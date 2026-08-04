@@ -6,7 +6,7 @@
 # (docs/development/testing.md § Diagnosing failures). Fixtures rather than the
 # tracked workflows, because the tracked ones are (and must stay) correct.
 #
-# Six groups:
+# Seven groups:
 #
 #   1. parse_filters reads the nested YAML string faithfully — trailing comments,
 #      comment-only lines, and the dedent that ends the block.
@@ -22,6 +22,9 @@
 #   6. parse_push_paths reads `on.push.paths` out of real YAML, and a workflow's
 #      push list is held equal to its changes filter — the drift Q571 itself
 #      shipped, which no assertion then covered.
+#   7. A `**` sits where picomatch still expands it. Both sides are pinned: the
+#      sound shapes must not be flagged (a false positive fails the tracked
+#      tree, which carries '**.go') and the degraded one must be (Q659).
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -322,7 +325,76 @@ expect_assertion push-names-the-missing-path 1 'scripts/fetch/\*\*' assert_push_
 PUSH_TRIGGER_FILTERS=('push.yml:short')
 expect_assertion push-fails-on-push-only 1 'differ from filter' assert_push_paths_match_filter
 
-# --- 7. the tracked workflows pass -------------------------------------------
+# --- 7. `**` must sit where picomatch still expands it ------------------------
+
+# The boundary is the whole content of this assertion, so it is pinned from both
+# sides. Sound shapes first — a false positive here would fail the tracked tree,
+# and '**.go' is what plan-hygiene.yml's `plan` filter carries today.
+expect_globstar_ok() {
+	local name="$1" pattern="$2"
+	if broken_globstar "$pattern"; then
+		bad "$name" "'$pattern' must NOT be flagged"
+	else
+		ok "$name" "'$pattern' globstars"
+	fi
+}
+
+# expect_globstar_broken NAME PATTERN WANT_FIX
+expect_globstar_broken() {
+	local name="$1" pattern="$2" want="$3"
+	if ! broken_globstar "$pattern"; then
+		bad "$name" "'$pattern' should be flagged"
+		return
+	fi
+	expect_eq "$name" "$want" "$(globstar_fix "$pattern")"
+}
+
+expect_globstar_ok globstar-whole-segment 'cmd/**/*.go'
+expect_globstar_ok globstar-leading-segment '**/*.go'
+expect_globstar_ok globstar-leading-suffix '**.go'
+expect_globstar_ok globstar-leading-named '**/go.mod'
+expect_globstar_ok globstar-trailing 'api/**'
+expect_globstar_ok globstar-bare '**'
+expect_globstar_ok globstar-nested 'charts/**/templates/**'
+# No `**` at all cannot degrade one. A lone `*` matches nothing useful here, but
+# that is a different defect and not this assertion's business.
+expect_globstar_ok globstar-absent '*.go'
+expect_globstar_ok globstar-literal 'go.work'
+
+# The Q659 shape: a mid-pattern `**` beside non-'/' characters.
+expect_globstar_broken globstar-mid-pattern 'cmd/**.go' 'cmd/**/*.go'
+expect_globstar_broken globstar-deep 'cmd/agc/**.go' 'cmd/agc/**/*.go'
+# A prefix on the globstar degrades it just the same, leading or not.
+expect_globstar_broken globstar-mid-prefixed 'cmd/x**/y' 'cmd/x**/*/y'
+expect_globstar_broken globstar-leading-prefixed 'x**/y' 'x**/*/y'
+
+# And the assertion itself, over a fixture holding one degraded pattern beside
+# three sound controls — the injected defect must be the only thing it reports.
+cat >"$FIXTURE_ROOT/workflows/globstar.yml" <<'YAML'
+jobs:
+  changes:
+    steps:
+      - uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            sound:
+              - 'cmd/**/*.go'
+              - '**/*.go'
+              - '**.go'
+              - '*.go'
+            degraded:
+              - 'cmd/**.go'
+YAML
+
+WORKFLOW_DIR="$FIXTURE_ROOT/workflows"
+expect_assertion globstar-passes-sound-patterns 0 '' \
+	assert_globstar_placement 'globstar.yml:sound'
+expect_assertion globstar-fails-on-degraded 1 'does not globstar' \
+	assert_globstar_placement 'globstar.yml:degraded'
+expect_assertion globstar-names-the-fix 1 "cmd/\*\*/\*\.go" \
+	assert_globstar_placement 'globstar.yml:degraded'
+
+# --- 8. the tracked workflows pass -------------------------------------------
 
 # End-to-end against the real tree, in a subshell so the fixture globals above
 # cannot leak into it. This is the same verdict `make path-filters-check` gives;
