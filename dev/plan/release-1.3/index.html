@@ -3303,9 +3303,11 @@ is the exclusion <code>externallyDeletedBeforeTerminal</code> already encodes. W
 run service does with an <code>abandoned</code> completion was <strong>measured 2026-08-04</strong>
 (Q645, <a href="../q645-abandoned-completion/#findings">Investigation H</a>): it concludes
 the run as <code>success</code> immediately, with no re-dispatch. A job that never ran
-reports green, so the release as shipped is the wrong result value for the
-winner's own delivery; the remedy is <a href="../../STATUS/#Q676">Q676</a> and the
-<code>AGC_FANOUT_COMPLETION</code> gate stays off.</p>
+reports green, so the release as shipped was the wrong call for the winner's
+own delivery. The remedy (Q676, measured 2026-08-04) is to report <strong>nothing</strong>:
+every accepted completejob value concluded the run <code>success</code> and told-nothing
+gets an honest run+job <code>cancelled</code> at ~15 minutes — see
+<a href="../q645-abandoned-completion/#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>.</p>
 <p><strong><code>JobProvisionStalled=False</code> was correct, not broken.</strong> The condition covers the
 listener's <em>deferral</em> reasons — <code>name_conflict</code> and <code>ceiling</code>, jobs held before a
 worker exists. A job whose worker was created and then reaped was never deferred,

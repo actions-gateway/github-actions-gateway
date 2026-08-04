@@ -2549,6 +2549,34 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#q676--the-remedy-measurements-2026-08-04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q676 — the remedy measurements (2026-08-04)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Q676 — the remedy measurements (2026-08-04)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-remedy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The remedy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2571,8 +2599,11 @@
 
 <h1 id="q645--what-the-run-service-does-with-an-abandoned-completion">Q645 — What the run service does with an <code>abandoned</code> completion<a class="headerlink" href="#q645--what-the-run-service-does-with-an-abandoned-completion" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> answered 2026-08-04 — conclude, not re-dispatch, and the conclusion
-is <strong>success</strong>. See <a href="#findings">Findings</a>; the remedy decision is
-<a href="../../STATUS/#Q676">Q676</a>.</p>
+is <strong>success</strong>. See <a href="#findings">Findings</a>. The remedy (Q676) is measured and
+decided the same day: the listener reports <strong>nothing</strong> for its own unrun
+delivery, per <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>.
+Follow-ups: Q682 (sibling <code>skipped</code> arm), Q683 (faster ending than the
+15-minute cancel).</p>
 <p>Queue item: Q645 (completed; done rows are deleted). Origin:
 <a href="../release-1.3/#the-rc5-re-run-2026-08-02">release-1.3.md § The rc.5 re-run</a>.</p>
 <h2 id="the-question">The question<a class="headerlink" href="#the-question" title="Permanent link">&para;</a></h2>
@@ -2754,8 +2785,9 @@ is now justified by the semantics below.</p>
 No re-queue, no redelivery to a live listener, no unstarted-job timeout. A job
 that never executed a single step reports green: the false-green outcome, worse
 for a CI consumer than either the silent 16-minute hang Q628 replaced or an
-honest failure. The remedy decision is filed as <a href="../../STATUS/#Q676">Q676</a>;
-candidate arms include reporting <code>failed</code> instead (concludes red and gives
+honest failure. The remedy decision was filed as Q676 and measured the same
+day, in <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>;
+candidate arms included reporting <code>failed</code> instead (concludes red and gives
 <code>rerun-failed-jobs</code> a target; result-value semantics unmeasured beyond
 <code>abandoned</code>), cancelling the run via REST before or instead of completing, or
 not completing at all (the told-nothing path measured 2026-08-02 left the job
@@ -2784,15 +2816,98 @@ read.</p>
 </ul>
 <h3 id="what-this-feeds">What this feeds<a class="headerlink" href="#what-this-feeds" title="Permanent link">&para;</a></h3>
 <ul>
-<li><a href="../../STATUS/#Q676">Q676</a>: the Q628 release path must not ship
-  <code>result=abandoned</code> for the winner's own delivery as-is; pick and measure a
-  remedy. The Q260 sibling case (<code>result=skipped</code> on deduped deliveries while
-  the winner still runs) is <strong>not</strong> covered by this measurement — whether a
-  sibling completion also concludes the whole run is exactly the semantics
+<li>Q676: the Q628 release path must not ship <code>result=abandoned</code> for the
+  winner's own delivery as-is; pick and measure a remedy. Done: see
+  <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>. The
+  Q260 sibling case (<code>result=skipped</code> on deduped deliveries while the winner
+  still runs) is <strong>not</strong> covered by this measurement. Whether a sibling
+  completion also concludes the whole run is exactly the semantics
   brokertest's fan-out accounting assumes it does not, and needs its own probe
-  arm before <code>AGC_FANOUT_COMPLETION</code> is trusted anywhere.</li>
+  arm (<a href="../../STATUS/#Q682">Q682</a>).</li>
 <li><code>broker/types.go</code> and <code>listener/job.go</code> comments updated to cite this
   measurement instead of the unmeasured ~15-minute-timeout rationale.</li>
+</ul>
+<h2 id="q676--the-remedy-measurements-2026-08-04">Q676 — the remedy measurements (2026-08-04)<a class="headerlink" href="#q676--the-remedy-measurements-2026-08-04" title="Permanent link">&para;</a></h2>
+<p>The same instrument re-run with <code>PROBE_ABANDONED_RESULT</code> selecting a candidate
+remedy value, plus <code>PROBE_ABANDONED_RERUN_CHECK=true</code> for the half a red
+conclusion alone cannot prove (does <code>rerun-failed-jobs</code> get a target?). Full
+logs in the session record; fixture runs named per row.</p>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th>Result sent</th>
+<th>Wire answer</th>
+<th>Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30912707732">30912707732</a></td>
+<td><code>failed</code></td>
+<td><strong>401</strong> <code>Not authorized for this job</code></td>
+<td>The value never reached semantics: refused outright on the same call shape (job token, post-acquire) that <code>abandoned</code> got a 204 on.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30913319212">30913319212</a></td>
+<td><code>failed</code></td>
+<td><strong>401</strong>, identical body</td>
+<td>Reproduced: two independent runs, two plans. (Both <code>failed</code> runs had a fan-out sibling on B; the <code>canceled</code> run did not. A residual confound, noted rather than chased, since two 401s disqualify the value either way.)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30913691716">30913691716</a></td>
+<td><code>canceled</code></td>
+<td><strong>2xx accepted</strong></td>
+<td>Run concluded <strong><code>success</code></strong> 1 s later, the same false green as <code>abandoned</code>; job record again orphaned <code>in_progress</code>. <code>rerun-failed-jobs</code> on the concluded run: <strong>403</strong> <code>This workflow run cannot be retried</code>.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30914399921">30914399921</a></td>
+<td><em>(none: acquire, then silence)</em></td>
+<td>n/a</td>
+<td>No redelivery at the ~10-min acquire-lock lapse (the Q247 recycle applies to started jobs, not never-started ones). At <strong>T0+15m14s</strong> the run <em>and</em> the job both concluded <strong><code>cancelled</code></strong>: honest, visible, and no orphaned <code>in_progress</code> record, the only arm that leaves none.</td>
+</tr>
+</tbody>
+</table>
+<p>Every accepted completejob value drives the run to <code>success</code>, <code>failed</code> is
+refused, and the green conclusion arms no re-run. <strong>The completejob family
+cannot produce an honest outcome for an acquired-but-never-run job; saying
+nothing produces the only honest one</strong>: <code>cancelled</code> at GitHub's
+~15-minute unstarted-job horizon.</p>
+<h3 id="the-remedy">The remedy<a class="headerlink" href="#the-remedy" title="Permanent link">&para;</a></h3>
+<p>The listener <strong>reports nothing</strong> for its own unrun delivery: the Q628
+<code>completejob(abandoned)</code> release is removed (it was live <strong>by default</strong>, since
+<code>AGC_FANOUT_COMPLETION</code> defaults on, contrary to what the pre-remedy comments
+here and in <code>broker/types.go</code> claimed), and a reaped-Pending worker's job now
+ends in the measured told-nothing cancel. The Q260 sibling fan-out completion
+is untouched: with the winner's own delivery still open, sibling completions
+conclude nothing (the 2026-07-04 dogfood re-route #5 measured per-delivery
+scoping), though the sibling <code>skipped</code> value has no live probe measurement.
+That arm is Q682. Making the released job's ending faster than 15 minutes
+(REST <code>force-cancel</code>, or a recovery re-run; plain <code>cancel</code> was measured
+sluggish against an orphaned acquire, and production deregisters the consumed
+runner record promptly where the probe held it, an unpinned variable) is Q683.</p>
+<p>Secondary observations, each load-bearing for the remedy choice:</p>
+<ul>
+<li><strong>Fan-out is real on this flow.</strong> Both runs delivered a sibling
+  <code>RunnerJobRequest</code> (distinct <code>runner_request_id</code>) to observer B immediately,
+  then a second delivery to A ~60 s later; A acquired its own. The Q645 run's
+  "no fan-out to B" was one draw, not a rule. An <strong>unacked</strong> sibling redelivers
+  ~1/s with a fresh broker <code>MessageID</code> for as long as it stays unresolved;
+  the probe now filters pre-T0 request ids out of the <code>REDISPATCHED</code> verdict,
+  and the Q260 dedup accounting gets live confirmation that siblings are
+  per-delivery assignments.</li>
+<li><strong>A plain REST cancel does not promptly conclude a run whose only job is an
+  acquired-but-ownerless <code>in_progress</code> record.</strong> Run 30912707732: cancel
+  202-accepted, still <code>in_progress</code> ~2.5 min later; <code>force-cancel</code> concluded
+  it within ~1 min. Run 30913319212: cancel 202, then force-cancel, and the
+  run still took ~3 more minutes to conclude <code>cancelled</code>. Any REST-cancel
+  remedy inherits this latency, needs <code>force-cancel</code> as the effective call,
+  and needs the run id, which the broker delivery does not carry (it is in the
+  worker's job payload, not <code>RunnerJobRequestBody</code>).</li>
+<li><strong>The acquire's <code>in_progress</code> job pins the runner record.</strong> Deleting the
+  acquiring runner answers 422 <code>currently running a job</code> until the run
+  concludes, so the release path's recycle cannot remove the runner while the
+  orphan lives; measured twice via the probe's own cleanup.</li>
 </ul>
 
 

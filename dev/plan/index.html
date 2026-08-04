@@ -2891,8 +2891,8 @@ markers per item.</p>
 </tr>
 <tr>
 <td><a href="q645-abandoned-completion/">q645-abandoned-completion.md</a></td>
-<td>Investigation H (Q645): what the run service does with a <code>result=abandoned</code> completejob for an acquired-but-never-run assignment (re-dispatch or conclude), which decides whether Q628 also needs a re-run arm; the same live call confirms or refutes the completejob wire format that keeps <code>AGC_FANOUT_COMPLETION</code> gated off</td>
-<td>✅ Done 2026-08-04 — one live run: the wire format is confirmed (204) and the answer is conclude, <strong>as <code>success</code></strong>, in one second, with no re-dispatch and the job record orphaned <code>in_progress</code>. A never-run job reporting green is the false-green outcome; the remedy decision is <a href="../STATUS/#Q676">Q676</a> and the gate stays off</td>
+<td>Investigation H (Q645/Q676): what the run service does with a completion for an acquired-but-never-run assignment, which decides the Q628 release path's shape</td>
+<td>✅ Done 2026-08-04 — five live runs: <code>abandoned</code> and <code>canceled</code> conclude the run <strong><code>success</code></strong> in one second (false green, job orphaned <code>in_progress</code>), <code>failed</code> is refused 401, and told-nothing gets an honest run+job <code>cancelled</code> at ~15 min. Remedy shipped: the listener reports nothing for its own unrun delivery. Follow-ups: <a href="../STATUS/#Q682">Q682</a>, <a href="../STATUS/#Q683">Q683</a></td>
 </tr>
 <tr>
 <td><a href="docs-page-boundaries/">docs-page-boundaries.md</a></td>

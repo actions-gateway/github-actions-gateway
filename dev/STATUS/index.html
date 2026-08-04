@@ -2756,12 +2756,20 @@
 <td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
 </tr>
 <tr>
-<td><a id="Q676"></a>Q676</td>
-<td><a href="../plan/q645-abandoned-completion/#findings">An <code>abandoned</code> completion concludes the run as <code>success</code>: a never-run job reports green</a></td>
-<td><code>bug</code></td>
+<td><a id="Q682"></a>Q682</td>
+<td><a href="../plan/q645-abandoned-completion/#the-remedy">Measure sibling <code>skipped</code> completion semantics live (Q260 fan-out)</a></td>
+<td><code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Inv. H covered only the winner's own delivery. The default-on sibling fan-out sends <code>skipped</code> mid-run; whether it concludes anything is unmeasured (brokertest assumes not). Needs a two-delivery probe arm.</td>
+</tr>
+<tr>
+<td><a id="Q683"></a>Q683</td>
+<td><a href="../plan/q645-abandoned-completion/#the-remedy">Faster honest ending for a pending-reap released job</a></td>
+<td><code>speed</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Measured 2026-08-04 (Q645, Inv. H): completejob(abandoned) got 204 and ended the run green in 1s; no re-dispatch, job record orphaned <code>in_progress</code>. Pick+measure the Q628 remedy (<code>failed</code>? REST cancel? no call?); sibling <code>skipped</code> unmeasured.</td>
+<td>Told-nothing ends run+job <code>cancelled</code> at ~15m (measured). Candidates: REST <code>force-cancel</code> (plain cancel measured sluggish vs an orphaned acquire), a recovery rerun, or prompt runner deregistration (Q418's mechanism; the probe held the record).</td>
 </tr>
 <tr>
 <td><a id="Q637"></a>Q637</td>
@@ -3074,6 +3082,22 @@
 <td>🔲</td>
 <td>S</td>
 <td>Every plan adds one long row near the same neighbours, so concurrent branches collide: #1138's rebase hit three conflicts, all in this file, while STATUS.md merged clean via its driver. Give it the driver, or restructure the rows.</td>
+</tr>
+<tr>
+<td><a id="Q679"></a>Q679</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">No per-spec filter on the e2e make target</a></td>
+<td><code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>SUITE=</code> picks one of four label subsets; no <code>--focus</code> passthrough, so <a href="../development/kind-iteration/#tightening-the-inner-loop">the inner loop</a> hand-assembles <code>ginkgo run</code>, re-typing the env vars <code>_GINKGO_RUN</code> already sets. Q592's shape.</td>
+</tr>
+<tr>
+<td><a id="Q680"></a>Q680</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>RUN=</code> is silently ignored by the unit-test targets</a></td>
+<td><code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q592 added <code>RUN=</code> to <code>test-integration</code> only, and make never errors on an unused variable, so <code>make test RUN=X</code> runs everything and says nothing. Thin on its own (<code>go test -run</code> needs no setup); the silent no-op is the hazard.</td>
 </tr>
 <tr>
 <td><a id="Q650"></a>Q650</td>
