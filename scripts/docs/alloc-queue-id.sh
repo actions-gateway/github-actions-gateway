@@ -33,10 +33,19 @@
 # the namespace is the record of which IDs have been used, and deleting one
 # would let a retired ID be reissued.
 #
+# Every ID takes a title, because this is the one place every row passes through
+# and the near-duplicate search needs text to match on (Q639). An optional
+# argument would be a gate nobody passes through, so titles are mandatory and
+# `-n <count>` is gone: the count is however many titles you give, and each gets
+# its own search. The search runs BEFORE the claim, so noticing a duplicate
+# costs no ID; it prints to stderr and never blocks, so `ID=$(...)` still works.
+#
 # Usage:
-#   alloc-queue-id.sh              # claim and print the next ID
-#   alloc-queue-id.sh -n 3         # claim and print 3 IDs, one per line
-#   alloc-queue-id.sh --peek       # print what the next ID would be, claim nothing
+#   alloc-queue-id.sh "<title>"              # claim and print one ID
+#   alloc-queue-id.sh "<title>" "<title>"    # one ID per title, one per line
+#   alloc-queue-id.sh --peek                 # print the next ID, claim nothing
+#   alloc-queue-id.sh --peek "<title>"       # ... and search for near-duplicates
+#   alloc-queue-id.sh --target <link> "<title>"   # link the Item cell will carry
 #
 # Rationale and the alternatives considered: docs/development/queue-id-allocation.md
 
@@ -105,27 +114,53 @@ claim() {
 	die "claiming $REF_NS/$id failed (exit $rc): $out"
 }
 
+# Advisory near-duplicate search for one title. Never fails the allocation: a
+# broken matcher must not stop a row being filed.
+search_duplicates() {
+	local title=$1 file=$2 target=$3 script
+	script="$(dirname "$0")/find-duplicate-rows.sh"
+	[[ -x "$script" ]] || return 0
+	"$script" --file "$file" ${target:+--target "$target"} "$title" >&2 || true
+}
+
 main() {
-	local count=1 peek=0 file
+	local peek=0 file target='' titles=()
 	file="$(git rev-parse --show-toplevel)/docs/STATUS.md"
 
 	while (($# > 0)); do
 		case "$1" in
-		-n)
-			count=${2:-}
-			[[ "$count" =~ ^[1-9][0-9]*$ ]] || die "-n wants a positive integer, got: ${2:-<missing>}"
+		--peek) peek=1 && shift ;;
+		--target)
+			target=${2:-}
 			shift 2
 			;;
-		--peek) peek=1 && shift ;;
 		-h | --help)
 			usage
 			exit 0
 			;;
-		*) die "unknown argument: $1" ;;
+		-*) die "unknown argument: $1" ;;
+		*)
+			# An empty argument is how `make queue-id` spells "no TITLE given"
+			# — the Makefile passes the variable through unconditionally so
+			# the shell never re-parses a title's quotes or backticks.
+			[[ -n "$1" ]] && titles+=("$1")
+			shift
+			;;
 		esac
 	done
 
-	local floor claimed_max file_max
+	if ((peek == 0)) && ((${#titles[@]} == 0)); then
+		die 'wants the title of each row you are about to file — one argument per ID, so each gets a near-duplicate search (--peek to look up the next ID without one)'
+	fi
+	((peek == 0)) || ((${#titles[@]} <= 1)) || die '--peek takes at most one title'
+	[[ -z "$target" ]] || ((${#titles[@]} <= 1)) || die '--target describes one row, so it takes at most one title'
+
+	local title
+	for title in ${titles[@]+"${titles[@]}"}; do
+		search_duplicates "$title" "$file" "$target"
+	done
+
+	local count=${#titles[@]} floor claimed_max file_max
 	claimed_max=$(highest_claimed)
 	file_max=$(highest_in_file "$file")
 	floor=$((claimed_max > file_max ? claimed_max : file_max))

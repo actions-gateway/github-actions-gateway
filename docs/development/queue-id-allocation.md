@@ -3,12 +3,14 @@
 Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in [`docs/STATUS.md`](../STATUS.md).
 
 ```bash
-make queue-id
+make queue-id TITLE='GMC CRD manifest drifts from the AGC types it embeds'
 ```
 
-That prints one ID (`Q423`) and claims it. `make queue-id N=3` claims three; `make queue-id PEEK=1` shows what the next one would be without claiming it. The script is [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh).
+That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (`Q423`). `make queue-id PEEK=1` shows what the next one would be without claiming it; `TARGET=<link>` sharpens the search when the Item cell's link is already decided. The script is [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh), which takes one title argument per ID — several titles claim several IDs, each searched on its own.
 
 Claim an ID when you file the row, use it, and move on. There is nothing to release and nothing to clean up.
+
+**The title is mandatory, and there is no untitled batch form.** This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through. `-n <count>` used to claim IDs without naming a row; it is gone, because a door beside the gate is the same as no gate. Why the search keys on what it does, and what it costs in false positives: [maintaining-backlog.md § Search before you file](maintaining-backlog.md#search-before-you-file).
 
 ## Why a ref
 

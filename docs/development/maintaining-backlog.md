@@ -5,7 +5,8 @@
 The format and process come from the globally-installed **backlog skill** (agents: invoke the `backlog` skill for the full playbook — grooming checklist, staleness signals, parallel dispatch, migration). The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:
 
 - [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) — enforces every format rule below; its header comment is the canonical rule list. Runs in `make check` (`make lint-backlog`), CI ([`status-lint.yml`](../../.github/workflows/status-lint.yml) and `unit-test.yml`), and the pre-commit hook. The hook's `--staged` mode also rejects any commit that stages `docs/STATUS.md` alongside other files.
-- [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh) — allocates a new Q-ID (`make queue-id`) by claiming a ref on the remote, so concurrent sessions never take the same one. Rationale, the alternatives weighed, and what it does *not* fix: [queue-id-allocation.md](queue-id-allocation.md).
+- [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh) — allocates a new Q-ID (`make queue-id TITLE="…"`) by claiming a ref on the remote, so concurrent sessions never take the same one. Rationale, the alternatives weighed, and what it does *not* fix: [queue-id-allocation.md](queue-id-allocation.md).
+- [`scripts/docs/find-duplicate-rows.sh`](../../scripts/docs/find-duplicate-rows.sh) — the near-duplicate search that allocation runs before it claims an ID. Advisory: it never blocks a filing. [How it is calibrated](#search-before-you-file).
 - [`scripts/docs/git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous. One-time `make merge-driver` per clone; a no-op until then. [Details below](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
 - [`scripts/docs/next-task.sh`](../../scripts/docs/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready 🔲 Queue row, for starting a fresh session on the next task.
 - [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only.
@@ -16,13 +17,57 @@ The format and process come from the globally-installed **backlog skill** (agent
 - **Two Queue states only: 🔲 ready and 🚫 blocked.** Done rows are **deleted** (git is the archive), "started" is signaled by the open PR (run `gh pr list` before picking; skip rows an open PR covers), and parked rows live in the Deferred table.
 - **Verify 🚫 blockers before treating a row as blocked** — a prior session may have shipped the dependency without flipping the row; grep for its deliverables. Cross-item blockers are machine-readable: a 🚫 row's Notes start with `Blocked by [QN](#QN)`, and `make queue-unblock ID=QN` lists every dependent when the blocker lands.
 - **Verify the defect a row asserts before implementing it.** A row's Notes are written at filing time from an observation that was never re-checked, so grep for the claimed defect the same way you grep for a blocker's deliverables — a prior session may have closed it without flipping the row, and Notes carry no observed-vs-suspected marker. Q506's row named a `noproxy` GHES gap that Q322 had already fixed; taking the row at its word would have "fixed" a non-bug and missed the real one next to it. An audit row inheriting an unverified premise is the sharpest case, but the rule is general.
-- **Search before you file.** Grep the Queue *and* Deferred tables for the topic — the file, the symptom, the command — before allocating an ID. Nothing catches a semantic duplicate: two rows describing one problem in different words pass every lint, and both get worked. [Q442](https://github.com/actions-gateway/github-actions-gateway/pull/847) duplicated Q440, which was already three rows below where it was inserted; the row was placed by reading the Queue's head and tail for priority, which is not the same as searching it.
-- **Allocate IDs with `make queue-id`**, which claims a `refs/queue-ids/QN` ref on the remote. There is no counter line in the file: a shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber ([Q382](queue-id-allocation.md#why-the-counter-had-to-go)). IDs are sparse, stable, never reused or renumbered, and never get sub-IDs (`5a`) — a trackable child gets its own top-level ID. The `Q` prefix keeps `Q44` from auto-linking to PR/issue #44; use the bare ID in commits and PRs.
+- **Search before you file** — `make queue-id` does it for you, and reading its candidates is the part that is on you. Nothing else catches a semantic duplicate: two rows describing one problem in different words pass every lint, and both get worked. [Details and calibration below](#search-before-you-file).
+- **Allocate IDs with `make queue-id TITLE="…"`**, which claims a `refs/queue-ids/QN` ref on the remote. There is no counter line in the file: a shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber ([Q382](queue-id-allocation.md#why-the-counter-had-to-go)). IDs are sparse, stable, never reused or renumbered, and never get sub-IDs (`5a`) — a trackable child gets its own top-level ID. The `Q` prefix keeps `Q44` from auto-linking to PR/issue #44; use the bare ID in commits and PRs.
 - **Notes are present tense, ≤ 250 chars (hard cap); past 200 chars the row must link a doc** from its Item or Notes cell — a `#QN` sibling anchor doesn't count, since sibling rows are capped too. No merged-PR lists or "SHIPPED" narration — history lives in `git log` and the plan doc. The same caps apply to Deferred trigger cells. Write for a skimmer: cut detail and link a doc rather than compressing into fragments.
 - **A row never cites a count of the backlog.** "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day. State the *shape* instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs. Q569's row was corrected twice in one session — 36 → 42 → 44 — before the count came out entirely.
 - **Deferred rows carry a concrete revive trigger**, tagged by source: `**Demand:**` (an outside ask) · `**Event:**` (an observable outside-our-control condition) · `**Decision:**` (our own call — grep `**Decision:**` for what we could move on unilaterally). When the trigger fires, move the row back into the Queue at the position it then deserves. A non-commitment belongs in [appendix-g](../design/appendix-g-future-enhancements.md), not Deferred.
 - **`docs/STATUS.md` edits are isolated commits** — never mixed with code or plan-doc changes, even when completing an item mid-feature (the pre-commit hook enforces this). Use `docs(status):` subjects, and name the removal reason with a fixed verb — `complete QN`, `prune QN`, `merge QN into QM`, `defer QN` — so metrics can tell throughput from garbage collection. Batch bulk additions (one audit's discoveries) into one commit; keep reshuffles separate from additions. When a rebase or merge conflicts on this file, resolve it via the [fast path](#resolving-a-statusmd-only-conflict-verify-cheap-push-now) below.
 - **M/L items get a plan doc** under `docs/plan/`, linked from the Item cell.
+
+## Search before you file
+
+The rule used to be "grep the Queue and Deferred tables first", and it failed three times: [Q442](https://github.com/actions-gateway/github-actions-gateway/pull/847) and [Q456](https://github.com/actions-gateway/github-actions-gateway/pull/893) both duplicated Q440, and [Q635](https://github.com/actions-gateway/github-actions-gateway/pull/1186) duplicated Q619. Every one satisfied the lint — a semantic duplicate is a well-formed row — and every one was filed mid-task, as a side effect of other work, exactly when the doc carrying the rule was not in context. A rule that fails at the same seam three times wants a mechanism.
+
+`make queue-id` is the mechanism, because it is the one chokepoint every filed row passes through, and it takes the title:
+
+```bash
+make queue-id TITLE='`doc-links` never reads a new doc until it is staged'
+```
+
+Single-quote it: these titles are full of backticks, which double quotes would hand to the shell as command substitution. A title carrying an apostrophe as well is easier to pass straight to `scripts/docs/alloc-queue-id.sh`, which takes it as a plain argument.
+
+It searches first and claims second, so recognising a duplicate costs no ID. Candidates print to stderr, so `ID=$(make queue-id TITLE="…")` still works, and **nothing is blocked**: the filer routinely knows something the matcher cannot, such as that two rows sharing a file are genuinely separate defects. Say which, in the new row's Notes.
+
+**The title is mandatory, and there is no untitled batch form.** An optional argument is a gate nobody passes through, and `-n 3` was one: it claimed IDs without naming a single row. Several rows at once means several titles: `scripts/docs/alloc-queue-id.sh` takes one argument per ID and searches each on its own, which is what a retro filing four rows actually wants. Nothing automated calls the target, so making the title mandatory changed only the lines that document it.
+
+`TARGET=<link>` is optional and worth passing when the Item cell's link is already decided.
+
+### What it keys on, and why
+
+From the three pairs, not from a guess about what similarity means here:
+
+| Pair | Shared content words | Item link |
+|---|---|---|
+| Q456 *"The GMC CRD manifests are stale and no gate notices"* / Q440 *"GMC CRD manifest drifts from the AGC types it embeds"* | 3 | same |
+| Q635 *"`doc-links` never reads a new doc's own links until it is staged…"* / Q619 *"Three gates scan tracked files only, so a new file misses its own `make check`"* | 4 | same |
+| Q511 *"Two live-GitHub runs collide invisibly…"* / Q500 *"Two concurrent live-GitHub runs collide on the fixture repo"* | 5 | different |
+
+Neither signal alone covers that: two pairs agreed on the link and barely on the words, one agreed on the words and not the link. So a row is a candidate on **either** route — ≥3 shared content words at ≥0.40 containment, or an exact link match at the lower bar of ≥2 words and ≥0.25. The shared-word floor is what a ratio alone cannot supply, because containment divides by the *shorter* title: a five-word row scores 0.40 on two incidental words, which is exactly how the novel-row control gets rejected.
+
+Deferred and Flake watch are searched too, because a row duplicating a parked item is the same mistake and those are the tables nobody greps. Notes cells are deliberately not matched: folding a 250-character Notes cell into a row's token set can only raise every score, inflating the ranking without adding a cut.
+
+### Whether it is noisy enough to ignore
+
+An advisory that fires constantly is worse than none, so the thresholds are measured rather than asserted. `scripts/docs/find-duplicate-rows.sh --audit` runs every shipped row back through the same scoring path the search uses, and prints what flags:
+
+```bash
+scripts/docs/find-duplicate-rows.sh --audit
+```
+
+**Roughly one row in five surfaces a candidate when filed, and every pair it flags is topically adjacent rather than a nonsense match.** The snapshot behind that, on 2026-08-04 (72 Queue + 31 Deferred + 15 Flake-watch rows): 11 flagged pairs out of 6,903. The rate held across every backlog state this was measured in — the Queue turns over faster than any fixed count survives, which is why the figure is a dated instance and `--audit` is the live answer. Two of the eleven look like real duplicates nobody caught: Q663 and Q612 are both `check-doc-links` defects, and Q660 and Q588 are both the doc-update-matrix sending a row into a `scripts/README.md` table that does not exist.
+
+Loosening either ratio by 0.05 roughly doubles the count. Re-run the audit before changing a threshold.
 
 ## The merge driver: resolve Queue rows by ID, not by line position
 
