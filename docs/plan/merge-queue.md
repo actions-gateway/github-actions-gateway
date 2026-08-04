@@ -150,3 +150,13 @@ re-derived, not committed to:
   short window where the row is open and no PR covers it. Same re-measurement
   decides; per-item files dominate this too, closing the conflict itself
   rather than routing around it.
+- The ordering gap above has a buildable fix, parked 2026-08-03 behind the
+  same re-measurement: a `pr-deps-gate` required check that reads
+  `Depends-on: #N` from the PR body, reports green when no dependency is
+  named, and red while any named PR is unmerged. The queue enforces the
+  sequencing for free, since a PR cannot enqueue until its required checks
+  pass; the one extra piece is a push-to-main workflow that re-requests the
+  check on open PRs whose dependencies just merged, because GitHub emits no
+  event to a dependent PR. This closes the no-covering-PR window (the status
+  PR is open, just unqueueable) and makes the split machine-enforced. Build
+  it only if the measured kickback rate says split PRs are worth having.
