@@ -1976,9 +1976,29 @@ kubectl get events -n <namespace> --field-selector reason=EvictionRetriesExhaust
 
 ## Proxy Pool Not Scaling
 
-**Symptoms.** The HPA for the proxy pool shows `TARGETS: <unknown>/60%` and the replica count does not increase under load.
+**Symptoms.** The HPA for the proxy pool shows `TARGETS: cpu: <unknown>/60%` and the replica count does not increase under load.
 
-**Likely cause.** `resources.requests.cpu` is unset or zero for proxy pods. The Kubernetes Horizontal Pod Autoscaler (HPA) computes CPU utilization as `(current_cpu_usage / requested_cpu)`. If `requests.cpu` is zero, the denominator is undefined and the HPA emits `<unknown>` for the target metric and stops scaling entirely.
+`<unknown>` is common to the first and third causes below, so it does not tell them apart. The `ScalingActive` condition's **reason** does, and unlike the condition's message text it is stable API surface. Match on it:
+
+```sh
+kubectl get hpa -n <namespace> \
+  -o custom-columns='NAME:.metadata.name,REASON:.status.conditions[?(@.type=="ScalingActive")].reason'
+```
+
+| `ScalingActive` reason | Cause |
+|---|---|
+| `FailedGetResourceMetric` | `resources.requests.cpu` unset (first cause below). The same reason covers a metrics-server that is absent or not yet serving, so check that first. |
+| `AmbiguousSelector` | Two pools share a selector (third cause below). |
+
+A real percentage in `TARGETS` means metric computation is working; go to the `ResourceQuota` cause instead.
+
+**Likely cause.** `resources.requests.cpu` is unset or zero for proxy pods. The Kubernetes Horizontal Pod Autoscaler (HPA) computes CPU utilization as `(current_cpu_usage / requested_cpu)`. With no request there is no denominator, so the HPA emits `<unknown>` for the target metric and stops scaling entirely. `ScalingActive` goes `False` with reason `FailedGetResourceMetric`:
+
+```text
+the HPA was unable to compute the replica count: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+```
+
+A metrics-server that is absent or not yet serving produces the same reason with a different tail (`the server could not find the requested resource (get pods.metrics.k8s.io)`), which is why the diagnostics below check for it. (Measured on Kubernetes v1.36.1, 2026-08-03: the first message against a pool declaring no `requests.cpu` with metrics-server v0.8.1 serving, the second on the same cluster before metrics-server was installed.)
 
 **Diagnostics.**
 
@@ -2028,11 +2048,20 @@ kubectl describe actionsgateway -n <namespace> <name>
 
 Resolve by **either** raising the platform-owned quota (`kubectl edit resourcequota -n <namespace> <quota-name>`) to admit the configured `maxReplicas`, **or** lowering `spec.proxy.maxReplicas` to fit. Editing the quota's `.spec.hard` re-triggers reconciliation immediately; the conditions clear on the next reconcile.
 
-**Third likely cause (mid-migration, GMC before `v1.3.0`): two proxy pools share a selector.** In a namespace running both a v1 inline pool and a v2 `EgressProxy` pool, **neither** pool scales and both HPAs report:
+**Third likely cause (mid-migration, GMC before `v1.3.0`): two proxy pools share a selector.** In a namespace running both a v1 inline pool and a v2 `EgressProxy` pool, **neither** pool scales, and both HPAs go `ScalingActive=False` with reason `AmbiguousSelector`. Each names **its own** scale target's selector and lists every HPA in the conflict. Below, the `EgressProxy` is named `ep1`:
+
+```sh
+kubectl get hpa -n <namespace> \
+  -o custom-columns='NAME:.metadata.name,REASON:.status.conditions[?(@.type=="ScalingActive")].reason,MESSAGE:.status.conditions[?(@.type=="ScalingActive")].message'
+```
 
 ```text
-ScalingActive   False   AmbiguousSelector   pods by selector app=actions-gateway-proxy are controlled by multiple HPAs
+NAME                    REASON              MESSAGE
+actions-gateway-proxy   AmbiguousSelector   pods by selector app=actions-gateway-proxy are controlled by multiple HPAs: [<namespace>/actions-gateway-proxy <namespace>/ep1-proxy]
+ep1-proxy               AmbiguousSelector   pods by selector actions-gateway.com/egress-proxy=ep1,app=actions-gateway-proxy are controlled by multiple HPAs: [<namespace>/ep1-proxy <namespace>/actions-gateway-proxy]
 ```
+
+Key any alerting on the **reason**, never the message: the selector differs per HPA, and the bracketed HPA list is unordered, and consecutive emissions swap it. The controller also records `AmbiguousSelector` and `FailedComputeMetricsReplicas` Warning Events carrying the same text, so `kubectl describe hpa` shows both. (Measured: Kubernetes v1.35.5 and v1.36.1, metrics-server v0.8.1, 2026-08-03; two Deployments whose pods both carry `app=actions-gateway-proxy`, one HPA each. Identical wording on both versions.)
 
 An HPA has no selector of its own — it resolves its scale target's — and refuses to act on pods a second HPA also controls. The v2 pool used to stamp `app: actions-gateway-proxy`, the label v1's `Deployment` selector keys on, so each HPA saw the other's pods. The same overlap put each pool's pods under both `PodDisruptionBudget`s (making them unevictable, so node drains hung) and made the two pools repel each other off every node.
 
