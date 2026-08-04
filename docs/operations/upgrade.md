@@ -317,7 +317,7 @@ No action required, but two observable behaviours change (Q503).
 Previously the AGC fired `rerun-failed-jobs` exactly once, `evictionRetryDelay`
 (default 5s) after seeing a worker evicted. Against real GitHub that call always lost
 a race it could not win: an ungracefully killed runner reports nothing, GitHub
-concludes the run only when the job lock's TTL lapses (~10 minutes, measured 9m36-9m38s when the runner reports nothing),
+concludes the run only when the job lock's TTL lapses (~10 minutes, measured 9m36-9m45s when the runner reports nothing),
 and until then the API refuses re-runs with `403 This workflow is already running`.
 The retry budget was spent, `actions_gateway_eviction_retries_total` incremented, and
 the job was never re-run — every evicted job needed a manual re-run despite the

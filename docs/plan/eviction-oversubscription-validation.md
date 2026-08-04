@@ -192,13 +192,15 @@ tenant's AGC, which is a gap in the harness rather than in the product. What wou
 it: capture the scale-set tenant's AGC log and the worker's full log on failure, then run
 the spec enough times to see how often each outcome occurs.
 
+**Q657 did that, and the hypothesis did not survive it. See
+[the re-measurement below](#the-17s-outlier-is-unattributable-q657-2026-08-03).**
+
 **What this does and does not license.** The ~10-minute figure stands for the case the
 design cares about — nothing reported, GitHub notices by itself — and is now measured on
-both tiers. It must not be quoted as "what an eviction costs", because a kubelet
-ephemeral-storage eviction is evidently not reliably ungraceful. The spec's
+both tiers. It must not be quoted as "what an eviction costs". The spec's
 `rerunCalls >= 2` assertion encodes the stronger claim and is what failed here; it is
-correct as a description of the ungraceful path and wrong as a description of every
-eviction.
+correct as a description of the ungraceful path, and the assertion is now conditioned on
+the measured latency rather than applied to every eviction.
 
 **The detection path is genuinely the scale-set one.** The refusals log
 `cause=eviction` against `owner=set-ss` and a `runner-set-ss-…` pod, so it is the
@@ -213,6 +215,86 @@ assignment, minted a JIT config and provisioned a worker that GitHub then report
 running the job. The pre-registered runner name was
 `real-ag-ss-de2978a1-838b-59ae-a1fc-5dcd47d793db`, matching `listener.runnerName`'s
 `<scaleSetName>-<jobID>` exactly.
+
+### The 17s outlier is unattributable (Q657, 2026-08-03)
+
+Q657 set out to quantify how often each outcome occurs and then qualify the design claim.
+It did neither, because the first thing the new instrument found was that the spec could
+not prove *which worker* it had evicted — and the 17s observation is the run that most
+needs that proof.
+
+**The instrument.** Both eviction specs now record, per run: the worker log from two
+captures that fail in different ways, GitHub's per-step records for the interrupted
+attempt, and one classified outcome line. The scale-set spec adds the `job-completed-at`
+annotation its listener stamps and an unfiltered AGC log tail. Same `v1.3.0` image pins as
+the runs above, on a throwaway kind cluster.
+
+**Attempt 1 evicted a worker that had no job.** The AGC log shows the listener provisioned
+two workers ten seconds apart: one for jobID `22463488…` at 23:59:05 — whose job Secret it
+reclaimed and whose job-completion it stamped in the same second — and one for jobID
+`cec0e443…` at 23:59:15, after the dispatch. GitHub ran the job on the first
+(`runner_name: real-ag-ss-22463488-…`). `scaleSetWorkerForRun` matched the second on its
+`run-id` annotation and returned it, because that lookup takes whichever candidate the API
+lists first.
+
+Nothing downstream noticed. The AGC detected the eviction and attributed it correctly —
+`runID 30864091648`, `tier=scaleset`, `attempt 1`, `cause=eviction` — and the only tell was
+the runner exiting **143** rather than 137: it was still `Listening for Jobs`, so it shut
+down inside its grace period. What that run timed was the cost of killing an idle runner.
+
+**So the harness gained an identity check**, and it is GitHub's `runner_name` that supplies
+it — the only source that knows which runner took the job. The scale-set runner is named
+`<scaleSetName>-<jobID>` and the worker pod embeds the same jobID, so the two reconcile
+before the spec touches the storage limit.
+
+**Attempt 2, with the check in place, measured the ungraceful path cleanly**
+([run 30864859954](https://github.com/actions-gateway/gateway-test/actions/runs/30864859954)):
+
+| Observation | Value |
+|---|---|
+| Worker pod phase/reason | `Running/` → `Failed/Evicted` |
+| Kubelet message | `Pod ephemeral local storage usage exceeds the total limit of containers 256Mi.` |
+| Runner container exit code | **137** |
+| Fill → kubelet eviction | 8s |
+| Job conclusion | **`failure`** |
+| **Eviction → conclusion** | **9m45s** (`finishedAt=00:13:21Z` → `completed_at=00:23:06Z`) |
+| Re-run calls before acceptance | **21** |
+| Step records, attempt 1 | `1. Set up job=completed/success`, `2. Hold the job open=`**`in_progress/null`** |
+| Verdict | `lock-lapsed` |
+
+**The step records are the discriminator, and they are the durable result of this work.**
+On the lock-lapsed path GitHub holds the job at `completed/failure` while the step it was
+interrupted in stays frozen at `in_progress/null` — the runner never posted that step's
+end. It is a per-run, log-independent read of "did the runner report?", and it survived
+every capture failure below. The shape a *reported* loss leaves is still uncaptured.
+
+**Where that leaves the claim.** Four scale-set attempts now exist: 9m38s, 17s, one that
+evicted the wrong worker, and 9m45s. Three of the four are consistent with the lock TTL
+being the only mechanism. The 17s run is the sole evidence for "a kubelet
+ephemeral-storage eviction is not reliably ungraceful", and it predates the identity check,
+so it cannot be said to have evicted the runner that was executing the job. **Treat that
+claim as unsupported rather than established** — it is not refuted either, because attempt
+1 exited 143 where the 17s run exited 137, so "it evicted an idle worker" does not fully
+account for it. Quoting ~10 minutes for the case where nothing is reported remains correct
+and is now backed by three clean observations across both tiers.
+
+**Two capture defects the runs found in the instrument itself, both fixed.** Recording them
+because each one produced a plausible-looking false reading:
+
+- **A capture reported late is a capture lost.** Attempt 1 read the evicted worker's log
+  and then discarded it: the `exitCode == 137` assertion fires before the verdict is
+  written. Diagnostics now report at the point of capture.
+- **A failed read is not a silent runner.** On attempt 2 the post-hoc `kubectl logs` came
+  back `unable to retrieve container logs for containerd://…` — the kubelet had already
+  reclaimed the container — and kubectl still exited 0. The first version of the outcome
+  line rendered that as a measured `relayRan=false`. It is now three-valued, with
+  `logsRead` naming which captures answered. The follower is the stronger of the two
+  sources here, streaming to within a second of the container's `finishedAt`; the
+  post-hoc read is corroboration.
+
+**What would settle the split**, and what Q657 did not buy: repeated runs *with* the
+identity check, enough of them to see whether a fast conclusion ever occurs on a worker
+confirmed to be executing the job.
 
 ### The scale-set half: how it was measured
 
@@ -338,12 +420,21 @@ cluster to do exactly what is needed:
 |---|---|
 | Pod phase/reason after the overshoot | `Failed/Evicted` |
 | Kubelet message | `Pod ephemeral local storage usage exceeds the total limit of containers 16Mi.` |
-| Container exit code | `137` — SIGKILL, no grace period, so no SIGTERM relay and nothing reported to GitHub |
+| Container exit code | `137` — SIGKILL, so the kubelet took the container rather than the job ending on its own |
 | Write → kill | ~55s, the kubelet's local-storage housekeeping cadence |
 
-The zero grace period is the point rather than a side effect: it is what makes this
-the *ungraceful* case, where GitHub must notice by itself. The graceful counterpart,
-where the runner does get its own report out, is [Q459](archive/q459-drained-worker-recovery.md)'s.
+The near-zero grace is the point rather than a side effect: it is what usually makes
+this the *ungraceful* case, where GitHub must notice by itself. The graceful
+counterpart, where the runner reliably gets its own report out, is
+[Q459](archive/q459-drained-worker-recovery.md)'s.
+
+**"Usually" is doing real work in that sentence, and this section originally read
+"always".** It inferred from the 137 exit that no SIGTERM was relayed and nothing
+reached GitHub. The exit code does not carry that: a runner that reports and *then*
+overruns its grace is SIGKILLed too, and the 2026-08-03 scale-set pair exited 137 on
+both sides of a 9m38s/17s split. What the runner managed to say is now read from its
+own log and from GitHub's per-step records rather than inferred from the exit code —
+see [Q657](../STATUS.md#Q657) and the scale-set result above.
 
 **Sizing the cap needed a measurement of its own.** The kubelet charges a pod only
 its writable layer, emptyDirs and logs — image layers are read-only and are not

@@ -2811,15 +2811,18 @@ needed — see
 > **`eviction_retries_total` incrementing but the job still never re-runs?** An
 > evicted run's re-run is deliberately slow to land: a kubelet eviction SIGKILLs
 > the runner before it can report, so GitHub does not conclude the run until the
-> job lock's TTL lapses — measured at 9m36–9m38s when the runner's report does not
+> job lock's TTL lapses — measured at 9m36–9m45s when the runner's report does not
 > escape (Q396) — and until then it refuses
 > `rerun-failed-jobs` with `403 This workflow is already running`. The AGC retries
 > that refusal every 30 seconds inside a 15-minute re-run window (Q503), so expect
 > `disruption auto-retry triggered` in the AGC log **~10 minutes** after the
 > eviction, not seconds, with `rerunCalls` in the tens — that attribute counts the
 > calls the recovery made. A single-digit count is not a fault: it means GitHub had
-> already concluded the run, which happens when the evicted runner did get its report
-> out (observed 2026-08-03, conclusion 17s after the job started). A recovery that gave up instead logs
+> already concluded the run before the recovery started calling — which is what happens
+> when the disrupted runner got its own report out, as a drain or a preemption lets it
+> (15–26s, Q459). One eviction has been seen concluding that fast too (2026-08-03, 17s),
+> but the run could not confirm which worker it disrupted, so do not read a low count
+> after an eviction as proof the runner reported. A recovery that gave up instead logs
 > `disruption auto-retry failed`, increments
 > `actions_gateway_eviction_rerun_failures_total`, and emits an
 > `EvictionRerunFailed` Warning Event naming the run — that job needs a manual

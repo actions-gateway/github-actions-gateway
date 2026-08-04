@@ -402,10 +402,12 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			"worker pod carries no ephemeral-storage limit; the eviction lever is absent")
 
 		By("streaming the worker's logs, so anything it manages to say on the way out is captured")
-		// Expected to show nothing: an ephemeral-storage eviction kills with a zero
-		// grace period, so the wrapper's SIGTERM relay never runs. Captured anyway,
-		// because "the runner said nothing" is the claim that makes GitHub's own
-		// detection the only thing that can conclude the job.
+		// Whether the runner says anything is the outcome under measurement, not a
+		// foregone conclusion: an ephemeral-storage eviction leaves a window measured at
+		// about two seconds, which the runner sometimes clears (Q657). "The runner said
+		// nothing" is what makes GitHub's own detection the only thing that can conclude
+		// the job, so it has to be observed rather than assumed. The stream loses the last
+		// instant before the kill; evictedWorkerLog re-reads the log whole afterwards.
 		relayLog := followPodLogs(tenantNS, podName)
 
 		observed := newPhaseRecorder(tenantNS, podName)
@@ -432,16 +434,30 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		AddReportEntry("Q396 kubelet eviction message", evictionMessage)
 		AddReportEntry("Q396 runner container exit code", strconv.Itoa(exitCode))
 		AddReportEntry("Q396 fill to kubelet eviction", evictedAt.Sub(filledAt).Round(time.Second).String())
-		AddReportEntry("Q396 worker log tail across the eviction", relayLog.stopAndRead())
+		// Two captures that fail in different ways, so the verdict can tell "the relay did
+		// not run" from "nothing was readable" (Q657). The follower is the one that reaches
+		// the last instant before the kill; the post-hoc read corroborates it when the
+		// kubelet has not already reclaimed the container.
+		followerLog := relayLog.stopAndRead()
+		AddReportEntry("Q396 worker log tail across the eviction", followerLog)
+		podLog, podLogOK := evictedWorkerLog("Q396", tenantNS, podName)
+		workerLogs := []workerLogSource{
+			{name: "follower", log: followerLog, ok: strings.TrimSpace(followerLog) != ""},
+			{name: "pod", log: podLog, ok: podLogOK},
+		}
 
-		By("confirming the runner was killed outright rather than asked to stop")
-		// The Queue row's "runner genuinely killed", made an assertion. 137 is SIGKILL:
-		// no grace period, no SIGTERM relay, no report to GitHub. A graceful exit code
-		// here would mean the runner had a chance to say something on the way out, and
-		// the latency below would then be measuring the report rather than GitHub's own
-		// detection — which is Q459's experiment, not this one.
+		By("confirming the kubelet killed the runner rather than asking it to stop")
+		// The Queue row's "runner genuinely killed", made an assertion. 137 is SIGKILL,
+		// which is what says the kubelet took the container rather than the job ending on
+		// its own — a graceful exit code here would mean this spec measured something
+		// other than the eviction it performed.
+		//
+		// It does NOT say the runner was silent. A runner that reports and then overruns
+		// its grace is SIGKILLed too, and both 2026-08-03 scale-set runs exited 137 while
+		// splitting 9m38s against 17s to conclusion. What escaped is recorded below, from
+		// the runner's own log and GitHub's step records, rather than inferred from here.
 		Expect(exitCode).To(Equal(137),
-			"the evicted runner exited %d, not SIGKILL; this is not the ungraceful path", exitCode)
+			"the evicted runner exited %d, not SIGKILL; the kubelet did not take this container", exitCode)
 
 		By("waiting for GitHub to conclude the job it can no longer hear from")
 		// The measurement. Bounded at 20 minutes: the design puts the job lock's TTL at
@@ -470,6 +486,8 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		AddReportEntry("Q396 server timestamps",
 			fmt.Sprintf("container finishedAt=%s, GitHub completed_at=%s",
 				evictedAt.Format(time.RFC3339), concludedAt.Format(time.RFC3339)))
+		recordEvictionOutcome("Q396", concludedAt.Sub(evictedAt), exitCode, workerLogs,
+			firstJobStepRecords(repoSlug, runID, 1))
 
 		By("reading what the AGC decided when it saw the eviction")
 		agcLog := agcEvictionLog(tenantNS)
@@ -1198,6 +1216,25 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		Expect(podEphemeralStorageLimit(scaleSetTenantNS, podName)).To(Equal(workerEphemeralStorageLimit),
 			"worker pod carries no ephemeral-storage limit; the eviction lever is absent")
 
+		By("confirming this worker is the one GitHub says is executing the job")
+		// Measured 2026-08-03: the run identity is NOT sufficient to name the worker. A
+		// listener that has provisioned more than one worker attributed to the run leaves
+		// several candidates, and the lookup above returns whichever the API listed first.
+		// On that run it returned an idle worker while the job executed on a sibling, and
+		// everything downstream still looked healthy — the AGC detected the eviction and
+		// attributed it to the right run — while the latency being measured was the cost
+		// of killing a runner that had no job to lose.
+		//
+		// GitHub's own runner_name is the tie-break, and it is the only source that knows
+		// which runner is executing: the scale-set runner is named "<scaleSetName>-<jobID>"
+		// and the worker pod embeds that same jobID, so the two can be reconciled.
+		Eventually(func(g Gomega) {
+			g.Expect(scaleSetJobRunnerName(g, repoSlug, runID)).NotTo(BeEmpty(),
+				"GitHub reports the job in_progress but names no runner yet")
+		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		assertWorkerRunsTheJob(scaleSetTenantNS, podName,
+			scaleSetJobRunnerName(Default, repoSlug, runID))
+
 		relayLog := followPodLogs(scaleSetTenantNS, podName)
 		observed := newPhaseRecorder(scaleSetTenantNS, podName)
 		stopSampling := observed.start(time.Second)
@@ -1219,11 +1256,21 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		AddReportEntry("Q396 scale-set kubelet eviction message", evictionMessage)
 		AddReportEntry("Q396 scale-set runner container exit code", strconv.Itoa(exitCode))
 		AddReportEntry("Q396 scale-set fill to kubelet eviction", evictedAt.Sub(filledAt).Round(time.Second).String())
-		AddReportEntry("Q396 scale-set worker log tail across the eviction", relayLog.stopAndRead())
+		// Two captures, read together — see the classic spec above (Q657).
+		followerLog := relayLog.stopAndRead()
+		AddReportEntry("Q396 scale-set worker log tail across the eviction", followerLog)
+		podLog, podLogOK := evictedWorkerLog("Q396 scale-set", scaleSetTenantNS, podName)
+		workerLogs := []workerLogSource{
+			{name: "follower", log: followerLog, ok: strings.TrimSpace(followerLog) != ""},
+			{name: "pod", log: podLog, ok: podLogOK},
+		}
 
-		By("confirming the runner was killed outright rather than asked to stop")
+		By("confirming the kubelet killed the runner rather than asking it to stop")
+		// 137 says the kubelet took the container, and nothing more — see the classic
+		// spec's reasoning. This is the tier on which a 137 exit was measured on both
+		// sides of the outcome split.
 		Expect(exitCode).To(Equal(137),
-			"the evicted runner exited %d, not SIGKILL; this is not the ungraceful path", exitCode)
+			"the evicted runner exited %d, not SIGKILL; the kubelet did not take this container", exitCode)
 
 		By("waiting for GitHub to conclude the job it can no longer hear from")
 		// The measurement, and the number the classic half puts at 9m36s. Pinned to
@@ -1247,10 +1294,24 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		AddReportEntry("Q396 scale-set server timestamps",
 			fmt.Sprintf("container finishedAt=%s, GitHub completed_at=%s",
 				evictedAt.Format(time.RFC3339), concludedAt.Format(time.RFC3339)))
+		recordEvictionOutcome("Q396 scale-set", concludedAt.Sub(evictedAt), exitCode, workerLogs,
+			firstJobStepRecords(repoSlug, runID, 1))
+		// Scale-set only, and a fourth independent read of when GitHub gave up: the
+		// listener stamps this the moment its queue delivers the terminal JobCompleted
+		// for the job (markJobCompleted), so it dates the conclusion from inside the
+		// cluster rather than from GitHub's own record. Empty once the reaper has been.
+		AddReportEntry("Q396 scale-set job-completed-at stamped on the worker",
+			podAnnotationBestEffort(scaleSetTenantNS, podName, "actions-gateway.com/job-completed-at"))
 
 		By("asserting the owning reconciler detected the disruption and reached recovery")
 		agcLog := agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy)
 		AddReportEntry("Q396 scale-set AGC eviction log lines", agcLog)
+		// The filtered view above is what the assertions below read, and it drops
+		// everything about the job's own lifecycle — which is why the 2026-08-03 runs left
+		// no way to see what the listener made of the disruption. The unfiltered tail is
+		// for diagnosis only; it is bounded because this tenant runs at logLevel: debug.
+		AddReportEntry("Q396 scale-set AGC log tail, unfiltered",
+			agcDeploymentLogTail(scaleSetTenantNS, scaleSetAGCDeploy, 1000))
 		Expect(agcLog).NotTo(ContainSubstring("worker pod disrupted but run_id unknown"),
 			"the AGC saw the eviction but had no run identity to recover with. Log:\n%s", agcLog)
 
@@ -1554,6 +1615,19 @@ func agcDeploymentLog(ns, deployment string) string {
 	return out
 }
 
+// agcDeploymentLogTail reads the last lines of a named AGC Deployment's log, for a
+// diagnostic report entry rather than an assertion. Bounded because a tenant running at
+// logLevel: debug produces more than a report should carry, and tolerant of a failed read
+// because losing a diagnostic must not fail a measurement that otherwise completed.
+func agcDeploymentLogTail(ns, deployment string, lines int) string {
+	out, err := utils.Run(exec.Command("kubectl", "logs", "-n", ns,
+		"deployment/"+deployment, fmt.Sprintf("--tail=%d", lines)))
+	if err != nil {
+		return fmt.Sprintf("(could not read AGC log from %s/%s: %v)", ns, deployment, err)
+	}
+	return out
+}
+
 // dispatchAndResolveRun dispatches a workflow_dispatch workflow on main and returns
 // the database ID of the run it created.
 //
@@ -1845,9 +1919,11 @@ func overflowEphemeralStorage(ns, podName string, sizeMiB int) string {
 // is the fallback, at second granularity, and the caller sees which one it got from the
 // message that comes back with it.
 //
-// The exit code is what distinguishes this disruption from every graceful one: an
-// ephemeral-storage eviction kills with no grace period, so the runner dies on SIGKILL
-// (137) with nothing relayed and nothing reported to GitHub.
+// The exit code says the kubelet killed rather than asked: 137 is SIGKILL. It does not
+// say the runner was silent — a runner that gets its report out and then overruns its
+// grace is SIGKILLed too, and both 2026-08-03 scale-set runs exited 137 while concluding
+// 9m38s and 17s after the kill. What the runner managed to say is read from its log and
+// from GitHub's step records instead (recordEvictionOutcome).
 func evictionFacts(ns, name string) (killedAt time.Time, exitCode int, message string) {
 	GinkgoHelper()
 	exitCode = -1
@@ -1878,6 +1954,182 @@ func evictionFacts(ns, name string) (killedAt time.Time, exitCode int, message s
 		"neither the container's finishedAt nor an Evicted Event carries a usable kill time; "+
 			"there is no server-side timestamp to measure latency from")
 	return t, exitCode, message + " [timestamp from the Evicted Event, not the container status]"
+}
+
+// relayRanMarker is what the worker wrapper logs when it receives a termination signal
+// and passes it to the runner (terminationRelay, cmd/worker/main.go). Its presence in an
+// evicted worker's log is direct evidence that the kill left a window to report in.
+const relayRanMarker = "forwarding termination signal to child"
+
+// evictedWorkerLog reads an evicted worker's container log whole, off the pod object, and
+// reports it before returning it.
+//
+// It is a second, independent read alongside the follower, and the weaker of the two:
+// measured 2026-08-03, the kubelet had already removed the evicted container and kubectl
+// answered `unable to retrieve container logs for containerd://…`. The follower is what
+// captured the last instant on that run, streaming to within a second of the container's
+// finishedAt. So this read is corroboration, never the sole source — and `ok` is what
+// keeps a failed read from being mistaken for a silent runner.
+//
+// It reports at the point of capture rather than leaving that to the caller's verdict,
+// because a capture is worth most on the runs that fail: the 2026-08-03 re-measurement
+// took this log and then lost it to an assertion that fired before the verdict was
+// written. The one thing a diagnostic must not do is depend on the spec getting further.
+func evictedWorkerLog(prefix, ns, name string) (log string, ok bool) {
+	out, err := utils.Run(exec.Command("kubectl", "logs", "-n", ns, name, "-c", "runner"))
+	// kubectl reports a container the kubelet has already reclaimed on stdout and still
+	// exits 0, so the exit status alone does not say whether a log came back.
+	ok = err == nil && !strings.Contains(out, "unable to retrieve container logs")
+	if !ok {
+		out = fmt.Sprintf("(no log readable off the evicted pod: err=%v, output=%s)", err, out)
+	}
+	AddReportEntry(prefix+" evicted worker log, read whole off the pod", out)
+	return out, ok
+}
+
+// scaleSetJobRunnerName returns the runner GitHub records as executing the run's first
+// job, "" while it names none. This is the only source that knows which of a tenant's
+// runners actually took the job; the cluster side can only say which pods exist.
+func scaleSetJobRunnerName(g Gomega, repoSlug, runID string) string {
+	out, err := utils.Run(exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/actions/runs/%s/jobs?filter=latest", repoSlug, runID),
+		"--jq", ".jobs[0].runner_name"))
+	g.Expect(err).NotTo(HaveOccurred())
+	name := strings.TrimSpace(out)
+	if name == "null" {
+		return ""
+	}
+	return name
+}
+
+// assertWorkerRunsTheJob requires the worker about to be disrupted to be the one GitHub
+// says is executing the job.
+//
+// The scale-set runner is named "<scaleSetName>-<jobID>" (listener.runnerName) and the
+// worker pod's name embeds the same jobID, truncated to fit the name budget. Comparing
+// the jobID's first segment reconciles them: it is 8 hex characters, which separates a
+// tenant's handful of concurrent workers without depending on how far the pod name was
+// truncated.
+//
+// This exists because the run-id annotation alone put the wrong pod under the eviction
+// lever on 2026-08-03 (Q657). The diagnostic lists every worker in the namespace, because
+// "the annotation matched a different pod than GitHub named" is only actionable next to
+// the set it was chosen from.
+func assertWorkerRunsTheJob(ns, podName, runnerName string) {
+	GinkgoHelper()
+	jobID := strings.TrimPrefix(runnerName, scaleSetLabel+"-")
+	Expect(jobID).NotTo(Equal(runnerName),
+		"GitHub named runner %q, which does not carry the %q prefix this scale set registers under",
+		runnerName, scaleSetLabel)
+
+	segment, _, _ := strings.Cut(jobID, "-")
+	Expect(segment).NotTo(BeEmpty(), "runner %q carries no job ID", runnerName)
+	Expect(podName).To(ContainSubstring(segment),
+		"the worker about to be evicted is %s, but GitHub says the job is executing on runner %q "+
+			"(job ID %s) — evicting this pod would measure the loss of a runner that has no job. "+
+			"Workers in %s: %s",
+		podName, runnerName, jobID, ns, strings.Join(allWorkerPods(Default, ns), ", "))
+}
+
+// podAnnotationBestEffort is podAnnotation for a pod that may legitimately be gone.
+//
+// The eviction specs read annotations that are only written late — after GitHub has
+// concluded the run, by which time the AGC's reaper may have taken the object. That read
+// is a diagnostic, so a missing pod has to come back as an empty string rather than fail
+// a measurement that already completed.
+func podAnnotationBestEffort(ns, name, key string) string {
+	out, err := utils.Run(exec.Command("kubectl", "get", "pod", name, "-n", ns,
+		"--ignore-not-found",
+		"-o", fmt.Sprintf("jsonpath={.metadata.annotations['%s']}", strings.ReplaceAll(key, ".", `\.`))))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// firstJobStepRecords renders the per-step records GitHub holds for one attempt's first
+// job, as "<number>. <name>=<status>/<conclusion>" lines.
+//
+// This is the read of "did the runner report?" that does not depend on capturing a log at
+// all, and it is the one evidence source that survived every capture failure: the runner
+// posts step results as it executes them, and a job GitHub concludes by itself — because a
+// lock stopped being renewed — has no such post behind it.
+//
+// The lock-lapsed shape is measured (2026-08-03, 9m45s to conclusion): the job reads
+// `completed/failure` while the step it was interrupted in is frozen at
+// `in_progress/null`. The shape a reported loss leaves has not been captured yet, so this
+// stays evidence rather than an assertion.
+func firstJobStepRecords(repoSlug, runID string, attempt int) string {
+	out, err := utils.Run(exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/actions/runs/%s/attempts/%d/jobs", repoSlug, runID, attempt),
+		"--jq", `.jobs[0].steps[] | "\(.number). \(.name)=\(.status)/\(.conclusion)"`))
+	if err != nil {
+		return fmt.Sprintf("(could not read step records: %v)", err)
+	}
+	if strings.TrimSpace(out) == "" {
+		return "(no step records)"
+	}
+	return strings.TrimSpace(out)
+}
+
+// recordEvictionOutcome writes one line classifying a measured eviction, followed by the
+// evidence the classification rests on.
+//
+// A kubelet ephemeral-storage eviction produces one of two outcomes and the spec cannot
+// choose which: measured 2026-08-03, two runs of one spec on one build split 9m38s to
+// conclusion against 17s. Latency is what separates them (see reportedItsOwnLoss), but
+// latency alone cannot say *why*, and neither of those runs captured enough to tell —
+// which is the whole of Q657. So every run states its verdict and its evidence in one
+// place, and a later run's observation can be pooled with this one's instead of read
+// alone.
+//
+// It is called as soon as the conclusion has been timed, ahead of the recovery
+// assertions, because an eviction that recovery then mishandles is still an observation
+// of the split.
+//
+// relayRan is three-valued on purpose. The marker's absence only means the relay did not
+// run if a log was actually read, and on 2026-08-03 the post-hoc read came back empty
+// because the kubelet had reclaimed the container — which an unguarded Contains would
+// have rendered as a measured `false`.
+func recordEvictionOutcome(prefix string, evictionToConclusion time.Duration, exitCode int,
+	logs []workerLogSource, stepRecords string,
+) {
+	verdict := "lock-lapsed"
+	if evictionToConclusion < reportedItsOwnLoss {
+		verdict = "report-escaped"
+	}
+
+	relayRan, read := "unknown", []string{}
+	for _, src := range logs {
+		if !src.ok {
+			continue
+		}
+		read = append(read, src.name)
+		if strings.Contains(src.log, relayRanMarker) {
+			relayRan = "true"
+		} else if relayRan == "unknown" {
+			relayRan = "false"
+		}
+	}
+	if len(read) == 0 {
+		read = append(read, "none")
+	}
+
+	AddReportEntry(prefix+" eviction outcome", fmt.Sprintf(
+		"verdict=%s latency=%s exitCode=%d relayRan=%s logsRead=%s",
+		verdict, evictionToConclusion.Round(time.Second), exitCode,
+		relayRan, strings.Join(read, "+")))
+	AddReportEntry(prefix+" GitHub step records for the interrupted attempt", stepRecords)
+}
+
+// workerLogSource is one capture of a disrupted worker's output, carrying whether the
+// capture actually produced anything. The two sources fail in different ways — the
+// follower dies with the container mid-write, the post-hoc read finds the container
+// already reclaimed — so the verdict reads both and says which ones answered.
+type workerLogSource struct {
+	name string
+	log  string
+	ok   bool
 }
 
 // agcEvictionLog returns the AGC's log lines about eviction handling. Scoped to the
