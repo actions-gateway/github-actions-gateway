@@ -3119,12 +3119,12 @@
 <td>Three shapes, three bespoke checks: shared paths across two <code>filters:</code> (Q533), <code>on.push.paths</code> vs its filter (gated), <code>pull_request.paths</code> vs <code>push.paths</code> (ungated). One registry replaces all three, over Q584's <code>devtools/ci/pathfilters</code> parser.</td>
 </tr>
 <tr>
-<td><a id="Q591"></a>Q591</td>
-<td><a href="../operations/troubleshooting/#proxy-pool-not-scaling">The <code>AmbiguousSelector</code> runbook quotes a controller message nothing measured</a></td>
-<td><code>docs</code> <code>tests</code> <code>retro</code></td>
+<td><a id="Q672"></a>Q672</td>
+<td><a href="../operations/troubleshooting/#proxy-pool-not-scaling">The proxy-scaling runbook's <code>ResourceQuota</code> strings are unmeasured</a></td>
+<td><code>docs</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q582's runbook quotes a verbatim <code>AmbiguousSelector</code> message from source recollection: k8s.io/kubernetes is not vendored and envtest runs no HPA controller. The kind e2e has one plus metrics-server — measure there. A cite-a-measurement instance.</td>
+<td>Q591 measured the <code>&lt;unknown&gt;</code> causes; the quota one needs its own repro. <code>FailedCreate ... exceeded quota</code>, <code>ReplicaFailure</code> with <code>exceeded quota</code>, and the "~30s" scrape cycle are unmeasured.</td>
 </tr>
 <tr>
 <td><a id="Q588"></a>Q588</td>
