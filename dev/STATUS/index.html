@@ -3132,15 +3132,7 @@
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>L</td>
-<td>Measured 2026-08-03: 3,918 corpus-wide, 189 cut on the website tier. Worst: troubleshooting.md 559, appendix-h 245, security-operations 228. Rule and threshold in documentation-standards.md. Reconcile each file's dash shapes before transforming.</td>
-</tr>
-<tr>
-<td><a id="Q654"></a>Q654</td>
-<td><a href="../plan/markdown-gates-parser/">Nothing enforces the em-dash density rule, so it can drift as its predecessor did</a></td>
-<td><code>docs</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The rule that produced 3,918 dashes was prose-only too. A counter must skip code fences and title separators (<code>Appendix A — Capacity…</code>), which regex cannot do. Makes <a href="#Q650">Q650</a> measurable.</td>
+<td>Measured 2026-08-04, code/headings/link text excluded: 9,993 in 584,490 words, 17.1 per 1,000 vs 3; 231 of 249 files over. <code>make em-dash-report</code> ranks them; the <a href="../development/documentation-standards/#enforcing-the-em-dash-rule">gate</a> ratchets each.</td>
 </tr>
 </tbody>
 </table>

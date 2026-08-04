@@ -2505,6 +2505,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#enforcing-the-em-dash-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enforcing the em-dash rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#an-upstream-behavior-claim-cites-a-measurement" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2749,8 +2760,9 @@ specific and honest.</p>
   a signature, and it is the surface tell readers spot fastest. Reach for a comma, a
   period, a colon, or parentheses first, and keep the dash only where the aside really
   does interrupt the sentence and no other mark carries it. Two dashes in one sentence
-  almost always means the sentence wants to be two sentences. Count with
-  <code>grep -o '—' &lt;file&gt; | wc -l</code>; above roughly 3 per 1,000 words, rewrite.</li>
+  almost always means the sentence wants to be two sentences. Above roughly 3 per 1,000
+  words, rewrite. <code>make em-dash-check</code> enforces it: see
+  <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</li>
 <li><strong>Formatting in moderation.</strong> Bold the keyword, not the sentence; sentence-case
   headings, not Title Case; no emoji as bullets or status markers. Mechanical,
   every-line formatting is itself a tell. (The one sanctioned Title-Case heading is the
@@ -2760,6 +2772,58 @@ specific and honest.</p>
 untouched produces well-punctuated filler, and no amount of substance survives prose
 that reads as machine-generated on sight. Neither half is optional, and neither
 substitutes for the other.</p>
+<h2 id="enforcing-the-em-dash-rule">Enforcing the em-dash rule<a class="headerlink" href="#enforcing-the-em-dash-rule" title="Permanent link">&para;</a></h2>
+<p><code>make em-dash-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-em-dash.sh"><code>scripts/docs/check-em-dash.sh</code></a>)
+counts the dashes and fails the build. It runs inside <code>make check</code> and as its own job in
+the <code>doc-links</code> CI workflow.</p>
+<p><strong>What it does not count.</strong> A raw <code>grep -o '—' | wc -l</code> was the rule's only instrument
+before, and it counts four shapes where the dash is legitimate, which is most of why the
+rule was unmeasurable. The counter reads the parsed document instead
+(<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/emdash"><code>devtools/docs/emdash</code></a>, over the goldmark layer Q612
+built), and skips:</p>
+<table>
+<thead>
+<tr>
+<th>Skipped</th>
+<th>Why</th>
+<th>In the tree</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fenced and indented code blocks, inline code spans</td>
+<td>The dash is part of a command or an identifier</td>
+<td>289</td>
+</tr>
+<tr>
+<td>Heading text</td>
+<td>The title separator, <code>2.1. Tier 1 — Gateway Manager Controller</code>, is this docset's section-naming convention</td>
+<td>590</td>
+</tr>
+<tr>
+<td>Link text</td>
+<td>Every one is a title citation, <code>[Appendix A — Capacity Targets &amp; SLOs](…)</code>, reproducing a heading the linking file does not own</td>
+<td>127</td>
+</tr>
+<tr>
+<td>Raw HTML, block and inline</td>
+<td>Markup and comments, which no reader sees</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<p>Words are skipped with them, so a long code block buys a page no headroom. Table cells,
+blockquotes and list items are prose and are counted.</p>
+<p><strong>The baseline.</strong> With those exclusions the tree measured 9,993 em-dashes in 584,490
+prose words on 2026-08-04, 17.1 per 1,000, with 231 of 249 files above the rule. A gate set at 3
+would land red on everything and be switched off, so
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/em-dash-baseline.txt"><code>scripts/docs/em-dash-baseline.txt</code></a> freezes
+each of those files at its current count as a ceiling. A listed file may not gain
+em-dashes; a file with no entry, including every new doc, is held to the rule itself.</p>
+<p><a href="../../STATUS/#Q650">Q650</a> is the cleanup. As it lands, <code>make em-dash-baseline</code> re-records
+the ceilings and the diff is the measure of what it cleared; an entry disappears once its
+file reaches the rule, and an empty baseline means the ratchet is done.
+<code>make em-dash-report</code> prints every file's density, worst first, which is the worklist.</p>
 <h2 id="an-upstream-behavior-claim-cites-a-measurement">An upstream-behavior claim cites a measurement<a class="headerlink" href="#an-upstream-behavior-claim-cites-a-measurement" title="Permanent link">&para;</a></h2>
 <p>A sentence about how something outside this repo behaves is a claim nobody here can
 check, and it goes stale with no commit, no red gate, and no other signal. Write the
@@ -2956,6 +3020,11 @@ exists today, and what's proposed:</p>
 <td><code>make docs-build</code> — the same links as the published site resolves them (Q560)</td>
 <td>1, 2</td>
 <td>Wired (<code>pages.yml</code> PR gate). Catches the site-only 404s <code>doc-links</code> cannot see.</td>
+</tr>
+<tr>
+<td><code>make em-dash-check</code>: em-dash density, code and titles excluded (Q654)</td>
+<td>1</td>
+<td>Wired (<code>make check</code>). Ratchets against a per-file baseline while <a href="../../STATUS/#Q650">Q650</a> clears the debt; see <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</td>
 </tr>
 <tr>
 <td>Periodic docs-vs-code drift audit</td>
