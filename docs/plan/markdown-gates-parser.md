@@ -52,10 +52,10 @@ Measured against the verbatim collection block:
 
 | Input | Collected | Effect |
 |---|---|---|
-| `[![badge](img)](target)` | the *image* target | dead outer link invisible — **live, 3 in README** |
+| `[![badge](img)](target)` | the *image* target | dead outer link invisible; **live, 3 in README** |
 | `[see [inner]](target)` | *nothing* | link silently skipped entirely |
 | `[wiki](docs/a(x).md)` | `docs/a(x` | truncated → false positive |
-| setext heading (`===`) | never registered as an anchor | false positive — latent, none in tracked docs |
+| setext heading (`===`) | never registered as an anchor | false positive; latent, none in tracked docs |
 
 Blast radius is the highest of the four: it runs in `make check`, in `STATUS_GATES`,
 and in its own [`doc-links.yml`](../../.github/workflows/doc-links.yml) workflow.
@@ -244,7 +244,7 @@ is the shape and not the target.
 The rules moved to `devtools/docs/backloglint`; `Tables()` on the parse layer is
 the only shared-package addition. The script kept the file selection and the
 environment interface (`NOTES_MAX_CHARS`, `BACKLOG_ALLOW_*`), mapping them onto
-flags — 518 lines to 92.
+flags: 518 lines to 92.
 
 **The reconciliation is the evidence.** `lint-backlog-test.sh` grew from 53 to 67
 cases, covering all 12 rules, and `LINT_BACKLOG_BIN` points the whole suite at
@@ -294,7 +294,7 @@ divergence was one `brew install gawk` away from arriving on a laptop.
 longest is [Q555](../STATUS.md#Q555) at 249 bytes / 249 characters, confirming
 the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B
 / 206 chars). Nothing is over cap on either scale, and runes ≤ bytes always, so
-moving to characters can only relax — never break — an existing row.
+moving to characters can only relax, never break, an existing row.
 
 **One workflow gap closed.** `status-lint.yml` gated on `scripts/docs/lint-backlog.sh`
 alone, which no longer holds the rules; it now also triggers on `devtools/**`,
