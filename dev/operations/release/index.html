@@ -4488,11 +4488,19 @@ write</code>: its ambient OIDC identity <em>is</em> the release trust root. A hi
 that job could push and keyless-sign malicious images as the legitimate publish
 identity. Three controls keep the pipeline itself trustworthy.</p>
 <h3 id="actions-are-pinned-to-full-commit-shas">Actions are pinned to full commit SHAs<a class="headerlink" href="#actions-are-pinned-to-full-commit-shas" title="Permanent link">&para;</a></h3>
-<p>Every <code>uses:</code> across <code>.github/workflows/</code> is pinned to a full 40-char commit SHA
-with a trailing <code># vX.Y.Z</code> comment for readability — never a floating tag (<code>@v4</code>)
-or branch. A tag is mutable: whoever controls the upstream repo can repoint it at
-new code, which would then run inside the privileged publish job. A SHA is
-immutable. The runtime tool downloads in the publish path are pinned the same way:
+<p>Every <code>uses:</code> in the repo is pinned to a full 40-char commit SHA with a trailing
+<code># vX.Y.Z</code> comment — never a floating tag (<code>@v4</code>) or branch. A tag is mutable:
+whoever controls the upstream repo can repoint it at new code, which would then
+run inside the privileged publish job. A SHA is immutable. The comment is not
+decoration: it is what Dependabot reads to know which release a SHA is, so a pin
+without one is a pin nothing will bump.</p>
+<p><code>make uses-pinned-check</code> enforces both halves, and the CI <code>uses-pinned</code> job
+(<code>unit-test.yml</code>) runs it on any workflow change. Exempt shapes, because neither
+is a mutable third-party reference: a local <code>./…</code> action or reusable workflow,
+which is in-tree code the same PR reviews, and a <code>docker://</code> image, which must
+carry an <code>@sha256:</code> digest instead. An unparseable workflow fails the gate rather
+than being skipped.</p>
+<p>The runtime tool downloads in the publish path are pinned the same way:
 <code>cosign</code> via <code>sigstore/cosign-installer</code> with an explicit <code>cosign-release</code>
 (kept in step with <code>COSIGN_VERSION</code> in the Makefile so a local <code>make
 verify-release</code> uses the same version that signed), and <code>syft</code> via the
@@ -4508,9 +4516,17 @@ commit SHA and keep the comment in sync:</p>
 </code></pre></div>
 <p><code>syft-version</code> is <strong>not</strong> Dependabot-managed (it's a tool download, not an action
 ref) — bump it by hand in <code>publish.yml</code> when you bump the <code>anchore/sbom-action</code>
-SHA. The CI <code>actionlint</code> job (<code>unit-test.yml</code>) checks that every <code>uses:</code> carries a
-well-formed ref, so a pin edited down to a bare <code>owner/repo</code> fails the PR; it does
-not check that the ref is a SHA rather than a tag — that stays a review call.</p>
+SHA.</p>
+<p>The two workflow gates divide the work, and it is worth knowing which answers
+what. <code>actionlint</code> checks that a <code>uses:</code> ref is present and well formed, so a pin
+edited down to a bare <code>owner/repo</code> fails the PR. But measured against v1.7.12,
+the version <code>tools/</code> pins, it accepts <code>@v7.0.1</code>, <code>@v4</code> and <code>@main</code> at exit 0,
+resolving the action's inputs off the tag while doing so. It reads the ref and
+never asserts it is a SHA. <code>uses-pinned-check</code> is the gate for that, and its scope
+is wider: actionlint lints only the root <code>.github/workflows/</code> directory, while the
+pin gate covers every workflow and composite action in the tree,
+including <code>cmd/gmc/.github/workflows/</code>: kubebuilder scaffolding GitHub never
+runs, whose refs no gate had read before.</p>
 <h3 id="signing-identity-is-tags-only">Signing identity is tags-only<a class="headerlink" href="#signing-identity-is-tags-only" title="Permanent link">&para;</a></h3>
 <p>Releases are cut by pushing a <code>v*</code> tag, so a legitimate keyless signature's Fulcio
 certificate records <code>publish.yml</code> running from <code>refs/tags/vX.Y.Z</code>. Two layers

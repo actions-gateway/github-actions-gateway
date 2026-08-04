@@ -2836,14 +2836,6 @@
 <td>Q643 shipped the <code>{reason}</code>-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every <code>gridPos</code> below y=52 and needs a <code>render.sh</code> re-shoot. Should <code>AwaitingProbe</code> alert?</td>
 </tr>
 <tr>
-<td><a id="Q644"></a>Q644</td>
-<td><a href="../operations/release/#supply-chain-integrity-of-the-pipeline-itself">Nothing enforces that a <code>uses:</code> ref is a SHA rather than a tag</a></td>
-<td><code>security</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured under Q579: actionlint accepts <code>actions/checkout@v7.0.1</code> at exit 0 — it checks a ref is present and well-formed, not that it is 40-hex. Every ref is a SHA today, so the gap is latent; Dependabot cannot stop a tag being written.</td>
-</tr>
-<tr>
 <td><a id="Q625"></a>Q625</td>
 <td><a href="../development/testing/#the-status-you-report-is-a-claim-too">Nothing catches a gate's exit code read through a pipe</a></td>
 <td><code>tests</code> <code>retro</code></td>
@@ -3354,6 +3346,13 @@
 <td><code>feature</code></td>
 <td>S</td>
 <td><strong>Event:</strong> orphan scale sets recur or an operator wants a prune path. Q334 fixed runner-<em>record</em> orphans, not stale <em>scale sets</em>; a throwaway deleted <code>gag-scaleset3</code>. Add a <code>scaleset</code> prune command.</td>
+</tr>
+<tr>
+<td><a id="Q678"></a>Q678</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">Re-assess the script entry point once most gate cores are Go</a></td>
+<td><code>debt</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Decision:</strong> enough gate cores have moved to Go to judge the seam on more than one instance. Every devtools program is fronted by a <code>scripts/&lt;group&gt;/</code> script doing file selection plus the build; whether that still earns its keep is unmeasured.</td>
 </tr>
 </tbody>
 </table>
