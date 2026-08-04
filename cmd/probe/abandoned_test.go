@@ -54,6 +54,12 @@ func TestParseAbandonedConfig_Defaults(t *testing.T) {
 	if cfg.RunnerVersion != "2.335.1" {
 		t.Errorf("RunnerVersion = %q, want 2.335.1", cfg.RunnerVersion)
 	}
+	if cfg.Result != broker.TaskResultAbandoned {
+		t.Errorf("Result = %q, want abandoned", cfg.Result)
+	}
+	if cfg.RerunCheck {
+		t.Error("RerunCheck = true, want false by default")
+	}
 	if cfg.Timeout != 5*time.Minute || cfg.Window != 20*time.Minute {
 		t.Errorf("Timeout/Window = %v/%v, want 5m/20m", cfg.Timeout, cfg.Window)
 	}
@@ -73,6 +79,8 @@ func TestParseAbandonedConfig_Overrides(t *testing.T) {
 	t.Parallel()
 	cfg, err := parseAbandonedConfig(testAbandonedEnv(t, map[string]string{
 		"PROBE_ABANDONED_LABEL":          "my-label",
+		"PROBE_ABANDONED_RESULT":         "failed",
+		"PROBE_ABANDONED_RERUN_CHECK":    "true",
 		"PROBE_ABANDONED_WORKFLOW":       "other.yml",
 		"PROBE_ABANDONED_RUNNER_VERSION": "2.999.0",
 		"PROBE_ABANDONED_TIMEOUT":        "30s",
@@ -83,6 +91,9 @@ func TestParseAbandonedConfig_Overrides(t *testing.T) {
 	}
 	if cfg.Label != "my-label" || cfg.WorkflowFile != "other.yml" || cfg.RunnerVersion != "2.999.0" {
 		t.Errorf("overrides not applied: %+v", cfg)
+	}
+	if cfg.Result != broker.TaskResultFailed || !cfg.RerunCheck {
+		t.Errorf("Result/RerunCheck = %q/%v, want failed/true", cfg.Result, cfg.RerunCheck)
 	}
 	if cfg.Timeout != 30*time.Second || cfg.Window != time.Minute {
 		t.Errorf("Timeout/Window = %v/%v, want 30s/1m", cfg.Timeout, cfg.Window)
@@ -186,9 +197,14 @@ type abandonedRESTStub struct {
 	// when a record with the requested name survives an interrupted run.
 	conflictOnce atomic.Bool
 
+	// rerunStatus is the status code POST …/rerun-failed-jobs answers with
+	// (default 201).
+	rerunStatus atomic.Int32
+
 	registrations atomic.Int64
 	deregistered  atomic.Int64
 	cancels       atomic.Int64
+	reruns        atomic.Int64
 }
 
 func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *abandonedRESTStub {
@@ -197,6 +213,7 @@ func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *
 	s.jobStatus.Store(func() (string, string) { return "queued", "" })
 	s.runStatus.Store(func() (string, string) { return "queued", "" })
 	s.runners.Store([]restRunner{})
+	s.rerunStatus.Store(int32(http.StatusCreated))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /oauth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -246,6 +263,10 @@ func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *
 		s.cancels.Add(1)
 		w.WriteHeader(http.StatusAccepted)
 	})
+	mux.HandleFunc("POST /repos/my-org/my-repo/actions/runs/7/rerun-failed-jobs", func(w http.ResponseWriter, _ *http.Request) {
+		s.reruns.Add(1)
+		w.WriteHeader(int(s.rerunStatus.Load()))
+	})
 	s.srv = httptest.NewServer(mux)
 	t.Cleanup(s.srv.Close)
 	return s
@@ -254,7 +275,7 @@ func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *
 // startAbandonedRun wires the full scenario against brokertest + the REST stub
 // and runs it on a goroutine, returning the stubs and a channel carrying the
 // verdict.
-func startAbandonedRun(t *testing.T, window time.Duration, configure func(*abandonedRESTStub)) (*brokertest.Server, *abandonedRESTStub, chan string) {
+func startAbandonedRun(t *testing.T, window time.Duration, env map[string]string, configure func(*abandonedRESTStub)) (*brokertest.Server, *abandonedRESTStub, chan string) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -267,16 +288,21 @@ func startAbandonedRun(t *testing.T, window time.Duration, configure func(*aband
 		configure(rest)
 	}
 
-	cfg, err := parseAbandonedConfig(testAbandonedEnv(t, map[string]string{
+	overrides := map[string]string{
 		"PROBE_ABANDONED_TIMEOUT": "10s",
 		"PROBE_ABANDONED_WINDOW":  window.String(),
-	}))
+	}
+	for k, v := range env {
+		overrides[k] = v
+	}
+	cfg, err := parseAbandonedConfig(testAbandonedEnv(t, overrides))
 	if err != nil {
 		t.Fatalf("parseAbandonedConfig: %v", err)
 	}
 	p := newAbandonedProbe(discardLogger(), cfg, staticTokenProvider{token: "install-token"},
 		rest.srv.URL, bs.HTTPClient(), bs.HTTPClient())
 	p.restPollInterval = 100 * time.Millisecond
+	p.rerunWait = 3 * time.Second
 
 	// The fixture delivery for A. Session IDs are minted sequentially by the
 	// stub, and the probe opens A's session first.
@@ -311,7 +337,7 @@ func waitForCompleteJob(t *testing.T, bs *brokertest.Server) {
 
 func TestAbandonedProbe_Redispatched(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil)
+	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil, nil)
 
 	waitForCompleteJob(t, bs)
 	// The re-dispatch: a fresh delivery reaches B's session after T0.
@@ -349,7 +375,7 @@ func TestAbandonedProbe_Redispatched(t *testing.T) {
 // run measured: the run concludes success while the job record never does.
 func TestAbandonedProbe_ConcludedRunLevel(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil)
+	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil, nil)
 
 	waitForCompleteJob(t, bs)
 	// No redelivery; the run goes terminal while the job stays in_progress.
@@ -369,9 +395,85 @@ func TestAbandonedProbe_ConcludedRunLevel(t *testing.T) {
 	}
 }
 
+// TestAbandonedProbe_RerunCheck drives the Q676 remedy measurement end to end:
+// completejob(failed), the run concludes failure, rerun-failed-jobs is accepted,
+// and the re-queued job reaches the surviving listener.
+func TestAbandonedProbe_RerunCheck(t *testing.T) {
+	t.Parallel()
+	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, map[string]string{
+		"PROBE_ABANDONED_RESULT":      "failed",
+		"PROBE_ABANDONED_RERUN_CHECK": "true",
+	}, nil)
+
+	waitForCompleteJob(t, bs)
+	rest.jobStatus.Store(func() (string, string) { return "in_progress", "" })
+	rest.runStatus.Store(func() (string, string) { return "completed", "failure" })
+
+	// Once the probe posts the rerun, re-queue the job to B's session.
+	deadline := time.After(10 * time.Second)
+	for rest.reruns.Load() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("rerun-failed-jobs never reached the REST stub")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-a2"})
+
+	select {
+	case verdict := <-verdictCh:
+		if verdict != verdictConcluded+"-run-failure" {
+			t.Fatalf("verdict = %q, want %s-run-failure", verdict, verdictConcluded)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("probe did not reach a verdict")
+	}
+	req, ok := bs.LastCompleteJob()
+	if !ok {
+		t.Fatal("no completejob recorded")
+	}
+	if req.Result != broker.TaskResultFailed {
+		t.Errorf("completejob result = %q, want failed", req.Result)
+	}
+	if got := rest.reruns.Load(); got != 1 {
+		t.Errorf("rerun-failed-jobs calls = %d, want 1", got)
+	}
+}
+
+// TestAbandonedProbe_RerunRefused: a non-2xx rerun-failed-jobs answer is a
+// recorded outcome, not a failure — the probe still finishes with the window
+// verdict and cleans up.
+func TestAbandonedProbe_RerunRefused(t *testing.T) {
+	t.Parallel()
+	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, map[string]string{
+		"PROBE_ABANDONED_RESULT":      "failed",
+		"PROBE_ABANDONED_RERUN_CHECK": "true",
+	}, func(s *abandonedRESTStub) {
+		s.rerunStatus.Store(int32(http.StatusForbidden))
+	})
+
+	waitForCompleteJob(t, bs)
+	rest.runStatus.Store(func() (string, string) { return "completed", "failure" })
+
+	select {
+	case verdict := <-verdictCh:
+		if verdict != verdictConcluded+"-run-failure" {
+			t.Fatalf("verdict = %q, want %s-run-failure", verdict, verdictConcluded)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("probe did not reach a verdict")
+	}
+	if got := rest.reruns.Load(); got != 1 {
+		t.Errorf("rerun-failed-jobs calls = %d, want 1", got)
+	}
+	if got := rest.cancels.Load(); got != 1 {
+		t.Errorf("cleanup cancels = %d, want 1", got)
+	}
+}
+
 func TestAbandonedProbe_ConcludedJobLevel(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil)
+	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil, nil)
 
 	waitForCompleteJob(t, bs)
 	// No redelivery; instead the REST job goes terminal.
@@ -389,7 +491,7 @@ func TestAbandonedProbe_ConcludedJobLevel(t *testing.T) {
 
 func TestAbandonedProbe_NoSignal(t *testing.T) {
 	t.Parallel()
-	bs, _, verdictCh := startAbandonedRun(t, 2*time.Second, nil)
+	bs, _, verdictCh := startAbandonedRun(t, 2*time.Second, nil, nil)
 
 	waitForCompleteJob(t, bs)
 	// Nothing happens on either channel; the window closes.
@@ -409,7 +511,7 @@ func TestAbandonedProbe_NoSignal(t *testing.T) {
 // record also exercises the startup stale-runner report.
 func TestAbandonedProbe_RecoversRunnerNameConflict(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, func(s *abandonedRESTStub) {
+	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil, func(s *abandonedRESTStub) {
 		s.conflictOnce.Store(true)
 		s.runners.Store([]restRunner{{
 			ID: 55, Name: "gag-q645-abandoned-a", Status: "offline",
@@ -530,6 +632,7 @@ func TestParseAbandonedConfig_Errors(t *testing.T) {
 		{name: "bad installation id", overrides: map[string]string{"GITHUB_APP_INSTALLATION_ID": "nope"}},
 		{name: "bad timeout", overrides: map[string]string{"PROBE_ABANDONED_TIMEOUT": "soon"}},
 		{name: "bad window", overrides: map[string]string{"PROBE_ABANDONED_WINDOW": "later"}},
+		{name: "bad result", overrides: map[string]string{"PROBE_ABANDONED_RESULT": "exploded"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

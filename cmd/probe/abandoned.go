@@ -1,14 +1,16 @@
-// Investigation H (Q645): what does the run service do with an `abandoned`
-// completion — re-dispatch the job, or conclude it?
+// Investigation H (Q645/Q676): what does the run service do with a completion
+// for an acquired-but-never-run assignment — re-dispatch the job, or conclude
+// it, and with which conclusion?
 //
 // Set PROBE_ABANDONED_TEST=true to run this scenario instead of the classic
 // broker probe. The Q628 fix releases an acquired-but-never-run job assignment
 // (worker pod reaped while Pending, no runner binary ever registered) with
-// POST {run_service_url}/completejob result=abandoned. Whether GitHub then
-// re-queues the job for the next runner or drives it terminal is unmeasured,
-// and decides whether the listener also needs a re-run arm. The same call
-// live-confirms the completejob wire serialization broker/types.go flags as
-// unverified — the reason AGC_FANOUT_COMPLETION defaults off.
+// POST {run_service_url}/completejob. The 2026-08-04 run measured
+// result=abandoned: the run concluded SUCCESS one second later — a false green
+// (the Q645 findings). PROBE_ABANDONED_RESULT re-runs the same instrument with
+// a candidate remedy value (Q676), and PROBE_ABANDONED_RERUN_CHECK=true adds
+// the half a conclusion alone cannot prove: whether the concluded run gives
+// POST /actions/runs/{id}/rerun-failed-jobs a target.
 //
 // One run, two repo-level JIT runners on the probe label:
 //
@@ -18,7 +20,7 @@
 //	  → POST {serverUrlV2}session per runner                (broker v2, Q267 flow)
 //	  → both sessions long-poll; the fixture job fans out to both
 //	  → A: POST {run_service_url}/acquirejob
-//	  → A: POST {run_service_url}/completejob result=abandoned   [T0]
+//	  → A: POST {run_service_url}/completejob result=<configured>   [T0]
 //	  → A's session deleted, runner deregistered (the listener's post-job recycle)
 //	  → window: B keeps polling (a post-T0 RunnerJobRequest is a re-dispatch)
 //	            while the fixture job's REST status is polled for a conclusion
@@ -42,6 +44,10 @@
 // Optional:
 //
 //	PROBE_ABANDONED_LABEL          - Runner label (default gag-q645-abandoned).
+//	PROBE_ABANDONED_RESULT         - completejob result value (default abandoned;
+//	                                 any broker.TaskResult value).
+//	PROBE_ABANDONED_RERUN_CHECK    - "true" adds the rerun-failed-jobs measurement
+//	                                 after a CONCLUDED-run verdict (default off).
 //	PROBE_ABANDONED_WORKFLOW       - Fixture workflow file (default q645-abandoned-probe.yml).
 //	PROBE_ABANDONED_RUNNER_VERSION - Advertised runner version (default 2.335.1,
 //	                                 the version cmd/agc/names pins).
@@ -95,6 +101,8 @@ type abandonedConfig struct {
 	Repo           string
 
 	Label         string
+	Result        broker.TaskResult
+	RerunCheck    bool
 	WorkflowFile  string
 	RunnerVersion string
 	Timeout       time.Duration
@@ -141,6 +149,17 @@ func parseAbandonedConfig(getenv func(string) string) (abandonedConfig, error) {
 	if cfg.Label == "" {
 		cfg.Label = "gag-q645-abandoned"
 	}
+	cfg.Result = broker.TaskResult(getenv("PROBE_ABANDONED_RESULT"))
+	if cfg.Result == "" {
+		cfg.Result = broker.TaskResultAbandoned
+	}
+	switch cfg.Result {
+	case broker.TaskResultSucceeded, broker.TaskResultSucceededWithIssues, broker.TaskResultFailed,
+		broker.TaskResultCanceled, broker.TaskResultSkipped, broker.TaskResultAbandoned:
+	default:
+		return abandonedConfig{}, fmt.Errorf("PROBE_ABANDONED_RESULT %q is not a broker.TaskResult value", cfg.Result)
+	}
+	cfg.RerunCheck = getenv("PROBE_ABANDONED_RERUN_CHECK") == "true"
 	cfg.WorkflowFile = getenv("PROBE_ABANDONED_WORKFLOW")
 	if cfg.WorkflowFile == "" {
 		cfg.WorkflowFile = "q645-abandoned-probe.yml"
@@ -185,6 +204,9 @@ type abandonedProbe struct {
 	// restPollInterval paces the REST status watch and the observer check during
 	// the window (default 15s; tests shorten it).
 	restPollInterval time.Duration
+	// rerunWait bounds the post-rerun watch for a redelivery (default 2m; tests
+	// shorten it).
+	rerunWait time.Duration
 }
 
 // jitRunner is one repo-level JIT registration: the runner record's identity
@@ -229,6 +251,7 @@ func newAbandonedProbe(logger *slog.Logger, cfg abandonedConfig, provider github
 		pollHC:           wireLoggedClient(pollHC, logger),
 		apiBase:          strings.TrimSuffix(apiBase, "/"),
 		restPollInterval: 15 * time.Second,
+		rerunWait:        2 * time.Minute,
 	}
 }
 
@@ -308,19 +331,19 @@ func (p *abandonedProbe) run(ctx context.Context) (string, error) {
 	err = sessA.bc.CompleteJob(ctx, jobReq.RunServiceURL, broker.CompleteJobRequest{
 		PlanID:    acq.Plan.PlanID,
 		JobID:     jobReq.RunnerRequestID,
-		Result:    broker.TaskResultAbandoned,
+		Result:    p.cfg.Result,
 		AuthToken: jobToken,
 	})
 	if err != nil {
 		p.log.Error("INVESTIGATION-H: VERDICT "+verdictWireRejected+" — the run service refused "+
-			"completejob result=abandoned; the TaskResult serialization broker/types.go flags as "+
-			"unconfirmed is wrong, and the primary question cannot be asked with a refused call",
+			"completejob result="+string(p.cfg.Result)+"; the primary question cannot be asked "+
+			"with a refused call",
 			"error", err)
 		return verdictWireRejected, nil
 	}
 	t0 := time.Now()
-	p.log.Info("INVESTIGATION-H: VERDICT "+verdictWireAccepted+" — completejob result=abandoned "+
-		"accepted (2xx); the wire serialization is live-confirmed",
+	p.log.Info("INVESTIGATION-H: VERDICT "+verdictWireAccepted+" — completejob result="+
+		string(p.cfg.Result)+" accepted (2xx); the wire serialization is live-confirmed",
 		"planId", acq.Plan.PlanID, "jobId", jobReq.RunnerRequestID)
 
 	// The listener's post-job recycle: the consumed delivery's session goes away
@@ -328,7 +351,11 @@ func (p *abandonedProbe) run(ctx context.Context) (string, error) {
 	p.closeSession(ctx, sessA)
 	p.deregisterRunner(ctx, runnerA)
 
-	return p.observe(ctx, obs, jobReq.RunnerRequestID, runID, jobID, t0), nil
+	verdict := p.observe(ctx, obs, jobReq.RunnerRequestID, runID, jobID, t0)
+	if p.cfg.RerunCheck && strings.HasPrefix(verdict, verdictConcluded+"-run-") {
+		p.rerunCheck(ctx, obs, runID, jobID)
+	}
+	return verdict, nil
 }
 
 // ── Observation ──────────────────────────────────────────────────────────────
@@ -436,8 +463,8 @@ func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
 					"sameRequestIdAsAcquired", same, "afterT0", d.At.Sub(t0).Round(time.Second).String())
 			}
 			p.log.Info("INVESTIGATION-H: VERDICT " + verdictRedispatched + " — a RunnerJobRequest " +
-				"reached a live listener after the abandoned completion. The job survives an " +
-				"abandoned completion; the AGC needs no re-run arm, only capacity")
+				"reached a live listener after the " + string(p.cfg.Result) + " completion. The job " +
+				"survives it; the AGC needs no re-run arm, only capacity")
 			return verdictRedispatched
 		}
 
@@ -445,7 +472,7 @@ func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
 		if now.After(deadline) {
 			p.log.Warn("INVESTIGATION-H: VERDICT "+verdictNoSignal+" — no redelivery and no "+
 				"conclusion within the window; the job is dangling as if nothing had been reported, "+
-				"so completejob(abandoned) released nothing",
+				"so completejob("+string(p.cfg.Result)+") released nothing",
 				"window", p.cfg.Window.String(), "lastStatus", lastStatus, "lastConclusion", lastConclusion)
 			return verdictNoSignal
 		}
@@ -477,16 +504,16 @@ func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
 			}
 			if rStatus == "completed" {
 				p.log.Info("INVESTIGATION-H: VERDICT "+verdictConcluded+"-run-"+rConclusion+" — the run "+
-					"went terminal with no redelivery: an abandoned completion ends the run rather than "+
-					"re-queueing the job, so a job that never executed reports this conclusion",
+					"went terminal with no redelivery: a "+string(p.cfg.Result)+" completion ends the run "+
+					"rather than re-queueing the job, so a job that never executed reports this conclusion",
 					"runId", runID, "runConclusion", rConclusion,
 					"jobStatus", status, "jobConclusion", conclusion)
 				return verdictConcluded + "-run-" + rConclusion
 			}
 			if status == "completed" {
 				p.log.Info("INVESTIGATION-H: VERDICT "+verdictConcluded+"-job-"+conclusion+" — the job "+
-					"went terminal with no redelivery: an abandoned completion kills the job, so a "+
-					"re-run arm is needed for it to ever execute",
+					"went terminal with no redelivery: a "+string(p.cfg.Result)+" completion kills the "+
+					"job, so a re-run arm is needed for it to ever execute",
 					"jobId", jobID, "conclusion", conclusion)
 				return verdictConcluded + "-job-" + conclusion
 			}
@@ -502,6 +529,82 @@ func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
 			p.log.Warn("INVESTIGATION-H: interrupted mid-window; no verdict")
 			return ""
 		case <-time.After(wait):
+		}
+	}
+}
+
+// ── Rerun check ──────────────────────────────────────────────────────────────
+
+// rerunCheck measures whether the concluded run gives rerun-failed-jobs a
+// target — the half of a red-conclusion remedy (Q676) the conclusion alone
+// cannot prove, and one the orphaned in_progress job record from the
+// 2026-08-04 run gives real grounds to doubt. Best-effort: every outcome is
+// logged, none is fatal, and the deferred cleanup cancel drives whatever this
+// re-queues terminal. B's session observer is still polling, so a re-queued
+// job reaching a live listener is observed on the same channel a real AGC
+// would see it on.
+func (p *abandonedProbe) rerunCheck(ctx context.Context, obs *sessionObserver, runID, jobID int64) {
+	status, conclusion, err := p.fetchJobStatus(ctx, jobID)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-H: rerun check: job status fetch failed", "jobId", jobID, "error", err)
+	} else {
+		p.log.Info("INVESTIGATION-H: rerun check: job record before rerun-failed-jobs",
+			"jobId", jobID, "status", status, "conclusion", conclusion)
+	}
+
+	t1 := time.Now()
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%d/rerun-failed-jobs", p.apiBase, p.cfg.Owner, p.cfg.Repo, runID)
+	code, body, err := p.postJSON(ctx, u)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-H: rerun check: rerun-failed-jobs request failed", "runId", runID, "error", err)
+		return
+	}
+	if code < 200 || code > 299 {
+		p.log.Info("INVESTIGATION-H: RERUN-REFUSED — rerun-failed-jobs refused the concluded run, "+
+			"so this conclusion does not arm a re-run",
+			"runId", runID, "status", code, "body", githubapp.SanitizeBody(body, 256))
+		return
+	}
+	p.log.Info("INVESTIGATION-H: rerun-failed-jobs accepted; watching for the re-queued job",
+		"runId", runID, "status", code, "window", p.rerunWait.String())
+
+	deadline := t1.Add(p.rerunWait)
+	requeued := false
+	for {
+		if ds := obs.after(t1); len(ds) > 0 {
+			d := ds[0]
+			p.log.Info("INVESTIGATION-H: RERUN-REDELIVERED — the re-run's job reached the live "+
+				"listener; a red conclusion plus rerun-failed-jobs closes the loop end to end",
+				"messageId", d.MessageID, "runnerRequestId", d.RequestID,
+				"afterRerun", d.At.Sub(t1).Round(time.Second).String())
+			return
+		}
+		if time.Now().After(deadline) {
+			if requeued {
+				p.log.Warn("INVESTIGATION-H: RERUN-REQUEUED-NO-DELIVERY — the run left completed "+
+					"but no delivery reached the live listener within the wait",
+					"runId", runID, "wait", p.rerunWait.String())
+			} else {
+				p.log.Warn("INVESTIGATION-H: RERUN-NO-EFFECT — rerun-failed-jobs answered 2xx but "+
+					"the run never left completed within the wait",
+					"runId", runID, "wait", p.rerunWait.String())
+			}
+			return
+		}
+		rStatus, rConclusion, rErr := p.fetchRunStatus(ctx, runID)
+		if rErr != nil {
+			p.log.Warn("INVESTIGATION-H: rerun check: REST run status fetch failed", "runId", runID, "error", rErr)
+		} else if rStatus != "completed" && !requeued {
+			requeued = true
+			p.log.Info("INVESTIGATION-H: rerun check: the run left completed",
+				"runId", runID, "status", rStatus, "conclusion", rConclusion,
+				"afterRerun", time.Since(t1).Round(time.Second).String())
+		}
+		select {
+		case <-ctx.Done():
+			p.log.Warn("INVESTIGATION-H: rerun check interrupted")
+			return
+		case <-time.After(p.restPollInterval):
 		}
 	}
 }
@@ -864,6 +967,28 @@ func (p *abandonedProbe) cancelFixtureRun(ctx context.Context, runID int64) {
 		return
 	}
 	p.log.Info("INVESTIGATION-H: fixture run cancelled", "runId", runID)
+}
+
+// postJSON issues one authorized bodyless REST POST and returns the response
+// status and body.
+func (p *abandonedProbe) postJSON(ctx context.Context, url string) (int, []byte, error) {
+	token, err := p.tokens.Token(ctx)
+	if err != nil {
+		return 0, nil, fmt.Errorf("installation token: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := p.hc.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, body, nil
 }
 
 // getJSON issues one authorized REST GET and decodes the response.
