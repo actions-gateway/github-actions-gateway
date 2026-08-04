@@ -55,71 +55,54 @@ func unrunWorkerMux(t *testing.T, srv *brokertest.Server, m *runnercore.Metrics,
 	return mgr
 }
 
-// Q628: a worker reaped before it ran leaves this session's OWN delivery with nothing
-// to report it — the runner binary never registered — so unless the listener releases
-// the assignment, GitHub holds the job on an acquired-but-unresolved delivery and
-// cancels the whole run at its ~15-minute unstarted-job timeout. Measured on the
-// v1.3.0-rc.5 dogfood gate: three workers reaped while Pending, the run stuck queued,
-// and the AGC reporting itself healthy throughout.
+// Q628/Q676: a worker reaped before it ran leaves this session's OWN delivery with
+// nothing to report it — the runner binary never registered. The Q628 fix released
+// it with completejob(abandoned); measured live (Q645 Investigation H and the Q676
+// remedy runs), completing the winner's own sole delivery concludes the whole run
+// as SUCCESS — a false green — abandoned and canceled alike, while failed is
+// refused with a 401. So the listener must report NOTHING for its own unrun
+// delivery, in both AGC_FANOUT_COMPLETION states, and leave the job to the acquire
+// lock's lapse.
 //
-// One delivery, no fan-out: this is the plain single-delivery path, not a Q260 shape.
-func TestAGC_Q628_UnrunWorkerReleasesItsOwnDelivery(t *testing.T) {
-	const planID = "plan-q628-release"
-	srv := brokertest.New()
-	t.Cleanup(srv.Close)
-	srv.EnableFanoutAccounting()
-	reqIDs := srv.EnqueueFanoutJob(planID, 1)
+// One delivery, no fan-out: this is the plain single-delivery path, not a Q260
+// shape — the sibling fan-out completion stays on and is covered by the Q260
+// accounting tests.
+func TestAGC_Q628_UnrunWorkerCompletesNothing(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		fanoutCompletion bool
+	}{
+		{name: "fanout completion on", fanoutCompletion: true},
+		{name: "fanout completion off", fanoutCompletion: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const planID = "plan-q628-nothing"
+			srv := brokertest.New()
+			t.Cleanup(srv.Close)
+			srv.EnableFanoutAccounting()
+			srv.EnqueueFanoutJob(planID, 1)
+			// A second job behind the first: the single listener runs handleJob
+			// synchronously in its poll loop, so acquiring this one proves the
+			// abandoned job's handleJob — where the pre-Q676 release ran — returned.
+			srv.EnqueueFanoutJob(planID+"-next", 1)
 
-	m := newTestMetrics()
-	mgr := unrunWorkerMux(t, srv, m, true)
-	t.Cleanup(mgr.Stop)
+			m := newTestMetrics()
+			mgr := unrunWorkerMux(t, srv, m, tc.fanoutCompletion)
+			t.Cleanup(mgr.Stop)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	require.NoError(t, mgr.Start(ctx))
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			require.NoError(t, mgr.Start(ctx))
 
-	require.Eventually(t, func() bool {
-		return len(srv.DeliveryResults(planID)) >= 1
-	}, 5*time.Second, 10*time.Millisecond,
-		"the session must release the assignment of a job its worker never ran")
+			require.Eventually(t, func() bool {
+				return srv.AcquireJobCalls() >= 2
+			}, 5*time.Second, 10*time.Millisecond,
+				"both deliveries must be acquired — the second proves the first's handleJob returned")
 
-	assert.Equal(t, broker.TaskResultAbandoned, srv.DeliveryResults(planID)[reqIDs[0]],
-		"the release reports abandoned: the assignment was real, but no step ran")
-
-	// The harm the release prevents. With the delivery resolved, the unstarted-job
-	// timeout has nothing dangling to cancel.
-	srv.ExpireUnstartedDeliveries(planID)
-	assert.NotEqual(t, "cancelled", srv.JobState(planID),
-		"a released assignment must not leave GitHub cancelling the run at its unstarted-job timeout")
-}
-
-// The pre-fix shape, kept as the negative control: with the AGC's own completejob
-// switched off (AGC_FANOUT_COMPLETION=false), the unrun delivery dangles and the
-// unstarted-job timeout cancels the run. It is what the opt-out buys, and it fails
-// if the release above ever starts happening unconditionally.
-func TestAGC_Q628_OptOutLeavesTheAssignmentDangling(t *testing.T) {
-	const planID = "plan-q628-optout"
-	srv := brokertest.New()
-	t.Cleanup(srv.Close)
-	srv.EnableFanoutAccounting()
-	srv.EnqueueFanoutJob(planID, 1)
-
-	m := newTestMetrics()
-	mgr := unrunWorkerMux(t, srv, m, false)
-	t.Cleanup(mgr.Stop)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	require.NoError(t, mgr.Start(ctx))
-
-	require.Eventually(t, func() bool {
-		return srv.AcquireJobCalls() >= 1
-	}, 5*time.Second, 10*time.Millisecond, "the delivery must be acquired before it can dangle")
-
-	require.Eventually(t, func() bool {
-		srv.ExpireUnstartedDeliveries(planID)
-		return srv.JobState(planID) == "cancelled"
-	}, 5*time.Second, 10*time.Millisecond,
-		"with the release opted out, the unrun delivery dangles and the run is cancelled at the unstarted-job timeout")
-	assert.Empty(t, srv.DeliveryResults(planID), "nothing released the assignment")
+			assert.Zero(t, srv.CompleteJobCalls(),
+				"no completejob may be sent for the winner's own unrun delivery: every accepted value concludes the run green (Q676)")
+			assert.Empty(t, srv.DeliveryResults(planID),
+				"the assignment stays unresolved for GitHub's lock lapse to reclaim")
+		})
+	}
 }
