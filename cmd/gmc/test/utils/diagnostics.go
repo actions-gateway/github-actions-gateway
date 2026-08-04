@@ -19,9 +19,11 @@ import (
 // non-retriable exit that nothing revived (Q137). This dumps the signals that
 // distinguish those: the RunnerGroup status (activeSessions, conditions,
 // observedGeneration), the AGC pod logs (where the listener logs broker-call
-// errors), pod/Deployment descriptions (scheduling + image-pull events), the
-// namespace event stream, and fakegithub's own logs/description (to spot a
-// contended or restarting single-replica broker under parallel CI load).
+// errors), pod/Deployment descriptions (scheduling + image-pull events), every
+// ReplicaSet's pod template (the only surviving record of a revision a mid-run
+// roll superseded — Q593), the namespace event stream, and fakegithub's own
+// logs/description (to spot a contended or restarting single-replica broker
+// under parallel CI load).
 //
 // It is best-effort: every command failure is logged and skipped, never
 // propagated, so calling it from a failure-gated AfterEach cannot mask the
@@ -36,6 +38,19 @@ func DumpAGCSessionDiagnostics(tenantNS, agcDeployment, infraNS, fakegithubDeplo
 		"kubectl", "get", "runnergroup", "-n", tenantNS, "-o", "yaml")
 	dumpCommand("pod descriptions in "+tenantNS,
 		"kubectl", "describe", "pods", "-n", tenantNS)
+	// A roll scales the superseded ReplicaSet to zero, so its pods — and the
+	// template they ran — are gone from every pod-scoped dump above; the
+	// ReplicaSet keeps the template. The table orders the revisions absolutely
+	// and carries the image, the field a roll most often changes.
+	dumpCommand("replicaset revisions in "+tenantNS,
+		"kubectl", "get", "replicasets", "-n", tenantNS, "--sort-by=.metadata.creationTimestamp",
+		"-o", "custom-columns=NAME:.metadata.name,CREATED:.metadata.creationTimestamp,"+
+			"DESIRED:.spec.replicas,READY:.status.readyReplicas,IMAGES:.spec.template.spec.containers[*].image")
+	// describe over `-o yaml`: it renders the template and the revision
+	// annotation without the status and metadata bulk, and prints a
+	// Secret-sourced env var as a reference rather than its value.
+	dumpCommand("replicaset pod templates in "+tenantNS,
+		"kubectl", "describe", "replicasets", "-n", tenantNS)
 	// --tail is generous: the session tenants run their AGC at debug (so this dump
 	// captures the listener's per-session/job/recycle trail — Q148), which is far
 	// more verbose than info, and the trail must not scroll out behind it.
