@@ -1,0 +1,1028 @@
+// Investigation H (Q645): what does the run service do with an `abandoned`
+// completion — re-dispatch the job, or conclude it?
+//
+// Set PROBE_ABANDONED_TEST=true to run this scenario instead of the classic
+// broker probe. The Q628 fix releases an acquired-but-never-run job assignment
+// (worker pod reaped while Pending, no runner binary ever registered) with
+// POST {run_service_url}/completejob result=abandoned. Whether GitHub then
+// re-queues the job for the next runner or drives it terminal is unmeasured,
+// and decides whether the listener also needs a re-run arm. The same call
+// live-confirms the completejob wire serialization broker/types.go flags as
+// unverified — the reason AGC_FANOUT_COMPLETION defaults off.
+//
+// One run, two repo-level JIT runners on the probe label:
+//
+//	installation token
+//	  → POST {api}/repos/{owner}/{repo}/actions/runners/generate-jitconfig  (A and B)
+//	  → RFC 7523 OAuth exchange per runner (githubapp.FetchRunnerOAuthToken)
+//	  → POST {serverUrlV2}session per runner                (broker v2, Q267 flow)
+//	  → both sessions long-poll; the fixture job fans out to both
+//	  → A: POST {run_service_url}/acquirejob
+//	  → A: POST {run_service_url}/completejob result=abandoned   [T0]
+//	  → A's session deleted, runner deregistered (the listener's post-job recycle)
+//	  → window: B keeps polling (a post-T0 RunnerJobRequest is a re-dispatch)
+//	            while the fixture job's REST status is polled for a conclusion
+//	  → cleanup: cancel the fixture run, delete B's session, deregister both
+//
+// Every broker and run-service call is issued by the shipping broker package,
+// so a live run is evidence about the exchange the AGC's listener actually
+// performs (listener/job.go), not a probe-local dialect. The JIT registration
+// and REST calls mirror agentpool.GithubRegistrar, which lives in cmd/agc's
+// internal tree and is reproduced here.
+//
+// Required environment variables:
+//
+//	GITHUB_APP_ID              - GitHub App numeric ID
+//	GITHUB_APP_PRIVATE_KEY     - Path to PEM file, or PEM literal
+//	GITHUB_APP_INSTALLATION_ID - Installation ID for the target repo
+//	GITHUB_ORG_URL             - Repository URL (https://github.com/{owner}/{repo});
+//	                             must be repo-level — the org Default runner group
+//	                             refuses public repositories (see testing.md)
+//
+// Optional:
+//
+//	PROBE_ABANDONED_LABEL          - Runner label (default gag-q645-abandoned).
+//	PROBE_ABANDONED_WORKFLOW       - Fixture workflow file (default q645-abandoned-probe.yml).
+//	PROBE_ABANDONED_RUNNER_VERSION - Advertised runner version (default 2.335.1,
+//	                                 the version cmd/agc/names pins).
+//	PROBE_ABANDONED_TIMEOUT        - Wait for the fixture delivery (default 5m).
+//	PROBE_ABANDONED_WINDOW         - Post-completion observation window (default 20m,
+//	                                 spanning GitHub's ~15m unstarted-job horizon).
+//
+// The App needs administration: write (runner registration) and actions: write
+// (the cleanup run-cancel). The Q645 plan doc carries the experiment's design
+// and what would make a result invalid.
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"math/big"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
+)
+
+// Verdicts. WIRE reports the completejob call itself; the remaining three are
+// the mutually-logged outcomes of the observation window.
+const (
+	verdictWireAccepted = "WIRE-ACCEPTED"
+	verdictWireRejected = "WIRE-REJECTED"
+	verdictRedispatched = "REDISPATCHED"
+	verdictConcluded    = "CONCLUDED"
+	verdictNoSignal     = "NO-SIGNAL"
+)
+
+// abandonedConfig holds the parsed environment for the abandoned-completion
+// scenario.
+type abandonedConfig struct {
+	AppID          int64
+	InstallationID int64
+	PrivateKeyPEM  []byte
+	RepoURL        string
+	Owner          string
+	Repo           string
+
+	Label         string
+	WorkflowFile  string
+	RunnerVersion string
+	Timeout       time.Duration
+	Window        time.Duration
+}
+
+// parseAbandonedConfig reads and validates the scenario environment from the
+// injected getenv function (normally os.Getenv).
+func parseAbandonedConfig(getenv func(string) string) (abandonedConfig, error) {
+	var cfg abandonedConfig
+
+	appIDStr, err := mustEnv(getenv, "GITHUB_APP_ID")
+	if err != nil {
+		return abandonedConfig{}, err
+	}
+	if _, err := fmt.Sscan(appIDStr, &cfg.AppID); err != nil {
+		return abandonedConfig{}, fmt.Errorf("parse GITHUB_APP_ID: %w", err)
+	}
+	installIDStr, err := mustEnv(getenv, "GITHUB_APP_INSTALLATION_ID")
+	if err != nil {
+		return abandonedConfig{}, err
+	}
+	if _, err := fmt.Sscan(installIDStr, &cfg.InstallationID); err != nil {
+		return abandonedConfig{}, fmt.Errorf("parse GITHUB_APP_INSTALLATION_ID: %w", err)
+	}
+	pemValue, err := mustEnv(getenv, "GITHUB_APP_PRIVATE_KEY")
+	if err != nil {
+		return abandonedConfig{}, err
+	}
+	cfg.PrivateKeyPEM, err = loadPEM(pemValue)
+	if err != nil {
+		return abandonedConfig{}, fmt.Errorf("load GITHUB_APP_PRIVATE_KEY: %w", err)
+	}
+	cfg.RepoURL, err = mustEnv(getenv, "GITHUB_ORG_URL")
+	if err != nil {
+		return abandonedConfig{}, err
+	}
+	cfg.Owner, cfg.Repo, err = parseOwnerRepo(cfg.RepoURL)
+	if err != nil {
+		return abandonedConfig{}, err
+	}
+
+	cfg.Label = getenv("PROBE_ABANDONED_LABEL")
+	if cfg.Label == "" {
+		cfg.Label = "gag-q645-abandoned"
+	}
+	cfg.WorkflowFile = getenv("PROBE_ABANDONED_WORKFLOW")
+	if cfg.WorkflowFile == "" {
+		cfg.WorkflowFile = "q645-abandoned-probe.yml"
+	}
+	cfg.RunnerVersion = getenv("PROBE_ABANDONED_RUNNER_VERSION")
+	if cfg.RunnerVersion == "" {
+		cfg.RunnerVersion = "2.335.1"
+	}
+	if cfg.Timeout, err = parseDurationEnv(getenv, "PROBE_ABANDONED_TIMEOUT", 5*time.Minute); err != nil {
+		return abandonedConfig{}, err
+	}
+	if cfg.Window, err = parseDurationEnv(getenv, "PROBE_ABANDONED_WINDOW", 20*time.Minute); err != nil {
+		return abandonedConfig{}, err
+	}
+	return cfg, nil
+}
+
+// parseOwnerRepo extracts owner and repo from a repository URL. The scenario
+// requires repo-level registration, so an org-only URL is rejected.
+func parseOwnerRepo(githubURL string) (string, string, error) {
+	trimmed := strings.TrimRight(githubURL, "/")
+	parts := strings.Split(trimmed, "/")
+	// parts: ["https:", "", "host", "owner", "repo"]
+	if len(parts) < 5 || parts[3] == "" || parts[4] == "" {
+		return "", "", fmt.Errorf("GITHUB_ORG_URL %q must be a repository URL (https://host/owner/repo) for repo-level JIT registration", githubURL)
+	}
+	return parts[3], parts[4], nil
+}
+
+// abandonedProbe carries the scenario dependencies. The HTTP clients and API
+// base are injectable so the whole flow runs in unit tests against httptest
+// stubs, mirroring the other scenarios.
+type abandonedProbe struct {
+	log *slog.Logger
+	cfg abandonedConfig
+
+	tokens  githubapp.TokenProvider
+	hc      *http.Client // REST API + generate-jitconfig + OAuth exchange
+	pollHC  *http.Client // broker long-poll + run service (header timeout above the 50s hold)
+	apiBase string
+
+	// restPollInterval paces the REST status watch and the observer check during
+	// the window (default 15s; tests shorten it).
+	restPollInterval time.Duration
+}
+
+// jitRunner is one repo-level JIT registration: the runner record's identity
+// plus the broker credentials parsed out of its encoded_jit_config blob (the
+// same decomposition agentpool.parseJITCredentials performs).
+type jitRunner struct {
+	ID               int64
+	Name             string
+	ClientID         string
+	AuthorizationURL string
+	BrokerURL        string
+	Key              *rsa.PrivateKey
+	deregistered     bool
+}
+
+// brokerSession is one live broker v2 session: the shipping client bound to the
+// session's broker URL, plus the AES message key when the server returned one.
+type brokerSession struct {
+	bc        *broker.Client
+	sessionID string
+	aesKey    []byte
+	closed    bool
+}
+
+// newAbandonedProbe builds the scenario. hc and pollHC may be nil to take the
+// bounded defaults (httpx.NewClient / broker.NewHTTPClient). Both are wrapped
+// in a wire logger so the record shows what GitHub answered, not only what the
+// client made of it.
+func newAbandonedProbe(logger *slog.Logger, cfg abandonedConfig, provider githubapp.TokenProvider,
+	apiBase string, hc, pollHC *http.Client) *abandonedProbe {
+	if hc == nil {
+		hc = httpx.NewClient()
+	}
+	if pollHC == nil {
+		pollHC = broker.NewHTTPClient()
+	}
+	return &abandonedProbe{
+		log:              logger,
+		cfg:              cfg,
+		tokens:           provider,
+		hc:               wireLoggedClient(hc, logger),
+		pollHC:           wireLoggedClient(pollHC, logger),
+		apiBase:          strings.TrimSuffix(apiBase, "/"),
+		restPollInterval: 15 * time.Second,
+	}
+}
+
+// runAbandonedProbe is the Investigation H entry point wired from run().
+func runAbandonedProbe(ctx context.Context, logger *slog.Logger, cfg abandonedConfig,
+	provider githubapp.TokenProvider, apiBase string) error {
+	p := newAbandonedProbe(logger, cfg, provider, apiBase, nil, nil)
+	_, err := p.run(ctx)
+	return err
+}
+
+// run executes the scenario and returns the window verdict (empty when the run
+// failed before a verdict could be read).
+func (p *abandonedProbe) run(ctx context.Context) (string, error) {
+	p.reportStaleRunners(ctx)
+
+	runnerA, err := p.registerRunner(ctx, p.cfg.Label+"-a")
+	if err != nil {
+		return "", err
+	}
+	defer p.deregisterRunner(context.WithoutCancel(ctx), runnerA)
+	runnerB, err := p.registerRunner(ctx, p.cfg.Label+"-b")
+	if err != nil {
+		return "", err
+	}
+	defer p.deregisterRunner(context.WithoutCancel(ctx), runnerB)
+
+	sessA, err := p.openSession(ctx, runnerA)
+	if err != nil {
+		return "", err
+	}
+	defer p.closeSession(context.WithoutCancel(ctx), sessA)
+	sessB, err := p.openSession(ctx, runnerB)
+	if err != nil {
+		return "", err
+	}
+	defer p.closeSession(context.WithoutCancel(ctx), sessB)
+
+	// B starts observing before the acquire, so a re-dispatch prompt enough to
+	// land during the acquire/complete exchange still has a listener (see the
+	// plan doc's invalid-result conditions).
+	obsCtx, stopObs := context.WithCancel(ctx)
+	obs := p.startObserver(obsCtx, sessB)
+	defer func() {
+		stopObs()
+		<-obs.done
+	}()
+
+	p.log.Info("INVESTIGATION-H: dispatch the fixture workflow NOW if not already queued",
+		"workflow", p.cfg.WorkflowFile, "runsOn", p.cfg.Label, "waiting", p.cfg.Timeout.String())
+	jobReq, msgID, err := p.awaitDelivery(ctx, sessA)
+	if err != nil {
+		return "", err
+	}
+	p.log.Info("INVESTIGATION-H: RunnerJobRequest delivered to A",
+		"messageId", msgID, "runnerRequestId", jobReq.RunnerRequestID,
+		"runServiceHost", hostOf(jobReq.RunServiceURL))
+
+	runID, jobID, err := p.resolveFixtureRun(ctx)
+	if err != nil {
+		return "", fmt.Errorf("resolve fixture run (the REST watch has no subject without it): %w", err)
+	}
+	defer p.cancelFixtureRun(context.WithoutCancel(ctx), runID)
+
+	acq, _, err := sessA.bc.AcquireJob(ctx, jobReq.RunServiceURL, broker.JobAcquisitionRequest{
+		JobMessageID:   jobReq.RunnerRequestID,
+		RunnerOS:       "Linux",
+		BillingOwnerID: jobReq.BillingOwnerID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("AcquireJob: %w", err)
+	}
+	jobToken := acq.JobAuthToken()
+	p.log.Info("INVESTIGATION-H: job acquired by A",
+		"planId", acq.Plan.PlanID, "hasJobToken", jobToken != "")
+
+	err = sessA.bc.CompleteJob(ctx, jobReq.RunServiceURL, broker.CompleteJobRequest{
+		PlanID:    acq.Plan.PlanID,
+		JobID:     jobReq.RunnerRequestID,
+		Result:    broker.TaskResultAbandoned,
+		AuthToken: jobToken,
+	})
+	if err != nil {
+		p.log.Error("INVESTIGATION-H: VERDICT "+verdictWireRejected+" — the run service refused "+
+			"completejob result=abandoned; the TaskResult serialization broker/types.go flags as "+
+			"unconfirmed is wrong, and the primary question cannot be asked with a refused call",
+			"error", err)
+		return verdictWireRejected, nil
+	}
+	t0 := time.Now()
+	p.log.Info("INVESTIGATION-H: VERDICT "+verdictWireAccepted+" — completejob result=abandoned "+
+		"accepted (2xx); the wire serialization is live-confirmed",
+		"planId", acq.Plan.PlanID, "jobId", jobReq.RunnerRequestID)
+
+	// The listener's post-job recycle: the consumed delivery's session goes away
+	// and its single-use runner record with it, leaving B the only listener.
+	p.closeSession(ctx, sessA)
+	p.deregisterRunner(ctx, runnerA)
+
+	return p.observe(ctx, obs, jobReq.RunnerRequestID, runID, jobID, t0), nil
+}
+
+// ── Observation ──────────────────────────────────────────────────────────────
+
+// observedDelivery is one RunnerJobRequest B's session received, timestamped so
+// the verdict can separate the pre-acquire fan-out sibling from a post-T0
+// re-dispatch.
+type observedDelivery struct {
+	At        time.Time
+	MessageID int64
+	RequestID string
+}
+
+// sessionObserver drains B's session on a goroutine, recording every delivery.
+type sessionObserver struct {
+	done chan struct{}
+
+	mu         sync.Mutex
+	deliveries []observedDelivery
+}
+
+func (o *sessionObserver) record(d observedDelivery) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.deliveries = append(o.deliveries, d)
+}
+
+// after returns the deliveries received strictly after t.
+func (o *sessionObserver) after(t time.Time) []observedDelivery {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	var out []observedDelivery
+	for _, d := range o.deliveries {
+		if d.At.After(t) {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// startObserver long-polls sess until ctx is cancelled, recording every
+// RunnerJobRequest. Poll errors are logged and retried after a short backoff:
+// the observer dying silently would turn a re-dispatch into NO-SIGNAL.
+func (p *abandonedProbe) startObserver(ctx context.Context, sess *brokerSession) *sessionObserver {
+	obs := &sessionObserver{done: make(chan struct{})}
+	go func() {
+		defer close(obs.done)
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			msg, err := sess.bc.GetMessage(ctx, sess.sessionID)
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				p.log.Warn("INVESTIGATION-H: observer poll failed; retrying", "error", err)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+				}
+				continue
+			}
+			if msg == nil {
+				continue
+			}
+			if msg.MessageType != "RunnerJobRequest" {
+				p.log.Info("INVESTIGATION-H: observer received non-job message",
+					"messageId", msg.MessageID, "messageType", msg.MessageType)
+				continue
+			}
+			body, err := p.decodeJobRequest(sess, msg)
+			d := observedDelivery{At: time.Now(), MessageID: msg.MessageID}
+			if err != nil {
+				p.log.Warn("INVESTIGATION-H: observer could not decode a RunnerJobRequest body; "+
+					"recording the delivery without its request id", "messageId", msg.MessageID, "error", err)
+			} else {
+				d.RequestID = body.RunnerRequestID
+			}
+			obs.record(d)
+			p.log.Info("INVESTIGATION-H: observer received RunnerJobRequest",
+				"messageId", msg.MessageID, "runnerRequestId", d.RequestID)
+		}
+	}()
+	return obs
+}
+
+// observe watches both channels until one is decisive or the window closes.
+func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
+	acquiredRequestID string, runID, jobID int64, t0 time.Time) string {
+	deadline := t0.Add(p.cfg.Window)
+	p.log.Info("INVESTIGATION-H: observation window open",
+		"window", p.cfg.Window.String(), "runId", runID, "jobId", jobID)
+
+	lastStatus, lastConclusion := "", ""
+	nextREST := time.Time{} // first REST check happens immediately
+	for {
+		if len(obs.after(t0)) > 0 {
+			for _, d := range obs.after(t0) {
+				same := d.RequestID != "" && d.RequestID == acquiredRequestID
+				p.log.Info("INVESTIGATION-H: post-T0 delivery",
+					"messageId", d.MessageID, "runnerRequestId", d.RequestID,
+					"sameRequestIdAsAcquired", same, "afterT0", d.At.Sub(t0).Round(time.Second).String())
+			}
+			p.log.Info("INVESTIGATION-H: VERDICT " + verdictRedispatched + " — a RunnerJobRequest " +
+				"reached a live listener after the abandoned completion. The job survives an " +
+				"abandoned completion; the AGC needs no re-run arm, only capacity")
+			return verdictRedispatched
+		}
+
+		now := time.Now()
+		if now.After(deadline) {
+			p.log.Warn("INVESTIGATION-H: VERDICT "+verdictNoSignal+" — no redelivery and no "+
+				"conclusion within the window; the job is dangling as if nothing had been reported, "+
+				"so completejob(abandoned) released nothing",
+				"window", p.cfg.Window.String(), "lastStatus", lastStatus, "lastConclusion", lastConclusion)
+			return verdictNoSignal
+		}
+		if now.After(nextREST) {
+			status, conclusion, err := p.fetchJobStatus(ctx, jobID)
+			switch {
+			case err != nil:
+				p.log.Warn("INVESTIGATION-H: REST job status fetch failed", "jobId", jobID, "error", err)
+			case status != lastStatus || conclusion != lastConclusion:
+				p.log.Info("INVESTIGATION-H: REST job transition",
+					"jobId", jobID, "status", status, "conclusion", conclusion,
+					"afterT0", now.Sub(t0).Round(time.Second).String())
+				lastStatus, lastConclusion = status, conclusion
+			}
+			if status == "completed" {
+				p.log.Info("INVESTIGATION-H: VERDICT "+verdictConcluded+"-"+conclusion+" — the job "+
+					"went terminal with no redelivery: an abandoned completion kills the job, so a "+
+					"re-run arm is needed for it to ever execute",
+					"jobId", jobID, "conclusion", conclusion)
+				return verdictConcluded + "-" + conclusion
+			}
+			nextREST = now.Add(p.restPollInterval)
+		}
+
+		wait := p.restPollInterval / 5
+		if wait < 200*time.Millisecond {
+			wait = 200 * time.Millisecond
+		}
+		select {
+		case <-ctx.Done():
+			p.log.Warn("INVESTIGATION-H: interrupted mid-window; no verdict")
+			return ""
+		case <-time.After(wait):
+		}
+	}
+}
+
+// ── Broker session plumbing ──────────────────────────────────────────────────
+
+// openSession exchanges the runner's JIT credentials for a broker OAuth token
+// and opens a v2 session, deriving the AES message key the same way
+// listener.createSession does.
+func (p *abandonedProbe) openSession(ctx context.Context, r *jitRunner) (*brokerSession, error) {
+	token, err := githubapp.FetchRunnerOAuthToken(ctx, &githubapp.RunnerCredentials{
+		ClientID:         r.ClientID,
+		AuthorizationURL: r.AuthorizationURL,
+	}, r.Key, p.hc)
+	if err != nil {
+		return nil, fmt.Errorf("broker OAuth exchange for %s: %w", r.Name, err)
+	}
+	bc := &broker.Client{
+		BrokerURL:     r.BrokerURL,
+		Token:         token,
+		UseV2Flow:     true,
+		RunnerVersion: p.cfg.RunnerVersion,
+		RunnerOS:      "linux",
+		RunnerArch:    "x64",
+		HTTPClient:    p.pollHC,
+	}
+	sess, err := bc.CreateSession(ctx, r.ID, r.Name, p.cfg.RunnerVersion)
+	if err != nil {
+		return nil, fmt.Errorf("CreateSession for %s: %w", r.Name, err)
+	}
+	bc.BrokerURL = sess.BrokerURL
+	out := &brokerSession{bc: bc, sessionID: sess.SessionID}
+	if len(sess.EncryptionKey) > 0 {
+		if sess.EncryptionKeyEncrypted {
+			aesKey, decErr := broker.DecryptSessionKey(sess.EncryptionKey, r.Key)
+			if decErr != nil {
+				p.log.Warn("INVESTIGATION-H: session key decrypt failed; message bodies will be "+
+					"parsed as plaintext", "runner", r.Name, "error", decErr)
+			} else {
+				out.aesKey = aesKey
+			}
+		} else {
+			out.aesKey = sess.EncryptionKey
+		}
+	}
+	p.log.Info("INVESTIGATION-H: session created",
+		"runner", r.Name, "sessionId", sess.SessionID, "hasAESKey", out.aesKey != nil)
+	return out, nil
+}
+
+// closeSession deletes the session once; safe to call again from the deferred
+// cleanup after the explicit post-completion recycle.
+func (p *abandonedProbe) closeSession(ctx context.Context, sess *brokerSession) {
+	if sess.closed {
+		return
+	}
+	sess.closed = true
+	dCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if err := sess.bc.DeleteSession(dCtx, sess.sessionID); err != nil {
+		p.log.Warn("INVESTIGATION-H: DeleteSession failed; the broker session leaks until it "+
+			"expires server-side", "sessionId", sess.sessionID, "error", err)
+		return
+	}
+	p.log.Info("INVESTIGATION-H: session deleted", "sessionId", sess.sessionID)
+}
+
+// awaitDelivery polls A's session for the fixture RunnerJobRequest.
+func (p *abandonedProbe) awaitDelivery(ctx context.Context, sess *brokerSession) (*broker.RunnerJobRequestBody, int64, error) {
+	deadline, cancel := context.WithTimeout(ctx, p.cfg.Timeout)
+	defer cancel()
+	for {
+		msg, err := sess.bc.GetMessage(deadline, sess.sessionID)
+		if err != nil {
+			if deadline.Err() != nil {
+				return nil, 0, fmt.Errorf("no RunnerJobRequest within %s — was the fixture workflow dispatched?", p.cfg.Timeout)
+			}
+			return nil, 0, fmt.Errorf("poll for delivery: %w", err)
+		}
+		if msg == nil {
+			if deadline.Err() != nil {
+				return nil, 0, fmt.Errorf("no RunnerJobRequest within %s — was the fixture workflow dispatched?", p.cfg.Timeout)
+			}
+			continue
+		}
+		if msg.MessageType != "RunnerJobRequest" {
+			p.log.Info("INVESTIGATION-H: A received non-job message",
+				"messageId", msg.MessageID, "messageType", msg.MessageType)
+			continue
+		}
+		body, err := p.decodeJobRequest(sess, msg)
+		if err != nil {
+			return nil, 0, fmt.Errorf("decode RunnerJobRequest %d: %w", msg.MessageID, err)
+		}
+		if body.RunServiceURL == "" {
+			return nil, 0, fmt.Errorf("RunnerJobRequest %d carries no run_service_url", msg.MessageID)
+		}
+		return body, msg.MessageID, nil
+	}
+}
+
+// decodeJobRequest decrypts (when the session has an AES key) and parses one
+// RunnerJobRequest body.
+func (p *abandonedProbe) decodeJobRequest(sess *brokerSession, msg *broker.TaskAgentMessage) (*broker.RunnerJobRequestBody, error) {
+	raw := []byte(msg.Body)
+	if sess.aesKey != nil {
+		plain, err := broker.DecryptMessageBody(msg.Body, sess.aesKey)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt body: %w", err)
+		}
+		raw = plain
+	}
+	var body broker.RunnerJobRequestBody
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, fmt.Errorf("unmarshal body: %w", err)
+	}
+	return &body, nil
+}
+
+// ── JIT registration (mirrors agentpool.GithubRegistrar, repo-level) ─────────
+
+// registerRunner registers a repo-level JIT runner with the probe label. A 409
+// name conflict (a record left by an interrupted run) is resolved by deleting
+// the survivor and retrying once.
+func (p *abandonedProbe) registerRunner(ctx context.Context, name string) (*jitRunner, error) {
+	r, status, err := p.tryRegisterRunner(ctx, name)
+	if status == http.StatusConflict {
+		p.log.Warn("INVESTIGATION-H: runner name already registered (an interrupted run's leftover); "+
+			"deleting it and retrying", "name", name)
+		if id, lookErr := p.lookupRunnerID(ctx, name); lookErr == nil && id != 0 {
+			p.deregisterRunner(ctx, &jitRunner{ID: id, Name: name})
+		}
+		r, _, err = p.tryRegisterRunner(ctx, name)
+	}
+	if err != nil {
+		return nil, err
+	}
+	p.log.Info("INVESTIGATION-H: JIT runner registered",
+		"name", r.Name, "id", r.ID, "brokerHost", hostOf(r.BrokerURL))
+	return r, nil
+}
+
+func (p *abandonedProbe) tryRegisterRunner(ctx context.Context, name string) (*jitRunner, int, error) {
+	token, err := p.tokens.Token(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("installation token: %w", err)
+	}
+	reqBody, err := json.Marshal(map[string]any{
+		"name":            name,
+		"runner_group_id": 1,
+		"labels":          []string{p.cfg.Label},
+		"work_folder":     "_work",
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/runners/generate-jitconfig", p.apiBase, p.cfg.Owner, p.cfg.Repo)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := p.hc.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("generate-jitconfig: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode, fmt.Errorf("generate-jitconfig for %s: status %d: %s",
+			name, resp.StatusCode, githubapp.SanitizeBody(respBody, 512))
+	}
+	var result struct {
+		Runner struct {
+			ID int64 `json:"id"`
+		} `json:"runner"`
+		EncodedJITConfig string `json:"encoded_jit_config"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("decode generate-jitconfig response: %w", err)
+	}
+	r, err := parseJITBlob(result.Runner.ID, name, result.EncodedJITConfig)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return r, resp.StatusCode, nil
+}
+
+// deregisterRunner deletes the runner record once; safe to call again from the
+// deferred cleanup after the explicit post-completion recycle. 404 is
+// tolerated: a consumed single-use JIT record is auto-removed by GitHub.
+func (p *abandonedProbe) deregisterRunner(ctx context.Context, r *jitRunner) {
+	if r.deregistered {
+		return
+	}
+	r.deregistered = true
+	token, err := p.tokens.Token(ctx)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-H: installation token for deregister failed", "runner", r.Name, "error", err)
+		return
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/runners/%d", p.apiBase, p.cfg.Owner, p.cfg.Repo, r.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := p.hc.Do(req)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-H: deregister runner failed", "runner", r.Name, "error", err)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	switch resp.StatusCode {
+	case http.StatusNoContent, http.StatusOK:
+		p.log.Info("INVESTIGATION-H: runner deregistered", "runner", r.Name, "id", r.ID)
+	case http.StatusNotFound:
+		p.log.Info("INVESTIGATION-H: runner already gone (single-use record consumed)", "runner", r.Name, "id", r.ID)
+	default:
+		p.log.Warn("INVESTIGATION-H: deregister runner unexpected status",
+			"runner", r.Name, "status", resp.StatusCode, "body", githubapp.SanitizeBody(body, 256))
+	}
+}
+
+// lookupRunnerID resolves a runner id by exact name, for the 409 recovery path.
+func (p *abandonedProbe) lookupRunnerID(ctx context.Context, name string) (int64, error) {
+	runners, err := p.listRunners(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, r := range runners {
+		if r.Name == name {
+			return r.ID, nil
+		}
+	}
+	return 0, nil
+}
+
+type restRunner struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Labels []struct {
+		Name string `json:"name"`
+	} `json:"labels"`
+}
+
+func (p *abandonedProbe) listRunners(ctx context.Context) ([]restRunner, error) {
+	var out struct {
+		Runners []restRunner `json:"runners"`
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/runners?per_page=100", p.apiBase, p.cfg.Owner, p.cfg.Repo)
+	if err := p.getJSON(ctx, u, &out); err != nil {
+		return nil, err
+	}
+	return out.Runners, nil
+}
+
+// reportStaleRunners logs every pre-existing runner on the probe label: another
+// consumer on the label is one of the plan doc's invalid-result conditions, so
+// the record must show whether one existed.
+func (p *abandonedProbe) reportStaleRunners(ctx context.Context) {
+	runners, err := p.listRunners(ctx)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-H: could not list existing runners", "error", err)
+		return
+	}
+	for _, r := range runners {
+		for _, l := range r.Labels {
+			if l.Name == p.cfg.Label {
+				p.log.Warn("INVESTIGATION-H: a runner already carries the probe label — if it is "+
+					"live it can consume the redelivery and invalidate the verdict",
+					"name", r.Name, "id", r.ID, "status", r.Status)
+			}
+		}
+	}
+}
+
+// ── REST watch ───────────────────────────────────────────────────────────────
+
+// resolveFixtureRun finds the newest queued run of the fixture workflow and its
+// single job, which the window's REST watch polls.
+func (p *abandonedProbe) resolveFixtureRun(ctx context.Context) (int64, int64, error) {
+	var runs struct {
+		WorkflowRuns []struct {
+			ID        int64  `json:"id"`
+			Status    string `json:"status"`
+			CreatedAt string `json:"created_at"`
+		} `json:"workflow_runs"`
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/workflows/%s/runs?status=queued&per_page=5",
+		p.apiBase, p.cfg.Owner, p.cfg.Repo, p.cfg.WorkflowFile)
+	if err := p.getJSON(ctx, u, &runs); err != nil {
+		return 0, 0, err
+	}
+	if len(runs.WorkflowRuns) == 0 {
+		return 0, 0, fmt.Errorf("no queued run of %s found", p.cfg.WorkflowFile)
+	}
+	// The list endpoint returns newest first; take the head and record it so a
+	// stale-run misattribution is visible in the record.
+	run := runs.WorkflowRuns[0]
+	p.log.Info("INVESTIGATION-H: watching fixture run",
+		"runId", run.ID, "createdAt", run.CreatedAt, "status", run.Status,
+		"queuedRunsOnWorkflow", len(runs.WorkflowRuns))
+
+	var jobs struct {
+		Jobs []struct {
+			ID     int64  `json:"id"`
+			Status string `json:"status"`
+		} `json:"jobs"`
+	}
+	if err := p.getJSON(ctx, fmt.Sprintf("%s/repos/%s/%s/actions/runs/%d/jobs", p.apiBase, p.cfg.Owner, p.cfg.Repo, run.ID), &jobs); err != nil {
+		return 0, 0, err
+	}
+	if len(jobs.Jobs) == 0 {
+		return 0, 0, fmt.Errorf("run %d has no jobs", run.ID)
+	}
+	p.log.Info("INVESTIGATION-H: watching fixture job", "jobId", jobs.Jobs[0].ID, "status", jobs.Jobs[0].Status)
+	return run.ID, jobs.Jobs[0].ID, nil
+}
+
+func (p *abandonedProbe) fetchJobStatus(ctx context.Context, jobID int64) (string, string, error) {
+	var job struct {
+		Status     string `json:"status"`
+		Conclusion string `json:"conclusion"`
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/jobs/%d", p.apiBase, p.cfg.Owner, p.cfg.Repo, jobID)
+	if err := p.getJSON(ctx, u, &job); err != nil {
+		return "", "", err
+	}
+	return job.Status, job.Conclusion, nil
+}
+
+// cancelFixtureRun drives the fixture run terminal at cleanup so the queue is
+// left empty. Deferred until after the window: a cancel inside it would
+// manufacture CONCLUDED-cancelled.
+func (p *abandonedProbe) cancelFixtureRun(ctx context.Context, runID int64) {
+	err := cancelWorkflowRun(ctx, cancelRunDeps{
+		log: p.log, hc: p.hc, tokens: p.tokens, apiBase: p.apiBase, tag: "INVESTIGATION-H",
+	}, p.cfg.Owner, p.cfg.Repo, runID)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-H: cleanup cancel failed; the fixture run may still be queued",
+			"runId", runID, "error", err)
+		return
+	}
+	p.log.Info("INVESTIGATION-H: fixture run cancelled", "runId", runID)
+}
+
+// getJSON issues one authorized REST GET and decodes the response.
+func (p *abandonedProbe) getJSON(ctx context.Context, url string, out any) error {
+	token, err := p.tokens.Token(ctx)
+	if err != nil {
+		return fmt.Errorf("installation token: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := p.hc.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("GET %s: status %d: %s", url, resp.StatusCode, githubapp.SanitizeBody(body, 256))
+	}
+	return json.Unmarshal(body, out)
+}
+
+// ── JIT blob decomposition ───────────────────────────────────────────────────
+
+// parseJITBlob decodes the encoded_jit_config blob into the runner's broker
+// credentials — the same decomposition agentpool.parseJITCredentials performs
+// (that helper lives in cmd/agc's internal tree).
+func parseJITBlob(agentID int64, name, encodedBlob string) (*jitRunner, error) {
+	decoded, err := base64.StdEncoding.DecodeString(encodedBlob)
+	if err != nil {
+		return nil, fmt.Errorf("decode jit config blob: %w", err)
+	}
+	var files map[string]string
+	if err := json.Unmarshal(decoded, &files); err != nil {
+		return nil, fmt.Errorf("unmarshal jit config blob: %w", err)
+	}
+	decodeFile := func(key string) ([]byte, error) {
+		b, err := base64.StdEncoding.DecodeString(files[key])
+		if err != nil {
+			return nil, fmt.Errorf("decode %s: %w", key, err)
+		}
+		return b, nil
+	}
+
+	runnerFile, err := decodeFile(".runner")
+	if err != nil {
+		return nil, err
+	}
+	var runnerCfg struct {
+		ServerURL   string `json:"serverUrl"`
+		ServerURLV2 string `json:"serverUrlV2"`
+	}
+	if err := json.Unmarshal(runnerFile, &runnerCfg); err != nil {
+		return nil, fmt.Errorf("parse .runner config: %w", err)
+	}
+	brokerURL := runnerCfg.ServerURLV2
+	if brokerURL == "" {
+		brokerURL = runnerCfg.ServerURL
+	}
+
+	credFile, err := decodeFile(".credentials")
+	if err != nil {
+		return nil, err
+	}
+	var credCfg struct {
+		Data struct {
+			ClientID         string `json:"clientId"`
+			AuthorizationURL string `json:"authorizationUrl"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(credFile, &credCfg); err != nil {
+		return nil, fmt.Errorf("parse .credentials config: %w", err)
+	}
+
+	rsaFile, err := decodeFile(".credentials_rsaparams")
+	if err != nil {
+		return nil, err
+	}
+	key, err := parseJITRSAParams(rsaFile)
+	if err != nil {
+		return nil, fmt.Errorf("parse RSA params: %w", err)
+	}
+
+	return &jitRunner{
+		ID:               agentID,
+		Name:             name,
+		ClientID:         credCfg.Data.ClientID,
+		AuthorizationURL: credCfg.Data.AuthorizationURL,
+		BrokerURL:        brokerURL,
+		Key:              key,
+	}, nil
+}
+
+// parseJITRSAParams reconstructs the RSA private key from the JIT blob's
+// .credentials_rsaparams JSON (lowercase keys, unlike the PascalCase config.sh
+// files githubapp.ParseRunnerRSAKey reads).
+func parseJITRSAParams(data []byte) (*rsa.PrivateKey, error) {
+	var p struct {
+		Modulus  string `json:"modulus"`
+		Exponent string `json:"exponent"`
+		D        string `json:"d"`
+		P        string `json:"p"`
+		Q        string `json:"q"`
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return nil, fmt.Errorf("unmarshal RSA JSON: %w", err)
+	}
+	decodeParam := func(name, b64 string) (*big.Int, error) {
+		b, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			b, err = base64.RawURLEncoding.DecodeString(b64)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", name, err)
+			}
+		}
+		return new(big.Int).SetBytes(b), nil
+	}
+	n, err := decodeParam("modulus", p.Modulus)
+	if err != nil {
+		return nil, err
+	}
+	e, err := decodeParam("exponent", p.Exponent)
+	if err != nil {
+		return nil, err
+	}
+	d, err := decodeParam("d", p.D)
+	if err != nil {
+		return nil, err
+	}
+	pp, err := decodeParam("p", p.P)
+	if err != nil {
+		return nil, err
+	}
+	q, err := decodeParam("q", p.Q)
+	if err != nil {
+		return nil, err
+	}
+	key := &rsa.PrivateKey{
+		PublicKey: rsa.PublicKey{N: n, E: int(e.Int64())},
+		D:         d,
+		Primes:    []*big.Int{pp, q},
+	}
+	key.Precompute()
+	if err := key.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid RSA key: %w", err)
+	}
+	return key, nil
+}
+
+// ── Wire logging ─────────────────────────────────────────────────────────────
+
+// wireTransport logs every response status on its way past, so the record
+// shows what GitHub answered (the completejob 2xx above all) rather than only
+// what the client made of it. Paths only — no query strings, no headers.
+type wireTransport struct {
+	rt  http.RoundTripper
+	log *slog.Logger
+}
+
+func (w wireTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	start := time.Now()
+	resp, err := w.rt.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	w.log.Debug("INVESTIGATION-H: wire",
+		"method", req.Method, "host", req.URL.Host, "path", req.URL.Path,
+		"status", resp.StatusCode, "elapsed", time.Since(start).Round(time.Millisecond).String())
+	return resp, err
+}
+
+// wireLoggedClient returns a copy of c whose transport logs response statuses.
+func wireLoggedClient(c *http.Client, log *slog.Logger) *http.Client {
+	rt := c.Transport
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+	c2 := *c
+	c2.Transport = wireTransport{rt: rt, log: log}
+	return &c2
+}
+
+// hostOf returns the host of a URL for logging, or the raw string when it does
+// not parse as one.
+func hostOf(raw string) string {
+	if i := strings.Index(raw, "://"); i >= 0 {
+		rest := raw[i+3:]
+		if j := strings.IndexByte(rest, '/'); j >= 0 {
+			return rest[:j]
+		}
+		return rest
+	}
+	return raw
+}
