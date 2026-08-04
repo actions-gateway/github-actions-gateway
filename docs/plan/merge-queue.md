@@ -129,3 +129,12 @@ re-derived, not committed to:
   resolution before a PR can enqueue; a per-item-file backlog format would
   remove it structurally, but is a large format change touching the backlog
   skill and lint, and only worth it if post-queue measurement shows it binding.
+- GitHub Issues + a Projects board would also zero the conflicts, but trades
+  them for a sync problem: today a Queue row is deleted in the same PR that
+  ships the work (atomic with the code, reviewable in the diff, greppable in
+  one file, and the bare-Q-ID anchor fabric across docs and code depends on
+  it), while an issue close is a separate mutation that can drift from code
+  state. Priority ordering is also weaker through `gh` (Projects v2 positions
+  are drag-first, not CLI-first). Considered 2026-08-03; behind the same
+  re-measurement, and per-item files in-repo rank ahead of it because they
+  keep every property above.
