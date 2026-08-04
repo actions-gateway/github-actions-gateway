@@ -38,6 +38,11 @@ with open(CONFIG) as fh:
 CASES = [
     (True, "make test-race"),
     (True, "make -C cmd/agc test-integration"),
+    (True, "make e2e"),
+    (True, "make e2e SUITE=single-node"),
+    (True, "make e2e-up"),
+    (True, "make e2e-cluster e2e-images"),
+    (True, "make e2e-github-cleanup"),
     (True, "go test -race ./..."),
     (True, "bash scripts/dogfood/release-sentinel.sh"),
     (True, "scripts/dogfood/release-sentinel.sh"),
@@ -56,6 +61,12 @@ CASES = [
     (False, "bash scripts/dogfood/validate-release-test.sh"),
     (False, "bash scripts/dogfood/release-sentinel-test.sh"),
     (False, "make test"),
+    # A target name mentioned in a quoted argument is not an invocation. The
+    # e2e pattern was `make .*\be2e`, whose `.*` reached past the target into
+    # the argument, so allocating a backlog ID about e2e was denied as an e2e
+    # run (upstream karlkfi/claude-foreground-guard#21).
+    (False, 'make queue-id TITLE="No per-spec filter on the e2e make target"'),
+    (False, 'make -n help NOTE="a note mentioning e2e somewhere"'),
 ]
 
 fails = 0
