@@ -334,8 +334,9 @@ bash scripts/dogfood/release-sentinel.sh
 
 It sleeps, and *exits* when there is something to say — a phase transition, a
 verdict, or a gate that has gone quiet for `RELEASE_SENTINEL_STALL` seconds
-(default 1200). That exit is the report: it carries the phase, both clocks, the
-latest e2e heartbeat, and what to do next. Relaunch it after each report until a
+(default 1200) **while GitHub reports no live run it could be waiting on**. That
+exit is the report: it carries the phase, both clocks, the run URL, the latest
+e2e heartbeat, and what to do next. Relaunch it after each report until a
 verdict arrives — in an agent session, the exit is what wakes the session, and
 the relay-and-relaunch loop is the session's job. Reporting is therefore driven
 by what the gate does, not by a clock: nothing is spent on an interval where
@@ -347,6 +348,29 @@ reported), `RELEASE_SENTINEL_TIMEOUT` (watch budget, default 7200),
 **The sentinel's exit is a wake, never a verdict** — every event exits 0. The
 verdict is the gate's own exit status, and the failure diagnostics are in the
 gate's log, not in the report.
+
+**A quiet gate is not on its own a stalled one.** Through the ~25-minute e2e leg
+the only thing writing to the stream is the relayed spec heartbeat, and that
+needs a job log GitHub will sometimes not serve — one run answered every log
+fetch with `BlobNotFound` for its whole 30 minutes and then passed. Since the
+stall threshold is shorter than a healthy leg, quiet alone reported a stall on
+every poll of that run. So the sentinel reconciles the silence against the run's
+own status (`gh run view --json status`, the run record — a different endpoint
+from the log, and one that answered throughout that incident) and reports a
+stall only once the run is no longer live. Phases with no run to consult — the
+deploy and teardown legs — are unchanged: quiet there is the gate's own.
+
+A gate genuinely stuck on a run that never concludes is caught elsewhere, by the
+watch's own `E2E_RUN_WATCH_TIMEOUT`, which fails the gate and reaches the
+sentinel as a `failed` event.
+
+**A stall is reported once, not once per relaunch.** The quiet does not clear
+when the report is read, so a watcher relaunched against it would exit
+immediately, forever. The sentinel remembers the stall it reported in
+`tmp/release-validation-progress.jsonl.stall` and stays asleep through the same
+one; it speaks up again when the stream moves, or when the same silence has
+deepened by another full `RELEASE_SENTINEL_STALL`. Nothing needs cleaning up
+between runs — the marker is keyed to the moment it went quiet.
 
 ##### Where is it right now?
 
@@ -362,8 +386,11 @@ jq . tmp/release-validation-status.json
 
 `gate` is `preflight` (settling the e2e lane, nothing spent yet), `running`,
 `passed`, or `failed`; `phase`, `elapsed`, `phaseElapsed` and `idle` say where
-and for how long; `heartbeat` carries the newest relayed spec line; `failure`
-names the phase that broke — the one that broke first, not the teardown that
+and for how long; `runRepo`/`runId` name the dispatched e2e run, which is what
+makes a quiet leg checkable against GitHub rather than only against the stream;
+`heartbeat` carries the newest relayed spec line — absent for a whole leg when
+GitHub will not serve the job log, which is a fetch problem and not a stalled
+run; `failure` names the phase that broke — the one that broke first, not the teardown that
 followed it. `scripts/dogfood/release-status.sh [stream-file]` renders the same
 object from any stream, including one whose gate process is gone.
 `RELEASE_STATUS_FILE=` disables the file.

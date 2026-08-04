@@ -85,6 +85,22 @@ progress_heartbeat() {
 	progress_status_write
 }
 
+# progress_run REPO RUN_ID — record the GitHub run the gate is now parked on.
+# The status object surfaces it as .runRepo/.runId so a renderer can ask GitHub
+# whether that run is still live (Q630). The heartbeat above cannot answer that:
+# it needs a fetchable job log, and a log GitHub will not serve is
+# indistinguishable from a run that has stopped moving.
+progress_run() {
+	[[ -n "${RELEASE_PROGRESS_FILE}" ]] || return 0
+	# Same reason as progress_heartbeat: the relay also runs standalone, and a
+	# run reference must not conjure a stream for a gate that is not running.
+	[[ -f "${RELEASE_PROGRESS_FILE}" ]] || return 0
+	jq -cn --arg repo "$1" --arg id "$2" --argjson t "$(date +%s)" \
+		'{kind:"run", t:$t, repo:$repo, id:$id}' \
+		>>"${RELEASE_PROGRESS_FILE}" 2>/dev/null || true
+	progress_status_write
+}
+
 # progress_phase PHASE MESSAGE — announce a phase to the operator and record its
 # start. The echo is what a human reads; the event is what a renderer reads.
 progress_phase() {
@@ -112,6 +128,7 @@ progress_status_json() {
 		[inputs | (fromjson? // empty)] as $events
 		| ($events | map(select(.kind == "phase"))) as $phases
 		| ($events | map(select(.kind == "heartbeat")) | last) as $beat
+		| ($events | map(select(.kind == "run")) | last) as $run
 		| ($phases | last) as $cur
 		| ($phases | map(select(.phase == "gate" and .state == "start")) | last) as $started
 		# The FIRST failure, not the last: the gate reports its own exit as a
@@ -135,6 +152,8 @@ progress_status_json() {
 			idle: (if ($events | length) > 0 then $now - ($events | last).t else null end),
 			heartbeat: ($beat.text // null),
 			heartbeatAge: (if $beat then $now - $beat.t else null end),
+			runRepo: ($run.repo // null),
+			runId: ($run.id // null),
 			failure: (if $failed then "\($failed.phase): \($failed.detail // "failed")" else null end)
 		}' <"$stream" 2>/dev/null || echo 'null'
 }

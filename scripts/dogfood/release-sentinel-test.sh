@@ -109,6 +109,108 @@ want_false 'a finished gate does not stall' \
 	stalled_p '{"gate":"passed","phase":"teardown","state":"start","idle":9999}'
 
 echo
+echo '== quiet is only a wedge once the run agrees (Q630) =='
+# The failure this reconciliation exists for. Through the e2e leg the stream's
+# only writer is the relayed spec heartbeat, which needs a fetchable job log;
+# GitHub served BlobNotFound for the whole of one 30-minute run that PASSED. The
+# stall threshold (1200s) is shorter than a healthy leg (25-33 min), so with the
+# log unreadable the stream is silent past the threshold every single time — a
+# false stall was certain, not merely possible.
+quiet_e2e='{"gate":"running","phase":"e2e","state":"start","idle":1500,"updatedAt":1000,"runRepo":"owner/repo","runId":"42"}'
+
+# Positive control on the OLD predicate: the fixture must be one the pre-Q630
+# detector reported, or the assertions below prove nothing. This is verbatim
+# what stalled_p was before the run-status check was added.
+old_stalled_p() {
+	local json="$1" idle
+	[[ "$(status_field "$json" gate)" == "running" ]] || return 1
+	idle="$(status_field "$json" idle)"
+	[[ -n "$idle" ]] || return 1
+	((idle >= RELEASE_SENTINEL_STALL))
+}
+want_true 'the old detector did report this quiet' old_stalled_p "$quiet_e2e"
+
+# gh answers from the run record, which is a different endpoint from the job log
+# and survives the log being unservable. One stub answering from a variable
+# rather than a redefinition per case: the answer is read in the subshell
+# `waiting_on_live_run_p` runs it in, which is fine — only writes would be lost
+# there. An empty answer is gh failing to answer at all.
+fake_run_status=''
+gh() {
+	[[ -n "$fake_run_status" ]] || return 1
+	echo "$fake_run_status"
+}
+
+# The seam itself. Everything below reaches gh through this one call.
+fake_run_status=in_progress
+want_eq 'the run status comes from the run record' in_progress \
+	"$(sentinel_run_status owner/repo 42)"
+
+want_false 'an unreadable log on a progressing run is not a stall' stalled_p "$quiet_e2e"
+want_true 'and the run reads as live' waiting_on_live_run_p "$quiet_e2e"
+
+# The control: the same silence, on a run that is over. The gate should have
+# moved on and did not, so this one is real news.
+fake_run_status=completed
+want_true 'the same quiet on a finished run still stalls' stalled_p "$quiet_e2e"
+want_false 'and the run does not read as live' waiting_on_live_run_p "$quiet_e2e"
+
+# A phase with no run to consult — deploy, teardown — keeps the original
+# meaning: nothing is fetching anything, so quiet is the gate's own. The stub is
+# armed with the one answer that would suppress a stall, so this passing is what
+# proves no run was consulted.
+fake_run_status=in_progress
+want_true 'quiet with no run reference still stalls' \
+	stalled_p '{"gate":"running","phase":"deploy","state":"start","idle":1300,"updatedAt":1000}'
+
+# Unaskable is not evidence. This detector's expensive failure is crying wolf,
+# and a gate truly stuck on a run that never concludes is caught by
+# e2e-run-watch.sh's own deadline (Q629) failing the gate instead.
+fake_run_status=''
+want_false 'an unreachable gh does not manufacture a stall' stalled_p "$quiet_e2e"
+fake_run_status=some_future_status
+want_false 'a status GitHub adds later is not a wedge' stalled_p "$quiet_e2e"
+unset -f gh
+
+echo
+echo '== a reported stall is not reported again (Q630) =='
+# A stall does not clear on its own: idle is still over the threshold when a
+# relaunched watcher looks, and the check runs before the first sleep. Without
+# memory every relaunch exits instantly and the session spins.
+SENTINEL_STREAM="${WORK}/memory.jsonl"
+rm -f "$(stall_marker)"
+want_false 'nothing remembered yet' stall_reported_p "$quiet_e2e"
+remember_stall "$quiet_e2e"
+want_true 'the same quiet is suppressed on relaunch' stall_reported_p "$quiet_e2e"
+
+# Re-arms when the stream moves: a new event means a different quiet.
+want_false 'a quiet that follows new events is a new stall' \
+	stall_reported_p '{"gate":"running","phase":"e2e","state":"start","idle":1300,"updatedAt":2000}'
+# ...and when the same quiet has deepened by another full threshold, so memory
+# silences a repeat rather than a fact.
+want_false 'a quiet deepened by another threshold is worth repeating' \
+	stall_reported_p '{"gate":"running","phase":"e2e","state":"start","idle":2700,"updatedAt":1000}'
+want_true 'but not before that' \
+	stall_reported_p '{"gate":"running","phase":"e2e","state":"start","idle":2699,"updatedAt":1000}'
+rm -f "$(stall_marker)"
+SENTINEL_STREAM="${RELEASE_PROGRESS_FILE}"
+
+echo
+echo '== the run reference reaches the status object =='
+# The sentinel can only consult a run it knows about, and the relay is what
+# tells it. A reference must not conjure a stream for a gate that is not running.
+run_stream="${WORK}/runref.jsonl"
+RELEASE_PROGRESS_FILE="$run_stream" progress_run owner/repo 42
+want_eq 'no stream, no run reference' '' "$([[ -e "$run_stream" ]] && echo exists)"
+echo '{"kind":"phase","t":1000,"phase":"gate","state":"start","detail":"v1.2.3-rc.4"}' >"$run_stream"
+RELEASE_PROGRESS_FILE="$run_stream" RELEASE_STATUS_FILE='' progress_run owner/repo 42
+run_json="$(progress_status_json "$run_stream")"
+want_eq 'the repo is carried' owner/repo "$(status_field "$run_json" runRepo)"
+want_eq 'the run id is carried' 42 "$(status_field "$run_json" runId)"
+want_contains 'and the report names the run' \
+	'https://github.com/owner/repo/actions/runs/42' "$(report phase "$run_json")"
+
+echo
 echo '== durations read as durations =='
 want_eq 'seconds' 45s "$(fmt_duration 45)"
 want_eq 'minutes' 9m03s "$(fmt_duration 543)"
@@ -178,6 +280,84 @@ else
 	wait "$watcher" || true
 	want_contains 'the transition woke the watcher' 'RELEASE-SENTINEL EVENT: phase' "$(cat "$live_out")"
 	want_contains 'the wake names the new phase' 'Phase: e2e (start)' "$(cat "$live_out")"
+fi
+
+echo
+echo '== live: an unreadable log does not wake the watcher, a finished run does =='
+# The helpers above decide it; this asserts the watcher is actually wired to
+# them, which is where Q630 went wrong. `gh` is shimmed onto PATH — these tests
+# never reach GitHub.
+mkdir -p "${WORK}/bin"
+fake_gh() {
+	printf '#!/usr/bin/env bash\necho %s\n' "$1" >"${WORK}/bin/gh"
+	chmod +x "${WORK}/bin/gh"
+}
+
+# A gate 25 minutes into the e2e leg with nothing relayed: exactly the shape a
+# BlobNotFound log leaves behind.
+quiet_t=$(($(date +%s) - 1500))
+live_quiet_stream="${WORK}/live-quiet.jsonl"
+{
+	echo "{\"kind\":\"phase\",\"t\":${quiet_t},\"phase\":\"gate\",\"state\":\"start\",\"detail\":\"v1.2.3-rc.4\"}"
+	echo "{\"kind\":\"phase\",\"t\":${quiet_t},\"phase\":\"e2e\",\"state\":\"start\"}"
+	echo "{\"kind\":\"run\",\"t\":${quiet_t},\"repo\":\"owner/repo\",\"id\":\"42\"}"
+} >"$live_quiet_stream"
+live_dead_stream="${WORK}/live-dead.jsonl"
+cp "$live_quiet_stream" "$live_dead_stream"
+
+# Sets `watcher` to the launched pid rather than printing it: a command
+# substitution would launch it from a subshell, leaving it unwaitable here.
+start_watcher() {
+	local stream="$1" out="$2"
+	(
+		PATH="${WORK}/bin:${PATH}" RELEASE_SENTINEL_INTERVAL=1 \
+			RELEASE_SENTINEL_TIMEOUT=60 RELEASE_SENTINEL_STALL=1200 \
+			bash "${REPO_ROOT}/scripts/dogfood/release-sentinel.sh" "$stream" >"$out" 2>&1
+	) &
+	watcher=$!
+}
+
+fake_gh in_progress
+live_out="${WORK}/live-quiet.out"
+start_watcher "$live_quiet_stream" "$live_out"
+sleep 3
+if kill -0 "$watcher" 2>/dev/null; then
+	ok 'a 25-minute silence on a live run does not wake it' 'still asleep'
+	kill "$watcher" 2>/dev/null || true
+	wait "$watcher" 2>/dev/null || true
+else
+	bad 'a 25-minute silence on a live run does not wake it' "exited: $(cat "$live_out")"
+fi
+
+# The control. Same silence, same threshold, run over: this one must wake.
+fake_gh completed
+live_out="${WORK}/live-dead.out"
+start_watcher "$live_dead_stream" "$live_out"
+waited=0
+while kill -0 "$watcher" 2>/dev/null && ((waited < 15)); do
+	sleep 1
+	waited=$((waited + 1))
+done
+if kill -0 "$watcher" 2>/dev/null; then
+	kill "$watcher" 2>/dev/null || true
+	bad 'the same silence on a finished run wakes it' 'still running after 15s'
+else
+	wait "$watcher" || true
+	want_contains 'the same silence on a finished run wakes it' \
+		'RELEASE-SENTINEL EVENT: stalled' "$(cat "$live_out")"
+fi
+
+# And the second bug: relaunched against the identical quiet, it must not fire
+# again the instant it starts. The marker the report above wrote is the memory.
+live_out="${WORK}/live-refire.out"
+start_watcher "$live_dead_stream" "$live_out"
+sleep 3
+if kill -0 "$watcher" 2>/dev/null; then
+	ok 'a relaunched watcher does not repeat the stall' 'still asleep'
+	kill "$watcher" 2>/dev/null || true
+	wait "$watcher" 2>/dev/null || true
+else
+	bad 'a relaunched watcher does not repeat the stall' "exited: $(cat "$live_out")"
 fi
 
 echo

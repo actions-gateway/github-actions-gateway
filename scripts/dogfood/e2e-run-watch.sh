@@ -135,6 +135,11 @@ watch_run() {
 	local seen=0 job_ids="" status conclusion state all new total deadline
 
 	echo "  watching https://github.com/${REPO}/actions/runs/${run_id}"
+	# The sentinel consults this run's own status to tell a quiet-but-healthy leg
+	# from a wedged gate (Q630). The heartbeat relay below cannot carry that: when
+	# the log endpoint serves nothing the stream stays silent for the whole leg,
+	# which reads exactly like a wedge.
+	progress_run "${REPO}" "${run_id}"
 	deadline=$(($(now) + E2E_RUN_WATCH_TIMEOUT))
 
 	while true; do
