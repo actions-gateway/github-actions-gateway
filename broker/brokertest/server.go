@@ -115,15 +115,48 @@ func (s *Server) RegisteredSessions() []string {
 	return s.sessions.ActiveIDs("")
 }
 
-// ActiveSessionsForOwner returns the IDs of currently-active sessions whose
-// ownerName belongs to the given RunnerGroup. CreateSession sends ownerName as
-// "<group>-<agentIndex>", so a session is matched when its owner has the prefix
-// "<group>-". Scoping by owner lets a test assert on only its own RunnerGroup's
-// sessions, immune to sessions other tests left active on this shared stub — the
-// global RegisteredSessions/ActiveSessionCount counters accumulate across the
-// whole package and cause cross-test flakes when used for exact-count assertions.
-func (s *Server) ActiveSessionsForOwner(group string) []string {
-	return s.sessions.ActiveIDs(group + "-")
+// ActiveSessionsForOwner returns the IDs of currently-active sessions owned by the
+// CR of the given name — a RunnerGroup or a RunnerSet. A listener owns its session
+// as "<CR name>-<agentIndex>", so a session matches when its ownerName is that name,
+// a "-", and a decimal index. The index segment is matched exactly rather than by
+// prefix, so a CR whose name extends this one ("<name>-set") keeps its own bucket.
+// Scoping by owner lets a test assert on only its own CR's sessions, immune to
+// sessions other tests left active on this shared stub — the global
+// RegisteredSessions/ActiveSessionCount counters accumulate across the whole package
+// and cause cross-test flakes when used for exact-count assertions.
+//
+// Kind is not separable here: the AGC derives the name from the bare CR name for
+// either kind, so a same-named RunnerGroup and RunnerSet send a byte-identical
+// ownerName and share one bucket. That is the production wire format, not a limit of
+// this stub — Q466 kind-scoped the registered runner name but not this one (Q677).
+func (s *Server) ActiveSessionsForOwner(name string) []string {
+	prefix := name + "-"
+	ids := s.sessions.ActiveIDs(prefix)
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		sess, ok := s.sessions.Get(id)
+		if !ok {
+			continue
+		}
+		if isAgentIndex(strings.TrimPrefix(sess.Owner, prefix)) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// isAgentIndex reports whether s is the agentIndex segment of an ownerName:
+// non-empty and all decimal digits, as fmt.Sprintf("%s-%d", …) emits it.
+func isAgentIndex(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // EnqueueJob places a job message onto the given session's queue.
@@ -445,7 +478,7 @@ func (s *Server) SetAcquireJobResponse(v any) {
 // so the listener's permanent baseline exits without being auto-restarted —
 // letting a test drive the controller's baseline-revival path (Q137). An empty
 // prefix clears the override. The prefix is matched against ownerName
-// ("<group>-<agentIndex>"), so passing "<group>-" scopes it to one RunnerGroup.
+// ("<CR name>-<agentIndex>"), so passing "<CR name>-" scopes it to one CR's pool.
 func (s *Server) FailCreateSessionForOwner(prefix string) {
 	s.mu.Lock()
 	s.failSessionOwner = prefix
@@ -475,9 +508,9 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		bearer := brokerstub.Bearer(r)
 
-		// Parse ownerName ("<group>-<agentIndex>") so tests can scope session
-		// assertions to one RunnerGroup via ActiveSessionsForOwner. Best-effort:
-		// a missing or unparsable body simply leaves the owner empty.
+		// Parse ownerName ("<CR name>-<agentIndex>") so tests can scope session
+		// assertions to one CR via ActiveSessionsForOwner. Best-effort: a missing
+		// or unparsable body simply leaves the owner empty.
 		var reqBody struct {
 			OwnerName string `json:"ownerName"`
 		}

@@ -129,9 +129,8 @@ func startAGC(t *testing.T, gatewayName string) {
 //
 // A listener owns its session as "<owner>-<agentIndex>" where owner is the CR name,
 // for both kinds — the session ownerName is not kind-scoped the way Q466 made the
-// agent Secret and GitHub runner names. So this prefix separates the two pools only
-// when the two CRs are not named such that one prefixes the other, which is why the
-// RunnerSet below gets its own name.
+// agent Secret and GitHub runner names (Q677). So this separates the two pools by
+// name but never by kind: the RunnerSet below must not share the RunnerGroup's name.
 func waitForGroupSessions(t *testing.T, group string, want int) []string {
 	t.Helper()
 	var got []string
@@ -152,9 +151,9 @@ func TestQ535_GatewayScopedAGCDeclinesV1RunnerGroups(t *testing.T) {
 	}
 
 	const ns = "q535-coexist"
-	// Distinct from other suites' names: the broker stub is shared and matches session
-	// owners by prefix, so a name another test also uses would be counted here. setName
-	// is not a prefix-extension of name for the same reason (see waitForGroupSessions).
+	// Distinct from other suites' names: the broker stub is shared and scopes session
+	// owners by CR name, so a name another test also uses would be counted here.
+	// setName differs from name because kind is not separable (see waitForGroupSessions).
 	const name = "q535-migrated"
 	const setName = "q535-set"
 	createNSForAGC(t, ns)
