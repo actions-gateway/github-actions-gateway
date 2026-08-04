@@ -2790,7 +2790,7 @@
 <td><code>ci</code> <code>debt</code></td>
 <td>🚫</td>
 <td>M</td>
-<td>Blocked by <a href="#Q612">Q612</a>. One escaped pipe shifts every field, so <code>St</code> reads the label cell and <code>Notes</code> the size and the rules pass on the wrong ones. Separately <code>awk</code>'s <code>length()</code> is bytes here, runes under gawk; Q594 sits at 250/248.</td>
+<td>Blocked by <a href="#Q612">Q612</a>. One escaped pipe shifts every field, so <code>St</code> reads the label cell and <code>Notes</code> the size and the rules pass on the wrong ones. Separately <code>awk</code>'s <code>length()</code> is bytes here, runes under gawk; Q555 sits at 249/249.</td>
 </tr>
 <tr>
 <td><a id="Q644"></a>Q644</td>
@@ -2833,12 +2833,12 @@
 <td>The hook scans the whole Bash string, so a <code>git commit -F -</code> heredoc quoting <code>go test -race</code> reads as a second go invocation and is denied. Skip heredoc bodies and <code>git commit -m</code>/<code>-F</code> arguments; <code>claude-go-throttle-hook-test.sh</code> takes the case.</td>
 </tr>
 <tr>
-<td><a id="Q594"></a>Q594</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/plan-hygiene.yml">plan-hygiene's <code>plan</code> filter lists <code>**.go</code>, which matches nothing</a></td>
-<td><code>bug</code> <code>ci</code></td>
+<td><a id="Q659"></a>Q659</td>
+<td><a href="../development/testing/#where-a-globstar-works-in-a-filter-glob">Nothing rejects a mid-pattern <code>**</code> in a filter glob</a></td>
+<td><code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>picomatch (dorny/paths-filter) degrades a <code>**</code> beside non-<code>/</code> chars into <code>*</code>, so <code>**.go</code> matches no Go file — none sit at the repo root. The no-plan-refs gate then runs only via its other paths. The <code>on.push.paths</code> twin is correct (GitHub matcher).</td>
+<td>picomatch degrades <code>cmd/**.go</code> to a <code>*</code> that cannot cross <code>/</code>, so it gates on nothing while reading as every Go file under <code>cmd/</code>. Assertion 3 passes — the literal prefix exists. No instance today (measured); wants a check-path-filters assertion.</td>
 </tr>
 <tr>
 <td><a id="Q563"></a>Q563</td>

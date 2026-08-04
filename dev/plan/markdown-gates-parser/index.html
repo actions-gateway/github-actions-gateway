@@ -2558,9 +2558,10 @@ after.</p>
 <p>Second defect, latent: <code>awk</code>'s <code>length()</code> counts <strong>bytes</strong> on this host (BWK awk
 20200816) and <strong>runes</strong> under <code>gawk</code> in a UTF-8 locale. <code>STATUS.md</code> carries 52 em
 dashes, 51 🔲, 26 ✅. Measuring every cell exactly as the script extracts it, the
-longest is <a href="../../STATUS/#Q594">Q594</a> at <strong>250 bytes / 248 characters</strong> — zero margin
-against the 250 cap. Nothing diverges today, but rows are routinely authored to fill
-the budget, and one at 251/249 would pass in one environment and fail in the other.</p>
+longest is <a href="../../STATUS/#Q555">Q555</a> at <strong>249 bytes / 249 characters</strong> — one byte of
+margin against the 250 cap, and <a href="../../STATUS/#Q640">Q640</a> ties it on bytes at 249/245.
+Nothing diverges today, but rows are routinely authored to fill the budget, and one at
+251/249 would pass in one environment and fail in the other.</p>
 <h3 id="runtime-is-not-the-argument">Runtime is not the argument<a class="headerlink" href="#runtime-is-not-the-argument" title="Permanent link">&para;</a></h3>
 <p><code>check-doc-links</code> 0.67 s, <code>lint-backlog</code> 0.49 s, <code>check-roadmap</code> 0.27 s. All
 sub-second. This plan buys <strong>correctness and testability</strong>, not speed. Nothing here

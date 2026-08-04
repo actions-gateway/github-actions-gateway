@@ -2558,6 +2558,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#where-a-globstar-works-in-a-filter-glob" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where a globstar works in a filter glob
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-path-list-written-twice-the-trigger-and-the-filter" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3583,6 +3594,41 @@
 <li><strong>Push-trigger agreement.</strong> A workflow that scopes its post-merge leg with <code>on.push.paths</code> lists the same paths as its <code>changes</code> filter. <code>PUSH_TRIGGER_FILTERS</code> registers the pairs. See below for why this one is easy to miss.</li>
 </ol>
 <p><strong>So adding a workspace module now fails the gate instead of slipping through</strong> — but the gate only knows about <em>whole-workspace</em> coverage. Judgement is still yours for the narrow filters: when you add a module, ask what each gate actually compiles, scans, or bakes, and remember the same applies to a gate that names files individually (<code>manifest-validate.sh</code>'s <code>standalone_manifests</code> — adding a path there means adding its directory to the filter). Wired into <code>make check</code> and CI's <code>path-filters</code> job in <code>unit-test.yml</code>, which is gated on the <code>workflows</code> filter — the one filter watching all of <code>.github/workflows/</code>, so editing any <code>filters:</code> block re-runs the gate that lints it. Behaviour, including that each assertion fails when it should, is asserted by <code>scripts/ci/check-path-filters-test.sh</code> under <code>make scripts-test</code>.</p>
+<h4 id="where-a-globstar-works-in-a-filter-glob">Where a globstar works in a filter glob<a class="headerlink" href="#where-a-globstar-works-in-a-filter-glob" title="Permanent link">&para;</a></h4>
+<p><code>dorny/paths-filter</code> matches with <a href="https://github.com/micromatch/picomatch">picomatch</a>; <code>on.push.paths</code> is matched by GitHub's own trigger matcher. The two do not agree, so a pattern copied from one list into the other can silently stop matching. Measured against the pinned <code>dorny/paths-filter@7b450ff</code> (v4.0.2) on a branch whose diff was two nested Go files (<code>cmd/agc/buildinfo.go</code>, <code>cmd/agc/config.go</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Filter pattern</th>
+<th>Matched</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>'**.go'</code></td>
+<td>both files</td>
+<td>a <strong>leading</strong> <code>**</code> globstars normally</td>
+</tr>
+<tr>
+<td><code>'**/*.go'</code></td>
+<td>both files</td>
+<td>equivalent to the above</td>
+</tr>
+<tr>
+<td><code>'*.go'</code></td>
+<td>nothing</td>
+<td>a lone <code>*</code> never crosses <code>/</code>, and matching is on the full path, not the basename</td>
+</tr>
+<tr>
+<td><code>'cmd/**.go'</code></td>
+<td>nothing</td>
+<td>a <strong>mid-pattern</strong> <code>**</code> beside non-<code>/</code> characters degrades to <code>*</code>, which then cannot cross the <code>/</code> in <code>agc/</code></td>
+</tr>
+</tbody>
+</table>
+<p>The hazard is narrow but silent: <code>cmd/**.go</code> reads as "every Go file under <code>cmd/</code>" and gates on nothing. Write <code>cmd/**/*.go</code>. Assertion 3 above does not catch it — the pattern's literal prefix (<code>cmd</code>) exists on disk.</p>
+<p>Q594 filed <code>plan-hygiene.yml</code>'s <code>'**.go'</code> as an instance of this. It is not: a leading <code>**</code> is fine, and that filter matches every Go file in the repo. The tree carries no instance of the broken shape today; Q659 is the recurrence guard.</p>
 <h4 id="a-path-list-written-twice-the-trigger-and-the-filter">A path list written twice: the trigger and the filter<a class="headerlink" href="#a-path-list-written-twice-the-trigger-and-the-filter" title="Permanent link">&para;</a></h4>
 <p>Three workflows — <code>e2e-calico.yml</code>, <code>plan-hygiene.yml</code>, <code>status-lint.yml</code> — express the same scoping decision <strong>twice</strong>, because the two legs are gated by different mechanisms:</p>
 <ul>
