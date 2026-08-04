@@ -475,7 +475,7 @@ point is that the choice is made rather than defaulted into.
 
 Anything deferred gets a Queue row with the release's gate label (`1.3-gate` and
 friends) so it cannot be frozen by the tag while nobody is looking. Allocate the
-ID with `make queue-id`; format per
+ID with `make queue-id TITLE="…"`; format per
 [maintaining-backlog.md](maintaining-backlog.md).
 
 ### Scope discipline

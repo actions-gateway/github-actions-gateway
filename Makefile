@@ -270,6 +270,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/backlog-metrics-test docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
+                 docs/find-duplicate-rows-test \
                  docs/git-merge-status-test docs/lint-backlog-test \
                  docs/release-version-hook-test docs/source-links-hook-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
@@ -287,7 +288,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate, release-note site-link resolution, release-gate ownership lease)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog near-duplicate search, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate, release-note site-link resolution, release-gate ownership lease)
 	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of
@@ -506,10 +507,24 @@ lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from t
 
 # IDs come from a ref claim, not from a counter line in STATUS.md: a shared
 # mutable counter conflicted by construction whenever two sessions filed a row
-# (Q382). N=<n> claims several at once; PEEK=1 shows the next without claiming.
+# (Q382). PEEK=1 shows the next ID without claiming it.
+#
+# TITLE is mandatory, because this target is the one chokepoint every filed row
+# passes through and the near-duplicate search needs text (Q639). It travels via
+# a target-scoped environment variable rather than an argument so the recipe
+# shell never re-parses the title's backticks, quotes or apostrophes — the
+# characters these titles are full of. Several IDs at once, or a title carrying
+# a literal `$` or `#`: call scripts/docs/alloc-queue-id.sh with one argument
+# per title.
+#
+# TARGET is the link the row's Item cell will carry, when it is already known:
+# two rows about one defect point at one file even when they word it
+# differently, so an exact match lowers the bar the text has to clear.
 .PHONY: queue-id
-queue-id: ## Allocate the next backlog Q-ID (make queue-id [N=3] [PEEK=1])
-	@scripts/docs/alloc-queue-id.sh $(if $(PEEK),--peek,) $(if $(N),-n $(N),)
+queue-id: export QUEUE_ID_TITLE = $(TITLE)
+queue-id: export QUEUE_ID_TARGET = $(TARGET)
+queue-id: ## Search the backlog for near-duplicates, then allocate a Q-ID (make queue-id TITLE="..." [TARGET=path] [PEEK=1])
+	@scripts/docs/alloc-queue-id.sh $(if $(PEEK),--peek,) $${QUEUE_ID_TARGET:+--target "$$QUEUE_ID_TARGET"} "$$QUEUE_ID_TITLE"
 
 # The public roadmap and the backlog drift apart silently — a 2026-07-25 audit
 # found six of seven "near-term" items already shipped. Because done Queue rows
