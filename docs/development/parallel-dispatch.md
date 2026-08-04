@@ -387,17 +387,14 @@ This is the key design decision; get it right up front.
   to `main`. Keep it behind one gate because the dispatcher's merge step is where
   **scope review** and **merge ordering** happen, and it is the single
   **stop/amend** control point. CI-green is not the same as correct-and-in-scope.
-- **GitHub-native auto-merge needs branch protection + required status checks.**
-  Without them, `gh pr merge --auto` has no required-checks gate and can merge on
-  mergeability alone — including before CI attaches. So "let each session
-  auto-merge" is not a free switch; it would first require configuring branch
-  protection.
-- **If you want to cut dispatcher polling**, the right move is: enable branch
-  protection with required checks, then have the **dispatcher** run
-  `gh pr merge <n> --auto` *after its scope check* — GitHub merges on green while
-  the gate stays. Optionally **tier by risk**: let purely mechanical PRs (lint
-  gates, docs) auto-merge on green, keep feature/large/security PRs
-  dispatcher-gated.
+- **The merge queue is the mechanical half of the merge gate** (active on `main`
+  since 2026-08-03; see [merge-queue.md](../plan/merge-queue.md)). `gh pr merge
+  --squash` enqueues; the queue validates the candidate merge result — including
+  the union with whatever is ahead in the queue — and kicks a failing entry back
+  to its PR, which pr-sentinel surfaces to the owning session. The dispatcher's
+  scope review stays: enqueue *after* the scope check, and the queue handles
+  green-ness, freshness, and jointly-red arbitration from there. Workers never
+  enqueue their own PRs unless the dispatch contract explicitly delegates it.
 
 ## Concurrency and contention
 
