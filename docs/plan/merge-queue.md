@@ -16,9 +16,9 @@ iterating; the queue run is the authoritative combined check).
 
 | Phase | State |
 |---|---|
-| 1. `merge_group` triggers on the 9 required-check workflows | 🚧 this PR |
-| 2. Activation: add the `merge_queue` rule to the `default-protect` ruleset | ❌ blocked on Phase 1 reaching `main` |
-| 3. Re-measure after ~1 week; decide follow-ups | ❌ after Phase 2 |
+| 1. `merge_group` triggers on the 9 required-check workflows | ✅ #1256, merged 2026-08-03 |
+| 2. Activation: add the `merge_queue` rule to the `default-protect` ruleset | ✅ 2026-08-03 — rule live, verified by GET after PUT; queue-era process-doc rewrite in the same change as this row |
+| 3. Re-measure after ~1 week; decide follow-ups | 💤 deferred, trigger ~2026-08-10 ([STATUS.md Deferred](../STATUS.md#deferred)) |
 
 ## The measurement (2026-08-03)
 

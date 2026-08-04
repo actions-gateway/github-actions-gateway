@@ -165,15 +165,16 @@ Keep commits small and focused. Never commit broken code or failing tests. Amend
 ### Pushing to a PR that is already open
 
 Prefer putting everything in the first push — but "never push again" is too strong, and
-the reason matters. PRs here squash-merge, so a commit that lands while the PR is
-**green and mergeable** can be overtaken by the merge and stranded: it never reaches
-`main`, and the SHA it was pushed as no longer exists to tell you so.
+the reason matters. Every merge goes through the **merge queue** (`gh pr merge --squash`
+enqueues; the queue validates the candidate merge and lands it), so the old race (a
+direct squash-merge overtaking a just-pushed commit and stranding it) cannot happen: a
+push to a queued PR **dequeues** it instead, and the PR re-enters the queue after its
+checks rerun on the new head.
 
-That risk is a property of the *mergeable* state, not of the PR being open. A PR whose
-checks are pending or failing cannot merge, so pushing to it is safe — and on anything
-that runs e2e, that is a window of roughly ten minutes on every push. Weigh the cost of
-the CI a push restarts, too: on a docs-only PR the gates are seconds, so an amend is
-cheap; on one that runs the full e2e matrix it is a quarter-hour you are spending twice.
+The cost of a push is therefore CI and queue position, not a stranded commit. On a
+docs-only PR the gates are seconds, so an amend is cheap; on one that runs the full e2e
+matrix a push restarts a quarter-hour of checks and sends the PR to the back of the
+queue. Weigh that before pushing a nicety onto a PR that is otherwise done.
 
 **The practical guard is a check immediately before the push, not a rule of thumb:**
 
@@ -181,9 +182,9 @@ cheap; on one that runs the full e2e matrix it is a quarter-hour you are spendin
 gh pr view <n> --json state,mergeStateStatus --jq '{state,mergeStateStatus}'
 ```
 
-`OPEN` with checks still running is safe to push. `CLEAN` means it can merge right now —
-either push promptly and confirm it landed, or branch off `main` instead. A state you
-read ten minutes ago is not the state you are pushing into.
+`OPEN` is safe to push (including `QUEUED` — the push dequeues and re-validates; do it
+deliberately, not accidentally). A state you read ten minutes ago is not the state you
+are pushing into.
 
 `MERGED` is the state worth naming separately, because the push *appears to work*. The
 merge deletes the branch, so pushing to it **recreates** it — git says
@@ -194,85 +195,44 @@ commit rather than re-push: confirm the PR's own work landed by content, `git ch
 <new> origin/main`, `git cherry-pick <sha>`, and open a fresh PR. The stray branch then
 needs deleting (`git push origin --delete <branch>`), which is easy to leave behind.
 
-**Re-check the base as well as the PR state.** A rebase and the push that follows it are
-separated by a full local gate, and `main` merges during it. The window is not a fixed
-number of minutes — it is however long your gate takes, and that varies by an order of
-magnitude across the machines this repo has been measured on: a cold `make check` is
-~21 min on a 4-core Intel i7 and 102 s on an 18-core M5 Max
-([measurements](docs/plan/archive/local-gate-throughput.md)). The longer the gate, the
-more of `main`'s merge traffic falls inside it — and force-pushing onto a base that has
-since moved spends a full CI cycle on something that cannot merge.
-
-```sh
-git fetch origin main && git rev-list --count HEAD..origin/main
-```
-
-Zero means the base you tested is still the base you are pushing. Non-zero means `main`
-moved: rebase onto it again before pushing, and re-run the gate if what moved can affect
-it — `git diff HEAD...origin/main --stat` says what did.
+**A stale base no longer forces a rebase — a conflicting one does.** The queue merges
+the candidate result of your branch against current `main`, so being commits behind is
+fine; only a textual conflict (`mergeStateStatus: DIRTY`) blocks the queue, and
+pr-sentinel wakes the session for that. Rebasing onto a moved `main` is still worth it
+when what moved can affect your gate — `git diff HEAD...origin/main --stat` says what
+did — because a queue kickback costs a full check cycle where a local re-run would have
+caught it first. The local-gate window varies by an order of magnitude across the
+machines this repo has been measured on (a cold `make check` is ~21 min on a 4-core
+Intel i7 and 102 s on an 18-core M5 Max —
+[measurements](docs/plan/archive/local-gate-throughput.md)), so the longer your gate,
+the more of `main`'s merge traffic lands inside it.
 
 Whatever happens, verify what actually landed **by content, not SHA** — see below.
 
-### Re-check concurrent work before opening and before merging
+### Re-check concurrent work before opening
 
-Pushing is not the only moment the state you checked has moved on. The check at the start
-of a task has a shelf life of minutes, and two more moments need it: immediately before
-`gh pr create`, and immediately before merging.
+The check at the start of a task has a shelf life of minutes; run it again immediately
+before `gh pr create`:
 
 ```sh
-git fetch origin main && git rev-list --count HEAD..origin/main
 gh pr list --json number,title --jq '.[] | "#\(.number)\t\(.title)"'
 ```
 
-Three different things go wrong, and only the first is fixed by rebasing.
+**An open PR can overlap yours** — read its diff and its body, not its title. #1093 was
+opened mid-session on a topic that overlapped the Q577 change, and carried evidence
+disproving the remedy that change was about to ship in `stop.sh`'s error text. The title
+said nothing about that. Revise before opening; if the other PR's evidence invalidates
+yours, put that on the Queue row instead of shipping around it.
 
-- **`main` moved** — a non-zero count. Rebase before opening. The cost is proportional to
-  how late you find it: the Q506 session ran long, `main` moved seven commits underneath
-  it, and the rebase landed at the end by chance rather than by check.
-
-- **An open PR overlaps yours** — read its diff and its body, not its title. #1093 was
-  opened mid-session on a topic that overlapped the Q577 change, and carried evidence
-  disproving the remedy that change was about to ship in `stop.sh`'s error text. The title
-  said nothing about that. Revise before opening; if the other PR's evidence invalidates
-  yours, put that on the Queue row instead of shipping around it.
-
-- **Two individually green PRs merge into a red `main`** — the one that breaks the branch,
-  and the one no rebase catches. A PR gate only ever sees its own base, so green tells you
-  nothing about the union of two open branches. #1062 raised MkDocs' link validation from
-  INFO to warnings under a `--strict` build (Q560) while #1063 added a link that trips it
-  (Q558); each passed on a base without the other, the merged tree built dirty, and the
-  failure surfaced two hours later on an unrelated PR.
-
-The union case needs its own check, because the tell is not a textual conflict. Compare
-what each branch touches:
-
-```sh
-gh pr diff <PR_NUMBER> --name-only
-git diff --name-only origin/main...HEAD
-```
-
-Shared paths are the cheap signal, but the question they stand in for is broader: **does
-one branch change a gate the other's content has to satisfy?** #1062 and #1063 shared one
-file and broke on something else entirely — a stricter linter meeting a new link. When the
-answer is yes or unclear, run the gate against the union before either merges:
-
-```sh
-git fetch origin pull/<PR_NUMBER>/head:pr-<PR_NUMBER>
-git switch -c union-check && git merge pr-<PR_NUMBER> && make check
-```
-
-Red means the two cannot both merge as they stand. Say so on both PRs and fix it on
-whichever branch owns the conflict, rather than racing to merge first. Delete the throwaway
-branches afterwards (`git switch -` then `git branch -D union-check pr-<PR_NUMBER>`); a
-`make check` run there can leave regenerated files behind.
-
-Before merging, run the same two commands once more. A green gate measured against a base
-that has since moved is not evidence about the tree being merged; if anything landed in the
-meantime, rebase and re-run rather than merging on the older result.
-
-Nothing prevents the union case automatically. Since #1067 the `pages` workflow re-runs the
-strict builds on push to `main`, so a docs break of this shape now goes red promptly instead
-of silently, but that is detection after `main` is already broken, and only for docs.
+**The jointly-red case is machine-checked at merge time.** Two individually green PRs
+used to merge into a red `main` because a PR gate only ever sees its own base — #1062
+raised MkDocs' link validation to strict-build warnings (Q560) while #1063 added a link
+that trips it (Q558); each passed without the other and the merged tree built dirty.
+The **merge queue** now closes this: every merge validates the candidate result (your
+branch plus whatever is ahead of it in the queue, on current `main`) before it lands,
+and a failing entry is kicked back to its PR with the failure attached — the signal
+pr-sentinel already reacts to. There is no manual union-gate or pre-merge freshness
+check to run; enqueue and let the queue arbitrate the race.
 
 ### When new work blocks an open PR
 
