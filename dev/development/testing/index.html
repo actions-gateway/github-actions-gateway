@@ -2957,6 +2957,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Script tests: neutralize the clock, never measure it">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The clock is as often a deadline around a process as a sleep inside one
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -4191,6 +4208,10 @@ the invariant itself reads.</p>
 </ul>
 <p>The second shape needs a seam in the script under test: <strong>read the clock through a named function</strong> (<code>now_seconds</code>), never an inline <code>date +%s</code>, so a test can substitute it. This is the same constraint as the <code>BASH_SOURCE</code> guard and the "keep new parsing in a named function" rule above — an inline call in the middle of a code path is untestable by construction.</p>
 <p>Q471 is the worked example, and it shows the cost of getting this wrong is not just a flake: <code>validate-cluster-test.sh</code> bounded real seconds (<code>date +%s</code>, max 1–5 s) around sleep-based retries, so it passed standalone and failed under a loaded <code>make check</code> — a flake that only ever fires where it is hardest to reproduce. Converting it to a fake clock also took the suite from ~4 s of real sleeping to under 0.5 s, because a test that stubs <code>sleep</code> does not wait for anything.</p>
+<h4 id="the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one">The clock is as often a deadline around a process as a <code>sleep</code> inside one<a class="headerlink" href="#the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one" title="Permanent link">&para;</a></h4>
+<p>The margin can look absurd and still be a race. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch-test.sh"><code>progress-watch-test.sh</code></a> asserted that <code>TEST_PROGRESS_INTERVAL=0</code> turns the watcher off by launching it, arming a 10 s <code>kill -9</code>, and reading <code>wait</code>'s status. The watcher exits in milliseconds, so the deadline had a ~2000× margin on an idle machine — and none at all on a busy one, because what it bounds is the scheduler, not the guard. Measured over 1,760 launches while four concurrent 41-way <code>make scripts-test</code> runs saturated an 18-core machine: p50 28 ms, p90 172 ms, p99 469 ms, and <strong>8 launches (0.45%) still alive at the deadline</strong>, each in state <code>S</code> with the shell not yet through startup (Q642). The suite reports that as <code>exit 137</code> — its own SIGKILL, indistinguishable from the hang the deadline exists to catch.</p>
+<p>So <strong>bound the subject's loop, not its wall clock</strong>. A stub <code>sleep</code> ahead of the real one on <code>PATH</code> records the tick and kills the process; the assertion reads the recorded ticks. "Off" becomes zero ticks, a regression fails on the tick it took instead of spinning for the length of the gate, and both outcomes terminate through the program's own control flow — so neither end needs a deadline. The kill still surfaces as a non-zero exit, which keeps a genuine hang from passing as a clean one.</p>
+<p>Prove it by widening the window, exactly as <a href="#synchronize-on-the-signal-you-assert-on">Q490</a> does: a <code>/bin/sleep 12</code> injected into <code>main</code> reproduces the reported <code>exit 137</code> on the old assertion every time, and the rewritten one passes against that same delay. <code>/bin/sleep</code>, not <code>sleep</code>, so the injected delay bypasses the stub on <code>PATH</code>.</p>
 <h3 id="testing-a-main-shaped-script-the-entry-point-seam-and-the-errexit-trap">Testing a <code>main</code>-shaped script: the entry-point seam, and the errexit trap<a class="headerlink" href="#testing-a-main-shaped-script-the-entry-point-seam-and-the-errexit-trap" title="Permanent link">&para;</a></h3>
 <p>A script whose logic lives in <code>main()</code> needs a seam before it can be sourced at all. The dogfood scripts use an env guard on the last line — <code>[[ -n "${START_LIB_ONLY:-}" ]] || main "$@"</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/start.sh"><code>start.sh</code></a>, and the same shape in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-start.sh"><code>e2e-start.sh</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-stop.sh"><code>e2e-stop.sh</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/delete.sh"><code>delete.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh"><code>validate-release.sh</code></a> — so a test sources the file for its functions without running it. It is the <code>BASH_SOURCE</code>-guard idea applied to an entry point; <strong>keep the guard when editing these scripts</strong>, or their suites stop being able to load them.</p>
 <p>The guard earns most on a script that is destructive at rest. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/delete.sh"><code>delete.sh</code></a> tears down the whole dogfood cluster, so its suite must never be one stray invocation away from running it; sourcing under <code>DELETE_LIB_ONLY=1</code> with <code>gcloud</code>/<code>kubectl</code>/<code>gh</code> stubbed is what makes the confirmation, the occupancy probes it quotes, and the delete ordering assertable at all. Teardown is the half worth asserting hardest: a drain that reports convergence it did not reach deletes an AGC out from under live work, and worker pods outlive their AGC with do-not-disrupt annotations pinning billable nodes (Q581, and the 82 stranded spot node-hours behind Q434).</p>

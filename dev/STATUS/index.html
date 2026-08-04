@@ -2577,14 +2577,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q642"></a>Q642</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch-test.sh"><code>progress-watch-test</code>'s <code>interval 0</code> case fails under <code>make check</code>, passes standalone</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong>Measured 2026-08-03:</strong> <code>FAIL interval 0 exits without output — exit 137 output ''</code> (line 148 SIGKILLs the watcher). Green twice standalone, so the watcher does not exit within the test's grace under the 41-way <code>run-parallel</code> load.</td>
-</tr>
-<tr>
 <td><a id="Q631"></a>Q631</td>
 <td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">The release gate starves itself: routed CI and the e2e leg draw on one global CPU budget</a></td>
 <td><code>dogfood</code> <code>debt</code></td>
@@ -3423,6 +3415,13 @@
 <td><code>flake</code> <code>tests</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> a <code>real-github-egress</code> spec fails on <code>main</code> after the Q648 fix and the banner misattributes it — <code>BLOCKED</code> on a spec still red across re-runs, or <code>REACHABLE</code>/<code>INCONCLUSIVE</code> on one that re-runs green. → top of Queue, escalated.</td>
+</tr>
+<tr>
+<td><a id="Q642"></a>Q642</td>
+<td><a href="../development/testing/#the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one"><code>progress-watch-test</code>'s <code>interval 0</code> case fails under <code>make check</code>, passes standalone</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> the <code>interval 0</code> case fails on <code>main</code> after the Q642 fix (it asserts on ticks a stubbed <code>sleep</code> records; no deadline bounds the watcher). Reproduced: 8/1760 launches alive at the old 10 s deadline. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q596"></a>Q596</td>
