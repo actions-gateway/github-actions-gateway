@@ -146,21 +146,40 @@ workspace_modules() {
 # because check-path-filters.sh requires the workspace-covering filters to match
 # every go.work module.
 #
-# The cost of that choice is this list: the Go gates run one workspace-wide
-# invocation, which cannot reach a module go.work does not list, so go-test.sh,
-# go-lint.sh and go-vulncheck.sh loop these separately with GOWORK=off. Omit a
-# module here and nothing tests, lints, or scans it.
+# The cost of that choice is that go-test.sh, go-lint.sh and go-vulncheck.sh
+# each need a separate GOWORK=off pass over these: they run one workspace-wide
+# invocation, which cannot reach a module go.work does not list.
+#
+# DISCOVERED, not enumerated — every tracked go.mod minus the go.work members,
+# in sorted order. As a hand-maintained list this was a gate that covers a new
+# module only if someone remembers to widen it, and the cost of forgetting is
+# silence: nothing tests, lints, or scans the module, and every gate stays
+# green. Discovery makes a new module opt OUT rather than opt IN.
+#
+# Two exclusions, both structural: vendored trees are third-party, and `tools/`
+# pins third-party build tools via blank imports and holds no first-party code.
+#
+# Impure (queries git and go) and cwd-sensitive: call it with the repo root as
+# the working directory. Asserted by scripts/go/go-lint-scope-test.sh.
 #
 # coverage.sh is a partial exception: its ratchet derives one profile from the
 # workspace build list and filters it per module, so these modules carry no
 # baseline row and no floor. It does still run their tests, unmeasured — `make
 # check` calls cover-check in place of `make test`, so skipping them there would
 # leave the fast gate never executing them at all.
-#
-# `tools/` is excluded on purpose — it pins third-party build tools via blank
-# imports and holds no first-party code.
 firstparty_nonworkspace_modules() {
-	printf '%s\n' devtools
+	local workspace=$'\n' m dir
+	while IFS= read -r m; do
+		workspace+="${m#./}"$'\n'
+	done < <(workspace_modules)
+	while IFS= read -r m; do
+		[[ "$m" == */go.mod ]] || continue
+		[[ "$m" == */vendor/* ]] && continue
+		dir="${m%/go.mod}"
+		[[ "$dir" == tools ]] && continue
+		[[ "$workspace" == *$'\n'"$dir"$'\n'* ]] && continue
+		printf '%s\n' "$dir"
+	done < <(git ls-files --cached --others --exclude-standard -- '*go.mod' | sort)
 }
 
 # init_throttle — populate THROTTLE_JOBS / THROTTLE_PREFIX from

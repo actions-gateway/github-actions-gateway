@@ -7,6 +7,10 @@
 # golangci-lint covers on a local run and where its cache lives, so they are
 # asserted here without invoking the linter. Runs under `make check` (via
 # `make scripts-test`) and the CI shellcheck job.
+#
+# Fixture assertions come first, then a block run against the checkout's own
+# module graph — a scoping input that names the wrong module set looks correct
+# to every fixture (Q670).
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -117,6 +121,44 @@ expect_cache() {
 expect_cache local-per-worktree '/wt/a' '' '' '/wt/a/tmp/golangci-lint'
 expect_cache ci-keeps-default '/wt/a' 'true' '' ''
 expect_cache explicit-wins '/wt/a' '' '/custom/cache' ''
+
+# --- the real module graph ---------------------------------------------------
+#
+# The fixtures above cannot catch a scoping input that names the wrong set of
+# modules, and that is the failure this gate has actually shipped: scoping fed
+# on go.work alone mapped a devtools-only branch to no module at all, so the
+# gate printed "no module changes", skipped golangci-lint and exited 0 while
+# twelve findings sat in the diff (Q670). These assertions run against the
+# checkout's own module graph, so they go red the moment a first-party module
+# stops being scoped — including one added after this test was written.
+REAL_MODULES="$(scoped_module_dirs)"
+REAL_EDGES="$(module_edges "$REAL_MODULES")"
+
+# expect_real NAME CHANGED_FILES WANT — as expect_scope, against the real graph.
+expect_real() {
+	local name="$1" files="$2" want="$3" got
+	got="$(lint_scope "$REAL_MODULES" "$REAL_EDGES" <<<"$files")"
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   real  %-24s -> %s\n' "$name" "$got"
+	else
+		printf 'FAIL real  %-24s want=[%s] got=[%s]\n' "$name" "$want" "$got" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# Every non-workspace module must be scopable. Asserted per module rather than
+# by naming devtools, so the next one is covered without editing this file.
+while IFS= read -r nonws; do
+	[[ -n "$nonws" ]] || continue
+	expect_real "nonworkspace-$nonws" "$nonws/probe.go" "modules $nonws"
+done < <(firstparty_nonworkspace_modules)
+
+# Controls — scoping must still narrow, not degrade to "lint everything".
+# A workspace module scopes to itself plus its dependents, and pulls in no
+# non-workspace module (they import nothing from the workspace).
+expect_real workspace-module-alone 'cmd/agc/main.go' 'modules cmd/agc cmd/gmc'
+# No Go module touched: still nothing to lint.
+expect_real no-go-change 'docs/STATUS.md' 'modules'
 
 if (( fails > 0 )); then
 	echo "go-lint-scope-test: $fails failure(s)" >&2

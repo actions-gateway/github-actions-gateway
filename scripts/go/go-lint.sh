@@ -6,9 +6,9 @@
 #
 # Local runs scope golangci-lint to the modules a change can actually affect:
 # the modules owning files changed vs the origin/main merge-base (committed,
-# uncommitted, and untracked), plus every workspace module that depends on one
-# of them, transitively — a dependency change can break a dependent's
-# typecheck and therefore its lint. Every other module lints byte-identically
+# uncommitted, and untracked), plus every module that depends on one of them,
+# transitively — a dependency change can break a dependent's typecheck and
+# therefore its lint. Every other module lints byte-identically
 # to the merge-base commit (same sources, same .golangci.yml, same
 # tools/-pinned linter), and that commit is on main where the CI full sweep
 # already ran green, so re-linting it proves nothing. Skipping it saves real
@@ -104,7 +104,7 @@ lint_cache_dir() {
 # a change set.
 #
 #   stdin:   changed file paths, repo-relative, one per line
-#   MODULES: workspace module dirs, newline-separated, repo-relative
+#   MODULES: first-party module dirs, newline-separated, repo-relative
 #   EDGES:   module dependencies, newline-separated "dependent dependency"
 #
 # Prints one line: "full <file>" when a workspace-wide file changed, else
@@ -163,6 +163,20 @@ module_dirs() {
 	done < <(workspace_modules)
 }
 
+# scoped_module_dirs — every first-party module dir change-scoping must be able
+# to name: the go.work members plus the modules outside the workspace.
+#
+# Deriving this from go.work alone is what disarmed the gate in Q670: a branch
+# adding six files under devtools/ owned no workspace module, so lint_scope
+# printed an empty module set, main() reported "no module changes" and returned
+# 0 — a green that had linted nothing, while CI's full sweep found twelve. Both
+# halves are discovered (go.work, then every other tracked go.mod), so a module
+# added later is scoped without editing this script.
+scoped_module_dirs() {
+	module_dirs
+	firstparty_nonworkspace_modules
+}
+
 # module_edges MODULES — print one "dependent dependency" line per
 # workspace-local replace directive. The replace directives are the
 # workspace's own dependency declarations: every module that imports a
@@ -200,7 +214,7 @@ compute_scope() {
 		return 0
 	fi
 	local modules edges
-	modules="$(module_dirs)"
+	modules="$(scoped_module_dirs)"
 	edges="$(module_edges "$modules")"
 	{
 		git diff --name-only "$base" --
@@ -243,11 +257,12 @@ main() {
 		exit 1
 	fi
 
-	local scope kind lint_dirs
+	local scope kind lint_dirs nonworkspace
+	nonworkspace="$(firstparty_nonworkspace_modules)"
 	scope="$(compute_scope)"
 	kind="${scope%% *}"
 	if [[ "$kind" == full ]]; then
-		lint_dirs="$(module_dirs)"
+		lint_dirs="$(scoped_module_dirs)"
 	else
 		lint_dirs="${scope#modules}"
 		if [[ -z "${lint_dirs// /}" ]]; then
@@ -287,16 +302,16 @@ main() {
 	[[ -n "$THROTTLE_JOBS" ]] && j_flag="-j $THROTTLE_JOBS"
 
 	local dir
-	# shellcheck disable=SC2086  # lint_dirs word-splits intentionally (no spaces in go.work paths)
+	# shellcheck disable=SC2086  # lint_dirs word-splits intentionally (no spaces in module paths)
 	for dir in $lint_dirs; do
-		lint_module "$dir" "$j_flag" ""
-	done
-
-	# Modules outside go.work carry no replace edges, so the scoping above cannot
-	# see them. They are small and always linted rather than plumbed into
-	# compute_scope, which derives its graph from the workspace.
-	for dir in $(firstparty_nonworkspace_modules); do
-		lint_module "$dir" "$j_flag" off
+		# A module go.work does not list resolves nothing through the workspace,
+		# so it lints against its own vendor tree with GOWORK=off.
+		# shellcheck disable=SC2086  # nonworkspace word-splits into in_list's WORD args
+		if in_list "$dir" $nonworkspace; then
+			lint_module "$dir" "$j_flag" off
+		else
+			lint_module "$dir" "$j_flag" ""
+		fi
 	done
 }
 

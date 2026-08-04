@@ -85,7 +85,7 @@ It cannot live under `scripts/` either. A Go module brings a `vendor/` tree, and
 
 ### Wiring a new first-party module
 
-Outside `go.work` the Go gates do not see the module: `go-test.sh`, `go-lint.sh`, `coverage.sh` and `go-vulncheck.sh` all iterate `workspace_modules()` (`go work edit -json`). Add it to `firstparty_nonworkspace_modules()` in [`scripts/lib/common.sh`](../../scripts/lib/common.sh) — that list is what the gates loop with `GOWORK=off` — and then:
+Outside `go.work` the Go gates do not see the module: `go-test.sh`, `go-lint.sh`, `coverage.sh` and `go-vulncheck.sh` all iterate `workspace_modules()` (`go work edit -json`). What they loop with `GOWORK=off` is `firstparty_nonworkspace_modules()` in [`scripts/lib/common.sh`](../../scripts/lib/common.sh), and **that needs no edit** — it discovers every tracked `go.mod` outside `go.work`, excluding vendored trees and `tools/`. It was a hand-maintained list until Q670, where the cost of a gate that covers a module only on remembering to widen it was measured directly: forgetting is silent, and every gate stays green. What still needs doing:
 
 1. Vendor it in [`scripts/go/vendor-sync.sh`](../../scripts/go/vendor-sync.sh), beside the existing `tools/` line: `(cd devtools && GOWORK=off go mod vendor)`, and add the same tree to [`scripts/go/vendor-check.sh`](../../scripts/go/vendor-check.sh) so the integrity gate actually diffs it.
 2. Add `<module>/vendor/**` to the `vendor` path filter, so that gate re-runs when the tree changes.
