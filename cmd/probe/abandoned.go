@@ -45,7 +45,9 @@
 //
 //	PROBE_ABANDONED_LABEL          - Runner label (default gag-q645-abandoned).
 //	PROBE_ABANDONED_RESULT         - completejob result value (default abandoned;
-//	                                 any broker.TaskResult value).
+//	                                 any broker.TaskResult value), or "none" to
+//	                                 send no completion at all and watch what the
+//	                                 acquire lock's lapse does with the job.
 //	PROBE_ABANDONED_RERUN_CHECK    - "true" adds the rerun-failed-jobs measurement
 //	                                 after a CONCLUDED-run verdict (default off).
 //	PROBE_ABANDONED_WORKFLOW       - Fixture workflow file (default q645-abandoned-probe.yml).
@@ -102,6 +104,7 @@ type abandonedConfig struct {
 
 	Label         string
 	Result        broker.TaskResult
+	SkipComplete  bool
 	RerunCheck    bool
 	WorkflowFile  string
 	RunnerVersion string
@@ -156,8 +159,10 @@ func parseAbandonedConfig(getenv func(string) string) (abandonedConfig, error) {
 	switch cfg.Result {
 	case broker.TaskResultSucceeded, broker.TaskResultSucceededWithIssues, broker.TaskResultFailed,
 		broker.TaskResultCanceled, broker.TaskResultSkipped, broker.TaskResultAbandoned:
+	case "none":
+		cfg.SkipComplete = true
 	default:
-		return abandonedConfig{}, fmt.Errorf("PROBE_ABANDONED_RESULT %q is not a broker.TaskResult value", cfg.Result)
+		return abandonedConfig{}, fmt.Errorf("PROBE_ABANDONED_RESULT %q is not a broker.TaskResult value or \"none\"", cfg.Result)
 	}
 	cfg.RerunCheck = getenv("PROBE_ABANDONED_RERUN_CHECK") == "true"
 	cfg.WorkflowFile = getenv("PROBE_ABANDONED_WORKFLOW")
@@ -328,23 +333,34 @@ func (p *abandonedProbe) run(ctx context.Context) (string, error) {
 	p.log.Info("INVESTIGATION-H: job acquired by A",
 		"planId", acq.Plan.PlanID, "hasJobToken", jobToken != "")
 
-	err = sessA.bc.CompleteJob(ctx, jobReq.RunServiceURL, broker.CompleteJobRequest{
-		PlanID:    acq.Plan.PlanID,
-		JobID:     jobReq.RunnerRequestID,
-		Result:    p.cfg.Result,
-		AuthToken: jobToken,
-	})
-	if err != nil {
-		p.log.Error("INVESTIGATION-H: VERDICT "+verdictWireRejected+" — the run service refused "+
-			"completejob result="+string(p.cfg.Result)+"; the primary question cannot be asked "+
-			"with a refused call",
-			"error", err)
-		return verdictWireRejected, nil
+	var t0 time.Time
+	if p.cfg.SkipComplete {
+		// The told-nothing arm: the winner walks away after the acquire, exactly
+		// what the listener would do with no release call at all. T0 is the
+		// walk-away; the window then measures whether the acquire lock's lapse
+		// (~10 min, Q247) recycles and redelivers the job.
+		t0 = time.Now()
+		p.log.Info("INVESTIGATION-H: no completion sent (result=none); watching what the acquire " +
+			"lock's lapse does with the job")
+	} else {
+		err = sessA.bc.CompleteJob(ctx, jobReq.RunServiceURL, broker.CompleteJobRequest{
+			PlanID:    acq.Plan.PlanID,
+			JobID:     jobReq.RunnerRequestID,
+			Result:    p.cfg.Result,
+			AuthToken: jobToken,
+		})
+		if err != nil {
+			p.log.Error("INVESTIGATION-H: VERDICT "+verdictWireRejected+" — the run service refused "+
+				"completejob result="+string(p.cfg.Result)+"; the primary question cannot be asked "+
+				"with a refused call",
+				"error", err)
+			return verdictWireRejected, nil
+		}
+		t0 = time.Now()
+		p.log.Info("INVESTIGATION-H: VERDICT "+verdictWireAccepted+" — completejob result="+
+			string(p.cfg.Result)+" accepted (2xx); the wire serialization is live-confirmed",
+			"planId", acq.Plan.PlanID, "jobId", jobReq.RunnerRequestID)
 	}
-	t0 := time.Now()
-	p.log.Info("INVESTIGATION-H: VERDICT "+verdictWireAccepted+" — completejob result="+
-		string(p.cfg.Result)+" accepted (2xx); the wire serialization is live-confirmed",
-		"planId", acq.Plan.PlanID, "jobId", jobReq.RunnerRequestID)
 
 	// The listener's post-job recycle: the consumed delivery's session goes away
 	// and its single-use runner record with it, leaving B the only listener.

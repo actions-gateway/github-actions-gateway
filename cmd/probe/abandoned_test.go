@@ -395,6 +395,36 @@ func TestAbandonedProbe_ConcludedRunLevel(t *testing.T) {
 	}
 }
 
+// TestAbandonedProbe_NoneSendsNoCompletion: the told-nothing arm acquires and
+// then walks away — no completejob on the wire.
+func TestAbandonedProbe_NoneSendsNoCompletion(t *testing.T) {
+	t.Parallel()
+	bs, _, verdictCh := startAbandonedRun(t, 2*time.Second, map[string]string{
+		"PROBE_ABANDONED_RESULT": "none",
+	}, nil)
+
+	deadline := time.After(10 * time.Second)
+	for bs.AcquireJobCalls() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("acquirejob never reached the broker stub")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+
+	select {
+	case verdict := <-verdictCh:
+		if verdict != verdictNoSignal {
+			t.Fatalf("verdict = %q, want %q", verdict, verdictNoSignal)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("probe did not reach a verdict")
+	}
+	if got := bs.CompleteJobCalls(); got != 0 {
+		t.Errorf("completejob calls = %d, want 0 for result=none", got)
+	}
+}
+
 // TestAbandonedProbe_SiblingRedeliveryIsNotRedispatch: a fan-out sibling the
 // observer saw before T0 keeps redelivering unacked after T0 (measured
 // 2026-08-04); its request id must not produce a REDISPATCHED verdict.
