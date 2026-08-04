@@ -437,7 +437,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		AddReportEntry("Q396 worker log tail across the eviction", relayLog.stopAndRead())
 		// Read whole, and read now: the pod still holds its log, and the AGC's reaper
 		// will take the object. This is the capture the 2026-08-03 runs lacked (Q657).
-		evictedLog := evictedWorkerLog(tenantNS, podName)
+		evictedLog := evictedWorkerLog("Q396", tenantNS, podName)
 
 		By("confirming the kubelet killed the runner rather than asking it to stop")
 		// The Queue row's "runner genuinely killed", made an assertion. 137 is SIGKILL,
@@ -1209,6 +1209,25 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		Expect(podEphemeralStorageLimit(scaleSetTenantNS, podName)).To(Equal(workerEphemeralStorageLimit),
 			"worker pod carries no ephemeral-storage limit; the eviction lever is absent")
 
+		By("confirming this worker is the one GitHub says is executing the job")
+		// Measured 2026-08-03: the run identity is NOT sufficient to name the worker. A
+		// listener that has provisioned more than one worker attributed to the run leaves
+		// several candidates, and the lookup above returns whichever the API listed first.
+		// On that run it returned an idle worker while the job executed on a sibling, and
+		// everything downstream still looked healthy — the AGC detected the eviction and
+		// attributed it to the right run — while the latency being measured was the cost
+		// of killing a runner that had no job to lose.
+		//
+		// GitHub's own runner_name is the tie-break, and it is the only source that knows
+		// which runner is executing: the scale-set runner is named "<scaleSetName>-<jobID>"
+		// and the worker pod embeds that same jobID, so the two can be reconciled.
+		Eventually(func(g Gomega) {
+			g.Expect(scaleSetJobRunnerName(g, repoSlug, runID)).NotTo(BeEmpty(),
+				"GitHub reports the job in_progress but names no runner yet")
+		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		assertWorkerRunsTheJob(scaleSetTenantNS, podName,
+			scaleSetJobRunnerName(Default, repoSlug, runID))
+
 		relayLog := followPodLogs(scaleSetTenantNS, podName)
 		observed := newPhaseRecorder(scaleSetTenantNS, podName)
 		stopSampling := observed.start(time.Second)
@@ -1234,7 +1253,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// The capture this tier's two 2026-08-03 runs lacked. The follower's stream ended
 		// mid-line in both, so neither could say whether the relay ran; the pod still
 		// holds the whole log until the reaper takes it (Q657).
-		evictedLog := evictedWorkerLog(scaleSetTenantNS, podName)
+		evictedLog := evictedWorkerLog("Q396 scale-set", scaleSetTenantNS, podName)
 
 		By("confirming the kubelet killed the runner rather than asking it to stop")
 		// 137 says the kubelet took the container, and nothing more — see the classic
@@ -1932,7 +1951,8 @@ func evictionFacts(ns, name string) (killedAt time.Time, exitCode int, message s
 // evicted worker's log is direct evidence that the kill left a window to report in.
 const relayRanMarker = "forwarding termination signal to child"
 
-// evictedWorkerLog reads an evicted worker's container log whole, off the pod object.
+// evictedWorkerLog reads an evicted worker's container log whole, off the pod object, and
+// reports it before returning it.
 //
 // The follower started before the disruption is a live stream, and it loses whatever the
 // container writes in the instant it is killed: both 2026-08-03 scale-set runs came back
@@ -1940,14 +1960,64 @@ const relayRanMarker = "forwarding termination signal to child"
 // keeps its logs until the object is deleted, which is what makes this second read
 // possible — and it must be taken before the AGC's reaper gets there.
 //
+// It reports at the point of capture rather than leaving that to the caller's verdict,
+// because a capture is worth most on the runs that fail: the 2026-08-03 re-measurement
+// took this log and then lost it to an assertion that fired before the verdict was
+// written. The one thing a diagnostic must not do is depend on the spec getting further.
+//
 // Best-effort: a pod already reclaimed has no log to give, and saying so is worth more
 // than failing a measurement that has otherwise completed.
-func evictedWorkerLog(ns, name string) string {
+func evictedWorkerLog(prefix, ns, name string) string {
 	out, err := utils.Run(exec.Command("kubectl", "logs", "-n", ns, name, "-c", "runner"))
 	if err != nil {
-		return fmt.Sprintf("(no log readable off the evicted pod: %v)", err)
+		out = fmt.Sprintf("(no log readable off the evicted pod: %v)", err)
 	}
+	AddReportEntry(prefix+" evicted worker log, read whole off the pod", out)
 	return out
+}
+
+// scaleSetJobRunnerName returns the runner GitHub records as executing the run's first
+// job, "" while it names none. This is the only source that knows which of a tenant's
+// runners actually took the job; the cluster side can only say which pods exist.
+func scaleSetJobRunnerName(g Gomega, repoSlug, runID string) string {
+	out, err := utils.Run(exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/actions/runs/%s/jobs?filter=latest", repoSlug, runID),
+		"--jq", ".jobs[0].runner_name"))
+	g.Expect(err).NotTo(HaveOccurred())
+	name := strings.TrimSpace(out)
+	if name == "null" {
+		return ""
+	}
+	return name
+}
+
+// assertWorkerRunsTheJob requires the worker about to be disrupted to be the one GitHub
+// says is executing the job.
+//
+// The scale-set runner is named "<scaleSetName>-<jobID>" (listener.runnerName) and the
+// worker pod's name embeds the same jobID, truncated to fit the name budget. Comparing
+// the jobID's first segment reconciles them: it is 8 hex characters, which separates a
+// tenant's handful of concurrent workers without depending on how far the pod name was
+// truncated.
+//
+// This exists because the run-id annotation alone put the wrong pod under the eviction
+// lever on 2026-08-03 (Q657). The diagnostic lists every worker in the namespace, because
+// "the annotation matched a different pod than GitHub named" is only actionable next to
+// the set it was chosen from.
+func assertWorkerRunsTheJob(ns, podName, runnerName string) {
+	GinkgoHelper()
+	jobID := strings.TrimPrefix(runnerName, scaleSetLabel+"-")
+	Expect(jobID).NotTo(Equal(runnerName),
+		"GitHub named runner %q, which does not carry the %q prefix this scale set registers under",
+		runnerName, scaleSetLabel)
+
+	segment, _, _ := strings.Cut(jobID, "-")
+	Expect(segment).NotTo(BeEmpty(), "runner %q carries no job ID", runnerName)
+	Expect(podName).To(ContainSubstring(segment),
+		"the worker about to be evicted is %s, but GitHub says the job is executing on runner %q "+
+			"(job ID %s) — evicting this pod would measure the loss of a runner that has no job. "+
+			"Workers in %s: %s",
+		podName, runnerName, jobID, ns, strings.Join(allWorkerPods(Default, ns), ", "))
 }
 
 // podAnnotationBestEffort is podAnnotation for a pod that may legitimately be gone.
@@ -2012,7 +2082,6 @@ func recordEvictionOutcome(prefix string, evictionToConclusion time.Duration, ex
 		"verdict=%s latency=%s exitCode=%d relayRan=%t",
 		verdict, evictionToConclusion.Round(time.Second), exitCode,
 		strings.Contains(workerLog, relayRanMarker)))
-	AddReportEntry(prefix+" evicted worker log, read whole off the pod", workerLog)
 	AddReportEntry(prefix+" GitHub step records for the interrupted attempt", stepRecords)
 }
 
