@@ -1,9 +1,11 @@
-# Q645 probe fixture — dispatch-only, never runs in normal CI.
+# Q645/Q676 probe fixture — dispatch-only, never runs in normal CI.
 #
 # Queues one job on runs-on: gag-q645-abandoned so the cmd/probe Investigation H
-# run (PROBE_ABANDONED_TEST=true) has a real job to acquire and complete with
-# result=abandoned. Nothing ever runs it: the probe never starts a runner binary,
-# and cleanup cancels the run once the observation window closes. See the Q645
+# run (PROBE_ABANDONED_TEST=true) has a real job to acquire and complete —
+# result=abandoned measured the Q628 release as shipped (Q645), and
+# PROBE_ABANDONED_RESULT re-runs the instrument with a candidate remedy value
+# (Q676). Nothing ever runs it: the probe never starts a runner binary, and
+# cleanup cancels the run once the observation window closes. See the Q645
 # plan doc.
 #
 # Dispatch this BEFORE starting the probe: a job queued against a
