@@ -36,6 +36,10 @@
 #      invisible on a PR — `pull_request` carries no path filter, so only the
 #      post-merge leg silently stops running. Q571's own regrouping did exactly
 #      this to e2e-calico.yml and merged green.
+#   6. Globstar placement. Every `filters:` pattern spells `**` somewhere
+#      picomatch still reads as recursive. `cmd/**.go` reads as every Go file
+#      under cmd/ and matches nothing, so it gates on nothing — and assertion 3
+#      passes it, because the literal prefix `cmd` exists (Q659).
 #
 # Costs a fraction of a second: it parses YAML and stats paths, it compiles
 # nothing. Backs `make path-filters-check` (part of `make check`) and the
@@ -189,6 +193,52 @@ literal_prefix() {
 	printf '%s' "${cut%/*}"
 }
 
+# segment_globstar_degraded INDEX SEGMENT — true when SEGMENT carries a `**` that
+# picomatch will not treat as recursive. A `**` earns its meaning as a whole path
+# segment; beside any other character it collapses to a single `*`, which cannot
+# cross a `/`. The one exception is a pattern-initial `**`, which globstars even
+# with a suffix attached — measured against the pinned
+# dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 (v4.0.2), where
+# '**.go' matched nested files and 'cmd/**.go' matched none. The table is in
+# docs/development/testing.md § Where a globstar works in a filter glob; the
+# leading exception is load-bearing, not theoretical — plan-hygiene.yml's `plan`
+# filter is '**.go' today.
+segment_globstar_degraded() {
+	local index="$1" segment="$2"
+	[[ "$segment" == *'**'* ]] || return 1
+	[[ "$segment" == '**' ]] && return 1
+	((index == 0)) && [[ "$segment" == '**'* ]] && return 1
+	return 0
+}
+
+# broken_globstar PATTERN — true when any segment of PATTERN degrades.
+broken_globstar() {
+	local pattern="$1" segments i
+	IFS='/' read -r -a segments <<<"$pattern"
+	for i in "${!segments[@]}"; do
+		segment_globstar_degraded "$i" "${segments[$i]}" && return 0
+	done
+	return 1
+}
+
+# globstar_fix PATTERN — PATTERN with each degraded `**` promoted to its own
+# segment, e.g. `cmd/**.go` -> `cmd/**/*.go`. Offered as a suggestion, not a
+# verdict: the rewrite is only obviously right for the `dir/**.ext` shape the
+# hazard actually takes.
+globstar_fix() {
+	local pattern="$1" segments segment i fixed=()
+	IFS='/' read -r -a segments <<<"$pattern"
+	for i in "${!segments[@]}"; do
+		segment="${segments[$i]}"
+		if segment_globstar_degraded "$i" "$segment"; then
+			segment="${segment/'**'/'**/*'}"
+		fi
+		fixed+=("$segment")
+	done
+	local IFS='/'
+	printf '%s' "${fixed[*]}"
+}
+
 # contains ITEM ELEMENT... — true when ITEM equals one of the remaining args.
 contains() {
 	local item="$1" element
@@ -319,6 +369,29 @@ $(diff <(printf '%s\n' "$push_paths") <(printf '%s\n' "$filter_paths") | sed 's/
 	done
 }
 
+# assert_globstar_placement FOUND... — every `filters:` pattern spells `**` where
+# picomatch still expands it. Scoped to `filters:` blocks on purpose: picomatch is
+# what dorny/paths-filter matches with, while `on.push.paths` is matched by
+# GitHub's own trigger matcher, which reads the same pattern differently. Applying
+# this rule to a push list could reject a pattern that works there.
+assert_globstar_placement() {
+	local key workflow filter name pattern
+	for key in "$@"; do
+		workflow="${key%%:*}"
+		filter="${key#*:}"
+		while IFS=$'\t' read -r name pattern; do
+			[[ "$name" == "$filter" ]] || continue
+			broken_globstar "$pattern" || continue
+			fail "$WORKFLOW_DIR/$workflow filter '$filter' lists '$pattern', whose '**' does not globstar.
+  dorny/paths-filter matches with picomatch, which expands '**' only as a whole path
+  segment (or at the very start of a pattern). Beside other characters it collapses to
+  a single '*' that cannot cross a '/', so this pattern reads as a recursive match and
+  gates on nothing — and assertion 3 passes it, because its literal prefix exists
+  (Q659). Did you mean '$(globstar_fix "$pattern")'?"
+		done < <(parse_filters "$WORKFLOW_DIR/$workflow")
+	done
+}
+
 main() {
 	ensure_pathfilters
 
@@ -347,6 +420,7 @@ main() {
 	assert_paths_live "${found[@]}"
 	assert_shared_lanes_agree
 	assert_push_paths_match_filter
+	assert_globstar_placement "${found[@]}"
 
 	if ((failures > 0)); then
 		echo >&2

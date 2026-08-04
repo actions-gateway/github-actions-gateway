@@ -341,13 +341,14 @@ Enabling all three tags at once is sound because they select disjoint package tr
 
 `make path-filters-check` ([`scripts/ci/check-path-filters.sh`](../../scripts/ci/check-path-filters.sh)) reconciles the hand-maintained `dorny/paths-filter` lists in `.github/workflows/` with what the repo actually contains. It exists because a filter that omits a directory makes its gate report green **by skipping** — the worst kind of false negative, since nothing is red and `main` ends up green on evidence it never gathered. That is not hypothetical: `api/` and `scaleset/` were absent from the integration, e2e, and security filters, so changes confined to either module merged without ever meeting envtest, e2e, `govulncheck`, or trivy (Q400, fixed by hand; this gate is the recurrence guard — Q429).
 
-Four assertions, cheapest first:
+Six assertions, cheapest first:
 
 1. **Registry completeness.** Every filter in every `filters:` block is listed in the script as either `WORKSPACE_FILTERS` (must cover the whole workspace) or `NARROW_FILTERS` (scoped to one gate's inputs, with the reason inline). A new workflow, or a new filter in an existing one, fails until someone classifies it — so the hole cannot reopen in a new shape. A stale entry naming a filter that no longer exists fails too.
 2. **Module coverage.** Every `WORKSPACE_FILTERS` entry matches every `go.work` module. Only a recursive glob rooted at the module or an ancestor counts: a bare `api` matches the literal path and nothing beneath it, and `api/config/**` leaves the rest of the module ungated. Failures name the module, the workflow, and the exact pattern to add, one per gap.
 3. **Live paths.** Every pattern's literal prefix still exists on disk. A pattern left behind by a rename matches nothing, which narrows its gate as silently as a missing module does.
 4. **Shared-lane agreement.** Two filters gating the same reusable workflow list the same `scripts/` patterns. `SHARED_LANE_FILTERS` pairs them; the failure prints a diff of the two sets. `e2e-test.yml` and `e2e-calico.yml` both call `e2e-reusable.yml` yet disagreed by roughly 60× about which scripts it runs — the Calico lane named two of the six the reusable workflow invokes directly, so a `free-runner-disk.sh` change skipped the lane that exercises it (Q571).
 5. **Push-trigger agreement.** A workflow that scopes its post-merge leg with `on.push.paths` lists the same paths as its `changes` filter. `PUSH_TRIGGER_FILTERS` registers the pairs. See below for why this one is easy to miss.
+6. **Globstar placement.** Every `filters:` pattern spells `**` where picomatch still expands it. `cmd/**.go` reads as every Go file under `cmd/` and matches nothing, and assertion 3 passes it because the literal prefix `cmd` exists. Scoped to `filters:` blocks only; see below.
 
 **So adding a workspace module now fails the gate instead of slipping through** — but the gate only knows about *whole-workspace* coverage. Judgement is still yours for the narrow filters: when you add a module, ask what each gate actually compiles, scans, or bakes, and remember the same applies to a gate that names files individually (`manifest-validate.sh`'s `standalone_manifests` — adding a path there means adding its directory to the filter). Wired into `make check` and CI's `path-filters` job in `unit-test.yml`, which is gated on the `workflows` filter — the one filter watching all of `.github/workflows/`, so editing any `filters:` block re-runs the gate that lints it. Behaviour, including that each assertion fails when it should, is asserted by `scripts/ci/check-path-filters-test.sh` under `make scripts-test`.
 
@@ -364,7 +365,13 @@ Four assertions, cheapest first:
 
 The hazard is narrow but silent: `cmd/**.go` reads as "every Go file under `cmd/`" and gates on nothing. Write `cmd/**/*.go`. Assertion 3 above does not catch it — the pattern's literal prefix (`cmd`) exists on disk.
 
-Q594 filed `plan-hygiene.yml`'s `'**.go'` as an instance of this. It is not: a leading `**` is fine, and that filter matches every Go file in the repo. The tree carries no instance of the broken shape today; Q659 is the recurrence guard.
+Q594 filed `plan-hygiene.yml`'s `'**.go'` as an instance of this. It is not: a leading `**` is fine, and that filter matches every Go file in the repo. The tree carries no instance of the broken shape today; **assertion 6 is the recurrence guard** (Q659).
+
+The rule it enforces, and the boundary that makes it usable: a `**` expands only as a **whole path segment**, or at the **very start** of a pattern. So `cmd/**/*.go`, `**/*.go` and `**.go` all pass, and `cmd/**.go` fails with the rewrite named. That leading exception is load-bearing rather than pedantic: `plan-hygiene.yml`'s `plan` filter is `'**.go'` today, so a rule phrased as "`**` must always be its own segment" would fail the tracked tree on arrival.
+
+**It scans `filters:` blocks only.** Those are what `dorny/paths-filter` matches with picomatch; `on.push.paths` and `pull_request.paths` are matched by GitHub's own trigger matcher, which reads the same pattern differently, so applying this rule there could reject a pattern that works. The two matchers are the distinction the table above measures, and assertion 5 already holds the three duplicated lists in step.
+
+Its own tests pin the boundary from both sides, since a false positive fails the tracked tree: the sound shapes must **not** be flagged, and the degraded one must be. The assertion was verified by injecting `'cmd/**.go'` into a real filter and requiring red.
 
 #### A path list written twice: the trigger and the filter
 
