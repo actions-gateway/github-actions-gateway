@@ -2844,14 +2844,6 @@
 <td>Q643 shipped the <code>{reason}</code>-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every <code>gridPos</code> below y=52 and needs a <code>render.sh</code> re-shoot. Should <code>AwaitingProbe</code> alert?</td>
 </tr>
 <tr>
-<td><a id="Q663"></a>Q663</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>check-doc-links</code> counts a deleted-but-tracked file as existing</a></td>
-<td><code>bug</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured: delete <code>bash-style.md</code> from the worktree, 5 files still link to it, gate exits 0. Q619 moved the scan list off <code>--cached</code>; the existence oracle still resolves a tracked-but-deleted path.</td>
-</tr>
-<tr>
 <td><a id="Q644"></a>Q644</td>
 <td><a href="../operations/release/#supply-chain-integrity-of-the-pipeline-itself">Nothing enforces that a <code>uses:</code> ref is a SHA rather than a tag</a></td>
 <td><code>security</code> <code>ci</code></td>
