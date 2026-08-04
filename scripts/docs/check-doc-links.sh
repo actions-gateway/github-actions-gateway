@@ -2,10 +2,12 @@
 #
 # check-doc-links.sh — GitHub-slug-aware markdown link & anchor checker (Q52).
 #
-# Walks every tracked, non-vendored Markdown file and fails on:
+# Walks every present, non-vendored Markdown file — tracked or
+# untracked-and-not-gitignored, so a brand-new doc's links are checked by its
+# own first `make check` (Q619) — and fails on:
 #   1. Dead relative file links — a `[text](path)` (or reference definition,
-#      or `<path>`-wrapped target) whose resolved path is neither a tracked
-#      file nor a tracked directory.
+#      or `<path>`-wrapped target) whose resolved path is neither a present
+#      file nor a present directory.
 #   2. Dead anchors — a `#fragment` (same-page `[x](#frag)` or cross-doc
 #      `[x](other.md#frag)`) that matches no heading slug or explicit
 #      `<a id="...">`/`<a name="...">` anchor in the target file.
@@ -29,11 +31,26 @@
 
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$repo_root"
+# The library is resolved from this script's own location, not from the git root
+# below: the root is whatever tree the gate is pointed at, which a test suite
+# scopes to a throwaway repo that has no scripts/lib/.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
-# Files to scan: tracked Markdown, excluding the vendored third-party trees.
-mapfile -t md_files < <(git ls-files -- '*.md' ':!:**/vendor/**' ':!:vendor/**' | LC_ALL=C sort)
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$REPO_ROOT"
+
+# Files to scan: present Markdown, excluding the vendored third-party trees.
+# Command substitution, not `mapfile < <(...)`: it keeps the selection under
+# `set -o pipefail`, so a failing `git ls-files` aborts the gate instead of
+# quietly reducing it to "no markdown files to check".
+md_files=()
+selected="$(git_candidates '*.md' ':!:**/vendor/**' ':!:vendor/**' |
+    select_present_files | LC_ALL=C sort)"
+if [[ -n "$selected" ]]; then
+    mapfile -t md_files <<<"$selected"
+fi
 
 # Skip symlinks (e.g. AGENTS.md -> CLAUDE.md) so the target is scanned once.
 scan_files=()
@@ -47,13 +64,13 @@ if (( ${#scan_files[@]} == 0 )); then
     exit 0
 fi
 
-# Existence oracle for relative-link resolution: every tracked path, plus
-# present-but-untracked (non-ignored) files so a link to a brand-new file added
-# in the same change resolves before it is staged. The awk program derives
-# ancestor directories from these so directory links resolve too.
+# Existence oracle for relative-link resolution: the same candidate set the scan
+# list is drawn from, so a link to a brand-new file added in the same change
+# resolves before it is staged. The awk program derives ancestor directories
+# from these so directory links resolve too.
 exist_file="$(mktemp "${TMPDIR:-/tmp}/check-doc-links.XXXXXX")"
 trap 'rm -f "$exist_file"' EXIT
-{ git ls-files; git ls-files --others --exclude-standard; } > "$exist_file"
+git_candidates > "$exist_file"
 
 awk -v GHA="${GITHUB_ACTIONS:-}" -v EXIST_FILE="$exist_file" '
     # ---- helpers ----------------------------------------------------------

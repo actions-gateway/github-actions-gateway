@@ -9,7 +9,8 @@
 # comment, a workflow comment and Go source, and the green cases pin the
 # exceptions that must NOT trip it: a workflow `paths:` filter, a plan file a
 # script opens as data, the inline opt-out marker, a bare directory reference
-# and the plan index.
+# and the plan index. A last group covers file *selection* rather than matching
+# — an untracked file is scanned and a gitignored one is not (Q619).
 #
 # The fixtures are built with printf from the variables below rather than
 # written as literal comment lines, because this file is itself a tracked shell
@@ -50,11 +51,10 @@ new_repo() {
     git -C "$WORK" init -q
 }
 
-# expect NAME WANT — stage whatever the case planted, run the gate inside WORK,
-# and compare its exit status with WANT.
-expect() {
+# run_gate NAME WANT — run the gate inside WORK against whatever is on disk and
+# compare its exit status with WANT.
+run_gate() {
     local name="$1" want="$2" got=0
-    git -C "$WORK" add -A
     ( cd "$WORK" && "$GATE" ) >"$WORK/gate.out" 2>&1 || got=$?
     if [[ "$got" == "$want" ]]; then
         printf 'ok   %s\n' "$name"
@@ -63,6 +63,12 @@ expect() {
     printf 'FAIL %s: want exit %s, got %s\n' "$name" "$want" "$got"
     awk '{ print "    " $0 }' "$WORK/gate.out"
     fails=$(( fails + 1 ))
+}
+
+# expect NAME WANT — stage whatever the case planted, then run_gate.
+expect() {
+    git -C "$WORK" add -A
+    run_gate "$@"
 }
 
 # --- red: the defect the gate exists to catch ------------------------------
@@ -129,6 +135,28 @@ printf '# Notes\n\nSee %s for the full log.\n' "$archived_ref" >"$WORK/notes.md"
 printf '#!/usr/bin/env bash\nmsg="docs: move %s to the archive"\n' "$plan_ref" \
     >"$WORK/script.sh"
 expect 'a doc or a message string naming the path stays green' 0
+
+# --- file selection: untracked is scanned, gitignored is the opt-out ---------
+#
+# The cases above stage before running, so they only ever measured the tracked
+# half. Both lists listed `--cached` only until Q619, which made a brand-new
+# script, workflow or Go file invisible to its own first `make check` — the
+# citation surfaced on the next run, after the gate had been reported green.
+
+new_repo
+printf '#!/usr/bin/env bash\n# See %s Part F.\nset -euo pipefail\n' "$plan_ref" \
+    >"$WORK/script.sh"
+run_gate 'untracked shell comment citing a plan file is rejected' 1
+
+new_repo
+printf 'package p\n\n// Context: %s\n' "$plan_ref" >"$WORK/a.go"
+run_gate 'untracked Go file citing a plan file is rejected' 1
+
+new_repo
+printf 'scratch.sh\nscratch.go\n' >"$WORK/.gitignore"
+printf '#!/usr/bin/env bash\n# See %s Part F.\n' "$plan_ref" >"$WORK/scratch.sh"
+printf 'package p\n\n// Context: %s\n' "$plan_ref" >"$WORK/scratch.go"
+run_gate 'a gitignored file is the opt-out and stays green' 0
 
 if (( fails > 0 )); then
     printf '\ncheck-no-plan-refs-in-code-test: %d assertion(s) failed\n' "$fails" >&2

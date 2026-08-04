@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 #
-# Unit tests for the file-selection helpers in scripts/ci/shellcheck-scripts.sh
-# (Q432): select_scripts (existence filter, de-dupe, order) and the
-# script_candidates + select_scripts pair end-to-end against a throwaway git
-# repo. The regression they lock down is coverage, not style — the gate used to
-# list `--cached` only, so a newly written script was skipped and its first
-# `make check` was a false green. Runs under `make check` (via
+# Unit tests for the file-selection helpers scripts/ci/shellcheck-scripts.sh
+# runs on (Q432): select_present_files (existence filter, de-dupe, order) and
+# the script_candidates + select_present_files pair end-to-end against a
+# throwaway git repo. The regression they lock down is coverage, not style — the
+# gate used to list `--cached` only, so a newly written script was skipped and
+# its first `make check` was a false green.
+#
+# git_candidates and select_present_files live in scripts/lib/common.sh since
+# Q619 swept the same query into the doc-link, conflict-marker and plan-ref
+# gates, so these assertions now defend all four. Runs under `make check` (via
 # `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 
@@ -33,7 +37,7 @@ expect() {
 	fi
 }
 
-# --- select_scripts: existence filter, de-dupe, order ------------------------
+# --- select_present_files: existence filter, de-dupe, order ------------------------
 
 SELECT_DIR="$FIXTURE_DIR/select"
 mkdir -p "$SELECT_DIR/sub"
@@ -43,21 +47,21 @@ mkdir -p "$SELECT_DIR/adir.sh" # a directory, not a script
 
 (
 	cd "$SELECT_DIR"
-	expect keeps-existing $'a.sh\nsub/b.sh' "$(printf 'a.sh\nsub/b.sh\n' | select_scripts)"
+	expect keeps-existing $'a.sh\nsub/b.sh' "$(printf 'a.sh\nsub/b.sh\n' | select_present_files)"
 	# A deleted-but-tracked path is still listed by `git ls-files --cached`;
 	# passing it to shellcheck would fail the gate on a file nobody can read.
-	expect drops-missing 'a.sh' "$(printf 'a.sh\ngone.sh\n' | select_scripts)"
+	expect drops-missing 'a.sh' "$(printf 'a.sh\ngone.sh\n' | select_present_files)"
 	# An unmerged path is listed once per merge stage.
 	expect dedupes-merge-stages $'a.sh\nsub/b.sh' \
-		"$(printf 'a.sh\na.sh\na.sh\nsub/b.sh\n' | select_scripts)"
-	expect skips-blank-lines 'a.sh' "$(printf '\na.sh\n\n' | select_scripts)"
-	expect drops-directories '' "$(printf 'adir.sh\n' | select_scripts)"
-	expect empty-input '' "$(printf '' | select_scripts)"
+		"$(printf 'a.sh\na.sh\na.sh\nsub/b.sh\n' | select_present_files)"
+	expect skips-blank-lines 'a.sh' "$(printf '\na.sh\n\n' | select_present_files)"
+	expect drops-directories '' "$(printf 'adir.sh\n' | select_present_files)"
+	expect empty-input '' "$(printf '' | select_present_files)"
 	# Order is input order, so the shellcheck arg list stays reproducible.
-	expect preserves-order $'sub/b.sh\na.sh' "$(printf 'sub/b.sh\na.sh\n' | select_scripts)"
+	expect preserves-order $'sub/b.sh\na.sh' "$(printf 'sub/b.sh\na.sh\n' | select_present_files)"
 )
 
-# --- script_candidates + select_scripts against a real git repo --------------
+# --- script_candidates + select_present_files against a real git repo --------------
 
 # A throwaway repo covering every state the gate has to classify: tracked,
 # tracked-in-a-subdir, untracked-and-not-ignored, untracked-but-gitignored,
@@ -81,7 +85,7 @@ mkdir -p "$GIT_DIR_FIXTURE/scripts/lib"
 	: >scripts/lib/untracked-nested.sh
 )
 
-got="$( (cd "$GIT_DIR_FIXTURE" && script_candidates | select_scripts | LC_ALL=C sort) )"
+got="$( (cd "$GIT_DIR_FIXTURE" && script_candidates | select_present_files | LC_ALL=C sort) )"
 want=$'scripts/lib/nested.sh\nscripts/lib/untracked-nested.sh\nscripts/tracked.sh\nscripts/untracked.sh'
 expect git-repo-selection "$want" "$got"
 
@@ -91,14 +95,14 @@ expect git-repo-selection "$want" "$got"
 # tracked-only query linted.
 missing="$(
 	comm -23 \
-		<(git ls-files 'scripts/*.sh' | select_scripts | LC_ALL=C sort) \
-		<(script_candidates | select_scripts | LC_ALL=C sort)
+		<(git ls-files 'scripts/*.sh' | select_present_files | LC_ALL=C sort) \
+		<(script_candidates | select_present_files | LC_ALL=C sort)
 )"
 expect real-tree-covers-tracked '' "$missing"
 
 # A failing candidate query must surface, not degrade the gate to a silent "no
 # scripts to shellcheck" pass — that is the same false-green shape as Q432
-# itself. select_scripts drains all of stdin, so pipefail sees the real status
+# itself. select_present_files drains all of stdin, so pipefail sees the real status
 # instead of a SIGPIPE from an early return.
 failing_candidates() {
 	printf 'scripts/ci/shellcheck-scripts.sh\n'
@@ -107,16 +111,16 @@ failing_candidates() {
 rc=0
 (
 	set -o pipefail
-	failing_candidates | select_scripts
+	failing_candidates | select_present_files
 ) >/dev/null || rc=$?
 expect propagates-candidate-failure 3 "$rc"
 
-if [[ -z "$(script_candidates | select_scripts)" ]]; then
+if [[ -z "$(script_candidates | select_present_files)" ]]; then
 	printf 'FAIL %-28s real worktree selected no scripts\n' real-tree-non-empty >&2
 	fails=$((fails + 1))
 else
 	printf 'ok   %-28s -> %s script(s)\n' real-tree-non-empty \
-		"$(script_candidates | select_scripts | wc -l | tr -d ' ')"
+		"$(script_candidates | select_present_files | wc -l | tr -d ' ')"
 fi
 
 if (( fails > 0 )); then

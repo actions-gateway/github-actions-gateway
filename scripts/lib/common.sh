@@ -26,6 +26,47 @@ require_cmd() {
 step() { echo; echo "==> $*"; }
 die() { echo; echo "ERROR: $*" >&2; exit 1; }
 
+# git_candidates PATHSPEC... — emit the git-known paths matching PATHSPEC, one
+# per line: tracked (--cached) PLUS untracked-and-not-gitignored (--others
+# --exclude-standard). With no PATHSPEC, the whole worktree.
+#
+# The untracked half is load-bearing for any gate that scans the tree. Listing
+# `--cached` alone makes a brand-new file invisible to its own first `make
+# check` — a false green until the commit that tracks it (Q432 in the shellcheck
+# gate; Q619 swept the doc-link, conflict-marker and plan-ref gates). The
+# consequence for callers' users: a scratch file is opted out by *gitignoring*
+# it, not by leaving it untracked — write it under the gitignored tmp/ at the
+# repo root, per the repo temp-file convention.
+#
+# core.quotePath=false keeps a non-ASCII path literal rather than C-quoted, so
+# it survives to the reader instead of being silently dropped by
+# select_present_files. Impure (queries git) and cwd-sensitive: call it with the
+# repo root as the working directory. Filtering lives in select_present_files.
+git_candidates() {
+	git -c core.quotePath=false ls-files --cached --others --exclude-standard -- "$@"
+}
+
+# select_present_files — read candidate paths on stdin, emit the ones a reader
+# can actually open, in input order. Two classes have to go:
+#   * a deleted-but-tracked path — `--cached` still lists a file removed from
+#     the worktree, and a reader exits non-zero on a path it cannot open;
+#   * duplicates — `--cached` lists an unmerged path once per merge stage, and
+#     reading the same file three times triples its findings.
+# Pure (reads stdin, stats paths). Drains all of stdin, so a `git_candidates |
+# select_present_files` pipeline under `set -o pipefail` reports a failing
+# candidate query instead of degrading to an empty — silently green — file set.
+# Asserted by scripts/ci/shellcheck-scripts-test.sh.
+select_present_files() {
+	local path seen=$'\n'
+	while IFS= read -r path; do
+		[[ -n "$path" ]] || continue
+		[[ -f "$path" ]] || continue
+		[[ "$seen" == *$'\n'"$path"$'\n'* ]] && continue
+		seen+="$path"$'\n'
+		printf '%s\n' "$path"
+	done
+}
+
 # gh_curl DESCRIPTION METHOD URL [EXTRA_CURL_ARGS...] — make a GitHub API call,
 # print the response body, and die() with the status and body when the HTTP code
 # is not 2xx. Deliberately does NOT pass curl -f: error responses must be
