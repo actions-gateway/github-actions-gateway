@@ -106,7 +106,8 @@ all: generate build test ## Generate, build, and test all modules
 # docs name that target instead of transcribing the list (Q649) — the same
 # reason STATUS_GATES exists below. `gate-lists-check` reconciles the recipe,
 # the .PHONY declarations and the doc pointer against them.
-CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-check \
+CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
+                    plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
                     v2-api-sync-check path-filters-check gate-lists-check shellcheck \
                     actionlint chart-crds-check chart-rbac-check chart-webhook-check \
@@ -139,13 +140,18 @@ list-gates: ## List every gate `make check` runs, in order, with what each one c
 gate-lists-check: ## Fail when `make check`'s gate list and its derived consumers disagree
 	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --status '$(STATUS_GATES)'
 
-# The complete set of gates a docs/STATUS.md-only diff can fail, so a backlog
+# The complete set of gates a docs/STATUS.md-only change can fail, so a backlog
 # edit can be verified in seconds instead of waiting out the full `make check`:
 #   lint-backlog          the format rules
+#   status-isolation-check a commit on this branch carries the backlog plus something else
 #   roadmap-check         a row changed table or vanished while a roadmap bullet still names it
 #   plan-index-check      the last Queue row citing a plan went away, so archival is owed
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
 #   doc-links             a #QN anchor or plan link broke while rows moved
+# status-isolation-check reads the branch's commits rather than its diff, which
+# is why it belongs here rather than only in CI: the fast path exists for the
+# hurried resolve-and-push, which is exactly when an --amend lands on the wrong
+# HEAD (Q652). It is git-only and costs milliseconds.
 # Every entry is also in CHECK_FAST_GATES, so this is a strict subset of `make
 # check` and never a second opinion — `gate-lists-check` enforces the subset. It
 # lives as a variable, and the docs point at the target rather than transcribing
@@ -153,7 +159,7 @@ gate-lists-check: ## Fail when `make check`'s gate list and its derived consumer
 # docs/development/maintaining-backlog.md named three of these five and called
 # that the complete set, so a `docs/STATUS.md` change that parked a row shipped
 # a PR red on roadmap-check.
-STATUS_GATES := lint-backlog roadmap-check plan-index-check \
+STATUS_GATES := lint-backlog status-isolation-check roadmap-check plan-index-check \
                  conflict-markers-check doc-links
 
 .PHONY: status-gates
@@ -290,7 +296,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
-                 docs/alloc-queue-id-test docs/find-duplicate-rows-test \
+                 docs/alloc-queue-id-test docs/check-status-isolation-test \
+                 docs/find-duplicate-rows-test \
                  docs/git-merge-status-test docs/lint-backlog-test \
                  docs/release-version-hook-test docs/source-links-hook-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
@@ -524,6 +531,14 @@ lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped
 .PHONY: lint-backlog
 lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from the backlog skill)
 	scripts/docs/lint-backlog.sh
+
+# The pre-commit hook refuses to *stage* docs/STATUS.md next to another file,
+# but it reads the index rather than the commit that index produces, so an
+# --amend onto a code commit slips past it. This reads the commits the branch
+# adds (Q652).
+.PHONY: status-isolation-check
+status-isolation-check: ## Fail when a commit on this branch mixes docs/STATUS.md with any other file
+	scripts/docs/check-status-isolation.sh
 
 # IDs come from a ref claim, not from a counter line in STATUS.md: a shared
 # mutable counter conflicted by construction whenever two sessions filed a row

@@ -14,6 +14,7 @@ on:
       - 'docs/features.md'
       - 'scripts/docs/lint-backlog.sh'
       - 'scripts/docs/check-roadmap.sh'
+      - 'scripts/docs/check-status-isolation.sh'
       - '.github/workflows/status-lint.yml'
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
@@ -52,6 +53,7 @@ jobs:
               - 'docs/features.md'
               - 'scripts/docs/lint-backlog.sh'
               - 'scripts/docs/check-roadmap.sh'
+              - 'scripts/docs/check-status-isolation.sh'
               - '.github/workflows/status-lint.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
@@ -66,9 +68,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      # fetch-depth: 0 for the isolation check below — it reads the commits the
+      # branch adds, which a shallow checkout does not carry.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: lint docs/STATUS.md format
         run: scripts/docs/lint-backlog.sh
+      # Backlog edits are isolated commits; the pre-commit hook that enforces
+      # that reads the index, so an --amend onto a code commit passes it and
+      # still writes a mixed commit (Q652). This reads the commits themselves.
+      #
+      # PRs only. A squash-merge collapses a PR's commits into one, so main's
+      # own history is mixed by construction and scanning it would fail every
+      # merge — the rule's value lives entirely inside a PR, which is the range
+      # scanned here.
+      - name: check docs/STATUS.md commit isolation
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/docs/check-status-isolation.sh --base "$BASE_SHA" --head "$HEAD_SHA"
       # Roadmap/backlog coherence (make roadmap-check). It lives here rather
       # than in unit-test.yml because that workflow path-ignores docs, and the
       # drift this catches arrives on docs-only PRs: deleting a shipped Queue
