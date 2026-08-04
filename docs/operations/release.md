@@ -928,22 +928,34 @@ the site drops the leading `v` exactly like the chart does. `v1.3.0` shipped 18
 such links. They 404 until the docs deploy for the tag completes, which is
 expected while the Release is still a draft.
 
-**Verify every link and anchor.** Nothing checks them for you: `make doc-links`
-skips external URLs by design, and every link in a notes file is absolute. Anchors
-are the usual failure, and the built site is the authoritative oracle — read the
-ids MkDocs actually emitted rather than re-deriving a slug by hand, which gets
-punctuation, backticks, and parenthesised clauses wrong:
+**Verify every link and anchor.** A gate does it for you now (Q636):
 
 ```bash
-make docs-build
-grep -oE 'id="[^"]*"' site/operations/upgrade/index.html | sed 's/id="//;s/"//'
+make release-links-check
 ```
 
-Better, resolve every link in the file against `site/` in one pass. Whatever you
-write, **include a URL you know is broken** and confirm it is reported: a checker
-that silently resolves nothing looks exactly like a clean file. `v1.3.0`'s notes
-were verified this way — 20 site URLs resolved, plus one deliberately bogus
-anchor that the same run flagged.
+It builds `site/` if it is missing and resolves every
+`https://actions-gateway.com/X.Y.Z/…` link in `docs/releases/` against it —
+`…/operations/upgrade/#gmc-rollback` becomes
+`site/operations/upgrade/index.html` carrying `id="gmc-rollback"`. Anchors are
+the usual failure, and the built site is the authoritative oracle: reading the
+ids MkDocs actually emitted beats re-deriving a slug by hand, which gets
+punctuation, backticks, and parenthesised clauses wrong.
+
+Two things it cannot answer, so they stay yours. A **third-party or github.com
+URL** has no local oracle and is only counted, not resolved. And `site/` is
+built from the current tree, so only the **newest** notes file's version is
+resolvable — links naming an older release are reported as skipped with their
+count, never quietly passed. That is also the shape to watch when the docs move
+on after a tag: the gate then reports a link the frozen published version still
+serves, and fixing the note is right only if the next release would inherit the
+same broken link.
+
+The site-side ids for one page, when you want to read them directly:
+
+```bash
+grep -oE 'id="[^"]*"' site/operations/upgrade/index.html | sed 's/id="//;s/"//'
+```
 
 **Do not hard-wrap.** GitHub renders a release body with comment-flavour GFM,
 where a single newline becomes `<br>`. Keep every paragraph, blockquote, and list

@@ -258,6 +258,20 @@ The scan asserts that **every** release-version literal in the five pin-bearing 
 
 A page that yields **no** pin at all fails rather than passes — an empty result cannot distinguish "this page has no stale pin" from "the pin moved and the scan no longer sees it". Behaviour is asserted by `scripts/docs/check-release-pins-test.sh` under `make scripts-test`, mostly as planted failures: a checker that silently matches nothing passes a stale tree exactly like a clean one.
 
+### The release-link gate
+
+`make release-links-check` (`scripts/docs/check-release-links.sh`) resolves the release notes' absolute links into the versioned site. `docs/releases/` is the one doc whose links are *all* absolute — those files are excluded from every site version, so a relative link would fail `mkdocs build --strict` — and the doc-link gate above skips external URLs by design, so nothing resolved them (Q636).
+
+The oracle is a local `mkdocs build`, never the network: a gate that fetches URLs fails when a third party sneezes. `mkdocs build` lays the release publication scope out exactly as the site serves it, so `https://actions-gateway.com/1.3.0/operations/upgrade/#gmc-rollback` resolves to `site/operations/upgrade/index.html` carrying `id="gmc-rollback"`. That also fixes the scope: **the exclusion in `check-doc-links.sh` stays**. "External" there means "unresolvable", and these are resolvable only because the site is built from this same tree — widening that gate globally would mean fetching URLs.
+
+Three deliberate limits, all of them printed rather than assumed:
+
+- **Only the site host is resolved.** A github.com or third-party link is counted and reported, never failed.
+- **Only one version is resolvable** — the newest note in `docs/releases/`. The build comes from the working tree, the tip of development after that tag: a faithful oracle for the notes being authored or amended, a wrong one for a frozen older release whose pages have since moved. Links naming another version are skipped, with the count and the reason.
+- **A missing `site/` is built, not skipped past.** The build *is* the gate, so no-opping without it would make a green verdict meaningless. An explicit `GAG_SITE_DIR` that does not exist is an error instead — the caller named a tree, so building a different one would be a lie about what was checked. Finding zero site links across every note is also a failure: these notes link the versioned site by convention, so none at all means the extractor stopped matching.
+
+It is the one docs-content gate **outside `make check`** — the fast local gate has no business provisioning a Python venv — and runs as a third job in [`doc-links.yml`](../../.github/workflows/doc-links.yml), whose checkout takes `fetch-depth: 0` for the announce bar's tag-derived version. Behaviour is asserted by `scripts/docs/check-release-links-test.sh` under `make scripts-test`, against a hand-built site tree that needs no mkdocs: planted dead pages and anchors, plus the controls that must stay green — a third-party URL carrying a bogus anchor, a code-fenced URL, and a link to a version this tree cannot stand in for.
+
 ### The roadmap coherence gate
 
 `make roadmap-check` (`scripts/docs/check-roadmap.sh`) fails when the public [roadmap](../roadmap.md) disagrees with the backlog in [`docs/STATUS.md`](../STATUS.md). It exists because the two drift silently and expensively: a 2026-07-25 audit found **six of seven** "In progress / near-term" roadmap items had already shipped, and the v2 API was still badged `alpha` more than two weeks after `v2beta1` graduated — released that way, because a stable tag deploys that tag's docs permanently. The `docs/development/doc-update-matrix.md` rule requiring the update already existed; a human-followed convention was not enough.

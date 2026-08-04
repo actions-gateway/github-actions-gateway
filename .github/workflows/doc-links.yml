@@ -1,10 +1,14 @@
-# The docs-content gates: Markdown link + anchor integrity (Q52) and release-pin
-# freshness (Q638). Kept as their own workflow rather than jobs in unit-test.yml:
-# that workflow deliberately path-ignores docs, so a docs-only change must
-# trigger *these* lightweight checks and nothing else — the Go suite never runs
-# on a pure-docs PR. Mirrors how e2e-test.yml is its own workflow. The `paths`
-# below scope it to Markdown plus the checkers and this workflow file, so a
-# code-only change doesn't trigger it.
+# The docs-content gates: Markdown link + anchor integrity (Q52), release-pin
+# freshness (Q638), and release-note site-link resolution (Q636). Kept as their
+# own workflow rather than jobs in unit-test.yml: that workflow deliberately
+# path-ignores docs, so a docs-only change must trigger *these* lightweight
+# checks and nothing else — the Go suite never runs on a pure-docs PR. Mirrors
+# how e2e-test.yml is its own workflow. The `paths` below scope it to Markdown
+# plus the checkers, the docs-site build inputs the release-links oracle is
+# built from, and this workflow file, so a code-only change doesn't trigger it.
+#
+# The two lists are the same list written twice — GitHub has no anchor syntax
+# across `pull_request` and `push` — so every edit belongs in both.
 name: doc-links
 
 on:
@@ -13,6 +17,10 @@ on:
       - '**.md'
       - 'scripts/docs/check-doc-links.sh'
       - 'scripts/docs/check-release-pins.sh'
+      - 'scripts/docs/check-release-links.sh'
+      - 'scripts/docs/docs-preview.sh'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
   push:
@@ -21,6 +29,10 @@ on:
       - '**.md'
       - 'scripts/docs/check-doc-links.sh'
       - 'scripts/docs/check-release-pins.sh'
+      - 'scripts/docs/check-release-links.sh'
+      - 'scripts/docs/docs-preview.sh'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
 
@@ -58,3 +70,26 @@ jobs:
           fetch-depth: 0
       - name: release pins are current (make release-pins-check)
         run: make release-pins-check
+
+  # Resolve the release notes' absolute links into the versioned site against a
+  # local `mkdocs build`, not over the network — a gate that fetches URLs is a
+  # gate that fails when a third party sneezes (Q636). `make release-links-check`
+  # provisions the pinned docs venv and builds site/ itself, so this job runs the
+  # same code path a contributor does and the two verdicts match. It is the one
+  # docs-content gate outside `make check`: the fast local gate has no business
+  # provisioning a Python venv.
+  #
+  # fetch-depth: 0 for the same reason pages.yml's build job takes it — the
+  # announce bar's version comes from the tag list at build time (Q393).
+  release-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+      - name: release-note site links resolve (make release-links-check)
+        run: make release-links-check

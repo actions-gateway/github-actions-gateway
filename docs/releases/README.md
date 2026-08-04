@@ -67,4 +67,8 @@ that links here must use the absolute `github.com` URL; a relative link fails
 Their own links point into the **versioned docs site**
 (`https://actions-gateway.com/X.Y.Z/…`, no leading `v`), so an operator reading
 the notes for a release gets that release's instructions. `make doc-links` skips
-external URLs by design, so those links are not checked — verify them by hand.
+external URLs by design; `make release-links-check` is the gate that resolves
+these ones anyway, against a local `mkdocs build` rather than the network
+(Q636). Only the newest notes file's version is resolvable — `site/` is built
+from the current tree — so links naming an older release are reported as
+skipped, and a link to any other host is counted but never failed.
