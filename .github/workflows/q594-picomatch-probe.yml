@@ -20,16 +20,20 @@ jobs:
         with:
           list-files: json
           filters: |
-            broken:
+            doublestar:
               - '**.go'
-            fixed:
+            globstar:
               - '**/*.go'
+            singlestar:
+              - '*.go'
+            pinned:
+              - 'cmd/**.go'
             everything:
               - '**'
       - name: report
         run: |
-          echo "changed files seen by the action: ${{ steps.f.outputs.everything_files }}"
-          echo "broken  ('**.go')   = ${{ steps.f.outputs.broken }}"
-          echo "fixed   ('**/*.go') = ${{ steps.f.outputs.fixed }}"
-          echo "broken_files = ${{ steps.f.outputs.broken_files }}"
-          echo "fixed_files  = ${{ steps.f.outputs.fixed_files }}"
+          echo "changed files seen: ${{ steps.f.outputs.everything_files }}"
+          echo "doublestar ('**.go')     = ${{ steps.f.outputs.doublestar }} -> ${{ steps.f.outputs.doublestar_files }}"
+          echo "globstar   ('**/*.go')   = ${{ steps.f.outputs.globstar }} -> ${{ steps.f.outputs.globstar_files }}"
+          echo "singlestar ('*.go')      = ${{ steps.f.outputs.singlestar }} -> ${{ steps.f.outputs.singlestar_files }}"
+          echo "pinned     ('cmd/**.go') = ${{ steps.f.outputs.pinned }} -> ${{ steps.f.outputs.pinned_files }}"

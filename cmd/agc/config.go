@@ -166,3 +166,5 @@ func buildBrokerConfig(cfg agcConfig) controller.BrokerConfig {
 		FanoutCompletion: cfg.FanoutCompletion != "false",
 	}
 }
+
+// q594 probe touch 2
