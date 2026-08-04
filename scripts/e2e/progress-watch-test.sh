@@ -136,21 +136,44 @@ echo '== interval 0 turns the watcher off =='
 # TEST_PROGRESS_INTERVAL is shared with the unit tier's renderer, where 0 means
 # "no progress reporting". Without the guard in main() the same value would make
 # this watcher `sleep 0` in a tight loop for the length of an e2e run.
-TEST_PROGRESS_INTERVAL=0 "$REPO_ROOT/scripts/e2e/progress-watch.sh" >"$WORK/off.log" 2>&1 &
-watcher=$!
-# A regression here hangs rather than fails, so the assertion carries its own
-# deadline instead of relying on the caller's.
-(
-	sleep 10
-	kill -9 "$watcher" 2>/dev/null
-) &
-killer=$!
-if wait "$watcher" && [[ ! -s "$WORK/off.log" ]]; then
-	ok 'interval 0 exits without output' 'exited 0, printed nothing'
+#
+# main() sleeps only inside that loop, so a stub `sleep` ahead of the real one
+# on PATH records exactly the ticks the guard is meant to prevent, and kills the
+# watcher at the first. Off is zero ticks; a regression fails on the tick it
+# took rather than spinning for the length of the gate. Nothing here bounds real
+# seconds: a deadline around the watcher measures the scheduler, which is what
+# failed this case only under a loaded `make check` (Q642, and testing.md
+# § The clock is as often a deadline around a process as a `sleep` inside one).
+mkdir -p "$WORK/bin"
+cat >"$WORK/bin/sleep" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${1-}" >>"$PROGRESS_WATCH_TICKS"
+kill -KILL "$PPID"
+STUB
+chmod +x "$WORK/bin/sleep"
+: >"$WORK/ticks"
+
+off_rc=0
+PATH="$WORK/bin:$PATH" PROGRESS_WATCH_TICKS="$WORK/ticks" TEST_PROGRESS_INTERVAL=0 \
+	"$REPO_ROOT/scripts/e2e/progress-watch.sh" >"$WORK/off.log" 2>&1 || off_rc=$?
+mapfile -t ticks <"$WORK/ticks"
+
+if ((${#ticks[@]} == 0)); then
+	ok 'interval 0 never reaches a tick' 'sleep was not called'
 else
-	bad 'interval 0 exits without output' "exit $? output $(printf '%q' "$(cat "$WORK/off.log")")"
+	bad 'interval 0 never reaches a tick' \
+		"slept ${#ticks[@]} time(s), first for $(printf '%q' "${ticks[0]}")s"
 fi
-kill "$killer" 2>/dev/null || true
+
+# Exiting and exiting quietly are separate properties: the guard could return
+# early and still have printed, and a killed watcher reports 128+SIGKILL here
+# rather than passing as a clean exit.
+if ((off_rc == 0)) && [[ ! -s "$WORK/off.log" ]]; then
+	ok 'interval 0 exits 0 without output' 'exited 0, printed nothing'
+else
+	bad 'interval 0 exits 0 without output' \
+		"exit $off_rc output $(printf '%q' "$(cat "$WORK/off.log")")"
+fi
 
 echo
 if ((fails > 0)); then
