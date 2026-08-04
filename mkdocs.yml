@@ -35,8 +35,13 @@ exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/devel
 #
 # Declaring every deliberate omission is what makes MkDocs' "not included in the
 # nav" list mean something: what remains is a page a reader can reach only by
-# search or URL. It reports at INFO, so read it — three operator pages sat there
-# unnoticed under green builds (Q562). See website.md § What belongs in nav.
+# search or URL, so `validation.nav.omitted_files` below fails the build on one
+# (Q563) — at the INFO default, three operator pages sat there unnoticed under
+# green builds (Q562). See website.md § What belongs in nav.
+#
+# /README.md is inert here: MkDocs drops docs/README.md as an index.md conflict
+# before nav evaluation, so it reaches no scope's omitted list. Kept to mirror
+# exclude_docs above rather than to suppress a report.
 not_in_nav: |
   /README.md
   /STATUS.md
@@ -144,13 +149,17 @@ hooks:
 # and 404 here — heading-slug dedup suffixes (`_1` here, `-1` on GitHub), a bare
 # `dir/` target that GitHub renders as the directory's README, an `<angled>`
 # placeholder that Python-Markdown strips as a tag. These ship as INFO by
-# default, invisible under a green build; raised to warnings they
-# fail `mkdocs build --strict` in pages.yml. `absolute_links` and the `nav` keys
-# keep their defaults. A link to a page the built scope excludes is NOT covered
-# here — MkDocs clamps that below warning level whatever this block says, so
+# default, invisible under a green build; raised to warnings they fail
+# `mkdocs build --strict` in pages.yml. `nav.omitted_files` is the same move for
+# a published page in no nav section and no `not_in_nav` entry (Q563).
+# `absolute_links` keeps its default, and so does `nav.not_found` — already warn.
+# A link to a page the built scope excludes is NOT covered here — MkDocs clamps
+# that below warning level whatever this block says, so
 # source_links.py absolutizes it instead (Q561). See
 # docs/development/website.md § The two link gates.
 validation:
+  nav:
+    omitted_files: warn
   links:
     not_found: warn
     anchors: warn

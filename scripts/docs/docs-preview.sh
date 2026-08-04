@@ -73,7 +73,11 @@ main() {
   fi
 
   # --strict fails on the link/anchor warnings mkdocs.yml's `validation` block
-  # raises (Q560). Both publication scopes are built, matching pages.yml's PR
+  # raises (Q560), and on a published page listed in neither `nav` nor
+  # `not_in_nav` (Q563, `validation.nav.omitted_files`). Both scopes matter for
+  # that one: a page's nav coverage is per build, so a dev-only page can only be
+  # caught by the second build.
+  # Both publication scopes are built, matching pages.yml's PR
   # gate: the release scope excludes docs/plan/ and docs/development/, so a
   # break in those pages only ever surfaces in the dev scope.
   "${venv_dir}/bin/mkdocs" build --strict

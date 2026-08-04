@@ -395,8 +395,11 @@ Only the PR gate is strict. The deploy job builds a tag's own docs, and a releas
 cut before this gate existed must stay publishable.
 
 `mkdocs.yml`'s `validation` block is what makes this fail at all: MkDocs reports
-these as INFO by default, invisible under a green build. `absolute_links` and the
-`nav` keys keep their defaults deliberately.
+these as INFO by default, invisible under a green build. The same block raises
+`nav.omitted_files` for the nav-coverage gate
+([§ What belongs in `nav`](#what-belongs-in-nav)); `absolute_links` and
+`nav.not_found` keep their defaults deliberately, the latter because it already
+defaults to `warn`.
 
 Neither gate covers a link to a page the build's own scope excludes — MkDocs
 clamps that one below warning level whatever `validation` says. That is
@@ -471,11 +474,29 @@ either in it or declared in `not_in_nav`. Two kinds are declared:
 
 Everything else in `nav`. That makes MkDocs' "pages exist in the docs directory,
 but are not included in the `nav` configuration" list the accidental omissions
-only, and **the list should be empty** — treat an entry as a page a reader can
-now reach only by search or URL. Q562 was three such pages (the admission-policy
-matrix, Appendix H, the protocol-dependency register) sitting unnoticed in it.
-MkDocs reports this at INFO, so it never fails the build; read the
-`make docs-build` output after adding a page.
+only, and **the list must be empty** — an entry is a page a reader can now reach
+only by search or URL. Q562 was three such pages (the admission-policy matrix,
+Appendix H, the protocol-dependency register) sitting unnoticed in it.
+
+**That is a gate, not a habit** (Q563). MkDocs reports the list at INFO, which
+never fails a build, so `mkdocs.yml` raises `validation.nav.omitted_files` to
+`warn` and `--strict` turns it into an error — the same INFO-to-warning move
+[§ The two link gates](#the-two-link-gates) makes for links. Add a page and
+`make docs-build` fails until it is either in `nav` or declared in `not_in_nav`:
+
+```
+The following pages exist in the docs directory, but are not included in the "nav" configuration:
+  - operations/your-new-page.md
+Aborted with 1 warnings in strict mode!
+```
+
+Both scopes are checked, because nav coverage is decided per build: a
+`development/` page is a page only on `dev`, so the release-scope build cannot
+see it. `not_in_nav` is what suppresses the report for a deliberate omission, so
+it stays populated — the empty list is MkDocs' *reported* one, never this key.
+The one inert entry is `/README.md`: MkDocs drops `docs/README.md` as an
+`index.md` conflict before nav is evaluated, so it reaches no scope's list and is
+kept only to mirror `exclude_docs`.
 
 ### The backlog page
 
