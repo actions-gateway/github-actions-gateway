@@ -35,6 +35,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Docker image speed](plan/docker-image-speed.md) | `speed` | ✅ |
 | [e2e test speed](plan/e2e-tests-speed.md) | `speed` `tests` | ✅ |
 | [e2e CI speed round 2](plan/e2e-ci-speed-round-2.md) | `speed` `tests` `ci` | ✅ |
+| [Merge queue](plan/merge-queue.md) | `speed` `ci` | ⚠️ |
 | [v2 API decomposition](plan/v2-api.md) | `feature` | ✅ |
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `dogfood` `docs` | ✅ |
@@ -55,6 +56,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q674"></a>Q674 | [Activate the merge queue on `main`: ruleset rule + queue-era process docs](plan/merge-queue.md#phase-2--activation-post-merge-ordering-matters) | `ci` | 🚫 | S | Blocked until Phase 1's `merge_group` triggers are on `main` — activating first wedges every merge. Then add the `merge_queue` rule to ruleset 17350763 (params in plan) and rewrite CONTRIBUTING/CLAUDE re-check + push rules to queue semantics. |
 | <a id="Q166"></a>Q166 | [v2 API M4: cross-namespace EgressProxy sharing](plan/v2-api.md) | `security` `feature` | 🔲 | M | Demand fired 2026-08-01: `sharing.allowedNamespaces` is served v2beta1 API with no enforcement (#1079 sweep), so the beta contract would harden a dormant field. Next: M4 consent check, CA distribution, dual-side NetworkPolicy. |
 | <a id="Q408"></a>Q408 | [Untrusted-PR egress posture for Kata workers](plan/q408-untrusted-pr-egress.md) | `security` | 🔲 | L | Phase 0 measured 2026-08-03 (dogfood run 30786972228): job-time egress is not registry-only. `get.helm.sh` and the Actions cache data plane block a mirror-scoped NP; helm's OCI client is a fourth one. New Phase 1 shrinks that residual first. |
 | <a id="Q606"></a>Q606 | [A hard-killed AGC still replays an assignment it concluded but had not yet deleted](plan/q603-settle-delete-gap.md#the-residual-stated-precisely) | `bug` | 🔲 | M | Q603 closed the graceful half; a hard kill between `settle` and its `DELETE` remains, and no ordering can close it. Q597 bounded the guards, so persisting them is the sharper candidate; the other needs a live measurement. The plan doc states which. |
