@@ -601,13 +601,32 @@ jobs:
           echo "=== runner disk (ENOSPC during bring-up is Q292's signature) ==="
           df -h /
           echo
-          echo "=== runner-host GitHub egress (Q352: a transport failure here means the runner's"
-          echo "    GitHub egress is down — real-GitHub e2e spec failures in this run are an"
-          echo "    infra blip; re-run the job) ==="
-          curl -sS -o /dev/null --max-time 10 \
-            --write-out 'api.github.com: HTTP %{http_code} in %{time_total}s\n' \
-            https://api.github.com/zen \
-            || echo "!!! runner host CANNOT reach https://api.github.com (curl rc=$?)"
+          echo "=== runner-host GitHub egress (Q352/Q648; same scoring as the in-suite probe,"
+          echo "    cmd/gmc/test/utils.ScoreGitHubEgress) ==="
+          gh_body=$(curl -sS --max-time 10 \
+            --write-out '\n%{http_code}' https://api.github.com/zen)
+          gh_rc=$?
+          gh_code="${gh_body##*$'\n'}"
+          if [[ $gh_rc -ne 0 ]]; then
+            echo "api.github.com: BLOCKED (curl rc=$gh_rc) — no response reached the runner; real-GitHub"
+            echo "  spec failures in this run are infra, not product. Re-run the job."
+          else
+            echo "api.github.com: HTTP $gh_code"
+            case "$gh_code" in
+              2??) echo "  REACHABLE — GitHub served the runner; treat real-GitHub spec failures as real." ;;
+              # /zen needs no credentials, so a refusal is about the source address —
+              # the address the in-cluster path NATs through.
+              403|408|429|5??)
+                echo "  BLOCKED — GitHub refused or could not serve this runner's address; real-GitHub"
+                echo "  spec failures in this run are infra, not product. Re-run the job." ;;
+              *)
+                echo "  INCONCLUSIVE — GitHub answers an unauthenticated /zen with 200 and nothing else,"
+                echo "  so an intermediary answered or the endpoint moved. Read the body." ;;
+            esac
+            if [[ $gh_code != 2?? ]]; then
+              echo "  body: $(printf '%s' "${gh_body%$'\n'*}" | tr -s '[:space:]' ' ' | cut -c1-200)"
+            fi
+          fi
           echo
           echo "=== nodes ==="
           kubectl get nodes -o wide
