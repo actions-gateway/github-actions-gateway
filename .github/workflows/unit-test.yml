@@ -188,19 +188,29 @@ jobs:
               - 'scripts/go/go-work-tidy.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
-            # Scope for the two gates that read the workflows themselves: the
-            # path-filter coherence gate (Q429) and actionlint (Q579). Their
-            # trigger set is the same — any workflow edit must re-run both — so
-            # they share one filter rather than keeping two lists that would have
-            # to stay in step. Deliberately the only filter watching ALL of
-            # .github/workflows/: editing any workflow's `filters:` block must
-            # re-run the gate that lints it.
+            # Scope for the three gates that read the workflows themselves: the
+            # path-filter coherence gate (Q429), actionlint (Q579) and the
+            # `uses:` pin gate (Q644). Their trigger set is the same — any
+            # workflow edit must re-run all three — so they share one filter
+            # rather than keeping lists that would have to stay in step.
+            # Deliberately the only filter watching ALL of .github/workflows/:
+            # editing any workflow's `filters:` block must re-run the gate that
+            # lints it.
             workflows:
               - '.github/workflows/**'
+              # The kubebuilder scaffolding workflows GitHub never runs. Outside
+              # actionlint's scope, which sees only the root directory above, but
+              # inside the pin gate's — it covers every workflow in the tree, so
+              # its trigger must too (Q644).
+              - 'cmd/gmc/.github/workflows/**'
               - '.github/actionlint.yaml'
               - 'go.work'
               - 'scripts/ci/check-path-filters.sh'
               - 'scripts/ci/actionlint-workflows.sh'
+              - 'scripts/ci/check-uses-pinned.sh'
+              # devtools/ backs the two gates here whose logic outgrew shell:
+              # devtools/ci/pathfilters and devtools/ci/usespin.
+              - 'devtools/**'
               - 'tools/**'
               - 'Makefile'
             # The claude-usage/ Python module (Q437). It matched no filter in this
@@ -472,6 +482,36 @@ jobs:
           shellcheck --version
       - name: lint workflows (make actionlint)
         run: make actionlint
+
+  # Assert every `uses:` is pinned to an immutable commit SHA (Q644). Its own job
+  # rather than a step in `actionlint` above, because it is the gate for what
+  # actionlint does NOT check and the two verdicts must be readable apart: folded
+  # into that job, a mutable pin would report as "actionlint failed" and send the
+  # reader to the linter that had in fact passed.
+  #
+  # Measured against actionlint v1.7.12, the version tools/ pins: `@v7.0.1`,
+  # `@v4` and `@main` all exit 0, and it resolves the action's inputs off the tag
+  # while doing so — it reads the ref and only ever asserts one is present and
+  # well formed. A tag is mutable by whoever owns the action, and an action runs
+  # inside a job holding the repository token. Dependabot bumps pins; nothing
+  # stopped one being written as a tag until this.
+  #
+  # Wider scope than actionlint, which lints only the root .github/workflows/:
+  # this covers every workflow and composite action in the tree, cmd/gmc/'s
+  # scaffolding included. Parses YAML and matches refs — no network, no toolchain
+  # beyond the Go build of devtools/ci/usespin.
+  uses-pinned:
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: action refs are SHA-pinned (make uses-pinned-check)
+        run: make uses-pinned-check
 
   # Run the claude-usage/ Python suite (Q437). That module holds the committed
   # record of the project's Claude Code usage — for days whose session transcripts

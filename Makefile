@@ -110,7 +110,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
                     v2-api-sync-check path-filters-check gate-lists-check shellcheck \
-                    actionlint chart-crds-check chart-rbac-check chart-webhook-check \
+                    actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
@@ -310,6 +310,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-conflict-markers-test ci/check-dep-advisory-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
                  ci/gate-list-test ci/shellcheck-scripts-test \
+                 ci/check-uses-pinned-test \
                  docs/backlog-metrics-test docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-release-links-test \
                  docs/check-release-pins-test \
@@ -618,6 +619,15 @@ shellcheck: ## Shellcheck every present scripts/*.sh — tracked or untracked-an
 .PHONY: actionlint
 actionlint: $(ACTIONLINT) ## Lint .github/workflows/** with actionlint (schema, uses:, expressions + shellcheck over inline run: blocks)
 	ACTIONLINT=$(ACTIONLINT) scripts/ci/actionlint-workflows.sh
+
+# What actionlint above does NOT do (Q644): it asserts a `uses:` ref is present
+# and well formed, never that it is a commit SHA. Measured against v1.7.12,
+# `actions/checkout@v4` and `@main` both exit 0. A tag is mutable by whoever owns
+# the action, so that gap is arbitrary third-party code running against the job
+# token. Rules and exempt shapes: devtools/ci/usespin's package comment.
+.PHONY: uses-pinned-check
+uses-pinned-check: ## Assert every workflow/action `uses:` is a 40-hex SHA with a version comment (tags are mutable)
+	scripts/ci/check-uses-pinned.sh
 
 .PHONY: queue-unblock
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)
