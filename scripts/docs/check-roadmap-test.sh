@@ -150,6 +150,33 @@ expect "non-Q-ID annotation" 1 \
     "$(roadmap '- **Near thing.** <!-- q:TODO --> Body. [d](plan/t.md)' -- "$EXPL")" \
     "$(status "Q1" "Q2")" 'is not a Q-ID'
 
+# A fenced block documenting the annotation format is prose about it, not an
+# annotation — the shape a line-matching gate cannot tell apart, because the
+# fence is invisible to it. This bullet has no real annotation and must fail.
+expect "annotation inside a code fence does not count" 1 \
+    "$(roadmap '- **Near thing.** Body text. [d](plan/t.md)' '' '  ```' '  - **Example.** <!-- q:Q1 --> How to annotate.' '  ```' -- "$EXPL")" \
+    "$(status "Q1" "Q2")" 'has no <!-- q:QN --> annotation'
+
+# The word cap measures the bullet, not the page. Prose between two bullets
+# belongs to neither, and counting it against the one above inflates every
+# multi-paragraph section: docs/roadmap.md:43 carried 19 words of a following
+# paragraph that way. 55 words of bullet plus 20 of paragraph is under the
+# 60-word cap only if the paragraph is left out of it.
+long_body="$(printf 'word %.0s' $(seq 1 51))"
+trailing_prose="$(printf 'para %.0s' $(seq 1 20))"
+expect "prose after a bullet is not counted against it" 0 \
+    "$(roadmap "- **Near thing.** <!-- q:Q1 --> [d](plan/t.md) $long_body" '' "$trailing_prose" -- "$EXPL")" \
+    "$(status "Q1" "Q2")"
+
+# The positive control for that one: a bullet whose own body wraps across lines
+# is still measured whole, so excluding the paragraph after it is not a way of
+# excluding continuation lines too.
+wrapped_head="$(printf 'word %.0s' $(seq 1 30))"
+wrapped_tail="$(printf 'word %.0s' $(seq 1 35))"
+expect "a bullet spanning line breaks is counted whole" 1 \
+    "$(roadmap "- **Near thing.** <!-- q:Q1 --> [d](plan/t.md) $wrapped_head" "  $wrapped_tail" -- "$EXPL")" \
+    "$(status "Q1" "Q2")" 'the rest belongs in the linked doc'
+
 # Format drift on either side is a hard error (rc 2), never a silent pass.
 printf '# Roadmap\n\n## Something Else\n\n- **Orphan.** Body. [d](plan/t.md)\n' >"$WORKDIR/no-sections.md"
 expect "roadmap headings renamed" 2 \
@@ -180,10 +207,11 @@ FEATURES_FILE="$(features toolong "$long_bullet")"
 expect "feature bullet over the word cap" 1 "$RM_OK" "$ST_OK" 'Move the detail into the linked doc'
 
 # A badge span is presentation, not prose, and must not spend the word budget.
-# Sized to the boundary so this actually discriminates: 38 body words count as
-# 45 with the spans stripped (the cap, so green) and 47 without (so red). A
-# shorter bullet would pass either way and pin nothing.
-badge_bullet="- **[A v2 capability](operations/runbook.md)** <span class=\"gag-v2-badge\">v2</span> <span class=\"gag-maturity-badge\">beta</span> —$(printf ' word%.0s' $(seq 1 38))"
+# Sized to the boundary so this actually discriminates: the title, the two badge
+# labels, the dash and 39 body words are exactly the 45-word cap, so any tag or
+# attribute leaking into the count fails it. A shorter bullet would pass either
+# way and pin nothing.
+badge_bullet="- **[A v2 capability](operations/runbook.md)** <span class=\"gag-v2-badge\">v2</span> <span class=\"gag-maturity-badge\">beta</span> —$(printf ' word%.0s' $(seq 1 39))"
 FEATURES_FILE="$(features badges "$badge_bullet")"
 expect "badge markup is not counted" 0 "$RM_OK" "$ST_OK"
 

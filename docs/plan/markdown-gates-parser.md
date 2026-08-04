@@ -1,7 +1,9 @@
 # Markdown gates on a real parser
 
-**Status:** open, filed 2026-08-02. Three phases:
-Q612 ✅ → Q613 ✅ → [Q614](../STATUS.md#Q614).
+**Status:** filed 2026-08-02; all three phases shipped by 2026-08-04.
+Q612 ✅ → Q613 ✅ → Q614 ✅. Still active while
+[Q654](../STATUS.md#Q654) cites it — a fourth consumer of the same parse layer,
+filed after the phases were scoped.
 
 Phase 1 shipped: `devtools/docs/markdown` (the shared parse layer over goldmark)
 and `devtools/docs/doclinks` (the checker), with `check-doc-links.sh` kept as the
@@ -150,8 +152,9 @@ In scope, one phase each:
    Result: [Phase 1 result](#phase-1-result-q612).
 2. **Q613 ✅ — `lint-backlog.sh`.** Table rows via the GFM AST; the
    character cap via `utf8.RuneCountInString`.
-3. **[Q614](../STATUS.md#Q614) — `check-roadmap.sh` + `backlog-metrics.sh`.** The
-   remaining two consumers, onto the same layer.
+3. **Q614 — `check-roadmap.sh` + `backlog-metrics.sh`.** ✅ The remaining two
+   consumers, onto the same layer.
+   Result: [Phase 3 result](#phase-3-result-q614).
 
 Each keeps its `scripts/` entry point, per
 [`scripts/README.md`](../../scripts/README.md) — the gate map stays in one place.
@@ -296,6 +299,67 @@ moving to characters can only relax — never break — an existing row.
 alone, which no longer holds the rules; it now also triggers on `devtools/**`,
 pins the toolchain with `setup-go`, and takes 5 minutes instead of 2 for the
 build. Runtime 0.49 s → 0.69 s, still sub-second, still not the argument.
+## Phase 3 result (Q614)
+
+Both gates keep their `scripts/` entry point and gain a Go checker —
+`devtools/docs/roadmapcheck` and `devtools/docs/backlogmetrics` — over the same
+parse layer. No new module, no new `make` target, no new path filter: the
+`devtools/**` filters Q612 wired already cover them.
+
+**The parse layer grew three general things**, not one-caller helpers:
+`Tables()` (GFM tables as rows of rendered cells), `TopLevelListItems()` (a
+bullet's text, its lead bold run, its HTML comments, whether it links), and
+`SectionRange()` (the lines a heading's section spans). Plus `ParseRow()`, for
+the case Q612 did not have: **a table row with no table around it.** The metrics
+replay reads `git log -p` output, where every row is a lone `+`/`-` diff line.
+GFM only recognizes a table whose delimiter is at least as wide as its header,
+and pads a narrower header out — so acceptance is monotone in the width and the
+narrowest accepted width *is* the row's cell count. `ParseRow` binary-searches
+it, which leaves every escaping rule to goldmark instead of restating it.
+
+**`check-roadmap` — reconciled.** Same verdict, same counts (18 bullets, 57
+features), byte-identical output. Every bullet's annotation IDs and link flag
+match. Word counts all fell — 5–24 on the roadmap, exactly 1 on `features.md`:
+
+| Difference | What it is |
+|---|---|
+| −1 on every bullet | The `- ` marker, which `split()` counted as a word. |
+| −1 per wrapped line | An indented continuation line yields an empty leading field. |
+| −19 on `roadmap.md:43` | The `awk` ran a bullet's span to the next bullet or heading, so the paragraph *between* two bullets was charged to the one above it. |
+
+Nothing crossed either cap under either counter, so nothing changed hands. The
+caps now mean what they say — 60 real words, not ~54 plus markup.
+
+**`backlog-metrics` — reconciled over the whole history**, 2864 diff rows, 630
+items. Identical filed dates and sizes; one event differs and 155 titles do:
+
+| Difference | Count | What it is |
+|---|---|---|
+| Q129 `pruned` 06-18 → `completed` 06-16 | 1 | The Q509 defect, one shape further out. The commit that moved Q129 to Progress buried `<a id="Q129"></a>Q129` mid-Notes, and the `awk`'s line-wide regex read that as re-adding the row — so the removal went unrecorded and a later commit booked it as a prune. Cell-scoped, a Progress row has no cell that reads as a bare ID. |
+| Backticks, `*emphasis*`, a literal `[` | 155 | Titles are rendered text now, so `` `windowStartTime` `` reads as `windowStartTime` and Q485's `sizingRecommendation[]` survives — the `awk` stripped every `[` to undo link markup and ate that one. Widens the 60-char aging-report window. |
+
+**One rule had to loosen, not tighten.** The ID cell is *searched for*, not
+pinned to index 0: history holds rows a botched edit prefixed with a stray
+delimiter (`|---|---|---|---|| <a id="Q166">…`). Pinning index 0 dropped that
+add, which booked a removal for a row that never left — caught by the
+reconciliation, not by review.
+
+**Red-first on the new shapes**, each failing against the `awk` and passing
+against the parser: a `<!-- q:QN -->` inside a code fence (old gate green on a
+bullet with no real annotation), prose after a bullet counted against it, an
+escaped pipe truncating a row's title, and a fenced example row counted as
+parked in Deferred. The line-break case is a positive **control** — it passes
+both, and pins that excluding the following paragraph did not also exclude the
+bullet's own continuation lines.
+
+**A boundary the port does not cross, now pinned:** the replay reads diff lines,
+which carry no document around them, so a row inside a fence still registers as
+an arrival there even though the same fence is respected when the file itself is
+parsed for Deferred IDs. Asserted so a change to it is a deliberate one — every
+metric moves with it.
+
+`backlog-metrics.sh` started as the backlog skill's script. It has now diverged;
+`scripts/README.md` says so rather than implying a sync obligation.
 
 ## Sequencing
 

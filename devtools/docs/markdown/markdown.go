@@ -24,6 +24,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // LinkKind distinguishes the constructs a destination can come from.
@@ -193,6 +194,28 @@ func (d *Document) Headings() []Heading {
 	return headings
 }
 
+// SectionRange returns the 1-based line range covered by the section a heading
+// of the given level and text opens, excluding the heading line itself. The
+// section ends at the next heading of that level or shallower, or at the end of
+// the document. Reports false when no such heading exists.
+func (d *Document) SectionRange(level int, text string) (start, end int, ok bool) {
+	headings := d.Headings()
+	for i, h := range headings {
+		if h.Level != level || h.Text != text {
+			continue
+		}
+		end = len(d.lineStarts)
+		for _, next := range headings[i+1:] {
+			if next.Level <= level {
+				end = next.Line - 1
+				break
+			}
+		}
+		return h.Line + 1, end, true
+	}
+	return 0, 0, false
+}
+
 // HTMLAnchors returns the `<a id="…">` anchors in the document's raw HTML.
 // Markup inside a code block is a code block to the parser, so it contributes
 // no anchor.
@@ -238,7 +261,15 @@ func (d *Document) inlineText(n ast.Node) string {
 		}
 		switch v := c.(type) {
 		case *ast.Text:
-			b.Write(v.Segment.Value(d.Source))
+			raw := v.Segment.Value(d.Source)
+			// Backslash escapes survive into the segment; a renderer resolves
+			// them on the way out, and so must anything reading the text
+			// (`a \| b` is one cell reading `a | b`). Raw text — a code span's
+			// contents — is exempt, as it is for a renderer.
+			if !v.IsRaw() {
+				raw = util.UnescapePunctuations(raw)
+			}
+			b.Write(raw)
 		case *ast.String:
 			b.Write(v.Value)
 		case *ast.AutoLink:

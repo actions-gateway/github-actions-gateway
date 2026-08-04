@@ -10,7 +10,7 @@ The format and process come from the globally-installed **backlog skill** (agent
 - [`scripts/docs/find-duplicate-rows.sh`](../../scripts/docs/find-duplicate-rows.sh) — the near-duplicate search that allocation runs before it claims an ID. Advisory: it never blocks a filing. [How it is calibrated](#search-before-you-file).
 - [`scripts/docs/git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous. One-time `make merge-driver` per clone; a no-op until then. [Details below](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
 - [`scripts/docs/next-task.sh`](../../scripts/docs/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready 🔲 Queue row, for starting a fresh session on the next task.
-- [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only.
+- [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only. The replay reads each diff line's cells through the shared Markdown parse layer, so an escaped pipe in a cell cannot shift a row's fields (Q614).
 
 ## The shared process, in brief
 
