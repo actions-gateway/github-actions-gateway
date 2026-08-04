@@ -99,8 +99,10 @@ Integration tests require `KUBEBUILDER_ASSETS`. See [`docs/development/testing.m
 Before requesting review or opening a PR, run the one-command gate:
 
 ```bash
-make check   # gofmt + golangci-lint + STATUS.md lint + unit tests
+make check
 ```
+
+To see what it covers, ask the target rather than a list in a doc — `make list-gates` prints every gate `make check` runs, in order, with what each one checks.
 
 `make check` runs exactly what `.github/workflows/unit-test.yml` runs, so a green `make check` means a green unit-test workflow — run it locally to avoid burning CI. The slower security gates (`make vulncheck`, `make trivy-scan`) and the integration/e2e tiers are kept separate so this loop stays fast; run them when your change warrants it.
 
