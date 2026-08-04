@@ -6,6 +6,7 @@ import (
 
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
@@ -25,11 +26,25 @@ import (
 // RunnerSet stops being listed and its series disappears with no reconcile-path cost
 // and no stale-series cleanup. Each value mirrors the condition the reconciler wrote
 // to .status.conditions (1 when True, 0 otherwise).
+//
+// WorkerCapacityDeclined (Q643) is the one condition whose value alone does not say
+// what an operator needs to know, so its family differs from the other three in two
+// ways. It carries a reason label, because the latched AwaitingProbe state (Q512) is a
+// True the operator must be able to tell apart from a live decline — it means intake is
+// throttled to one probe job per deadline window rather than gated on present evidence,
+// and it outlives the stuck pod that WorkersUnschedulable reports. The reason set is
+// closed and small (CapacityAvailable, PodsUnschedulable, ScaleUpDeclined,
+// AwaitingProbe, GateModeUnsupported), so the label adds no unbounded cardinality; the
+// scrape-time read means a reason change replaces the series rather than leaving the
+// old one frozen. And it is emitted only when the condition is present, because the
+// reconciler removes rather than falsifies it for a set with no gate: a 0 there would
+// read as "evaluated, capacity available" on every ungated set in the fleet.
 type runnerSetCapacityCollector struct {
 	reader        client.Reader
 	pressure      *prometheus.Desc
 	exceeded      *prometheus.Desc
 	unschedulable *prometheus.Desc
+	declined      *prometheus.Desc
 }
 
 // NewRunnerSetCapacityCollector returns the collector that exports every RunnerSet's
@@ -52,6 +67,11 @@ func NewRunnerSetCapacityCollector(reader client.Reader) prometheus.Collector {
 			"1 when the RunnerSet WorkersUnschedulable condition is True (worker pods are Pending and cannot be scheduled for a non-quota reason), else 0.",
 			[]string{"namespace", "runner_set"}, nil,
 		),
+		declined: prometheus.NewDesc(
+			"actions_gateway_runnerset_worker_capacity_declined",
+			"1 when the RunnerSet WorkerCapacityDeclined condition is True (the opt-in capacity gate is refusing job intake), else 0. The reason label carries the condition's current reason, which is what distinguishes the latched AwaitingProbe state from a live decline. Emitted only for a set whose capacity gate is enabled.",
+			[]string{"namespace", "runner_set", "reason"}, nil,
+		),
 	}
 }
 
@@ -59,6 +79,7 @@ func (c *runnerSetCapacityCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.pressure
 	ch <- c.exceeded
 	ch <- c.unschedulable
+	ch <- c.declined
 }
 
 func (c *runnerSetCapacityCollector) Collect(ch chan<- prometheus.Metric) {
@@ -80,6 +101,11 @@ func (c *runnerSetCapacityCollector) Collect(ch chan<- prometheus.Metric) {
 			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkerQuotaExceeded), rs.Namespace, rs.Name)
 		ch <- prometheus.MustNewConstMetric(c.unschedulable, prometheus.GaugeValue,
 			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable), rs.Namespace, rs.Name)
+		if gate := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined); gate != nil {
+			ch <- prometheus.MustNewConstMetric(c.declined, prometheus.GaugeValue,
+				conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined),
+				rs.Namespace, rs.Name, gate.Reason)
+		}
 	}
 }
 

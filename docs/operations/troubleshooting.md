@@ -592,7 +592,11 @@ are being cancelled either. On the classic tier
 `actions_gateway_jobs_admission_rejected_total{reason="capacity"}` climbs; on the
 default `ScaleSet` tier `actions_gateway_scaleset_advertised_capacity` has dropped
 and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` holds the
-remainder of the ceiling.
+remainder of the ceiling. Those two count the *cost* of the refusal; the gate's own
+state is `actions_gateway_runnerset_worker_capacity_declined`, which reads `1` under
+the `reason` label below and is emitted only for a set that opted in — so
+`max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)`
+is the fleet-wide "which sets are gated, and on what evidence" query.
 
 **Cause.** This is **deliberate, and only ever happens on a set that opted in.**
 The runner set has `spec.capacityGate.mode: Observe` (Q405, Q406, Q470), and the signal
@@ -625,6 +629,11 @@ its absence is not a failure to report, it means the set did not opt in.
 > a `RunnerSet` that never claims anything again has a different problem. On an
 > idle gated set whose shape stays unplaceable, `AwaitingProbe` can persist
 > `True` indefinitely; that is truthful, and harmless until jobs arrive.
+>
+> A latched set is invisible to the scheduler-side signals: the pod that produced
+> the verdict is gone, so `WorkersUnschedulable` — and its gauge — is back to `0`
+> while intake is still throttled. `worker_capacity_declined{reason="AwaitingProbe"}`
+> is the series that stays `1`, which is why the gauge carries the reason.
 
 **Diagnostics.**
 

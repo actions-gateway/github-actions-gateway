@@ -82,7 +82,7 @@ publishes the v2 counterpart. It is pure observability: it reaches a condition, 
 Event, and a gauge, and never reaches `Provisioner.Admit`. The `WorkerQuota` ladder
 and `WorkersUnschedulable` are gauged on both owners — v1 via
 `actions_gateway_worker_*`, v2 via the `actions_gateway_runnerset_*` twins Q319
-added; `WorkerCapacityDeclined` is the one that still has no gauge.
+added; `WorkerCapacityDeclined` joined them in Q643, with a `reason` label.
 
 So the intake path has no capacity awareness at all, and the per-claim cost of
 that is:
@@ -395,11 +395,13 @@ turn it off), plus the website positioning page in the same PR per the standing
 rule.
 
 **Estimate.** ~450–700 lines net across ~25 files, 1–2 PRs, Sz M. The v2 gauge
-for the new condition is deliberately out of scope. Q319 has since exported the
-other three RunnerSet capacity conditions as `actions_gateway_runnerset_*` gauges
-and deliberately left this one out — it is conditionally absent rather than
-False when the gate is off, which is its own design question — so
-`WorkerCapacityDeclined` is now tracked alone as [Q643](../STATUS.md#Q643).
+for the new condition was deliberately out of scope here, and Q319 left it out of
+the `actions_gateway_runnerset_*` family for the same reason: the condition is
+conditionally *absent* rather than False when the gate is off, which is its own
+design question. Q643 settled it — the gauge follows the condition, so an ungated
+set emits no series at all, and a `reason` label carries which of the five reasons
+is current so the latched `AwaitingProbe` state is distinguishable from a live
+decline.
 
 ## 7. Phase 2 — the autoscaler-declination signal (Q406)
 
