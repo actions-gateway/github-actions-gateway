@@ -15,6 +15,9 @@ on:
       - 'scripts/docs/lint-backlog.sh'
       - 'scripts/docs/check-roadmap.sh'
       - 'scripts/docs/check-status-isolation.sh'
+      # The backlog gate's rules live in devtools/docs/backloglint over the
+      # shared parse layer (Q613), so a change there changes this gate's verdict.
+      - 'devtools/**'
       - '.github/workflows/status-lint.yml'
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
@@ -54,6 +57,7 @@ jobs:
               - 'scripts/docs/lint-backlog.sh'
               - 'scripts/docs/check-roadmap.sh'
               - 'scripts/docs/check-status-isolation.sh'
+              - 'devtools/**'
               - '.github/workflows/status-lint.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
@@ -66,13 +70,21 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.status == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    # 5, not 2: the backlog gate builds devtools/docs/backloglint (Q613), and a
+    # cold module build has to fit inside the budget alongside the two checks.
+    timeout-minutes: 5
     steps:
       # fetch-depth: 0 for the isolation check below — it reads the commits the
       # branch adds, which a shallow checkout does not carry.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      # The backlog gate is a Go program now. Pinning the toolchain to go.work
+      # keeps it off whatever the runner image happens to default to, which is
+      # the version that decides whether the build downloads a second one.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
       - name: lint docs/STATUS.md format
         run: scripts/docs/lint-backlog.sh
       # Backlog edits are isolated commits; the pre-commit hook that enforces
