@@ -50,6 +50,23 @@ func withSystemCABundleCandidates(t *testing.T, paths []string) {
 	t.Cleanup(func() { systemCABundleCandidates = orig })
 }
 
+// writeUnreadable writes content to path, strips its mode bits, and restores
+// them so t.TempDir cleanup can remove the file. It reads the file back and
+// skips when that read succeeds. uid is a proxy for the capability and is
+// wrong both ways: a uid-0 process without CAP_DAC_OVERRIDE cannot read mode
+// 000, and a non-root process holding it can. The skip names the uid observed,
+// so a skipped run is distinguishable from a passing one.
+func writeUnreadable(t *testing.T, path, content string) {
+	t.Helper()
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	require.NoError(t, os.Chmod(path, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
+
+	if _, err := os.ReadFile(path); err == nil {
+		t.Skipf("uid %d reads a mode-000 file, so %s cannot be made unreadable", os.Geteuid(), path)
+	}
+}
+
 func TestReadJITBlob_Valid(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, jitConfigFile), []byte("  base64blob==\n"), 0o600))
@@ -691,15 +708,9 @@ func TestResolveWorkerBin_NeitherRunnerHomeNorPathHasIt(t *testing.T) {
 // other than absence (here, permission denied) must surface as a wrapped
 // error, not be silently skipped like the missing-file case.
 func TestMaterializeJITConfig_ReadErrorOtherThanNotExist(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("permission checks don't apply when running as root")
-	}
 	payloadDir := t.TempDir()
 	runnerHome := t.TempDir()
-	jitPath := filepath.Join(payloadDir, jitConfigFile)
-	require.NoError(t, os.WriteFile(jitPath, []byte("irrelevant"), 0o600))
-	require.NoError(t, os.Chmod(jitPath, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(jitPath, 0o600) }) // allow TempDir cleanup to remove it
+	writeUnreadable(t, filepath.Join(payloadDir, jitConfigFile), "irrelevant")
 
 	err := materializeJITConfig(payloadDir, runnerHome)
 	require.Error(t, err)
@@ -760,14 +771,9 @@ func TestMaterializeJITConfig_WriteFileFails(t *testing.T) {
 // CA cert path exists but can't be read (permission denied), which must
 // error rather than be treated as the tolerated "no proxy configured" no-op.
 func TestInstallCATrust_ReadErrorOtherThanNotExist(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("permission checks don't apply when running as root")
-	}
 	runnerHome := t.TempDir()
 	caPath := filepath.Join(t.TempDir(), "tls.crt")
-	require.NoError(t, os.WriteFile(caPath, []byte("cert"), 0o600))
-	require.NoError(t, os.Chmod(caPath, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(caPath, 0o600) })
+	writeUnreadable(t, caPath, "cert")
 
 	env, err := installCATrust(runnerHome, caPath)
 	require.Error(t, err)
@@ -778,14 +784,8 @@ func TestInstallCATrust_ReadErrorOtherThanNotExist(t *testing.T) {
 // TestInstallCATrust_ReadSystemCABundleErrorPropagates covers the case where readSystemCABundle returning a non-NotExist error must
 // abort installCATrust before anything is written.
 func TestInstallCATrust_ReadSystemCABundleErrorPropagates(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("permission checks don't apply when running as root")
-	}
-	staging := t.TempDir()
-	unreadable := filepath.Join(staging, "ca-certificates.crt")
-	require.NoError(t, os.WriteFile(unreadable, []byte("sys"), 0o600))
-	require.NoError(t, os.Chmod(unreadable, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o600) })
+	unreadable := filepath.Join(t.TempDir(), "ca-certificates.crt")
+	writeUnreadable(t, unreadable, "sys")
 	withSystemCABundleCandidates(t, []string{unreadable})
 
 	runnerHome := t.TempDir()
@@ -842,13 +842,8 @@ func TestInstallCATrust_WriteFileFails(t *testing.T) {
 // TestReadSystemCABundle_ErrorOtherThanNotExist covers the case where a candidate path exists but is unreadable, which must surface as
 // an error rather than be treated like a missing candidate.
 func TestReadSystemCABundle_ErrorOtherThanNotExist(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("permission checks don't apply when running as root")
-	}
 	unreadable := filepath.Join(t.TempDir(), "ca-bundle.crt")
-	require.NoError(t, os.WriteFile(unreadable, []byte("x"), 0o600))
-	require.NoError(t, os.Chmod(unreadable, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o600) })
+	writeUnreadable(t, unreadable, "x")
 	withSystemCABundleCandidates(t, []string{unreadable})
 
 	b, err := readSystemCABundle()
@@ -892,16 +887,11 @@ func TestRun_MaterializeJITConfigErrorIsWrapped(t *testing.T) {
 // with an "install proxy CA trust: " wrapped error before any pipes or
 // subprocess are created.
 func TestRun_InstallCATrustErrorIsWrapped(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("permission checks don't apply when running as root")
-	}
 	payloadDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, payloadFile), []byte(`{}`), 0o600))
 
 	caPath := filepath.Join(t.TempDir(), "tls.crt")
-	require.NoError(t, os.WriteFile(caPath, []byte("cert"), 0o600))
-	require.NoError(t, os.Chmod(caPath, 0o000))
-	t.Cleanup(func() { _ = os.Chmod(caPath, 0o600) })
+	writeUnreadable(t, caPath, "cert")
 
 	t.Setenv("PAYLOAD_SECRET_PATH", payloadDir)
 	t.Setenv("RUNNER_HOME_DIR", t.TempDir())
