@@ -2600,6 +2600,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#phase-3-result-q614" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 result (Q614)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sequencing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2631,8 +2642,11 @@
 
 
 <h1 id="markdown-gates-on-a-real-parser">Markdown gates on a real parser<a class="headerlink" href="#markdown-gates-on-a-real-parser" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> open, filed 2026-08-02. Three phases:
-Q612 ✅ → Q613 ✅ → <a href="../../STATUS/#Q614">Q614</a>.</p>
+<p><strong>Status:</strong> filed 2026-08-02; all three phases shipped by 2026-08-04.
+Q612 ✅ → Q613 ✅ → Q614 ✅. Q654 shipped alongside them: an em-dash density
+gate on the same parse layer, filed after the phases were scoped. Only the
+Progress row still references this plan, so archiving it is the milestone's
+call rather than any one phase's.</p>
 <p>Phase 1 shipped: <code>devtools/docs/markdown</code> (the shared parse layer over goldmark)
 and <code>devtools/docs/doclinks</code> (the checker), with <code>check-doc-links.sh</code> kept as the
 entry point that selects the files. What the build measured, and what it changed
@@ -2651,7 +2665,7 @@ missing a module made its gate pass by skipping.</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>scripts/docs/check-doc-links.sh</code></a> is 235 lines,
 ~190 of them a single <code>awk</code> program implementing a Markdown parser <em>and</em> the
 github-slugger algorithm. Of the four gates in this plan it is the <strong>only one with no
-<code>-test.sh</code> companion</strong> — <code>lint-backlog</code>, <code>check-roadmap</code>, and <code>backlog-metrics</code> all
+<code>-test.sh</code> companion</strong>: <code>lint-backlog</code>, <code>check-roadmap</code>, and <code>backlog-metrics</code> all
 have one. The most parser-dense gate is the untested one.</p>
 <p>Repointing the README's license badge at a nonexistent file left the gate green; the
 identical target as a plain link failed it:</p>
@@ -2663,7 +2677,7 @@ identical target as a plain link failed it:</p>
 </code></pre></div>
 <p>The collection regex <code>\[[^]]*\]\([^)]*\)</code> matches the inner <strong>image</strong> first, so the
 outer destination is never collected. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md"><code>README.md</code></a> line 7 points at
-<code>LICENSE</code> through exactly this shape — a relative path the gate cannot see.</p>
+<code>LICENSE</code> through exactly this shape, a relative path the gate cannot see.</p>
 <p>Measured against the verbatim collection block:</p>
 <table>
 <thead>
@@ -2701,13 +2715,13 @@ and in its own <a href="https://github.com/actions-gateway/github-actions-gatewa
 <h3 id="lint-backlogsh-splits-table-rows-positionally"><code>lint-backlog.sh</code> splits table rows positionally<a class="headerlink" href="#lint-backlogsh-splits-table-rows-positionally" title="Permanent link">&para;</a></h3>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a> reads the Queue
 with <code>awk -F'|'</code> and fixed field indices. One escaped pipe in any cell shifts every
-field — measured:</p>
+field, measured:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>| … | Item with a \| pipe | `lbl` | 🔲 | S | short note |   → NF=9  $5=[ `lbl` ]  $7=[ S ]
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>| … | Item plain          | `lbl` | 🔲 | S | short note |   → NF=8  $5=[ 🔲 ]    $7=[ short note ]
 </code></pre></div>
 <p><code>St</code> then reads the label cell and <code>Notes</code> reads the size, so the row's rules evaluate
 the wrong cells and pass. This fails <em>silently wrong</em>, not loudly, which is why it is
-worth closing before it happens rather than after. Filed as latent — "zero occurrences
+worth closing before it happens rather than after. Filed as latent: "zero occurrences
 in <code>STATUS.md</code> today", which the build disproved: <a href="../../STATUS/#Q625">Q625</a> carries one,
 and the gate was reading 13 characters of a 243-character cell (<a href="#phase-2-result-q613">Phase 2
 result</a>).</p>
@@ -2773,7 +2787,7 @@ this work.</p>
 <h3 id="cost-verified">Cost, verified<a class="headerlink" href="#cost-verified" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Zero external dependencies.</strong> <code>go.mod</code> at v1.7.8, v1.7.16, and v1.8.5 has no
-  <code>require</code> block at all — the smallest possible supply-chain delta for a parser.</li>
+  <code>require</code> block at all, the smallest possible supply-chain delta for a parser.</li>
 <li><strong>265 KB</strong> module zip including tests; <code>go mod vendor</code> strips tests, so the
   <code>devtools/vendor</code> delta (364 KB today) is smaller than that.</li>
 <li><strong>Wiring already exists.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>vendor-sync.sh</code></a>,
@@ -2787,7 +2801,7 @@ this work.</p>
 <h3 id="third-party-notices-owes-nothing--settled"><code>THIRD-PARTY-NOTICES</code> owes nothing — settled<a class="headerlink" href="#third-party-notices-owes-nothing--settled" title="Permanent link">&para;</a></h3>
 <p><code>THIRD-PARTY-NOTICES</code> is generated from the <strong>root</strong> <code>vendor/modules.txt</code> only
 (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh"><code>gen-third-party-notices.sh</code></a>), so
-<code>devtools/</code> dependencies are not covered — and should not be. Attribution is triggered
+<code>devtools/</code> dependencies are not covered, and should not be. Attribution is triggered
 by <em>distributing</em> a binary, and these gate binaries are never shipped or signed, which
 is the same reason <code>tools/vendor/</code> is already excluded. Vendoring goldmark is therefore
 not a notices change.</p>
@@ -2804,11 +2818,12 @@ the rule outlives this plan's archival. No decision left for Q612.</p>
    Result: <a href="#phase-1-result-q612">Phase 1 result</a>.</li>
 <li><strong>Q613 ✅ — <code>lint-backlog.sh</code>.</strong> Table rows via the GFM AST; the
    character cap via <code>utf8.RuneCountInString</code>.</li>
-<li><strong><a href="../../STATUS/#Q614">Q614</a> — <code>check-roadmap.sh</code> + <code>backlog-metrics.sh</code>.</strong> The
-   remaining two consumers, onto the same layer.</li>
+<li><strong>Q614 — <code>check-roadmap.sh</code> + <code>backlog-metrics.sh</code>.</strong> ✅ The remaining two
+   consumers, onto the same layer.
+   Result: <a href="#phase-3-result-q614">Phase 3 result</a>.</li>
 </ol>
 <p>Each keeps its <code>scripts/</code> entry point, per
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> — the gate map stays in one place.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a>: the gate map stays in one place.</p>
 <h3 id="out-of-scope-deliberately">Out of scope, deliberately<a class="headerlink" href="#out-of-scope-deliberately" title="Permanent link">&para;</a></h3>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a> and
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-status-rows.awk"><code>merge-status-rows.awk</code></a> stay as they are. A
@@ -2818,7 +2833,7 @@ onto goldmark would be actively wrong, not merely unnecessary.</p>
 <p>Also out: <code>check-codegen-drift.sh</code>, the <code>chart-*-check.sh</code> family, <code>validate-egress-ip.sh</code>,
 <code>dogfood/setup.sh</code>, and the <code>e2e/</code> scripts. They are long, but they orchestrate external
 CLIs (<code>kubectl</code>, <code>helm</code>, <code>docker</code>, <code>controller-gen</code>). Shell is the right language;
-Go would be <code>exec.Command</code> soup. <strong>Length is not the signal — parsing is.</strong></p>
+Go would be <code>exec.Command</code> soup. <strong>Length is not the signal; parsing is.</strong></p>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
 <p>A rewrite that merely passes on the current tree proves nothing: the <code>awk</code> gate also
 passes, and that is the bug. Per
@@ -2829,7 +2844,7 @@ each phase reconciles rather than greps:</p>
    explained as a fixed defect, not waved through. The corpus is real: 242 files, 5134
    links/anchors.</li>
 <li><strong>Red-first on each proven defect.</strong> The four rows in the first table become test
-   cases that fail against the old behaviour and pass against the new — including the
+   cases that fail against the old behaviour and pass against the new, including the
    badge-wrapped link, which is the one with live instances.</li>
 <li><strong>Slug equivalence.</strong> Every heading in every tracked <code>.md</code> slugged both ways and
    reconciled. This is what upgrades "13 probed cases agreed" into a real assertion.</li>
@@ -2886,17 +2901,17 @@ resolved to a fix, and <strong>nothing</strong> the <code>awk</code> collected w
 would have been silent coverage losses:</p>
 <ul>
 <li><strong>Admonitions.</strong> A <code>!!! note</code> body is four-space-indented, so a stock parser
-  reads it as an indented code block — 15 links across three pages, all
+  reads it as an indented code block: 15 links across three pages, all
   checked before.</li>
 <li><strong><code>md_in_html</code>.</strong> A <code>&lt;p markdown="span"&gt;…&lt;/p&gt;</code> element is raw HTML to
-  CommonMark — 4 more links.</li>
+  CommonMark: 4 more links.</li>
 </ul>
 <p>Both are now parsed by <code>MkDocsDialect</code>, a goldmark extension in the parse layer,
 which is where they belong: the other three gates read the same docs.</p>
 <p><strong>The hand-written slugger stayed</strong>, ported to Go and unit-tested, rather than
 being replaced by goldmark's <code>WithAutoHeadingID</code>. The gate's contract is
 GitHub's anchors, and goldmark keeps Unicode letters GitHub drops. Cost of
-keeping it: ~30 lines. Slug reconciliation over the corpus is above — 3333
+keeping it: ~30 lines. Slug reconciliation over the corpus is above: 3333
 headings, the only two differences being fixes.</p>
 <p><strong>Cost, corrected.</strong> <code>devtools/vendor</code> grew 364 KB → 956 KB, not the "smaller
 than 265 KB" the module-zip figure predicted: <code>go mod vendor</code> keeps the GFM
@@ -2940,7 +2955,7 @@ this plan's two filed defects, and each is paired with a control that agreed:</p
 <td>Control: same length, no escape</td>
 <td>fail</td>
 <td>fail</td>
-<td>—</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>\|</code> in the Item cell, <code>St</code> 🔲</td>
@@ -2952,7 +2967,7 @@ this plan's two filed defects, and each is paired with a control that agreed:</p
 <td>Control: same Item, no escape</td>
 <td>pass</td>
 <td>pass</td>
-<td>—</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>\|</code> as the last two characters</td>
@@ -3012,6 +3027,92 @@ moving to characters can only relax — never break — an existing row.</p>
 alone, which no longer holds the rules; it now also triggers on <code>devtools/**</code>,
 pins the toolchain with <code>setup-go</code>, and takes 5 minutes instead of 2 for the
 build. Runtime 0.49 s → 0.69 s, still sub-second, still not the argument.</p>
+<h2 id="phase-3-result-q614">Phase 3 result (Q614)<a class="headerlink" href="#phase-3-result-q614" title="Permanent link">&para;</a></h2>
+<p>Both gates keep their <code>scripts/</code> entry point and gain a Go checker,
+<code>devtools/docs/roadmapcheck</code> and <code>devtools/docs/backlogmetrics</code>, over the same
+parse layer. No new module, no new <code>make</code> target, no new path filter: the
+<code>devtools/**</code> filters Q612 wired already cover them.</p>
+<p><strong>The parse layer grew three general things</strong>, not one-caller helpers:
+<code>Tables()</code> gains a <code>Text</code> reading of each cell beside Q613's source reading,
+<code>TopLevelListItems()</code> reports a bullet's text, its lead bold run, its HTML
+comments and whether it links, and <code>SectionRange()</code> gives the lines a heading's
+section spans. Plus <code>ParseRow()</code>, for the case Q612 did not have: <strong>a table row
+with no table around it.</strong> The metrics replay reads <code>git log -p</code> output, where
+every row is a lone <code>+</code>/<code>-</code> diff line. GFM only recognizes a table whose
+delimiter is at least as wide as its header, and pads a narrower header out, so
+acceptance is monotone in the width and the narrowest accepted width <em>is</em> the
+row's cell count. <code>ParseRow</code> binary-searches it, which leaves every escaping
+rule to goldmark instead of restating it.</p>
+<p><strong><code>check-roadmap</code> reconciled</strong> to the same verdict and the same counts (18
+bullets, 57 features), with byte-identical output. Every bullet's annotation IDs
+and link flag match. Word counts all fell, by 5 to 24 on the roadmap and by
+exactly 1 on <code>features.md</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Difference</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>−1 on every bullet</td>
+<td>The <code>-</code> marker, which <code>split()</code> counted as a word.</td>
+</tr>
+<tr>
+<td>−1 per wrapped line</td>
+<td>An indented continuation line yields an empty leading field.</td>
+</tr>
+<tr>
+<td>−19 on <code>roadmap.md:43</code></td>
+<td>The <code>awk</code> ran a bullet's span to the next bullet or heading, so the paragraph <em>between</em> two bullets was charged to the one above it.</td>
+</tr>
+</tbody>
+</table>
+<p>Nothing crossed either cap under either counter, so nothing changed hands. The
+caps now mean what they say: 60 real words, not ~54 plus markup.</p>
+<p><strong><code>backlog-metrics</code> reconciled over the whole history</strong>, 2898 diff rows and 631
+items. Identical filed dates and sizes; one event differs and 156 titles do:</p>
+<table>
+<thead>
+<tr>
+<th>Difference</th>
+<th>Count</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q129 <code>pruned</code> 06-18 → <code>completed</code> 06-16</td>
+<td>1</td>
+<td>The Q509 defect, one shape further out. The commit that moved Q129 to Progress buried <code>&lt;a id="Q129"&gt;&lt;/a&gt;Q129</code> mid-Notes, and the <code>awk</code>'s line-wide regex read that as re-adding the row, so the removal went unrecorded and a later commit booked it as a prune. Cell-scoped, a Progress row has no cell that reads as a bare ID.</td>
+</tr>
+<tr>
+<td>Backticks, <code>*emphasis*</code>, a literal <code>[</code></td>
+<td>156</td>
+<td>Titles are rendered text now, so <code>`windowStartTime`</code> reads as <code>windowStartTime</code> and Q485's <code>sizingRecommendation[]</code> survives; the <code>awk</code> stripped every <code>[</code> to undo link markup and ate that one. Widens the 60-char aging-report window.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>One rule had to loosen, not tighten.</strong> The ID cell is <em>searched for</em>, not
+pinned to index 0: history holds rows a botched edit prefixed with a stray
+delimiter (<code>|---|---|---|---|| &lt;a id="Q166"&gt;…</code>). Pinning index 0 dropped that
+add, which booked a removal for a row that never left. The reconciliation caught
+it; review would not have.</p>
+<p><strong>Red-first on the new shapes</strong>, each failing against the <code>awk</code> and passing
+against the parser: a <code>&lt;!-- q:QN --&gt;</code> inside a code fence (old gate green on a
+bullet with no real annotation), prose after a bullet counted against it, an
+escaped pipe truncating a row's title, and a fenced example row counted as
+parked in Deferred. The line-break case is a positive <strong>control</strong>: it passes
+both, and pins that excluding the following paragraph did not also exclude the
+bullet's own continuation lines.</p>
+<p><strong>A boundary the port does not cross, now pinned:</strong> the replay reads diff lines,
+which carry no document around them, so a row inside a fence still registers as
+an arrival there even though the same fence is respected when the file itself is
+parsed for Deferred IDs. Asserted so a change to it is a deliberate one, since
+every metric moves with it.</p>
+<p><code>backlog-metrics.sh</code> started as the backlog skill's script. It has now diverged;
+<code>scripts/README.md</code> says so rather than implying a sync obligation.</p>
 <h2 id="sequencing">Sequencing<a class="headerlink" href="#sequencing" title="Permanent link">&para;</a></h2>
 <p>Q612 lands the shared package, so Q613 and Q614 are blocked on it — recorded as <code>🚫</code> in
 the Queue with the <code>Blocked by</code> prefix <code>make queue-unblock</code> reads. The ordering is also

@@ -2536,7 +2536,7 @@
 <p><strong>Status:</strong> 🔲 ready · 🚫 blocked<br />
 <strong>Size:</strong> S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in <code>docs/plan/</code><br />
 <strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.0-gate</code> (blocks the <a href="../plan/release-1.0/">Release 1.0</a> tag) <code>1.3-gate</code> (blocks the <a href="../plan/release-1.3/">Release 1.3</a> tag) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/"><code>v2.0.0</code></a> tag)<br />
-<strong>New IDs:</strong> <code>make queue-id TITLE="…"</code> — it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter here</a>)</p>
+<strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter here</a>)</p>
 <p>Maintained per <a href="../development/maintaining-backlog/"><code>docs/development/maintaining-backlog.md</code></a>: done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in <a href="#deferred">Deferred</a>, and every edit is an isolated <code>docs(status):</code> commit gated by <code>scripts/docs/lint-backlog.sh</code>.</p>
 <hr />
 <h2 id="progress">Progress<a class="headerlink" href="#progress" title="Permanent link">&para;</a></h2>
@@ -2683,7 +2683,7 @@
 <tr>
 <td><a href="../plan/markdown-gates-parser/">Markdown gates on a real parser</a></td>
 <td><code>milestone</code> <code>ci</code> <code>debt</code></td>
-<td>⚠️</td>
+<td>✅</td>
 </tr>
 </tbody>
 </table>
@@ -2845,14 +2845,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured under Q579: actionlint accepts <code>actions/checkout@v7.0.1</code> at exit 0 — it checks a ref is present and well-formed, not that it is 40-hex. Every ref is a SHA today, so the gap is latent; Dependabot cannot stop a tag being written.</td>
-</tr>
-<tr>
-<td><a id="Q614"></a>Q614</td>
-<td><a href="../plan/markdown-gates-parser/"><code>check-roadmap</code> and <code>backlog-metrics</code> parse markdown by regex</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The last two consumers move onto the shared parse layer: roadmap bullets with their <code>&lt;!-- q:QN --&gt;</code> annotations, and the metrics replay's table rows. No new dependency and no new gate wiring.</td>
 </tr>
 <tr>
 <td><a id="Q625"></a>Q625</td>
