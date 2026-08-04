@@ -1,12 +1,15 @@
 # Markdown gates on a real parser
 
 **Status:** open, filed 2026-08-02. Three phases:
-Q612 ✅ → [Q613](../STATUS.md#Q613) → [Q614](../STATUS.md#Q614).
+Q612 ✅ → Q613 ✅ → [Q614](../STATUS.md#Q614).
 
 Phase 1 shipped: `devtools/docs/markdown` (the shared parse layer over goldmark)
 and `devtools/docs/doclinks` (the checker), with `check-doc-links.sh` kept as the
 entry point that selects the files. What the build measured, and what it changed
 about the plan below, is in [Phase 1 result](#phase-1-result-q612).
+
+Phase 2 shipped: `devtools/docs/backloglint`, plus `Tables()` on the parse layer.
+[Phase 2 result](#phase-2-result-q613).
 
 Four gates read Markdown with hand-rolled `awk`: the link/anchor checker, the backlog
 linter, the roadmap coherence check, and the backlog metrics replay. Each re-implements
@@ -66,9 +69,11 @@ field — measured:
 ```
 
 `St` then reads the label cell and `Notes` reads the size, so the row's rules evaluate
-the wrong cells and pass. Zero occurrences in `STATUS.md` today — this fails *silently
-wrong*, not loudly, which is why it is worth closing before it happens rather than
-after.
+the wrong cells and pass. This fails *silently wrong*, not loudly, which is why it is
+worth closing before it happens rather than after. Filed as latent — "zero occurrences
+in `STATUS.md` today", which the build disproved: [Q625](../STATUS.md#Q625) carries one,
+and the gate was reading 13 characters of a 243-character cell ([Phase 2
+result](#phase-2-result-q613)).
 
 Second defect, latent: `awk`'s `length()` counts **bytes** on this host (BWK awk
 20200816) and **runes** under `gawk` in a UTF-8 locale. `STATUS.md` carries 52 em
@@ -143,7 +148,7 @@ In scope, one phase each:
 1. **Q612 — `check-doc-links.sh`.** ✅ Lands `devtools/docs/markdown`
    (the shared parse layer) plus goldmark, and closes the proven defects.
    Result: [Phase 1 result](#phase-1-result-q612).
-2. **[Q613](../STATUS.md#Q613) — `lint-backlog.sh`.** Table rows via the GFM AST; the
+2. **Q613 ✅ — `lint-backlog.sh`.** Table rows via the GFM AST; the
    character cap via `utf8.RuneCountInString`.
 3. **[Q614](../STATUS.md#Q614) — `check-roadmap.sh` + `backlog-metrics.sh`.** The
    remaining two consumers, onto the same layer.
@@ -229,6 +234,68 @@ repointing README line 7's badge link at a nonexistent target left the `awk`
 gate green (exit 0, no finding) and failed the new one at `README.md:7`. The
 control — the same dead target as a plain link — failed both, so the difference
 is the shape and not the target.
+
+## Phase 2 result (Q613)
+
+The rules moved to `devtools/docs/backloglint`; `Tables()` on the parse layer is
+the only shared-package addition. The script kept the file selection and the
+environment interface (`NOTES_MAX_CHARS`, `BACKLOG_ALLOW_*`), mapping them onto
+flags — 518 lines to 92.
+
+**The reconciliation is the evidence.** `lint-backlog-test.sh` grew from 53 to 67
+cases, covering all 12 rules, and `LINT_BACKLOG_BIN` points the whole suite at
+another implementation so both ran over the same corpus. The `awk` passed 62 and
+failed 5; the rewrite passed 67. Every one of the five disagreements is one of
+this plan's two filed defects, and each is paired with a control that agreed:
+
+| Case | `awk` | Go | Why they differ |
+|---|---|---|---|
+| Over-cap Notes holding `\|` | pass | **fail** | The cap measured the stub before the escape |
+| Control: same length, no escape | fail | fail | — |
+| `\|` in the Item cell, `St` 🔲 | **fail** | pass | `St` was read from the Labels cell |
+| Control: same Item, no escape | pass | pass | — |
+| `\|` as the last two characters | pass | **fail** | The trailing `\` was the whole cell |
+| 250 em dashes (750 bytes) | **fail** | pass | Cap counted bytes |
+| Control: 251 em dashes | fail | fail | Over on either scale |
+| 200 em dashes, no doc link | **fail** | pass | Link threshold counted bytes |
+
+Over a 48 KB copy of the real `STATUS.md` carrying one instance each of rules 1,
+2, 3, 5, 7 and 11, both produce the **same six findings, worded identically** —
+the new ones additionally carry `:LINE:`. Rules 8, 9 and 10 are asserted through
+throwaway repos in the suite, and rule 8's positive case (a `flake` row actually
+deleted) was **untested before this change**: only the branch-behind-`main`
+negative was.
+
+Rule 12 (a new row's ID holds a `refs/queue-ids` claim) landed on `main` while
+this was in flight and was ported the same way. Its six cases — written against
+the `awk`, not against this — pass unchanged, which is the check that matters:
+a rule dropped in a port disarms a gate that still reports green.
+
+**The escaped-pipe defect had a live instance.** [Q625](../STATUS.md#Q625)'s
+Notes carry `` `make check \| tail` ``, so the `awk` read a 13-character cell
+where the row holds 243. Pushing that cell to 264 characters left the `awk`
+green; the rewrite fails it at `docs/STATUS.md:77`. The control — the same
+overflow on Q631, which has no escaped pipe — failed both, so the difference is
+the shape and not the row.
+
+**Which `awk` counts what, measured.** `length()` on `"é—🔲"` answers 9 under
+this host's BWK awk 20200816 and under mawk 1.3.4, and 3 under GNU awk 5.2.1 in
+a UTF-8 locale — bytes and runes respectively (`LC_ALL=C` puts gawk back on
+bytes). CI runs the byte one: `ubuntu-latest` inherits Ubuntu 24.04's
+`/usr/bin/awk` → mawk 1.3.4, and the runner image's apt manifest adds no awk of
+its own. So the gate counted bytes in both places it actually ran, and the
+divergence was one `brew install gawk` away from arriving on a laptop.
+
+**No row was reclassified.** All 109 Queue and Deferred cells re-measured: the
+longest is [Q555](../STATUS.md#Q555) at 249 bytes / 249 characters, confirming
+the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B
+/ 206 chars). Nothing is over cap on either scale, and runes ≤ bytes always, so
+moving to characters can only relax — never break — an existing row.
+
+**One workflow gap closed.** `status-lint.yml` gated on `scripts/docs/lint-backlog.sh`
+alone, which no longer holds the rules; it now also triggers on `devtools/**`,
+pins the toolchain with `setup-go`, and takes 5 minutes instead of 2 for the
+build. Runtime 0.49 s → 0.69 s, still sub-second, still not the argument.
 
 ## Sequencing
 

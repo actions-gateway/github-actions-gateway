@@ -11,7 +11,11 @@
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-LINT="$REPO_ROOT/scripts/docs/lint-backlog.sh"
+# LINT_BACKLOG_BIN points the whole suite at another implementation, which is
+# how the Q613 rewrite was reconciled against the awk it replaced: every case
+# below ran under both, and the only disagreements were the two defects the
+# rewrite exists to close (escaped-pipe cases, and the rune-vs-byte cap).
+LINT="${LINT_BACKLOG_BIN:-$REPO_ROOT/scripts/docs/lint-backlog.sh}"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -22,6 +26,14 @@ fails=0
 repeat() {
 	local char="$1" n="$2"
 	printf '%*s' "$n" '' | tr ' ' "$char"
+}
+
+# repeat_str STR N — emit N copies of STR. `tr` maps single bytes, so a
+# multi-byte character needs this instead of repeat.
+repeat_str() {
+	local str="$1" n="$2" out='' i
+	for ((i = 0; i < n; i++)); do out+="$str"; done
+	printf '%s' "$out"
 }
 
 # fixture ROW... — write a STATUS.md whose Queue holds the given rows (one
@@ -389,6 +401,93 @@ cp "$(fixture "$Q2_ROW")" "$flake_repo/docs/STATUS.md"
 rc=0; (cd "$flake_repo" && "$LINT" "$flake_repo/docs/STATUS.md") >/dev/null 2>&1 || rc=$?
 if [[ "$rc" == 0 ]]; then printf 'ok   rule 8: branch behind main       -> pass\n'; else
 	printf 'FAIL rule 8: a branch predating a flake row was flagged for deleting it (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# --- Escaped pipes: a cell boundary, not a field separator (Q613) ------------
+
+# Splitting a row on a literal `|` shifts every field after an escaped pipe, so
+# the rules downstream read the wrong cell — silently, in both directions. Each
+# case below is paired with a control that differs only by the escape, so a
+# disagreement is attributable to the shape and not to the row.
+#
+# shellcheck disable=SC2016  # `\|` is markdown, not a shell escape
+
+# Direction 1: a rule that should FIRE and does not. The Notes cell is over the
+# hard cap, but everything after the escaped pipe lands in a later field, so a
+# positional split measures only the stub before it.
+LONG_NOTES="$(repeat a 40) \\| $(repeat b 215)" # 258 chars
+expect 'pipe: over-cap notes with \| -> fail' 1 "$(qrow Q1 "$LINK_ITEM" 🔲 "$LONG_NOTES")"
+expect 'pipe: control, same length no \| -> fail' 1 "$(qrow Q1 "$LINK_ITEM" 🔲 "$(repeat a 258)")"
+
+# Direction 2: a rule that should NOT fire and does. The escape sits in the Item
+# cell, so a positional split reads St from the Labels cell and rejects a
+# perfectly good row.
+expect 'pipe: \| in Item, St still 🔲   -> clean' 0 \
+	"$(qrow Q1 'Item with a \| pipe' 🔲 'short note')"
+expect 'pipe: control, same Item no \|  -> clean' 0 \
+	"$(qrow Q1 'Item with a pipe' 🔲 'short note')"
+
+# The escape costs the two characters it is written as: the cap is counted over
+# the cell's source form, which is what an author sees while writing the row.
+expect 'pipe: \| counts as two chars   -> fail' 1 \
+	"$(qrow Q1 "$LINK_ITEM" 🔲 "$(repeat a 249)\\|")"
+
+# --- Cell length is runes, not bytes (Q613) ----------------------------------
+
+# `awk`'s length() counts bytes under BWK awk and mawk but runes under gawk in a
+# UTF-8 locale, so a row of multi-byte characters near the cap passed or failed
+# depending on which awk ran the gate. 250 em dashes are 250 characters and 750
+# bytes; the cap is on characters.
+expect 'runes: 250 multi-byte chars    -> clean' 0 "$(qrow Q1 "$LINK_ITEM" 🔲 "$(repeat_str — 250)")"
+expect 'runes: 251 multi-byte chars    -> fail' 1 "$(qrow Q1 "$LINK_ITEM" 🔲 "$(repeat_str — 251)")"
+# The link threshold reads the same scale.
+expect 'runes: 201 multi-byte, no link -> fail' 1 "$(qrow Q1 "$PLAIN_ITEM" 🔲 "$(repeat_str — 201)")"
+expect 'runes: 200 multi-byte, no link -> clean' 0 "$(qrow Q1 "$PLAIN_ITEM" 🔲 "$(repeat_str — 200)")"
+
+# --- Rule 8: a deleted flake row is the failure this rule exists for ---------
+
+# The staleness case below asserts the rule stays quiet on a branch that merely
+# predates the row. This asserts the other half: a branch that actually deletes
+# a flake row main carries must fail, or the rule is decoration.
+flake_del_repo="$WORKDIR/flake-delete"
+mkdir -p "$flake_del_repo/docs"
+git -C "$flake_del_repo" init -q
+# shellcheck disable=SC2016  # the backticks are markdown; rule 8 matches /`flake`/
+DEL_FLAKE_ROW="$(qrow Q3 "$PLAIN_ITEM" 🔲 'flaky' '`flake`')"
+
+cp "$(fixture "$Q2_ROW" "$DEL_FLAKE_ROW")" "$flake_del_repo/docs/STATUS.md"
+git -C "$flake_del_repo" add docs/STATUS.md
+git -C "$flake_del_repo" "${git_id[@]}" commit -qm 'file a flake row'
+git -C "$flake_del_repo" update-ref refs/remotes/origin/main HEAD
+cp "$(fixture "$Q2_ROW")" "$flake_del_repo/docs/STATUS.md"
+
+rc=0; (cd "$flake_del_repo" && "$LINT" "$flake_del_repo/docs/STATUS.md") >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 1 ]]; then printf 'ok   rule 8: deleted flake row         -> fail\n'; else
+	printf 'FAIL rule 8: a deleted flake row was not flagged (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+rc=0
+(cd "$flake_del_repo" && BACKLOG_ALLOW_FLAKE_DELETE=Q3 "$LINT" "$flake_del_repo/docs/STATUS.md") >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 8: BACKLOG_ALLOW_FLAKE_DELETE -> pass\n'; else
+	printf 'FAIL rule 8: the escape hatch should admit a retired row (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# Moving the row to Deferred — what a shipped mitigation actually does — keeps
+# it, so the rule stays quiet without the escape hatch.
+cp "$(fixture "$Q2_ROW" --deferred "$(drow Q3 "$PLAIN_ITEM" '**Event:** recurs on main after the fix.')")" \
+	"$flake_del_repo/docs/STATUS.md"
+rc=0; (cd "$flake_del_repo" && "$LINT" "$flake_del_repo/docs/STATUS.md") >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 8: moved to Flake watch     -> pass\n'; else
+	printf 'FAIL rule 8: a row moved to Deferred should satisfy the rule (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# --- Structural rules --------------------------------------------------------
+
+# A visible ID with no anchor cannot be cross-referenced.
+expect 'ids: visible ID, no anchor      -> fail' 1 '| Q1 | item | infra | 🔲 | S | notes |'
+
+# A file with no Queue section at all is not a backlog.
+no_queue_file="$WORKDIR/no-queue.md"
+printf '# Project Status\n\n## Deferred\n' >"$no_queue_file"
+rc=0; "$LINT" "$no_queue_file" >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 1 ]]; then printf 'ok   structure: no ## Queue section  -> fail\n'; else
+	printf 'FAIL structure: a file with no Queue section should fail (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
 
 # --- The real file must pass every rule ---------------------------------------
 
