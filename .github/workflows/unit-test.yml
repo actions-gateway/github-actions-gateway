@@ -150,6 +150,11 @@ jobs:
               # Deliberately narrow: it is outside go.work precisely so tooling
               # edits never reach the e2e or security lanes.
               - 'devtools/**'
+              # foreground-guard-patterns-test.sh asserts against this config,
+              # so a config-only change must re-run it. Without this a new slow
+              # command could register an over-matching pattern with the test
+              # that catches it never running.
+              - '.claude/foreground-guard.json'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
             # Vendor-integrity gate scope: anything that determines what the
