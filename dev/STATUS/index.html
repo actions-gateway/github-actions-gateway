@@ -2593,14 +2593,6 @@
 <td><strong>Measured 2026-08-03:</strong> <code>FAIL interval 0 exits without output — exit 137 output ''</code> (line 148 SIGKILLs the watcher). Green twice standalone, so the watcher does not exit within the test's grace under the 41-way <code>run-parallel</code> load.</td>
 </tr>
 <tr>
-<td><a id="Q630"></a>Q630</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel.sh">A healthy quiet e2e leg is indistinguishable from a wedged one, so the stall report is unusable</a></td>
-<td><code>dogfood</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Stall keys on status-file writes, which need relayed heartbeats, which need a fetchable job log. GitHub served <code>BlobNotFound</code> for a whole 30-min PASSED run: <code>hb: none</code>, false stalls, and re-firing instantly on relaunch. Consult run status instead.</td>
-</tr>
-<tr>
 <td><a id="Q631"></a>Q631</td>
 <td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">The release gate starves itself: routed CI and the e2e leg draw on one global CPU budget</a></td>
 <td><code>dogfood</code> <code>debt</code></td>
@@ -2679,14 +2671,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-03: Q644 allocated here, #1194 merged it first; shipped as Q647 after renames across commit, PR body, and a plan doc. <code>lint-backlog</code> catches it only at rebase. Same chokepoint as <a href="#Q639">Q639</a> — reservation, not dedup search.</td>
-</tr>
-<tr>
-<td><a id="Q636"></a>Q636</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/README.md">No gate checks a release note's links, and they are the one doc whose links are all absolute</a></td>
-<td><code>ci</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>docs/releases/</code> is now in-repo, but <code>check-doc-links</code> skips external URLs, so every anchor into the versioned site is unverified. <code>site/</code> is a working oracle — resolving the v1.3.0 notes against it caught a planted bad anchor.</td>
 </tr>
 <tr>
 <td><a id="Q637"></a>Q637</td>
@@ -2809,14 +2793,6 @@
 <td>Blocked by <a href="#Q612">Q612</a>. The last two consumers move onto the shared parse layer: roadmap bullets with their <code>&lt;!-- q:QN --&gt;</code> annotations, and the metrics replay's table rows. No new dependency and no new gate wiring.</td>
 </tr>
 <tr>
-<td><a id="Q619"></a>Q619</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh">Three gates scan tracked files only, so a new file misses its own <code>make check</code></a></td>
-<td><code>ci</code> <code>tests</code> <code>bug</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q432 fixed this in <code>shellcheck-scripts.sh</code> and never swept the class: <code>check-doc-links</code>, <code>check-conflict-markers</code>, <code>check-no-plan-refs-in-code</code> still select <code>--cached</code> only, so a brand-new doc's own links read green locally.</td>
-</tr>
-<tr>
 <td><a id="Q625"></a>Q625</td>
 <td><a href="../development/testing/#the-status-you-report-is-a-claim-too">Nothing catches a gate's exit code read through a pipe</a></td>
 <td><code>tests</code> <code>retro</code></td>
@@ -2855,14 +2831,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Teardown normally removes the <code>--allow-agc-extra-env</code> <code>kubectl patch</code>; skipping it leaves the field owned by <code>kubectl-patch</code>, so the next run's <code>helm upgrade</code> dies on a <code>.args</code> conflict. Adopt the field, or re-patch idempotently.</td>
-</tr>
-<tr>
-<td><a id="Q593"></a>Q593</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/diagnostics.go">A superseded ReplicaSet's pod template never reaches the e2e diagnostics dump</a></td>
-<td><code>tests</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>describe pods</code>/<code>get all</code> name the ReplicaSets but never their templates, so a mid-run AGC roll leaves no record of what changed — Q549 and Q587 both stalled there. Dump each RS's <code>.spec.template</code>.</td>
 </tr>
 <tr>
 <td><a id="Q569"></a>Q569</td>

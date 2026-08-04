@@ -3389,8 +3389,9 @@ hour into a report:</p>
 </code></pre></div>
 <p>It sleeps, and <em>exits</em> when there is something to say — a phase transition, a
 verdict, or a gate that has gone quiet for <code>RELEASE_SENTINEL_STALL</code> seconds
-(default 1200). That exit is the report: it carries the phase, both clocks, the
-latest e2e heartbeat, and what to do next. Relaunch it after each report until a
+(default 1200) <strong>while GitHub reports no live run it could be waiting on</strong>. That
+exit is the report: it carries the phase, both clocks, the run URL, the latest
+e2e heartbeat, and what to do next. Relaunch it after each report until a
 verdict arrives — in an agent session, the exit is what wakes the session, and
 the relay-and-relaunch loop is the session's job. Reporting is therefore driven
 by what the gate does, not by a clock: nothing is spent on an interval where
@@ -3401,6 +3402,26 @@ reported), <code>RELEASE_SENTINEL_TIMEOUT</code> (watch budget, default 7200),
 <p><strong>The sentinel's exit is a wake, never a verdict</strong> — every event exits 0. The
 verdict is the gate's own exit status, and the failure diagnostics are in the
 gate's log, not in the report.</p>
+<p><strong>A quiet gate is not on its own a stalled one.</strong> Through the ~25-minute e2e leg
+the only thing writing to the stream is the relayed spec heartbeat, and that
+needs a job log GitHub will sometimes not serve — one run answered every log
+fetch with <code>BlobNotFound</code> for its whole 30 minutes and then passed. Since the
+stall threshold is shorter than a healthy leg, quiet alone reported a stall on
+every poll of that run. So the sentinel reconciles the silence against the run's
+own status (<code>gh run view --json status</code>, the run record — a different endpoint
+from the log, and one that answered throughout that incident) and reports a
+stall only once the run is no longer live. Phases with no run to consult — the
+deploy and teardown legs — are unchanged: quiet there is the gate's own.</p>
+<p>A gate genuinely stuck on a run that never concludes is caught elsewhere, by the
+watch's own <code>E2E_RUN_WATCH_TIMEOUT</code>, which fails the gate and reaches the
+sentinel as a <code>failed</code> event.</p>
+<p><strong>A stall is reported once, not once per relaunch.</strong> The quiet does not clear
+when the report is read, so a watcher relaunched against it would exit
+immediately, forever. The sentinel remembers the stall it reported in
+<code>tmp/release-validation-progress.jsonl.stall</code> and stays asleep through the same
+one; it speaks up again when the stream moves, or when the same silence has
+deepened by another full <code>RELEASE_SENTINEL_STALL</code>. Nothing needs cleaning up
+between runs — the marker is keyed to the moment it went quiet.</p>
 <h5 id="where-is-it-right-now">Where is it right now?<a class="headerlink" href="#where-is-it-right-now" title="Permanent link">&para;</a></h5>
 <p>Reading back an hour of log to answer that is the wrong shape, so the gate keeps
 its event stream rendered as one object in <code>tmp/release-validation-status.json</code>,
@@ -3411,8 +3432,11 @@ directly for a human:</p>
 </code></pre></div>
 <p><code>gate</code> is <code>preflight</code> (settling the e2e lane, nothing spent yet), <code>running</code>,
 <code>passed</code>, or <code>failed</code>; <code>phase</code>, <code>elapsed</code>, <code>phaseElapsed</code> and <code>idle</code> say where
-and for how long; <code>heartbeat</code> carries the newest relayed spec line; <code>failure</code>
-names the phase that broke — the one that broke first, not the teardown that
+and for how long; <code>runRepo</code>/<code>runId</code> name the dispatched e2e run, which is what
+makes a quiet leg checkable against GitHub rather than only against the stream;
+<code>heartbeat</code> carries the newest relayed spec line — absent for a whole leg when
+GitHub will not serve the job log, which is a fetch problem and not a stalled
+run; <code>failure</code> names the phase that broke — the one that broke first, not the teardown that
 followed it. <code>scripts/dogfood/release-status.sh [stream-file]</code> renders the same
 object from any stream, including one whose gate process is gone.
 <code>RELEASE_STATUS_FILE=</code> disables the file.</p>
@@ -3962,27 +3986,35 @@ per stable tag: <code>https://actions-gateway.com/X.Y.Z/operations/…</code>. M
 the site drops the leading <code>v</code> exactly like the chart does. <code>v1.3.0</code> shipped 18
 such links. They 404 until the docs deploy for the tag completes, which is
 expected while the Release is still a draft.</p>
-<p><strong>Verify every link and anchor.</strong> Nothing checks them for you: <code>make doc-links</code>
-skips external URLs by design, and every link in a notes file is absolute. Anchors
-are the usual failure, and the built site is the authoritative oracle — read the
-ids MkDocs actually emitted rather than re-deriving a slug by hand, which gets
-punctuation, backticks, and parenthesised clauses wrong:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>make<span class="w"> </span>docs-build
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;id=&quot;[^&quot;]*&quot;&#39;</span><span class="w"> </span>site/operations/upgrade/index.html<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s/id=&quot;//;s/&quot;//&#39;</span>
+<p><strong>Verify every link and anchor.</strong> A gate does it for you now (Q636):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>make<span class="w"> </span>release-links-check
 </code></pre></div>
-<p>Better, resolve every link in the file against <code>site/</code> in one pass. Whatever you
-write, <strong>include a URL you know is broken</strong> and confirm it is reported: a checker
-that silently resolves nothing looks exactly like a clean file. <code>v1.3.0</code>'s notes
-were verified this way — 20 site URLs resolved, plus one deliberately bogus
-anchor that the same run flagged.</p>
+<p>It builds <code>site/</code> if it is missing and resolves every
+<code>https://actions-gateway.com/X.Y.Z/…</code> link in <code>docs/releases/</code> against it —
+<code>…/operations/upgrade/#gmc-rollback</code> becomes
+<code>site/operations/upgrade/index.html</code> carrying <code>id="gmc-rollback"</code>. Anchors are
+the usual failure, and the built site is the authoritative oracle: reading the
+ids MkDocs actually emitted beats re-deriving a slug by hand, which gets
+punctuation, backticks, and parenthesised clauses wrong.</p>
+<p>Two things it cannot answer, so they stay yours. A <strong>third-party or github.com
+URL</strong> has no local oracle and is only counted, not resolved. And <code>site/</code> is
+built from the current tree, so only the <strong>newest</strong> notes file's version is
+resolvable — links naming an older release are reported as skipped with their
+count, never quietly passed. That is also the shape to watch when the docs move
+on after a tag: the gate then reports a link the frozen published version still
+serves, and fixing the note is right only if the next release would inherit the
+same broken link.</p>
+<p>The site-side ids for one page, when you want to read them directly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;id=&quot;[^&quot;]*&quot;&#39;</span><span class="w"> </span>site/operations/upgrade/index.html<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s/id=&quot;//;s/&quot;//&#39;</span>
+</code></pre></div>
 <p><strong>Do not hard-wrap.</strong> GitHub renders a release body with comment-flavour GFM,
 where a single newline becomes <code>&lt;br&gt;</code>. Keep every paragraph, blockquote, and list
 continuation on one line. <code>v1.3.0</code>'s hard-wrapped draft rendered 46 of them.</p>
 <p>Check this against the <strong>renderer</strong>, not the source. <code>gh release view --json body</code>
 returns the raw Markdown, which never contains <code>&lt;br&gt;</code> however badly it is wrapped,
 so grepping that is a check that cannot fail. Render it the way GitHub will:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>/markdown<span class="w"> </span>-f<span class="w"> </span><span class="nv">mode</span><span class="o">=</span>gfm<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;text=</span><span class="k">$(</span>cat<span class="w"> </span>docs/releases/vX.Y.Z.md<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;&lt;br&gt;&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>/markdown<span class="w"> </span>-f<span class="w"> </span><span class="nv">mode</span><span class="o">=</span>gfm<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;text=</span><span class="k">$(</span>cat<span class="w"> </span>docs/releases/vX.Y.Z.md<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;&lt;br&gt;&#39;</span>
 </code></pre></div>
 <p><code>mode=gfm</code> is the comment flavour; <code>mode=markdown</code> is not, and reports 0 on a
 hard-wrapped file. The same render confirms the rest of the GitHub-only markup
@@ -3992,8 +4024,8 @@ per fold, and no literal <code>[!</code> anywhere.</p>
 <code>id</code>, so <code>[Upgrading](#upgrading)</code> is a dead link. Refer to a section by name in
 bold instead. Verify on a published release rather than trusting this — the page
 does emit ids, but only on GitHub's own chrome:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span>https://github.com/&lt;owner&gt;/&lt;repo&gt;/releases/tag/&lt;tag&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;&lt;h[1-6][^&gt;]*&gt;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;id=&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span>https://github.com/&lt;owner&gt;/&lt;repo&gt;/releases/tag/&lt;tag&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;&lt;h[1-6][^&gt;]*&gt;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;id=&#39;</span>
 </code></pre></div>
 <p><strong>So a table of contents is not available, and should not be faked.</strong> An unlinked
 list of section names is dead weight that costs collapsed height against the
@@ -4012,10 +4044,10 @@ A curated draft is exactly that condition, so the step logs <code>already exists
 leaving its notes and flags untouched</code> and the digests never appear. They also
 cannot be written in advance: the images are built <em>from</em> the tag.</p>
 <p>So after <code>publish.yml</code> goes green, resolve them and amend the notes file:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>worker<span class="w"> </span>wrapper<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span><span class="s2">&quot;ghcr.io/actions-gateway/</span><span class="si">${</span><span class="nv">img</span><span class="si">}</span><span class="s2">:vX.Y.Z&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">    </span>--format<span class="w"> </span><span class="s1">&#39;{{json .Manifest.Digest}}&#39;</span>
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="k">done</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>worker<span class="w"> </span>wrapper<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span><span class="s2">&quot;ghcr.io/actions-gateway/</span><span class="si">${</span><span class="nv">img</span><span class="si">}</span><span class="s2">:vX.Y.Z&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span>--format<span class="w"> </span><span class="s1">&#39;{{json .Manifest.Digest}}&#39;</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="k">done</span>
 </code></pre></div>
 <p>Confirm they are <strong>index</strong> digests, not per-arch manifests — the mediaType must
 be a manifest list, and the index must carry both <code>linux/amd64</code> and <code>linux/arm64</code>.
@@ -4117,7 +4149,7 @@ release-notes URL by hand. Nothing in the pipeline rewrites them, so after the
 tag they still advertise the <em>previous</em> release — and a reader following one
 installs a release behind, digests and all. A gate runs the bump instead of
 remembering it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>make<span class="w"> </span>release-pins-check
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>make<span class="w"> </span>release-pins-check
 </code></pre></div>
 <p>It resolves the newest stable <code>vX.Y.Z</code> tag and fails with the file and line of
 every pin that still names an older one, across the five pages that tell a
@@ -4143,11 +4175,11 @@ still read <code>1.2.z</code> (Q638).</p>
 digests pinned via <code>--set</code>, exactly as
 <a href="../install/#pin-images-by-digest">install.md § Pin images by digest</a> and
 <a href="../upgrade/">upgrade.md</a> document (<code>X.Y.Z</code> is the release tag without the <code>v</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
 <h2 id="patch-releases-and-backports">Patch releases and backports<a class="headerlink" href="#patch-releases-and-backports" title="Permanent link">&para;</a></h2>
 <p>A patch release (<code>vX.Y.Z+1</code>) is <strong>bugfix-only</strong> by SemVer. That has a release-
@@ -4286,8 +4318,8 @@ SHA-pinned, but syft itself is a runtime download).</p>
 bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and
 merge those like any dependency PR. To pin or bump by hand, resolve the tag to its
 commit SHA and keep the comment in sync:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.sha&#39;</span>
-<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.sha&#39;</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
 </code></pre></div>
 <p><code>syft-version</code> is <strong>not</strong> Dependabot-managed (it's a tool download, not an action
 ref) — bump it by hand in <code>publish.yml</code> when you bump the <code>anchore/sbom-action</code>

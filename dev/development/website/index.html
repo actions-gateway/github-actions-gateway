@@ -3033,6 +3033,10 @@ cannot cover both</strong> (Q560):</p>
 </tr>
 </tbody>
 </table>
+<p>Two engines, two gates. <code>docs/releases/</code> is the exception that needs a third:
+those files publish to neither, and their links are all absolute into the
+versioned site, so <code>make release-links-check</code> resolves them against a local
+<code>site/</code> build (<a href="../testing/#the-release-link-gate">testing.md § The release-link gate</a>).</p>
 <p>A link can pass one and 404 on the other. Three divergences have actually shipped
 broken:</p>
 <ul>

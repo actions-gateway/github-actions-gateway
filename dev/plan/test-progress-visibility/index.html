@@ -2618,8 +2618,13 @@ the natural sibling.</p>
    leg is one ~25-minute phase, so a status object built from phase events alone
    reports "e2e, 18 minutes" for the whole of it — the phase is the only thing
    that does not change. <code>e2e-run-watch.sh</code> now folds the newest relayed line
-   into the stream as a <code>heartbeat</code> record, which is also what keeps the stall
-   detector honest through the longest phase.</li>
+   into the stream as a <code>heartbeat</code> record. <strong>This was also load-bearing for the
+   stall detector, and that part was wrong</strong> (Q630): the heartbeat needs a
+   fetchable job log, GitHub served <code>BlobNotFound</code> for a whole 30-minute run that
+   passed, and since the stall threshold is shorter than a healthy leg the
+   detector then reported a false stall on every poll. The stream cannot be the
+   only witness to a phase whose only writer depends on someone else's storage —
+   the detector now reconciles silence against the run's own status.</li>
 <li><strong>A gate's failure is reported by its first failing phase, not its last.</strong>
    The teardown trap records <code>gate fail</code> after the phase that actually broke
    records its own, so taking the newest failure would answer every failed run
@@ -2629,7 +2634,10 @@ the natural sibling.</p>
    which is exactly the failure a walk-away command hides. <code>idle</code> (age of the
    newest event) crossing <code>RELEASE_SENTINEL_STALL</code> is a wake in its own right,
    and only for a <code>running</code> gate: preflight has no stream to be quiet on and a
-   finished gate is expected to be silent.</li>
+   finished gate is expected to be silent. Q630 added the other half: absence of
+   events is a <em>hypothesis</em> of a wedge, confirmed against the run status before
+   it is reported, and remembered afterwards so a relaunched watcher does not
+   re-report the same silence the instant it starts.</li>
 </ol>
 <h2 id="phase-3--the-remaining-tiers-by-measurement">Phase 3 — the remaining tiers, by measurement<a class="headerlink" href="#phase-3--the-remaining-tiers-by-measurement" title="Permanent link">&para;</a></h2>
 <p>Measured output density and longest silence, isolated to the actual test steps
