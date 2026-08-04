@@ -11,3 +11,10 @@ tools/vendor/** linguist-vendored
 # opt-in: `make merge-driver`. Without it, git falls back to its built-in
 # three-way merge and this line is a no-op.
 docs/STATUS.md merge=backlog
+
+# Same treatment for the plan index, keyed on the plan path in column 1 rather
+# than a backlog row ID: every plan that lands adds one long row near the same
+# neighbours, so concurrent branches collide by construction. Per-clone and
+# opt-in for the same reason, via the same `make merge-driver`; without it git
+# falls back to its built-in three-way merge and this line is a no-op.
+docs/plan/README.md merge=planindex

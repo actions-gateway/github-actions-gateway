@@ -317,7 +317,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
                  docs/alloc-queue-id-test docs/check-status-isolation-test \
                  docs/find-duplicate-rows-test \
-                 docs/git-merge-status-test docs/lint-backlog-test \
+                 docs/git-merge-plan-index-test docs/git-merge-status-test \
+                 docs/lint-backlog-test \
                  docs/release-version-hook-test docs/source-links-hook-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
                  dogfood/start-test dogfood/e2e-start-test dogfood/e2e-stop-test \
@@ -362,16 +363,18 @@ hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 	git config core.hooksPath .githooks
 	@echo "git hooks installed: core.hooksPath -> .githooks (fast gofmt + STATUS.md gate on commit)"
 
-# Install the docs/STATUS.md merge driver for this clone. .gitattributes already
-# routes the file to `merge=backlog`, but git refuses to let a tracked file
-# define a driver's command (that would be remote code execution on clone), so
-# the config half is per-clone and opt-in. Until it is installed the attribute
-# names an undefined driver and git uses its built-in three-way merge — the
-# pre-driver behaviour. Run once after cloning (scripts/dev/setup.sh does it for you);
-# repo-local, never --global, and shared with every linked worktree.
+# Install the two Markdown merge drivers for this clone: docs/STATUS.md by
+# backlog row ID, docs/plan/README.md by plan path. .gitattributes already routes
+# both files, but git refuses to let a tracked file define a driver's command
+# (that would be remote code execution on clone), so the config half is per-clone
+# and opt-in. Until it is installed the attributes name undefined drivers and git
+# uses its built-in three-way merge — the pre-driver behaviour. Run once after
+# cloning (scripts/dev/setup.sh does it for you); repo-local, never --global, and
+# shared with every linked worktree.
 .PHONY: merge-driver
-merge-driver: ## Install the docs/STATUS.md merge driver (Queue conflicts resolve by row ID)
+merge-driver: ## Install the docs/STATUS.md and docs/plan/README.md merge drivers (conflicts resolve by row key)
 	scripts/docs/git-merge-status.sh --install
+	scripts/docs/git-merge-plan-index.sh --install
 
 # Diagnose the local toolchain: report which required/e2e/extended CLI tools are
 # missing or installed-but-not-on-PATH, with per-OS install and PATH-fix hints.

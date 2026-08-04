@@ -1,12 +1,22 @@
-# merge-status-rows.awk — three-way merge of docs/STATUS.md Queue rows by ID
-# set-semantics. Driven by scripts/docs/git-merge-status.sh; see that script's header
-# for the why, and docs/development/queue-id-allocation.md for the conflict
-# classes this exists to absorb.
+# merge-table-rows.awk — three-way merge of one Markdown table's data rows by
+# key set-semantics. Driven by scripts/docs/git-merge-status.sh (docs/STATUS.md's
+# Queue table) and scripts/docs/git-merge-plan-index.sh (docs/plan/README.md's
+# index tables); see those scripts' headers for the why, and
+# docs/development/queue-id-allocation.md for the conflict classes this exists
+# to absorb.
 #
-#   awk -f merge-status-rows.awk BASE.rows OURS.rows THEIRS.rows
+#   awk -v key_mode=anchor -f merge-table-rows.awk BASE.rows OURS.rows THEIRS.rows
 #
-# Each input holds only the Queue table's data rows (one `| <a id="QN"></a>QN |
-# ... |` line each), already split out by the caller.
+# Each input holds only one table's data rows, already split out by the caller.
+#
+# key_mode selects how a row's stable key is read from its first cell, which is
+# the only file-specific knowledge here:
+#
+#   anchor  the `<a id="QN"></a>QN` backlog anchor (default)
+#   link    a Markdown link's target, e.g. `[foo.md](foo.md)` -> `foo.md`
+#
+# Either way the key comes from cell 1 alone, so an escaped `\|` in a later cell
+# cannot shift it.
 #
 # Exit 0: the merged row block is on stdout and the result is certain.
 # Exit 2: the merge is NOT certain; a one-line reason is on stderr and the
@@ -14,7 +24,7 @@
 #         guess here — a wrongly resolved row loses backlog state, whereas a
 #         conflict marker costs a minute.
 #
-# The rules, per ID:
+# The rules, per key:
 #   * deleted on either side (and unchanged on the other) -> deleted
 #   * added on either side                                -> present
 #   * changed on one side only                            -> that change
@@ -23,7 +33,7 @@
 #   * deleted on one side, changed on the other           -> uncertain
 #   * same new ID added on both sides with different text -> uncertain
 #
-# Row *order* is priority in this file, so it is reconstructed rather than
+# Row *order* is meaningful in these files, so it is reconstructed rather than
 # assumed: the rows both sides kept form a skeleton, and each side's additions
 # are spliced back in at the position that side put them. When the two sides
 # order the shared rows differently, the side that still agrees with the base
@@ -31,19 +41,25 @@
 # reordered, that is uncertain.
 
 function fail(msg) {
-	printf "merge-status-rows: %s\n", msg > "/dev/stderr"
+	printf "merge-table-rows: %s\n", msg > "/dev/stderr"
 }
 
 function side_name(s) {
 	return (s == 0) ? "base" : ((s == 1) ? "ours" : "theirs")
 }
 
-# row_id LINE — the Queue ID this row belongs to, or "" when the line is not a
-# well-formed row. Mirrors scripts/docs/lint-backlog.sh's parse_id: the ID cell is
-# field 2 of the pipe-split row, and its `<a id="QN"></a>` anchor must match the
-# visible ID, because every cross-reference in the file resolves through the
-# anchor.
-function row_id(line,    n, f, cell, anchor, visible) {
+# row_id LINE — the key this row belongs to, or "" when the line is not a
+# well-formed row. Dispatches on key_mode; the empty return is what makes an
+# unparseable row a fallback rather than a guess.
+function row_id(line) {
+	return (key_mode == "link") ? row_key_link(line) : row_key_anchor(line)
+}
+
+# row_key_anchor LINE — the backlog ID. Mirrors scripts/docs/lint-backlog.sh's
+# parse_id: the ID cell is field 2 of the pipe-split row, and its
+# `<a id="QN"></a>` anchor must match the visible ID, because every
+# cross-reference in the file resolves through the anchor.
+function row_key_anchor(line,    n, f, cell, anchor, visible) {
 	if (line !~ /^\|/) return ""
 	n = split(line, f, "|")
 	if (n < 3) return ""
@@ -57,6 +73,24 @@ function row_id(line,    n, f, cell, anchor, visible) {
 	gsub(/[ \t]+$/, "", visible)
 	if (visible != "Q" anchor) return ""
 	return visible
+}
+
+# row_key_link LINE — the first cell's Markdown link target, which is what keys
+# docs/plan/README.md: one row per plan file, and the path is the identity the
+# rest of the tooling already uses (scripts/docs/check-plan-index.sh reads the
+# same cell). A row whose first cell is not a link has no key.
+function row_key_link(line,    n, f, cell, target) {
+	if (line !~ /^\|/) return ""
+	n = split(line, f, "|")
+	if (n < 3) return ""
+	cell = f[2]
+	if (!match(cell, /\[[^]]*\]\([^)]+\)/)) return ""
+	target = substr(cell, RSTART, RLENGTH)
+	sub(/^\[[^]]*\]\(/, "", target)
+	sub(/\)$/, "", target)
+	gsub(/^[ \t]+/, "", target)
+	gsub(/[ \t]+$/, "", target)
+	return target
 }
 
 # seq_equal A NA B NB — 1 when the two 1-indexed ID sequences are identical.
@@ -78,13 +112,13 @@ function push(id) {
 
 BEGIN {
 	if (ARGC != 4) {
-		fail("usage: awk -f merge-status-rows.awk BASE OURS THEIRS")
+		fail("usage: awk -f merge-table-rows.awk BASE OURS THEIRS")
 		exit 2
 	}
 
 	# --- read the three row blocks -------------------------------------------
 	# Read explicitly rather than through awk's main loop: awk skips a
-	# zero-length file entirely, so an empty Queue on one side would shift every
+	# zero-length file entirely, so an empty table on one side would shift every
 	# later file's side index.
 	for (s = 0; s <= 2; s++) {
 		file = ARGV[s + 1]
@@ -93,11 +127,11 @@ BEGIN {
 			if (line ~ /^[ \t]*$/) continue
 			id = row_id(line)
 			if (id == "") {
-				fail(sprintf("%s: not a well-formed Queue row: %.60s", side_name(s), line))
+				fail(sprintf("%s: not a well-formed table row: %.60s", side_name(s), line))
 				exit 2
 			}
 			if ((s SUBSEP id) in text) {
-				fail(sprintf("%s: %s appears twice in the Queue table", side_name(s), id))
+				fail(sprintf("%s: %s appears twice in the table", side_name(s), id))
 				exit 2
 			}
 			text[s, id] = line
@@ -199,7 +233,7 @@ BEGIN {
 		} else if (theirs_kept_base_order && !ours_kept_base_order) {
 			for (n = 1; n <= ns; n++) sk[++nsk] = shared_ours[n]
 		} else {
-			fail("Queue rows were reordered on both sides")
+			fail("rows were reordered on both sides")
 			exit 2
 		}
 	}
