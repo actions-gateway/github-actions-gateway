@@ -3299,10 +3299,13 @@ with <code>completejob</code> — the same remedy the Q260 fan-out already appli
 deduped sibling's identically dangling assignment, behind the same
 <code>AGC_FANOUT_COMPLETION</code> switch. Disruption recovery is deliberately <em>not</em> armed:
 <code>rerun-failed-jobs</code> has no failed job to act on for a job that never ran, which
-is the exclusion <code>externallyDeletedBeforeTerminal</code> already encodes. <strong>What the
-run service does with an <code>abandoned</code> completion — re-dispatch or conclude — is
-unmeasured</strong>; the release is what stops the assignment dangling either way.
-Tracked for a live measurement as <a href="../../STATUS/#Q645">Q645</a>.</p>
+is the exclusion <code>externallyDeletedBeforeTerminal</code> already encodes. What the
+run service does with an <code>abandoned</code> completion was <strong>measured 2026-08-04</strong>
+(Q645, <a href="../q645-abandoned-completion/#findings">Investigation H</a>): it concludes
+the run as <code>success</code> immediately, with no re-dispatch. A job that never ran
+reports green, so the release as shipped is the wrong result value for the
+winner's own delivery; the remedy is <a href="../../STATUS/#Q676">Q676</a> and the
+<code>AGC_FANOUT_COMPLETION</code> gate stays off.</p>
 <p><strong><code>JobProvisionStalled=False</code> was correct, not broken.</strong> The condition covers the
 listener's <em>deferral</em> reasons — <code>name_conflict</code> and <code>ceiling</code>, jobs held before a
 worker exists. A job whose worker was created and then reaped was never deferred,

@@ -2764,12 +2764,12 @@
 <td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
 </tr>
 <tr>
-<td><a id="Q645"></a>Q645</td>
-<td><a href="../plan/release-1.3/#the-rc5-re-run-2026-08-02">Nothing has measured what the run service does with an <code>abandoned</code> completion</a></td>
-<td><code>dogfood</code> <code>bug</code></td>
+<td><a id="Q676"></a>Q676</td>
+<td><a href="../plan/q645-abandoned-completion/#findings">An <code>abandoned</code> completion concludes the run as <code>success</code>: a never-run job reports green</a></td>
+<td><code>bug</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>Q628 releases an unrun worker's assignment with <code>result=abandoned</code>; whether GitHub re-dispatches or concludes the run is unmeasured, and decides whether a re-run arm is also needed. Measurable on a turn-up: reap a Pending worker, watch the run.</td>
+<td>M</td>
+<td>Measured 2026-08-04 (Q645, Inv. H): completejob(abandoned) got 204 and ended the run green in 1s; no re-dispatch, job record orphaned <code>in_progress</code>. Pick+measure the Q628 remedy (<code>failed</code>? REST cancel? no call?); sibling <code>skipped</code> unmeasured.</td>
 </tr>
 <tr>
 <td><a id="Q637"></a>Q637</td>
