@@ -539,8 +539,10 @@ The rules above govern *why* something failed. The same discipline applies to th
 - **A tool that exits 0 having printed nothing may have checked nothing.** `gh attestation verify` writes its summary only to a TTY; captured or redirected it is silent, and silence is indistinguishable from a no-op. When a verification's whole value is that it ran, make it emit something assertable (`--format json`, then read the predicate) rather than trusting the status alone.
 - **A state observed once is not a steady state.** Pods wedged now may clear in ten minutes; a set that looks static may be churning underneath a stable count. Before calling a condition permanent, take a second reading far enough apart to tell the difference, and compare *identities* rather than counts.
 - **A count grouped by symptom is not a measurement of cause.** A tool's ranking groups records by whatever its normalizer could see, which is seldom what shares a mechanism: workspace-guard's friction report folds `f=$(ls -t …)`, `for f in <glob>`, and a literal `f=/path` into a single `$f` row, so one count of 31 supported four incompatible explanations — the pattern actually being claimed was 4 of them, none in the previous seven days. Re-derive the aggregate along the axis the claim needs (time, construct, actor) before naming a cause; and when the claim is causal, **exercise the system that would produce the effect** rather than counting records that correlate with it. Nineteen prompts whose command text contained a scratchpad path read as a guard defect until the guard was fed a payload directly, which showed it already exempts the session's own scratchpad and every one of the 19 was a correctly-flagged cross-session access.
+- **A count or a superlative is a claim, not a recollection.** "Six of them", "the only one without a test", "none of the workflows" — each asserts a *population* and a *width of scan*, and both go stale the moment the tree moves. A scan run earlier in the session for another purpose does not transfer: re-derive the number as you write the sentence, and say what population it is true of. The [markdown-gates plan](../plan/markdown-gates-parser.md) first called `check-doc-links.sh` the only script here with no `-test.sh` companion, from memory of an earlier sweep; re-running it found six of the fourteen scripts in `scripts/docs/` untested, and the claim shipped rescoped to the four gates that plan covers, where it is exactly true. Re-derived while writing this line: seven of fourteen, because `gen-api-reference.sh` has landed since. The number moved in a day.
+- **An instrument's total is bounded by what it can observe, and an event it never saw leaves no gap.** Establish the blind spots before quoting the number, because nothing in the output will. The guard friction reports rank PreToolUse decisions, so foreground-guard's 200 prompts — quoted upstream as the largest single source of friction here — is a **floor**: the hook returns ahead of all analysis when the payload carries `run_in_background: true` (`karlkfi/claude-foreground-guard#15`), so every backgrounded poll is absent by construction. pr-sentinel scored near zero for a sharper reason: its defect lives in a watcher script that no PreToolUse analyzer observes at all. Quote a total with the shape it cannot see named beside it.
 
-The failure mode these share is reporting a conclusion from a signal that does not carry it. The fix is the same each time: name the signal the claim actually depends on, and read that one.
+The failure mode these share is reporting a conclusion from a signal that does not carry it. The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.
 
 ### Check for a committed capture before booking a live measurement
 
@@ -564,6 +566,29 @@ to pin down, and it ages into a file everyone assumes someone else is checking. 
 commit a capture, commit the test that reads it in the same change — and when a capture
 already exists for an interface you are changing, assert against it rather than a payload
 you wrote yourself.
+
+**Live observations are filed by when they were taken, not by what they answer.** `cmd/probe`
+and `testdata/` are the two shelves anyone would think to check, and they are not the only
+ones a live answer lands on. A probe's *findings* are written up in the plan doc that commissioned
+it, which is archived the moment that plan closes, and the durable residue of a live run is
+often one corrected constant in a fake. Search all four shelves before booking the run:
+
+- `testdata/` and its [README](../../testdata/README.md) — the committed payload captures.
+- `cmd/probe` and [the credential-gated probe scenarios](#the-credential-gated-probe-scenarios) — what each investigation was built to settle.
+- `docs/plan/` **and `docs/plan/archive/`** — the results tables. Grep the archive; a closed plan's measurements do not expire with it.
+- The doubles. A constant a live run corrected is a recorded observation wearing a code comment.
+
+Q501's Phase 0 is the worked example, and the second recurrence after Q495. It asked whether
+a cancelled run is signalled at all on the ScaleSet tier, and budgeted a live run to find
+out. Q468's retention probe had already cancelled a real run and recorded the answer — the
+job's `JobCompleted` with `result: canceled` on the queue ~0.2 s later — in the results table
+of [an archived plan](../plan/archive/q468-jobcompleted-retention.md), and that same run's
+one-L spelling correction was sitting in a comment in `scaleset/scalesetstub/stub.go`. Both
+were findable only by someone who already knew they existed.
+
+So when you take a live measurement, **file it where the next reader will look for the
+interface**, not only in the doc that commissioned it: name the question in the capture's or
+constant's own comment, and cite the results table from the code its answer constrains.
 
 ### A goroutine stack in the output is not always a failure
 
@@ -801,6 +826,22 @@ to 38 body words — 45 counted with the spans stripped, 47 without — deleting
 turned it red, which is what made it a test. Whenever the behaviour under test is a
 limit, a cap, a timeout, or a retry count, put the fixture *at* the edge and confirm one
 step past it fails.
+
+**The mirror, for a gate: inject the defect it is supposed to catch.** "This gate would
+catch that" is the same causation claim pointed at a green, and reading the matcher only
+*predicts* the answer — a regex is exactly the kind of thing that looks like it covers a
+case it does not. Injecting measures it: break one real input the way the gate should
+notice, require red, restore. Pair the injection with a **control that must fail**, for the
+[reason a throwaway probe needs one](#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything)
+— an injection that produces no red proves the gate blind only if a near-identical one does
+produce red; otherwise you have measured your own harness.
+
+Q612's blind spot was settled that way in a single pass. Repointing the README's live
+license badge at `THIS-FILE-DOES-NOT-EXIST.md` left `check-doc-links` green —
+`ok (242 files, 5134 links checked)`, exit 0 — while the identical target written as a plain
+link failed it on the same file. That is the whole finding: the collection regex matches the
+inner image first, so a badge-wrapped link's outer destination is never checked, and a
+total of 5,134 checked links says nothing about the shape the gate cannot see.
 
 ### A measurement that reproduces a call is not a test of the code that makes it
 
@@ -1532,6 +1573,16 @@ The grepped log line is the proof the assertion ran; the job's conclusion only p
 - **No workflow runs attached at all** — the push registered, but GitHub never dispatched any workflow for the head SHA. Observed on this repo for **~10 minutes** after a push: `gh run list --branch <branch>` returned nothing for that commit while the PR page showed no checks section whatsoever. Nothing is red, so the PR reads as clean at a glance; in fact nothing has run.
 
 **Fix for both:** `gh pr close <n> && gh pr reopen <n>`. The `reopened` event re-dispatches the workflows and re-evaluates the path filters against the full PR diff. Then re-verify with the commands above (asynchronously — see [Never foreground-poll CI, logs, or files](#never-foreground-poll-ci-logs-or-files)) and confirm the expected gates are now present and concluded before treating the PR as tested.
+
+### A focused run is a path filter you applied yourself
+
+The rule above is about a gate that narrowed the work for you. `--focus` is the same green with the filter written by hand: `ginkgo run --focus '<spec>'` is the correct inner loop for iterating on a new spec ([kind-iteration.md § Tightening the inner loop](kind-iteration.md#tightening-the-inner-loop)) and it is not a verification, because it reports on the specs you named and stays silent about every sibling you excluded.
+
+**Run a new spec's whole family once before calling it done** — the family being whatever shares mutable state with it. In the e2e suite that state is the cluster, and the sharpest instance of it is the GMC's `AGC_EXTRA_*` env: it is set deployment-wide and reaches every tenant AGC, so a spec that bends it to reach a double bends it for all its siblings too. A focused run cannot observe that, and neither can the sibling's own focused run — both are green, and only a run holding both is not.
+
+Q528 is the worked example. `E2E_AGC_ScaleSetAcquisition` needed the AGC's scale-set endpoints re-pointed at the in-cluster stub, and the first form rewrote them for **every** gateway whenever the `STUB_AUTH_URL`/`STUB_BROKER_URL` pair was set. Its sibling `E2E_AGC_ScaleSetRecovery` depends on a listener that stays *down*: its gateway named fakegithub's plaintext port over `https` so the bootstrap would die on the TLS handshake — precisely the scheme the new rewrite swapped. The new spec was green on three consecutive focused runs against a local kind cluster; the sibling went red in CI on `scale-set listener active`. The repair was to narrow the rewrite to gateways already naming the stub's `host:port`, and to move the recovery spec onto a host that does not resolve, which no rewrite can re-point.
+
+The reviewer's tell: a PR whose "how it was tested" names only the specs it added.
 
 ### The e2e workflows: kindnet and Calico
 
