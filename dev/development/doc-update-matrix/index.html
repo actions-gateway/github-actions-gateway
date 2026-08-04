@@ -439,6 +439,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -2297,6 +2319,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2367,7 +2493,7 @@
 <tbody>
 <tr>
 <td>New or changed CRD fields / API surface</td>
-<td><a href="../../design/03-api-contracts/">design/03-api-contracts.md</a> — add the field with its comment block; <a href="../../design/02-architecture/">design/02-architecture.md</a> — update prose, and the metrics table if new metrics were added. Apply the <a href="../api-review/#design-rules">API design rules</a> <em>before</em> writing the field, and check the change against <a href="../api-review/#is-this-change-breaking">Is this change breaking?</a> if it touches shipped surface. <strong>If the chart renders an instance of the CRD</strong> (today: <code>PriorityClassAllowlist</code>), the chart template must <a href="../api-review/#if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty">omit the new field when empty</a> — Helm never reapplies <code>crds/</code> on upgrade, so an unconditional render breaks <code>helm upgrade</code> midway.</td>
+<td><strong><code>make api-reference</code></strong> — a <code>v2beta1</code> doc comment or validation marker is published verbatim at <a href="../../reference/api/">reference/api.md</a>, so write it for an operator reading the site, not only for a contributor reading the type (<a href="../code-generation/#the-generated-api-reference">code-generation.md</a>; <code>make check</code> fails on a stale page). Then <a href="../../design/03-api-contracts/">design/03-api-contracts.md</a> — add the field with its comment block; <a href="../../design/02-architecture/">design/02-architecture.md</a> — update prose, and the metrics table if new metrics were added. Apply the <a href="../api-review/#design-rules">API design rules</a> <em>before</em> writing the field, and check the change against <a href="../api-review/#is-this-change-breaking">Is this change breaking?</a> if it touches shipped surface. <strong>If the chart renders an instance of the CRD</strong> (today: <code>PriorityClassAllowlist</code>), the chart template must <a href="../api-review/#if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty">omit the new field when empty</a> — Helm never reapplies <code>crds/</code> on upgrade, so an unconditional render breaks <code>helm upgrade</code> midway.</td>
 </tr>
 <tr>
 <td>New behaviour, retry logic, or operational mode</td>

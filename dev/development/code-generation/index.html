@@ -439,6 +439,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -2297,6 +2319,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2394,6 +2520,17 @@
     <span class="md-ellipsis">
       
         Codegen drift is gated by make check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-generated-api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The generated API reference
       
     </span>
   </a>
@@ -2528,6 +2665,7 @@
 <h1 id="agent-reference-code-generation">Agent reference: Code generation<a class="headerlink" href="#agent-reference-code-generation" title="Permanent link">&para;</a></h1>
 <h2 id="when-to-regenerate">When to regenerate<a class="headerlink" href="#when-to-regenerate" title="Permanent link">&para;</a></h2>
 <p>Whenever you modify CRD types (<code>api/</code> for the shared v2 kinds, <code>cmd/agc/api/</code> or <code>cmd/gmc/api/</code> for the v1 kinds), run the corresponding targets. Also run <code>make manifests</code> whenever you add or remove RBAC verbs/resources in a controller.</p>
+<p>A <code>v2beta1</code> change also has a second output: <code>make api-reference</code> rewrites the published field reference from the same markers. It is not part of <code>make generate</code> — that target is controller-gen's three modules — so a doc-comment edit that changes no schema still owes it. See <a href="#the-generated-api-reference">§ The generated API reference</a>.</p>
 <p>The v2 (<code>actions-gateway.com</code>) <code>v2alpha1</code> kinds live in the neutral <code>api/</code> module shared by both controllers — the Actions Gateway Controller (AGC) and the Gateway Manager Controller (GMC) (Q164); the v1 (<code>actions-gateway.github.com</code>) kinds stay split across <code>cmd/agc/api/v1alpha1</code> and <code>cmd/gmc/api/v1alpha1</code>.</p>
 <h2 id="the-root-targets-regenerate-everything-start-here">The root targets regenerate everything (start here)<a class="headerlink" href="#the-root-targets-regenerate-everything-start-here" title="Permanent link">&para;</a></h2>
 <p>From the repo root, either target covers all three modules — you do not need to know which module a type change reaches:</p>
@@ -2557,6 +2695,53 @@
 <p><strong>The DeepCopy half is gated for a different reason.</strong> Missing DeepCopy code was assumed to fail the build, and for a <em>changed</em> type it does. For an <em>added</em> one it does not: <code>ClusterCapacity</code> (<a href="../../STATUS/">Q470</a>) shipped with no <code>DeepCopy</code>/<code>DeepCopyInto</code> and an <code>ActionsGatewaySpec.DeepCopyInto</code> that never copied the field, so <code>ActionsGateway.DeepCopy()</code> handed back an object aliasing the caller's pointer into the shared informer cache — compiling cleanly and passing CI (<a href="../../STATUS/">Q477</a>). <strong><code>make manifests</code> alone no longer satisfies the gate after a type change; <code>make generate</code> does.</strong></p>
 <p>The gate also fails if a module gains a <code>manifests:</code> or <code>deepcopy:</code> target without being registered in the script's <code>MODULES</code> table or <code>DEEPCOPY_MODULES</code> list, or if a registration stops matching the module's own recipe — so it cannot quietly under-cover. Full assertion list: <a href="../testing/#the-codegen-drift-gate">testing.md § The codegen drift gate</a>.</p>
 <p><strong>Editing a <code>manifests:</code> or <code>deepcopy:</code> recipe means re-syncing its registration</strong> — adding or dropping a generator, or pointing an <code>output:</code> rule at a different dir, fails the gate until the registration matches again — and so does changing the <code>object</code> call, which <code>DEEPCOPY_MODULES</code> holds as one shared string for all three modules. The recipe is parsed out of the <code>Makefile</code> as text, tabs and backslash continuations included, so that parsing is itself asserted by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-codegen-drift-test.sh"><code>scripts/go/check-codegen-drift-test.sh</code></a> under <code>make scripts-test</code> (<a href="../testing/#the-codegen-drift-gate">why</a>); re-wrapping a recipe is safe, but do it with that suite green. Commenting a call out is safe too — shell comments are stripped before the parse, so a <code>#</code>-disabled generator or <code>output:</code> rule counts as absent, exactly as <code>make</code> sees it (Q464). Dropping the row is still what a permanently removed target needs.</p>
+<h2 id="the-generated-api-reference">The generated API reference<a class="headerlink" href="#the-generated-api-reference" title="Permanent link">&para;</a></h2>
+<p><a href="../../reference/api/"><code>docs/reference/api.md</code></a> is the published field-level API
+reference, generated by <a href="https://github.com/elastic/crd-ref-docs"><code>crd-ref-docs</code></a>
+from the same doc comments and <code>+kubebuilder</code> validation markers controller-gen
+turns into the CRD schemas. Editing a field's description means editing the Go
+doc comment, then:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>api-reference<span class="w">        </span><span class="c1"># scripts/docs/gen-api-reference.sh — rewrite docs/reference/api.md</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>api-reference-check<span class="w">  </span><span class="c1"># the drift gate, run by `make check` and CI&#39;s lint job</span>
+</code></pre></div>
+<p><code>crd-ref-docs</code> is pinned in the vendored <code>tools/</code> module like controller-gen, so
+<code>make tools</code> builds it into <code>.build/</code> and no host install is involved.</p>
+<p><strong>Scope is <code>api/v2beta1</code> only</strong> — the served, storage, non-deprecated version.
+<code>v1alpha1</code> and <code>v2alpha1</code> are removed at v2.0.0; a deprecated version documented
+field by field beside the current one reads as a supported choice, and <code>v2alpha1</code>
+is <code>v2beta1</code>'s shape anyway apart from the two RunnerSet fields the conversion
+webhook round-trips. Readers on either get <code>kubectl explain</code> and the
+<a href="../../operations/v1alpha1-deprecation/">deprecation</a> and
+<a href="../../operations/migration-v1-to-v2/">migration</a> pages instead — spelled out on
+the <a href="../../reference/">reference overview</a>. <strong>Adding a version to the page
+is a deliberate decision, not a mechanical one</strong>; adding a <em>kind</em> to <code>v2beta1</code>
+needs nothing beyond <code>make api-reference</code>, but do add it to the generator's
+completeness assertion (below).</p>
+<p>Three inputs shape the output, all under
+<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/api/hack/crd-ref-docs"><code>api/hack/crd-ref-docs/</code></a>:</p>
+<ul>
+<li><strong><code>config.yaml</code></strong> — the ignored types/fields, and <code>render.kubernetesVersion</code>,
+  which pins the Kubernetes release the embedded core types (<code>PodTemplateSpec</code>,
+  <code>Affinity</code>, <code>ObjectMeta</code>) link to on kubernetes.io. <strong>Bump it alongside the
+  <code>k8s.io/api</code> minor in <code>api/go.mod</code></strong> so the linked schema is the one the CRDs
+  actually embed (<code>k8s.io/api</code> v0.36.x is Kubernetes 1.36).</li>
+<li><strong><code>templates/*.tpl</code></strong> — a fork of the tool's built-in markdown set. A
+  <code>--templates-dir</code> replaces the whole set, so all four are present even where
+  only one changed. Two changes: the page preamble in <code>gv_list.tpl</code>, and a
+  regex in <code>gv_details.tpl</code>/<code>type.tpl</code> that renders godoc's <code># Section</code> heading
+  syntax as a bold lead. Left alone those become <code>&lt;h1&gt;</code>s in the middle of the
+  page and put package-internal asides in the site TOC beside the kinds.
+  <strong>Re-diff the fork against
+  <code>tools/vendor/github.com/elastic/crd-ref-docs/templates/markdown/</code> when the
+  pinned <code>crd-ref-docs</code> version moves.</strong> A Dependabot bump that changes the
+  rendering turns <code>api-reference-check</code> red on its own PR — <code>tools/**</code> is in the
+  gate's CI path filter — and <code>make api-reference</code> is the remedy.</li>
+<li><strong>the kind list in
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/gen-api-reference.sh"><code>gen-api-reference.sh</code></a></strong> — the
+  script fails unless every <code>v2beta1</code> kind has a section in the output. A tool
+  that finds no API types exits 0 having rendered a stub, which would make
+  <code>--check</code> pass on any tree and the writing mode quietly replace a good page.</li>
+</ul>
 <h2 id="sync-the-helm-chart-crds-after-any-crd-change">Sync the Helm chart CRDs (after any CRD change)<a class="headerlink" href="#sync-the-helm-chart-crds-after-any-crd-change" title="Permanent link">&para;</a></h2>
 <p>The Helm charts ship the CRDs under <code>templates/crds/</code>, but the <strong>authoritative</strong> schema is the controller-gen output under <code>cmd/*/config/crd</code> (the v1alpha1 CRDs) and <code>api/config/crd</code> (the v2alpha1 CRDs). The chart copies are <em>generated</em> from those sources — do not hand-edit them. The split:</p>
 <ul>
@@ -2564,17 +2749,17 @@
 <li><strong><code>charts/actions-gateway-crds-v2/templates/crds/</code></strong> — the five <strong>v2alpha1</strong> (<code>actions-gateway.com</code>) CRDs: <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code> (sourced from <code>api/config/crd</code>). They live in a <strong>separate, opt-in chart</strong> because the <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code> CRDs each embed a full <code>PodTemplateSpec</code> (~600 KB) and adding them to the main chart pushed its Helm release Secret past the hard <strong>1 MiB</strong> limit (Helm stores the rendered manifest <em>plus</em> a copy of the chart source, gzipped, in one Secret). A separate release keeps each chart within budget and makes v2 opt-in (<a href="../../STATUS/">Q149</a>).</li>
 </ul>
 <p><code>scripts/manifest/sync-chart-crds.sh</code> writes both charts in one pass. After regenerating manifests, re-sync:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>chart-crds<span class="w">   </span><span class="c1"># scripts/manifest/sync-chart-crds.sh — regenerates the chart CRD templates from the sources</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>chart-crds<span class="w">   </span><span class="c1"># scripts/manifest/sync-chart-crds.sh — regenerates the chart CRD templates from the sources</span>
 </code></pre></div>
 <p><code>make chart-crds-check</code> (run by <code>make check</code>, <code>make manifest-validate</code>, and CI's <code>manifest-validate.yml</code>) fails if a chart copy drifted from its source, or if the <strong>GMC-bundled</strong> RunnerGroup CRD (<code>cmd/gmc/config/crd/bases/…runnergroups.yaml</code>, a bundled copy of the <em>imported</em> type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy (<a href="../../STATUS/">Q73</a>). <strong><code>make -C cmd/gmc manifests</code> cannot refresh the bundled copy</strong> — controller-gen walks only the GMC module's own packages (<code>paths="./..."</code>), and the <code>RunnerGroup</code> type lives in <code>cmd/agc/api/</code>. The remedy after any RunnerGroup type change: regenerate the AGC copy (<code>make -C cmd/agc manifests</code>), <code>cp</code> it over the GMC-bundled path, then <code>make chart-crds</code>. For a k8s.io/api skew, align the module versions (<a href="../../STATUS/">Q68</a>) first, then do the same.</p>
 <h2 id="sync-the-helm-chart-rbac-after-any-rbac-marker-change">Sync the Helm chart RBAC (after any RBAC marker change)<a class="headerlink" href="#sync-the-helm-chart-rbac-after-any-rbac-marker-change" title="Permanent link">&para;</a></h2>
 <p>The chart's GMC <code>manager-role</code> ClusterRole templates the metadata/binding, but its <strong>rules</strong> are the controller-gen output of the GMC controllers' <code>+kubebuilder:rbac</code> markers (<code>cmd/gmc/config/rbac/role.yaml</code>). The chart embeds them via <code>.Files.Get</code> from a <em>generated</em> fragment — do not hand-edit it. After regenerating manifests, re-sync the chart:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>chart-rbac<span class="w">   </span><span class="c1"># scripts/manifest/sync-chart-rbac.sh — regenerates charts/actions-gateway/files/manager-role-rules.yaml</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>chart-rbac<span class="w">   </span><span class="c1"># scripts/manifest/sync-chart-rbac.sh — regenerates charts/actions-gateway/files/manager-role-rules.yaml</span>
 </code></pre></div>
 <p><code>make chart-rbac-check</code> (run by <code>make check</code>, <code>make manifest-validate</code>, and CI's <code>manifest-validate.yml</code>) fails if the fragment drifted from <code>cmd/gmc/config/rbac/role.yaml</code> — so a permission added via a marker but not propagated to the chart, which would leave the deployed GMC missing the grant, fails CI (<a href="../../STATUS/">Q142</a>).</p>
 <h2 id="sync-the-helm-chart-webhook-after-any-webhook-marker-change">Sync the Helm chart webhook (after any webhook-marker change)<a class="headerlink" href="#sync-the-helm-chart-webhook-after-any-webhook-marker-change" title="Permanent link">&para;</a></h2>
 <p>The chart ships the <code>ValidatingWebhookConfiguration</code> at <code>charts/actions-gateway/templates/webhook.yaml</code>, but the authoritative webhook <strong>body</strong> (rules, <code>failurePolicy</code>, <code>sideEffects</code>, <code>admissionReviewVersions</code>, the service path) is the controller-gen output of the <code>+kubebuilder:webhook</code> marker (<code>cmd/gmc/config/webhook/manifests.yaml</code> — the same file the GMC integration suite loads into envtest). The chart template is <em>generated</em> from that source, re-injecting the chart's Helm wiring (name prefix, labels, the cert-manager CA-inject annotation, the templated namespace, and the non-cert-manager <code>caBundle</code>) — do not hand-edit it. After regenerating manifests, re-sync the chart:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>chart-webhook<span class="w">   </span><span class="c1"># scripts/manifest/sync-chart-webhook.sh — regenerates charts/actions-gateway/templates/webhook.yaml</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>chart-webhook<span class="w">   </span><span class="c1"># scripts/manifest/sync-chart-webhook.sh — regenerates charts/actions-gateway/templates/webhook.yaml</span>
 </code></pre></div>
 <p><code>make chart-webhook-check</code> (run by <code>make check</code>, <code>make manifest-validate</code>, and CI's <code>manifest-validate.yml</code>) fails if the chart template drifted from the controller-gen source — so a marker change (a new intercepted resource/operation, a path or <code>failurePolicy</code> change) that is regenerated into <code>config/</code> but not propagated to the chart fails CI (<a href="../../STATUS/">Q143</a>).</p>
 <h2 id="agc-clusterrole-rules-not-controller-gen">AGC ClusterRole rules (NOT controller-gen)<a class="headerlink" href="#agc-clusterrole-rules-not-controller-gen" title="Permanent link">&para;</a></h2>
@@ -2588,16 +2773,16 @@ must be shipped by one of the two fragments, or a real install 403s on it.</p>
 <p>The <code>agc-clusterrunnertemplate-reader</code> ClusterRole carries the cluster-scoped reads a namespaced <code>RoleBinding</code> cannot authorize — <code>clusterrunnertemplates</code> and (since <a href="../../STATUS/">Q450</a>) <code>runtimeclasses</code>. Its source is likewise the hand-maintained fragment <code>charts/actions-gateway/files/agc-clusterrunnertemplate-reader-rules.yaml</code>. Unlike the tenant role it holds <em>exactly</em> what the markers declare for those kinds, so the drift test asserts verb-level equality both ways, plus the read-only property the cluster-wide scope depends on: any write verb here fails the test (<a href="../../STATUS/">Q454</a>, rationale in <a href="../../design/05-security/#the-agcs-cluster-scoped-read-surface">design/05-security.md</a>). Adding a cluster-scoped kind to the AGC means editing the marker in <code>doc.go</code> <em>and</em> this fragment in the same change.</p>
 <h2 id="rbac-marker-placement">RBAC marker placement<a class="headerlink" href="#rbac-marker-placement" title="Permanent link">&para;</a></h2>
 <p><code>+kubebuilder:rbac</code> is a <strong>package-level</strong> marker (controller-gen v0.21+). It must appear before the <code>package</code> declaration, not in a type's doc comment. Placing it on a struct silently produces no output — controller-gen won't warn, it will just generate nothing.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// Correct — before the package declaration:</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1">// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">package</span><span class="w"> </span><span class="nx">controller</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// Correct — before the package declaration:</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="kn">package</span><span class="w"> </span><span class="nx">controller</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// Wrong — on a type, silently ignored:</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1">// MyReconciler reconciles things.</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1">// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="kd">type</span><span class="w"> </span><span class="nx">MyReconciler</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">...</span><span class="w"> </span><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1">// Wrong — on a type, silently ignored:</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1">// MyReconciler reconciles things.</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1">// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="kd">type</span><span class="w"> </span><span class="nx">MyReconciler</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">...</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
 <p>The markers live at the top of <code>cmd/gmc/internal/controller/actionsgateway_controller.go</code>. Non-standard verbs (<code>bind</code>, <code>escalate</code>) are supported in <code>verbs=</code> and appear in the generated role.</p>
 <h2 id="crd-marker-and-api-file-gotchas">CRD marker and API-file gotchas<a class="headerlink" href="#crd-marker-and-api-file-gotchas" title="Permanent link">&para;</a></h2>

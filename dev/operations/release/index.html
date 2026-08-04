@@ -445,6 +445,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -2713,6 +2735,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -3906,8 +4032,12 @@ is not a field: the chart installs chart-root <code>crds/</code> on a <em>fresh 
 so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two
 must cross-reference. Then fold the rest — new spec fields, new status fields, new
 condition reasons — grouped by kind, counted like any other fold. <code>v1.3.0</code> listed
-28 new condition reasons this way. Until a generated API reference exists, say
-which artifact is authoritative (<code>kubectl explain</code>, or the signed CRD asset).</p>
+28 new condition reasons this way, and had to name <code>kubectl explain</code> and the
+signed CRD asset as the authority because no reference page existed. Link the
+<a href="../../reference/api/">generated API reference</a> instead, at <strong>this release's</strong>
+version path (<code>/X.Y.Z/reference/api/</code>), so the fields the notes name are one
+click from their descriptions. It covers <code>v2beta1</code> only; a deprecated-version
+field still needs <code>kubectl explain</code>.</p>
 <p><strong>Validation is receipts, not adjectives.</strong> "Thoroughly tested" is worth nothing.
 Link the run, quote the counts, and quote a value measured at the layer that
 matters: <code>v1.3.0</code> cites 73/73 specs with a run link, and a derived <code>1500m</code> observed

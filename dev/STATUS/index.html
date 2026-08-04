@@ -439,6 +439,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -2297,6 +2319,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2601,14 +2727,6 @@
 <td>It upgrades with default values only, so any preflight gated on a value being SET is dead code in CI. Q298's <code>allowedInfraPriorityClasses</code> lookup guard was verified by hand on kind, not by a gate. Add a values-set leg.</td>
 </tr>
 <tr>
-<td><a id="Q632"></a>Q632</td>
-<td><a href="../development/code-generation/">Generate an API reference page from the CRD markers</a></td>
-<td><code>docs</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>No field-level API docs exist in <code>docs/</code>. The CRDs are the only authority, so v1.3.0's notes hand-wrote an API section with nowhere to link. The kubebuilder markers are already there, so <code>crd-ref-docs</code> can generate a page into the mkdocs site.</td>
-</tr>
-<tr>
 <td><a id="Q649"></a>Q649</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Adding a gate means hand-editing three copies of the gate list, and concurrent PRs collide on all three</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -2727,14 +2845,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Q643 shipped the <code>{reason}</code>-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every <code>gridPos</code> below y=52 and needs a <code>render.sh</code> re-shoot. Should <code>AwaitingProbe</code> alert?</td>
-</tr>
-<tr>
-<td><a id="Q641"></a>Q641</td>
-<td><a href="../development/testing/#a-tests-environment-assumptions-must-be-probed-not-inferred"><code>cmd/worker</code> permission tests infer the capability from uid instead of probing it</a></td>
-<td><code>tests</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Five <code>os.Geteuid() == 0</code> skips proxy for whether mode bits bite. Root with <code>drop: ALL</code> cannot read mode 000, so the skip fires and the assertion never runs; non-root with <code>CAP_DAC_OVERRIDE</code> is the inverse. Probe the read, as Q596's sibling does.</td>
 </tr>
 <tr>
 <td><a id="Q612"></a>Q612</td>

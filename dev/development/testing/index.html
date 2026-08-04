@@ -439,6 +439,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -2297,6 +2319,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -3418,7 +3544,7 @@
 <p>Add a heavier tier only when the change warrants it — <code>make test-race</code> for the concurrency core, <code>make test-integration</code> or the e2e targets for controller and cluster behaviour, <code>make vulncheck</code>/<code>make trivy-scan</code> for dependency and image changes — and give each one an <a href="#slow-tiers-need-an-explicit-timeout-or-a-background-run">explicit timeout or a background run</a>.</p>
 <p>One caveat on the inner loop: the <code>make</code> targets throttle themselves, but a bare <code>go test</code> run directly does not. That is harmless for a plain module-scoped run and <strong>not</strong> harmless with <code>-race</code> — use <code>make test-race</code>, or prefix a manual run with <code>$(scripts/agent/local-throttle.sh prefix)</code>. See <a href="#resource-auto-throttle-on-gui-dev-machines">Resource auto-throttle on GUI dev machines</a>.</p>
 <h3 id="the-make-check-pre-review-gate">The <code>make check</code> pre-review gate<a class="headerlink" href="#the-make-check-pre-review-gate" title="Permanent link">&para;</a></h3>
-<p>For the one-command gate before requesting review, run <code>make check</code> from the repo root. It runs gofmt, <code>golangci-lint</code>, the <code>docs/STATUS.md</code> format lint, the <a href="#the-roadmap-coherence-gate">roadmap/backlog coherence gate</a> (<code>make roadmap-check</code>), the plan-index/no-plan-refs drift gates (<code>make plan-index-check no-plan-refs-check</code>, which assert active plans in <code>docs/plan/README.md</code> are still STATUS-referenced and that neither Go code nor a shell/workflow comment cites a plan doc by path — see <a href="../maintaining-backlog/#archiving-completed-plan-docs">maintaining-backlog.md § Archiving completed plan docs</a> for the two rules and the inline opt-out), the single-Go-version gate (<code>make go-version-check</code>, which asserts the <code>go</code> directive matches across <code>go.work</code>, every <code>go.mod</code>, and every <code>go.work.gen</code>), the <a href="#the-v2-api-sync-gate">v2 API sync gate</a> (<code>make v2-api-sync-check</code>), the <a href="#the-build-tag-gate">build-tag gate</a> (<code>make build-tags-check</code>, which compiles and vets the <code>integration</code>/<code>e2e</code>/<code>load</code>-tagged files no other fast gate builds), the <a href="#the-path-filter-gate">path-filter gate</a> (<code>make path-filters-check</code>, which reconciles CI's <code>dorny/paths-filter</code> lists with <code>go.work</code>), <code>shellcheck</code> over the helper scripts (see <a href="#the-shellcheck-gate">the shell-lint gate</a> below), <a href="#the-actionlint-gate">the actionlint gate</a> (<code>make actionlint</code>, which lints the workflows themselves — schema, <code>uses:</code> refs, expressions, and the inline <code>run:</code> blocks), the chart CRD/RBAC/webhook drift gates (<code>make chart-crds-check chart-rbac-check chart-webhook-check</code>, which fail if the Helm chart's CRD/RBAC/webhook templates drifted from their sources), the <a href="#the-codegen-drift-gate">codegen drift gate</a> (<code>make codegen-check</code>, which fails if a committed CRD/RBAC/webhook manifest is stale relative to the Go types controller-gen generates it from), the scripts behavioural tests (<code>make scripts-test</code>), the <a href="#the-claude-usage-snapshot-gate">claude-usage snapshot gate</a> (<code>make claude-usage-test</code>), the Markdown link/anchor check (see <a href="#the-doc-link-gate">the doc-link gate</a> below), the <a href="#the-release-pin-gate">release-pin gate</a> (<code>make release-pins-check</code>, which fails when an install/upgrade page still pins a superseded release), and the unit tests with the coverage ratchet (<a href="#coverage-measurement-and-the-ratchet"><code>make cover-check</code></a> below, which supersets <code>make test</code> — the same unit-test packages, run once per module with <code>-cover</code>, plus the per-module coverage floor). It covers the lint, unit-test <em>logic</em>, and coverage gates the <code>.github/workflows/unit-test.yml</code> + <code>coverage</code> CI jobs enforce — run it once when the work is done, not after every edit (<a href="#the-inner-loop-cheap-checks-while-iterating-make-check-once-pre-pr">the inner loop</a> above is what you iterate with). The one CI step <code>make check</code> does <strong>not</strong> reproduce is the race detector: the CI <code>unit-test</code> job runs the same per-module unit tests under <code>-race</code> (see <a href="#the-race-detector-unit-gate">the race gate</a> below), which roughly doubles their runtime. Reproduce that locally with <code>make test-race</code> — kept out of <code>make check</code> so the default dev gate doesn't become an unthrottled <code>-race</code> run. The slower security gates (<code>make vulncheck</code>, <code>make trivy-scan</code>, <code>make polaris-scan</code>), the <a href="#install-artifact-validation">install-artifact validation</a> (<code>make manifest-validate</code>), and the integration/e2e tiers below stay separate too so this loop stays fast.</p>
+<p>For the one-command gate before requesting review, run <code>make check</code> from the repo root. It runs gofmt, <code>golangci-lint</code>, the <code>docs/STATUS.md</code> format lint, the <a href="#the-roadmap-coherence-gate">roadmap/backlog coherence gate</a> (<code>make roadmap-check</code>), the plan-index/no-plan-refs drift gates (<code>make plan-index-check no-plan-refs-check</code>, which assert active plans in <code>docs/plan/README.md</code> are still STATUS-referenced and that neither Go code nor a shell/workflow comment cites a plan doc by path — see <a href="../maintaining-backlog/#archiving-completed-plan-docs">maintaining-backlog.md § Archiving completed plan docs</a> for the two rules and the inline opt-out), the single-Go-version gate (<code>make go-version-check</code>, which asserts the <code>go</code> directive matches across <code>go.work</code>, every <code>go.mod</code>, and every <code>go.work.gen</code>), the <a href="#the-v2-api-sync-gate">v2 API sync gate</a> (<code>make v2-api-sync-check</code>), the <a href="#the-build-tag-gate">build-tag gate</a> (<code>make build-tags-check</code>, which compiles and vets the <code>integration</code>/<code>e2e</code>/<code>load</code>-tagged files no other fast gate builds), the <a href="#the-path-filter-gate">path-filter gate</a> (<code>make path-filters-check</code>, which reconciles CI's <code>dorny/paths-filter</code> lists with <code>go.work</code>), <code>shellcheck</code> over the helper scripts (see <a href="#the-shellcheck-gate">the shell-lint gate</a> below), <a href="#the-actionlint-gate">the actionlint gate</a> (<code>make actionlint</code>, which lints the workflows themselves — schema, <code>uses:</code> refs, expressions, and the inline <code>run:</code> blocks), the chart CRD/RBAC/webhook drift gates (<code>make chart-crds-check chart-rbac-check chart-webhook-check</code>, which fail if the Helm chart's CRD/RBAC/webhook templates drifted from their sources), the <a href="#the-codegen-drift-gate">codegen drift gate</a> (<code>make codegen-check</code>, which fails if a committed CRD/RBAC/webhook manifest is stale relative to the Go types controller-gen generates it from), the API-reference drift gate (<code>make api-reference-check</code>, which fails if <a href="../../reference/api/"><code>docs/reference/api.md</code></a> is stale relative to the <code>api/v2beta1</code> doc comments and validation markers <code>crd-ref-docs</code> generates it from — see <a href="../code-generation/#the-generated-api-reference">code-generation.md § The generated API reference</a>), the scripts behavioural tests (<code>make scripts-test</code>), the <a href="#the-claude-usage-snapshot-gate">claude-usage snapshot gate</a> (<code>make claude-usage-test</code>), the Markdown link/anchor check (see <a href="#the-doc-link-gate">the doc-link gate</a> below), the <a href="#the-release-pin-gate">release-pin gate</a> (<code>make release-pins-check</code>, which fails when an install/upgrade page still pins a superseded release), and the unit tests with the coverage ratchet (<a href="#coverage-measurement-and-the-ratchet"><code>make cover-check</code></a> below, which supersets <code>make test</code> — the same unit-test packages, run once per module with <code>-cover</code>, plus the per-module coverage floor). It covers the lint, unit-test <em>logic</em>, and coverage gates the <code>.github/workflows/unit-test.yml</code> + <code>coverage</code> CI jobs enforce — run it once when the work is done, not after every edit (<a href="#the-inner-loop-cheap-checks-while-iterating-make-check-once-pre-pr">the inner loop</a> above is what you iterate with). The one CI step <code>make check</code> does <strong>not</strong> reproduce is the race detector: the CI <code>unit-test</code> job runs the same per-module unit tests under <code>-race</code> (see <a href="#the-race-detector-unit-gate">the race gate</a> below), which roughly doubles their runtime. Reproduce that locally with <code>make test-race</code> — kept out of <code>make check</code> so the default dev gate doesn't become an unthrottled <code>-race</code> run. The slower security gates (<code>make vulncheck</code>, <code>make trivy-scan</code>, <code>make polaris-scan</code>), the <a href="#install-artifact-validation">install-artifact validation</a> (<code>make manifest-validate</code>), and the integration/e2e tiers below stay separate too so this loop stays fast.</p>
 <p><code>make check</code> also <strong>does not</strong> run the three dependency-drift gates — <code>make vendor-check</code>, <code>make tidy-check</code>, and <code>license-notices</code> — because two of them re-fetch modules and can hit the network on a cold cache, which would tax every run to catch a class that lands on ~4% of commits. CI runs all three as their own jobs (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a> <code>vendor-check</code>/<code>tidy-check</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/license-notices.yml"><code>license-notices.yml</code></a>), path-gated on the dependency files — plus, for <code>tidy-check</code>, on <code>**/*.go</code>, because an import edit alone can untidy a <code>go.mod</code> (Q545; see <a href="../go-workspaces/#changing-dependencies">go-workspaces.md § Changing dependencies</a>). The consequence to keep in mind: <strong>a green <code>make check</code> does not imply a green <code>unit-test.yml</code> when a change touches <code>go.mod</code>/<code>go.sum</code>/<code>vendor/</code>/<code>go.work*</code> — or adds and drops imports</strong> — the drift gates can still fail on push. So after any dependency change, run <code>make vendor-sync</code> (the one-shot remedy) and commit the result before pushing; see <a href="../go-workspaces/#changing-dependencies">go-workspaces.md § Changing dependencies</a>. As a backstop, <code>make check</code> prints a one-line reminder (via <code>scripts/ci/check-dep-advisory.sh</code>, its last step) whenever the change it sees touches a dependency file — advisory only, it never fails the gate, and it does not fire on an import-only change.</p>
 <p><strong>A background run's verdict covers only the tree it saw.</strong> <code>make check</code> is routinely launched as a <em>background</em> task so the doc updates, the <code>docs/STATUS.md</code> row, and the PR body can be written while it runs — that is the recommended shape (<a href="../parallel-dispatch/#run-the-local-gate-in-the-background-not-on-the-critical-path">parallel-dispatch.md § Run the local gate in the background</a>), but it means a green report can describe a tree that no longer exists. Every edit made while the gate is running is unverified, and that includes the parallel work itself: <code>docs/STATUS.md</code>, <code>docs/**</code>, and the plan docs are gated by <code>lint-backlog</code>, <code>doc-links</code>, <code>roadmap-check</code>, and <code>plan-index-check</code>. <strong>Re-run <code>make check</code> over the final tree before concluding.</strong> The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm. A <strong>code</strong> edit voids the verdict outright rather than merely narrowing it, and "code" means anything the gate compiles or lints: <code>scripts/*.sh</code> and the <code>Makefile</code> count, not only Go.</p>
 <p><strong>The exit code you read has to belong to the gate.</strong> A verdict is only as good as the command that reported it, and the usual way that breaks is wrapping the gate in something that has an exit status of its own. Three shapes, all seen in real sessions:</p>
@@ -3899,7 +4025,7 @@ you wrote yourself.</p>
 </ul>
 <p>The reviewer's tell: a test that names an environment fact in a comment or skip message but never reads it.</p>
 <p>Both remedies are in the record. <strong>Q482</strong> is the provision case: the <code>shellcheck</code> job runs <code>make scripts-test</code>, whose <code>scripts/go/go-vet-tags-test.sh</code> shells out to a real <code>go</code>. <code>ubuntu-latest</code> preinstalls one; the dogfood runner image omits it by design. The dependency was never written down or checked, so every <code>target_gag=true</code> dispatch reported a red that was not a failure. The fix added the same pinned <code>setup-go</code> step its six sibling jobs already had. <strong>Q596</strong> is the probe case: <code>check-v2-api-sync-test</code>'s <code>unreadable-file</code> assertion <code>chmod 000</code>s a fixture and requires the gate to call it trouble, gated on whether <code>cat</code> actually fails — not on <code>$EUID</code>, precisely because uid does not settle whether the mode bits bite on this runner.</p>
-<p>Q482 established this for the Go toolchain only. It covers both languages and every tier those nine jobs carry: Go unit tests, the <code>scripts/</code> shell suites under <code>make scripts-test</code>, integration, and e2e. <code>TestBuildTrustPool_PreservesSystemRoots</code> (<code>cmd/agc/internal/transport/trustpool_test.go</code>) and the <code>python3</code> guards in <code>scripts/docs/*-hook-test.sh</code> are the models in each.</p>
+<p>Q482 established this for the Go toolchain only. It covers both languages and every tier those nine jobs carry: Go unit tests, the <code>scripts/</code> shell suites under <code>make scripts-test</code>, integration, and e2e. <code>TestBuildTrustPool_PreservesSystemRoots</code> (<code>cmd/agc/internal/transport/trustpool_test.go</code>) and the <code>python3</code> guards in <code>scripts/docs/*-hook-test.sh</code> are the models in each. For the mode-bits case in Go, <code>writeUnreadable</code> (<code>cmd/worker/worker_test.go</code>) is the direct port of Q596's shell probe: it <code>chmod 000</code>s the fixture, reads it back, and skips only when that read succeeds (Q641).</p>
 <h3 id="proving-a-flake-fix-invert-it">Proving a flake fix: invert it<a class="headerlink" href="#proving-a-flake-fix-invert-it" title="Permanent link">&para;</a></h3>
 <p>Repeated passes do not validate a flake fix. A green <code>-count=20</code> is equally consistent with <em>"the race is closed"</em> and <em>"the race didn't fire this time"</em> — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.</p>
 <p>Run the <strong>negative control</strong> before concluding: invert the fix — restore the old value, remove the pin, revert the ordering — and confirm the suite <em>fails</em>. A fix you cannot make fail on demand has not been shown to be load-bearing, and shipping it closes the backlog row while leaving the flake live. When the inverted form refuses to fail either, that is itself the finding: the diagnosis is wrong, or the mechanism isn't the one you think it is.</p>

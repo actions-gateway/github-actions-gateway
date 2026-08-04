@@ -884,4 +884,12 @@
          <loc>https://actions-gateway.com/dev/plan/archive/worker-sidecar-reap-warning/</loc>
          <lastmod>2026-08-04</lastmod>
     </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/reference/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/reference/api/</loc>
+         <lastmod>2026-08-04</lastmod>
+    </url>
 </urlset>
