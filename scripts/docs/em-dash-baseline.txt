@@ -195,7 +195,7 @@
 98 docs/plan/gke-dogfood.md
 40 docs/plan/go-to-market.md
 20 docs/plan/make.md
-24 docs/plan/markdown-gates-parser.md
+35 docs/plan/markdown-gates-parser.md
 4 docs/plan/milestone-1-tests.md
 43 docs/plan/milestone-1.md
 27 docs/plan/milestone-2.md
