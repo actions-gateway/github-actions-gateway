@@ -1,9 +1,10 @@
 # Markdown gates on a real parser
 
 **Status:** filed 2026-08-02; all three phases shipped by 2026-08-04.
-Q612 ✅ → Q613 ✅ → Q614 ✅. Still active while
-[Q654](../STATUS.md#Q654) cites it — a fourth consumer of the same parse layer,
-filed after the phases were scoped.
+Q612 ✅ → Q613 ✅ → Q614 ✅. Q654 shipped alongside them — an em-dash density
+gate on the same parse layer, filed after the phases were scoped. Only the
+Progress row still references this plan, so archiving it is the milestone's
+call rather than any one phase's.
 
 Phase 1 shipped: `devtools/docs/markdown` (the shared parse layer over goldmark)
 and `devtools/docs/doclinks` (the checker), with `check-doc-links.sh` kept as the
