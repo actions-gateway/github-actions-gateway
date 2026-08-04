@@ -1537,8 +1537,22 @@ The cluster/image/test plumbing for the e2e suite lives in one reusable workflow
 
 A handful of specs deliberately reach the **live** `api.github.com` (see the `real-github-egress` label above), so a transient outage of the CI runner's own GitHub egress kills them with signatures that look like product regressions — observed as a proxy CONNECT 502 (kindnet lane, 2026-07-14) and curl exit-28 timeouts including the proxy-less DirectEgress spec (Calico lane, 2026-07-19), both green on re-run. Two probes make such blips self-attribute instead of costing a triage:
 
-- **In-suite, at failure time (the authoritative signal):** when a `real-github-egress`-labelled spec fails, a suite-level `AfterEach` immediately issues an HTTPS GET to `api.github.com/zen` from the test process — the runner host, the segment every in-cluster path NATs through — and stamps a `RUNNER-HOST GITHUB PREFLIGHT: FAILED/OK` banner into the spec's failure output. `FAILED` (a transport error; any HTTP status counts as reachable) means infra blip — re-run; `OK` means treat the failure as real. A non-fatal baseline probe also logs reachability at suite start; it deliberately does **not** fail fast, since a start-time blip may clear before those specs run and a fatal preflight would add a flake surface rather than remove one.
-- **In the workflow's failure-diagnostic step:** `e2e-reusable.yml` curls `api.github.com/zen` from the runner alongside the cluster dumps, covering the case where the suite process itself died before the `AfterEach` could report.
+- **In-suite, at failure time (the authoritative signal):** when a `real-github-egress`-labelled spec fails, a suite-level `AfterEach` immediately issues an HTTPS GET to `api.github.com/zen` from the test process — the runner host, the segment every in-cluster path NATs through — and stamps a `RUNNER-HOST GITHUB PREFLIGHT: <verdict>` banner into the spec's failure output. A non-fatal baseline probe logs the same verdict at suite start; it deliberately does **not** fail fast, since a start-time blip may clear before those specs run and a fatal preflight would add a flake surface rather than remove one.
+- **In the workflow's failure-diagnostic step:** `e2e-reusable.yml` curls `api.github.com/zen` from the runner alongside the cluster dumps and applies the same table in shell, covering the case where the suite process itself died before the `AfterEach` could report.
+
+**How the probe scores a response.** The probe goes straight from the test process to GitHub — no proxy, no cluster, nothing this repo ships — so its result can never be caused by a product regression. It shares exactly two things with the in-cluster path: the runner's egress address and the internet between it and GitHub. Anything that refuses the probe therefore refuses the traffic the failing spec depends on, which is what makes each response decidable ([`ScoreGitHubEgress`](../../cmd/gmc/test/utils/github_egress.go), table-tested in `github_egress_test.go`):
+
+| Probe result | Verdict | What to do |
+|---|---|---|
+| Transport error (DNS, dial, TLS, timeout) | `BLOCKED` | Nothing answered. Infra — re-run the job. |
+| 2xx | `REACHABLE` | GitHub served the runner. Treat the failure as real; inspect the in-cluster path (workload NP → proxy → egress NP → GitHub). |
+| 403, 429 | `BLOCKED` | `/zen` carries no credentials and needs none, so a refusal is not about who asked — GitHub is throttling or blocking this source address. The in-cluster path NATs through that same address. Infra — re-run. |
+| 408, 5xx | `BLOCKED` | The path reaches GitHub (or an intermediary) but it will not serve the request. Not something this repo can regress. Infra — re-run. |
+| Anything else (3xx surviving redirect following, 401, 404, other 4xx) | `INCONCLUSIVE` | GitHub answers an unauthenticated `/zen` with 200 and nothing else, so an intermediary intercepted the request or the endpoint moved. Read the body excerpt in the banner: not GitHub's → interception, infra, re-run; GitHub's → the probe is stale, fix it and triage the spec on its own output. |
+
+A non-2xx banner also carries `x-ratelimit-remaining`, `retry-after`, and a 200-byte body excerpt — GitHub's own words for the refusal. Those make the banner concrete but never change a verdict.
+
+Scoring `403` as `REACHABLE` was the original rule and the bug behind Q648: on 2026-08-03 the probe stamped `PREFLIGHT: OK (HTTP 403)` three times into a failing run, telling the operator to treat a rate-limited runner as a product regression; the re-run was green. Getting it wrong the other way is just as costly — a verdict of `BLOCKED` on a genuinely broken spec means re-running it forever — which is why `INCONCLUSIVE` exists and stays narrow: it covers only the responses that say *something other than GitHub* answered, and it names the one artifact (the body) that resolves it.
 
 #### The Calico e2e lane
 
