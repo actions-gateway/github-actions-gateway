@@ -174,8 +174,11 @@ type abandonedRESTStub struct {
 	srv *httptest.Server
 
 	// jobStatus is consulted on every GET /actions/jobs/{id}; swap it to drive
-	// the CONCLUDED path.
+	// the job-level CONCLUDED path.
 	jobStatus atomic.Value // func() (status, conclusion string)
+	// runStatus is consulted on every GET /actions/runs/{id}; swap it to drive
+	// the run-level CONCLUDED path — the one the 2026-08-04 live run took.
+	runStatus atomic.Value // func() (status, conclusion string)
 	// runners backs GET /actions/runners; seed it to exercise the stale-runner
 	// report and the 409 name-conflict recovery.
 	runners atomic.Value // []restRunner
@@ -192,6 +195,7 @@ func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *
 	t.Helper()
 	s := &abandonedRESTStub{}
 	s.jobStatus.Store(func() (string, string) { return "queued", "" })
+	s.runStatus.Store(func() (string, string) { return "queued", "" })
 	s.runners.Store([]restRunner{})
 
 	mux := http.NewServeMux()
@@ -232,6 +236,10 @@ func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *
 	})
 	mux.HandleFunc("GET /repos/my-org/my-repo/actions/jobs/99", func(w http.ResponseWriter, _ *http.Request) {
 		status, conclusion := s.jobStatus.Load().(func() (string, string))()
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": status, "conclusion": conclusion})
+	})
+	mux.HandleFunc("GET /repos/my-org/my-repo/actions/runs/7", func(w http.ResponseWriter, _ *http.Request) {
+		status, conclusion := s.runStatus.Load().(func() (string, string))()
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": status, "conclusion": conclusion})
 	})
 	mux.HandleFunc("POST /repos/my-org/my-repo/actions/runs/7/cancel", func(w http.ResponseWriter, _ *http.Request) {
@@ -337,7 +345,31 @@ func TestAbandonedProbe_Redispatched(t *testing.T) {
 	}
 }
 
-func TestAbandonedProbe_Concluded(t *testing.T) {
+// TestAbandonedProbe_ConcludedRunLevel drives the outcome the 2026-08-04 live
+// run measured: the run concludes success while the job record never does.
+func TestAbandonedProbe_ConcludedRunLevel(t *testing.T) {
+	t.Parallel()
+	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil)
+
+	waitForCompleteJob(t, bs)
+	// No redelivery; the run goes terminal while the job stays in_progress.
+	rest.jobStatus.Store(func() (string, string) { return "in_progress", "" })
+	rest.runStatus.Store(func() (string, string) { return "completed", "success" })
+
+	select {
+	case verdict := <-verdictCh:
+		if verdict != verdictConcluded+"-run-success" {
+			t.Fatalf("verdict = %q, want %s-run-success", verdict, verdictConcluded)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("probe did not reach a verdict")
+	}
+	if got := rest.cancels.Load(); got != 1 {
+		t.Errorf("cleanup cancels = %d, want 1 (409-tolerant cancel still issued)", got)
+	}
+}
+
+func TestAbandonedProbe_ConcludedJobLevel(t *testing.T) {
 	t.Parallel()
 	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil)
 
@@ -347,14 +379,11 @@ func TestAbandonedProbe_Concluded(t *testing.T) {
 
 	select {
 	case verdict := <-verdictCh:
-		if verdict != verdictConcluded+"-cancelled" {
-			t.Fatalf("verdict = %q, want %s-cancelled", verdict, verdictConcluded)
+		if verdict != verdictConcluded+"-job-cancelled" {
+			t.Fatalf("verdict = %q, want %s-job-cancelled", verdict, verdictConcluded)
 		}
 	case <-time.After(20 * time.Second):
 		t.Fatal("probe did not reach a verdict")
-	}
-	if got := rest.cancels.Load(); got != 1 {
-		t.Errorf("cleanup cancels = %d, want 1 (409-tolerant cancel still issued)", got)
 	}
 }
 

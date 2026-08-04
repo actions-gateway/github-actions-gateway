@@ -144,11 +144,12 @@ type RenewJobResponse struct {
 // or its own delivery when the worker was removed before it ran (Q628, which sends
 // TaskResultAbandoned). The remaining values are defined for wire fidelity.
 //
-// WIRE FORMAT NOT LIVE-CONFIRMED: the exact serialization the run service expects
-// for the result field (lowercase camelCase strings here, vs PascalCase or the
-// integer enum) has not been validated against a live run service. The AGC's
-// completejob call is gated off by default until a dogfood turn-up confirms it
-// (Q260 follow-up item 1).
+// Wire format live-confirmed 2026-08-04: the run service accepted this lowercase
+// camelCase serialization with a 204 (Investigation H, the Q645 probe). The AGC's
+// completejob call stays gated off by default for a measured *semantic* reason
+// instead: completing an acquired-but-never-run delivery with abandoned concluded
+// the whole run as SUCCESS one second later — a job that never executed reports
+// green (the Q645 findings). Remedy tracked as Q676.
 type TaskResult string
 
 const (
@@ -176,10 +177,12 @@ const (
 // CompleteJobRequest is the request body for POST {run_service_url}/completejob.
 // A runner sends it to report a job's terminal result. In GAG the worker pod's
 // runner binary makes this call for a job it actually ran; the AGC itself sends it
-// for an assignment it acquired but never ran — so GitHub does not leave that
-// per-delivery job assignment dangling until its ~15-minute unstarted-job timeout
-// and cancel the job. That covers a deduplicated duplicate delivery (Q260 follow-up)
-// and a delivery whose worker pod was removed before it started (Q628).
+// for an assignment it acquired but never ran — a deduplicated duplicate delivery
+// (Q260 follow-up) and a delivery whose worker pod was removed before it started
+// (Q628). Measured caveat: for the winner's own (sole) delivery this call does not
+// release the job back to the queue — it concludes the run immediately, as success
+// when the result is abandoned (Q645 Investigation H; remedy Q676). The deduped-
+// sibling case, where the winner still reports the real result, is unmeasured.
 //
 // JobID is the delivery's own RunnerRequestID — distinct per sibling under GitHub's
 // broker fan-out — so, under the per-delivery lock model the renew path relies on

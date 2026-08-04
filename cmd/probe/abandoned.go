@@ -425,6 +425,7 @@ func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
 		"window", p.cfg.Window.String(), "runId", runID, "jobId", jobID)
 
 	lastStatus, lastConclusion := "", ""
+	lastRunStatus, lastRunConclusion := "", ""
 	nextREST := time.Time{} // first REST check happens immediately
 	for {
 		if len(obs.after(t0)) > 0 {
@@ -449,6 +450,21 @@ func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
 			return verdictNoSignal
 		}
 		if now.After(nextREST) {
+			// Both levels, because the live run split them: the 2026-08-04 run
+			// concluded the RUN success one second after the abandoned completion
+			// while the JOB record stayed in_progress with a null conclusion past
+			// the whole window (see the Q645 plan doc findings). A watch on either
+			// level alone reads NO-SIGNAL or misses the orphaned job.
+			rStatus, rConclusion, rErr := p.fetchRunStatus(ctx, runID)
+			switch {
+			case rErr != nil:
+				p.log.Warn("INVESTIGATION-H: REST run status fetch failed", "runId", runID, "error", rErr)
+			case rStatus != lastRunStatus || rConclusion != lastRunConclusion:
+				p.log.Info("INVESTIGATION-H: REST run transition",
+					"runId", runID, "status", rStatus, "conclusion", rConclusion,
+					"afterT0", now.Sub(t0).Round(time.Second).String())
+				lastRunStatus, lastRunConclusion = rStatus, rConclusion
+			}
 			status, conclusion, err := p.fetchJobStatus(ctx, jobID)
 			switch {
 			case err != nil:
@@ -459,12 +475,20 @@ func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
 					"afterT0", now.Sub(t0).Round(time.Second).String())
 				lastStatus, lastConclusion = status, conclusion
 			}
+			if rStatus == "completed" {
+				p.log.Info("INVESTIGATION-H: VERDICT "+verdictConcluded+"-run-"+rConclusion+" — the run "+
+					"went terminal with no redelivery: an abandoned completion ends the run rather than "+
+					"re-queueing the job, so a job that never executed reports this conclusion",
+					"runId", runID, "runConclusion", rConclusion,
+					"jobStatus", status, "jobConclusion", conclusion)
+				return verdictConcluded + "-run-" + rConclusion
+			}
 			if status == "completed" {
-				p.log.Info("INVESTIGATION-H: VERDICT "+verdictConcluded+"-"+conclusion+" — the job "+
+				p.log.Info("INVESTIGATION-H: VERDICT "+verdictConcluded+"-job-"+conclusion+" — the job "+
 					"went terminal with no redelivery: an abandoned completion kills the job, so a "+
 					"re-run arm is needed for it to ever execute",
 					"jobId", jobID, "conclusion", conclusion)
-				return verdictConcluded + "-" + conclusion
+				return verdictConcluded + "-job-" + conclusion
 			}
 			nextREST = now.Add(p.restPollInterval)
 		}
@@ -801,6 +825,18 @@ func (p *abandonedProbe) resolveFixtureRun(ctx context.Context) (int64, int64, e
 	}
 	p.log.Info("INVESTIGATION-H: watching fixture job", "jobId", jobs.Jobs[0].ID, "status", jobs.Jobs[0].Status)
 	return run.ID, jobs.Jobs[0].ID, nil
+}
+
+func (p *abandonedProbe) fetchRunStatus(ctx context.Context, runID int64) (string, string, error) {
+	var run struct {
+		Status     string `json:"status"`
+		Conclusion string `json:"conclusion"`
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%d", p.apiBase, p.cfg.Owner, p.cfg.Repo, runID)
+	if err := p.getJSON(ctx, u, &run); err != nil {
+		return "", "", err
+	}
+	return run.Status, run.Conclusion, nil
 }
 
 func (p *abandonedProbe) fetchJobStatus(ctx context.Context, jobID int64) (string, string, error) {

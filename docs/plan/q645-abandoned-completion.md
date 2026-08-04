@@ -1,8 +1,10 @@
 # Q645 — What the run service does with an `abandoned` completion
 
-**Status:** probe built; live run pending.
+**Status:** answered 2026-08-04 — conclude, not re-dispatch, and the conclusion
+is **success**. See [Findings](#findings); the remedy decision is
+[Q676](../STATUS.md#Q676).
 
-Queue item: [Q645](../STATUS.md#Q645). Origin:
+Queue item: Q645 (completed; done rows are deleted). Origin:
 [release-1.3.md § The rc.5 re-run](release-1.3.md#the-rc5-re-run-2026-08-02).
 
 ## The question
@@ -72,8 +74,10 @@ repos, same as Investigations E/F/G):
      re-dispatch, observed on the same channel a real AGC listener would see
      it on. Its `runner_request_id` (same as A's, or fresh) is recorded:
      that is the fan-out identity a recovering AGC would have to dedup against.
-   - **REST.** The fixture job's `status`/`conclusion` polled every 15 s;
-     every transition logged with its timestamp.
+   - **REST.** The fixture run's and job's `status`/`conclusion` polled every
+     15 s; every transition logged with its timestamp. Both levels, because
+     the live run split them (see Findings): the run concluded while the job
+     record never did.
 
 Verdicts, each logged with the evidence behind it:
 
@@ -81,7 +85,7 @@ Verdicts, each logged with the evidence behind it:
 |---|---|
 | `WIRE-ACCEPTED` / `WIRE-REJECTED` | completejob's response status: the serialization confirmation `broker/types.go` is waiting on. Rejected ends the run, since the primary question cannot be asked with a call the service refused. |
 | `REDISPATCHED` | B received a job delivery after T0. The job survives an abandoned completion; no re-run arm is needed. |
-| `CONCLUDED-<conclusion>` | The REST job went terminal without redelivery. An abandoned completion kills the job; a re-run arm is needed for it to ever execute. |
+| `CONCLUDED-run-<c>` / `CONCLUDED-job-<c>` | The REST run (or job) went terminal without redelivery. An abandoned completion kills the job; a re-run arm is needed for it to ever execute. |
 | `NO-SIGNAL` | Neither within the window. The job is dangling exactly as if nothing had been reported, itself a finding: completejob(abandoned) released nothing. |
 
 `REDISPATCHED` and `CONCLUDED-*` are not mutually exclusive in principle
@@ -123,4 +127,70 @@ reads as what it is rather than being flattened into one word.
 
 ## Findings
 
-*(recorded after the live run)*
+### The answer: WIRE-ACCEPTED, then CONCLUDED-run-success (2026-08-04)
+
+One live run, first attempt, fixture run
+[30886332454](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30886332454),
+full log in the session record. The timeline (all times UTC):
+
+| t | Event |
+|---|---|
+| 07:04:10 | Fixture dispatched by a `[q645-probe]` branch push; run and job `queued` |
+| 07:04:27 | Runners A (id 28620) and B (28621) registered, both sessions polling; the `RunnerJobRequest` reaches **A only** in under a second |
+| 07:04:29.7 | A acquires (plan `808639ca`, job token present); the REST **job** flips to `in_progress`, `runner_name` stamped, `started_at` set |
+| 07:04:29.9 | A sends `completejob result=abandoned` → **204 No Content** |
+| 07:04:30 | The REST **run** is `completed` / **`success`** (`updated_at` pins it to this second) |
+| 07:04:30 → 07:24:32 | 20-minute window: B receives nothing; the REST **job** stays `in_progress`, `conclusion: null`, still true 25 minutes later, after the run was long green |
+
+**The wire format is confirmed.** The run service accepted the lowercase
+camelCase `result` serialization with a 204. The `WIRE FORMAT NOT
+LIVE-CONFIRMED` caveat in `broker/types.go` is resolved; keeping
+`AGC_FANOUT_COMPLETION` off is no longer justified by serialization risk; it
+is now justified by the semantics below.
+
+**The answer to Q645 is: conclude, not re-dispatch — and the conclusion is
+`success`.** GitHub ended the run one second after the abandoned completion.
+No re-queue, no redelivery to a live listener, no unstarted-job timeout. A job
+that never executed a single step reports green: the false-green outcome, worse
+for a CI consumer than either the silent 16-minute hang Q628 replaced or an
+honest failure. The remedy decision is filed as [Q676](../STATUS.md#Q676);
+candidate arms include reporting `failed` instead (concludes red and gives
+`rerun-failed-jobs` a target; result-value semantics unmeasured beyond
+`abandoned`), cancelling the run via REST before or instead of completing, or
+not completing at all (the told-nothing path measured 2026-08-02 left the job
+`queued` for 16+ minutes, which at least stays visibly unfinished).
+
+**The run and job records disagree.** The run concluded while its only job
+never did: `in_progress`, `conclusion: null`, `completed_at: null`, indefinitely.
+The probe's own window verdict printed `NO-SIGNAL` because its watch covered the
+job endpoint only; the run endpoint carried the signal. The instrument now
+watches both levels (verdicts `CONCLUDED-run-<c>` / `CONCLUDED-job-<c>`), so a
+re-run reports this outcome directly instead of leaving it to a post-hoc REST
+read.
+
+Secondary observations, recorded because a stub would have answered otherwise:
+
+- **No fan-out to B.** Both sessions were polling before dispatch; the
+  delivery reached A alone. The Q260 multi-delivery fan-out did not occur for
+  a single queued job with two idle same-label sessions on the classic v2
+  flow.
+- **Acquire is what "starts" the job REST-side.** `started_at` and
+  `runner_name` were stamped at `acquirejob`, before any runner binary
+  existed.
+- **Both broker sessions came back with no encryption key** — message bodies
+  arrived as plaintext JSON and parsed directly (`hasAESKey=false` in the
+  log).
+- **Cancel of an already-completed run returned 2xx**, not the 409 the
+  cleanup helper treats as already-terminal.
+
+### What this feeds
+
+- [Q676](../STATUS.md#Q676): the Q628 release path must not ship
+  `result=abandoned` for the winner's own delivery as-is; pick and measure a
+  remedy. The Q260 sibling case (`result=skipped` on deduped deliveries while
+  the winner still runs) is **not** covered by this measurement — whether a
+  sibling completion also concludes the whole run is exactly the semantics
+  brokertest's fan-out accounting assumes it does not, and needs its own probe
+  arm before `AGC_FANOUT_COMPLETION` is trusted anywhere.
+- `broker/types.go` and `listener/job.go` comments updated to cite this
+  measurement instead of the unmeasured ~15-minute-timeout rationale.
