@@ -1309,11 +1309,21 @@ identity. Three controls keep the pipeline itself trustworthy.
 
 ### Actions are pinned to full commit SHAs
 
-Every `uses:` across `.github/workflows/` is pinned to a full 40-char commit SHA
-with a trailing `# vX.Y.Z` comment for readability — never a floating tag (`@v4`)
-or branch. A tag is mutable: whoever controls the upstream repo can repoint it at
-new code, which would then run inside the privileged publish job. A SHA is
-immutable. The runtime tool downloads in the publish path are pinned the same way:
+Every `uses:` in the repo is pinned to a full 40-char commit SHA with a trailing
+`# vX.Y.Z` comment — never a floating tag (`@v4`) or branch. A tag is mutable:
+whoever controls the upstream repo can repoint it at new code, which would then
+run inside the privileged publish job. A SHA is immutable. The comment is not
+decoration: it is what Dependabot reads to know which release a SHA is, so a pin
+without one is a pin nothing will bump.
+
+`make uses-pinned-check` enforces both halves, and the CI `uses-pinned` job
+(`unit-test.yml`) runs it on any workflow change. Exempt shapes, because neither
+is a mutable third-party reference: a local `./…` action or reusable workflow,
+which is in-tree code the same PR reviews, and a `docker://` image, which must
+carry an `@sha256:` digest instead. An unparseable workflow fails the gate rather
+than being skipped.
+
+The runtime tool downloads in the publish path are pinned the same way:
 `cosign` via `sigstore/cosign-installer` with an explicit `cosign-release`
 (kept in step with `COSIGN_VERSION` in the Makefile so a local `make
 verify-release` uses the same version that signed), and `syft` via the
@@ -1333,9 +1343,18 @@ gh api repos/<owner>/<action>/commits/<tag> --jq '.sha'
 
 `syft-version` is **not** Dependabot-managed (it's a tool download, not an action
 ref) — bump it by hand in `publish.yml` when you bump the `anchore/sbom-action`
-SHA. The CI `actionlint` job (`unit-test.yml`) checks that every `uses:` carries a
-well-formed ref, so a pin edited down to a bare `owner/repo` fails the PR; it does
-not check that the ref is a SHA rather than a tag — that stays a review call.
+SHA.
+
+The two workflow gates divide the work, and it is worth knowing which answers
+what. `actionlint` checks that a `uses:` ref is present and well formed, so a pin
+edited down to a bare `owner/repo` fails the PR. But measured against v1.7.12,
+the version `tools/` pins, it accepts `@v7.0.1`, `@v4` and `@main` at exit 0,
+resolving the action's inputs off the tag while doing so. It reads the ref and
+never asserts it is a SHA. `uses-pinned-check` is the gate for that, and its scope
+is wider: actionlint lints only the root `.github/workflows/` directory, while the
+pin gate covers every workflow and composite action in the tree,
+including `cmd/gmc/.github/workflows/`: kubebuilder scaffolding GitHub never
+runs, whose refs no gate had read before.
 
 ### Signing identity is tags-only
 
