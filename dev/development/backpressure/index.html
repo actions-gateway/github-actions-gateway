@@ -2703,7 +2703,7 @@ linked worktree. Bypass the hook for a single commit with <code>git commit --no-
 </tr>
 <tr>
 <td>Structural rules</td>
-<td><code>scripts/docs/lint-backlog.sh</code> — <code>docs/STATUS.md</code> format: no <code>**Next ID:**</code> counter (IDs come from <code>make queue-id</code>), unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule</td>
+<td><code>scripts/docs/lint-backlog.sh</code> — <code>docs/STATUS.md</code> format: no <code>**Next ID:**</code> counter and every new ID holds a <code>refs/queue-ids/QN</code> claim (IDs come from <code>make queue-id</code>), unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule</td>
 <td><code>.githooks/pre-commit</code> (also enforces isolated STATUS.md commits); <code>make check</code>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint.yml</code></a></td>
 </tr>
 <tr>
