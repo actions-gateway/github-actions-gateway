@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `ci` `dogfood` `debt` `feature` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag) `1.3-gate` (blocks the [Release 1.3](plan/release-1.3.md) tag) `2.0-gate` (blocks the [`v2.0.0`](plan/v2-ga.md) tag)  
-**New IDs:** `make queue-id TITLE="…"` — it searches for near-duplicates, then claims ([why there is no counter here](development/queue-id-allocation.md))
+**New IDs:** `make queue-id TITLE="…"`: it searches for near-duplicates, then claims ([why there is no counter here](development/queue-id-allocation.md))
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/docs/lint-backlog.sh`.
 
@@ -45,7 +45,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [v1 sunset → v2-only](plan/v1-classic-sunset-review.md) | `debt` | ✅ |
 | [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `feature` | ✅ |
 | [Capacity-aware job intake](plan/capacity-aware-intake.md) | `feature` | ✅ |
-| [Markdown gates on a real parser](plan/markdown-gates-parser.md) | `milestone` `ci` `debt` | ⚠️ |
+| [Markdown gates on a real parser](plan/markdown-gates-parser.md) | `milestone` `ci` `debt` | ✅ |
 
 ---
 
