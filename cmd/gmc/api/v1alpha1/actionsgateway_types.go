@@ -12,11 +12,17 @@ import (
 // The admission webhook enforces this at create/update time. A CEL XValidation
 // rule is intentionally omitted: k8s ≤ 1.30 CEL cannot use has() on optional
 // non-pointer string fields, so the rule would fail to install on those versions.
+// v2 replaces this type with the name-only LocalSecretReference.
 type SecretReference struct {
 	Name string `json:"name"`
-	// Namespace must be left empty. Cross-namespace Secret references are not
-	// supported; the referenced Secret must reside in the ActionsGateway's own
-	// namespace. This field is reserved for a future protocol extension.
+	// Namespace is inert and must be left empty: the admission webhook rejects
+	// any non-empty value. Cross-namespace Secret references are not supported;
+	// the referenced Secret must reside in the ActionsGateway's own namespace.
+	// The field is not a reserved extension point — v2 drops it outright, since
+	// a reference that names another namespace but resolves in the referrer's is
+	// a confused-deputy footgun. It stays in this schema only because removing a
+	// field from a served version is breaking, and goes when v1alpha1 does, at
+	// v2.0.0.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 }
@@ -244,10 +250,18 @@ type ActionsGatewayStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	// ProxyReadyReplicas is the number of egress proxy pods currently Ready.
 	// +optional
 	ProxyReadyReplicas int32 `json:"proxyReadyReplicas,omitempty"`
+	// ActiveSessions is inert: the GMC never sets it, so it is absent from every
+	// gateway the GMC reconciles. Do not read or alert on it. The live long-poll
+	// session count is per-RunnerGroup, in status.activeSessions on the tenant's
+	// RunnerGroup objects. v2's ActionsGatewayStatus omits it; it goes when
+	// v1alpha1 does, at v2.0.0.
 	// +optional
 	ActiveSessions int32 `json:"activeSessions,omitempty"`
+	// ObservedGeneration is the .metadata.generation the most recent reconcile
+	// acted on.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }

@@ -103,9 +103,10 @@ type ActionsGatewaySpec struct {
     // GitHubAppRef points to a Secret containing the tenant's GitHub App
     // private key and App ID.
     //
-    // If GitHubAppRef.Namespace is omitted it defaults to the namespace of
-    // the ActionsGateway CR, so a tenant can create the Secret alongside the
-    // CR and manage credential rotation themselves.
+    // The Secret always resolves in the ActionsGateway CR's own namespace, so
+    // a tenant can create it alongside the CR and manage credential rotation
+    // themselves. GitHubAppRef.Namespace is inert and must be left empty; the
+    // admission webhook rejects any non-empty value.
     GitHubAppRef SecretReference `json:"gitHubAppRef"`
 
     // GitHubURL is the GitHub organization, enterprise, or repository URL this
@@ -296,8 +297,9 @@ type ActionsGatewayStatus struct {
     // +optional
     ProxyReadyReplicas int32 `json:"proxyReadyReplicas,omitempty"`
 
-    // ActiveSessions is the number of currently open long-poll sessions
-    // across all RunnerGroups managed by this gateway's AGC.
+    // ActiveSessions is inert: the GMC never sets it. The live long-poll
+    // session count is per-RunnerGroup, in RunnerGroupStatus.ActiveSessions.
+    // It is removed with v1alpha1 at v2.0.0; v2's ActionsGatewayStatus omits it.
     // +optional
     ActiveSessions int32 `json:"activeSessions,omitempty"`
 
