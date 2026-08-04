@@ -50,7 +50,8 @@ func TestListener_DeferredJobIsReOfferedUntilItProvisions(t *testing.T) {
 	require.Eventually(t, func() bool { return m.provisionedCount() == 1 }, 5*time.Second, 10*time.Millisecond,
 		"the re-offer must provision the job once the conflict clears")
 	assert.Equal(t, []string{jobID}, prov.jobIDs(), "the deferred job provisions exactly once")
-	assert.Equal(t, 0, m.deferredCount(), "a provisioned job leaves the deferred set")
+	assert.Eventually(t, func() bool { return m.deferredCount() == 0 }, 5*time.Second, 10*time.Millisecond,
+		"a provisioned job leaves the deferred set")
 }
 
 // TestListener_DeferredJobStopsOnCompletion covers the other way a stall ends: GitHub

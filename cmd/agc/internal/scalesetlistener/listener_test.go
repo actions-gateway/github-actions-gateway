@@ -180,6 +180,12 @@ func (m *countingMetrics) completedCount() int {
 
 // deferredCount returns the most recently published deferred-job gauge, summed over
 // every reason.
+//
+// A test asserting that a provisioned job LEFT the set must wait on this gauge, not
+// read it after waiting on provisionedCount: retryDeferred increments the provisioned
+// metric inside provisionAssigned and calls resolveDeferred — which republishes this
+// gauge — only after it returns, so the two settle in that order and a bare read lands
+// in the gap. Asserting a job is still held is safe; nothing is removing it.
 func (m *countingMetrics) deferredCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
