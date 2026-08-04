@@ -4667,9 +4667,48 @@ recorded alongside the verdict as the evidence it rests on.</p>
 <h4 id="runnergithub-egress-attribution-q352">Runner→GitHub egress attribution (Q352)<a class="headerlink" href="#runnergithub-egress-attribution-q352" title="Permanent link">&para;</a></h4>
 <p>A handful of specs deliberately reach the <strong>live</strong> <code>api.github.com</code> (see the <code>real-github-egress</code> label above), so a transient outage of the CI runner's own GitHub egress kills them with signatures that look like product regressions — observed as a proxy CONNECT 502 (kindnet lane, 2026-07-14) and curl exit-28 timeouts including the proxy-less DirectEgress spec (Calico lane, 2026-07-19), both green on re-run. Two probes make such blips self-attribute instead of costing a triage:</p>
 <ul>
-<li><strong>In-suite, at failure time (the authoritative signal):</strong> when a <code>real-github-egress</code>-labelled spec fails, a suite-level <code>AfterEach</code> immediately issues an HTTPS GET to <code>api.github.com/zen</code> from the test process — the runner host, the segment every in-cluster path NATs through — and stamps a <code>RUNNER-HOST GITHUB PREFLIGHT: FAILED/OK</code> banner into the spec's failure output. <code>FAILED</code> (a transport error; any HTTP status counts as reachable) means infra blip — re-run; <code>OK</code> means treat the failure as real. A non-fatal baseline probe also logs reachability at suite start; it deliberately does <strong>not</strong> fail fast, since a start-time blip may clear before those specs run and a fatal preflight would add a flake surface rather than remove one.</li>
-<li><strong>In the workflow's failure-diagnostic step:</strong> <code>e2e-reusable.yml</code> curls <code>api.github.com/zen</code> from the runner alongside the cluster dumps, covering the case where the suite process itself died before the <code>AfterEach</code> could report.</li>
+<li><strong>In-suite, at failure time (the authoritative signal):</strong> when a <code>real-github-egress</code>-labelled spec fails, a suite-level <code>AfterEach</code> immediately issues an HTTPS GET to <code>api.github.com/zen</code> from the test process — the runner host, the segment every in-cluster path NATs through — and stamps a <code>RUNNER-HOST GITHUB PREFLIGHT: &lt;verdict&gt;</code> banner into the spec's failure output. A non-fatal baseline probe logs the same verdict at suite start; it deliberately does <strong>not</strong> fail fast, since a start-time blip may clear before those specs run and a fatal preflight would add a flake surface rather than remove one.</li>
+<li><strong>In the workflow's failure-diagnostic step:</strong> <code>e2e-reusable.yml</code> curls <code>api.github.com/zen</code> from the runner alongside the cluster dumps and applies the same table in shell, covering the case where the suite process itself died before the <code>AfterEach</code> could report.</li>
 </ul>
+<p><strong>How the probe scores a response.</strong> The probe goes straight from the test process to GitHub — no proxy, no cluster, nothing this repo ships — so its result can never be caused by a product regression. It shares exactly two things with the in-cluster path: the runner's egress address and the internet between it and GitHub. Anything that refuses the probe therefore refuses the traffic the failing spec depends on, which is what makes each response decidable (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/github_egress.go"><code>ScoreGitHubEgress</code></a>, table-tested in <code>github_egress_test.go</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Probe result</th>
+<th>Verdict</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Transport error (DNS, dial, TLS, timeout)</td>
+<td><code>BLOCKED</code></td>
+<td>Nothing answered. Infra — re-run the job.</td>
+</tr>
+<tr>
+<td>2xx</td>
+<td><code>REACHABLE</code></td>
+<td>GitHub served the runner. Treat the failure as real; inspect the in-cluster path (workload NP → proxy → egress NP → GitHub).</td>
+</tr>
+<tr>
+<td>403, 429</td>
+<td><code>BLOCKED</code></td>
+<td><code>/zen</code> carries no credentials and needs none, so a refusal is not about who asked — GitHub is throttling or blocking this source address. The in-cluster path NATs through that same address. Infra — re-run.</td>
+</tr>
+<tr>
+<td>408, 5xx</td>
+<td><code>BLOCKED</code></td>
+<td>The path reaches GitHub (or an intermediary) but it will not serve the request. Not something this repo can regress. Infra — re-run.</td>
+</tr>
+<tr>
+<td>Anything else (3xx surviving redirect following, 401, 404, other 4xx)</td>
+<td><code>INCONCLUSIVE</code></td>
+<td>GitHub answers an unauthenticated <code>/zen</code> with 200 and nothing else, so an intermediary intercepted the request or the endpoint moved. Read the body excerpt in the banner: not GitHub's → interception, infra, re-run; GitHub's → the probe is stale, fix it and triage the spec on its own output.</td>
+</tr>
+</tbody>
+</table>
+<p>A non-2xx banner also carries <code>x-ratelimit-remaining</code>, <code>retry-after</code>, and a 200-byte body excerpt — GitHub's own words for the refusal. Those make the banner concrete but never change a verdict.</p>
+<p>Scoring <code>403</code> as <code>REACHABLE</code> was the original rule and the bug behind Q648: on 2026-08-03 the probe stamped <code>PREFLIGHT: OK (HTTP 403)</code> three times into a failing run, telling the operator to treat a rate-limited runner as a product regression; the re-run was green. Getting it wrong the other way is just as costly — a verdict of <code>BLOCKED</code> on a genuinely broken spec means re-running it forever — which is why <code>INCONCLUSIVE</code> exists and stays narrow: it covers only the responses that say <em>something other than GitHub</em> answered, and it names the one artifact (the body) that resolves it.</p>
 <h4 id="the-calico-e2e-lane">The Calico e2e lane<a class="headerlink" href="#the-calico-e2e-lane" title="Permanent link">&para;</a></h4>
 <ul>
 <li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-calico.yml"><code>e2e-calico.yml</code></a></strong> — <code>kind_cni: calico</code> (Q119). kindnet accepts <code>NetworkPolicy</code> but its bundled enforcer does not drop egress, so the NetworkPolicy-enforcement specs self-skip on the per-PR kindnet leg; on Calico they assert real packet drops. The full suite runs on both CNIs — these specs simply activate under Calico: the two <code>TenantProvisioning</code> egress negatives (<code>WorkloadEgressBlockedToNonProxyPod</code>, <code>WorkerCannotReachK8sAPI</code>), <code>ProxyConnectWorks</code> (which runs on both but is only truly enforced here), and the two <code>ManagerMetricsNP</code> specs (Q83). No per-lane spec selection is needed — the suite's runtime <code>egressEnforcingCNI()</code> self-skip does the routing.</li>

@@ -2577,14 +2577,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q648"></a>Q648</td>
-<td><a href="../development/testing/#runnergithub-egress-attribution-q352">The runner→GitHub egress probe scores an HTTP 403 as reachable, so a refused runner reads as a real failure</a></td>
-<td><code>flake</code> <code>tests</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong>Measured 2026-08-03</strong> (run 30832163714 attempt 1): probe stamped <code>PREFLIGHT: OK (HTTP 403)</code> 3x at failure time, so it said treat-as-real; green on re-run. It errors only on transport, so 403 is OK.</td>
-</tr>
-<tr>
 <td><a id="Q642"></a>Q642</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch-test.sh"><code>progress-watch-test</code>'s <code>interval 0</code> case fails under <code>make check</code>, passes standalone</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -3401,6 +3393,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q648"></a>Q648</td>
+<td><a href="../development/testing/#runnergithub-egress-attribution-q352">The runner→GitHub egress probe scores an HTTP 403 as reachable, so a refused runner reads as a real failure</a></td>
+<td><code>flake</code> <code>tests</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Event:</strong> a <code>real-github-egress</code> spec fails on <code>main</code> after the Q648 fix and the banner misattributes it — <code>BLOCKED</code> on a spec still red across re-runs, or <code>REACHABLE</code>/<code>INCONCLUSIVE</code> on one that re-runs green. → top of Queue, escalated.</td>
+</tr>
 <tr>
 <td><a id="Q596"></a>Q596</td>
 <td><a href="../development/testing/#the-v2-api-sync-gate"><code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> fails under <code>make check</code>, passes standalone</a></td>
