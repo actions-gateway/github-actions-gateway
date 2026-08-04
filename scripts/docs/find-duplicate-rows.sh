@@ -53,9 +53,10 @@ set -euo pipefail
 #   text alone      — >= MIN_SHARED shared content words AND containment >= MIN_SCORE
 #   same link target — a lower bar on both, since the target is itself evidence
 #
-# Measured over the 119 shipped Queue + Deferred + Flake-watch rows: 9 of 7,021
-# pairs flag, ~0.15 candidates per row filed. Loosening either ratio by 0.05
-# roughly doubles it. See maintaining-backlog.md for the full table.
+# Measured on the shipped backlog: roughly one row in five surfaces a candidate,
+# and every flagged pair is topically adjacent (2026-08-04: 11 of 6,903 pairs
+# over 118 rows). Loosening either ratio by 0.05 roughly doubles it. Re-measure
+# with --audit; the method and the pairs it keys on are in maintaining-backlog.md.
 readonly MIN_SHARED=3
 readonly MIN_SCORE=0.40
 readonly TARGET_MIN_SHARED=2

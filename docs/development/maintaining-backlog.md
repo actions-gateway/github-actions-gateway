@@ -65,7 +65,9 @@ An advisory that fires constantly is worse than none, so the thresholds are meas
 scripts/docs/find-duplicate-rows.sh --audit
 ```
 
-Over the backlog as of 2026-08-03 (75 Queue + 31 Deferred + 13 Flake-watch rows): **9 flagged pairs out of 7,021** — about one candidate per seven rows filed, and every one of the nine is topically adjacent rather than a nonsense match. Loosening either ratio by 0.05 roughly doubles it. Re-run the audit before changing a threshold; the claim decays as the backlog grows.
+**Roughly one row in five surfaces a candidate when filed, and every pair it flags is topically adjacent rather than a nonsense match.** The snapshot behind that, on 2026-08-04 (72 Queue + 31 Deferred + 15 Flake-watch rows): 11 flagged pairs out of 6,903. The rate held across every backlog state this was measured in — the Queue turns over faster than any fixed count survives, which is why the figure is a dated instance and `--audit` is the live answer. Two of the eleven look like real duplicates nobody caught: Q663 and Q612 are both `check-doc-links` defects, and Q660 and Q588 are both the doc-update-matrix sending a row into a `scripts/README.md` table that does not exist.
+
+Loosening either ratio by 0.05 roughly doubles the count. Re-run the audit before changing a threshold.
 
 ## The merge driver: resolve Queue rows by ID, not by line position
 
