@@ -37,9 +37,10 @@ import (
 type Session struct {
 	// ID is the minted "session-<n>" identifier.
 	ID string
-	// Owner is the RunnerGroup ownerName ("<group>-<agentIndex>"), or "" when
-	// the double does not model owners. Used for prefix-scoped listing so a
-	// test asserts on only its own RunnerGroup's sessions on a shared instance.
+	// Owner is the ownerName the listener sent ("<CR name>-<agentIndex>", for a
+	// RunnerGroup or a RunnerSet alike), or "" when the double does not model
+	// owners. Used for prefix-scoped listing so a test asserts on only its own
+	// CR's sessions on a shared instance.
 	Owner string
 	// AgentID is the runner agent ID the session was created for (the
 	// single-use doubles map this back to a consumable runner record); 0 when
