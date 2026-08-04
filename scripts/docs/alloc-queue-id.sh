@@ -31,7 +31,17 @@
 # IDs are sparse, not dense. A session that claims an ID and then never files
 # a row leaves a hole; that is expected, not a leak. Refs are never deleted:
 # the namespace is the record of which IDs have been used, and deleting one
-# would let a retired ID be reissued.
+# would let a retired ID be reissued. Measured 2026-08-03: 10 of 240 claims
+# never became a row, so the space is consumed about 4% faster than rows are
+# filed.
+#
+# There is NO no-reserve report. `--peek` printed the next free ID and claimed
+# nothing, which is the `**Next ID:** QN` counter this script replaced, reborn
+# as a flag: two sessions reading it concurrently read the same answer, and the
+# one that merged second paid the renumber. Q656 measured that collision — a row
+# carrying Q644 was committed 43 minutes before any Q644 claim existed. Knowing
+# the next ID without taking it has no use that survives the session, so the
+# only way to learn an ID is to hold it.
 #
 # Every ID takes a title, because this is the one place every row passes through
 # and the near-duplicate search needs text to match on (Q639). An optional
@@ -43,8 +53,6 @@
 # Usage:
 #   alloc-queue-id.sh "<title>"              # claim and print one ID
 #   alloc-queue-id.sh "<title>" "<title>"    # one ID per title, one per line
-#   alloc-queue-id.sh --peek                 # print the next ID, claim nothing
-#   alloc-queue-id.sh --peek "<title>"       # ... and search for near-duplicates
 #   alloc-queue-id.sh --target <link> "<title>"   # link the Item cell will carry
 #
 # Rationale and the alternatives considered: docs/development/queue-id-allocation.md
@@ -124,12 +132,11 @@ search_duplicates() {
 }
 
 main() {
-	local peek=0 file target='' titles=()
+	local file target='' titles=()
 	file="$(git rev-parse --show-toplevel)/docs/STATUS.md"
 
 	while (($# > 0)); do
 		case "$1" in
-		--peek) peek=1 && shift ;;
 		--target)
 			target=${2:-}
 			shift 2
@@ -149,10 +156,8 @@ main() {
 		esac
 	done
 
-	if ((peek == 0)) && ((${#titles[@]} == 0)); then
-		die 'wants the title of each row you are about to file — one argument per ID, so each gets a near-duplicate search (--peek to look up the next ID without one)'
-	fi
-	((peek == 0)) || ((${#titles[@]} <= 1)) || die '--peek takes at most one title'
+	((${#titles[@]} > 0)) ||
+		die 'wants the title of each row you are about to file — one argument per ID, so each gets a near-duplicate search'
 	[[ -z "$target" ]] || ((${#titles[@]} <= 1)) || die '--target describes one row, so it takes at most one title'
 
 	local title
@@ -164,11 +169,6 @@ main() {
 	claimed_max=$(highest_claimed)
 	file_max=$(highest_in_file "$file")
 	floor=$((claimed_max > file_max ? claimed_max : file_max))
-
-	if ((peek == 1)); then
-		printf 'Q%d\n' "$((floor + 1))"
-		return 0
-	fi
 
 	local slug sha candidate=$((floor + 1)) issued=0 attempts=0
 	slug=$(repo_slug)

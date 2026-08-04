@@ -41,6 +41,8 @@ It searches first and claims second, so recognising a duplicate costs no ID. Can
 
 **The title is mandatory, and there is no untitled batch form.** An optional argument is a gate nobody passes through, and `-n 3` was one: it claimed IDs without naming a single row. Several rows at once means several titles: `scripts/docs/alloc-queue-id.sh` takes one argument per ID and searches each on its own, which is what a retro filing four rows actually wants. Nothing automated calls the target, so making the title mandatory changed only the lines that document it.
 
+**Every path through it claims, and a row whose ID holds no claim fails the lint.** `PEEK=1` used to report the next free ID without taking it, which two concurrent sessions read identically — the counter this mechanism replaced, behind a flag. It is gone, and rule 12 catches the other way to obtain an unreserved ID (reading the file's highest and adding one) at the commit that files the row rather than at the rebase that collides. What that cost in practice, and the one case rule 12 still cannot see: [queue-id-allocation.md § Reserving, not reporting](queue-id-allocation.md#reserving-not-reporting).
+
 `TARGET=<link>` is optional and worth passing when the Item cell's link is already decided.
 
 ### What it keys on, and why

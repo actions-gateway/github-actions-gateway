@@ -53,6 +53,18 @@
 #      otherwise invisible: Q592 was filed with `infra` from a branch cut before
 #      that label was split into ci/dogfood/debt, and merged without a conflict
 #      because the two edits touched different rows.
+#  12. A Q-ID this branch ADDS holds a `refs/queue-ids/QN` claim on the remote.
+#      Rule 1 removes the shared counter; this removes the other way to obtain
+#      an ID without reserving it, which is to read the file's highest and add
+#      one. Q656 measured what that costs: a row carrying Q644 was committed 43
+#      minutes before any Q644 claim existed, a second session then claimed
+#      Q644 legitimately, and the rule-follower paid the renumber across a
+#      commit message, a PR body and a plan doc. Scoped to *new* IDs against the
+#      git baseline, and to IDs at or above the namespace's lowest claim —
+#      everything below predates the allocator and holds no ref. Skipped when
+#      the remote is unreachable, so an offline clone still lints; CI re-runs it
+#      with a network. Filing a row whose ID was claimed elsewhere (a dispatcher
+#      allocating for a worker)? Set BACKLOG_ALLOW_UNCLAIMED_ID="Q1 Q2".
 #
 # Usage:
 #   lint-backlog.sh [--staged] [path/to/STATUS.md]
@@ -268,9 +280,83 @@ check_no_resurrected_rows() {
     return "$rc"
 }
 
+# Rule 12. The allocator's claim namespace. An ID with no claim was never
+# reserved, so a concurrent session can still be handed it.
+QUEUE_ID_REF_NS='refs/queue-ids'
+
+check_new_ids_claimed() {
+    local baseline_ref="" baseline="" rel
+    rel="$(backlog_relpath)"
+    [[ -n "$rel" ]] || return 0
+    baseline_ref="$(baseline_ref)"
+    [[ -n "$baseline_ref" ]] || return 0
+
+    baseline="$(git show "$baseline_ref:$rel" 2>/dev/null || true)"
+    [[ -n "$baseline" ]] || return 0
+
+    # Collect the new IDs before touching the network: a branch that adds no row
+    # pays nothing, which is most runs of `make check`.
+    local id
+    local -a new_ids=()
+    while read -r id; do
+        [[ -n "$id" ]] || continue
+        grep -q "<a id=\"$id\"></a>" <<<"$baseline" && continue
+        new_ids+=("$id")
+    done < <(anchor_ids <"$FILE")
+    (( ${#new_ids[@]} )) || return 0
+
+    # No remote, no network, no claims yet: nothing to check against. An empty
+    # namespace is indistinguishable from an unreachable one here, and both mean
+    # this clone cannot answer the question.
+    local claims
+    claims="$(git ls-remote origin "$QUEUE_ID_REF_NS/*" 2>/dev/null)" || return 0
+    [[ -n "$claims" ]] || return 0
+
+    # IDs below the namespace's lowest claim predate the allocator entirely.
+    local floor
+    floor="$(awk -F/ '$NF ~ /^Q[0-9]+$/ {
+        n = substr($NF, 2) + 0
+        if (min == 0 || n < min) min = n
+    } END { print min + 0 }' <<<"$claims")"
+
+    local -a allowed=()
+    read -r -a allowed <<<"${BACKLOG_ALLOW_UNCLAIMED_ID:-}"
+
+    local rc=0 ok a
+    for id in "${new_ids[@]}"; do
+        (( ${id#Q} >= floor )) || continue
+        # Anchored to the end of the ls-remote line: an unanchored match reads a
+        # claim on Q4010 as a claim on Q401, and the failure is a silent pass.
+        grep -qE "[[:space:]]$QUEUE_ID_REF_NS/$id\$" <<<"$claims" && continue
+        ok=0
+        for a in ${allowed+"${allowed[@]}"}; do
+            [[ "$a" == "$id" ]] && ok=1 && break
+        done
+        (( ok )) && continue
+        if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+            printf '::error file=%s::%s is a new row here but holds no %s/%s claim, so it was never reserved and a concurrent session can be handed the same ID. Allocate it with make queue-id TITLE=... and renumber the row now, while it is still one file. See docs/development/queue-id-allocation.md\n' \
+                "$FILE" "$id" "$QUEUE_ID_REF_NS" "$id"
+        else
+            printf 'lint-backlog: %s: %s is new here but holds no %s/%s claim.\n' \
+                "$FILE" "$id" "$QUEUE_ID_REF_NS" "$id" >&2
+            printf '  An unclaimed ID was never reserved, so a concurrent session can still be\n' >&2
+            printf '  handed it — and the loser renumbers the row, its anchor, every cross-\n' >&2
+            printf '  reference, the plan doc, the PR body and the commit subject. Allocate it:\n' >&2
+            printf '    make queue-id TITLE=%sthe row title%s\n' "'" "'" >&2
+            printf '  then renumber now, while the change is still one file. See\n' >&2
+            printf '  docs/development/queue-id-allocation.md.\n' >&2
+            printf '  Claimed from another clone or session? BACKLOG_ALLOW_UNCLAIMED_ID=%s\n' "$id" >&2
+        fi
+        rc=1
+    done
+
+    return "$rc"
+}
+
 flake_check_rc=0
 check_flake_rows_preserved || flake_check_rc=1
 check_no_resurrected_rows || flake_check_rc=1
+check_new_ids_claimed || flake_check_rc=1
 
 # Rule 9. Every `plan/NAME.md` path linked from a Queue row's Item or Notes cell.
 # Deferred rows are deliberately excluded: a deferred residual does not hold a

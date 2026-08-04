@@ -6,9 +6,11 @@ Backlog IDs are allocated by claiming a git ref on the remote, not by a counter 
 make queue-id TITLE='GMC CRD manifest drifts from the AGC types it embeds'
 ```
 
-That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (`Q423`). `make queue-id PEEK=1` shows what the next one would be without claiming it; `TARGET=<link>` sharpens the search when the Item cell's link is already decided. The script is [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh), which takes one title argument per ID — several titles claim several IDs, each searched on its own.
+That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (`Q423`). `TARGET=<link>` sharpens the search when the Item cell's link is already decided. The script is [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh), which takes one title argument per ID — several titles claim several IDs, each searched on its own.
 
 Claim an ID when you file the row, use it, and move on. There is nothing to release and nothing to clean up.
+
+**Every path through the target claims, and an ID you did not claim will not lint.** Those are the two halves of the same rule: the only way to learn an ID is to hold it, and a row carrying an ID nobody holds fails [`lint-backlog`](maintaining-backlog.md) rule 12 at the commit that files it. Both are below, under [Reserving, not reporting](#reserving-not-reporting).
 
 **The title is mandatory, and there is no untitled batch form.** This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through. `-n <count>` used to claim IDs without naming a row; it is gone, because a door beside the gate is the same as no gate. Why the search keys on what it does, and what it costs in false positives: [maintaining-backlog.md § Search before you file](maintaining-backlog.md#search-before-you-file).
 
@@ -23,6 +25,26 @@ gh api -X POST "repos/$REPO/git/refs" -f ref=refs/queue-ids/Q423 -f sha="$SENTIN
 ```
 
 `201` means you won. `422 Reference already exists` means someone beat you, so advance and retry.
+
+## Reserving, not reporting
+
+A ref claim is only a reservation for the sessions that make one. Q656 measured what the rest costs.
+
+On 2026-08-03 a row carrying Q644 was committed at 09:30:59. Another session allocated at 10:14:06, was handed Q643 and Q644, and therefore saw a floor of 642. **No Q644 claim existed 43 minutes after a row was already using it.** Two sessions running the allocator cannot both be handed Q644; the create-ref call fails for the second, atomically. The collision proves one of them never made the call. The one that did held the ID legitimately, merged second, and paid the renumber across a commit message, a PR body and a plan doc.
+
+There were two ways to hold an ID without reserving it, and both are closed:
+
+- **`--peek` / `PEEK=1`** printed the next free ID and claimed nothing. That is the `**Next ID:** QN` counter this mechanism replaced, behind a flag: two sessions reading it concurrently read the same answer. **Removed.** Knowing the next ID without taking it has no use that survives the session, and IDs are free: if you want to know, claim it.
+- **Reading the file's highest ID and adding one.** No tool can prevent that, so it fails loudly instead. `lint-backlog` rule 12 requires every Q-ID a branch *adds* to hold a `refs/queue-ids/QN` claim, and it runs in the pre-commit hook, `make check`, and CI — so an unreserved ID is caught at the commit that files it rather than at the rebase that collides. The message names the fix, and `BACKLOG_ALLOW_UNCLAIMED_ID="Q1 Q2"` is there for an ID claimed from another clone.
+
+What rule 12 costs and what it still misses:
+
+- It checks only IDs that are new against the git baseline, so a branch that files no row makes no network call at all.
+- IDs below the namespace's lowest claim (Q421) predate the allocator and hold no ref, so they are skipped.
+- When `git ls-remote` cannot reach the remote it skips rather than fails, so an offline clone still lints. CI re-runs it with a network.
+- **It cannot catch a hand-picked ID that another session has already claimed but not yet filed.** That is the narrow residual: the ref exists, so the row looks reserved. Closing it needs the claim to record *who* holds it, which no one has needed yet.
+
+The concurrency the claim exists for is asserted in [`scripts/docs/alloc-queue-id-test.sh`](../../scripts/docs/alloc-queue-id-test.sh): eight allocators released at the same instant, against a bare fixture origin and a `gh` stub, each writing its own result. They take eight distinct IDs. The last case deletes the mechanism, running the identical fleet against a stub whose create-ref reports success and reserves nothing. All eight then take the same ID, which is what makes the first assertion mean anything.
 
 ## Why the counter had to go
 
@@ -67,7 +89,7 @@ Every row in the table above is a *line-position* verdict. The [merge driver](ma
 - **Claims point at the repository's root commit**, never at a branch tip. A ref is a GC root, so claims anchored to `claude/*` tips would pin every squash-orphaned branch history forever. Anchored to one already-permanent object, they retain nothing new.
 - **No garbage collection.** Each ref is ~64 bytes in `packed-refs`. The remote already carries ~800 `refs/pull/*` refs that GitHub never prunes, so the namespace is noise against what is already there. Deleting a claim would also let a retired ID be reissued, which the "IDs are never reused" rule forbids.
 - **Clones never fetch them.** The default refspec is `+refs/heads/*:refs/remotes/origin/*`, and GitHub serves git protocol v2, which filters refs server-side. There is no fetch or clone cost.
-- **IDs are sparse.** A session that claims an ID and never files a row leaves a hole. That is expected, not a leak.
+- **IDs are sparse, and a claimed-but-unused ID is never reclaimed.** A session that claims an ID and dies, or files nothing, strands it — the ref stays, the number is never reissued, and the gap is permanent. That is the intended behaviour, not a leak to fix: reclaiming would mean deciding that a claim is stale, and the session holding it is exactly the one that cannot be asked. Measured 2026-08-03: 10 of 240 claims (Q432, Q442, Q470, Q473, Q487, Q494, Q496, Q504, Q608, Q655) never became a row, so the space is consumed about 4% faster than rows are filed. Against a 64-byte ref and an unbounded integer, that buys nothing worth the risk of reissuing a retired ID. Removing `--peek` raises the rate slightly, since a session that would have peeked now holds one.
 - **Never claim with `git push <sha>:<ref>`.** When the ref already exists and points at the same object, push reports `Everything up-to-date` and exits 0, so the caller concludes it won a race it lost. Every claim shares one sentinel object, so this failure mode is the default, not an edge case.
 
 To see what has been allocated:

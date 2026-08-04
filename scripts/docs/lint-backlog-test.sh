@@ -460,6 +460,77 @@ expect_file 'labels: gate label declared     -> clean' 0 \
 expect_file 'labels: gloss link text as label-> fail' 1 \
 	"$(labelled_fixture "$GATE_DECL" "$(lbl v2.0.0)" "$(lbl tests)")"
 
+# --- Rule 12: a new row's ID must hold a claim on the remote ------------------
+#
+# Reproduces Q656: a row was committed carrying an ID nobody had reserved, a
+# second session then claimed that ID legitimately, and the collision surfaced
+# only at rebase. The fixture origin is a real bare repo, so `git ls-remote`
+# answers from it rather than from the network.
+claim_repo="$WORKDIR/claims"
+claim_origin="$WORKDIR/claims-origin.git"
+mkdir -p "$claim_repo/docs"
+git -C "$claim_repo" init -q
+git init -q --bare "$claim_origin"
+
+CLAIMED_ROW="$(qrow Q402 "$PLAIN_ITEM" 🔲 'claimed')"
+UNCLAIMED_ROW="$(qrow Q401 "$PLAIN_ITEM" 🔲 'never reserved')"
+LEGACY_ROW="$(qrow Q300 "$PLAIN_ITEM" 🔲 'predates the allocator')"
+
+cp "$(fixture "$(qrow Q400 "$PLAIN_ITEM" 🔲 'base')")" "$claim_repo/docs/STATUS.md"
+git -C "$claim_repo" add docs/STATUS.md
+git -C "$claim_repo" "${git_id[@]}" commit -qm 'branch point'
+git -C "$claim_repo" remote add origin "$claim_origin"
+git -C "$claim_repo" push -q origin HEAD:refs/heads/main
+git -C "$claim_repo" update-ref refs/remotes/origin/main HEAD
+
+# The namespace starts at Q400, so Q300 is below the floor and Q402 is taken.
+claim_sha="$(git -C "$claim_repo" rev-parse HEAD)"
+git -C "$claim_origin" update-ref refs/queue-ids/Q400 "$claim_sha"
+git -C "$claim_origin" update-ref refs/queue-ids/Q402 "$claim_sha"
+
+run_claim() {
+	rc=0
+	(cd "$claim_repo" && "$@" "$LINT" "$claim_repo/docs/STATUS.md") >/dev/null 2>&1 || rc=$?
+}
+
+cp "$(fixture "$(qrow Q400 "$PLAIN_ITEM" 🔲 'base')" "$UNCLAIMED_ROW")" "$claim_repo/docs/STATUS.md"
+run_claim env
+if [[ "$rc" == 1 ]]; then printf 'ok   rule 12: new row, no claim        -> fail\n'; else
+	printf 'FAIL rule 12: an unreserved new ID was not flagged (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+run_claim env BACKLOG_ALLOW_UNCLAIMED_ID=Q401
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 12: BACKLOG_ALLOW_UNCLAIMED -> pass\n'; else
+	printf 'FAIL rule 12: the escape hatch should allow an ID claimed elsewhere (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# A longer ID sharing Q401's prefix is not Q401's claim. An unanchored match
+# would read this as reserved and pass, which is the dangerous direction.
+git -C "$claim_origin" update-ref refs/queue-ids/Q4010 "$claim_sha"
+run_claim env
+if [[ "$rc" == 1 ]]; then printf 'ok   rule 12: prefix of a longer claim  -> fail\n'; else
+	printf 'FAIL rule 12: a claim on Q4010 was accepted as a claim on Q401 (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+git -C "$claim_origin" update-ref -d refs/queue-ids/Q4010
+
+cp "$(fixture "$(qrow Q400 "$PLAIN_ITEM" 🔲 'base')" "$CLAIMED_ROW")" "$claim_repo/docs/STATUS.md"
+run_claim env
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 12: new row holding a claim  -> pass\n'; else
+	printf 'FAIL rule 12: a properly allocated ID was flagged (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# IDs below the namespace's lowest claim predate the allocator and hold no ref.
+cp "$(fixture "$(qrow Q400 "$PLAIN_ITEM" 🔲 'base')" "$LEGACY_ROW")" "$claim_repo/docs/STATUS.md"
+run_claim env
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 12: ID below the namespace   -> pass\n'; else
+	printf 'FAIL rule 12: an ID predating the allocator was flagged (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# Only *new* IDs are checked: a row the baseline already carried is settled, and
+# re-litigating it would fail every branch that merely touches the file.
+cp "$(fixture "$UNCLAIMED_ROW")" "$claim_repo/docs/STATUS.md"
+git -C "$claim_repo" add docs/STATUS.md
+git -C "$claim_repo" "${git_id[@]}" commit -qm 'unclaimed row already in the baseline'
+git -C "$claim_repo" update-ref refs/remotes/origin/main HEAD
+run_claim env
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 12: unclaimed but not new    -> pass\n'; else
+	printf 'FAIL rule 12: a pre-existing unclaimed row was flagged (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
 rc=0
 "$LINT" "$REPO_ROOT/docs/STATUS.md" >/dev/null 2>&1 || rc=$?
 if [[ "$rc" == 0 ]]; then
