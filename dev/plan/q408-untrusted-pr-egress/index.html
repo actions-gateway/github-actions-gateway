@@ -2461,13 +2461,63 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-the-gap--what-an-e2e-job-pulls-at-job-time" class="md-nav__link">
+  <a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. The gap — what an e2e job pulls at job time
+        2. The gap — what an e2e job actually fetches at job time (Phase 0)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="2. The gap — what an e2e job actually fetches at job time (Phase 0)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-the-measurement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 The measurement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-the-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 The inventory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-what-the-measurement-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 What the measurement changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-open-decisions-phase-1-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Open decisions (Phase 1 inputs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2495,10 +2545,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#32-wiring-the-three-clients" class="md-nav__link">
+  <a href="#32-wiring-the-clients" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3.2 Wiring the three clients
+        3.2 Wiring the clients
       
     </span>
   </a>
@@ -2609,10 +2659,12 @@
 
 <h1 id="untrusted-pr-egress-posture-for-kata-workers--q408">Untrusted-PR Egress Posture for Kata Workers — Q408<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers--q408" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-07-31): design written; no phase implemented.</strong> The Demand
-trigger fired (operator ask), moving <a href="../../STATUS/#Q408">Q408</a> out of
-Deferred. Next step: Phase 0, the measured job-time egress inventory on a
-live Kata e2e run.</p>
+<p><strong>Status (2026-08-03): Phase 0 measured; §2 rewritten from the measurement;
+Phases 1–4 re-sequenced because of what it found.</strong> The design (§3) survives
+for the registry half. The measurement killed the assumption that job-time
+egress <em>is</em> the registry half — see <a href="#23-what-the-measurement-changes">§2.3</a>
+and the new Phase 1. Next step: the <a href="#24-open-decisions-phase-1-inputs">§2.4</a>
+decisions, then Phase 1.</p>
 </blockquote>
 <p>Design and phased plan for the posture named in
 <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a>
@@ -2660,7 +2712,7 @@ controls, so this plan only builds what is actually missing:</p>
 </tr>
 <tr>
 <td>Go modules</td>
-<td>Athens in-cluster cache (Q244, <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/athens"><code>deploy/athens/</code></a>) — the pattern this plan copies: unlabelled cache pod keeps free egress, additive NetworkPolicy admits workload→cache, workers wired by env (<code>GOPROXY</code>)</td>
+<td>Athens in-cluster cache (Q244, <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/athens"><code>deploy/athens/</code></a>) — the pattern this plan copies: unlabelled cache pod keeps free egress, additive NetworkPolicy admits workload→cache, workers wired by env (<code>GOPROXY</code>). Wired for the <strong>main</strong> dogfood tenant only (<code>scripts/dogfood/setup.sh</code>); the e2e tenant is closed by <code>vendor/</code> instead (<a href="#23-what-the-measurement-changes">§2.3</a>)</td>
 </tr>
 <tr>
 <td>Doctrine</td>
@@ -2671,36 +2723,212 @@ controls, so this plan only builds what is actually missing:</p>
 <p><strong>The one opener:</strong> the e2e overlays ship an additive <code>e2e-open-egress</code>
 NetworkPolicy (<code>podSelector: {}</code>, allow-all egress —
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/resources.yaml"><code>deploy/dogfood-e2e/overlays/kata/resources.yaml</code></a>)
-because the suite pulls from CDN-fronted public registries. Q408 is the work
-that lets us delete it from the Kata overlay.</p>
-<h2 id="2-the-gap--what-an-e2e-job-pulls-at-job-time">2. The gap — what an e2e job pulls at job time<a class="headerlink" href="#2-the-gap--what-an-e2e-job-pulls-at-job-time" title="Permanent link">&para;</a></h2>
+because the suite pulls from CDN-fronted public registries — and, as Phase 0
+measured, from <code>get.helm.sh</code> and the Actions cache data plane too. Q408 is the
+work that lets us delete it from the Kata overlay.</p>
+<h2 id="2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">2. The gap — what an e2e job actually fetches at job time (Phase 0)<a class="headerlink" href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0" title="Permanent link">&para;</a></h2>
 <p>Only <strong>in-job</strong> traffic matters. The worker pod's own images (runner,
 <code>docker:28-dind</code> sidecar) are pulled by the <em>node's</em> containerd, outside the
-pod network namespace, and are not governed by the tenant NetworkPolicy.
-Inside the job, three clients fetch over the pod's network:</p>
+pod network namespace, and are not governed by the tenant NetworkPolicy.</p>
+<h3 id="21-the-measurement">2.1 The measurement<a class="headerlink" href="#21-the-measurement" title="Permanent link">&para;</a></h3>
+<p>Source: GitHub Actions run
+<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30786972228">30786972228</a>,
+job <code>e2e / e2e</code> (job id 91602337821) — a green <code>workflow_dispatch</code> release-gate
+run of <code>e2e-test.yml</code> on 2026-08-03, routed to the dogfood scale set
+(<code>runs-on: gag-ci-e2e</code>, runner <code>gag-ci-e2e-246a8cb2-…</code>), kindnet lane, 62 of 73
+specs passed. <code>E2E_VARIANT</code> defaults to <code>kata</code> (<code>scripts/dogfood/e2e-start.sh</code>)
+and nothing pins it otherwise, so this is the Kata overlay; the job's <code>docker
+info</code> corroborates it — an Alpine dind container on kernel 6.18.35 reporting 5
+CPUs / 13.88 GiB, i.e. a micro-VM sized from the pod's limits, not the
+c2-standard-8 node it runs on.</p>
+<p>No new dogfood run was booked: the job log of a run that already happened <em>is</em>
+the measurement, and it records every fetch the job made.</p>
+<p>Reproduce with:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/:owner/:repo/actions/jobs/91602337821/logs<span class="w"> </span>&gt;<span class="w"> </span>tmp/q408/run.log
+</code></pre></div>
+<p>then extract hosts (<code>grep -oE 'https?://[a-zA-Z0-9._-]+'</code>) and image pulls
+(<code>grep -oE 'Pulling from [a-zA-Z0-9/_.-]*'</code>).</p>
+<h3 id="22-the-inventory">2.2 The inventory<a class="headerlink" href="#22-the-inventory" title="Permanent link">&para;</a></h3>
+<p><strong>Registry / chart pulls.</strong> "Warm" is what run 30786972228 did with the Actions
+cache populated; "cold" is the same step on a cache miss, which every version
+bump forces. Upstream hosts for the three pinned manifests were read from the
+manifests themselves, not assumed.</p>
+<table>
+<thead>
+<tr>
+<th>Ref</th>
+<th>Client</th>
+<th>Warm run</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>docker.io/moby/buildkit:buildx-stable-1@sha256:0168…</code></td>
+<td>inner dockerd (pre-pull step)</td>
+<td><strong>pulled</strong> — no cache entry exists for it</td>
+</tr>
+<tr>
+<td><code>docker.io/library/registry:2</code></td>
+<td>inner dockerd (<code>make e2e-registry</code>)</td>
+<td><strong>pulled</strong> — no cache entry exists for it</td>
+</tr>
+<tr>
+<td><code>ghcr.io/actions-gateway/gmc:v1.2.0</code></td>
+<td>inner dockerd (released-chart upgrade check)</td>
+<td><strong>pulled</strong> — released image, never cached</td>
+</tr>
+<tr>
+<td><code>ghcr.io/actions-gateway/charts/actions-gateway:1.2.0</code></td>
+<td><strong>helm's OCI client</strong></td>
+<td><strong>pulled</strong> — released chart, never cached</td>
+</tr>
+<tr>
+<td><code>docker.io/kindest/node:v1.35.5@sha256:ce97…</code></td>
+<td>inner dockerd</td>
+<td>cache hit (353 MB restore)</td>
+</tr>
+<tr>
+<td><code>docker.io/curlimages/curl:8.10.1</code></td>
+<td>inner dockerd</td>
+<td>cache hit</td>
+</tr>
+<tr>
+<td><code>docker.io/hashicorp/vault:1.18.3</code></td>
+<td>inner dockerd</td>
+<td>cache hit</td>
+</tr>
+<tr>
+<td><code>quay.io/jetstack/cert-manager-{controller,webhook,cainjector}:v1.20.2</code></td>
+<td>inner dockerd</td>
+<td>cache hit</td>
+</tr>
+<tr>
+<td><code>registry.k8s.io/metrics-server/metrics-server:v0.8.1</code></td>
+<td>inner dockerd</td>
+<td>cache hit</td>
+</tr>
+<tr>
+<td><code>quay.io/calico/{node,cni,kube-controllers}:v3.31.5</code></td>
+<td>inner dockerd</td>
+<td>calico lane only; not exercised here</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The inner kind cluster's containerd made zero upstream pulls.</strong> Everything it
+needs is either <code>kind load</code>ed from the runner's Docker daemon (kind node image,
+cert-manager, metrics-server, calico) or served from the in-job local registry
+on <code>127.0.0.1:5000</code> (the six baked images, curl, Vault). The one registry
+resolution kind's containerd attempted was <code>registry.invalid</code>, a deliberate
+negative probe. So the hypothesised second client is, as installed, not a
+client at all.</p>
+<p><strong>Non-registry HTTP(S).</strong> Every hostname the job log names, excluding
+in-cluster addresses and hosts that only appear in printed prose:</p>
+<table>
+<thead>
+<tr>
+<th>Host</th>
+<th>Fetched</th>
+<th>Reachable today via</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>github.com</code></td>
+<td>checkout; <code>kubernetes-sigs/kind</code> release binary; cert-manager and metrics-server release manifests; the Go toolchain tarball (<code>actions/go-versions</code>, via <code>actions/setup-go</code>)</td>
+<td>the managed GitHub rule</td>
+</tr>
+<tr>
+<td><code>raw.githubusercontent.com</code></td>
+<td>the pinned Calico manifest (calico lane only)</td>
+<td>the managed GitHub rule</td>
+</tr>
+<tr>
+<td><code>get.helm.sh</code></td>
+<td>the helm binary, downloaded by <code>azure/setup-helm</code></td>
+<td><strong><code>e2e-open-egress</code> only</strong></td>
+</tr>
+<tr>
+<td>Actions cache data plane</td>
+<td>five cache restores, ~353 MB for the kind node image alone</td>
+<td><strong><code>e2e-open-egress</code> only</strong> — the host is not visible in the job log and has not been measured</td>
+</tr>
+<tr>
+<td>Actions service / <code>api.github.com</code></td>
+<td>runner control plane, job logs, <code>upload-artifact</code></td>
+<td>the managed GitHub rule</td>
+</tr>
+<tr>
+<td><code>proxy.golang.org</code></td>
+<td><strong>nothing</strong> — configured as <code>GOPROXY</code>, zero <code>go: downloading</code> lines in the run</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Two coverage gaps in this measurement, both stated rather than papered over:
+the calico lane (<code>e2e-calico.yml</code>, nightly) was not the lane measured, so its
+<code>raw.githubusercontent.com</code> + <code>quay.io/calico/*</code> fetches are read from the
+workflow and the manifest rather than observed; and the live-GitHub specs were
+among the 11 skipped, so their real <code>api.github.com</code> traffic did not run. Both
+ride paths the managed GitHub rule already admits, so neither changes the
+design — but neither is measured.</p>
+<h3 id="23-what-the-measurement-changes">2.3 What the measurement changes<a class="headerlink" href="#23-what-the-measurement-changes" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>The inner <code>dockerd</code></strong> (Kata guest): <code>kindest/node</code>, images <code>docker
-   build</code> FROMs, the local-registry container (<code>make e2e-registry</code>), the
-   Vault test image.</li>
-<li><strong>The inner kind cluster's containerd</strong>: CNI images (<code>KIND_CNI=calico</code>),
-   plus whatever the suite deploys that isn't pushed to the in-job local
-   registry.</li>
-<li><strong>Direct HTTP(S)</strong>: <code>go</code> module fetches (already covered — the repo
-   vendors, and dogfood wires Athens), possibly nothing else. Setup-time
-   fetches (<code>get.helm.sh</code>, <code>quay.io</code> kata-deploy chart, image <em>builds</em>) run
-   on trusted infra, not in the job.</li>
+<li><strong>Job-time egress is not registry-only, so the <a href="#33-the-networkpolicy-swap">§3.3</a>
+   swap cannot produce a green run on its own.</strong> §2's earlier text asserted
+   that <code>get.helm.sh</code> and friends "run on trusted infra, not in the job".
+   Measured: <code>azure/setup-helm</code> downloads from <code>get.helm.sh</code> inside the job,
+   and <code>actions/cache</code> moves hundreds of megabytes over a data plane that is
+   neither GitHub nor a registry. A NetworkPolicy admitting only DNS, GitHub
+   and the mirror set fails at <code>azure/setup-helm</code>, before the suite starts.
+   The Kata overlay's own comment on <code>e2e-open-egress</code> already listed
+   <code>get.helm.sh</code> alongside the registries; the plan's §2 contradicted it, and
+   the plan was the one that was wrong.</li>
+<li><strong>There is a fourth registry client: helm.</strong> <code>helm pull
+   oci://ghcr.io/actions-gateway/charts/…</code> speaks the registry protocol from
+   the runner container, and neither dockerd's <code>--registry-mirror</code> nor kind's
+   <code>containerdConfigPatches</code> redirects it. Wiring it means rewriting the ref
+   (and <code>--plain-http</code>), the same treatment §3.2 reserves for non-Hub docker
+   pulls.</li>
+<li><strong>The inner kind containerd needs no mirror wiring</strong> (measured: zero
+   upstream pulls). §3.2's <code>containerdConfigPatches</code> bullet shrinks from a
+   deliverable to a fallback for a preload that goes missing.</li>
+<li><strong>Go is closed by <code>vendor/</code>, not by Athens.</strong> §3.2 claimed "the dogfood
+   tenant wires <code>GOPROXY</code> to Athens (Q244)". That wiring is in
+   <code>scripts/dogfood/setup.sh</code> for the <em>main</em> dogfood tenant's RunnerTemplate;
+   the e2e tenant's overlays set no <code>GOPROXY</code>, and the measured run ran with
+   <code>GOPROXY='https://proxy.golang.org,direct'</code>. It fetched nothing only because
+   the repo vendors. Any future <code>go install</code> of a tool outside <code>vendor/</code>
+   would egress to <code>proxy.golang.org</code> under the tight policy and fail.</li>
+<li><strong><code>actions/cache</code> is already doing most of the mirror's job.</strong> Five of the
+   ten refs came from the Actions cache rather than an upstream registry, and
+   four of the remaining five have no cache entry at all. So the mirror's value
+   is the cold path (every version bump, every cache eviction) and those four
+   never-cached refs, not the steady state. It also makes the two mechanisms
+   substitutes: the tight lane can drop the image caches and let the mirror
+   serve them warm instead of allowlisting the cache data plane.</li>
 </ol>
-<p>Candidate upstream hosts: <code>docker.io</code> (registry-1.docker.io), <code>ghcr.io</code>,
-<code>registry.k8s.io</code>, <code>quay.io</code>. <strong>This list is a hypothesis.</strong> Phase 0
-replaces it with a measured inventory before any manifest is written
-(CLAUDE.md: measure before asserting).</p>
+<h3 id="24-open-decisions-phase-1-inputs">2.4 Open decisions (Phase 1 inputs)<a class="headerlink" href="#24-open-decisions-phase-1-inputs" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>The non-registry residual.</strong> Two ways to close it. Shrink it to
+  GitHub-only: helm and kubectl are <em>already baked into the e2e runner image</em>
+  (<code>scripts/dogfood/e2e-runner/Dockerfile</code>), so <code>azure/setup-helm</code> is redundant
+  on the self-hosted lane; the kind binary could join them; the three upstream
+  manifests already come from <code>github.com</code>, which the managed rule admits. Or
+  stand up an allowlisted forward proxy for whatever is left. The first is
+  smaller and adds no component.</li>
+<li><strong><code>actions/cache</code> on the tight lane.</strong> Keep it and allowlist its data plane
+  (host unmeasured; it is not GitHub), or drop the five image caches and let
+  the mirror be the cache. Dropping it is what makes the residual GitHub-only,
+  at the cost of a cold mirror on the first run after a bump.</li>
+</ul>
 <h2 id="3-design">3. Design<a class="headerlink" href="#3-design" title="Permanent link">&para;</a></h2>
 <h3 id="31-the-mirror--one-pull-through-cache-per-upstream">3.1 The mirror — one pull-through cache per upstream<a class="headerlink" href="#31-the-mirror--one-pull-through-cache-per-upstream" title="Permanent link">&para;</a></h3>
 <p><a href="https://github.com/distribution/distribution">CNCF Distribution</a>
-(<code>registry:3</code>, digest-pinned at Phase 1) in <strong>pull-through cache mode</strong>
+(<code>registry:3</code>, digest-pinned at Phase 2) in <strong>pull-through cache mode</strong>
 (<code>proxy.remoteurl</code>). Proxy mode supports exactly one upstream per instance,
 so the deployment is one Deployment + ClusterIP Service per upstream host —
-<code>mirror-docker-io</code>, <code>mirror-ghcr-io</code>, … — the final set fixed by Phase 0.
+<code>mirror-docker-io</code>, <code>mirror-ghcr-io</code>, <code>mirror-quay-io</code>, <code>mirror-registry-k8s-io</code>,
+the set fixed by the Phase 0 measurement (<a href="#22-the-inventory">§2.2</a>).
 Properties that make it the right tool:</p>
 <ul>
 <li><strong>Read-only by construction.</strong> A registry in proxy mode rejects pushes —
@@ -2747,27 +2975,35 @@ compromised mirror cannot substitute content — the mirror is trusted only for
 tag→digest resolution, exactly as the upstream registry already was. Cosign
 signatures key on the manifest digest, not the pull location, so verification
 through the mirror also holds.</p>
-<h3 id="32-wiring-the-three-clients">3.2 Wiring the three clients<a class="headerlink" href="#32-wiring-the-three-clients" title="Permanent link">&para;</a></h3>
+<h3 id="32-wiring-the-clients">3.2 Wiring the clients<a class="headerlink" href="#32-wiring-the-clients" title="Permanent link">&para;</a></h3>
+<p>Four upstreams need a mirror instance, per the <a href="#22-the-inventory">§2.2</a>
+inventory: <code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code>.</p>
 <ul>
 <li><strong>Inner dockerd</strong> (Kata overlay dind sidecar <code>args</code>): add
   <code>--registry-mirror=http://mirror-docker-io.&lt;ns&gt;.svc.cluster.local:5000</code>.
   This transparently covers every Docker-Hub pull, implicit or explicit.
-  <code>dockerd</code> mirrors <strong>only</strong> Docker Hub — a job-time <code>docker pull
-  ghcr.io/...</code> cannot be transparently redirected. Phase 0 determines
-  whether any non-Hub docker-client pull exists at job time; if so, the ref
-  is rewritten to the mirror address (<code>mirror-ghcr-io:5000/owner/img</code>) at
-  its call site, which pull-through mode serves natively.</li>
-<li><strong>Inner kind containerd</strong> (<code>test/kind-config-*.yaml</code>):
-  <code>containerdConfigPatches</code> registry-mirror entries mapping each upstream
-  host to its mirror Service. containerd handles per-host mirrors properly,
-  so kind-side pulls (calico, anything not in the local registry) all
-  redirect. The kind configs also serve local <code>make e2e</code> outside the
-  cluster, so the mirror entries must be additive-with-fallback (containerd
-  falls back to the upstream when the mirror is unreachable) or selected via
-  an env-gated config — Phase 2 decides after measuring which pulls actually
-  ride kind.</li>
-<li><strong>Go</strong>: already closed — the repo builds with the committed <code>vendor/</code>
-  tree, and the dogfood tenant wires <code>GOPROXY</code> to Athens (Q244).</li>
+  <code>dockerd</code> mirrors <strong>only</strong> Docker Hub, and the measured job makes non-Hub
+  docker-client pulls — <code>ghcr.io/actions-gateway/gmc</code>, and on a cold cache the
+  <code>quay.io</code> and <code>registry.k8s.io</code> prepulls. Those refs are rewritten to the
+  mirror address (<code>mirror-ghcr-io:5000/owner/img</code>) at their call sites, which
+  pull-through mode serves natively.</li>
+<li><strong>helm's OCI client</strong> (<code>chart-released-upgrade-check.sh</code>): <code>helm pull
+  oci://ghcr.io/&lt;owner&gt;/charts/…</code> takes neither of the above. The script
+  already parameterises the ref (<code>RELEASED_CHART_OCI</code>), so the tight lane
+  points it at <code>mirror-ghcr-io:5000/&lt;owner&gt;/charts</code> with <code>--plain-http</code>.</li>
+<li><strong>Inner kind containerd</strong> (<code>test/kind-config-*.yaml</code>): nothing required.
+  Measured: zero upstream pulls, because every image is <code>kind load</code>ed or
+  served from the in-job <code>127.0.0.1:5000</code> registry. Mirror entries via
+  <code>containerdConfigPatches</code> remain an option as a fallback for a preload that
+  goes missing; they would need to be additive-with-fallback (containerd falls
+  back to the upstream when the mirror is unreachable) since the same configs
+  serve local <code>make e2e</code> outside the cluster.</li>
+<li><strong>Go</strong>: closed by the committed <code>vendor/</code> tree, not by a proxy — the e2e
+  tenant sets no <code>GOPROXY</code> and the measured run used
+  <code>proxy.golang.org</code> without fetching from it (<a href="#23-what-the-measurement-changes">§2.3</a>).
+  Under the tight policy that default becomes a latent failure for any <code>go
+  install</code> outside <code>vendor/</code>; wiring the e2e tenant to Athens the way
+  <code>scripts/dogfood/setup.sh</code> wires the main dogfood tenant closes it.</li>
 </ul>
 <h3 id="33-the-networkpolicy-swap">3.3 The NetworkPolicy swap<a class="headerlink" href="#33-the-networkpolicy-swap" title="Permanent link">&para;</a></h3>
 <p>In the <strong>Kata overlay only</strong>: delete <code>e2e-open-egress</code>, add
@@ -2776,9 +3012,13 @@ managed default-deny stays authoritative for everything else (DNS + proxy /
 GitHub). The dind overlay keeps open egress: it is the explicit trusted-CI
 fallback (<code>E2E_VARIANT=dind</code>), and privileged DinD was never a candidate for
 untrusted code anyway.</p>
-<p>Result: the Kata worker's complete reachable set is <strong>cluster DNS (:53) +
+<p>Target: the Kata worker's complete reachable set is <strong>cluster DNS (:53) +
 GitHub (via the managed rule) + the mirror set</strong>. Nothing else, including
 the metadata server on its service ports.</p>
+<p><strong>This swap is only green once the non-registry residual is gone.</strong> Phase 0
+measured <code>get.helm.sh</code> and the Actions cache data plane as job-time fetches
+that no mirror serves and no managed rule admits, so Phase 1 has to close them
+before this policy can be applied — <a href="#24-open-decisions-phase-1-inputs">§2.4</a>.</p>
 <h3 id="34-residual-channels-stated-honestly">3.4 Residual channels, stated honestly<a class="headerlink" href="#34-residual-channels-stated-honestly" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>GitHub via the managed rule</strong> — inherent to running GitHub CI (job code
@@ -2814,32 +3054,40 @@ endpoint with four properties:</p>
 why it is the reference implementation. Any backend meeting the same four
 tests can substitute — Dragonfly is the scheduled candidate (<a href="#6-follow-on-validations-q539-q540">§6</a>).</p>
 <h2 id="4-phases">4. Phases<a class="headerlink" href="#4-phases" title="Permanent link">&para;</a></h2>
-<p>Each phase is a separate PR; 0 and 3 need live dogfood sessions
+<p>Each phase is a separate PR; 1, 3 and 4 need live dogfood sessions
 (prod-guarded — deliberate, operator-driven runs).</p>
 <ul>
-<li><strong>Phase 0 — measured egress inventory.</strong> On a green Kata e2e run (open
-  egress still in place), enumerate the actual job-time pull set:
-  <code>docker images --digests</code> in the guest + <code>crictl images</code> in the kind
-  nodes after the suite, cross-checked against suite logs. Deliverable: a
-  table in §2 replacing the hypothesis — hosts, images, and which client
-  (dockerd vs kind containerd) fetched each.</li>
-<li><strong>Phase 1 — mirror manifests.</strong> <code>deploy/registry-mirror/</code> (Athens-shaped:
-  base, persistent overlay, README, NetworkPolicies), one instance per
-  Phase-0 host, applied from the e2e setup path. Validation: apply to the
-  dogfood cluster; <code>curl</code> the mirror's <code>/v2/</code> and pull one image through
-  each instance from a debug pod.</li>
-<li><strong>Phase 2 — wiring.</strong> dockerd <code>--registry-mirror</code> in the Kata overlay;
-  kind <code>containerdConfigPatches</code>; any non-Hub docker-client refs rewritten.
-  Validation: a green Kata e2e run <strong>with open egress still present</strong>, with
-  the mirror access logs proving the pulls rode the mirror (hit counts &gt;
-  0 per instance) — wiring proven before enforcement changes.</li>
-<li><strong>Phase 3 — enforcement.</strong> Swap <code>e2e-open-egress</code> → <code>e2e-mirror-egress</code>
+<li><strong>Phase 0 — measured egress inventory. ✅ Done (2026-08-03).</strong> Read off a
+  green Kata dogfood run that had already happened rather than booking a new
+  one; <a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>
+  is the deliverable, and <a href="#23-what-the-measurement-changes">§2.3</a> is what it
+  cost the design.</li>
+<li><strong>Phase 1 — shrink the non-registry residual to GitHub.</strong> New phase, forced
+  by Phase 0. Resolve the <a href="#24-open-decisions-phase-1-inputs">§2.4</a> decisions,
+  then make the e2e workflow's job-time non-registry fetches land only on hosts
+  the managed GitHub rule already admits. Validation: a green Kata e2e run with
+  open egress still present, and the run log naming no non-GitHub,
+  non-registry host.</li>
+<li><strong>Phase 2 — mirror manifests.</strong> <code>deploy/registry-mirror/</code> (Athens-shaped:
+  base, persistent overlay, README, NetworkPolicies), one instance per §2.2
+  upstream — <code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code> — applied
+  from the e2e setup path. Validation: apply to the dogfood cluster; <code>curl</code>
+  the mirror's <code>/v2/</code> and pull one image through each instance from a debug
+  pod.</li>
+<li><strong>Phase 3 — wiring.</strong> dockerd <code>--registry-mirror</code> in the Kata overlay;
+  non-Hub docker-client refs rewritten; helm's OCI ref pointed at the ghcr
+  mirror. Validation: a green Kata e2e run <strong>with open egress still present</strong>,
+  with the mirror access logs proving the pulls rode the mirror (hit counts &gt;
+  0 per instance) — wiring proven before enforcement changes. Run it once with
+  the image caches cold, so the <code>quay.io</code> / <code>registry.k8s.io</code> prepulls are
+  exercised rather than skipped.</li>
+<li><strong>Phase 4 — enforcement.</strong> Swap <code>e2e-open-egress</code> → <code>e2e-mirror-egress</code>
   in the Kata overlay. Validation on dogfood: (a) a green Kata e2e run
   under the tight policy; (b) negatives from inside a job — <code>docker pull</code>
   of a host with no mirror instance fails, <code>curl https://example.com</code>
   times out, a push to the mirror is refused; (c) kind-side pull of a
   non-local-registry image succeeds via the mirror.</li>
-<li><strong>Phase 4 — docs + close-out.</strong>
+<li><strong>Phase 5 — docs + close-out.</strong>
   <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> caveat
   "validated posture is trusted CI" flips to the how-to;
   <a href="../../operations/security-operations/">security-operations.md</a> mirror
@@ -2884,7 +3132,7 @@ tests can substitute — Dragonfly is the scheduled candidate (<a href="#6-follo
 </ul>
 <h2 id="6-follow-on-validations-q539-q540">6. Follow-on validations (Q539, Q540)<a class="headerlink" href="#6-follow-on-validations-q539-q540" title="Permanent link">&para;</a></h2>
 <p>Decision 2026-07-31: both alternates get validated, sequenced <strong>after</strong> this
-plan's Phase 3 proves the reference posture — the contract must be validated
+plan's Phase 4 proves the reference posture — the contract must be validated
 on the simple implementation before variants are graded against it.</p>
 <ul>
 <li><strong><a href="../../STATUS/#Q539">Q539</a> — Kata + Dragonfly as the mirror backend.</strong>
@@ -2893,7 +3141,7 @@ on the simple implementation before variants are graded against it.</p>
   §3.5 contract: workers reach only a seed-peer ClusterIP Service (the
   <code>hostNetwork</code> dfdaemon is not policy-selectable), back-to-source is
   restricted to the Phase-0 upstream allowlist, non-GET registry operations
-  are refused, and workers never participate in the P2P mesh. Same Phase-3
+  are refused, and workers never participate in the P2P mesh. Same Phase-4
   validation battery, plus negatives for the contract points. Needs its own
   plan doc when picked up.</li>
 <li><strong><a href="../../STATUS/#Q540">Q540</a> — the composed stack as a milestone: Kata +
@@ -2906,9 +3154,9 @@ on the simple implementation before variants are graded against it.</p>
   node-layer P2P mesh stays unreachable from worker pods).</li>
 </ul>
 <h2 id="7-success-criteria">7. Success criteria<a class="headerlink" href="#7-success-criteria" title="Permanent link">&para;</a></h2>
-<p>Q408 closes when the Phase 3 validation lands: the dogfood Kata e2e variant
+<p>Q408 closes when the Phase 4 validation lands: the dogfood Kata e2e variant
 runs green with <code>e2e-open-egress</code> deleted, the negative probes confirm
-enforcement, and the Phase 4 docs make the recipe the supported posture. At
+enforcement, and the Phase 5 docs make the recipe the supported posture. At
 that point "Kata-isolated runners are only suitable for trusted CI"
 disappears from the docs, replaced by the reference architecture for
 untrusted-PR CI.</p>
