@@ -623,8 +623,9 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// A worker taken away before any container started ran no step and registered no
 	// runner, so neither value describes it: succeeded concluded an assignment whose
 	// job never ran, and the listener had nothing to distinguish it from a clean run
-	// (Q628). It is reported abandoned instead, which is what lets the listener
-	// release the assignment rather than leave it dangling.
+	// (Q628). It is reported abandoned instead, which tells the listener to report
+	// nothing for the delivery — completing it would conclude the run green
+	// (Q645/Q676) — and leave the job to the acquire lock's lapse.
 	//
 	// Not when a recovery armed above: those causes already re-run the job, and
 	// preemption's own victim is most often a pod that never started (Q497). One
@@ -632,7 +633,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	switch {
 	case outcome.DeletedBeforeStart && cause == "":
 		result = broker.TaskResultAbandoned
-		log.Warn("worker pod was removed before it ran; reporting the job as abandoned so its assignment is released",
+		log.Warn("worker pod was removed before it ran; reporting the job as abandoned so the assignment is left to GitHub's lock lapse",
 			"phase", outcome.Phase, "duration", duration)
 	case outcome.Phase == corev1.PodFailed:
 		result = broker.TaskResultFailed

@@ -48,10 +48,11 @@ var RealClock Clock = realClock{}
 // A); an empty result (an error before the pod reached a terminal phase) is treated
 // as succeeded by that fan-out.
 //
-// broker.TaskResultAbandoned is the one value that also changes what the listener
-// does: it means the worker was removed before it ran, so no runner registered and
-// nothing will ever report this delivery either, and the listener releases its own
-// assignment too rather than leaving it for GitHub's unstarted-job timeout (Q628).
+// broker.TaskResultAbandoned means the worker was removed before it ran, so no
+// runner registered and nothing will ever report this delivery. The listener
+// reports nothing for it either — completing the winner's own sole delivery
+// concludes the whole run as success, a false green (measured, Q645/Q676; see
+// handleJob) — and leaves the job to the acquire lock's lapse.
 //
 // The error return is the provisioning error as before (recoverable; the poll loop
 // logs and continues).
@@ -182,10 +183,10 @@ type Config struct {
 	// late redelivery arriving during the linger window is resolved with the recorded
 	// terminal result. Losers do NOT complete early.
 	//
-	// It also gates the same release of a runner's OWN delivery when its worker was
-	// removed before it ran (Q628) — the identical dangling assignment, reached
-	// without any fan-out, and the identical remedy — so one switch turns off every
-	// completejob the AGC issues on its own behalf.
+	// It does NOT cover the winner's own delivery when its worker was removed
+	// before it ran: completing that delivery concludes the whole run as success —
+	// a false green (measured, Q645/Q676) — so the listener never completes its
+	// own unrun assignment, regardless of this switch (see handleJob).
 	//
 	// ON BY DEFAULT: the run service's completion is per-delivery, not
 	// planID-scoped — completejob on a sibling's OWN jobID resolves only that

@@ -476,9 +476,11 @@ is the exclusion `externallyDeletedBeforeTerminal` already encodes. What the
 run service does with an `abandoned` completion was **measured 2026-08-04**
 (Q645, [Investigation H](q645-abandoned-completion.md#findings)): it concludes
 the run as `success` immediately, with no re-dispatch. A job that never ran
-reports green, so the release as shipped is the wrong result value for the
-winner's own delivery; the remedy is [Q676](../STATUS.md#Q676) and the
-`AGC_FANOUT_COMPLETION` gate stays off.
+reports green, so the release as shipped was the wrong call for the winner's
+own delivery. The remedy (Q676, measured 2026-08-04) is to report **nothing**:
+every accepted completejob value concluded the run `success` and told-nothing
+gets an honest run+job `cancelled` at ~15 minutes — see
+[the remedy measurements](q645-abandoned-completion.md#q676--the-remedy-measurements-2026-08-04).
 
 **`JobProvisionStalled=False` was correct, not broken.** The condition covers the
 listener's *deferral* reasons — `name_conflict` and `ceiling`, jobs held before a

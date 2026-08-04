@@ -268,20 +268,15 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 			jobResult = result
 		}
 		// Abandoned means the worker was removed before it ran, so the runner binary
-		// never registered and nothing will ever report THIS delivery. Release it on
-		// the same terms as a deduped sibling — it is the same dangling assignment —
-		// rather than leave GitHub told nothing (Q628). Measured (Q645 Investigation
-		// H): this call concludes the run as SUCCESS immediately, it does not re-queue
-		// the job — a false green for a job that never ran; the remedy is Q676, and
-		// AGC_FANOUT_COMPLETION stays off until it lands. ctx, not jobCtx: the renew
-		// loop may have cancelled the job, which is exactly when the release matters.
-		if result == broker.TaskResultAbandoned && cfg.FanoutCompletion && runServiceURL != "" {
-			completeDelivery(ctx, cfg, log, planID, SiblingDelivery{
-				RunnerRequestID: jobID,
-				RunServiceURL:   runServiceURL,
-				JobToken:        jobToken,
-			}, result)
-		}
+		// never registered and nothing will ever report THIS delivery. The listener
+		// deliberately reports nothing either: completing the winner's own sole
+		// delivery concludes the whole run, as success for abandoned and canceled
+		// (a false green for a job that never ran), while failed is refused with a
+		// 401. No completejob value yields an honest outcome (measured, Q645/Q676;
+		// docs/design/04-operational-flows.md § Stuck-Pending Worker Pod), and told
+		// nothing GitHub concludes the run and job as cancelled at its ~15-minute
+		// unstarted-job timeout. Sibling completions (Q260) are different: the
+		// winner's own delivery stays open, so they conclude nothing.
 		return acquired, jobErr
 	}
 	return acquired, nil

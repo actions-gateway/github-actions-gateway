@@ -139,17 +139,18 @@ type RenewJobResponse struct {
 // TaskResult is a job's terminal result as reported to
 // POST {run_service_url}/completejob. The values mirror the runner SDK's
 // TaskResult enum (Microsoft.TeamFoundation.DistributedTask.WebApi.TaskResult).
-// The AGC itself sends the winner's pod-phase proxy when it releases a job
-// assignment nothing else will report — a deduped sibling delivery (Q260 Option A)
-// or its own delivery when the worker was removed before it ran (Q628, which sends
-// TaskResultAbandoned). The remaining values are defined for wire fidelity.
+// The AGC itself sends the winner's pod-phase proxy when it fans completion out
+// to the deduped sibling deliveries of a fanned-out job (Q260 Option A). The
+// remaining values are defined for wire fidelity.
 //
 // Wire format live-confirmed 2026-08-04: the run service accepted this lowercase
-// camelCase serialization with a 204 (Investigation H, the Q645 probe). The AGC's
-// completejob call stays gated off by default for a measured *semantic* reason
-// instead: completing an acquired-but-never-run delivery with abandoned concluded
-// the whole run as SUCCESS one second later — a job that never executed reports
-// green (the Q645 findings). Remedy tracked as Q676.
+// camelCase serialization with a 204 (Investigation H, the Q645 probe). Value
+// semantics measured for an acquired-but-never-run WINNER's-own delivery
+// (Q645/Q676; docs/design/04-operational-flows.md § Stuck-Pending Worker Pod):
+// abandoned and canceled are accepted and conclude the whole run as SUCCESS one
+// second later, a false green for a job that never executed, and failed is
+// refused with a 401. The listener therefore never completes its own unrun
+// delivery.
 type TaskResult string
 
 const (
@@ -166,23 +167,24 @@ const (
 	// Q260 loser): honest (acquired, ran nothing) and the smallest blast radius if
 	// the run service maps a delivery's completion onto the whole job.
 	TaskResultSkipped TaskResult = "skipped"
-	// TaskResultAbandoned is a job the runner gave up without a conclusion. The AGC
-	// reports it for a delivery whose worker pod was removed before any container
-	// ran — an unschedulable worker reaped at spec.pendingPodDeadline, say: the
-	// assignment is real and must be released, but no step executed, so neither
-	// succeeded nor failed describes it (Q628).
+	// TaskResultAbandoned is a job the runner gave up without a conclusion. A
+	// JobHandler returns it for a delivery whose worker pod was removed before any
+	// container ran — an unschedulable worker reaped at spec.pendingPodDeadline,
+	// say (Q628). It is never sent to completejob for the winner's own delivery:
+	// measured (Q645), that concludes the run as SUCCESS, a false green.
 	TaskResultAbandoned TaskResult = "abandoned"
 )
 
 // CompleteJobRequest is the request body for POST {run_service_url}/completejob.
 // A runner sends it to report a job's terminal result. In GAG the worker pod's
 // runner binary makes this call for a job it actually ran; the AGC itself sends it
-// for an assignment it acquired but never ran — a deduplicated duplicate delivery
-// (Q260 follow-up) and a delivery whose worker pod was removed before it started
-// (Q628). Measured caveat: for the winner's own (sole) delivery this call does not
-// release the job back to the queue — it concludes the run immediately, as success
-// when the result is abandoned (Q645 Investigation H; remedy Q676). The deduped-
-// sibling case, where the winner still reports the real result, is unmeasured.
+// only for a deduplicated sibling delivery of a fanned-out job (Q260 Option A).
+// Measured caveat (Q645/Q676): for the winner's own (sole) delivery this call does
+// not release the job back to the queue — it concludes the run immediately, as
+// success for abandoned and canceled, while failed is refused (401) — so the AGC
+// never completes its own unrun delivery. The deduped-sibling case, where the
+// winner still reports the real result, is unmeasured live (the 2026-07-04 dogfood
+// re-route #5 confirmed per-delivery scoping).
 //
 // JobID is the delivery's own RunnerRequestID — distinct per sibling under GitHub's
 // broker fan-out — so, under the per-delivery lock model the renew path relies on
