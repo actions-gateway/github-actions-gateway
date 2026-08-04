@@ -235,13 +235,13 @@ func daysBetween(a, b string) int {
 }
 
 func (r *replay) writeEvents(w io.Writer, today string) {
-	fmt.Fprintln(w, "id\tfiled\tremoved\tdays_open\treason\tsize\ttitle")
+	_, _ = fmt.Fprintln(w, "id\tfiled\tremoved\tdays_open\treason\tsize\ttitle")
 	for _, it := range r.sorted() {
 		end, reason := today, "open"
 		if rm := r.removed[it.id]; rm != nil {
 			end, reason = rm.date, rm.reason
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
 			it.id, it.filed, r.removedDate(it.id), daysBetween(it.filed, end), reason, it.size, it.title)
 	}
 }
@@ -278,16 +278,16 @@ func (r *replay) writeSummary(w io.Writer, deferred map[string]bool) {
 		}
 	}
 
-	fmt.Fprintf(w, "backlog metrics — high-water Q%d, %d items ever filed\n\n", counter, len(r.filed))
-	fmt.Fprintf(w, "  open now:        %d\n", len(open))
-	fmt.Fprintf(w, "  completed:       %d\n", nDone)
+	_, _ = fmt.Fprintf(w, "backlog metrics — high-water Q%d, %d items ever filed\n\n", counter, len(r.filed))
+	_, _ = fmt.Fprintf(w, "  open now:        %d\n", len(open))
+	_, _ = fmt.Fprintf(w, "  completed:       %d\n", nDone)
 	ratio := 0.0
 	if resolved := nDone + nPruned + nOther; resolved > 0 {
 		ratio = 100 * float64(nPruned) / float64(resolved)
 	}
-	fmt.Fprintf(w, "  pruned:          %d  (prune ratio %.0f%% of resolved)\n", nPruned, ratio)
+	_, _ = fmt.Fprintf(w, "  pruned:          %d  (prune ratio %.0f%% of resolved)\n", nPruned, ratio)
 	if nOther > 0 {
-		fmt.Fprintf(w, "  other removals:  %d  (no verb in commit subject — adopt complete/prune/merge/defer)\n", nOther)
+		_, _ = fmt.Fprintf(w, "  other removals:  %d  (no verb in commit subject — adopt complete/prune/merge/defer)\n", nOther)
 	}
 	if nDone > 0 {
 		sort.Ints(cycle)
@@ -299,10 +299,10 @@ func (r *replay) writeSummary(w io.Writer, deferred map[string]bool) {
 		for _, d := range cycle {
 			sum += d
 		}
-		fmt.Fprintf(w, "  cycle time:      median %.0f days, mean %.1f days (filed -> completed)\n",
+		_, _ = fmt.Fprintf(w, "  cycle time:      median %.0f days, mean %.1f days (filed -> completed)\n",
 			med, float64(sum)/float64(nDone))
 	}
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 
 	var aging []*item
 	nDeferred := 0
@@ -314,14 +314,14 @@ func (r *replay) writeSummary(w io.Writer, deferred map[string]bool) {
 		aging = append(aging, it)
 	}
 	if nDeferred > 0 {
-		fmt.Fprintf(w, "  parked in Deferred: %d (excluded from aging WIP)\n", nDeferred)
+		_, _ = fmt.Fprintf(w, "  parked in Deferred: %d (excluded from aging WIP)\n", nDeferred)
 	}
 	if len(aging) == 0 {
 		return
 	}
-	fmt.Fprintln(w, "  aging WIP (open Queue rows by ID gap — the groom staleness signal):")
+	_, _ = fmt.Fprintln(w, "  aging WIP (open Queue rows by ID gap — the groom staleness signal):")
 	for _, it := range aging {
-		fmt.Fprintf(w, "    %-6s gap %-4d filed %s  %s %s\n",
+		_, _ = fmt.Fprintf(w, "    %-6s gap %-4d filed %s  %s %s\n",
 			it.id, counter-idNum(it.id), it.filed, it.size, truncate(it.title, 60))
 	}
 }

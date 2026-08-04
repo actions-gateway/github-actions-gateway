@@ -89,7 +89,7 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 	for _, p := range []string{roadmapPath, statusPath, featuresPath} {
 		src, err := os.ReadFile(p)
 		if err != nil {
-			fmt.Fprintf(findings, "check-roadmap: file not found: %s\n", p)
+			_, _ = fmt.Fprintf(findings, "check-roadmap: file not found: %s\n", p)
 			return 2
 		}
 		docs[p] = markdown.Parse(src)
@@ -98,7 +98,7 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 	queue := statusIDs(docs[statusPath], "Queue")
 	deferred := statusIDs(docs[statusPath], "Deferred")
 	if len(queue) == 0 && len(deferred) == 0 {
-		fmt.Fprintf(findings, "check-roadmap: parsed no Q-IDs from %s — the table format changed?\n", statusPath)
+		_, _ = fmt.Fprintf(findings, "check-roadmap: parsed no Q-IDs from %s — the table format changed?\n", statusPath)
 		return 2
 	}
 
@@ -107,7 +107,7 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 	roadmapName := base(roadmapPath)
 	bullets := roadmapBullets(docs[roadmapPath])
 	if len(bullets) == 0 {
-		fmt.Fprintf(findings, "check-roadmap: found no bullets under %q or %q in %s — the headings changed?\n",
+		_, _ = fmt.Fprintf(findings, "check-roadmap: found no bullets under %q or %q in %s — the headings changed?\n",
 			nearTermHeading, exploringHeading, roadmapPath)
 		return 2
 	}
@@ -117,7 +117,7 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 
 	features := featureBullets(docs[featuresPath])
 	if len(features) == 0 {
-		fmt.Fprintf(findings, "check-roadmap: found no capability bullets in %s — the page format changed?\n", featuresPath)
+		_, _ = fmt.Fprintf(findings, "check-roadmap: found no capability bullets in %s — the page format changed?\n", featuresPath)
 		return 2
 	}
 	featuresName := base(featuresPath)
@@ -133,10 +133,10 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 	}
 
 	if c.failed {
-		fmt.Fprintln(findings, "check-roadmap: roadmap and backlog disagree, or the feature index drifted (see above). Reconcile per docs/development/doc-update-matrix.md.")
+		_, _ = fmt.Fprintln(findings, "check-roadmap: roadmap and backlog disagree, or the feature index drifted (see above). Reconcile per docs/development/doc-update-matrix.md.")
 		return 1
 	}
-	fmt.Fprintf(summary, "check-roadmap: ok (%d forward-looking bullet(s) backed by live STATUS.md rows; %d feature(s) linked)\n",
+	_, _ = fmt.Fprintf(summary, "check-roadmap: ok (%d forward-looking bullet(s) backed by live STATUS.md rows; %d feature(s) linked)\n",
 		len(bullets), len(features))
 	return 0
 }
@@ -148,7 +148,7 @@ type checker struct {
 }
 
 func (c *checker) report(file string, line int, msg string) {
-	fmt.Fprintf(c.findings, "check-roadmap: %s:%d: %s\n", file, line, msg)
+	_, _ = fmt.Fprintf(c.findings, "check-roadmap: %s:%d: %s\n", file, line, msg)
 	c.failed = true
 }
 
