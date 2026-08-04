@@ -2519,6 +2519,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The merge driver: resolve Queue rows by ID, not by line position">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-same-treatment-for-docsplanreadmemd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The same treatment for docs/plan/README.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2727,7 +2744,7 @@
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-status-isolation.sh"><code>scripts/docs/check-status-isolation.sh</code></a> — fails a branch whose commits mix the backlog with anything else. Backs <code>make status-isolation-check</code>; runs in <code>make check</code>, <code>make status-gates</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint.yml</code></a>. <a href="#isolated-commits-and-what-actually-enforces-them">Why it exists next to the hook</a>.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id.sh"><code>scripts/docs/alloc-queue-id.sh</code></a> — allocates a new Q-ID (<code>make queue-id TITLE="…"</code>) by claiming a ref on the remote, so concurrent sessions never take the same one. Rationale, the alternatives weighed, and what it does <em>not</em> fix: <a href="../queue-id-allocation/">queue-id-allocation.md</a>.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/find-duplicate-rows.sh"><code>scripts/docs/find-duplicate-rows.sh</code></a> — the near-duplicate search that allocation runs before it claims an ID. Advisory: it never blocks a filing. <a href="#search-before-you-file">How it is calibrated</a>.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>scripts/docs/git-merge-status.sh</code></a> — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous. One-time <code>make merge-driver</code> per clone; a no-op until then. <a href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">Details below</a>.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>scripts/docs/git-merge-status.sh</code></a> — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous. Its sibling <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> does the same for <a href="../../plan/"><code>docs/plan/README.md</code></a>, keyed on the plan path. One <code>make merge-driver</code> per clone installs both; a no-op until then. <a href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">Details below</a>.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/next-task.sh"><code>scripts/docs/next-task.sh</code></a> — prints a kickoff prompt (or <code>--title</code>) for the top ready 🔲 Queue row, for starting a fresh session on the next task.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/backlog-metrics.sh"><code>scripts/docs/backlog-metrics.sh</code></a> — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only. The replay reads each diff line's cells through the shared Markdown parse layer, so an escaped pipe in a cell cannot shift a row's fields (Q614).</li>
 </ul>
@@ -2867,6 +2884,16 @@
 </table>
 <p>A conflict marker costs a minute; a wrongly resolved row loses backlog state. Two consequences worth internalising: the driver <strong>cannot resurrect a row the other side deleted</strong> (a deletion either wins outright or produces markers, never a re-add), and it claims <strong>no</strong> knowledge of the Progress or Deferred tables — those merge as plain text, exactly as before.</p>
 <p><strong>It does not help GitHub's server-side squash-merge</strong>, which cannot see a clone's config. And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below. <code>make lint-backlog</code> remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.</p>
+<h3 id="the-same-treatment-for-docsplanreadmemd">The same treatment for <code>docs/plan/README.md</code><a class="headerlink" href="#the-same-treatment-for-docsplanreadmemd" title="Permanent link">&para;</a></h3>
+<p>The plan index has <code>STATUS.md</code>'s contention and the same cause. Every plan doc that lands adds one long row, every archival moves one to the top of the Archive table, and the topical sections concentrate both on the same few neighbours. Over the 22 changes to the file that merged between 2026-08-01 and 2026-08-03, <strong>18 of the 231 pairs touch a row in common; the other 213 disagree only about line position</strong> — and adjacency makes a plain three-way merge conflict on those anyway.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>scripts/docs/git-merge-plan-index.sh</code></a> decides them by the <strong>plan path in column 1</strong>, sharing the Queue driver's row rules and its refusal discipline. That key is not a new convention: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh"><code>check-plan-index.sh</code></a> already reads the same cell, so the driver and the gate cannot disagree about what a row is.</p>
+<p>Two things differ from the <code>STATUS.md</code> driver:</p>
+<ul>
+<li><strong>It merges every table in the file, not one named section.</strong> Archiving a plan is a delete in a topical table and an add in the Archive table, and a section-scoped merge would read that as an unexplained deletion.</li>
+<li><strong>It checks the whole file afterwards for a plan listed twice</strong>, comparing basenames so <code>archive/x.md</code> and <code>x.md</code> count as one plan. Per-table merges cannot see that pair, which one branch archiving a plan while another relocates it produces.</li>
+</ul>
+<p>Everything else is the Queue driver's behaviour: a row changed on both sides, a row deleted on one side and edited on the other, one plan filed twice with different text, rows reordered on both sides, a row whose first cell is not a link, and a side that added or removed a whole table all fall back to the plain three-way merge and its conflict markers.</p>
+<p><code>make merge-driver</code> installs both drivers. Neither is required: until you run it the <code>.gitattributes</code> lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.</p>
 <h2 id="resolving-a-statusmd-only-conflict-verify-cheap-push-now">Resolving a <code>STATUS.md</code>-only conflict: verify cheap, push now<a class="headerlink" href="#resolving-a-statusmd-only-conflict-verify-cheap-push-now" title="Permanent link">&para;</a></h2>
 <p>Because every session edits <code>docs/STATUS.md</code>, rebase and merge conflicts on it are routine — fewer with the merge driver installed, never zero. When the conflict is <strong>confined to <code>docs/STATUS.md</code></strong>, re-running the full <code>make check</code> before pushing is not just unnecessary — it is what causes the <em>next</em> conflict.</p>
 <p>The full gate takes ~6 minutes. Every one of those minutes is a window in which a sibling session merges its own <code>STATUS.md</code> edit and puts your branch behind again, so you resolve, wait ~6 minutes, and lose the race a second time. It is a feedback loop, not bad luck: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/724">PR #724</a> went around it four times. Shrinking the verify step from ~6 minutes to a few seconds is what breaks the loop.</p>

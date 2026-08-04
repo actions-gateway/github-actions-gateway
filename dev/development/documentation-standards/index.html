@@ -2539,6 +2539,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-restated-default-is-a-claim-with-no-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A restated default is a claim with no gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#in-prose" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2868,13 +2879,30 @@ nobody here touched anything.</p>
 <p>Two edges keep the rule from swallowing every sentence in the docset:</p>
 <ul>
 <li><strong>Our own behavior is not upstream.</strong> A wrong claim about this repo's code goes red
-  in a test. That is the gate; a citation adds nothing to it.</li>
+  in a test. That is the gate; a citation adds nothing to it. The exemption is exactly
+  as strong as that red gate, which is why a restated default falls outside it (next
+  section).</li>
 <li><strong>Specified is not observed.</strong> Where upstream publishes normative text (an RFC
   grammar, a documented status code, a CRD field's own godoc), link that text and stop:
   the spec is its own citation. The rule bites on behavior learned by reading upstream
   source or by inference, which is most of what this system depends on, and is where
   all four claims above came from.</li>
 </ul>
+<h3 id="a-restated-default-is-a-claim-with-no-gate">A restated default is a claim with no gate<a class="headerlink" href="#a-restated-default-is-a-claim-with-no-gate" title="Permanent link">&para;</a></h3>
+<p>A flag or field default restated away from its wiring is the in-repo case the
+"our own behavior" exemption does not cover: no test reads comments, so a wrong
+one stays green forever. The measured case is Q676 (2026-08-04): <code>broker/types.go</code>,
+<code>listener/job.go</code>, and the Q645 plan doc all said the AGC's completejob release
+"stays gated off by default" while <code>cmd/agc/config.go</code> shipped
+<code>AGC_FANOUT_COMPLETION</code> on unless explicitly <code>"false"</code>. A production false-green
+defect read as contained for as long as the comments were trusted; the divergence
+surfaced only because remedy work happened to read the wiring.</p>
+<p>State a default's value only at the site that wires it. Everywhere else, say the
+switch exists and cite that site (or the operator doc that documents it), rather
+than copying the value into a sentence that can drift. When restating is genuinely
+clearer, treat the sentence like an upstream claim: name the wiring site in the
+same clause, so the reader can check it and the next editor knows what it depends
+on.</p>
 <h3 id="in-prose">In prose<a class="headerlink" href="#in-prose" title="Permanent link">&para;</a></h3>
 <p>State the claim, then the version and the date, or the run they came from. Both of
 these are in the docset today:</p>

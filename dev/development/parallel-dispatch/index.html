@@ -3210,7 +3210,10 @@ implementing the <strong>same</strong> Queue item — an <em>assignment</em> pro
   <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a>,
   which decides the Queue table by row ID. Picking from the top makes every
   worker's deletion adjacent to the next one's, which is precisely what a
-  line-position merge cannot absorb. One-time <code>make merge-driver</code> per clone.</li>
+  line-position merge cannot absorb. The same <code>make merge-driver</code> installs the
+  <a href="../maintaining-backlog/#the-same-treatment-for-docsplanreadmemd">plan-index driver</a>,
+  which does the same for <code>docs/plan/README.md</code>, where a dispatch batch that
+  files or archives several plans collides the same way. One-time, per clone.</li>
 </ul>
 <p>The earlier rule was "the dispatcher owns the coordination files." That was a
 workaround from before self-healing was robust — every PR editing STATUS.md made
@@ -3270,7 +3273,8 @@ or stuck.</p>
   helper that rebases the PR branch onto <code>origin/main</code> in a throwaway worktree and
   force-pushes with lease works well). The <code>docs/STATUS.md</code>
   <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a>
-  runs during rebase too, so Queue-row conflicts usually resolve on their own.</li>
+  runs during rebase too, so Queue-row conflicts usually resolve on their own,
+  as does the <code>docs/plan/README.md</code> one.</li>
 <li><strong>Semantic / code conflicts</strong> go back to a worker: spawn a small resolve chip
   that takes over the PR branch, rebases onto <code>main</code>, resolves with full
   judgment, re-runs the gate, and force-pushes with lease. The dispatcher does

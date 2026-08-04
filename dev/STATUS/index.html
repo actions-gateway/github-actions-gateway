@@ -3076,14 +3076,6 @@
 <td>Q591 measured the <code>&lt;unknown&gt;</code> causes; the quota one needs its own repro. <code>FailedCreate ... exceeded quota</code>, <code>ReplicaFailure</code> with <code>exceeded quota</code>, and the "~30s" scrape cycle are unmeasured.</td>
 </tr>
 <tr>
-<td><a id="Q611"></a>Q611</td>
-<td><a href="../development/maintaining-backlog/"><code>docs/plan/README.md</code> has STATUS.md's contention and none of its merge tooling</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Every plan adds one long row near the same neighbours, so concurrent branches collide: #1138's rebase hit three conflicts, all in this file, while STATUS.md merged clean via its driver. Give it the driver, or restructure the rows.</td>
-</tr>
-<tr>
 <td><a id="Q679"></a>Q679</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">No per-spec filter on the e2e make target</a></td>
 <td><code>ci</code> <code>tests</code></td>
