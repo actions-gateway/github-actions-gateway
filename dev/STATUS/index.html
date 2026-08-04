@@ -2981,11 +2981,11 @@
 </tr>
 <tr>
 <td><a id="Q662"></a>Q662</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/foreground-guard.json">foreground-guard's <code>make .*\be2e</code> blocks the fast e2e targets too</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/foreground-guard.json">foreground-guard registers the fast e2e targets as 30-minute commands</a></td>
 <td><code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>It demands a 30-min timeout for <code>e2e-github-cleanup</code> (seconds), <code>e2e-cluster</code>, and <code>e2e-registry-delete</code> alike — only <code>make e2e</code> itself is slow. Narrow it, and assert both directions in <code>scripts/agent/foreground-guard-patterns-test.sh</code>.</td>
+<td>Every <code>e2e-*</code> target is registered at 30 min; only <code>make e2e</code>/<code>e2e-up</code> are slow (<code>e2e-github-cleanup</code> takes seconds). <code>foreground-guard-patterns-test.sh</code> asserts the fast ones as must-match, so narrowing means flipping them. Runtimes unmeasured.</td>
 </tr>
 <tr>
 <td><a id="Q522"></a>Q522</td>
