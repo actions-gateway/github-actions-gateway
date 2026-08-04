@@ -2751,14 +2751,6 @@
 <td>Isolation is what keeps rebases trivial — a 12-commit rebase run resolved clean every time — but a stray <code>--amend</code> onto the wrong HEAD silently lands code in a <code>docs(status):</code> commit. Gate it: a commit touching STATUS.md touches nothing else.</td>
 </tr>
 <tr>
-<td><a id="Q653"></a>Q653</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">A rebase plus a slow local gate can force-push a stale base</a></td>
-<td><code>docs</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>make check</code> takes ~15 min and main can merge faster, so a branch falls behind between rebase and push — burning a full CI cycle on a base that cannot merge. Re-check <code>git rev-list --count HEAD..origin/main</code> before pushing.</td>
-</tr>
-<tr>
 <td><a id="Q639"></a>Q639</td>
 <td><a href="../development/maintaining-backlog/">Filing a Queue row surfaces no near-duplicate, so the search-before-you-file rule keeps being tripped</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -2901,6 +2893,14 @@
 <td>🔲</td>
 <td>S</td>
 <td><code>make check \| tail</code> reports <code>tail</code>'s status, so a false green reads identical to a real one. The rule sits in CLAUDE.md and testing.md and a session tripped it anyway. Wants a PreToolUse warning when a gate is piped into <code>tail</code>/<code>head</code>/<code>grep</code>.</td>
+</tr>
+<tr>
+<td><a id="Q665"></a>Q665</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Nothing catches a force-push onto a base that went stale during the local gate</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q653 wrote the rule; the slip happens at the push, in flow, not while reading CONTRIBUTING — same shape as Q625. Wants a PreToolUse warning when <code>HEAD..origin/main</code> is non-zero at <code>git push</code>.</td>
 </tr>
 <tr>
 <td><a id="Q624"></a>Q624</td>
