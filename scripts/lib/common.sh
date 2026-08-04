@@ -139,35 +139,24 @@ workspace_modules() {
 	go work edit -json | jq -r '.Use[].DiskPath'
 }
 
-# firstparty_nonworkspace_modules — print the disk path of every first-party Go
-# module deliberately kept OUT of go.work (docs/development/go-workspaces.md
-# § First-party Go tooling stays outside the workspace). A workspace module
-# would drag every change to it through an image bake and an e2e cluster,
-# because check-path-filters.sh requires the workspace-covering filters to match
-# every go.work module.
+# nonworkspace_modules — print the disk path of every tracked Go module kept OUT
+# of go.work, one per line, sorted. Vendored trees are the sole exclusion: they
+# are third-party source, not modules this repo maintains.
 #
-# The cost of that choice is that go-test.sh, go-lint.sh and go-vulncheck.sh
-# each need a separate GOWORK=off pass over these: they run one workspace-wide
-# invocation, which cannot reach a module go.work does not list.
+# DISCOVERED, not enumerated — every tracked go.mod minus the go.work members.
+# As a hand-maintained list this was a gate that covers a new module only if
+# someone remembers to widen it, and the cost of forgetting is silence: nothing
+# tests, lints, scans, or tidies the module, and every gate stays green.
+# Discovery makes a new module opt OUT rather than opt IN.
 #
-# DISCOVERED, not enumerated — every tracked go.mod minus the go.work members,
-# in sorted order. As a hand-maintained list this was a gate that covers a new
-# module only if someone remembers to widen it, and the cost of forgetting is
-# silence: nothing tests, lints, or scans the module, and every gate stays
-# green. Discovery makes a new module opt OUT rather than opt IN.
-#
-# Two exclusions, both structural: vendored trees are third-party, and `tools/`
-# pins third-party build tools via blank imports and holds no first-party code.
+# This is the whole-repo view — the one the tidy flow needs, because `go mod
+# tidy` normalises a module's go.mod/go.sum whoever wrote its imports.
+# firstparty_nonworkspace_modules is the narrower view for gates that only
+# reason about first-party code.
 #
 # Impure (queries git and go) and cwd-sensitive: call it with the repo root as
 # the working directory. Asserted by scripts/go/go-lint-scope-test.sh.
-#
-# coverage.sh is a partial exception: its ratchet derives one profile from the
-# workspace build list and filters it per module, so these modules carry no
-# baseline row and no floor. It does still run their tests, unmeasured — `make
-# check` calls cover-check in place of `make test`, so skipping them there would
-# leave the fast gate never executing them at all.
-firstparty_nonworkspace_modules() {
+nonworkspace_modules() {
 	local workspace=$'\n' m dir
 	while IFS= read -r m; do
 		workspace+="${m#./}"$'\n'
@@ -176,10 +165,34 @@ firstparty_nonworkspace_modules() {
 		[[ "$m" == */go.mod ]] || continue
 		[[ "$m" == */vendor/* ]] && continue
 		dir="${m%/go.mod}"
-		[[ "$dir" == tools ]] && continue
 		[[ "$workspace" == *$'\n'"$dir"$'\n'* ]] && continue
 		printf '%s\n' "$dir"
 	done < <(git ls-files --cached --others --exclude-standard -- '*go.mod' | sort)
+}
+
+# firstparty_nonworkspace_modules — nonworkspace_modules minus `tools/`, which
+# pins third-party build tools via blank imports and holds no first-party code.
+# These are the modules deliberately kept out of go.work
+# (docs/development/go-workspaces.md § First-party Go tooling stays outside the
+# workspace): a workspace module would drag every change to it through an image
+# bake and an e2e cluster, because check-path-filters.sh requires the
+# workspace-covering filters to match every go.work module.
+#
+# The cost of that choice is that go-test.sh, go-lint.sh and go-vulncheck.sh
+# each need a separate GOWORK=off pass over these: they run one workspace-wide
+# invocation, which cannot reach a module go.work does not list.
+#
+# coverage.sh is a partial exception: its ratchet derives one profile from the
+# workspace build list and filters it per module, so these modules carry no
+# baseline row and no floor. It does still run their tests, unmeasured — `make
+# check` calls cover-check in place of `make test`, so skipping them there would
+# leave the fast gate never executing them at all.
+firstparty_nonworkspace_modules() {
+	local dir
+	while IFS= read -r dir; do
+		[[ "$dir" == tools ]] && continue
+		printf '%s\n' "$dir"
+	done < <(nonworkspace_modules)
 }
 
 # init_throttle — populate THROTTLE_JOBS / THROTTLE_PREFIX from
