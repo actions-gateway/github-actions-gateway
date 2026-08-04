@@ -5258,7 +5258,9 @@ isolation, so prefer the upgrade.</p>
 <hr />
 <h2 id="runnergroup-reports-workersunschedulable">RunnerGroup Reports WorkersUnschedulable<a class="headerlink" href="#runnergroup-reports-workersunschedulable" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> <code>kubectl get runnergroup</code> shows a <code>WorkersUnschedulable=True</code>
-condition, or the <code>actions_gateway_workers_unschedulable</code> gauge is <code>1</code>. Jobs are
+condition, or the <code>actions_gateway_workers_unschedulable</code> gauge is <code>1</code> — on a v2
+<code>RunnerSet</code>, <code>kubectl get runnerset</code> and the per-set twin
+<code>actions_gateway_runnerset_workers_unschedulable</code>. Jobs are
 acquired but never start; worker pods sit <code>Pending</code>. Each pod the reaper eventually
 gives up on also emits a <code>WorkersUnschedulable</code> Warning event and a
 <code>WorkerPodStuckPending</code> event on the RunnerGroup.</p>
@@ -5275,8 +5277,12 @@ condition. The two never both fire for the same cause.</p>
 <blockquote>
 <p><strong>v2 <code>RunnerSet</code>.</strong> The same <code>WorkersUnschedulable</code> condition is set on a v2
 <code>RunnerSet</code> (Q303) with identical semantics — swap <code>runnergroup</code> for <code>runnerset</code>
-in the commands below. (The <code>actions_gateway_workers_unschedulable</code> gauge is still
-emitted only for v1 <code>RunnerGroup</code>s; on a <code>RunnerSet</code>, read the condition directly.)</p>
+in the commands below. Its gauge is the per-set twin
+<code>actions_gateway_runnerset_workers_unschedulable</code> (Q319), keyed on
+<code>namespace</code>/<code>runner_set</code> rather than <code>namespace</code>/<code>runner_group</code>; the v1
+<code>actions_gateway_workers_unschedulable</code> stays <code>RunnerGroup</code>-only, so
+<code>actions_gateway_workers_unschedulable == 1 or actions_gateway_runnerset_workers_unschedulable == 1</code>
+is the query that covers both while <code>v1alpha1</code> is still served.</p>
 </blockquote>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Read the condition — its message names the stuck pods and the scheduler verdict.</span>
@@ -7605,7 +7611,7 @@ the pod is its to recover. Either one missing makes recovery inert for that pod.
 - If you see <code>child outlived the shutdown grace period; killing it</code> routinely, the runner is not finishing its cancellation inside the budget — raise the pair above rather than accepting the kill, and check whether a job step is ignoring cancellation.</p>
 <hr />
 <h2 id="jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion<a class="headerlink" href="#jobs-failing-due-to-namespace-resourcequota-exhaustion" title="Permanent link">&para;</a></h2>
-<p><strong>Symptoms.</strong> Jobs sit queued in GitHub while the <code>RunnerGroup</code>/<code>RunnerSet</code> reports <code>WorkerQuotaExceeded=True</code> (and <code>actions_gateway_worker_quota_exceeded</code> reads <code>1</code>) — the AGC is declining to take on work it cannot place. Which metric shows it depends on the acquisition tier:</p>
+<p><strong>Symptoms.</strong> Jobs sit queued in GitHub while the <code>RunnerGroup</code>/<code>RunnerSet</code> reports <code>WorkerQuotaExceeded=True</code> (and <code>actions_gateway_worker_quota_exceeded</code> reads <code>1</code> — on a <code>RunnerSet</code>, the per-set twin <code>actions_gateway_runnerset_worker_quota_exceeded</code>) — the AGC is declining to take on work it cannot place. Which metric shows it depends on the acquisition tier:</p>
 <table>
 <thead>
 <tr>
@@ -7643,19 +7649,19 @@ the pod is its to recover. Either one missing makes recovery inert for that pod.
 </thead>
 <tbody>
 <tr>
-<td><code>WorkerQuotaPressure</code> — <code>actions_gateway_worker_quota_pressure</code></td>
+<td><code>WorkerQuotaPressure</code> — <code>actions_gateway_worker_quota_pressure</code>, v2 twin <code>actions_gateway_runnerset_worker_quota_pressure</code></td>
 <td>Workers can't scale to the configured ceiling (<code>maxWorkers</code> / max <code>priorityTiers</code> threshold) within the quota's remaining headroom.</td>
 <td>warning (don't page)</td>
 </tr>
 <tr>
-<td><code>WorkerQuotaExceeded</code> — <code>actions_gateway_worker_quota_exceeded</code></td>
+<td><code>WorkerQuotaExceeded</code> — <code>actions_gateway_worker_quota_exceeded</code>, v2 twin <code>actions_gateway_runnerset_worker_quota_exceeded</code></td>
 <td>The quota can't admit even one more worker pod — the next acquired job's pod will be rejected.</td>
 <td>error (page)</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p><strong>v2 <code>RunnerSet</code>.</strong> Both <code>WorkerQuotaPressure</code> and <code>WorkerQuotaExceeded</code> are set on a v2 <code>RunnerSet</code> (Q303) with identical semantics — swap <code>runnergroup</code> for <code>runnerset</code> in the commands below. (The <code>actions_gateway_worker_quota_*</code> gauges are still emitted only for v1 <code>RunnerGroup</code>s; on a <code>RunnerSet</code>, read the conditions directly.)</p>
+<p><strong>v2 <code>RunnerSet</code>.</strong> Both <code>WorkerQuotaPressure</code> and <code>WorkerQuotaExceeded</code> are set on a v2 <code>RunnerSet</code> (Q303) with identical semantics — swap <code>runnergroup</code> for <code>runnerset</code> in the commands below. Their gauges are the per-set twins <code>actions_gateway_runnerset_worker_quota_pressure</code> and <code>actions_gateway_runnerset_worker_quota_exceeded</code> (Q319), keyed on <code>namespace</code>/<code>runner_set</code> rather than <code>namespace</code>/<code>runner_group</code>; the v1 <code>actions_gateway_worker_quota_*</code> families stay <code>RunnerGroup</code>-only, so <code>actions_gateway_worker_quota_exceeded == 1 or actions_gateway_runnerset_worker_quota_exceeded == 1</code> is the query that covers both while <code>v1alpha1</code> is still served.</p>
 </blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-117-1" name="__codelineno-117-1" href="#__codelineno-117-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-117-2" name="__codelineno-117-2" href="#__codelineno-117-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .status.conditions[?(@.type==&quot;WorkerQuotaExceeded&quot;)]}{.status} {.reason}: {.message}{&quot;\n&quot;}{end}&#39;</span>
