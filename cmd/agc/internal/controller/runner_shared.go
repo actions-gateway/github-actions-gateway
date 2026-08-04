@@ -13,13 +13,16 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // Owner-agnostic runtime machinery shared by the v1 RunnerGroup and v2 RunnerSet
@@ -157,6 +160,38 @@ func (p *pendingConditions) forget(key types.NamespacedName) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.m, key)
+}
+
+// retryBackoffCap bounds the per-item requeue delay of both reconcilers' work
+// queues, replacing the 1000s cap of client-go's default controller rate limiter.
+//
+// The worker-pod reaper's deadline is carried by nothing but the RequeueAfter of
+// the reconcile that computed it: a pod sitting Pending emits no further watch
+// event (workerPodPhaseChangePredicate passes phase changes, not status
+// heartbeats), so no other wake-up is scheduled between the pod's creation and its
+// pendingPodDeadline. controller-runtime discards RequeueAfter whenever the
+// reconcile also returns an error (vendored v0.24.1,
+// internal/controller/controller.go), so a run of reconcile errors — a
+// Status().Update optimistic-lock conflict is the routine one, and one lands
+// within a second of worker-pod creation — leaves the reap to the rate-limited
+// retry alone. At the client-go default that retry escalates to 1000s, so a
+// stuck-Pending worker could hold its concurrency-ceiling slot and its node
+// reservation for ~17 minutes past the deadline, with the operator's
+// WorkerPodStuckPending event delayed with it.
+//
+// 30s bounds how late a reap can be without making a genuinely failing reconcile
+// hammer the API server; the exponential ramp below the cap is unchanged.
+const retryBackoffCap = 30 * time.Second
+
+// reconcileRateLimiter builds the shared work-queue rate limiter. It is
+// client-go's DefaultTypedControllerRateLimiter with retryBackoffCap substituted
+// for the 1000s per-item cap: same exponential ramp, same 10 qps overall token
+// bucket.
+func reconcileRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
+	return workqueue.NewTypedMaxOfRateLimiter(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Millisecond, retryBackoffCap),
+		&workqueue.TypedBucketRateLimiter[reconcile.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+	)
 }
 
 // workerPodPhaseChangePredicate restricts a worker-Pod watch to this project's

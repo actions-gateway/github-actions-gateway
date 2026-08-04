@@ -1582,6 +1582,8 @@ kubectl describe nodes | grep -A 5 "Allocated resources"
 
 **The session releases the job assignment (Q628).** No runner ever registered, so nothing inside the pod can report the job. The session therefore issues `completejob` with `result=abandoned` on its own delivery, and logs `worker pod was removed before it ran; reporting the job as abandoned so its assignment is released`. Without it the assignment sits acquired-but-unresolved until GitHub's ~15-minute unstarted-job timeout cancels the whole run — and before Q628 the session reported the job as **succeeded**, so a fanned-out job's sibling deliveries were resolved green for work that never happened. How the run service dispositions an `abandoned` completion (re-dispatch versus conclude) has not been measured against live GitHub; the AGC-side signal is the metric. The release shares the `AGC_FANOUT_COMPLETION=false` opt-out with the Q260 fan-out — opting out restores the dangling assignment and the timeout cancel.
 
+**Timing.** `pendingPodDeadline` is a floor, not an instant. The AGC arms a timer for it on the reconcile that last saw the pod, and a reconcile that ends in an error — an optimistic-lock conflict on the owner's status is the routine one — hands the wake-up to the work queue's retry instead. That retry is capped at 30s, so on a contended cluster a reap can land up to about half a minute past the deadline, and the `WorkerPodStuckPending` event with it.
+
 **Likely causes.**
 - `workerImage` (or the `podTemplate` container image) does not exist or is not pullable from the cluster — `ErrImagePull` / `ImagePullBackOff`.
 - `podTemplate` scheduling constraints (nodeSelector, tolerations, GPU resources) that no node satisfies.
