@@ -81,6 +81,22 @@ for want, cmd in CASES:
         if hit:
             print(f"       caught by: {hit}", file=sys.stderr)
 
+# This file only runs inside `make scripts-test`, which CI reaches through the
+# `scripts` path filter. CONFIG has to be in that filter or a config-only change
+# skips this test and an over-matching pattern ships unasserted.
+WORKFLOW = ".github/workflows/unit-test.yml"
+with open(WORKFLOW) as fh:
+    block = re.search(r"\n(\s+)scripts:\n((?:\1  .*\n)+)", fh.read())
+if not block:
+    print(f"FAIL no `scripts` filter found in {WORKFLOW}", file=sys.stderr)
+    fails += 1
+elif f"'{CONFIG}'" not in block.group(2):
+    fails += 1
+    print(f"FAIL {CONFIG} missing from the `scripts` filter in {WORKFLOW};", file=sys.stderr)
+    print("       a config-only change would skip this test", file=sys.stderr)
+else:
+    print(f"ok   {CONFIG} is in the `scripts` filter of {WORKFLOW}")
+
 print()
 if fails:
     print(f"{fails} case(s) wrong", file=sys.stderr)
