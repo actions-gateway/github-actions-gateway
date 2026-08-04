@@ -2,8 +2,10 @@
 #
 # Unit tests for scripts/ci/check-conflict-markers.sh (Q379): the four marker
 # forms are rejected, near-misses (setext underlines, mid-line mentions,
-# six/eight-char runs) stay legal, and the current tracked tree passes. The
-# marker strings are assembled at runtime so this file never contains one.
+# six/eight-char runs) stay legal, the no-args file selection covers untracked
+# files while honouring the gitignore opt-out (Q619), and the current tree
+# passes. The marker strings are assembled at runtime so this file never
+# contains one.
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 
@@ -70,11 +72,63 @@ else
 	fails=$((fails + 1))
 fi
 
-# The current tracked tree must itself be clean (the no-args default mode).
+# --- file selection in the no-args default mode -----------------------------
+#
+# Reading the pathspec predicts coverage; planting the marker measures it. The
+# gate listed `--cached` only until Q619, so a brand-new file's markers were
+# invisible to its own first `make check` and only surfaced once the commit that
+# tracked it had landed. A throwaway repo scopes the gate — it resolves its root
+# with `git rev-parse --show-toplevel`.
+SELECT_REPO="$FIXTURE_DIR/repo"
+mkdir -p "$SELECT_REPO"
+(
+	cd "$SELECT_REPO"
+	git init -q -b main .
+	printf 'ignored.txt\n' >.gitignore
+	printf 'clean\n' >tracked.txt
+	printf 'clean\n' >doomed.txt
+	git add -A >/dev/null
+	git -c user.name=test -c user.email=test@example.com commit -qm init --no-verify
+)
+
+# selection_case NAME EXPECT_RC [FILE CONTENT] — optionally plant CONTENT at
+# FILE inside the fixture repo, run the checker there in its no-args mode, and
+# assert the exit code. The planted file is removed afterwards so cases don't
+# leak into each other.
+selection_case() {
+	local name="$1" want_rc="$2" file="${3:-}" content="${4:-}" got_rc=0
+	if [[ -n "$file" ]]; then
+		printf '%s\n' "$content" >"$SELECT_REPO/$file"
+	fi
+	( cd "$SELECT_REPO" && "$CHECKER" ) >/dev/null 2>&1 || got_rc=$?
+	if [[ -n "$file" ]]; then
+		rm -f "$SELECT_REPO/$file"
+	fi
+	if [[ "$got_rc" == "$want_rc" ]]; then
+		printf 'ok   %-24s rc=%s\n' "$name" "$got_rc"
+	else
+		printf 'FAIL %-24s want rc=%s got rc=%s\n' "$name" "$want_rc" "$got_rc" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# Baseline, so a red below is the planted marker and not the fixture itself.
+selection_case fixture-repo-clean 0
+selection_case untracked-scanned 1 untracked.txt "$gt7 theirs"
+# Gitignoring is the documented opt-out, and it must still work.
+selection_case gitignored-skipped 0 ignored.txt "$gt7 theirs"
+# A deleted-but-tracked path is still listed by `--cached`; grep failing to open
+# it would be swallowed by the gate's `|| true` and report a partial scan clean.
+# The scan must survive it and still see a marker in a file that IS present.
+rm "$SELECT_REPO/doomed.txt"
+selection_case deleted-tracked-ok 0
+selection_case deleted-tracked-still-scans 1 untracked.txt "$lt7 HEAD"
+
+# The current tree must itself be clean (the no-args default mode).
 if "$CHECKER" >/dev/null; then
-	printf 'ok   %-24s\n' tracked-tree-clean
+	printf 'ok   %-24s\n' real-tree-clean
 else
-	printf 'FAIL %-24s tracked tree has markers or scan errored\n' tracked-tree-clean >&2
+	printf 'FAIL %-24s tree has markers or scan errored\n' real-tree-clean >&2
 	fails=$((fails + 1))
 fi
 

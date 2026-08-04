@@ -33,16 +33,36 @@
 #
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$repo_root" || exit 2
+# The library is resolved from this script's own location, not from the git root
+# below: the root is whatever tree the gate is pointed at, which the test suite
+# scopes to a throwaway repo that has no scripts/lib/.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
-# Tracked Go sources, excluding vendored trees.
-mapfile -t go_files < <(git ls-files -- '*.go' ':!:**/vendor/**' ':!:vendor/**')
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$REPO_ROOT" || exit 2
 
-# Tracked shell scripts and GitHub workflows, excluding vendored trees.
-mapfile -t comment_files < <(git ls-files -- \
-    '*.sh' '.github/workflows/*.yml' '.github/workflows/*.yaml' \
-    ':!:**/vendor/**' ':!:vendor/**')
+# Both lists cover present files — tracked or untracked-and-not-gitignored — so
+# a brand-new script, workflow or Go file is scanned by its own first `make
+# check` (Q619). Command substitution, not `mapfile < <(...)`: it keeps the
+# selection under `set -o pipefail`, so a failing `git ls-files` aborts the gate
+# rather than reducing it to a silently green empty file set.
+
+# Go sources, excluding vendored trees.
+go_files=()
+selected="$(git_candidates '*.go' ':!:**/vendor/**' ':!:vendor/**' | select_present_files)"
+if [[ -n "$selected" ]]; then
+    mapfile -t go_files <<<"$selected"
+fi
+
+# Shell scripts and GitHub workflows, excluding vendored trees.
+comment_files=()
+selected="$(git_candidates '*.sh' '.github/workflows/*.yml' '.github/workflows/*.yaml' \
+    ':!:**/vendor/**' ':!:vendor/**' | select_present_files)"
+if [[ -n "$selected" ]]; then
+    mapfile -t comment_files <<<"$selected"
+fi
 
 go_hits=""
 if (( ${#go_files[@]} > 0 )); then
