@@ -18,10 +18,10 @@ func fixture(t *testing.T, files map[string]string) (root, existFile string, mdF
 	var paths []string
 	for name, body := range files {
 		full := filepath.Join(root, name)
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(full, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		paths = append(paths, name)
@@ -30,7 +30,7 @@ func fixture(t *testing.T, files map[string]string) (root, existFile string, mdF
 		}
 	}
 	existFile = filepath.Join(t.TempDir(), "exist")
-	if err := os.WriteFile(existFile, []byte(strings.Join(paths, "\n")+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(existFile, []byte(strings.Join(paths, "\n")+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return root, existFile, mdFiles

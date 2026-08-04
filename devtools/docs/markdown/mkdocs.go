@@ -11,19 +11,18 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// The docs are rendered by MkDocs Material, which enables two Python-Markdown
-// extensions that CommonMark has no equivalent for. Both hide links from a
-// stock parser, and both were checked by the awk this package replaces —
-// measured on this repo: 19 links across four pages.
+// MkDocsDialect parses the two Python-Markdown extensions MkDocs Material
+// enables that CommonMark has no equivalent for, the way the site renders them.
+// Both hide links from a stock parser, and both were checked by the awk this
+// package replaces — measured on this repo: 19 links across four pages.
 //
 //   - `admonition`: a `!!! note "Title"` line plus a four-space-indented body,
 //     which CommonMark reads as an indented code block.
 //   - `md_in_html`: an HTML element carrying `markdown="1"`/`"span"`/`"block"`
 //     whose content is Markdown, which CommonMark reads as raw HTML.
 //
-// MkDocsDialect parses both the way the site renders them. `markdown="0"` is
-// deliberately not matched: it means "do not parse", which is what an ordinary
-// HTML block already does.
+// `markdown="0"` is deliberately not matched: it means "do not parse", which is
+// what an ordinary HTML block already does.
 var MkDocsDialect goldmark.Extender = &mkdocsDialect{}
 
 type mkdocsDialect struct{}

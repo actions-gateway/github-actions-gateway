@@ -107,7 +107,7 @@ func (d *Document) Line(offset int) int {
 // link.
 func (d *Document) Links() []Link {
 	var links []Link
-	ast.Walk(d.Root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(d.Root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -176,7 +176,7 @@ func normalizeRefLabel(label string) string {
 func (d *Document) Headings() []Heading {
 	slugger := NewSlugger()
 	var headings []Heading
-	ast.Walk(d.Root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(d.Root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		h, ok := n.(*ast.Heading)
 		if !ok || !entering {
 			return ast.WalkContinue, nil
@@ -205,7 +205,7 @@ func (d *Document) HTMLAnchors() []HTMLAnchor {
 			anchors = append(anchors, HTMLAnchor{ID: id, Line: d.Line(seg.Start + m[0])})
 		}
 	}
-	ast.Walk(d.Root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(d.Root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -232,7 +232,7 @@ func (d *Document) HTMLAnchors() []HTMLAnchor {
 // attributes of embedded HTML dropped as a browser drops them.
 func (d *Document) inlineText(n ast.Node) string {
 	var b strings.Builder
-	ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -277,7 +277,7 @@ func (d *Document) nodeLine(n ast.Node) int {
 func firstSegment(n ast.Node) (text.Segment, bool) {
 	var found text.Segment
 	ok := false
-	ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering || ok {
 			return ast.WalkContinue, nil
 		}

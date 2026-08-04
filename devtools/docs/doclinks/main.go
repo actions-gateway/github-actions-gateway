@@ -44,7 +44,9 @@ func main() {
 
 	out := bufio.NewWriter(os.Stdout)
 	broken, err := run(*root, *existFile, flag.Args(), out, os.Getenv("GITHUB_ACTIONS") != "")
-	out.Flush()
+	if ferr := out.Flush(); err == nil {
+		err = ferr
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "doclinks: %v\n", err)
 		os.Exit(2)
@@ -80,9 +82,9 @@ func run(root, existFile string, files []string, out io.Writer, gha bool) (int, 
 
 	for _, f := range c.findings {
 		if gha {
-			fmt.Fprintf(out, "::error file=%s,line=%d::%s\n", f.file, f.line, f.msg)
+			_, _ = fmt.Fprintf(out, "::error file=%s,line=%d::%s\n", f.file, f.line, f.msg)
 		} else {
-			fmt.Fprintf(out, "%s:%d: %s\n", f.file, f.line, f.msg)
+			_, _ = fmt.Fprintf(out, "%s:%d: %s\n", f.file, f.line, f.msg)
 		}
 	}
 	if n := len(c.findings); n > 0 {
@@ -90,10 +92,10 @@ func run(root, existFile string, files []string, out io.Writer, gha bool) (int, 
 		if n == 1 {
 			plural = ""
 		}
-		fmt.Fprintf(out, "check-doc-links: FAILED — %d broken link/anchor%s\n", n, plural)
+		_, _ = fmt.Fprintf(out, "check-doc-links: FAILED — %d broken link/anchor%s\n", n, plural)
 		return n, nil
 	}
-	fmt.Fprintf(out, "check-doc-links: ok (%d markdown files, %d links/anchors checked)\n", len(files), len(c.links))
+	_, _ = fmt.Fprintf(out, "check-doc-links: ok (%d markdown files, %d links/anchors checked)\n", len(files), len(c.links))
 	return 0, nil
 }
 
@@ -242,7 +244,7 @@ func readExisting(name string) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	exists := map[string]bool{}
 	s := bufio.NewScanner(f)
