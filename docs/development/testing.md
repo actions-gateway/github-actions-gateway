@@ -1316,6 +1316,59 @@ never about package state. Worked example, including the owner-prefix filter
 that made one such drop safe:
 [e2e-ci-speed-round-2.md](../plan/e2e-ci-speed-round-2.md#5-de-serialize-e2e_agc_workerpodlifecycle-).
 
+### Every e2e suite dumps cluster state before it tears down
+
+An e2e suite that deletes its namespace in teardown destroys the only evidence of
+why it failed. The specs here wait minutes for a Deployment, a condition, or a
+NetworkPolicy to settle, so a timeout's failure message is a bare "never became
+ready" — and by the time anyone reads it in CI the namespace is gone. Seven
+suites shipped that way, which is what made Q664 undiagnosable and Q666 the fix.
+
+So a suite that creates a namespace hooks the failure before teardown:
+
+```go
+AfterEach(func() {
+    if CurrentSpecReport().Failed() {
+        utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, tenantNS)
+    }
+})
+```
+
+Two dumps exist, both in [`cmd/gmc/test/utils/diagnostics.go`](../../cmd/gmc/test/utils/diagnostics.go).
+Pick by what the suite is waiting on:
+
+| Suite waits on | Helper | Adds |
+|---|---|---|
+| A broker session, a worker pod, a job | `DumpAGCSessionDiagnostics` | RunnerGroup status, AGC log tail, ReplicaSet templates, fakegithub |
+| Provisioning, a CR condition, RBAC, a NetworkPolicy verdict | `DumpProvisioningDiagnostics` | Namespace labels, ActionsGateway status, NetworkPolicies, per-pod log tails, the manager's policies and log tail |
+
+**Watch the volume when you extend one.** A dump nobody can read is a dump that
+did not happen. `DumpProvisioningDiagnostics` samples the NetworkPolicy `ipBlock`
+lists for exactly this reason: measured on a forced-failure run of
+`E2E_GMC_Teardown`, the tenant workload policy's GitHub meta ranges were 7352
+entries filling 14704 of that section's 14901 lines, and the whole dump was
+15450 lines. Sampling five and printing the elided count brought it to 758 with
+every section intact. Before adding a `-o yaml` of anything, check what it looks
+like on a real tenant rather than what it looks like in the type definition.
+
+Both are best-effort — a failed command prints one line and the dump continues,
+so it can never mask the real failure — and neither reads a Secret. Keep it that
+way when extending them: these dumps run against live tenant namespaces, and
+credentials reach a tenant pod as volume mounts, which `kubectl describe` renders
+as a Secret *name*. `TestDumpProvisioningDiagnosticsNeverReadsASecret` fails the
+build if a `get secret` is ever added.
+
+**`AfterEach` is the right node, and `DeferCleanup` is not.** Ginkgo runs
+`JustAfterEach`, then `AfterEach`/`AfterAll`, and only on a later pass the
+`DeferCleanup` nodes
+([`internal/group.go:249-258`](../../vendor/github.com/onsi/ginkgo/v2/internal/group.go)).
+An `AfterEach` dump therefore beats *every* cleanup the suite registered — the
+`DeleteNamespace` in an `AfterAll`, and also the per-spec `DeferCleanup` that
+deletes a probe pod, so the probe's logs are still fetchable when the dump runs.
+Putting the dump in a `DeferCleanup` gives up that ordering: cleanups run
+last-registered-first, so a probe pod registered after it is deleted first and
+the dump captures nothing.
+
 ### Watching an e2e run in progress
 
 At `--procs 6` Ginkgo's own output is close to silent: it suppresses spec-start entirely in parallel mode, prints a passing spec as a bare `•`, and two measured CI runs went 98 s and 78 s between any output. `make e2e` therefore runs [`scripts/e2e/progress-watch.sh`](../../scripts/e2e/progress-watch.sh) alongside the suite, which prints one line per 30 s:

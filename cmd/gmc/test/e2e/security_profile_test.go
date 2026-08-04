@@ -32,6 +32,14 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 		utils.BaseTenant(ns, agName, secretName).ApplyWithWebhookRetry()
 	})
 
+	// Dump before AfterAll deletes the namespace; the dump's namespace object
+	// carries the pod-security labels these specs assert on (Q666).
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, ns)
+		}
+	})
+
 	AfterAll(func() {
 		utils.DeleteActionsGatewayCR(ns, agName)
 		utils.DeleteNamespace(ns)

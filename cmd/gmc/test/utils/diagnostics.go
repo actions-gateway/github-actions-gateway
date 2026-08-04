@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:revive,staticcheck
 )
@@ -71,6 +72,149 @@ func DumpAGCSessionDiagnostics(tenantNS, agcDeployment, infraNS, fakegithubDeplo
 
 	_, _ = fmt.Fprintf(GinkgoWriter,
 		"===== end AGC session-registration diagnostics (tenant=%s) =====\n\n", tenantNS)
+}
+
+// DumpProvisioningDiagnostics writes best-effort cluster state to the Ginkgo
+// output for a GMC provisioning-or-policy failure in the given namespaces — the
+// multi-minute WaitForDeploymentReady, resource-existence and NetworkPolicy-
+// enforcement timeouts. It is the GMC-side counterpart to
+// DumpAGCSessionDiagnostics, which covers broker-session registration instead.
+//
+// The suites that call it delete their namespace in teardown, so a timeout used
+// to leave nothing behind (Q666). Per namespace it captures the signals that
+// separate the failure modes: the namespace object (the pod-security and
+// selector labels several specs assert on), the workload inventory, the
+// ActionsGateway status (conditions and observedGeneration separate "GMC never
+// reconciled" from "reconciled and failed"), the NetworkPolicies (asserted for
+// existence and for egress shape, so the rule set is what attributes a blocked
+// connection to policy rather than to a dead endpoint), pod descriptions
+// (scheduling, image-pull, probe and pod-security rejections), each pod's log
+// tail and its previous container's, and the event stream. It then adds the
+// shared manager's ingress NetworkPolicies — a regression there blocks
+// admission for every tenant at once (Q83), so it presents as nothing
+// provisioning anywhere — and the manager's log tail, the only record of a
+// reconcile that never ran.
+//
+// Nothing here reads a Secret. Credentials reach a tenant pod as Secret volume
+// mounts rather than env vars (E2E_GMC_AGCNoCredentialEnvVars asserts that), and
+// describe renders a volume as its Secret name; the ActionsGateway spec carries
+// a SecretReference, also a name.
+//
+// It is best-effort: every command failure is logged and skipped, never
+// propagated, so calling it from a failure-gated AfterEach cannot mask the
+// original failure. Call it only when the spec has already failed.
+func DumpProvisioningDiagnostics(managerNS, managerDeployment string, namespaces ...string) {
+	scope := strings.Join(namespaces, ",")
+	_, _ = fmt.Fprintf(GinkgoWriter,
+		"\n===== GMC provisioning diagnostics (namespaces=%s) =====\n", scope)
+
+	for _, ns := range namespaces {
+		// Callers pass every namespace a suite may have created; the ones a
+		// focused or early-failing run never reached would otherwise emit a
+		// screen of identical "unavailable" lines.
+		if _, err := Run(exec.Command("kubectl", "get", "namespace", ns)); err != nil {
+			_, _ = fmt.Fprintf(GinkgoWriter, "--- namespace %s: not readable (%v), skipping ---\n", ns, err)
+			continue
+		}
+		dumpCommand("namespace "+ns,
+			"kubectl", "get", "namespace", ns, "-o", "yaml")
+		dumpCommand("workloads in "+ns,
+			"kubectl", "get", "all", "-n", ns)
+		dumpCommand("actionsgateway status in "+ns,
+			"kubectl", "get", "actionsgateways.actions-gateway.github.com", "-n", ns, "-o", "yaml")
+		dumpNetworkPolicies("networkpolicies in "+ns, ns)
+		// describe over `-o yaml`: it renders the scheduling and probe events
+		// without the status bulk, and prints a Secret-backed volume or env var
+		// as a reference rather than its value.
+		dumpCommand("pod descriptions in "+ns,
+			"kubectl", "describe", "pods", "-n", ns)
+		dumpPodLogs(ns)
+		dumpCommand("events in "+ns,
+			"kubectl", "get", "events", "-n", ns, "--sort-by=.lastTimestamp")
+	}
+
+	dumpNetworkPolicies("manager networkpolicies in "+managerNS, managerNS)
+	// No --previous counterpart: a restarted manager re-reconciles, so the
+	// current tail already carries the retry.
+	dumpCommand("manager logs in "+managerNS,
+		"kubectl", "logs", "deploy/"+managerDeployment, "-n", managerNS, "--tail=400", "--all-containers")
+
+	_, _ = fmt.Fprintf(GinkgoWriter,
+		"===== end GMC provisioning diagnostics (namespaces=%s) =====\n\n", scope)
+}
+
+// networkPolicyCIDRSample is how many ipBlock entries survive a dump. The
+// tenant workload policy carries GitHub's full meta range set: measured on a
+// forced-failure run of E2E_GMC_Teardown, 7352 entries filled 14704 of the
+// section's 14901 lines, leaving 197 for the selectors, ports and policyTypes
+// the specs actually assert on. The sample keeps the shape visible; the count
+// keeps the elision honest.
+const networkPolicyCIDRSample = 5
+
+// dumpNetworkPolicies writes the namespace's NetworkPolicies with the ipBlock
+// CIDR lists sampled rather than reproduced in full.
+func dumpNetworkPolicies(label, ns string) {
+	out, err := Run(exec.Command("kubectl", "get", "networkpolicy", "-n", ns, "-o", "yaml"))
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- %s: unavailable (%v) ---\n", label, err)
+		return
+	}
+	_, _ = fmt.Fprintf(GinkgoWriter, "--- %s ---\n%s\n", label, sampleCIDRs(out))
+}
+
+// sampleCIDRs keeps the first networkPolicyCIDRSample ipBlock entries of a
+// NetworkPolicy YAML document and replaces the remainder with a count. An
+// ipBlock entry is the `- ipBlock:` line and the `cidr:` line under it, so both
+// are held back together and neither is emitted without the other.
+func sampleCIDRs(doc string) string {
+	var out []string
+	var pending string
+	kept, elided := 0, 0
+	for _, line := range strings.Split(doc, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "- ipBlock:"):
+			pending = line
+		case pending != "" && strings.HasPrefix(trimmed, "cidr:"):
+			if kept < networkPolicyCIDRSample {
+				out = append(out, pending, line)
+				kept++
+			} else {
+				elided++
+			}
+			pending = ""
+		default:
+			if pending != "" {
+				out = append(out, pending)
+				pending = ""
+			}
+			out = append(out, line)
+		}
+	}
+	if pending != "" {
+		out = append(out, pending)
+	}
+	if elided > 0 {
+		out = append(out, fmt.Sprintf("# %d further ipBlock cidr entries elided (GitHub meta ranges)", elided))
+	}
+	return strings.Join(out, "\n")
+}
+
+// dumpPodLogs writes a bounded log tail for every pod in ns. The probe pods the
+// NetworkPolicy specs drive carry their verdict in their logs, and a crash
+// looping proxy or AGC records its fatal only in the previous container.
+func dumpPodLogs(ns string) {
+	out, err := Run(exec.Command("kubectl", "get", "pods", "-n", ns, "-o", "name"))
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- pod logs in %s: unavailable (%v) ---\n", ns, err)
+		return
+	}
+	for _, pod := range strings.Fields(out) {
+		dumpCommand(pod+" logs in "+ns,
+			"kubectl", "logs", pod, "-n", ns, "--tail=150", "--all-containers", "--prefix")
+		dumpCommand(pod+" previous-container logs in "+ns,
+			"kubectl", "logs", pod, "-n", ns, "--tail=60", "--all-containers", "--prefix", "--previous")
+	}
 }
 
 // dumpCommand runs a diagnostic command and writes its labeled output to the

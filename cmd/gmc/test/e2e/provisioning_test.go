@@ -28,6 +28,13 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		utils.BaseTenant(tenantNS, agName, secretName).ApplyWithWebhookRetry()
 	})
 
+	// Dump before AfterAll deletes the namespace (Q666).
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, tenantNS)
+		}
+	})
+
 	AfterAll(func() {
 		utils.DeleteActionsGatewayCR(tenantNS, agName)
 		utils.DeleteNamespace(tenantNS)

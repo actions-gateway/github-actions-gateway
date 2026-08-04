@@ -84,6 +84,17 @@ var _ = Describe("Manager NetworkPolicy", Ordered, func() {
 		}, 3*time.Minute, time.Second).Should(Succeed())
 	})
 
+	// Each spec creates its own probe namespace and deletes it in DeferCleanup.
+	// Ginkgo runs every AfterEach before any DeferCleanup, so this dump sees the
+	// probe pods and the namespace the failing spec used, whichever that is —
+	// the dump skips the two it never created (Q666).
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment,
+				metricsNPUnlabeledNS, metricsNPLabeledNS, webhookNPNamespace)
+		}
+	})
+
 	// metricsURL targets the manager metrics Service on :8443. --insecure: the
 	// probe asserts TCP/TLS reachability through the NP, not metrics auth — an
 	// unauthenticated request still completes the TLS handshake and gets an HTTP

@@ -30,6 +30,15 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		}
 	})
 
+	// Dump both tenants before AfterAll deletes them: a cross-tenant block that
+	// never lands is a claim about nsB's policy observed from nsA, so neither
+	// side alone explains it (Q666).
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, nsA, nsB)
+		}
+	})
+
 	AfterAll(func() {
 		for _, ns := range []string{nsA, nsB} {
 			utils.DeleteActionsGatewayCR(ns, agName)
