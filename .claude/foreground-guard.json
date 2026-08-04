@@ -5,7 +5,7 @@
       "go test .*-tags[= ]integration": 600000,
       "make (-C [^ ]+ )?test-integration\\b": 600000,
       "make (-C [^ ]+ )?test-race\\b": 600000,
-      "make .*\\be2e": 1800000,
+      "make (-C [^ ]+ )?e2e(-[a-z-]+)?\\b": 1800000,
       "((^|[;&|(]\\s*)(\\w+=\\S+\\s+)*|(^|[;&|(]\\s*|\\s)(bash|sh|exec|nohup)\\s+(\\w+=\\S+\\s+)*)\\S*scripts/dogfood/validate-release\\.sh": 3600000,
       "((^|[;&|(]\\s*)(\\w+=\\S+\\s+)*|(^|[;&|(]\\s*|\\s)(bash|sh|exec|nohup)\\s+(\\w+=\\S+\\s+)*)\\S*scripts/dogfood/release-sentinel\\.sh": 7200000
     }
