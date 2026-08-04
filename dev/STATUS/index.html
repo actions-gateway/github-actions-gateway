@@ -2884,14 +2884,6 @@
 <td>The hook scans the whole Bash string, so a <code>git commit -F -</code> heredoc quoting <code>go test -race</code> reads as a second go invocation and is denied. Skip heredoc bodies and <code>git commit -m</code>/<code>-F</code> arguments; <code>claude-go-throttle-hook-test.sh</code> takes the case.</td>
 </tr>
 <tr>
-<td><a id="Q667"></a>Q667</td>
-<td><a href="../development/go-workspaces/#wiring-a-new-first-party-module"><code>tidy-check</code> never tidies the non-workspace Go modules</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>go-work-tidy.sh</code> draws its module list from <code>go.work</code>, so the flow never tidies <code>devtools/</code> or <code>tools/</code>; the check then diffs a tree nothing rewrote. Derived from the flow's source, not injected — a working-tree edit masks it locally.</td>
-</tr>
-<tr>
 <td><a id="Q671"></a>Q671</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>make scripts-test</code>'s help line lists every suite, so two PRs adding suites always conflict</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
