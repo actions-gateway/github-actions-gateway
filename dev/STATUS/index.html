@@ -2735,14 +2735,6 @@
 <td><code>isolation</code>, <code>resilience</code>, <code>provisioning</code>, <code>teardown</code>, <code>security_profile</code>, <code>manager_np</code>, <code>rbac_e2e</code> run multi-minute waits then <code>DeleteNamespace</code> with no <code>Failed()</code> dump, so a timeout leaves no AGC log — what made Q664 undiagnosable.</td>
 </tr>
 <tr>
-<td><a id="Q649"></a>Q649</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Adding a gate means hand-editing three copies of the gate list, and concurrent PRs collide on all three</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Two of three rebases on #1192 collided here. A gate name is hand-copied into <code>.PHONY</code>, the <code>check:</code> help, and testing.md's enumeration, so every gate-adding PR edits all three and they conflict.</td>
-</tr>
-<tr>
 <td><a id="Q652"></a>Q652</td>
 <td><a href="../development/maintaining-backlog/">Nothing enforces the <code>docs/STATUS.md</code> isolated-commit rule</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
