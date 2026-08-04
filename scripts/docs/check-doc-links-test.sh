@@ -43,10 +43,18 @@ new_repo() {
     git -C "$WORK" init -q
 }
 
-# run_gate NAME WANT — run the gate inside WORK and compare its exit status.
+# run_gate NAME WANT [gha] — run the gate inside WORK and compare its exit
+# status. GITHUB_ACTIONS is pinned rather than inherited: it switches the
+# findings between `file:line:` and `::error` annotations, and CI sets it, so an
+# assertion on either format would otherwise pass or fail on where the suite
+# runs rather than on what the gate did.
 run_gate() {
-    local name="$1" want="$2" got=0
-    ( cd "$WORK" && "$GATE" ) >"$WORK/gate.out" 2>&1 || got=$?
+    local name="$1" want="$2" mode="${3:-plain}" got=0
+    if [[ "$mode" == "gha" ]]; then
+        ( cd "$WORK" && GITHUB_ACTIONS=true "$GATE" ) >"$WORK/gate.out" 2>&1 || got=$?
+    else
+        ( cd "$WORK" && env -u GITHUB_ACTIONS "$GATE" ) >"$WORK/gate.out" 2>&1 || got=$?
+    fi
     if [[ "$got" == "$want" ]]; then
         printf 'ok   %s\n' "$name"
         return
@@ -132,7 +140,7 @@ run_gate 'a symlinked doc is skipped, not scanned twice' 0
 new_repo
 printf '[gone](missing.md)\n' >"$WORK/a.md"
 git -C "$WORK" add -A
-GITHUB_ACTIONS=true run_gate 'a finding under CI still fails the gate' 1
+run_gate 'a finding under CI still fails the gate' 1 gha
 expect_out 'the finding is a GitHub error annotation' '::error file=a.md,line=1::dead link'
 
 if (( fails > 0 )); then
