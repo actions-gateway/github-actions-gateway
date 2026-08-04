@@ -31,6 +31,14 @@
 #      cluster (an upgrade can succeed while silently never delivering one),
 #      the restarted manager must come back, the validating webhook must
 #      enforce, and the PriorityClass guard's params must resolve.
+#   4. An upgrade that SETS the values every step above leaves at their defaults
+#      must reach the CRD-SCHEMA preflight and then clear it (Q646). Steps 1-3
+#      replay the release's own values, which are the chart defaults, so every
+#      preflight gated on a value being set was dead code here: measured on
+#      kind against the published v1.3.0 chart, the default-values upgrade
+#      reaches none of the three guards in priorityclass-allowlist.yaml. This
+#      step sets allowedInfraPriorityClasses (Q298) and allowedPriorityClasses,
+#      the one pair whose guard no other step reaches.
 #
 # "Last released" is discovered dynamically so a new release re-points this
 # check automatically: the highest stable vX.Y.Z tag on the origin remote
@@ -68,6 +76,11 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 
 readonly CHART_DIR="${REPO_ROOT}/charts/actions-gateway"
 readonly PROBE_NS="chart-released-upgrade-check"
+# Allowlist entries for the values-set leg. Names only — neither list is checked
+# against real PriorityClass objects — but they must be DISJOINT, or the CRD's
+# CEL rule rejects the pair and the leg fails for the wrong reason.
+readonly PROBE_WORKER_CLASS="released-upgrade-probe-worker"
+readonly PROBE_INFRA_CLASS="released-upgrade-probe-infra"
 
 require_cmd helm "https://helm.sh/docs/intro/install/"
 require_cmd kubectl "https://kubernetes.io/docs/tasks/tools/"
@@ -107,6 +120,34 @@ upgrade_to_head() {
 	UPGRADE_OUT="$(helm upgrade "${HELM_RELEASE}" "${CHART_DIR}" \
 		--kube-context "${KUBE_CONTEXT}" --namespace "${RELEASE_NS}" \
 		-f "${work_dir}/values.yaml" --wait --timeout 10m 2>&1)" || UPGRADE_RC=$?
+}
+
+# infra_field_declared echoes "yes" when the PriorityClassAllowlist CRD stored in
+# the cluster declares spec.allowedInfraPriorityClasses on any version, and empty
+# otherwise (CRD absent included). This is the exact condition the chart's
+# schema preflight tests via `lookup`, read the same way, so the check can tell
+# "the guard should fire" from "the CRD is already current" instead of assuming
+# which branch step 2 took.
+infra_field_declared() {
+	local schema
+	schema="$(kc get crd priorityclassallowlists.actions-gateway.com -o json 2>/dev/null)" || return 0
+	jq -r 'if [.spec.versions[]
+		| select(.schema.openAPIV3Schema.properties.spec.properties
+			| has("allowedInfraPriorityClasses"))] | length > 0
+		then "yes" else "" end' <<<"${schema}"
+}
+
+# upgrade_with_lists attempts the upgrade to HEAD with both PriorityClass
+# allowlists SET rather than defaulted. Same globals-not-substitution reason as
+# upgrade_to_head; extra helm args are forwarded verbatim.
+upgrade_with_lists() {
+	UPGRADE_RC=0
+	UPGRADE_OUT="$(helm upgrade "${HELM_RELEASE}" "${CHART_DIR}" \
+		--kube-context "${KUBE_CONTEXT}" --namespace "${RELEASE_NS}" \
+		-f "${work_dir}/values.yaml" \
+		--set "allowedPriorityClasses={${PROBE_WORKER_CLASS}}" \
+		--set "allowedInfraPriorityClasses={${PROBE_INFRA_CLASS}}" \
+		"$@" 2>&1)" || UPGRADE_RC=$?
 }
 
 # assert_webhook_enforces fails unless the GMC validating webhook denies an
@@ -443,6 +484,94 @@ for crd in ${head_root_crds[@]+"${head_root_crds[@]}"}; do
 	echo "     ${crd}: present"
 done
 
+# --- 4. A values-set upgrade must reach the schema preflight, then clear it ---
+# Everything above replays the release's captured values, which for a stock
+# install are the chart's defaults — so allowedInfraPriorityClasses is empty and
+# the chart omits it from the rendered CR entirely. That is deliberate (it keeps
+# the default upgrade safe against a stale CRD with no cluster read at all), and
+# it is exactly why the preflight guarding the SET case had no coverage: Q298's
+# lookup guard shipped verified by hand on kind, not by this gate.
+#
+# The negative half is doubly anchored — on HEAD's chart still carrying the
+# guard, and on the cluster's stored CRD actually predating the field. The
+# second anchor is not decoration: whether the stored CRD is current depends on
+# which branch step 2 took (the documented step in step 3 applies crds/, a
+# plain success does not), and on what the last released chart happened to ship.
+# Asserting the failure unconditionally would redden the gate the day a release
+# ships the field.
+step "an upgrade that SETS the PriorityClass allowlists must reach the schema preflight"
+before_revision="$(release_revision)"
+if ! grep -q "allowedInfraPriorityClasses is set, but the PriorityClassAllowlist CRD" \
+	"${CHART_DIR}/templates/priorityclass-allowlist.yaml"; then
+	echo "     (skipping the negative half: HEAD's chart no longer guards the field's schema)"
+elif [[ -n "$(infra_field_declared)" ]]; then
+	echo "     (skipping the negative half: the stored CRD already declares"
+	echo "      allowedInfraPriorityClasses, so there is no stale schema to refuse)"
+else
+	upgrade_with_lists --wait --timeout 5m
+	if ((UPGRADE_RC == 0)); then
+		echo "FAIL: an upgrade setting allowedInfraPriorityClasses was ACCEPTED while the" >&2
+		echo "  cluster's PriorityClassAllowlist CRD still predates that field. Helm skips the" >&2
+		echo "  chart-root crds/ dir on upgrade, so the field is not in the stored schema and" >&2
+		echo "  server-side apply prunes it or fails MIDWAY — the half-applied shape this check" >&2
+		echo "  exists to reject. The render-time guard in" >&2
+		echo "  charts/actions-gateway/templates/priorityclass-allowlist.yaml is gone or no" >&2
+		echo "  longer fires (Q298)." >&2
+		exit 1
+	fi
+	if [[ "${UPGRADE_OUT}" != *"allowedInfraPriorityClasses"* ||
+		"${UPGRADE_OUT}" != *"docs/operations/upgrade.md"* ]]; then
+		echo "FAIL: the values-set upgrade failed, but not with the schema preflight message" >&2
+		echo "  (it must name allowedInfraPriorityClasses and point at" >&2
+		echo "  docs/operations/upgrade.md). Helm said:" >&2
+		echo "  ${UPGRADE_OUT}" >&2
+		exit 1
+	fi
+	if [[ "$(release_revision)" != "${before_revision}" ]]; then
+		echo "FAIL: the refused values-set upgrade still advanced the release revision — it" >&2
+		echo "  failed while applying, not at render, leaving the release half-upgraded." >&2
+		exit 1
+	fi
+	echo "OK: the stale-schema upgrade failed at render with the documented message"
+
+	step "running the documented pre-upgrade step, then retrying the values-set upgrade"
+	kc apply -f - <<<"$(helm show crds "${CHART_DIR}")" >/dev/null
+fi
+
+# The positive half is unconditional: whichever way the negative half went, an
+# upgrade with both lists set must succeed against a current CRD. It is the only
+# place any tier renders allowedInfraPriorityClasses into the CR at all.
+upgrade_with_lists --wait --timeout 10m
+if ((UPGRADE_RC != 0)); then
+	echo "FAIL: the values-set upgrade still fails with the CRD schema current. Setting the" >&2
+	echo "  PriorityClass allowlists is a supported configuration, and after the documented" >&2
+	echo "  pre-upgrade step nothing should refuse it. Helm said:" >&2
+	echo "  ${UPGRADE_OUT}" >&2
+	exit 1
+fi
+
+# The upgrade succeeding is not the same as the values landing: the chart omits
+# allowedInfraPriorityClasses when empty, and a stale stored schema prunes it on
+# write, so both failure modes look like a clean upgrade from the outside.
+allowlist_json="$(kc get priorityclassallowlist \
+	-l app.kubernetes.io/part-of=actions-gateway -o json)"
+if [[ "$(jq -r '.items | length' <<<"${allowlist_json}")" != "1" ]]; then
+	die "expected exactly one chart-owned PriorityClassAllowlist after the values-set upgrade,
+       found: $(jq -rc '[.items[].metadata.name]' <<<"${allowlist_json}")"
+fi
+rendered="$(jq -c '.items[0].spec' <<<"${allowlist_json}")"
+for want in "${PROBE_WORKER_CLASS}" "${PROBE_INFRA_CLASS}"; do
+	if [[ "${rendered}" != *"${want}"* ]]; then
+		echo "FAIL: the values-set upgrade succeeded but the PriorityClassAllowlist CR does not" >&2
+		echo "  carry ${want}. Its spec is:" >&2
+		echo "  ${rendered}" >&2
+		echo "  A field the chart renders but the stored CRD does not declare is pruned on" >&2
+		echo "  write with no error — the silent half of the Q298 hazard." >&2
+		exit 1
+	fi
+done
+echo "OK: both allowlists round-trip into the CR: ${rendered}"
+
 step "admission must work on the upgraded release"
 # A previous run's cleanup deletes the probe namespace with --wait=false, so a
 # back-to-back invocation can find it Terminating — which rejects every create
@@ -462,5 +591,6 @@ assert_params_resolve
 
 echo
 echo "OK: the last released chart (${RELEASED_TAG}) installed from its published artifact,"
-echo "    upgraded to HEAD's chart along the documented path, and came out with a healthy"
-echo "    manager, working admission, and every chart-root CRD present."
+echo "    upgraded to HEAD's chart along the documented path — with the PriorityClass"
+echo "    allowlists both defaulted and SET — and came out with a healthy manager, working"
+echo "    admission, and every chart-root CRD present."
