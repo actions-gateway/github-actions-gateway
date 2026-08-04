@@ -73,8 +73,9 @@ func egressProxyLabels(ep *gmcv2alpha1.EgressProxy) map[string]string {
 // pod wearing it is claimed by all three throughout a migration's coexistence window:
 // each pool's pods fall under the other's PDB, both HPAs wedge on AmbiguousSelector
 // (the HPA controller reads the scale target's — the Deployment's — selector and
-// refuses to act on pods another HPA also controls, so neither pool autoscales), and
-// the two pools repel each other off every node. The generic "this is a proxy pod"
+// refuses to act on pods another HPA also controls, so neither pool autoscales;
+// measured on Kubernetes v1.35.5 and v1.36.1, Q591), and the two pools repel each
+// other off every node. The generic "this is a proxy pod"
 // identity for humans and tooling is the recommended `app.kubernetes.io/name` label,
 // which is additive metadata that nothing selects on; the v2 workload NetworkPolicy
 // reaches proxy pods via egressProxyPodPeerSelector instead.
