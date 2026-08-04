@@ -74,7 +74,7 @@ field, measured:
 `St` then reads the label cell and `Notes` reads the size, so the row's rules evaluate
 the wrong cells and pass. This fails *silently wrong*, not loudly, which is why it is
 worth closing before it happens rather than after. Filed as latent: "zero occurrences
-in `STATUS.md` today", which the build disproved: [Q625](../STATUS.md#Q625) carries one,
+in `STATUS.md` today", which the build disproved: Q625 carried one,
 and the gate was reading 13 characters of a 243-character cell ([Phase 2
 result](#phase-2-result-q613)).
 
@@ -275,7 +275,7 @@ this was in flight and was ported the same way. Its six cases — written agains
 the `awk`, not against this — pass unchanged, which is the check that matters:
 a rule dropped in a port disarms a gate that still reports green.
 
-**The escaped-pipe defect had a live instance.** [Q625](../STATUS.md#Q625)'s
+**The escaped-pipe defect had a live instance.** Q625's
 Notes carry `` `make check \| tail` ``, so the `awk` read a 13-character cell
 where the row holds 243. Pushing that cell to 264 characters left the `awk`
 green; the rewrite fails it at `docs/STATUS.md:77`. The control — the same
