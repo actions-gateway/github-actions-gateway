@@ -163,7 +163,8 @@ Each keeps its `scripts/` entry point, per
 ### Out of scope, deliberately
 
 [`git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) and
-[`merge-status-rows.awk`](../../scripts/lib/merge-status-rows.awk) stay as they are. A
+[`merge-table-rows.awk`](../../scripts/lib/merge-table-rows.awk) stay as they are, as does
+the [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) sibling. A
 merge driver must reconstruct the file **line for line**, including the conflict-marker
 fallback; an AST discards exactly the byte-level fidelity it depends on. Rewriting it
 onto goldmark would be actively wrong, not merely unnecessary.

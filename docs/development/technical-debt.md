@@ -161,7 +161,7 @@ Two corroborating signals when the first read is ambiguous:
 Parsing structured text is necessary but not sufficient. A script that must reproduce
 its input **byte for byte** is worse off with an abstract syntax tree, which discards
 exactly the fidelity it depends on. [`git-merge-status.sh`](../../scripts/docs/git-merge-status.sh)
-and [`merge-status-rows.awk`](../../scripts/lib/merge-status-rows.awk) parse Markdown
+and [`merge-table-rows.awk`](../../scripts/lib/merge-table-rows.awk) parse Markdown
 tables and stay in `awk` for that reason: a merge driver reconstructs the file line for
 line, conflict-marker fallback included.
 

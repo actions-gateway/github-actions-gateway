@@ -19,7 +19,8 @@
 # change. Row order is reconstructed from whichever side reordered. Everything
 # outside those rows — the header, the Progress table, the Deferred table — is
 # merged exactly as git would have merged it, with no set-semantics applied.
-# The rules and the ordering rebuild live in scripts/lib/merge-status-rows.awk.
+# The rules and the ordering rebuild live in scripts/lib/merge-table-rows.awk;
+# docs/plan/README.md gets the same treatment from git-merge-plan-index.sh.
 #
 # WHAT IT REFUSES TO DO. Any uncertainty ends the same way: re-run the plain
 # three-way merge and leave its conflict markers. A row changed on both sides, a
@@ -55,106 +56,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROWS_AWK="$SCRIPT_DIR/../lib/merge-table-rows.awk"
+
 DRIVER_NAME='backlog'
-ROWS_AWK="$SCRIPT_DIR/../lib/merge-status-rows.awk"
+DRIVER_LOG='merge-status'
+DRIVER_PATH='scripts/docs/git-merge-status.sh'
+DRIVER_DESC='docs/STATUS.md: merge Queue rows by ID set-semantics, else conflict markers'
+DRIVER_INSTALL_NOTE='  docs/STATUS.md Queue conflicts now resolve by ID during merge/rebase;
+  anything ambiguous still gets ordinary conflict markers.'
+DRIVER_SELF="${BASH_SOURCE[0]}"
+DEFAULT_PATH='docs/STATUS.md'
 
-# note MSG — one line of driver commentary on stderr, so a resolution (or a
-# refusal) is never silent.
-note() {
-	printf 'merge-status: %s\n' "$1" >&2
-}
+# shellcheck source=scripts/lib/merge-driver-common.sh
+. "$SCRIPT_DIR/../lib/merge-driver-common.sh"
 
-# install_driver — point this clone's git config at the driver. Repo-local by
-# construction (never --global), and the script path stays relative so it
-# resolves in the main checkout and in every linked worktree, which share one
-# config file. The same reason core.hooksPath is relative in `make hooks`.
-install_driver() {
-	git config "merge.$DRIVER_NAME.name" \
-		'docs/STATUS.md: merge Queue rows by ID set-semantics, else conflict markers'
-	git config "merge.$DRIVER_NAME.driver" \
-		'scripts/docs/git-merge-status.sh %O %A %B %L %P %S %X %Y'
-	printf 'merge driver installed: merge.%s -> scripts/docs/git-merge-status.sh\n' "$DRIVER_NAME"
-	printf '  docs/STATUS.md Queue conflicts now resolve by ID during merge/rebase;\n'
-	printf '  anything ambiguous still gets ordinary conflict markers.\n'
-}
-
-if [[ "${1:-}" == "--install" ]]; then
-	install_driver
-	exit 0
-fi
-
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-	# The header comment block is the documentation; print it without the `#`.
-	awk 'NR == 1 { next } /^#/ { sub(/^#[ ]?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"
-	exit 0
-fi
-
-if (( $# < 3 )); then
-	note 'expected the %O %A %B placeholders; run --install to configure git, or --help'
-	exit 2
-fi
-
-BASE_FILE="$1"
-OURS_FILE="$2"
-THEIRS_FILE="$3"
-
-MARKER_SIZE="${4:-7}"
-if [[ ! "$MARKER_SIZE" =~ ^[0-9]+$ ]] || (( MARKER_SIZE < 7 )); then
-	MARKER_SIZE=7
-fi
-
-TARGET_PATH="${5:-docs/STATUS.md}"
-
-# conflict_label VALUE FALLBACK — git passes %S/%X/%Y only from 2.44 on; an
-# older git leaves the placeholder unexpanded, so a value that still looks like
-# one is not a label.
-conflict_label() {
-	local value="$1" fallback="$2"
-	if [[ -z "$value" || "$value" == %* ]]; then
-		printf '%s' "$fallback"
-	else
-		printf '%s' "$value"
-	fi
-}
-
-LABEL_BASE="$(conflict_label "${6:-}" "$TARGET_PATH (base)")"
-LABEL_OURS="$(conflict_label "${7:-}" "$TARGET_PATH (ours)")"
-LABEL_THEIRS="$(conflict_label "${8:-}" "$TARGET_PATH (theirs)")"
-
-WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/merge-status.XXXXXX")"
-trap 'rm -rf "$WORKDIR"' EXIT
-
-# fallback REASON — the only exit path for an uncertain merge: redo the merge the
-# way git would have without this driver, and keep whatever it produces. Clean
-# means nothing was actually contested, so it exits 0; otherwise the file carries
-# ordinary conflict markers and the driver reports a conflict.
-#
-# Exit status stays under 128 either way: git reads >128 as "the driver crashed",
-# which fails the whole merge instead of recording a conflict.
-fallback() {
-	local reason="$1" rc=0
-	git merge-file --marker-size="$MARKER_SIZE" \
-		-L "$LABEL_OURS" -L "$LABEL_BASE" -L "$LABEL_THEIRS" \
-		"$OURS_FILE" "$BASE_FILE" "$THEIRS_FILE" >/dev/null 2>&1 || rc=$?
-	if (( rc == 0 )); then
-		note "$reason; the plain three-way merge resolved it cleanly"
-		exit 0
-	fi
-	note "$reason; left ordinary conflict markers in $TARGET_PATH"
-	exit 1
-}
-
-# Any unexpected internal failure is just another uncertainty.
-trap 'fallback "the driver failed unexpectedly"' ERR
-
-# first_line FILE DEFAULT — FILE's first line, or DEFAULT when it has none. Used
-# to turn a helper's stderr into a fallback reason without ever producing an
-# empty one.
-first_line() {
-	local line=""
-	[[ -s "$1" ]] && IFS= read -r line <"$1"
-	printf '%s' "${line:-$2}"
-}
+merge_driver_init "$@"
 
 # split_status FILE OUT_PREFIX — carve FILE into OUT_PREFIX.{prefix,rows,suffix}:
 # everything up to and including the Queue table's `|---|` separator, then the
@@ -209,15 +125,15 @@ split_status() {
 for side_pair in "base:$BASE_FILE" "ours:$OURS_FILE" "theirs:$THEIRS_FILE"; do
 	side="${side_pair%%:*}"
 	if ! split_status "${side_pair#*:}" "$WORKDIR/$side" 2>"$WORKDIR/split.err"; then
-		fallback "$side: $(first_line "$WORKDIR/split.err" 'the Queue table could not be located')"
+		merge_driver_fallback "$side: $(merge_driver_first_line "$WORKDIR/split.err" 'the Queue table could not be located')"
 	fi
 done
 
 # The Queue rows, by ID set-semantics.
-if ! awk -f "$ROWS_AWK" \
+if ! awk -v key_mode=anchor -f "$ROWS_AWK" \
 	"$WORKDIR/base.rows" "$WORKDIR/ours.rows" "$WORKDIR/theirs.rows" \
 	>"$WORKDIR/merged.rows" 2>"$WORKDIR/rows.err"; then
-	fallback "$(first_line "$WORKDIR/rows.err" 'the Queue rows could not be merged by ID')"
+	merge_driver_fallback "$(merge_driver_first_line "$WORKDIR/rows.err" 'the Queue rows could not be merged by ID')"
 fi
 
 # Everything else is merged as plain text — this driver claims no special
@@ -227,12 +143,12 @@ for part in prefix suffix; do
 		-L "$LABEL_OURS" -L "$LABEL_BASE" -L "$LABEL_THEIRS" \
 		"$WORKDIR/ours.$part" "$WORKDIR/base.$part" "$WORKDIR/theirs.$part" \
 		>"$WORKDIR/merged.$part" 2>/dev/null; then
-		fallback "the file outside the Queue rows conflicts (${part})"
+		merge_driver_fallback "the file outside the Queue rows conflicts (${part})"
 	fi
 done
 
 cat "$WORKDIR/merged.prefix" "$WORKDIR/merged.rows" "$WORKDIR/merged.suffix" \
 	>"$WORKDIR/result"
 cp "$WORKDIR/result" "$OURS_FILE"
-note "resolved the $TARGET_PATH Queue table by ID; review the row set before committing"
+merge_driver_note "resolved the $TARGET_PATH Queue table by ID; review the row set before committing"
 exit 0
