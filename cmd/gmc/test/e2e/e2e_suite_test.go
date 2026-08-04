@@ -192,8 +192,24 @@ func setupGMC() {
 	fakegithubBaseURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
 		fakegithubServiceName, infraNamespace, fakegithubServicePort)
 
+	// A prior run under E2E_SKIP_TEARDOWN=true leaves this Deployment behind with
+	// .spec.template.spec.containers[name="manager"].args owned by the
+	// kubectl-patch field manager: the arg patch below claims the whole atomic
+	// list. Helm 4 applies server-side, so `make deploy` below fails outright on
+	// that field rather than overwriting it, before any spec runs. Deleting the
+	// Deployment drops the stale ownership and Helm recreates it chart-owned.
+	// fakegithub, cert-manager, and the tenant namespaces are untouched, so a
+	// skipped teardown still leaves a failed run's state to inspect. Foreground
+	// cascade so the fresh Deployment cannot adopt the old ReplicaSet mid-GC.
+	By("deleting any leftover GMC Deployment so Helm reapplies it with chart-owned fields")
+	cmd := exec.Command("kubectl", "delete", "deployment", managerDeployment,
+		"-n", gmcNamespace, "--ignore-not-found", "--cascade=foreground")
+	// Best-effort: a first run has no gmc-system namespace at all, and a delete
+	// that genuinely fails resurfaces as the apply conflict on `make deploy`.
+	_, _ = utils.Run(cmd)
+
 	By("deploying GMC via the Helm chart")
-	cmd := exec.Command("make", "deploy",
+	cmd = exec.Command("make", "deploy",
 		fmt.Sprintf("GMC_IMG=%s", gmcImage),
 		fmt.Sprintf("AGC_IMG=%s", agcImage),
 		fmt.Sprintf("PROXY_IMG=%s", proxyImage),
