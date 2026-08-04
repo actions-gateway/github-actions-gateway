@@ -2461,6 +2461,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#search-before-you-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search before you file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Search before you file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-it-keys-on-and-why" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it keys on, and why
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whether-it-is-noisy-enough-to-ignore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Whether it is noisy enough to ignore
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2657,7 +2696,8 @@
 <p>The format and process come from the globally-installed <strong>backlog skill</strong> (agents: invoke the <code>backlog</code> skill for the full playbook — grooming checklist, staleness signals, parallel dispatch, migration). The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:</p>
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a> — enforces every format rule below; its header comment is the canonical rule list. Runs in <code>make check</code> (<code>make lint-backlog</code>), CI (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint.yml</code></a> and <code>unit-test.yml</code>), and the pre-commit hook. The hook's <code>--staged</code> mode also rejects any commit that stages <code>docs/STATUS.md</code> alongside other files.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id.sh"><code>scripts/docs/alloc-queue-id.sh</code></a> — allocates a new Q-ID (<code>make queue-id</code>) by claiming a ref on the remote, so concurrent sessions never take the same one. Rationale, the alternatives weighed, and what it does <em>not</em> fix: <a href="../queue-id-allocation/">queue-id-allocation.md</a>.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id.sh"><code>scripts/docs/alloc-queue-id.sh</code></a> — allocates a new Q-ID (<code>make queue-id TITLE="…"</code>) by claiming a ref on the remote, so concurrent sessions never take the same one. Rationale, the alternatives weighed, and what it does <em>not</em> fix: <a href="../queue-id-allocation/">queue-id-allocation.md</a>.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/find-duplicate-rows.sh"><code>scripts/docs/find-duplicate-rows.sh</code></a> — the near-duplicate search that allocation runs before it claims an ID. Advisory: it never blocks a filing. <a href="#search-before-you-file">How it is calibrated</a>.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>scripts/docs/git-merge-status.sh</code></a> — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous. One-time <code>make merge-driver</code> per clone; a no-op until then. <a href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">Details below</a>.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/next-task.sh"><code>scripts/docs/next-task.sh</code></a> — prints a kickoff prompt (or <code>--title</code>) for the top ready 🔲 Queue row, for starting a fresh session on the next task.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/backlog-metrics.sh"><code>scripts/docs/backlog-metrics.sh</code></a> — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only.</li>
@@ -2668,19 +2708,64 @@
 <li><strong>Two Queue states only: 🔲 ready and 🚫 blocked.</strong> Done rows are <strong>deleted</strong> (git is the archive), "started" is signaled by the open PR (run <code>gh pr list</code> before picking; skip rows an open PR covers), and parked rows live in the Deferred table.</li>
 <li><strong>Verify 🚫 blockers before treating a row as blocked</strong> — a prior session may have shipped the dependency without flipping the row; grep for its deliverables. Cross-item blockers are machine-readable: a 🚫 row's Notes start with <code>Blocked by [QN](#QN)</code>, and <code>make queue-unblock ID=QN</code> lists every dependent when the blocker lands.</li>
 <li><strong>Verify the defect a row asserts before implementing it.</strong> A row's Notes are written at filing time from an observation that was never re-checked, so grep for the claimed defect the same way you grep for a blocker's deliverables — a prior session may have closed it without flipping the row, and Notes carry no observed-vs-suspected marker. Q506's row named a <code>noproxy</code> GHES gap that Q322 had already fixed; taking the row at its word would have "fixed" a non-bug and missed the real one next to it. An audit row inheriting an unverified premise is the sharpest case, but the rule is general.</li>
-<li><strong>Search before you file.</strong> Grep the Queue <em>and</em> Deferred tables for the topic — the file, the symptom, the command — before allocating an ID. Nothing catches a semantic duplicate: two rows describing one problem in different words pass every lint, and both get worked. <a href="https://github.com/actions-gateway/github-actions-gateway/pull/847">Q442</a> duplicated Q440, which was already three rows below where it was inserted; the row was placed by reading the Queue's head and tail for priority, which is not the same as searching it.</li>
-<li><strong>Allocate IDs with <code>make queue-id</code></strong>, which claims a <code>refs/queue-ids/QN</code> ref on the remote. There is no counter line in the file: a shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber (<a href="../queue-id-allocation/#why-the-counter-had-to-go">Q382</a>). IDs are sparse, stable, never reused or renumbered, and never get sub-IDs (<code>5a</code>) — a trackable child gets its own top-level ID. The <code>Q</code> prefix keeps <code>Q44</code> from auto-linking to PR/issue #44; use the bare ID in commits and PRs.</li>
+<li><strong>Search before you file</strong> — <code>make queue-id</code> does it for you, and reading its candidates is the part that is on you. Nothing else catches a semantic duplicate: two rows describing one problem in different words pass every lint, and both get worked. <a href="#search-before-you-file">Details and calibration below</a>.</li>
+<li><strong>Allocate IDs with <code>make queue-id TITLE="…"</code></strong>, which claims a <code>refs/queue-ids/QN</code> ref on the remote. There is no counter line in the file: a shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber (<a href="../queue-id-allocation/#why-the-counter-had-to-go">Q382</a>). IDs are sparse, stable, never reused or renumbered, and never get sub-IDs (<code>5a</code>) — a trackable child gets its own top-level ID. The <code>Q</code> prefix keeps <code>Q44</code> from auto-linking to PR/issue #44; use the bare ID in commits and PRs.</li>
 <li><strong>Notes are present tense, ≤ 250 chars (hard cap); past 200 chars the row must link a doc</strong> from its Item or Notes cell — a <code>#QN</code> sibling anchor doesn't count, since sibling rows are capped too. No merged-PR lists or "SHIPPED" narration — history lives in <code>git log</code> and the plan doc. The same caps apply to Deferred trigger cells. Write for a skimmer: cut detail and link a doc rather than compressing into fragments.</li>
 <li><strong>A row never cites a count of the backlog.</strong> "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day. State the <em>shape</em> instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs. Q569's row was corrected twice in one session — 36 → 42 → 44 — before the count came out entirely.</li>
 <li><strong>Deferred rows carry a concrete revive trigger</strong>, tagged by source: <code>**Demand:**</code> (an outside ask) · <code>**Event:**</code> (an observable outside-our-control condition) · <code>**Decision:**</code> (our own call — grep <code>**Decision:**</code> for what we could move on unilaterally). When the trigger fires, move the row back into the Queue at the position it then deserves. A non-commitment belongs in <a href="../../design/appendix-g-future-enhancements/">appendix-g</a>, not Deferred.</li>
 <li><strong><code>docs/STATUS.md</code> edits are isolated commits</strong> — never mixed with code or plan-doc changes, even when completing an item mid-feature (the pre-commit hook enforces this). Use <code>docs(status):</code> subjects, and name the removal reason with a fixed verb — <code>complete QN</code>, <code>prune QN</code>, <code>merge QN into QM</code>, <code>defer QN</code> — so metrics can tell throughput from garbage collection. Batch bulk additions (one audit's discoveries) into one commit; keep reshuffles separate from additions. When a rebase or merge conflicts on this file, resolve it via the <a href="#resolving-a-statusmd-only-conflict-verify-cheap-push-now">fast path</a> below.</li>
 <li><strong>M/L items get a plan doc</strong> under <code>docs/plan/</code>, linked from the Item cell.</li>
 </ul>
+<h2 id="search-before-you-file">Search before you file<a class="headerlink" href="#search-before-you-file" title="Permanent link">&para;</a></h2>
+<p>The rule used to be "grep the Queue and Deferred tables first", and it failed three times: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/847">Q442</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/pull/893">Q456</a> both duplicated Q440, and <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1186">Q635</a> duplicated Q619. Every one satisfied the lint — a semantic duplicate is a well-formed row — and every one was filed mid-task, as a side effect of other work, exactly when the doc carrying the rule was not in context. A rule that fails at the same seam three times wants a mechanism.</p>
+<p><code>make queue-id</code> is the mechanism, because it is the one chokepoint every filed row passes through, and it takes the title:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>queue-id<span class="w"> </span><span class="nv">TITLE</span><span class="o">=</span><span class="s1">&#39;`doc-links` never reads a new doc until it is staged&#39;</span>
+</code></pre></div>
+<p>Single-quote it: these titles are full of backticks, which double quotes would hand to the shell as command substitution. A title carrying an apostrophe as well is easier to pass straight to <code>scripts/docs/alloc-queue-id.sh</code>, which takes it as a plain argument.</p>
+<p>It searches first and claims second, so recognising a duplicate costs no ID. Candidates print to stderr, so <code>ID=$(make queue-id TITLE="…")</code> still works, and <strong>nothing is blocked</strong>: the filer routinely knows something the matcher cannot, such as that two rows sharing a file are genuinely separate defects. Say which, in the new row's Notes.</p>
+<p><strong>The title is mandatory, and there is no untitled batch form.</strong> An optional argument is a gate nobody passes through, and <code>-n 3</code> was one: it claimed IDs without naming a single row. Several rows at once means several titles: <code>scripts/docs/alloc-queue-id.sh</code> takes one argument per ID and searches each on its own, which is what a retro filing four rows actually wants. Nothing automated calls the target, so making the title mandatory changed only the lines that document it.</p>
+<p><code>TARGET=&lt;link&gt;</code> is optional and worth passing when the Item cell's link is already decided.</p>
+<h3 id="what-it-keys-on-and-why">What it keys on, and why<a class="headerlink" href="#what-it-keys-on-and-why" title="Permanent link">&para;</a></h3>
+<p>From the three pairs, not from a guess about what similarity means here:</p>
+<table>
+<thead>
+<tr>
+<th>Pair</th>
+<th>Shared content words</th>
+<th>Item link</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q456 <em>"The GMC CRD manifests are stale and no gate notices"</em> / Q440 <em>"GMC CRD manifest drifts from the AGC types it embeds"</em></td>
+<td>3</td>
+<td>same</td>
+</tr>
+<tr>
+<td>Q635 <em>"<code>doc-links</code> never reads a new doc's own links until it is staged…"</em> / Q619 <em>"Three gates scan tracked files only, so a new file misses its own <code>make check</code>"</em></td>
+<td>4</td>
+<td>same</td>
+</tr>
+<tr>
+<td>Q511 <em>"Two live-GitHub runs collide invisibly…"</em> / Q500 <em>"Two concurrent live-GitHub runs collide on the fixture repo"</em></td>
+<td>5</td>
+<td>different</td>
+</tr>
+</tbody>
+</table>
+<p>Neither signal alone covers that: two pairs agreed on the link and barely on the words, one agreed on the words and not the link. So a row is a candidate on <strong>either</strong> route — ≥3 shared content words at ≥0.40 containment, or an exact link match at the lower bar of ≥2 words and ≥0.25. The shared-word floor is what a ratio alone cannot supply, because containment divides by the <em>shorter</em> title: a five-word row scores 0.40 on two incidental words, which is exactly how the novel-row control gets rejected.</p>
+<p>Deferred and Flake watch are searched too, because a row duplicating a parked item is the same mistake and those are the tables nobody greps. Notes cells are deliberately not matched: folding a 250-character Notes cell into a row's token set can only raise every score, inflating the ranking without adding a cut.</p>
+<h3 id="whether-it-is-noisy-enough-to-ignore">Whether it is noisy enough to ignore<a class="headerlink" href="#whether-it-is-noisy-enough-to-ignore" title="Permanent link">&para;</a></h3>
+<p>An advisory that fires constantly is worse than none, so the thresholds are measured rather than asserted. <code>scripts/docs/find-duplicate-rows.sh --audit</code> runs every shipped row back through the same scoring path the search uses, and prints what flags:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/docs/find-duplicate-rows.sh<span class="w"> </span>--audit
+</code></pre></div>
+<p><strong>Roughly one row in five surfaces a candidate when filed, and every pair it flags is topically adjacent rather than a nonsense match.</strong> The snapshot behind that, on 2026-08-04 (72 Queue + 31 Deferred + 15 Flake-watch rows): 11 flagged pairs out of 6,903. The rate held across every backlog state this was measured in — the Queue turns over faster than any fixed count survives, which is why the figure is a dated instance and <code>--audit</code> is the live answer. Two of the eleven look like real duplicates nobody caught: Q663 and Q612 are both <code>check-doc-links</code> defects, and Q660 and Q588 are both the doc-update-matrix sending a row into a <code>scripts/README.md</code> table that does not exist.</p>
+<p>Loosening either ratio by 0.05 roughly doubles the count. Re-run the audit before changing a threshold.</p>
 <h2 id="the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">The merge driver: resolve Queue rows by ID, not by line position<a class="headerlink" href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position" title="Permanent link">&para;</a></h2>
 <p>Most <code>docs/STATUS.md</code> conflicts are an artifact of the file's shape rather than a real disagreement. A plain three-way merge decides by line position, and the process puts every edit in the same place: pick from the top, insert at the priority the item deserves, flakes first. One untouched row of separation merges cleanly; <strong>adjacent</strong> rows do not, so a four-worker dispatch batch that takes rows 1–4 conflicts by construction (<a href="../queue-id-allocation/#what-this-fixes-and-what-it-does-not">the measurements</a>).</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>scripts/docs/git-merge-status.sh</code></a> is a git merge driver that decides the Queue table by <strong>row ID</strong> instead: a row deleted on either side is deleted, a row added on either side is present, a row changed on one side takes that change, and row order is rebuilt from whichever side reordered. It runs on local merges, rebases, cherry-picks and stash applications — everywhere the pain is.</p>
 <p><strong>One-time setup, per clone:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>merge-driver
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>merge-driver
 </code></pre></div>
 <p><code>.gitattributes</code> already routes the file to <code>merge=backlog</code>, but git deliberately refuses to let a tracked file define a driver's <em>command</em> — that would be remote code execution on clone — so the config half is per-clone and opt-in. <strong>Nothing requires you to install it:</strong> until you do, the attribute names an undefined driver and git silently uses its built-in three-way merge, which is exactly the pre-driver behaviour. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/setup.sh"><code>scripts/dev/setup.sh</code></a> installs it for you, as it does the git hooks.</p>
 <p><strong>What it refuses to resolve.</strong> Every uncertainty ends the same way — the plain three-way merge re-runs and its conflict markers stand, with a one-line reason on stderr:</p>
@@ -2729,7 +2814,7 @@
 <li>Check for leftover markers before staging: <code>git diff --check</code>. An <code>Edit</code>-based resolution can silently leave one behind, and <code>git diff --check</code> catches it in the working tree — before it becomes a commit the gate has to reject.</li>
 <li>Run only the gates that can actually observe a <code>STATUS.md</code> change:</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>status-gates
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>status-gates
 </code></pre></div>
 <ol>
 <li>Commit and push <strong>immediately</strong>. Do not wait on <code>make check</code>.</li>
@@ -2745,7 +2830,7 @@
 <p>The <a href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a> closes the reorder-over-delete path at the source — it decides by ID, so a relocated row cannot outvote a deletion — but only for people who installed it, and only for local merges. The lint rule stays the load-bearing check.</p>
 <p>Deliberately re-opening a closed item? <code>BACKLOG_ALLOW_RESURRECT="Q1 Q2" make lint-backlog</code>.</p>
 <p><strong>To inspect by hand</strong>, list the IDs your branch has that <code>origin/main</code> does not:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>comm<span class="w"> </span>-23<span class="w"> </span>&lt;<span class="o">(</span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;id=&quot;Q[0-9]*&quot;&#39;</span><span class="w"> </span>docs/STATUS.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="o">)</span><span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>origin/main:docs/STATUS.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;id=&quot;Q[0-9]*&quot;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="o">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>comm<span class="w"> </span>-23<span class="w"> </span>&lt;<span class="o">(</span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;id=&quot;Q[0-9]*&quot;&#39;</span><span class="w"> </span>docs/STATUS.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="o">)</span><span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>origin/main:docs/STATUS.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;id=&quot;Q[0-9]*&quot;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="o">)</span>
 </code></pre></div>
 <p>Every ID it prints should be one <em>you</em> filed. Anything else is a row <code>main</code> deleted and your rebase brought back — check whether its work shipped before you push.</p>
 <h2 id="when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size">When the context doesn't fit, write the doc — whatever the item's size<a class="headerlink" href="#when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size" title="Permanent link">&para;</a></h2>
@@ -2826,8 +2911,8 @@ sent the next session to re-diagnose the wrong thing.</p>
 </table>
 <p>The counts are the ~3/N 95% upper bound on the residual per-run failure rate (25 → ~12%, 50 → ~6%); the higher bar buys a trustworthy regression signal after retirement, not just more confidence the flake is gone. Tune per flake — these are floors, not ceilings.</p>
 <p>Soak is counted in <strong>runs, not calendar days</strong>: what proves a flake dead is the spec being <em>exercised</em> green, and calendar time is only a proxy for that — one that breaks whenever merge velocity shifts or the spec is path-gated and runs rarely. Counting runs measures the thing directly and never needs re-tuning to velocity; the recurrences seen here (Q300, Q291) surfaced within a few dozen runs, inside even the lower threshold. Count green runs of the covering workflow since the fix's merge date:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="w"> </span>&lt;name&gt;.yml<span class="w"> </span>--branch<span class="w"> </span>main<span class="w"> </span>--status<span class="w"> </span>success<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--created<span class="w"> </span><span class="s1">&#39;&gt;=YYYY-MM-DD&#39;</span><span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;length&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="w"> </span>&lt;name&gt;.yml<span class="w"> </span>--branch<span class="w"> </span>main<span class="w"> </span>--status<span class="w"> </span>success<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--created<span class="w"> </span><span class="s1">&#39;&gt;=YYYY-MM-DD&#39;</span><span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;length&#39;</span>
 </code></pre></div>
 <p>A run that failed on an <em>unrelated</em> flake is excluded, so this undercounts slightly — conservative, which is what we want. One thing run-count can't see: a flake suspected to be <strong>time-correlated</strong> (nightly-load or API-rate-limit windows) should also sit through a few day/night cycles before graduating — judgment, not a fixed number.</p>
 <p>On retirement, <strong>move the row to <a href="../flake-watch-retired/">flake-watch-retired.md</a></strong> (a cold, greppable ledger) rather than deleting it. That preserves the "a fix was already attempted here" memory at zero live-table cost: if the flake ever returns post-retirement it re-enters as a fresh find, and the ledger is one <code>grep</code> away to reconnect the history. Deleting outright throws that memory away and makes the next occurrence look novel.</p>

@@ -2505,6 +2505,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#an-upstream-behavior-claim-cites-a-measurement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An upstream-behavior claim cites a measurement
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="An upstream-behavior claim cites a measurement">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-counts-as-upstream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What counts as upstream
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-prose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In prose
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-code-comments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In code comments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-you-cannot-measure-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When you cannot measure it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#conventions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2699,6 +2760,91 @@ specific and honest.</p>
 untouched produces well-punctuated filler, and no amount of substance survives prose
 that reads as machine-generated on sight. Neither half is optional, and neither
 substitutes for the other.</p>
+<h2 id="an-upstream-behavior-claim-cites-a-measurement">An upstream-behavior claim cites a measurement<a class="headerlink" href="#an-upstream-behavior-claim-cites-a-measurement" title="Permanent link">&para;</a></h2>
+<p>A sentence about how something outside this repo behaves is a claim nobody here can
+check, and it goes stale with no commit, no red gate, and no other signal. Write the
+version it was measured against and when, or name the gate that keeps re-measuring it.
+The Queue-row form of the same rule is <a href="../maintaining-backlog/#a-rows-asserted-defect-is-a-claim-not-a-finding">maintaining-backlog.md § A row's asserted defect
+is a claim</a>;
+this section is its other two homes, prose docs and code comments.</p>
+<p>Three such claims shipped here from source inspection. All three were wrong:</p>
+<table>
+<thead>
+<tr>
+<th>Claim, as shipped</th>
+<th>What refuted it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"Karpenter sets <code>eventTime</code>", in the operator runbook, with the same premise in two places in the capacity plan</td>
+<td>Q479's live run: at Karpenter v1.14.0 the events come from the <strong>legacy</strong> recorder, <code>lastTimestamp</code> set and <code>eventTime</code> null, the same generation as cluster autoscaler (<a href="../../plan/capacity-aware-intake/#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a>).</td>
+</tr>
+<tr>
+<td>"The skipped job is re-assigned or timed out server-side", a <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go"><code>listener.go</code></a> comment (Q270) that was also the safety argument for dropping the job</td>
+<td>Q551: the scale-set queue does <strong>not</strong> re-assign it. Skipped jobs sat queued at GitHub forever with no condition, Event, or metric naming them. The comment now reads "the queue does not re-assign it".</td>
+</tr>
+<tr>
+<td>Q584's own filing: <code>check-path-filters.sh</code>'s awk YAML parsing could "mis-read as full coverage, failing green"</td>
+<td>The gate iterates a hardcoded filter registry against <code>go.work</code>, so a parse failure removes patterns and fails <strong>closed</strong>. The row reached <code>main</code> first and cost a second PR to correct.</td>
+</tr>
+</tbody>
+</table>
+<p>Q594 is the fourth, and the one caught in time: it asserted that <code>plan-hygiene.yml</code>'s
+<code>**.go</code> filter matched no Go file. Running the pinned action measured the opposite, so
+no fix was needed, and what landed instead is a compliant version of the finding
+(<a href="../testing/#where-a-globstar-works-in-a-filter-glob">testing.md § Where a globstar works in a filter
+glob</a>).</p>
+<h3 id="what-counts-as-upstream">What counts as upstream<a class="headerlink" href="#what-counts-as-upstream" title="Permanent link">&para;</a></h3>
+<p>Anything whose behavior can change with no commit in this repo: a third-party library,
+a Kubernetes API behavior, a GitHub API or Actions Service response, a CI action's
+matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary.
+The test is whether the sentence could go false while <code>make check</code> stays green and
+nobody here touched anything.</p>
+<p>Two edges keep the rule from swallowing every sentence in the docset:</p>
+<ul>
+<li><strong>Our own behavior is not upstream.</strong> A wrong claim about this repo's code goes red
+  in a test. That is the gate; a citation adds nothing to it.</li>
+<li><strong>Specified is not observed.</strong> Where upstream publishes normative text (an RFC
+  grammar, a documented status code, a CRD field's own godoc), link that text and stop:
+  the spec is its own citation. The rule bites on behavior learned by reading upstream
+  source or by inference, which is most of what this system depends on, and is where
+  all four claims above came from.</li>
+</ul>
+<h3 id="in-prose">In prose<a class="headerlink" href="#in-prose" title="Permanent link">&para;</a></h3>
+<p>State the claim, then the version and the date, or the run they came from. Both of
+these are in the docset today:</p>
+<blockquote>
+<p>Today both autoscalers set <code>lastTimestamp</code> and leave <code>eventTime</code> empty (measured:
+cluster autoscaler v1.36.1, Karpenter v1.14.0).</p>
+</blockquote>
+<p>From <a href="../../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">troubleshooting.md</a>.
+The second names the input as well as the version, because the answer depended on it:</p>
+<blockquote>
+<p>Measured against the pinned <code>dorny/paths-filter@7b450ff</code> (v4.0.2) on a branch whose
+diff was two nested Go files.</p>
+</blockquote>
+<h3 id="in-code-comments">In code comments<a class="headerlink" href="#in-code-comments" title="Permanent link">&para;</a></h3>
+<p>Comments here are terse and mechanism-focused, so the citation is a parenthetical
+rather than a paragraph: the version and what was observed, inside the clause that
+makes the claim.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// Neither project records through that generation today — measured live for both</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1">// (CA v1.36.1, Karpenter v1.14.0: LastTimestamp set, EventTime null) — but nothing</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// pins them to the legacy one, and the window is what keeps a future migration from</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">// reintroducing the accident.</span>
+</code></pre></div>
+<p>From <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/autoscaler_verdict.go"><code>autoscaler_verdict.go</code></a>.
+When the measurement needs more than a clause, it goes in <code>docs/</code> and the comment links
+there. Growing a provenance paragraph in the source is not the compliant form.</p>
+<p><strong>A live gate beats a date.</strong> Where a gate re-measures the claim on every run, name the
+gate instead: it is fresher than any date, and it turns red when upstream moves.
+<code>make test-autoscaler</code> and <code>make test-karpenter</code> drive real autoscalers and assert the
+matcher's verdict on the events that come back, which is why the reason constants they
+pin carry no per-claim date.</p>
+<h3 id="when-you-cannot-measure-it">When you cannot measure it<a class="headerlink" href="#when-you-cannot-measure-it" title="Permanent link">&para;</a></h3>
+<p>Say so in the same clause: "unverified, source inspection only". One clause tells the
+next session where to start, instead of handing it something it will trust for months.
+Every claim in the table above shipped as a flat assertion instead.</p>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2726,7 +2872,7 @@ substitutes for the other.</p>
 </tr>
 <tr>
 <td><strong>A link is a claim</strong></td>
-<td>Linking asserts the target covers the thing you linked <em>from</em>. Open it and confirm — nothing else will. <code>mkdocs build</code> and <code>check-doc-links.sh</code> check that a target <strong>resolves</strong>, never that it is on-topic, so a confidently wrong link stays permanently green. Riskiest when adding links in bulk: a roadmap bullet linked "single-replica by design" to <a href="../../design/appendix-e-capacity-planning/">Appendix E</a>, which never mentions replicas — <a href="../../design/02-architecture/">§2 Architecture</a> is where that design and its job-level HA argument live. Same principle as the cite-a-measurement rule for upstream behavior, applied to cross-references.</td>
+<td>Linking asserts the target covers the thing you linked <em>from</em>. Open it and confirm — nothing else will. <code>mkdocs build</code> and <code>check-doc-links.sh</code> check that a target <strong>resolves</strong>, never that it is on-topic, so a confidently wrong link stays permanently green. Riskiest when adding links in bulk: a roadmap bullet linked "single-replica by design" to <a href="../../design/appendix-e-capacity-planning/">Appendix E</a>, which never mentions replicas — <a href="../../design/02-architecture/">§2 Architecture</a> is where that design and its job-level HA argument live. Same principle as <a href="#an-upstream-behavior-claim-cites-a-measurement">cite a measurement</a>, applied to cross-references.</td>
 </tr>
 <tr>
 <td><strong>Name a cross-reference, don't count it</strong></td>
@@ -2841,7 +2987,9 @@ next step is the periodic drift audit, since it catches what the per-change rule
       of text or filler.</li>
 <li>[ ] <strong>Trustworthy (6):</strong> specific and evidence-backed, not promotional (doesn't read
       as AI slop); honest about limitations and "not yet implemented"; acronyms expanded
-      on first use; terms match the glossary; no links to <code>CLAUDE.md</code>.</li>
+      on first use; terms match the glossary; no links to <code>CLAUDE.md</code>; every
+      <a href="#an-upstream-behavior-claim-cites-a-measurement">upstream-behavior claim cites a
+      measurement</a> or the gate pinning it.</li>
 </ul>
 
 

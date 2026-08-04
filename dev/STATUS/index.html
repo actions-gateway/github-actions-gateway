@@ -2536,7 +2536,7 @@
 <p><strong>Status:</strong> 🔲 ready · 🚫 blocked<br />
 <strong>Size:</strong> S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in <code>docs/plan/</code><br />
 <strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.0-gate</code> (blocks the <a href="../plan/release-1.0/">Release 1.0</a> tag) <code>1.3-gate</code> (blocks the <a href="../plan/release-1.3/">Release 1.3</a> tag) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/"><code>v2.0.0</code></a> tag)<br />
-<strong>New IDs:</strong> <code>make queue-id</code> (<a href="../development/queue-id-allocation/">why there is no counter here</a>)</p>
+<strong>New IDs:</strong> <code>make queue-id TITLE="…"</code> — it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter here</a>)</p>
 <p>Maintained per <a href="../development/maintaining-backlog/"><code>docs/development/maintaining-backlog.md</code></a>: done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in <a href="#deferred">Deferred</a>, and every edit is an isolated <code>docs(status):</code> commit gated by <code>scripts/docs/lint-backlog.sh</code>.</p>
 <hr />
 <h2 id="progress">Progress<a class="headerlink" href="#progress" title="Permanent link">&para;</a></h2>
@@ -2759,20 +2759,12 @@
 <td>Isolation is what keeps rebases trivial — a 12-commit rebase run resolved clean every time — but a stray <code>--amend</code> onto the wrong HEAD silently lands code in a <code>docs(status):</code> commit. Gate it: a commit touching STATUS.md touches nothing else.</td>
 </tr>
 <tr>
-<td><a id="Q639"></a>Q639</td>
-<td><a href="../development/maintaining-backlog/">Filing a Queue row surfaces no near-duplicate, so the search-before-you-file rule keeps being tripped</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Twice now: Q442 duplicated Q440, Q635 duplicated Q619. The rule is precise and lives in a doc read when editing the backlog deliberately — but rows get filed mid-task, in flow. <code>make queue-id</code> is the one chokepoint every row passes through.</td>
-</tr>
-<tr>
 <td><a id="Q656"></a>Q656</td>
 <td><a href="../development/queue-id-allocation/"><code>make queue-id</code> reports a free ID but reserves nothing, so concurrent sessions collide</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-03: Q644 allocated here, #1194 merged it first; shipped as Q647 after renames across commit, PR body, and a plan doc. <code>lint-backlog</code> catches it only at rebase. Same chokepoint as <a href="#Q639">Q639</a> — reservation, not dedup search.</td>
+<td>Measured 2026-08-03: Q644 allocated here, #1194 merged it first; shipped as Q647 after renames across commit, PR body, and a plan doc. <code>lint-backlog</code> catches it only at rebase. Same chokepoint as the near-duplicate search — reservation, not dedup.</td>
 </tr>
 <tr>
 <td><a id="Q637"></a>Q637</td>
@@ -3188,15 +3180,7 @@
 <td><code>docs</code> <code>tests</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q582's runbook quotes a verbatim <code>AmbiguousSelector</code> message from source recollection: k8s.io/kubernetes is not vendored and envtest runs no HPA controller. The kind e2e has one plus metrics-server — measure there. Another <a href="#Q534">Q534</a> instance.</td>
-</tr>
-<tr>
-<td><a id="Q534"></a>Q534</td>
-<td><a href="../development/documentation-standards/">Rule: an upstream-behavior claim cites a measurement, in docs and in code comments</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Refuted three times: Q479, Q270's comment (Q551), and Q584's own filing. One rule, both homes — a claim cites a measured version+date or the gate pinning it. The Queue-row half landed in maintaining-backlog.md; docs and code comments remain.</td>
+<td>Q582's runbook quotes a verbatim <code>AmbiguousSelector</code> message from source recollection: k8s.io/kubernetes is not vendored and envtest runs no HPA controller. The kind e2e has one plus metrics-server — measure there. A cite-a-measurement instance.</td>
 </tr>
 <tr>
 <td><a id="Q588"></a>Q588</td>

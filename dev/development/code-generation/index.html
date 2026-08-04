@@ -2786,7 +2786,7 @@ must be shipped by one of the two fragments, or a real install 403s on it.</p>
 </code></pre></div>
 <p>The markers live at the top of <code>cmd/gmc/internal/controller/actionsgateway_controller.go</code>. Non-standard verbs (<code>bind</code>, <code>escalate</code>) are supported in <code>verbs=</code> and appear in the generated role.</p>
 <h2 id="crd-marker-and-api-file-gotchas">CRD marker and API-file gotchas<a class="headerlink" href="#crd-marker-and-api-file-gotchas" title="Permanent link">&para;</a></h2>
-<p>Hard-won, easy-to-reintroduce mistakes when editing the API types:</p>
+<p>Hard-won, easy-to-reintroduce mistakes when editing the API types. Each is a claim about how gofmt, controller-gen, or the apiserver behaves, so a new entry cites the version it was measured against per <a href="../documentation-standards/#an-upstream-behavior-claim-cites-a-measurement">documentation-standards.md § An upstream-behavior claim cites a measurement</a>:</p>
 <ul>
 <li><strong>gofmt corrupts <code>''</code> inside CEL markers.</strong> A doubled single-quote in a <code>+kubebuilder:validation:XValidation</code> marker comment gets rewritten by gofmt into a single curly quote, silently breaking the CEL rule (and <code>''</code> is not a CEL quote escape anyway — that's SQL). Never use empty-string literals in XValidation: write <code>size(x) == 0</code>, not <code>x == ''</code>.</li>
 <li><strong><code>selectableFields</code> on one served version only.</strong> On a multi-version CRD, declaring <code>+kubebuilder:selectablefield</code> markers on more than one version makes controller-gen hoist them in a way the apiserver rejects at CRD apply time. Declare them on a single version.</li>
