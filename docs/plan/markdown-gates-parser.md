@@ -242,10 +242,10 @@ the only shared-package addition. The script kept the file selection and the
 environment interface (`NOTES_MAX_CHARS`, `BACKLOG_ALLOW_*`), mapping them onto
 flags — 518 lines to 92.
 
-**The reconciliation is the evidence.** `lint-backlog-test.sh` grew from 47 to 61
-cases, covering all 11 rules, and `LINT_BACKLOG_BIN` points the whole suite at
-another implementation so both ran over the same corpus. The `awk` passed 56 and
-failed 5; the rewrite passed 61. Every one of the five disagreements is one of
+**The reconciliation is the evidence.** `lint-backlog-test.sh` grew from 53 to 67
+cases, covering all 12 rules, and `LINT_BACKLOG_BIN` points the whole suite at
+another implementation so both ran over the same corpus. The `awk` passed 62 and
+failed 5; the rewrite passed 67. Every one of the five disagreements is one of
 this plan's two filed defects, and each is paired with a control that agreed:
 
 | Case | `awk` | Go | Why they differ |
@@ -265,6 +265,11 @@ the new ones additionally carry `:LINE:`. Rules 8, 9 and 10 are asserted through
 throwaway repos in the suite, and rule 8's positive case (a `flake` row actually
 deleted) was **untested before this change**: only the branch-behind-`main`
 negative was.
+
+Rule 12 (a new row's ID holds a `refs/queue-ids` claim) landed on `main` while
+this was in flight and was ported the same way. Its six cases — written against
+the `awk`, not against this — pass unchanged, which is the check that matters:
+a rule dropped in a port disarms a gate that still reports green.
 
 **The escaped-pipe defect had a live instance.** [Q625](../STATUS.md#Q625)'s
 Notes carry `` `make check \| tail` ``, so the `awk` read a 13-character cell
