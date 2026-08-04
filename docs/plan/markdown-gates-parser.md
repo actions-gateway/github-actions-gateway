@@ -1,7 +1,12 @@
 # Markdown gates on a real parser
 
 **Status:** open, filed 2026-08-02. Three phases:
-[Q612](../STATUS.md#Q612) → [Q613](../STATUS.md#Q613) → [Q614](../STATUS.md#Q614).
+[Q612](../STATUS.md#Q612) ✅ → [Q613](../STATUS.md#Q613) → [Q614](../STATUS.md#Q614).
+
+Phase 1 shipped: `devtools/docs/markdown` (the shared parse layer over goldmark)
+and `devtools/docs/doclinks` (the checker), with `check-doc-links.sh` kept as the
+entry point that selects the files. What the build measured, and what it changed
+about the plan below, is in [Phase 1 result](#phase-1-result-q612).
 
 Four gates read Markdown with hand-rolled `awk`: the link/anchor checker, the backlog
 linter, the roadmap coherence check, and the backlog metrics replay. Each re-implements
@@ -176,6 +181,53 @@ each phase reconciles rather than greps:
 4. **Delete the mechanism.** For each new gate, remove the check and require red on the
    assertion that names it
    ([testing.md](../development/testing.md#verify-a-causation-claim-by-deleting-the-mechanism)).
+
+## Phase 1 result (Q612)
+
+The differential run is the evidence, over the whole tree: 249 files, **5521**
+links collected by the `awk` and **5558** by the parser. Every difference
+resolved to a fix, and **nothing** the `awk` collected was lost:
+
+| Difference | Count | What it is |
+|---|---|---|
+| Badge-wrapped outer targets | 3 | The filed defect. `README.md` lines 7–9; `LICENSE` is the relative one, and it resolves — the shape was unchecked, not broken. |
+| Link text spanning a line break | 25 | The `awk` matched per line, so a link whose text wrapped was collected by neither half. The largest class, and unfiled. |
+| Reference-link *uses* | 9 | `[text][label]` resolved to its destination. The `awk` collected only the definition. |
+| Heading inside a blockquote | 1 anchor | `^#{1,6}` never matched it, so links to it read as dead. |
+| Inline HTML in a heading | 1 anchor | Slugged from the rendered text, as GitHub does, instead of from the tag source. |
+| `<a id="QN">` inside a code span | −3 anchors | Prose *about* an anchor published one. A fixed false positive, not a loss. |
+
+**Two dialect gaps the survey missed.** MkDocs is not CommonMark, and both gaps
+would have been silent coverage losses:
+
+- **Admonitions.** A `!!! note` body is four-space-indented, so a stock parser
+  reads it as an indented code block — 15 links across three pages, all
+  checked before.
+- **`md_in_html`.** A `<p markdown="span">…</p>` element is raw HTML to
+  CommonMark — 4 more links.
+
+Both are now parsed by `MkDocsDialect`, a goldmark extension in the parse layer,
+which is where they belong: the other three gates read the same docs.
+
+**The hand-written slugger stayed**, ported to Go and unit-tested, rather than
+being replaced by goldmark's `WithAutoHeadingID`. The gate's contract is
+GitHub's anchors, and goldmark keeps Unicode letters GitHub drops. Cost of
+keeping it: ~30 lines. Slug reconciliation over the corpus is above — 3333
+headings, the only two differences being fixes.
+
+**Cost, corrected.** `devtools/vendor` grew 364 KB → 956 KB, not the "smaller
+than 265 KB" the module-zip figure predicted: `go mod vendor` keeps the GFM
+extension and the renderer packages. Runtime 0.67 s → 0.96 s, both sub-second,
+which is still not the argument. The checker is built to `.build/` and exec'd
+rather than `go run`, because its exit status is the verdict and `go run` prints
+an `exit status 1` line of its own on top of the findings.
+
+**The blind spot was measured, not predicted** ([Q622's
+method](../development/testing.md#verify-a-causation-claim-by-deleting-the-mechanism)):
+repointing README line 7's badge link at a nonexistent target left the `awk`
+gate green (exit 0, no finding) and failed the new one at `README.md:7`. The
+control — the same dead target as a plain link — failed both, so the difference
+is the shape and not the target.
 
 ## Sequencing
 

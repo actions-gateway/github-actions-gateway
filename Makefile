@@ -286,7 +286,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-conflict-markers-test ci/check-dep-advisory-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
                  ci/gate-list-test ci/shellcheck-scripts-test \
-                 docs/backlog-metrics-test docs/check-release-links-test \
+                 docs/backlog-metrics-test docs/check-doc-links-test \
+                 docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
                  docs/find-duplicate-rows-test \
@@ -307,7 +308,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog near-duplicate search, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate, release-note site-link resolution, release-gate ownership lease, gate-list reconciliation)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog near-duplicate search, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate, release-note site-link resolution, release-gate ownership lease, gate-list reconciliation, doc-link gate file selection)
 	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of

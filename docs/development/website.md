@@ -364,6 +364,10 @@ cannot cover both** (Q560):
 | `make doc-links` (`scripts/docs/check-doc-links.sh`) | github.com — GitHub's heading slugger, directory listings | `doc-links.yml`, `make check` |
 | `make docs-build` (`mkdocs build --strict`) | the published site — Python-Markdown slugs, MkDocs path resolution | `pages.yml`'s PR `build` job |
 
+The first gate reads the MkDocs dialect even though it answers for GitHub: its
+parser handles `!!!` admonition bodies and `markdown="1"` HTML, so a link inside
+one is checked rather than silently skipped as an indented code block (Q612).
+
 Two engines, two gates. `docs/releases/` is the exception that needs a third:
 those files publish to neither, and their links are all absolute into the
 versioned site, so `make release-links-check` resolves them against a local
