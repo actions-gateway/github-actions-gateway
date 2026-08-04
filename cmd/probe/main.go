@@ -120,6 +120,27 @@ func run(logger *slog.Logger) error {
 		return runReplayProbe(ctx, logger, gCfg, provider, "https://api.github.com")
 	}
 
+	// ── Investigation H (Q645): the abandoned-completion outcome ────────────
+	// One run, two JIT runners, both on the classic broker v2 flow the AGC's
+	// listener ships. See abandoned.go.
+	if os.Getenv("PROBE_ABANDONED_TEST") == "true" {
+		hCfg, err := parseAbandonedConfig(os.Getenv)
+		if err != nil {
+			return err
+		}
+		provider, err := githubapp.NewInstallationTokenProvider(githubapp.Credentials{
+			AppID:          hCfg.AppID,
+			PrivateKeyPEM:  hCfg.PrivateKeyPEM,
+			InstallationID: hCfg.InstallationID,
+		}, nil, false)
+		if err != nil {
+			return fmt.Errorf("create token provider: %w", err)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		return runAbandonedProbe(ctx, logger, hCfg, provider, "https://api.github.com")
+	}
+
 	// ── 1. Read credentials from environment ────────────────────────────────
 	cfg, err := parseProbeConfig(os.Getenv)
 	if err != nil {

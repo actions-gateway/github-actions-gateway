@@ -1,0 +1,39 @@
+# Q645 probe fixture — dispatch-only, never runs in normal CI.
+#
+# Queues one job on runs-on: gag-q645-abandoned so the cmd/probe Investigation H
+# run (PROBE_ABANDONED_TEST=true) has a real job to acquire and complete with
+# result=abandoned. Nothing ever runs it: the probe never starts a runner binary,
+# and cleanup cancels the run once the observation window closes. See the Q645
+# plan doc.
+#
+# Dispatch this BEFORE starting the probe: a job queued against a
+# not-yet-registered label waits server-side and is delivered the moment the
+# probe's runners appear, which removes the race the probe's own "dispatch NOW"
+# prompt implies.
+name: q645-abandoned-probe
+on:
+  workflow_dispatch: {}
+  # workflow_dispatch only works once the file reaches the default branch; the
+  # push trigger (scoped to this file on claude/ branches) lets the probe session
+  # queue the job from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/q645-abandoned-probe.yml"]
+
+# The job exists to be queued, abandoned, and observed; it never touches the
+# repo, so it gets no token scopes at all.
+permissions: {}
+
+# Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[q645-probe]". A plain push touching this file (e.g.
+# editing the fixture itself) skips the job, so the run concludes green instead
+# of leaving a queued job on the PR.
+jobs:
+  abandoned-job:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q645-probe]')
+    runs-on: gag-q645-abandoned
+    timeout-minutes: 10
+    steps:
+      - run: echo "This job is never expected to run — the Q645 probe abandons its assignment (Q645)."
+# A push of this file whose head commit message carries the opt-in tag is the
+# branch-side dispatch path the probe session uses before the file reaches main.

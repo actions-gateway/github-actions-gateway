@@ -472,10 +472,13 @@ with `completejob` — the same remedy the Q260 fan-out already applies to a
 deduped sibling's identically dangling assignment, behind the same
 `AGC_FANOUT_COMPLETION` switch. Disruption recovery is deliberately *not* armed:
 `rerun-failed-jobs` has no failed job to act on for a job that never ran, which
-is the exclusion `externallyDeletedBeforeTerminal` already encodes. **What the
-run service does with an `abandoned` completion — re-dispatch or conclude — is
-unmeasured**; the release is what stops the assignment dangling either way.
-Tracked for a live measurement as [Q645](../STATUS.md#Q645).
+is the exclusion `externallyDeletedBeforeTerminal` already encodes. What the
+run service does with an `abandoned` completion was **measured 2026-08-04**
+(Q645, [Investigation H](q645-abandoned-completion.md#findings)): it concludes
+the run as `success` immediately, with no re-dispatch. A job that never ran
+reports green, so the release as shipped is the wrong result value for the
+winner's own delivery; the remedy is [Q676](../STATUS.md#Q676) and the
+`AGC_FANOUT_COMPLETION` gate stays off.
 
 **`JobProvisionStalled=False` was correct, not broken.** The condition covers the
 listener's *deferral* reasons — `name_conflict` and `ceiling`, jobs held before a

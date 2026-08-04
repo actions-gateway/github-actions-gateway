@@ -16,3 +16,4 @@ self-hosted-runner:
     - gag-probe-scaleset
     - gag-q468-retention
     - gag-q583-replay
+    - gag-q645-abandoned

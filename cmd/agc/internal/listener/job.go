@@ -270,9 +270,11 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		// Abandoned means the worker was removed before it ran, so the runner binary
 		// never registered and nothing will ever report THIS delivery. Release it on
 		// the same terms as a deduped sibling — it is the same dangling assignment —
-		// or GitHub holds the job queued until its unstarted-job timeout cancels the
-		// run, having been told nothing (Q628). ctx, not jobCtx: the renew loop may
-		// have cancelled the job, which is exactly when the release matters.
+		// rather than leave GitHub told nothing (Q628). Measured (Q645 Investigation
+		// H): this call concludes the run as SUCCESS immediately, it does not re-queue
+		// the job — a false green for a job that never ran; the remedy is Q676, and
+		// AGC_FANOUT_COMPLETION stays off until it lands. ctx, not jobCtx: the renew
+		// loop may have cancelled the job, which is exactly when the release matters.
 		if result == broker.TaskResultAbandoned && cfg.FanoutCompletion && runServiceURL != "" {
 			completeDelivery(ctx, cfg, log, planID, SiblingDelivery{
 				RunnerRequestID: jobID,
