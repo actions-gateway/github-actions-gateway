@@ -2881,6 +2881,12 @@
 <td><code>1</code> when <code>WorkersUnschedulable=True</code> on a v2 <code>RunnerSet</code> — the per-set twin of <code>actions_gateway_workers_unschedulable</code>: worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (<strong>not</strong> quota). Page if sustained; the stuck pods and the scheduler verdict are named in the condition message.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_runnerset_worker_capacity_declined</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td><code>1</code> when <code>WorkerCapacityDeclined=True</code> on a v2 <code>RunnerSet</code> (Q405, Q406; gauged in Q643): the opt-in capacity gate is refusing job intake because the cluster cannot place another worker pod of this set's shape. <strong>Emitted only for a set that set <code>spec.capacityGate.mode</code></strong> — a set with no gate carries no condition, and an absent series is what says so; a <code>0</code> would read as "gate evaluated, capacity available". <code>reason</code> is the condition's current reason and is the label to alert and group on: <code>PodsUnschedulable</code> is the scheduler's verdict (a fixed-size cluster, <code>clusterCapacity.nodeAutoscaling: Absent</code>), <code>ScaleUpDeclined</code> is the cluster autoscaler's own declination (the default, <code>Present</code>), and <code>AwaitingProbe</code> is the <strong>latched</strong> state (Q512) — the declined pods were reaped, so intake is throttled to one probe job per <code>pendingPodDeadline</code> window until a worker pod schedules. <code>CapacityAvailable</code> and <code>GateModeUnsupported</code> are the two <code>False</code> reasons and read <code>0</code>. Exactly one series exists per gated set: a reason change replaces it rather than adding one, so <code>max by (reason) (…) == 1</code> is safe. <strong>The <code>AwaitingProbe</code> row is the one that needs the label.</strong> It outlives the stuck pod that produced it, so <code>actions_gateway_runnerset_workers_unschedulable</code> has already fallen back to <code>0</code> while this reads <code>1</code> — an operator watching only the scheduler signal sees a recovered set whose intake is still throttled.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
@@ -3014,6 +3020,17 @@ set surfaces the capacity blocker in <code>.status.conditions</code> instead of 
 <code>pendingJobs</code> with <code>Ready=True</code>. Each has its own gauge — the
 <code>actions_gateway_runnerset_*</code> triplet above (Q319) — so a <code>RunnerSet</code> is alertable
 without scraping CRD conditions through kube-state-metrics.</p>
+<p><strong><code>WorkerCapacityDeclined</code> is gauged too, and differs in two ways</strong> (Q643). It carries a
+<code>reason</code> label, because the value alone cannot separate a live decline from the latched
+<code>AwaitingProbe</code> state, and those call for different actions — one has stuck pods to
+inspect, the other has none and means intake is throttled to one probe job per
+<code>pendingPodDeadline</code> window. And it is emitted only for a set whose gate is on, because
+the reconciler <em>removes</em> the condition for an ungated set rather than publishing it
+<code>False</code>; the family follows the condition, so absence means "no gate here". The
+per-consequence series stay as they are: <code>jobs_admission_rejected_total{reason="capacity"}</code>
+counts jobs the classic tier left queued and <code>scaleset_capacity_withheld{reason="capacity"}</code>
+counts slots the scale-set tier withheld. Those answer "how much did the gate cost this
+tenant"; this gauge answers "is the gate closed right now, and on what evidence".</p>
 <p><strong>Why separate families instead of a <code>runner_set</code> label on the v1 gauges.</strong> Unlike the
 proxy conditions above, the two objects do not share a label set: the v1 series key on
 <code>runner_group</code>, which a <code>RunnerSet</code> has none of. Folding both into one family would

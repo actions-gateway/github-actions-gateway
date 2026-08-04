@@ -2797,7 +2797,7 @@ publishes the v2 counterpart. It is pure observability: it reaches a condition, 
 Event, and a gauge, and never reaches <code>Provisioner.Admit</code>. The <code>WorkerQuota</code> ladder
 and <code>WorkersUnschedulable</code> are gauged on both owners — v1 via
 <code>actions_gateway_worker_*</code>, v2 via the <code>actions_gateway_runnerset_*</code> twins Q319
-added; <code>WorkerCapacityDeclined</code> is the one that still has no gauge.</p>
+added; <code>WorkerCapacityDeclined</code> joined them in Q643, with a <code>reason</code> label.</p>
 <p>So the intake path has no capacity awareness at all, and the per-claim cost of
 that is:</p>
 <ul>
@@ -3110,11 +3110,13 @@ three rungs), <code>operations/observability-metrics</code> (the new reason labe
 turn it off), plus the website positioning page in the same PR per the standing
 rule.</p>
 <p><strong>Estimate.</strong> ~450–700 lines net across ~25 files, 1–2 PRs, Sz M. The v2 gauge
-for the new condition is deliberately out of scope. Q319 has since exported the
-other three RunnerSet capacity conditions as <code>actions_gateway_runnerset_*</code> gauges
-and deliberately left this one out — it is conditionally absent rather than
-False when the gate is off, which is its own design question — so
-<code>WorkerCapacityDeclined</code> is now tracked alone as <a href="../../STATUS/#Q643">Q643</a>.</p>
+for the new condition was deliberately out of scope here, and Q319 left it out of
+the <code>actions_gateway_runnerset_*</code> family for the same reason: the condition is
+conditionally <em>absent</em> rather than False when the gate is off, which is its own
+design question. Q643 settled it — the gauge follows the condition, so an ungated
+set emits no series at all, and a <code>reason</code> label carries which of the five reasons
+is current so the latched <code>AwaitingProbe</code> state is distinguishable from a live
+decline.</p>
 <h2 id="7-phase-2--the-autoscaler-declination-signal-q406">7. Phase 2 — the autoscaler-declination signal (Q406)<a class="headerlink" href="#7-phase-2--the-autoscaler-declination-signal-q406" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p>The mode name <code>AutoscalerVerdict</code> in this section is historical: Q470 replaced it with

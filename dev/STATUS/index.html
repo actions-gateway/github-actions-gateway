@@ -2745,14 +2745,6 @@
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.</td>
 </tr>
 <tr>
-<td><a id="Q643"></a>Q643</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_capacity.go"><code>WorkerCapacityDeclined</code> is the one RunnerSet capacity condition with no gauge</a></td>
-<td><code>feature</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q319 gauged the other three. <code>scaleset_capacity_withheld{reason="capacity"}</code> and <code>jobs_admission_rejected_total{reason="capacity"}</code> count consequences, not condition state, and neither shows the <code>AwaitingProbe</code> latch (Q512).</td>
-</tr>
-<tr>
 <td><a id="Q647"></a>Q647</td>
 <td><a href="../operations/troubleshooting/">The runbook's capacity rows cite only the RunnerGroup gauges, so a v2 operator reads a flat 0</a></td>
 <td><code>docs</code></td>
@@ -2767,6 +2759,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>The panel needs <code>worker_pods_reaped_total{runner_set!=""}</code> (Q514), but <code>exporter.py</code> emits that counter with <code>runner_group</code> only. Pre-dates Q319; measured on the 2026-08-03 render.</td>
+</tr>
+<tr>
+<td><a id="Q658"></a>Q658</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-tenant.json"><code>worker_capacity_declined</code> has no dashboard tile and no preview series</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q643 shipped the <code>{reason}</code>-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every <code>gridPos</code> below y=52 and needs a <code>render.sh</code> re-shoot. Should <code>AwaitingProbe</code> alert?</td>
 </tr>
 <tr>
 <td><a id="Q641"></a>Q641</td>
