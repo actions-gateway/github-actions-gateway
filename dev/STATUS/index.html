@@ -2839,14 +2839,6 @@
 <td>Measured: delete <code>bash-style.md</code> from the worktree, 5 files still link to it, gate exits 0. Q619 moved the scan list off <code>--cached</code>; the existence oracle still resolves a tracked-but-deleted path.</td>
 </tr>
 <tr>
-<td><a id="Q613"></a>Q613</td>
-<td><a href="../plan/markdown-gates-parser/"><code>lint-backlog</code> splits Queue rows positionally</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>One escaped pipe shifts every field, so <code>St</code> reads the label cell and <code>Notes</code> the size and the rules pass on the wrong ones. Separately <code>awk</code>'s <code>length()</code> is bytes here, runes under gawk; Q555 sits at 249/249.</td>
-</tr>
-<tr>
 <td><a id="Q644"></a>Q644</td>
 <td><a href="../operations/release/#supply-chain-integrity-of-the-pipeline-itself">Nothing enforces that a <code>uses:</code> ref is a SHA rather than a tag</a></td>
 <td><code>security</code> <code>ci</code></td>

@@ -2589,6 +2589,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#phase-2-result-q613" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 result (Q613)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sequencing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2621,11 +2632,13 @@
 
 <h1 id="markdown-gates-on-a-real-parser">Markdown gates on a real parser<a class="headerlink" href="#markdown-gates-on-a-real-parser" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> open, filed 2026-08-02. Three phases:
-Q612 ✅ → <a href="../../STATUS/#Q613">Q613</a> → <a href="../../STATUS/#Q614">Q614</a>.</p>
+Q612 ✅ → Q613 ✅ → <a href="../../STATUS/#Q614">Q614</a>.</p>
 <p>Phase 1 shipped: <code>devtools/docs/markdown</code> (the shared parse layer over goldmark)
 and <code>devtools/docs/doclinks</code> (the checker), with <code>check-doc-links.sh</code> kept as the
 entry point that selects the files. What the build measured, and what it changed
 about the plan below, is in <a href="#phase-1-result-q612">Phase 1 result</a>.</p>
+<p>Phase 2 shipped: <code>devtools/docs/backloglint</code>, plus <code>Tables()</code> on the parse layer.
+<a href="#phase-2-result-q613">Phase 2 result</a>.</p>
 <p>Four gates read Markdown with hand-rolled <code>awk</code>: the link/anchor checker, the backlog
 linter, the roadmap coherence check, and the backlog metrics replay. Each re-implements
 some slice of Markdown with regular expressions, and regular expressions cannot count
@@ -2693,9 +2706,11 @@ field — measured:</p>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>| … | Item plain          | `lbl` | 🔲 | S | short note |   → NF=8  $5=[ 🔲 ]    $7=[ short note ]
 </code></pre></div>
 <p><code>St</code> then reads the label cell and <code>Notes</code> reads the size, so the row's rules evaluate
-the wrong cells and pass. Zero occurrences in <code>STATUS.md</code> today — this fails <em>silently
-wrong</em>, not loudly, which is why it is worth closing before it happens rather than
-after.</p>
+the wrong cells and pass. This fails <em>silently wrong</em>, not loudly, which is why it is
+worth closing before it happens rather than after. Filed as latent — "zero occurrences
+in <code>STATUS.md</code> today", which the build disproved: <a href="../../STATUS/#Q625">Q625</a> carries one,
+and the gate was reading 13 characters of a 243-character cell (<a href="#phase-2-result-q613">Phase 2
+result</a>).</p>
 <p>Second defect, latent: <code>awk</code>'s <code>length()</code> counts <strong>bytes</strong> on this host (BWK awk
 20200816) and <strong>runes</strong> under <code>gawk</code> in a UTF-8 locale. <code>STATUS.md</code> carries 52 em
 dashes, 51 🔲, 26 ✅. Measuring every cell exactly as the script extracts it, the
@@ -2787,7 +2802,7 @@ the rule outlives this plan's archival. No decision left for Q612.</p>
 <li><strong>Q612 — <code>check-doc-links.sh</code>.</strong> ✅ Lands <code>devtools/docs/markdown</code>
    (the shared parse layer) plus goldmark, and closes the proven defects.
    Result: <a href="#phase-1-result-q612">Phase 1 result</a>.</li>
-<li><strong><a href="../../STATUS/#Q613">Q613</a> — <code>lint-backlog.sh</code>.</strong> Table rows via the GFM AST; the
+<li><strong>Q613 ✅ — <code>lint-backlog.sh</code>.</strong> Table rows via the GFM AST; the
    character cap via <code>utf8.RuneCountInString</code>.</li>
 <li><strong><a href="../../STATUS/#Q614">Q614</a> — <code>check-roadmap.sh</code> + <code>backlog-metrics.sh</code>.</strong> The
    remaining two consumers, onto the same layer.</li>
@@ -2895,6 +2910,108 @@ repointing README line 7's badge link at a nonexistent target left the <code>awk
 gate green (exit 0, no finding) and failed the new one at <code>README.md:7</code>. The
 control — the same dead target as a plain link — failed both, so the difference
 is the shape and not the target.</p>
+<h2 id="phase-2-result-q613">Phase 2 result (Q613)<a class="headerlink" href="#phase-2-result-q613" title="Permanent link">&para;</a></h2>
+<p>The rules moved to <code>devtools/docs/backloglint</code>; <code>Tables()</code> on the parse layer is
+the only shared-package addition. The script kept the file selection and the
+environment interface (<code>NOTES_MAX_CHARS</code>, <code>BACKLOG_ALLOW_*</code>), mapping them onto
+flags — 518 lines to 92.</p>
+<p><strong>The reconciliation is the evidence.</strong> <code>lint-backlog-test.sh</code> grew from 53 to 67
+cases, covering all 12 rules, and <code>LINT_BACKLOG_BIN</code> points the whole suite at
+another implementation so both ran over the same corpus. The <code>awk</code> passed 62 and
+failed 5; the rewrite passed 67. Every one of the five disagreements is one of
+this plan's two filed defects, and each is paired with a control that agreed:</p>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th><code>awk</code></th>
+<th>Go</th>
+<th>Why they differ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Over-cap Notes holding <code>\|</code></td>
+<td>pass</td>
+<td><strong>fail</strong></td>
+<td>The cap measured the stub before the escape</td>
+</tr>
+<tr>
+<td>Control: same length, no escape</td>
+<td>fail</td>
+<td>fail</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>\|</code> in the Item cell, <code>St</code> 🔲</td>
+<td><strong>fail</strong></td>
+<td>pass</td>
+<td><code>St</code> was read from the Labels cell</td>
+</tr>
+<tr>
+<td>Control: same Item, no escape</td>
+<td>pass</td>
+<td>pass</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>\|</code> as the last two characters</td>
+<td>pass</td>
+<td><strong>fail</strong></td>
+<td>The trailing <code>\</code> was the whole cell</td>
+</tr>
+<tr>
+<td>250 em dashes (750 bytes)</td>
+<td><strong>fail</strong></td>
+<td>pass</td>
+<td>Cap counted bytes</td>
+</tr>
+<tr>
+<td>Control: 251 em dashes</td>
+<td>fail</td>
+<td>fail</td>
+<td>Over on either scale</td>
+</tr>
+<tr>
+<td>200 em dashes, no doc link</td>
+<td><strong>fail</strong></td>
+<td>pass</td>
+<td>Link threshold counted bytes</td>
+</tr>
+</tbody>
+</table>
+<p>Over a 48 KB copy of the real <code>STATUS.md</code> carrying one instance each of rules 1,
+2, 3, 5, 7 and 11, both produce the <strong>same six findings, worded identically</strong> —
+the new ones additionally carry <code>:LINE:</code>. Rules 8, 9 and 10 are asserted through
+throwaway repos in the suite, and rule 8's positive case (a <code>flake</code> row actually
+deleted) was <strong>untested before this change</strong>: only the branch-behind-<code>main</code>
+negative was.</p>
+<p>Rule 12 (a new row's ID holds a <code>refs/queue-ids</code> claim) landed on <code>main</code> while
+this was in flight and was ported the same way. Its six cases — written against
+the <code>awk</code>, not against this — pass unchanged, which is the check that matters:
+a rule dropped in a port disarms a gate that still reports green.</p>
+<p><strong>The escaped-pipe defect had a live instance.</strong> <a href="../../STATUS/#Q625">Q625</a>'s
+Notes carry <code>`make check \| tail`</code>, so the <code>awk</code> read a 13-character cell
+where the row holds 243. Pushing that cell to 264 characters left the <code>awk</code>
+green; the rewrite fails it at <code>docs/STATUS.md:77</code>. The control — the same
+overflow on Q631, which has no escaped pipe — failed both, so the difference is
+the shape and not the row.</p>
+<p><strong>Which <code>awk</code> counts what, measured.</strong> <code>length()</code> on <code>"é—🔲"</code> answers 9 under
+this host's BWK awk 20200816 and under mawk 1.3.4, and 3 under GNU awk 5.2.1 in
+a UTF-8 locale — bytes and runes respectively (<code>LC_ALL=C</code> puts gawk back on
+bytes). CI runs the byte one: <code>ubuntu-latest</code> inherits Ubuntu 24.04's
+<code>/usr/bin/awk</code> → mawk 1.3.4, and the runner image's apt manifest adds no awk of
+its own. So the gate counted bytes in both places it actually ran, and the
+divergence was one <code>brew install gawk</code> away from arriving on a laptop.</p>
+<p><strong>No row was reclassified.</strong> All 109 Queue and Deferred cells re-measured: the
+longest is <a href="../../STATUS/#Q555">Q555</a> at 249 bytes / 249 characters, confirming
+the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B
+/ 206 chars). Nothing is over cap on either scale, and runes ≤ bytes always, so
+moving to characters can only relax — never break — an existing row.</p>
+<p><strong>One workflow gap closed.</strong> <code>status-lint.yml</code> gated on <code>scripts/docs/lint-backlog.sh</code>
+alone, which no longer holds the rules; it now also triggers on <code>devtools/**</code>,
+pins the toolchain with <code>setup-go</code>, and takes 5 minutes instead of 2 for the
+build. Runtime 0.49 s → 0.69 s, still sub-second, still not the argument.</p>
 <h2 id="sequencing">Sequencing<a class="headerlink" href="#sequencing" title="Permanent link">&para;</a></h2>
 <p>Q612 lands the shared package, so Q613 and Q614 are blocked on it — recorded as <code>🚫</code> in
 the Queue with the <code>Blocked by</code> prefix <code>make queue-unblock</code> reads. The ordering is also

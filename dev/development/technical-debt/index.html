@@ -2843,9 +2843,9 @@ have drifted since.</p>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a></td>
-<td>518</td>
-<td>Queue rows split on a literal <code>\|</code> field separator at fixed indices; one escaped pipe in a cell shifts every field and the row's rules then evaluate the wrong ones</td>
-<td><strong>Rewrite</strong> (<a href="../../STATUS/">Q613</a>)</td>
+<td>518, now 92</td>
+<td>Queue rows split on a literal <code>\|</code> field separator at fixed indices; one escaped pipe in a cell shifted every field and the row's rules then evaluated the wrong ones</td>
+<td><strong>Rewritten</strong> (Q613) — the rules are <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/backloglint"><code>devtools/docs/backloglint</code></a> over the same parse layer; the script keeps the file selection and the environment interface</td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a></td>

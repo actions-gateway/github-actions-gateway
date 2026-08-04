@@ -2877,7 +2877,7 @@ markers per item.</p>
 <tr>
 <td><a href="markdown-gates-parser/">markdown-gates-parser.md</a></td>
 <td>Move the four <code>awk</code>-based Markdown gates (link/anchor check, backlog lint, roadmap coherence, metrics replay) onto a real parser in <code>devtools/</code>, keeping each <code>scripts/</code> entry point — regular expressions cannot count brackets, and every defect traces to that</td>
-<td>❌ Open — filed 2026-08-02. Measured: <code>check-doc-links.sh</code> never checks a badge-wrapped link's outer target (3 live in README, one relative), <code>lint-backlog.sh</code> shifts every table field on one escaped pipe, and its character cap means bytes or runes depending on the <code>awk</code>. goldmark settled by probe: zero external deps, and its auto-ID matched the current slugger on all 13 probed headings. Phases are Q612 (done) → <a href="../STATUS/#Q613">Q613</a> → <a href="../STATUS/#Q614">Q614</a>; the merge driver is deliberately excluded</td>
+<td>❌ Open — filed 2026-08-02. Measured: <code>check-doc-links.sh</code> never checks a badge-wrapped link's outer target (3 live in README, one relative), <code>lint-backlog.sh</code> shifted every table field on one escaped pipe (Q625 carried a live instance), and its character cap meant bytes or runes depending on the <code>awk</code>. goldmark settled by probe: zero external deps, and its auto-ID matched the current slugger on all 13 probed headings. Phases are Q612 and Q613 (done) → <a href="../STATUS/#Q614">Q614</a>; the merge driver is deliberately excluded</td>
 </tr>
 <tr>
 <td><a href="website/">website.md</a></td>
