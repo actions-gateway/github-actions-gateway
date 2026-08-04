@@ -53,7 +53,7 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 
 - Follow Go best practices for code style, naming, comments, and package organization.
 - Public types, functions, and packages must have godoc comments.
-- **Comments are terse, mechanism-focused, and present tense.** Long-form narrative rationale belongs in `docs/` or the PR description, not in code comments. Never narrate the diff ("previously…", "no longer…", commit SHAs) or argue with a hypothetical reviewer in a comment; state a shared rationale once at the declaration and cross-reference it elsewhere. CRD field godoc (it becomes the API description) stays complete.
+- **Comments are terse, mechanism-focused, and present tense.** Long-form narrative rationale belongs in `docs/` or the PR description, not in code comments. Never narrate the diff ("previously…", "no longer…", commit SHAs) or argue with a hypothetical reviewer in a comment; state a shared rationale once at the declaration and cross-reference it elsewhere. A comment asserting how something **upstream** behaves cites the measured version or the gate pinning it ([documentation-standards.md](docs/development/documentation-standards.md#an-upstream-behavior-claim-cites-a-measurement)) — Q270's unmeasured one was the safety argument for dropping a job, and Q551 refuted it. CRD field godoc (it becomes the API description) stays complete.
 - Tests must be meaningful — verify behavior, not just that the code runs.
 - All go modules in the repo must use the same Go version.
 - When a function starts something asynchronous, return a `<-chan struct{}` done channel so the caller controls whether and how to wait (block, select with timeout, ignore). Do not hide the channel inside a closure or call site.
