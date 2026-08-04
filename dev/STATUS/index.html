@@ -2719,14 +2719,6 @@
 <td>Q628 releases an unrun worker's assignment with <code>result=abandoned</code>; whether GitHub re-dispatches or concludes the run is unmeasured, and decides whether a re-run arm is also needed. Measurable on a turn-up: reap a Pending worker, watch the run.</td>
 </tr>
 <tr>
-<td><a id="Q652"></a>Q652</td>
-<td><a href="../development/maintaining-backlog/">Nothing enforces the <code>docs/STATUS.md</code> isolated-commit rule</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Isolation is what keeps rebases trivial — a 12-commit rebase run resolved clean every time — but a stray <code>--amend</code> onto the wrong HEAD silently lands code in a <code>docs(status):</code> commit. Gate it: a commit touching STATUS.md touches nothing else.</td>
-</tr>
-<tr>
 <td><a id="Q637"></a>Q637</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate asserts nothing about the capacity gate or the namespace-quota rung</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
