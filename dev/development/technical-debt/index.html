@@ -2527,6 +2527,45 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A shell gate becomes a Go devtool on parsing density, not length
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A shell gate becomes a Go devtool on parsing density, not length">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worked-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-rewrite-costs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the rewrite costs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2752,6 +2791,92 @@ Nth fix round, not after. When the answer is "external," the disposition is usua
 ceiling is a GitHub protocol) or an architecture change that removes the dependency —
 not another patch. This complements the standing rule that source-reading is unverified
 until exercised end-to-end.</p>
+<h3 id="a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length">A shell gate becomes a Go devtool on parsing density, not length<a class="headerlink" href="#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length" title="Permanent link">&para;</a></h3>
+<p>A long shell script is not debt. A shell script standing in for a parser is. The two
+look alike from the outside, so the decision needs a test that reads the script rather
+than its line count.</p>
+<p>Ask what the script does with <strong>text it did not produce</strong>:</p>
+<ul>
+<li><strong>It parses a structured format into fields and reasons over them</strong> (Markdown, a
+  GitHub Flavored Markdown table, YAML, JSON), so it has to track nesting, escaping,
+  and matched delimiters. Regular expressions cannot count brackets. Rewrite it in Go
+  against a real parser.</li>
+<li><strong>It sequences external command-line interfaces</strong> (<code>kubectl</code>, <code>helm</code>, <code>gcloud</code>,
+  <code>docker</code>) and branches on their exit codes. Length here comes from the number of
+  steps, not from the difficulty of any one of them. Shell is the right language, and
+  Go would be <code>exec.Command</code> soup.</li>
+</ul>
+<p>Two corroborating signals when the first read is ambiguous:</p>
+<ul>
+<li><strong>How does it fail?</strong> A parser-dense gate fails <em>silently wrong</em>: a link never
+  collected, a table cell read from the wrong index, and the gate stays green by not
+  seeing. An orchestrator fails loudly, because the CLI it called exits non-zero.</li>
+<li><strong>What would a test look like?</strong> A parse routine takes a string and returns fields,
+  which is a table test. An orchestrator needs a live cluster, and moving it to Go buys
+  no testability it did not already have.</li>
+</ul>
+<p>Parsing structured text is necessary but not sufficient. A script that must reproduce
+its input <strong>byte for byte</strong> is worse off with an abstract syntax tree, which discards
+exactly the fidelity it depends on. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a>
+and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-status-rows.awk"><code>merge-status-rows.awk</code></a> parse Markdown
+tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for
+line, conflict-marker fallback included.</p>
+<h4 id="worked-examples">Worked examples<a class="headerlink" href="#worked-examples" title="Permanent link">&para;</a></h4>
+<p>Line counts measured 2026-08-03 with <code>wc -l</code>. The <a href="../../plan/markdown-gates-parser/">Q612 survey</a>
+and the Queue row that asked for this section cited 235, 601, and 790; all three scripts
+have drifted since.</p>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Lines</th>
+<th>Reads</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>scripts/docs/check-doc-links.sh</code></a></td>
+<td>252</td>
+<td>178 of them (lines 75–252) are one <code>awk</code> program implementing a Markdown parser plus the github-slugger algorithm</td>
+<td><strong>Rewrite</strong> (<a href="../../STATUS/">Q612</a>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a></td>
+<td>518</td>
+<td>Queue rows split on a literal <code>\|</code> field separator at fixed indices; one escaped pipe in a cell shifts every field and the row's rules then evaluate the wrong ones</td>
+<td><strong>Rewrite</strong> (<a href="../../STATUS/">Q613</a>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a></td>
+<td>603</td>
+<td>Zero <code>awk</code>/<code>jq</code>/<code>sed</code> invocations. Field extraction is delegated to <code>kubectl -o jsonpath</code>; the body is <code>kubectl</code>, <code>helm</code>, <code>gcloud</code>, <code>curl</code>, and <code>docker</code> calls</td>
+<td><strong>Stays shell</strong></td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a></td>
+<td>791</td>
+<td>One line invoking <code>awk</code>/<code>jq</code>/<code>sed</code>. The longest script under <code>scripts/</code>, and the least parsing of the four</td>
+<td><strong>Stays shell</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Sorted by length, the verdicts run backwards: the two shortest are the rewrites and the
+two longest stay shell. That is why length is not the signal.</p>
+<h4 id="what-the-rewrite-costs">What the rewrite costs<a class="headerlink" href="#what-the-rewrite-costs" title="Permanent link">&para;</a></h4>
+<p>Moving a gate to Go buys a parser that handles nesting and escaping correctly, rune
+counting that does not vary with the host <code>awk</code>, and a test suite over functions with
+inputs and outputs. It costs a module in the Go workspace, a vendored dependency to
+sync and check (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>vendor-sync.sh</code></a>,
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-check.sh"><code>vendor-check.sh</code></a>), a compile before the gate runs,
+and a continuous integration (CI) path filter that has to include the new tree.</p>
+<p>Most of that is a one-time cost per module, not per gate: <code>devtools/</code> already exists
+with its vendor tree and CI wiring, so the second and third gates onto the same parse
+layer are cheap where the first was not. The gate keeps its <code>scripts/</code> entry point
+either way, so the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">script map</a> stays in one place.</p>
+<p>None of this argues for rewriting shell in general. Almost every script under
+<code>scripts/</code> sits on the orchestration side of the line and should stay there; the
+criterion exists to find the few that do not.</p>
 <h2 id="strategy-the-debt-lifecycle">Strategy: the debt lifecycle<a class="headerlink" href="#strategy-the-debt-lifecycle" title="Permanent link">&para;</a></h2>
 <p>Policy decides what to do with one item. Strategy is the loop that keeps the
 whole codebase from accumulating debt faster than we pay it down.</p>
@@ -2861,6 +2986,10 @@ absolute bar, so it raises quality without manufacturing low-value work.</p>
 <tr>
 <td>Deciding fix / flag / defer / decline</td>
 <td>this doc</td>
+</tr>
+<tr>
+<td>Deciding whether a shell gate should become a Go devtool</td>
+<td>this doc (<a href="#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length">the criterion</a>), pointed to from <a href="../bash-style/">bash-style.md</a></td>
 </tr>
 <tr>
 <td>Recording and prioritizing an item</td>

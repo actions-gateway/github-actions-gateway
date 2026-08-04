@@ -2472,6 +2472,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#when-not-to-write-the-script-in-shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When not to write the script in shell
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#accepted-shellcheck-findings" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2534,6 +2545,8 @@
 <h2 id="shared-helpers-and-makefile-wiring">Shared helpers and Makefile wiring<a class="headerlink" href="#shared-helpers-and-makefile-wiring" title="Permanent link">&para;</a></h2>
 <p>Before writing a new helper function, check <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a> — <code>require_cmd</code>, <code>workspace_modules</code>, and the throttle setup already live there. The root <code>Makefile</code> keeps recipes as thin target→script wiring so the logic stays shellcheck-covered; see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> for the script inventory and parameter conventions.</p>
 <p><strong>A new script goes in a <code>scripts/&lt;group&gt;/</code> directory, never at the top level.</strong> The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> and the rule is explained in <a href="../testing/#scripts-is-grouped-by-blast-radius">testing.md § <code>scripts/</code> is grouped by blast radius</a>. Put a <code>*-test.sh</code> beside its subject.</p>
+<h2 id="when-not-to-write-the-script-in-shell">When not to write the script in shell<a class="headerlink" href="#when-not-to-write-the-script-in-shell" title="Permanent link">&para;</a></h2>
+<p>A script that sequences <code>kubectl</code>/<code>helm</code>/<code>gcloud</code> calls belongs here however long it gets. A script that parses a structured format into fields and reasons over them wants a real parser and a test suite, and belongs in <code>devtools/</code> as a Go program with a thin <code>scripts/</code> entry point. The criterion is parsing density, not length; it, its corroborating signals, and what the rewrite costs are in <a href="../technical-debt/#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length">technical-debt.md § A shell gate becomes a Go devtool on parsing density, not length</a>.</p>
 <h2 id="accepted-shellcheck-findings">Accepted shellcheck findings<a class="headerlink" href="#accepted-shellcheck-findings" title="Permanent link">&para;</a></h2>
 <p>A finding that is accepted rather than fixed carries a targeted <code># shellcheck disable=SCxxxx</code> directive with a justifying comment immediately above the line (example: the dynamic-name <code>read</code>/<code>export</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/probe-investigations-cd.sh"><code>scripts/dev/probe-investigations-cd.sh</code></a>). Everything else is fixed to match the rules above.</p>
 <h3 id="sc2329-on-a-trap-invoked-cleanup-function">SC2329 on a <code>trap</code>-invoked cleanup function<a class="headerlink" href="#sc2329-on-a-trap-invoked-cleanup-function" title="Permanent link">&para;</a></h3>
