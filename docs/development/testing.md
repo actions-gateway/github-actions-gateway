@@ -312,6 +312,21 @@ Four assertions, cheapest first:
 
 **So adding a workspace module now fails the gate instead of slipping through** — but the gate only knows about *whole-workspace* coverage. Judgement is still yours for the narrow filters: when you add a module, ask what each gate actually compiles, scans, or bakes, and remember the same applies to a gate that names files individually (`manifest-validate.sh`'s `standalone_manifests` — adding a path there means adding its directory to the filter). Wired into `make check` and CI's `path-filters` job in `unit-test.yml`, which is gated on the `workflows` filter — the one filter watching all of `.github/workflows/`, so editing any `filters:` block re-runs the gate that lints it. Behaviour, including that each assertion fails when it should, is asserted by `scripts/ci/check-path-filters-test.sh` under `make scripts-test`.
 
+#### Where a globstar works in a filter glob
+
+`dorny/paths-filter` matches with [picomatch](https://github.com/micromatch/picomatch); `on.push.paths` is matched by GitHub's own trigger matcher. The two do not agree, so a pattern copied from one list into the other can silently stop matching. Measured against the pinned `dorny/paths-filter@7b450ff` (v4.0.2) on a branch whose diff was two nested Go files (`cmd/agc/buildinfo.go`, `cmd/agc/config.go`):
+
+| Filter pattern | Matched | Why |
+|---|---|---|
+| `'**.go'` | both files | a **leading** `**` globstars normally |
+| `'**/*.go'` | both files | equivalent to the above |
+| `'*.go'` | nothing | a lone `*` never crosses `/`, and matching is on the full path, not the basename |
+| `'cmd/**.go'` | nothing | a **mid-pattern** `**` beside non-`/` characters degrades to `*`, which then cannot cross the `/` in `agc/` |
+
+The hazard is narrow but silent: `cmd/**.go` reads as "every Go file under `cmd/`" and gates on nothing. Write `cmd/**/*.go`. Assertion 3 above does not catch it — the pattern's literal prefix (`cmd`) exists on disk.
+
+Q594 filed `plan-hygiene.yml`'s `'**.go'` as an instance of this. It is not: a leading `**` is fine, and that filter matches every Go file in the repo. The tree carries no instance of the broken shape today; Q659 is the recurrence guard.
+
 #### A path list written twice: the trigger and the filter
 
 Three workflows — `e2e-calico.yml`, `plan-hygiene.yml`, `status-lint.yml` — express the same scoping decision **twice**, because the two legs are gated by different mechanisms:
