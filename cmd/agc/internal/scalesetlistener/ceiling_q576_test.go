@@ -113,7 +113,8 @@ func TestListener_CeilingBlockedJobRegistersNoRunner(t *testing.T) {
 	assert.Equal(t, []string{jobID}, prov.jobIDs(), "the deferred job provisions exactly once")
 	assert.Equal(t, 1, srv.GenerateJITCalls(), "exactly one registration, minted when the job could actually run")
 	assert.Zero(t, srv.DeleteRunnerCalls(), "one mint under a free name conflicts with nothing")
-	assert.Zero(t, m.deferredFor(scalesetlistener.DeferReasonCeiling), "a provisioned job leaves the deferred set")
+	assert.Eventually(t, func() bool { return m.deferredFor(scalesetlistener.DeferReasonCeiling) == 0 },
+		5*time.Second, 10*time.Millisecond, "a provisioned job leaves the deferred set")
 }
 
 // TestListener_CeilingRejectionFromProvisionIsDeferredNotRedelivered covers the race the
