@@ -35,3 +35,5 @@ jobs:
     timeout-minutes: 10
     steps:
       - run: echo "This job is never expected to run — the Q645 probe abandons its assignment (Q645)."
+# A push of this file whose head commit message carries the opt-in tag is the
+# branch-side dispatch path the probe session uses before the file reaches main.
