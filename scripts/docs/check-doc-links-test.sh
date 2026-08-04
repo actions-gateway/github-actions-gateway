@@ -135,6 +135,35 @@ ln -s CLAUDE.md "$WORK/AGENTS.md"
 git -C "$WORK" add -A
 run_gate 'a symlinked doc is skipped, not scanned twice' 0
 
+# --- the existence oracle (Q663) -------------------------------------------
+#
+# The oracle is built from the same candidate set as the scan list, so both
+# halves of that set have to hold: a deleted-but-tracked path must stop
+# answering "exists" (`--cached` still lists it), and an untracked, non-ignored
+# path must keep answering it (Q619). The present-target control sits between
+# them so a red deleted case cannot be credited to the link rather than the
+# deletion.
+
+new_repo
+printf '# Style\n' >"$WORK/style.md"
+printf '[style](style.md)\n' >"$WORK/a.md"
+git -C "$WORK" add -A
+rm "$WORK/style.md"
+run_gate 'a link to a deleted-but-tracked file is caught (Q663)' 1
+expect_out 'the deleted-target finding names the link' 'a.md:1: dead link: style.md'
+
+new_repo
+printf '# Style\n' >"$WORK/style.md"
+printf '[style](style.md)\n' >"$WORK/a.md"
+git -C "$WORK" add -A
+run_gate 'control: the same link with the target present is green' 0
+
+new_repo
+printf '[new](brand-new.md)\n' >"$WORK/a.md"
+git -C "$WORK" add -A
+printf '# Brand new\n' >"$WORK/brand-new.md"
+run_gate 'a link to an untracked, non-ignored file resolves (Q619)' 0
+
 # --- CI annotations --------------------------------------------------------
 
 new_repo
