@@ -192,6 +192,23 @@ commit rather than re-push: confirm the PR's own work landed by content, `git ch
 <new> origin/main`, `git cherry-pick <sha>`, and open a fresh PR. The stray branch then
 needs deleting (`git push origin --delete <branch>`), which is easy to leave behind.
 
+**Re-check the base as well as the PR state.** A rebase and the push that follows it are
+separated by a full local gate, and `main` merges during it. The window is not a fixed
+number of minutes — it is however long your gate takes, and that varies by an order of
+magnitude across the machines this repo has been measured on: a cold `make check` is
+~21 min on a 4-core Intel i7 and 102 s on an 18-core M5 Max
+([measurements](docs/plan/archive/local-gate-throughput.md)). The longer the gate, the
+more of `main`'s merge traffic falls inside it — and force-pushing onto a base that has
+since moved spends a full CI cycle on something that cannot merge.
+
+```sh
+git fetch origin main && git rev-list --count HEAD..origin/main
+```
+
+Zero means the base you tested is still the base you are pushing. Non-zero means `main`
+moved: rebase onto it again before pushing, and re-run the gate if what moved can affect
+it — `git diff HEAD...origin/main --stat` says what did.
+
 Whatever happens, verify what actually landed **by content, not SHA** — see below.
 
 ### When new work blocks an open PR
