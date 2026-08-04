@@ -149,8 +149,13 @@ Three deliverables:
    leg is one ~25-minute phase, so a status object built from phase events alone
    reports "e2e, 18 minutes" for the whole of it — the phase is the only thing
    that does not change. `e2e-run-watch.sh` now folds the newest relayed line
-   into the stream as a `heartbeat` record, which is also what keeps the stall
-   detector honest through the longest phase.
+   into the stream as a `heartbeat` record. **This was also load-bearing for the
+   stall detector, and that part was wrong** (Q630): the heartbeat needs a
+   fetchable job log, GitHub served `BlobNotFound` for a whole 30-minute run that
+   passed, and since the stall threshold is shorter than a healthy leg the
+   detector then reported a false stall on every poll. The stream cannot be the
+   only witness to a phase whose only writer depends on someone else's storage —
+   the detector now reconciles silence against the run's own status.
 2. **A gate's failure is reported by its first failing phase, not its last.**
    The teardown trap records `gate fail` after the phase that actually broke
    records its own, so taking the newest failure would answer every failed run
@@ -160,7 +165,10 @@ Three deliverables:
    which is exactly the failure a walk-away command hides. `idle` (age of the
    newest event) crossing `RELEASE_SENTINEL_STALL` is a wake in its own right,
    and only for a `running` gate: preflight has no stream to be quiet on and a
-   finished gate is expected to be silent.
+   finished gate is expected to be silent. Q630 added the other half: absence of
+   events is a *hypothesis* of a wedge, confirmed against the run status before
+   it is reported, and remembered afterwards so a relaunched watcher does not
+   re-report the same silence the instant it starts.
 
 ## Phase 3 — the remaining tiers, by measurement
 
