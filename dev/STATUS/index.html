@@ -2895,6 +2895,14 @@
 <td>Measured: a branch adding six Go files under <code>devtools/</code> printed "no module changes" and skipped golangci-lint; CI's full sweep then found 12. <code>compute_scope</code> maps changes to <code>go.work</code> dirs only. Separate from <a href="#Q667">Q667</a> — different gate.</td>
 </tr>
 <tr>
+<td><a id="Q671"></a>Q671</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>make scripts-test</code>'s help line lists every suite, so two PRs adding suites always conflict</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Adding a suite edits <code>SCRIPTS_TESTS</code> and a 1350-char <code>##</code> line naming all of them, so two such PRs conflict by construction (#1243 vs #1239). Q649 derived the gate list this way; same fix shape.</td>
+</tr>
+<tr>
 <td><a id="Q659"></a>Q659</td>
 <td><a href="../development/testing/#where-a-globstar-works-in-a-filter-glob">Nothing rejects a mid-pattern <code>**</code> in a filter glob</a></td>
 <td><code>ci</code></td>
