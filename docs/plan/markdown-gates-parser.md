@@ -1,7 +1,7 @@
 # Markdown gates on a real parser
 
 **Status:** open, filed 2026-08-02. Three phases:
-[Q612](../STATUS.md#Q612) ✅ → [Q613](../STATUS.md#Q613) → [Q614](../STATUS.md#Q614).
+Q612 ✅ → [Q613](../STATUS.md#Q613) → [Q614](../STATUS.md#Q614).
 
 Phase 1 shipped: `devtools/docs/markdown` (the shared parse layer over goldmark)
 and `devtools/docs/doclinks` (the checker), with `check-doc-links.sh` kept as the
@@ -140,8 +140,9 @@ the rule outlives this plan's archival. No decision left for Q612.
 
 In scope, one phase each:
 
-1. **[Q612](../STATUS.md#Q612) — `check-doc-links.sh`.** Lands `devtools/docs/markdown`
+1. **Q612 — `check-doc-links.sh`.** ✅ Lands `devtools/docs/markdown`
    (the shared parse layer) plus goldmark, and closes the proven defects.
+   Result: [Phase 1 result](#phase-1-result-q612).
 2. **[Q613](../STATUS.md#Q613) — `lint-backlog.sh`.** Table rows via the GFM AST; the
    character cap via `utf8.RuneCountInString`.
 3. **[Q614](../STATUS.md#Q614) — `check-roadmap.sh` + `backlog-metrics.sh`.** The
