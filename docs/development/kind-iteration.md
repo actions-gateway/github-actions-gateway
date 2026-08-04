@@ -214,6 +214,19 @@ A full `make e2e-up` run is ~10 minutes per cycle. To iterate on a single compon
 
 This drops each iteration from ~10 minutes to under a minute.
 
+### Re-running the suite over skipped-teardown state
+
+Part of what a skipped teardown leaves behind is a GMC Deployment whose `.args` are owned by the `kubectl-patch` field manager: the suite appends `--allow-agc-extra-env=true` with `kubectl patch --type=json`, and `args` is an atomic list, so that patch claims all of it. Helm 4 applies server-side, so the next run's `helm upgrade` fails instead of overwriting:
+
+```
+Apply failed with 1 conflict: conflict with "kubectl-patch" using apps/v1:
+.spec.template.spec.containers[name="manager"].args
+```
+
+`setupGMC` deletes the leftover Deployment before `make deploy` for exactly this reason (Q590), and Helm recreates it chart-owned. Nothing else the skipped teardown left is touched, so the fakegithub, cert-manager, and tenant-namespace state of a failed run stays inspectable right up until you start the next run.
+
+An ad-hoc `helm upgrade` against a standing release hits the same conflict. `--force-conflicts` reclaims ownership (Helm 4 only: Helm 3 has no server-side apply, so there is nothing to reclaim), which is what [`scripts/e2e/chart-upgrade-check.sh`](../../scripts/e2e/chart-upgrade-check.sh) does in its normalize step, deliberately *not* on the upgrade its assertions rest on.
+
 ## Watching what's actually happening
 
 Distroless pods log to stdout. Useful one-shots:
