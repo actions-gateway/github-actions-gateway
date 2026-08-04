@@ -127,8 +127,9 @@ specific and honest.
   a signature, and it is the surface tell readers spot fastest. Reach for a comma, a
   period, a colon, or parentheses first, and keep the dash only where the aside really
   does interrupt the sentence and no other mark carries it. Two dashes in one sentence
-  almost always means the sentence wants to be two sentences. Count with
-  `grep -o '—' <file> | wc -l`; above roughly 3 per 1,000 words, rewrite.
+  almost always means the sentence wants to be two sentences. Above roughly 3 per 1,000
+  words, rewrite. `make em-dash-check` enforces it: see
+  [Enforcing the em-dash rule](#enforcing-the-em-dash-rule).
 - **Formatting in moderation.** Bold the keyword, not the sentence; sentence-case
   headings, not Title Case; no emoji as bullets or status markers. Mechanical,
   every-line formatting is itself a tell. (The one sanctioned Title-Case heading is the
@@ -138,6 +139,40 @@ Fix both halves. Cutting punctuation density while leaving the padding and puffe
 untouched produces well-punctuated filler, and no amount of substance survives prose
 that reads as machine-generated on sight. Neither half is optional, and neither
 substitutes for the other.
+
+## Enforcing the em-dash rule
+
+`make em-dash-check` ([`scripts/docs/check-em-dash.sh`](../../scripts/docs/check-em-dash.sh))
+counts the dashes and fails the build. It runs inside `make check` and as its own job in
+the `doc-links` CI workflow.
+
+**What it does not count.** A raw `grep -o '—' | wc -l` was the rule's only instrument
+before, and it counts four shapes where the dash is legitimate, which is most of why the
+rule was unmeasurable. The counter reads the parsed document instead
+([`devtools/docs/emdash`](../../devtools/docs/emdash/), over the goldmark layer Q612
+built), and skips:
+
+| Skipped | Why | In the tree |
+|---|---|---|
+| Fenced and indented code blocks, inline code spans | The dash is part of a command or an identifier | 288 |
+| Heading text | The title separator, `2.1. Tier 1 — Gateway Manager Controller`, is this docset's section-naming convention | 590 |
+| Link text | Every one is a title citation, `[Appendix A — Capacity Targets & SLOs](…)`, reproducing a heading the linking file does not own | 127 |
+| Raw HTML, block and inline | Markup and comments, which no reader sees | 3 |
+
+Words are skipped with them, so a long code block buys a page no headroom. Table cells,
+blockquotes and list items are prose and are counted.
+
+**The baseline.** With those exclusions the tree measures 9,978 em-dashes in 582,049
+prose words, 17.1 per 1,000, and 231 of 249 files are above the rule. A gate set at 3
+would land red on everything and be switched off, so
+[`scripts/docs/em-dash-baseline.txt`](../../scripts/docs/em-dash-baseline.txt) freezes
+each of those files at its current count as a ceiling. A listed file may not gain
+em-dashes; a file with no entry, including every new doc, is held to the rule itself.
+
+[Q650](../STATUS.md#Q650) is the cleanup. As it lands, `make em-dash-baseline` re-records
+the ceilings and the diff is the measure of what it cleared; an entry disappears once its
+file reaches the rule, and an empty baseline means the ratchet is done.
+`make em-dash-report` prints every file's density, worst first, which is the worklist.
 
 ## An upstream-behavior claim cites a measurement
 
@@ -275,6 +310,7 @@ exists today, and what's proposed:
 | Per-change doc updates via the [doc-update-matrix](doc-update-matrix.md) | 1 | Convention, enforced in review (PR self-check). |
 | `make doc-links` — broken cross-file links + heading anchors, GitHub slugs (Q52) | 1, 2 | Wired (`make check`). The automated guard against link rot. |
 | `make docs-build` — the same links as the published site resolves them (Q560) | 1, 2 | Wired (`pages.yml` PR gate). Catches the site-only 404s `doc-links` cannot see. |
+| `make em-dash-check`: em-dash density, code and titles excluded (Q654) | 1 | Wired (`make check`). Ratchets against a per-file baseline while [Q650](../STATUS.md#Q650) clears the debt; see [Enforcing the em-dash rule](#enforcing-the-em-dash-rule). |
 | Periodic docs-vs-code drift audit | 1 | **Proposed** — a recurring backstop for what the per-change rule misses. |
 | Reader questions (issues, support threads) logged as coverage gaps | 3 | **Proposed** — turns real confusion into Queue items. |
 

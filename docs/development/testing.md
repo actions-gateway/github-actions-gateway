@@ -212,7 +212,7 @@ Unlike `make test-race` and `make vulncheck`, `cover-check` **is** the unit-test
 
 ### Gates scan present files, not just tracked ones
 
-Four gates walk the tree — [shellcheck](#the-shellcheck-gate), [doc-links](#the-doc-link-gate), [conflict-markers](#the-conflict-marker-gate), and `no-plan-refs-check` — and all four draw their file list from one helper pair in [`scripts/lib/common.sh`](../../scripts/lib/common.sh):
+Five gates walk the tree — [shellcheck](#the-shellcheck-gate), [doc-links](#the-doc-link-gate), [conflict-markers](#the-conflict-marker-gate), `no-plan-refs-check`, and `em-dash-check` — and all five draw their file list from one helper pair in [`scripts/lib/common.sh`](../../scripts/lib/common.sh):
 
 - `git_candidates PATHSPEC…` — `git ls-files --cached --others --exclude-standard`, i.e. **tracked** files plus **untracked ones that are not gitignored**.
 - `select_present_files` — drops what no reader can open: a **deleted-but-tracked** path (`--cached` still lists it) and merge-stage **duplicates** (`--cached` lists an unmerged path once per stage, which would multiply its findings).
@@ -221,7 +221,7 @@ Four gates walk the tree — [shellcheck](#the-shellcheck-gate), [doc-links](#th
 
 **Consequence for scratch files: gitignore them.** Leaving a file untracked no longer opts it out of anything — write it under the gitignored `tmp/` at the repo root, per the repo temp-file convention. That is the documented opt-out and every one of the four honours it.
 
-The selection rules are asserted by `scripts/ci/shellcheck-scripts-test.sh` (the helpers directly, plus end-to-end against a throwaway repo covering every state: tracked, untracked, gitignored, deleted-but-tracked), and the untracked/gitignored behaviour is planted and measured per-gate in `scripts/ci/check-conflict-markers-test.sh` and `scripts/docs/check-no-plan-refs-in-code-test.sh`. All run under `make scripts-test`.
+The selection rules are asserted by `scripts/ci/shellcheck-scripts-test.sh` (the helpers directly, plus end-to-end against a throwaway repo covering every state: tracked, untracked, gitignored, deleted-but-tracked), and the untracked/gitignored behaviour is planted and measured per-gate in `scripts/ci/check-conflict-markers-test.sh`, `scripts/docs/check-no-plan-refs-in-code-test.sh`, and `scripts/docs/check-em-dash-test.sh`. All run under `make scripts-test`.
 
 ### The shellcheck gate
 

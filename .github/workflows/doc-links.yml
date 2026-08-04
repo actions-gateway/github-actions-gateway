@@ -18,6 +18,9 @@ on:
     paths:
       - '**.md'
       - 'scripts/docs/check-doc-links.sh'
+      - 'scripts/docs/check-em-dash.sh'
+      - 'scripts/docs/em-dash-baseline.txt'
+      - 'devtools/docs/**'
       - 'scripts/docs/check-release-pins.sh'
       - 'scripts/docs/check-release-links.sh'
       - 'scripts/docs/docs-preview.sh'
@@ -31,6 +34,9 @@ on:
     paths:
       - '**.md'
       - 'scripts/docs/check-doc-links.sh'
+      - 'scripts/docs/check-em-dash.sh'
+      - 'scripts/docs/em-dash-baseline.txt'
+      - 'devtools/docs/**'
       - 'scripts/docs/check-release-pins.sh'
       - 'scripts/docs/check-release-links.sh'
       - 'scripts/docs/docs-preview.sh'
@@ -61,6 +67,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: markdown links + anchors (make doc-links)
         run: make doc-links
+
+  # Enforce the em-dash density rule (Q654). Same file walk as doc-links and
+  # the same counter dependency, but its own job so a density failure and a
+  # dead link are separate verdicts on the PR. The counter reads the parsed
+  # document, which is why 'devtools/docs/**' is in the triggers above.
+  em-dash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: em-dash density (make em-dash-check)
+        run: make em-dash-check
 
   # Reconcile `make check`'s gate list with everything derived from it (Q649).
   # It lives here rather than in unit-test.yml's lint job because it spans the
