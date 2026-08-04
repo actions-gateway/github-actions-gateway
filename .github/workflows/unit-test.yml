@@ -6,6 +6,11 @@ on:
   # job + each job's `if:` guard, so the expensive jobs stay off unrelated PRs.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   pull_request:
+  # Merge queue: also run on the queue's candidate merge commit so the gate
+  # reports its required check there — an unreporting required check wedges
+  # the queue. paths-filter diffs merge_group events via git against the
+  # event's base/head, so non-matching queue entries stay cheap.
+  merge_group:
   push:
     branches: [main]
     paths-ignore:

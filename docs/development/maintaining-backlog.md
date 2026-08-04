@@ -351,6 +351,6 @@ A comment that must name a plan file — because that file is what the script op
 3. `git mv docs/plan/<docname>.md docs/plan/archive/<docname>.md` — preserves history.
 4. **Update any in-repo links** to the new path: `docs/plan/README.md` (move the row to the **Archive** section), other plan docs (`grep -rn "<docname>.md" docs/plan/`), the `docs/development|design|operations` trees, and **the moved doc's own outbound links** — dropping a level into `archive/` breaks every relative link in the doc itself (`make doc-links` catches all of these).
 5. **Bundle archival in one commit** when several plans close in the same session — easier to review and revert as a unit.
-6. **Do not edit STATUS.md in the same commit** as the archive move — STATUS.md edits are always isolated.
+6. **Do not edit STATUS.md in the same commit** as the archive move; STATUS.md edits are always isolated.
 
 A plan that is partially complete stays in `docs/plan/`. Archive is for "everything in this doc has shipped," not "most of it has."

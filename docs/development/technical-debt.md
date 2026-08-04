@@ -252,7 +252,7 @@ and catch real regressions — and we are explicit about the rest.
 | **Open-item count / age** | Track lightly — the labeled Queue in [docs/STATUS.md](../STATUS.md) is the register; formal aging is overkill at this scale. |
 | **Function length** | Track — `funlen` as a ratcheted ceiling ([Q371](../STATUS.md)): the threshold starts just above the worst surviving function and lowers as long functions are decomposed, the same "gates by not getting worse" pattern the coverage ratchet uses. Cyclomatic complexity proper (`gocyclo`) stays skipped — length is the cheaper proxy, and Q367 showed the god `main`/`run` functions were the real target. |
 | **Suppression hygiene** | Track — `nolintlint` (`allow-unused: false`, `require-specific: true`) ([Q371](../STATUS.md)): an inert or blanket `//nolint` directive fails the build, so a suppression cannot outlive the finding it documents (the class the dead `nolint:gocyclo` on the old `main()` was). |
-| Technical-debt ratio, defect ratio, DORA velocity (lead time, change-failure rate), debt index | **Skip** — each needs an issue tracker, a remediation-cost estimator, or a delivery cadence this project does not have. Revisit if the project grows a team and a release pipeline. |
+| Technical-debt ratio, defect ratio, DORA velocity (lead time, change-failure rate), debt index | **Skip**: each needs an issue tracker, a remediation-cost estimator, or a delivery cadence this project does not have. Revisit if the project grows a team and a release pipeline. |
 
 The principle: **a metric earns a place only when it changes a decision.** A
 number nobody acts on is itself a small piece of debt.
