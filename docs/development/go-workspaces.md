@@ -75,6 +75,7 @@ A gate needs no separate compile step in its Makefile target: `go build`/`go run
 
 - **Called once** — `go run` from the module directory, like `tools/`: `(cd devtools && go run ./ci/pathfilters …)`. Warm that costs ~42ms.
 - **Called in a loop** — build once into the gitignored `.build/` and exec the binary, which costs ~17ms a call against ~42ms for a `go run` that re-links every time. `check-path-filters.sh` does this in `ensure_pathfilters`; it invokes the extractor dozens of times per run.
+- **Its exit status is the gate's verdict** — build and exec even when called once. `go run` adds an `exit status 1` line of its own to stderr on top of the program's findings, and suppressing that would suppress the toolchain's compile errors with it. `check-doc-links.sh` builds for this reason. Put the binary beside the source it is built from, not under the tree being checked: a test suite points the gate at a throwaway repo.
 
 ### Why it stays out of the workspace, and out of `scripts/`
 

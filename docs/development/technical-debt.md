@@ -173,7 +173,7 @@ have drifted since.
 
 | Script | Lines | Reads | Verdict |
 |---|---|---|---|
-| [`scripts/docs/check-doc-links.sh`](../../scripts/docs/check-doc-links.sh) | 252 | 178 of them (lines 75–252) are one `awk` program implementing a Markdown parser plus the github-slugger algorithm | **Rewrite** ([Q612](../STATUS.md)) |
+| [`scripts/docs/check-doc-links.sh`](../../scripts/docs/check-doc-links.sh) | 252, now 76 | 178 of them were one `awk` program implementing a Markdown parser plus the github-slugger algorithm | **Rewritten** (Q612) — the checker is [`devtools/docs/doclinks`](../../devtools/docs/doclinks/) over a shared goldmark parse layer; the script keeps the file selection |
 | [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) | 518 | Queue rows split on a literal `\|` field separator at fixed indices; one escaped pipe in a cell shifts every field and the row's rules then evaluate the wrong ones | **Rewrite** ([Q613](../STATUS.md)) |
 | [`scripts/dev/validate-egress-ip.sh`](../../scripts/dev/validate-egress-ip.sh) | 603 | Zero `awk`/`jq`/`sed` invocations. Field extraction is delegated to `kubectl -o jsonpath`; the body is `kubectl`, `helm`, `gcloud`, `curl`, and `docker` calls | **Stays shell** |
 | [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) | 791 | One line invoking `awk`/`jq`/`sed`. The longest script under `scripts/`, and the least parsing of the four | **Stays shell** |
