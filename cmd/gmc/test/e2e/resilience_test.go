@@ -29,6 +29,14 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
 	})
 
+	// Dump before AfterAll deletes the namespace; a recovery that never lands
+	// shows up in the pod events and the manager's log (Q666).
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, tenantNS)
+		}
+	})
+
 	AfterAll(func() {
 		utils.DeleteActionsGatewayCR(tenantNS, agName)
 		utils.DeleteNamespace(tenantNS)

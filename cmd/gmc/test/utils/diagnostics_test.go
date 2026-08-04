@@ -51,6 +51,95 @@ func captureGinkgoWriter(t *testing.T) *bytes.Buffer {
 	return &buf
 }
 
+// fakeKubectlForNamespaces puts a kubectl on PATH that reports every namespace
+// in present as existing and every other one as not found, answers `get pods`
+// with a two-pod list, and echoes its arguments otherwise.
+func fakeKubectlForNamespaces(t *testing.T, present ...string) {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = namespace ]; then\n" +
+		"  case \" " + strings.Join(present, " ") + " \" in *\" $3 \"*) echo \"namespace/$3\"; exit 0;; esac\n" +
+		"  echo 'Error from server (NotFound)' >&2; exit 1\n" +
+		"fi\n" +
+		"if [ \"$1\" = get ] && [ \"$2\" = pods ]; then printf 'pod/proxy-0\\npod/agc-0\\n'; exit 0; fi\n" +
+		"echo \"fake kubectl $*\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "kubectl"), []byte(script), 0o700); err != nil { //nolint:gosec // test fixture must be executable
+		t.Fatalf("write fake kubectl: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// The dump exists to make a torn-down namespace diagnosable, so it must carry
+// the GMC's verdict and the manager's log tail, not just the tenant inventory.
+func TestDumpProvisioningDiagnosticsCapturesGatewayStatusAndManagerLogs(t *testing.T) {
+	fakeKubectlForNamespaces(t, "tenant-a")
+	out := captureGinkgoWriter(t)
+
+	DumpProvisioningDiagnostics("gmc-system", "gmc-controller-manager", "tenant-a")
+
+	dumped := out.String()
+	for _, want := range []string{
+		"--- namespace tenant-a ---",
+		"--- actionsgateway status in tenant-a ---",
+		"--- networkpolicies in tenant-a ---",
+		"--- pod descriptions in tenant-a ---",
+		"--- pod/proxy-0 logs in tenant-a ---",
+		"--- pod/agc-0 previous-container logs in tenant-a ---",
+		"--- events in tenant-a ---",
+		"--- manager networkpolicies in gmc-system ---",
+		"--- manager logs in gmc-system ---",
+	} {
+		if !strings.Contains(dumped, want) {
+			t.Errorf("dump is missing %q:\n%s", want, dumped)
+		}
+	}
+}
+
+// The dump runs against live tenant namespaces, so a command that reads a
+// Secret would put credential material into a CI artifact. Credentials reach a
+// tenant pod as volume mounts, which describe renders as a name.
+func TestDumpProvisioningDiagnosticsNeverReadsASecret(t *testing.T) {
+	fakeKubectlForNamespaces(t, "tenant-a")
+	out := captureGinkgoWriter(t)
+
+	DumpProvisioningDiagnostics("gmc-system", "gmc-controller-manager", "tenant-a")
+
+	// Run echoes every command it invokes as `running: "..."`.
+	for _, line := range strings.Split(out.String(), "\n") {
+		if !strings.HasPrefix(line, "running: ") {
+			continue
+		}
+		for _, banned := range []string{" secret", " secrets"} {
+			if strings.Contains(line, banned) {
+				t.Errorf("dump reads a Secret, which would leak credential material into CI output: %s", line)
+			}
+		}
+	}
+}
+
+// Callers pass every namespace their suite may create; an early failure leaves
+// most of them absent, and a screen of identical "unavailable" lines per
+// namespace buries the one that has the evidence.
+func TestDumpProvisioningDiagnosticsSkipsAbsentNamespaces(t *testing.T) {
+	fakeKubectlForNamespaces(t, "gmc-np-webhook")
+	out := captureGinkgoWriter(t)
+
+	DumpProvisioningDiagnostics("gmc-system", "gmc-controller-manager",
+		"gmc-np-metrics-denied", "gmc-np-metrics-allowed", "gmc-np-webhook")
+
+	dumped := out.String()
+	if !strings.Contains(dumped, "--- namespace gmc-np-metrics-denied: not readable") {
+		t.Errorf("absent namespace was not reported as skipped:\n%s", dumped)
+	}
+	if strings.Contains(dumped, "--- pod descriptions in gmc-np-metrics-denied ---") {
+		t.Errorf("absent namespace was still dumped in full:\n%s", dumped)
+	}
+	if !strings.Contains(dumped, "--- pod descriptions in gmc-np-webhook ---") {
+		t.Errorf("the namespace that exists was not dumped:\n%s", dumped)
+	}
+}
+
 // A superseded ReplicaSet's pod template is the only record of what a mid-run
 // AGC roll changed (Q593): its pods are gone, so no pod-scoped dump holds it.
 func TestDumpAGCSessionDiagnosticsCapturesSupersededReplicaSetTemplate(t *testing.T) {

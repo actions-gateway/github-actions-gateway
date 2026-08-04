@@ -29,6 +29,10 @@ const (
 	gmcNamespace   = "gmc-system"
 	infraNamespace = "e2e-infra"
 
+	// managerDeployment is the manager Deployment rendered by the Helm chart
+	// (namePrefix "gmc"); the failure dumps read its logs.
+	managerDeployment = "gmc-controller-manager"
+
 	fakegithubServiceName = "fakegithub"
 	fakegithubServicePort = "8080"
 

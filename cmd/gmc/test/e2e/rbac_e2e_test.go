@@ -27,6 +27,14 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
 	})
 
+	// Dump before AfterAll deletes the namespace; the RBAC objects these specs
+	// probe are in the inventory (Q666).
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, tenantNS)
+		}
+	})
+
 	AfterAll(func() {
 		utils.DeleteActionsGatewayCR(tenantNS, agName)
 		utils.DeleteNamespace(tenantNS)

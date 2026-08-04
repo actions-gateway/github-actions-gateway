@@ -29,6 +29,14 @@ var _ = Describe("E2E_GMC_Teardown", Ordered, func() {
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
 	})
 
+	// Dump before AfterAll deletes the namespace; a managed resource that never
+	// disappears is only visible in the inventory (Q666).
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, tenantNS)
+		}
+	})
+
 	AfterAll(func() {
 		utils.DeleteNamespace(tenantNS)
 	})
