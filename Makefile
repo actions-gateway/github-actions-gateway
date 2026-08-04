@@ -65,7 +65,7 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check release-pins-check shellcheck actionlint queue-unblock queue-id \
+        ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check release-pins-check release-links-check shellcheck actionlint queue-unblock queue-id \
         third-party-notices third-party-notices-check vendor-check tidy-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
@@ -155,6 +155,15 @@ doc-links: ## Fail on broken relative links / heading anchors in tracked Markdow
 .PHONY: release-pins-check
 release-pins-check: ## Fail when an install/upgrade page pins a release older than the newest stable tag
 	scripts/docs/check-release-pins.sh
+
+# Release notes are the one doc whose links are all absolute — they point into
+# the versioned site — and check-doc-links skips external URLs by design, so
+# nothing resolved them (Q636). The oracle is a local `mkdocs build`, so this
+# stays out of `make check`: the fast gate has no business provisioning a venv.
+# The doc-links.yml CI workflow runs it, and the script builds site/ if absent.
+.PHONY: release-links-check
+release-links-check: ## Resolve release-note links into the versioned site against a local site/ build
+	scripts/docs/check-release-links.sh
 
 # Enforce the "all go modules use the same Go version" rule (Q68). The two
 # go.work.gen files feed `make manifests` via GOWORK= and have silently drifted
@@ -252,7 +261,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-conflict-markers-test ci/check-dep-advisory-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
                  ci/shellcheck-scripts-test \
-                 docs/backlog-metrics-test docs/check-release-pins-test \
+                 docs/backlog-metrics-test docs/check-release-links-test \
+                 docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
                  docs/git-merge-status-test docs/lint-backlog-test \
                  docs/release-version-hook-test docs/source-links-hook-test \
@@ -270,7 +280,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate, release-note site-link resolution)
 	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of

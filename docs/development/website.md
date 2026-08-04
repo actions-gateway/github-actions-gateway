@@ -364,6 +364,11 @@ cannot cover both** (Q560):
 | `make doc-links` (`scripts/docs/check-doc-links.sh`) | github.com — GitHub's heading slugger, directory listings | `doc-links.yml`, `make check` |
 | `make docs-build` (`mkdocs build --strict`) | the published site — Python-Markdown slugs, MkDocs path resolution | `pages.yml`'s PR `build` job |
 
+Two engines, two gates. `docs/releases/` is the exception that needs a third:
+those files publish to neither, and their links are all absolute into the
+versioned site, so `make release-links-check` resolves them against a local
+`site/` build ([testing.md § The release-link gate](testing.md#the-release-link-gate)).
+
 A link can pass one and 404 on the other. Three divergences have actually shipped
 broken:
 
