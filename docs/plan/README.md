@@ -63,6 +63,7 @@ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
+| [merge-queue.md](merge-queue.md) | Adopt GitHub's merge queue on `main` to kill the freshness-invalidation loop: every merge (~every 25–30 min) invalidates every in-flight green PR, and re-validation costs a full e2e cycle — a third+ of e2e compute measured as redo. Queue runs the gates once per batch on the candidate merge result; e2e stays per-PR | 🚧 In progress — measured + decided 2026-08-03; Phase 1 (`merge_group` triggers on the 9 required-check workflows) in flight; Phase 2 (ruleset activation) blocked on Phase 1 reaching `main` |
 | [docker-image-speed.md](docker-image-speed.md) | Image build + load-into-kind time | ✅ Done — every item shipped (§1/2/4/5/8/9/13) or explicitly 🚫 not pursued (§7/12); §3/6/10/11 obsoleted by vendoring + in-cluster registry |
 | [e2e-tests-speed.md](e2e-tests-speed.md) | E2E suite + CI-pipeline speed improvements | ✅ Done — Round 1 (§1–§14) and Round 2 (§15–§18) all shipped (the top-of-file TOC ✓ markers lag the authoritative status tables) |
 | [e2e-ci-speed-round-2.md](e2e-ci-speed-round-2.md) | `e2e / e2e` job wall time after the first two speed plans: the image bake and the suite's serial tail | ✅ Done — all six items shipped: image-build consolidation (§1–3, one root Dockerfile + shared cacheable `deps` stage), the disk-cleanup overlap (§4), and the serial-tail work (§5–6). §6's metrics-server drop was measured and reverted; the kcm sync period is declined on flake risk |
