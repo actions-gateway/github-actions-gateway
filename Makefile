@@ -17,6 +17,7 @@ SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 GINKGO         := $(REPO_ROOT)/.build/ginkgo
 GOLANGCI_LINT  := $(REPO_ROOT)/.build/golangci-lint
 GOVULNCHECK    := $(REPO_ROOT)/.build/govulncheck
+CRD_REF_DOCS   := $(REPO_ROOT)/.build/crd-ref-docs
 COSIGN         := $(REPO_ROOT)/.build/cosign
 # COSIGN_VERSION pins the cosign release used to verify published signatures.
 # Keep in step with the `cosign-release` pinned in .github/workflows/publish.yml
@@ -66,6 +67,7 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check release-pins-check release-links-check shellcheck actionlint queue-unblock queue-id \
+        api-reference api-reference-check \
         third-party-notices third-party-notices-check vendor-check tidy-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
@@ -105,11 +107,11 @@ all: generate build test ## Generate, build, and test all modules
 CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
                     v2-api-sync-check path-filters-check shellcheck actionlint chart-crds-check \
-                    chart-rbac-check chart-webhook-check codegen-check scripts-test \
-                    claude-usage-test doc-links release-pins-check
+                    chart-rbac-check chart-webhook-check codegen-check api-reference-check \
+                    scripts-test claude-usage-test doc-links release-pins-check
 
 .PHONY: check
-check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + actionlint + chart-CRD/RBAC/webhook drift + controller-gen manifest/DeepCopy drift + scripts-test + claude-usage tests + doc link/anchor check + release-pin freshness + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + actionlint + chart-CRD/RBAC/webhook drift + controller-gen manifest/DeepCopy drift + API-reference drift + scripts-test + claude-usage tests + doc link/anchor check + release-pin freshness + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	scripts/ci/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
 	$(MAKE) lint
@@ -364,6 +366,19 @@ manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC/webhook manifests for all mo
 .PHONY: codegen-check
 codegen-check: $(CONTROLLER_GEN) ## Fail if committed CRD/RBAC/webhook manifests or zz_generated.deepcopy.go drifted from the Go types controller-gen generates them from (Q440, Q477)
 	CONTROLLER_GEN=$(CONTROLLER_GEN) scripts/go/check-codegen-drift.sh
+
+# The published API reference (Q632). crd-ref-docs reads the same doc comments
+# and validation markers controller-gen turns into the CRD schemas, so the page
+# cannot describe a field the API does not have — but only while it is
+# regenerated, which is what api-reference-check (in `make check`) enforces.
+# Scope and the deprecated-version decision: docs/development/code-generation.md.
+.PHONY: api-reference
+api-reference: $(CRD_REF_DOCS) ## Regenerate docs/reference/api.md from the api/v2beta1 kubebuilder markers
+	CRD_REF_DOCS=$(CRD_REF_DOCS) scripts/docs/gen-api-reference.sh
+
+.PHONY: api-reference-check
+api-reference-check: $(CRD_REF_DOCS) ## Fail if docs/reference/api.md drifted from the api/v2beta1 Go types it is generated from (Q632)
+	CRD_REF_DOCS=$(CRD_REF_DOCS) scripts/docs/gen-api-reference.sh --check
 
 .PHONY: build
 build: build-agc build-gmc build-probe build-proxy ## Build all binaries into .build/
@@ -900,7 +915,7 @@ karpenter-cluster-delete: ## Delete the live-Karpenter kind cluster (no-op if it
 ##@ Tools
 
 .PHONY: tools
-tools: $(ACTIONLINT) $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) $(GOVULNCHECK) ## Build all vendored build tools into .build/
+tools: $(ACTIONLINT) $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) $(GOVULNCHECK) ## Build all vendored build tools into .build/
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Build golangci-lint into .build/
@@ -927,12 +942,13 @@ verify-release: $(COSIGN) ## Verify cosign signatures for a published release: m
 # suite imports.
 $(ACTIONLINT):     TOOL_PKG := github.com/rhysd/actionlint/cmd/actionlint
 $(CONTROLLER_GEN): TOOL_PKG := sigs.k8s.io/controller-tools/cmd/controller-gen
+$(CRD_REF_DOCS):   TOOL_PKG := github.com/elastic/crd-ref-docs
 $(KUBEBUILDER):    TOOL_PKG := sigs.k8s.io/kubebuilder/v4
 $(SETUP_ENVTEST):  TOOL_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 $(GOLANGCI_LINT):  TOOL_PKG := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 $(GOVULNCHECK):    TOOL_PKG := golang.org/x/vuln/cmd/govulncheck
 
-$(ACTIONLINT) $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK):
+$(ACTIONLINT) $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ $(TOOL_PKG)
 
