@@ -396,6 +396,24 @@ func (o *sessionObserver) after(t time.Time) []observedDelivery {
 	return out
 }
 
+// requestIDsBefore returns the request ids of deliveries received at or before
+// t. A queued job can fan out a sibling delivery to the observer's session
+// before the acquire (measured 2026-08-04: distinct RunnerRequestID, fresh
+// broker MessageID on every unacked redelivery, ~1/s), and that sibling keeps
+// redelivering after T0 — so a post-T0 delivery counts as a re-dispatch only
+// when its request id was never seen before T0.
+func (o *sessionObserver) requestIDsBefore(t time.Time) map[string]bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	ids := map[string]bool{}
+	for _, d := range o.deliveries {
+		if !d.At.After(t) && d.RequestID != "" {
+			ids[d.RequestID] = true
+		}
+	}
+	return ids
+}
+
 // startObserver long-polls sess until ctx is cancelled, recording every
 // RunnerJobRequest. Poll errors are logged and retried after a short backoff:
 // the observer dying silently would turn a re-dispatch into NO-SIGNAL.
@@ -451,12 +469,27 @@ func (p *abandonedProbe) observe(ctx context.Context, obs *sessionObserver,
 	p.log.Info("INVESTIGATION-H: observation window open",
 		"window", p.cfg.Window.String(), "runId", runID, "jobId", jobID)
 
+	siblingIDs := obs.requestIDsBefore(t0)
+	siblingLogged := map[string]bool{}
 	lastStatus, lastConclusion := "", ""
 	lastRunStatus, lastRunConclusion := "", ""
 	nextREST := time.Time{} // first REST check happens immediately
 	for {
-		if len(obs.after(t0)) > 0 {
-			for _, d := range obs.after(t0) {
+		var fresh []observedDelivery
+		for _, d := range obs.after(t0) {
+			if siblingIDs[d.RequestID] {
+				if !siblingLogged[d.RequestID] {
+					siblingLogged[d.RequestID] = true
+					p.log.Info("INVESTIGATION-H: pre-T0 sibling delivery still redelivering (unacked "+
+						"fan-out, not a re-dispatch); further redeliveries of it are not logged",
+						"runnerRequestId", d.RequestID, "messageId", d.MessageID)
+				}
+				continue
+			}
+			fresh = append(fresh, d)
+		}
+		if len(fresh) > 0 {
+			for _, d := range fresh {
 				same := d.RequestID != "" && d.RequestID == acquiredRequestID
 				p.log.Info("INVESTIGATION-H: post-T0 delivery",
 					"messageId", d.MessageID, "runnerRequestId", d.RequestID,
@@ -569,10 +602,17 @@ func (p *abandonedProbe) rerunCheck(ctx context.Context, obs *sessionObserver, r
 		"runId", runID, "status", code, "window", p.rerunWait.String())
 
 	deadline := t1.Add(p.rerunWait)
+	siblingIDs := obs.requestIDsBefore(t1)
 	requeued := false
 	for {
-		if ds := obs.after(t1); len(ds) > 0 {
-			d := ds[0]
+		var fresh []observedDelivery
+		for _, d := range obs.after(t1) {
+			if !siblingIDs[d.RequestID] {
+				fresh = append(fresh, d)
+			}
+		}
+		if len(fresh) > 0 {
+			d := fresh[0]
 			p.log.Info("INVESTIGATION-H: RERUN-REDELIVERED — the re-run's job reached the live "+
 				"listener; a red conclusion plus rerun-failed-jobs closes the loop end to end",
 				"messageId", d.MessageID, "runnerRequestId", d.RequestID,

@@ -395,6 +395,29 @@ func TestAbandonedProbe_ConcludedRunLevel(t *testing.T) {
 	}
 }
 
+// TestAbandonedProbe_SiblingRedeliveryIsNotRedispatch: a fan-out sibling the
+// observer saw before T0 keeps redelivering unacked after T0 (measured
+// 2026-08-04); its request id must not produce a REDISPATCHED verdict.
+func TestAbandonedProbe_SiblingRedeliveryIsNotRedispatch(t *testing.T) {
+	t.Parallel()
+	bs, _, verdictCh := startAbandonedRun(t, 3*time.Second, nil, nil)
+
+	// The pre-T0 sibling delivery on B's session.
+	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-sibling"})
+	waitForCompleteJob(t, bs)
+	// The same sibling redelivered after T0: fan-out noise, not a re-dispatch.
+	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-sibling"})
+
+	select {
+	case verdict := <-verdictCh:
+		if verdict != verdictNoSignal {
+			t.Fatalf("verdict = %q, want %q (sibling redelivery filtered)", verdict, verdictNoSignal)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("probe did not reach a verdict")
+	}
+}
+
 // TestAbandonedProbe_RerunCheck drives the Q676 remedy measurement end to end:
 // completejob(failed), the run concludes failure, rerun-failed-jobs is accepted,
 // and the re-queued job reaches the surviving listener.
