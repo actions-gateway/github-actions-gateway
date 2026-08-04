@@ -1150,14 +1150,18 @@ make -C cmd/agc test-integration   # AGC only
 make -C cmd/gmc test-integration   # GMC only
 ```
 
-Or manually, after building setup-envtest:
+`RUN=` narrows a module's run to matching test names. It is passed straight to `go test -run`, so the full regexp syntax works:
 
 ```bash
-make setup-envtest
-export KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.35 --bin-dir .build -p path)
-(cd cmd/agc && go test -v -tags integration -timeout 5m -count=1 ./internal/controller/integration/...)
-(cd cmd/gmc && go test -v -tags integration -timeout 5m -count=1 ./internal/controller/integration/...)
+make -C cmd/gmc test-integration RUN='TestCRD_ActionsGateway_LogLevel_DefaultsToInfo'
 ```
+
+The target adds `-v -count=1` alongside `-run`: a targeted run wants the test's output, and a cached `PASS` prints none. A name that matches nothing reports `no tests to run` and passes; it does **not** fall back to running the module.
+
+Prefer `RUN=` over exporting `KUBEBUILDER_ASSETS` yourself. Hand-assembling it has two traps, both of which surface as a confusing envtest failure rather than an obvious mistake (Q582 spent three attempts on them):
+
+- **The version is pinned, not guessed.** `setup-envtest use` needs the version the module pins in `ENVTEST_K8S_VERSION` (`cmd/agc/Makefile`, `cmd/gmc/Makefile`). Typing another one gives you a different apiserver than CI runs against, or one that isn't installed, in which case `use` quietly downloads it.
+- **`--bin-dir` must be absolute.** `-p path` echoes back the shape you gave it, so a relative `--bin-dir` leaves `KUBEBUILDER_ASSETS` relative, and each test binary then resolves it against its own package directory rather than the repo root. The Makefiles pass `$(REPO_ROOT)/.build`.
 
 Unit tests (`make test` / `go test ./...`) do **not** require envtest — the integration packages are excluded by their `//go:build integration` tag.
 

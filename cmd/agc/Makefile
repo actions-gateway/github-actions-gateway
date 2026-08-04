@@ -32,10 +32,16 @@ build: ## Build the agc binary into .build/
 test: ## Run unit tests (no envtest required)
 	go test -race -timeout 2m ./...
 
+# RUN narrows the run to matching test names (Q592). The two halves a
+# hand-assembled KUBEBUILDER_ASSETS gets wrong are already right here:
+# ENVTEST_K8S_VERSION is the pin, and --bin-dir is absolute, since `-p path`
+# echoes the shape it is given and each test binary resolves a relative one
+# against its own package dir. -v -count=1 ride along with RUN: a targeted run
+# wants the test's output, and a cached PASS prints none.
 .PHONY: test-integration
-test-integration: manifests $(SETUP_ENVTEST) ## Run envtest-backed integration tests
+test-integration: manifests $(SETUP_ENVTEST) ## Run envtest-backed integration tests; RUN='TestName' narrows to matching tests
 	KUBEBUILDER_ASSETS="$(shell "$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
-		go test -race -timeout 5m -tags integration ./...
+		go test -race -timeout 5m -tags integration $(if $(RUN),-run '$(RUN)' -v -count=1) ./...
 
 # The live-autoscaler drift gate (Q474). Runs against the kind cluster
 # `make autoscaler-cluster` stands up, and fails rather than skips when that
