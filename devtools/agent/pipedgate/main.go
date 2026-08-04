@@ -1,0 +1,133 @@
+// Command pipedgate decides whether a Claude Code PreToolUse Bash payload
+// reads a gate's exit code through a pipe, and prints the `ask` decision when
+// it does (Q625).
+//
+// A pipeline's status is its LAST stage's, so `make check 2>&1 | tail -30;
+// echo "EXIT=$?"` prints EXIT=0 for a failing gate — a false green that reads
+// identical to a real one. zsh, the shell the Bash tool runs, has no
+// PIPESTATUS to recover it.
+//
+// Why a parser and not regular expressions: the question is whether a gate sits
+// at command position on the LEFT of a pipe, which means tracking quoting,
+// heredoc bodies, subshell nesting, and command substitution. Regular
+// expressions cannot count brackets, so the shell version this replaces
+// hand-rolled a character scanner for it (175 of its 257 code lines). Against a
+// real parse tree the question is a node type: a BinaryCmd whose Op is Pipe.
+// Quoted text and heredoc bodies stop being a special case, because a command
+// named inside a string is a Lit, never a command.
+//
+// The decision is `ask`, never `deny`: piping a gate into a filter is sometimes
+// exactly right (you want the output and do not care about the status), and
+// nothing in the command string distinguishes that from the bug. A false
+// positive costs one keystroke; a deny would block real work and get switched
+// off.
+//
+// What it detects — a registered gate (see Registry) on the LEFT of a pipe,
+// including through a subshell or brace group whose status the pipe consumes,
+// inside a command substitution, and in any stage of a longer pipeline. Also a
+// $PIPESTATUS read anywhere, which is a bug on its own: that name is bash's, and
+// in zsh it expands to empty, so every test against it reads as success.
+//
+// What it deliberately does not detect:
+//
+//   - A command bash cannot parse. zsh-only syntax reaches this tool as a parse
+//     error and gets silence, because a half-parse is a guess.
+//   - A gate reached through a variable or eval ($CMD | tail), or one piped
+//     inside a script this call merely invokes. The input is one command
+//     string, not a program.
+//   - A gate behind a throttle wrapper (taskpolicy ... go test ... | tail): the
+//     wrapper's own flags are not peeled, so the head does not match.
+//   - A pipeline whose status genuinely does not matter, which is why the
+//     decision is `ask`.
+//   - Any command carrying a heavy `go ... -race`, which
+//     claude-go-throttle-hook.sh rewrites; see defersToThrottleHook.
+//
+// Mitigations that suppress the warning: `set -o pipefail` in the same command,
+// zsh's $pipestatus, and redirecting to a file instead of piping.
+//
+// Quoting and heredocs need no special case. A gate named inside a string or a
+// heredoc body parses as a literal, never a command, so a commit message
+// quoting `make check | tail` is silent by construction. The one asymmetry is
+// deliberate: an UNQUOTED heredoc really does expand $PIPESTATUS, so that reads
+// as the bug it is, while a <<'EOF' body does not.
+//
+// Usage:
+//
+//	pipedgate <registry.json>    # PreToolUse payload on stdin, decision on stdout
+//
+// Silence means "proceed": Claude Code reads an empty stdout as no opinion.
+// Every failure path is silent — a missing registry, an unparseable command, a
+// payload for another tool. A hook that runs on every Bash call must never be
+// the reason one fails.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+)
+
+type payload struct {
+	ToolName  string `json:"tool_name"`
+	ToolInput struct {
+		Command string `json:"command"`
+	} `json:"tool_input"`
+}
+
+type hookOutput struct {
+	HookSpecificOutput struct {
+		HookEventName            string `json:"hookEventName"`
+		PermissionDecision       string `json:"permissionDecision"`
+		PermissionDecisionReason string `json:"permissionDecisionReason"`
+	} `json:"hookSpecificOutput"`
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: pipedgate <registry.json>")
+		os.Exit(2)
+	}
+	os.Exit(run(os.Args[1], os.Stdin, os.Stdout))
+}
+
+func run(registryPath string, stdin io.Reader, stdout io.Writer) int {
+	raw, err := io.ReadAll(stdin)
+	if err != nil {
+		return 0
+	}
+	var p payload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return 0
+	}
+	if p.ToolName != "Bash" || p.ToolInput.Command == "" {
+		return 0
+	}
+
+	regRaw, err := os.ReadFile(registryPath)
+	if err != nil {
+		return 0
+	}
+	var reg Registry
+	if err := json.Unmarshal(regRaw, &reg); err != nil {
+		return 0
+	}
+	c, _ := reg.compile()
+	if len(c.gates) == 0 {
+		return 0
+	}
+
+	reason := Decide(p.ToolInput.Command, c)
+	if reason == "" {
+		return 0
+	}
+
+	var out hookOutput
+	out.HookSpecificOutput.HookEventName = "PreToolUse"
+	out.HookSpecificOutput.PermissionDecision = "ask"
+	out.HookSpecificOutput.PermissionDecisionReason = reason
+	if err := json.NewEncoder(stdout).Encode(out); err != nil {
+		return 0
+	}
+	return 0
+}

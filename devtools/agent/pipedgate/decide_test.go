@@ -1,0 +1,181 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// shippedRegistry loads .claude/piped-gate-guard.json — the file the hook reads
+// at runtime, not a copy. A registry edit that broke a pattern would otherwise
+// pass a suite asserting its own fixture.
+func shippedRegistry(t *testing.T) *compiled {
+	t.Helper()
+	path := filepath.Join("..", "..", "..", ".claude", "piped-gate-guard.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read shipped registry: %v", err)
+	}
+	var reg Registry
+	if err := json.Unmarshal(raw, &reg); err != nil {
+		t.Fatalf("parse shipped registry: %v", err)
+	}
+	c, errs := reg.compile()
+	if len(errs) > 0 {
+		t.Fatalf("registry patterns do not compile: %v", errs)
+	}
+	if len(c.gates) == 0 {
+		t.Fatal("registry lists no gates")
+	}
+	return c
+}
+
+// Both directions are asserted because both fail silently. A rule that stops
+// matching lets the original bug back in: a failing gate piped into `tail`
+// reports success and reads exactly like a real green. A rule that matches too
+// much turns every `git show`, `grep`, and commit message that merely NAMES a
+// gate into a permission prompt — and this runs on every Bash call.
+func TestDecide(t *testing.T) {
+	reg := shippedRegistry(t)
+
+	cases := []struct {
+		name string
+		cmd  string
+		warn bool
+		// substr, when set, must appear in the reason.
+		substr string
+	}{
+		// --- A gate whose status the pipe swallows -----------------------------
+		{name: "plain pipe to tail", cmd: "make check | tail -30", warn: true, substr: "exit status is the filter's"},
+		{name: "the canonical false green", cmd: `make check 2>&1 | tail -30; echo "EXIT=$?"`, warn: true},
+		// The recurrence that reopened Q625: a failed pull reported EXIT=0.
+		{name: "git pull piped", cmd: `git pull --ff-only 2>&1 | tail -5; echo "EXIT=$?"`, warn: true},
+		{name: "git push piped", cmd: "git push -u origin HEAD 2>&1 | tail -3", warn: true},
+		{name: "make -C piped to grep", cmd: `make -C cmd/agc test-integration | grep -E "FAIL|ok"`, warn: true},
+		{name: "go test piped", cmd: "go test ./... | tail -20", warn: true},
+		{name: "scripts gate piped", cmd: "scripts/ci/check-tools.sh | head -20", warn: true},
+		{name: "bash-wrapped scripts gate", cmd: `bash scripts/docs/lint-backlog.sh | grep -v "^ok"`, warn: true},
+		{name: "tee loses the status too", cmd: "make check | tee tmp/check.log", warn: true},
+		{name: "inside a command substitution", cmd: "out=$(make check | tail -1)", warn: true},
+		{name: "subshell group piped", cmd: "(cd cmd/agc && go test ./...) | tail -5", warn: true},
+		{name: "brace group piped", cmd: "{ cd cmd/agc && go test ./...; } | tail -5", warn: true},
+		{name: "after an unrelated leading segment", cmd: "mkdir -p tmp; make check | grep FAIL", warn: true},
+		{name: "env-prefixed gate", cmd: "GOFLAGS=-mod=mod go build ./... | tail -5", warn: true},
+		{name: "second stage of a three-stage pipeline", cmd: "cat x | make check | tail", warn: true},
+		{name: "|& pipes stderr too", cmd: "make check |& tail -5", warn: true},
+		// `make test-race` carries "-race" but no `go build`/`go test` token, so
+		// the throttle hook never claims it and this one must still warn.
+		{name: "make test-race still warns", cmd: "make test-race 2>&1 | tail -40", warn: true},
+
+		// --- PIPESTATUS does not exist in zsh ----------------------------------
+		{name: "PIPESTATUS[0] after a gate", cmd: `make check 2>&1 | tail -5; echo "EXIT=${PIPESTATUS[0]}"`, warn: true, substr: "does not exist in zsh"},
+		{name: "bare $PIPESTATUS, no gate", cmd: "ls -l | wc -l; echo $PIPESTATUS", warn: true, substr: "does not exist in zsh"},
+
+		// --- The correct forms -------------------------------------------------
+		{name: "redirect then echo $?", cmd: `make check > tmp/check.log 2>&1; echo "EXIT=$?"`},
+		{name: "redirect then grep the FILE", cmd: `make check > tmp/check.log 2>&1; echo "EXIT=$?"; grep -E "FAILED" tmp/check.log`},
+		{name: "pipefail propagates", cmd: "set -o pipefail; make check | tail -30"},
+		{name: "set -euo pipefail counts", cmd: "set -euo pipefail; make check 2>&1 | tail -30"},
+		{name: "zsh $pipestatus recovers it", cmd: `make check 2>&1 | tail -5; echo "EXIT=${pipestatus[1]}"`},
+		{name: "no pipe at all", cmd: "make check"},
+		{name: "gate on the RIGHT keeps its status", cmd: `printf "%s" "$msg" | git commit -F -`},
+
+		// --- Commands that merely NAME a gate (the Q624 shape) -----------------
+		{name: "git show of a file containing it", cmd: `git show origin/main:CLAUDE.md | grep -n "make check"`},
+		{name: "commit message quoting the bug", cmd: `git commit -m "fix(ci): make check | tail was reporting EXIT=0"`},
+		// A heredoc body is a word, never a command, so a piped gate quoted in
+		// one is text however the delimiter is written. No special case in the
+		// code does this; the parser does.
+		{name: "commit message in a quoted heredoc body", cmd: "git commit -F - <<'EOF'\nfix(ci): stop doing make check | tail -30\nEOF"},
+		{name: "commit message in an unquoted heredoc body", cmd: "git commit -F - <<EOF\nci: make check | tail lied\nEOF"},
+		// A quoted delimiter makes the body literal, so $PIPESTATUS there is not
+		// a read.
+		{name: "PIPESTATUS inside a quoted heredoc is text", cmd: "git commit -F - <<'EOF'\nnote: ${PIPESTATUS[0]} is a bash-ism\nEOF"},
+		// An UNquoted delimiter expands, so the same text really does read the
+		// variable — and in zsh it expands to empty. Warning is correct here.
+		{name: "PIPESTATUS inside an unquoted heredoc is a real read", cmd: "git commit -F - <<EOF\nnote: ${PIPESTATUS[0]} was empty\nEOF", warn: true, substr: "does not exist in zsh"},
+		{name: "grep for the pattern in docs", cmd: `grep -rn "make check | tail" docs/`},
+		{name: "single-quoted PIPESTATUS is text, not a read", cmd: `grep -rn '$PIPESTATUS' docs/`},
+		{name: "echo of the offending form", cmd: `echo "never run: make check | tail"`},
+
+		// --- Non-gate commands piped into filters ------------------------------
+		{name: "git log", cmd: "git log --oneline | head -5"},
+		{name: "git diff", cmd: "git diff origin/main | head -40"},
+		{name: "gh pr list", cmd: "gh pr list | head -20"},
+		{name: "cat a log", cmd: "cat tmp/check.log | tail -30"},
+		{name: "kubectl get", cmd: "kubectl get pods -n gag | grep Running"},
+		{name: "make help is informational", cmd: "make help | grep check"},
+		{name: "make -n prints, not runs", cmd: "make -n check | head"},
+
+		// --- Owned by the sibling throttle hook --------------------------------
+		{name: "go test -race defers", cmd: "go test -race ./... | tee tmp/race.log"},
+		{name: "already-throttled -race does not defer", cmd: "nice -n 10 taskpolicy -d throttle go test -race ./... | tail"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Decide(tc.cmd, reg)
+			if tc.warn && got == "" {
+				t.Fatalf("want a warning, got silence\ncommand: %s", tc.cmd)
+			}
+			if !tc.warn && got != "" {
+				t.Fatalf("want silence, got a warning\ncommand: %s\nreason: %s", tc.cmd, got)
+			}
+			if tc.substr != "" && !strings.Contains(got, tc.substr) {
+				t.Fatalf("reason missing %q\nreason: %s", tc.substr, got)
+			}
+		})
+	}
+}
+
+// An unanchored pattern searches the whole head, which is how a rule starts
+// matching text that merely mentions a command.
+func TestShippedRegistryPatternsAreAnchored(t *testing.T) {
+	path := filepath.Join("..", "..", "..", ".claude", "piped-gate-guard.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read shipped registry: %v", err)
+	}
+	var reg Registry
+	if err := json.Unmarshal(raw, &reg); err != nil {
+		t.Fatalf("parse shipped registry: %v", err)
+	}
+	for _, p := range append(append([]string{}, reg.Gates...), reg.Exempt...) {
+		if !strings.HasPrefix(p, "^") {
+			t.Errorf("pattern not anchored to command position: %s", p)
+		}
+	}
+}
+
+// A command this tool cannot parse gets silence, not a guess.
+func TestUnparseableCommandIsSilent(t *testing.T) {
+	reg := shippedRegistry(t)
+	for _, cmd := range []string{"make check | tail 'unterminated", "make check | | tail", "for do done"} {
+		if got := Decide(cmd, reg); got != "" {
+			t.Errorf("want silence for unparseable %q, got: %s", cmd, got)
+		}
+	}
+}
+
+// A registry with no gates cannot warn — detection is driven by the registry,
+// not by an incidental match somewhere in the walk.
+func TestEmptyRegistryNeverWarnsAboutAPipe(t *testing.T) {
+	empty, _ := Registry{}.compile()
+	if got := Decide(`make check 2>&1 | tail -30; echo "EXIT=$?"`, empty); got != "" {
+		t.Errorf("want silence with an empty registry, got: %s", got)
+	}
+}
+
+// A bad pattern degrades the warning; it never breaks the tool.
+func TestBadPatternIsDroppedNotFatal(t *testing.T) {
+	reg := Registry{Gates: []string{"^make([[:space:]]|$)", "*not a regexp"}}
+	c, errs := reg.compile()
+	if len(errs) != 1 {
+		t.Fatalf("want 1 rejected pattern, got %d", len(errs))
+	}
+	if got := Decide("make check | tail", c); got == "" {
+		t.Error("the surviving pattern should still warn")
+	}
+}

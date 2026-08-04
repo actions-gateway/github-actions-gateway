@@ -131,6 +131,10 @@ jobs:
               # never executed. It reaches the `scripts` filter below too; that
               # one gates shellcheck, which does not touch Go (Q618).
               - 'devtools/**'
+              # devtools/agent/pipedgate's table test reads the shipped registry
+              # rather than a fixture (Q625), so a registry edit that broke a
+              # pattern must re-run this job's Go tests too.
+              - '.claude/piped-gate-guard.json'
               - 'coverage-baseline.txt'
               - '.github/workflows/unit-test.yml'
             status:
