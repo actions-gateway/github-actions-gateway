@@ -2871,6 +2871,14 @@
 <td>Q653 wrote the rule; the slip happens at the push, in flow, not while reading CONTRIBUTING — same shape as Q625. Wants a PreToolUse warning when <code>HEAD..origin/main</code> is non-zero at <code>git push</code>.</td>
 </tr>
 <tr>
+<td><a id="Q668"></a>Q668</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#re-check-concurrent-work-before-opening-and-before-merging">Nothing catches an open PR that overlaps yours at <code>gh pr create</code></a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q543 wrote the rule; the slip happens at <code>gh pr create</code>, in flow, not while reading CONTRIBUTING — same shape as <a href="#Q625">Q625</a>/<a href="#Q665">Q665</a>. Wants a PreToolUse warning when an open PR's files overlap <code>origin/main...HEAD</code>.</td>
+</tr>
+<tr>
 <td><a id="Q624"></a>Q624</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook.sh"><code>go-throttle</code> denies a commit whose message text quotes a <code>-race</code> command</a></td>
 <td><code>debt</code> <code>retro</code></td>
@@ -3125,14 +3133,6 @@
 <td>🔲</td>
 <td>S</td>
 <td><code>startEgressProxyReconcilerNoResync</code> says it proves a reconcile came from a watch, but a not-ready pool short-requeues every 15 s too — a Q506 test passed with both <code>Watches</code> deleted. State both sources; Q326 drives the pool Ready for this reason.</td>
-</tr>
-<tr>
-<td><a id="Q543"></a>Q543</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md">Re-check concurrent work — <code>origin/main</code> and open PRs — before opening or merging</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Mandated at session start only; Q506 cost a late rebase. Concurrent PRs merge individually-green and jointly-red (Q560/Q558). One opened mid-session can change what yours should say — Q577 vs #1093.</td>
 </tr>
 <tr>
 <td><a id="Q586"></a>Q586</td>
