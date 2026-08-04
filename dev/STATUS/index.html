@@ -2703,14 +2703,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q664"></a>Q664</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_lifecycle_test.go"><code>E2E_AGC_StuckPendingPodReaped</code> times out with the stuck-Pending workers never reaped</a></td>
-<td><code>flake</code> <code>tests</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong>Measured 2026-08-04</strong> (run 30864634432 attempt 1, kindnet): <code>Timed out after 180.000s</code> at line 187 — two <code>runner-podstuck-…</code> pods still listed where the assertion wants empty. Attempt 2 green, no code change. Blocks the e2e merge gate.</td>
-</tr>
-<tr>
 <td><a id="Q631"></a>Q631</td>
 <td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">The release gate starves itself: routed CI and the e2e leg draw on one global CPU budget</a></td>
 <td><code>dogfood</code> <code>debt</code></td>
@@ -3455,6 +3447,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q664"></a>Q664</td>
+<td><a href="../design/02-architecture/"><code>E2E_AGC_StuckPendingPodReaped</code> times out with the stuck-Pending workers never reaped</a></td>
+<td><code>flake</code> <code>tests</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Event:</strong> it times out on <code>main</code> after the Q664 fix (the reconcilers cap work-queue retry at 30s, so a reconcile error cannot strand the reap deadline <code>RequeueAfter</code> carries). Not reproduced locally in 4 runs. → top of Queue, escalated.</td>
+</tr>
 <tr>
 <td><a id="Q648"></a>Q648</td>
 <td><a href="../development/testing/#runnergithub-egress-attribution-q352">The runner→GitHub egress probe scores an HTTP 403 as reachable, so a refused runner reads as a real failure</a></td>
