@@ -154,7 +154,7 @@ built), and skips:
 
 | Skipped | Why | In the tree |
 |---|---|---|
-| Fenced and indented code blocks, inline code spans | The dash is part of a command or an identifier | 288 |
+| Fenced and indented code blocks, inline code spans | The dash is part of a command or an identifier | 289 |
 | Heading text | The title separator, `2.1. Tier 1 — Gateway Manager Controller`, is this docset's section-naming convention | 590 |
 | Link text | Every one is a title citation, `[Appendix A — Capacity Targets & SLOs](…)`, reproducing a heading the linking file does not own | 127 |
 | Raw HTML, block and inline | Markup and comments, which no reader sees | 3 |
@@ -162,8 +162,8 @@ built), and skips:
 Words are skipped with them, so a long code block buys a page no headroom. Table cells,
 blockquotes and list items are prose and are counted.
 
-**The baseline.** With those exclusions the tree measures 9,978 em-dashes in 582,049
-prose words, 17.1 per 1,000, and 231 of 249 files are above the rule. A gate set at 3
+**The baseline.** With those exclusions the tree measured 9,993 em-dashes in 584,490
+prose words on 2026-08-04, 17.1 per 1,000, with 231 of 249 files above the rule. A gate set at 3
 would land red on everything and be switched off, so
 [`scripts/docs/em-dash-baseline.txt`](../../scripts/docs/em-dash-baseline.txt) freezes
 each of those files at its current count as a ceiling. A listed file may not gain
