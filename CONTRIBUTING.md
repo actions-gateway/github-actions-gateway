@@ -43,6 +43,10 @@ Three guard plugins are also recommended — `PreToolUse` hooks that keep AI-ass
 
 Restart Claude Code after installing so the hooks register (`python3` and `git` must be on your `PATH`).
 
+**These plugins are built by this project's maintainer, and this repo is their primary dogfood.** That makes the guards part of what is being developed here, not just tooling around it. So a prompt that fires wrongly, a pattern that misses, or a denial with an unhelpful message is a **finding**, and it gets filed against the plugin's own repo rather than worked around in a session. Working around one fixes nothing for the next session, the next repo, or anyone else running the plugin. The same goes for bugs found in Claude Code itself, and in upstream projects this exercises; several have been reported from work on this repo.
+
+The point of the guards is trust, and trust is what buys speed: they are why AI-assisted work here can move quickly without risking a leaked credential, a destroyed cluster, or a surprise cloud bill. A change that buys throughput by weakening one of those is a bad trade even when the throughput is real.
+
 Build the vendored tool binaries and install the git hooks before doing anything else:
 
 ```bash
