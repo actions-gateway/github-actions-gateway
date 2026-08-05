@@ -2561,10 +2561,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#standard-worker-prompt-skeleton" class="md-nav__link">
+  <a href="#the-worker-prompt-carries-the-delta-not-the-contract" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Standard worker prompt skeleton
+        The worker prompt carries the delta, not the contract
       
     </span>
   </a>
@@ -2796,7 +2796,8 @@ commit). Tell every worker to run <code>make check</code> as a <strong>backgroun
 does its docs / STATUS-row / PR-body work and re-run it over the final tree —
 under a batch the gate is mostly heavy-build-slot queue time and must not sit on
 the critical path. Stream tasks by shared files and land foundational changes first. Verify each PR's
-<strong>scope</strong>, then merge after CI is green. <strong>No secret may be read, printed,
+<strong>scope</strong> and that its heavy gates ran, then <strong>report it ready. I merge; you
+never do.</strong> <strong>No secret may be read, printed,
 logged, or passed to a model</strong> — exclude any task needing real credentials and
 tell me. Minimize asks (only genuine decisions, e.g. a license choice).
 Document decisions in <code>tmp/</code>. I can stop or amend the rules anytime.</p>
@@ -2809,9 +2810,8 @@ Document decisions in <code>tmp/</code>. I can stop or amend the rules anytime.<
   the machine you are on (see <a href="#concurrency-and-contention">Concurrency and contention</a>).</li>
 <li><strong>Exclusions</strong> — anything needing real secrets or a live cluster; state it up
   front rather than making the dispatcher discover it mid-run.</li>
-<li><strong>Merge gating</strong> — default is dispatcher-gated after a scope review; say so if
-  you want risk-tiered auto-merge (and note that needs branch protection +
-  required checks first, per <a href="#the-merge-model">the merge model</a>).</li>
+<li><strong>Merge gating</strong> — not a knob. The maintainer reviews and enqueues; the
+  dispatcher verifies and reports (<a href="#the-merge-model">the merge model</a>).</li>
 <li><strong>Model per task</strong> — match the model to the work, not the batch (see
   <a href="#model-selection">Model selection</a>). The dispatcher sets each worker's model
   in its spawn prompt; an autonomous worker cannot run <code>model-advisor</code>
@@ -2832,9 +2832,10 @@ Document decisions in <code>tmp/</code>. I can stop or amend the rules anytime.<
 - Selects the batch, decides priority and ordering, groups by file contention.
 - Spawns one worker session per task.
 - Watches each PR, verifies its <strong>scope</strong> (checks-green is necessary, not
-  sufficient), merges it, and advances the next task.
+  sufficient), hands it to the maintainer, and advances the next task.
 - Owns <strong>assignment</strong>, merge ordering, and scope review (see
   <a href="#the-dispatcher-owns-assignment-not-coordination-files">the dispatcher owns assignment</a>).
+- Does <strong>not</strong> merge or enqueue (<a href="#the-merge-model">the merge model</a>).
 - Is the single place to <strong>stop or amend</strong> the run.</p>
 <p><strong>Worker</strong> (one session per task, each in its own worktree):
 - Implements exactly one task, runs the local gate, opens a PR.
@@ -2989,11 +2990,11 @@ for cases where neither the plugin nor a background task is workable.</p>
   that opened docs-only (e.g. a <code>docs/STATUS.md</code> row) and later had code pushed can
   show all-green/<code>CLEAN</code> while build, lint, integration, e2e, and the security
   scans never tested the code. Before declaring the PR ready, verify the relevant
-  gates ran (<code>gh pr checks &lt;n&gt;</code>, <code>gh run list --branch &lt;branch&gt;</code>) and
+  gates ran (<code>gh pr checks &lt;n&gt;</code>, <code>gh run list --commit &lt;sha&gt;</code>) and
   <code>gh pr close &lt;n&gt; &amp;&amp; gh pr reopen &lt;n&gt;</code> to force them if they were skipped. See
   <a href="../testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md § Path-gated workflows</a>.</li>
-<li><strong>Never self-merge.</strong> A green + mergeable PR is handed to the dispatcher; the
-  merge stays dispatcher-gated (see <a href="#the-merge-model">the merge model</a>).</li>
+<li><strong>Never merge or enqueue.</strong> A green + mergeable PR is handed to the dispatcher,
+  which hands it to the maintainer (see <a href="#the-merge-model">the merge model</a>).</li>
 <li><strong>Relaunch the watcher after every actionable wake</strong> — <code>check_failure</code>,
   <code>conflict</code>/<code>behind</code>, <code>timeout</code>, <code>error</code>. An unwatched open PR heals nothing.
   <code>ready</code> and <code>closed</code> end the watch; the safety valve below does too.</li>
@@ -3027,29 +3028,37 @@ list above). Two things that do:</p>
   exit on <code>DIRTY</code>/<code>BEHIND</code> or on the PR closing. Unlike a pr-sentinel relaunch
   it sleeps between polls, so it does not spin.</li>
 </ul>
-<h3 id="standard-worker-prompt-skeleton">Standard worker prompt skeleton<a class="headerlink" href="#standard-worker-prompt-skeleton" title="Permanent link">&para;</a></h3>
-<p>Every worker prompt should be self-contained (a fresh session has no memory of
-the dispatcher conversation) and include:</p>
+<h3 id="the-worker-prompt-carries-the-delta-not-the-contract">The worker prompt carries the delta, not the contract<a class="headerlink" href="#the-worker-prompt-carries-the-delta-not-the-contract" title="Permanent link">&para;</a></h3>
+<p>The contract is a repo-local skill, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/skills/dispatch-worker/SKILL.md"><code>dispatch-worker</code></a>:
+gate placement, boundaries, STATUS.md commit isolation, heavy-gate verification,
+the pr-sentinel loop, and the never-merge rule. Invoke it and stop there. <strong>Do not
+restate any of it in the prompt.</strong></p>
+<p>Restating was the earlier practice and it was waste twice over. <code>CLAUDE.md</code>
+auto-loads into every fresh session, so a "Rules" block duplicates what the worker
+already has; the rest duplicated this file, which the worker can read. It also
+made the chips themselves unreviewable, which matters because the chip list is
+where a maintainer scans what is about to run.</p>
+<p>So the prompt carries only what the skill and the Queue row cannot:</p>
 <ul>
-<li><strong>Rules:</strong> follow the repo's contributor instructions; Conventional Commits
-  with no AI attribution; the project's doc-update expectations; test via the
-  repo's <code>make</code> gate, not bare tooling.</li>
-<li><strong>Gate placement:</strong> once the code is final, start <code>make check</code> as a
-  <strong>background</strong> task and do the docs / <code>docs/STATUS.md</code> row / PR-body work while
-  it runs, then re-run it over the final tree before opening the PR. Under a
-  batch the gate is mostly slot-queue time, and this is what keeps it off the
-  critical path (see
-  <a href="#run-the-local-gate-in-the-background-not-on-the-critical-path">run the local gate in the background</a>).</li>
-<li><strong>Boundaries:</strong> work only inside this worktree; never touch another branch or
-  PR; never read, print, log, or pass any secret/credential anywhere.</li>
-<li><strong>The task:</strong> what to change, which files, the acceptance check, and the bare
-  backlog ID to put in the PR title and body.</li>
-<li><strong>Model:</strong> the model the worker should run on, chosen by the dispatcher per
-  <a href="#model-selection">Model selection</a> — a fresh worker session cannot stop to
-  run <code>model-advisor</code> interactively, so the choice is made for it at spawn.</li>
-<li><strong>Do not merge</strong> — the dispatcher merges.</li>
-<li><strong>The self-healing loop</strong> above.</li>
+<li><strong>The item</strong> and the model to run on (<a href="#model-selection">Model selection</a>); a
+  fresh worker cannot run <code>model-advisor</code> interactively.</li>
+<li><strong>What the dispatcher measured, and when.</strong> The row's asserted mechanism is a
+  claim; saying it was re-verified saves the worker repeating the check, and
+  saying <em>where the row is stale</em> saves it implementing a fixed defect.</li>
+<li><strong>The trap worth naming</strong> — the tempting wrong fix, the control the test needs,
+  the decision the row leaves open.</li>
+<li><strong>Contention</strong> with work in flight, by file.</li>
 </ul>
+<p>A prompt that fits in a few lines is one a maintainer can scan a whole wave of.
+If it is running long, the excess is usually contract that belongs in the skill,
+or task detail that belongs in the Queue row.</p>
+<blockquote>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>/dispatch-worker Q664 — Opus 5. Verified 2026-08-04: the reap wait at
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>worker_lifecycle_test.go:187 times out with two pods still listed. Do NOT
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>raise the timeout; decide test-bug vs reaper-bug on evidence. Q666 is in
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>flight adding the failure dumps this needs.
+</code></pre></div>
+</blockquote>
 <h2 id="model-selection">Model selection<a class="headerlink" href="#model-selection" title="Permanent link">&para;</a></h2>
 <p>The dispatcher picks each worker's model and bakes it into the spawn prompt. A
 worker is a fresh, unattended session: it cannot pause to run the <code>model-advisor</code>
@@ -3077,13 +3086,14 @@ dispatcher toil than the model delta. Record the per-task model choice in the
    gates actually ran</strong> — green/<code>CLEAN</code> is not enough if a path-gated workflow was
    skipped (a PR opened docs-only then given code can show all-green while build /
    lint / integration / e2e / security-scan never tested it; <code>gh pr checks &lt;n&gt;</code> +
-   <code>gh run list --branch &lt;branch&gt;</code>, and close→reopen to force them — see
+   <code>gh run list --commit &lt;sha&gt;</code>, and close→reopen to force them — see
    <a href="../testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md § Path-gated workflows</a>).
    Then <strong>review the diff for scope</strong> — is it doing exactly the task, with no stray
    changes, no weakened gate, no security default regressed? Green CI does not
-   prove this. <strong>Never merge a PR whose code was not actually tested by CI</strong> — that
-   is how <code>main</code> breaks and flakes accumulate.</li>
-<li>Merge (<code>gh pr merge &lt;n&gt; --squash --delete-branch</code>).</li>
+   prove this.</li>
+<li><strong>Report it ready. Do not merge and do not enqueue</strong> (see
+   <a href="#the-merge-model">the merge model</a>). Re-check mergeability as you report: a
+   <code>CLEAN</code> PR goes stale when a sibling lands.</li>
 <li>Advance: spawn the next task in that stream.</li>
 </ol>
 <p>Keep a small written tracker (a scratch file in the gitignored <code>tmp/</code>) of
@@ -3098,24 +3108,31 @@ auditable and resumable.</p>
   background watcher wakes it for both
   (see <a href="#the-worker-contract-self-healing">the worker contract</a>). (This is the
   self-healing loop.)</li>
-<li><strong>Auto-<em>merge</em> stays dispatcher-gated.</strong> Merge is a global, irreversible write
-  to <code>main</code>. Keep it behind one gate because the dispatcher's merge step is where
-  <strong>scope review</strong> and <strong>merge ordering</strong> happen, and it is the single
-  <strong>stop/amend</strong> control point. CI-green is not the same as correct-and-in-scope.</li>
-<li><strong>The merge queue is the mechanical half of the merge gate</strong> (active on <code>main</code>
-  since 2026-08-03; see <a href="../../plan/merge-queue/">merge-queue.md</a>). <code>gh pr merge
-  --squash</code> enqueues; the queue validates the candidate merge result — including
-  the union with whatever is ahead in the queue — and kicks a failing entry back
-  to its PR, which pr-sentinel surfaces to the owning session. The dispatcher's
-  scope review stays: enqueue <em>after</em> the scope check, and the queue handles
-  green-ness, freshness, and jointly-red arbitration from there. Workers never
-  enqueue their own PRs unless the dispatch contract explicitly delegates it.</li>
+<li><strong>Auto-<em>merge</em> is the maintainer's, and an agent never takes it.</strong> Not the
+  worker, and <strong>not the dispatcher</strong> either. Merge is a global, irreversible write
+  to <code>main</code>, and it is also the moment a human loads the project's state into their
+  own head. That context is what makes it possible to groom the backlog, operate
+  the thing in production, and advocate for it to anyone else. Automating it would
+  buy throughput by spending the only context that makes the throughput worth
+  having. So the dispatcher stops at <em>verified and ready</em>, and reports. Read a
+  request to go faster as a request to shorten everything <strong>before</strong> this step.</li>
+<li><strong>The merge queue is the mechanical half, not a delegation of the gate</strong> (active
+  on <code>main</code> since 2026-08-03; see <a href="../../plan/merge-queue/">merge-queue.md</a>).
+  <code>gh pr merge --squash</code> enqueues; the queue validates the candidate merge result,
+  including the union with whatever is ahead of it, and kicks a failing entry back
+  to its PR, which pr-sentinel surfaces to the owning session. It arbitrates
+  green-ness, freshness, and the jointly-red case. It does <strong>not</strong> decide whether a
+  change should land, so enqueueing is the maintainer's action, taken after their
+  review. Neither workers nor the dispatcher enqueue.</li>
+<li><strong>What the dispatcher owes at handoff</strong>, so the review is cheap rather than a
+  re-derivation: which heavy gates ran and on which head SHA, what the scope review
+  found, and the mergeability state as of <em>now</em>.</li>
 </ul>
 <h2 id="concurrency-and-contention">Concurrency and contention<a class="headerlink" href="#concurrency-and-contention" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Take the concurrency cap from the machine</strong>, not from a constant:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/agent/local-throttle.sh<span class="w"> </span>workers
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/agent/local-throttle.sh<span class="w"> </span>workers
 </code></pre></div>
 <p>It returns the smaller of what RAM and physical cores allow, under a ceiling of
   12. A worker costs one Claude Code session (measured 0.43 GB mean / 0.60 GB
@@ -3321,8 +3338,8 @@ production credentials) — exclude them explicitly and hand them to a human.</p
 <li>[ ] Coordination via built-ins (spawn prompt, <code>list_sessions</code>, PR/comments,
       self-healing); <code>send_message</code> only as a rare reactive nudge — no mailbox or
       comms daemon.</li>
-<li>[ ] Merge model decided (gated vs. risk-tiered; branch protection if using
-      native auto-merge).</li>
+<li>[ ] Everyone clear that the <strong>maintainer</strong> merges and enqueues — no agent does
+      (<a href="#the-merge-model">the merge model</a>).</li>
 <li>[ ] PR-watcher gates on checks <strong>and</strong> mergeability and handles zero-check PRs.</li>
 <li>[ ] Watcher launched <strong>bare</strong> (no inline <code>VAR=…</code> prefix, or the auto-allow
       lapses into a prompt) and relaunched after every actionable wake.</li>
