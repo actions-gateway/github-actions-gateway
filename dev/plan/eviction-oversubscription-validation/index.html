@@ -2517,6 +2517,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-second-worker-was-not-a-replay-q661-2026-08-04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The second worker was not a replay (Q661, 2026-08-04)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-scale-set-half-how-it-was-measured" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3144,6 +3155,42 @@ because each one produced a plausible-looking false reading:</p>
 <p><strong>What would settle the split</strong>, and what Q657 did not buy: repeated runs <em>with</em> the
 identity check, enough of them to see whether a fast conclusion ever occurs on a worker
 confirmed to be executing the job.</p>
+<h3 id="the-second-worker-was-not-a-replay-q661-2026-08-04">The second worker was not a replay (Q661, 2026-08-04)<a class="headerlink" href="#the-second-worker-was-not-a-replay-q661-2026-08-04" title="Permanent link">&para;</a></h3>
+<p>Attempt 1's two workers were filed as a listener defect on the reading that a replayed
+queue message had built the second one. The two identifiers the capture recorded refute
+that on their own, before any code is read.</p>
+<p><strong>Both identifiers are jobIDs, and they are different jobs.</strong> <code>22463488…</code> and <code>cec0e443…</code>
+look like different shapes only because the first happens to be all decimal digits; both
+are the first group of a UUID. The runner name is the proof: the listener composes it as
+<code>&lt;scaleSetName&gt;-&lt;jobID&gt;</code>, and this document records one in full from the same tier:
+<code>real-ag-ss-de2978a1-838b-59ae-a1fc-5dcd47d793db</code>. So <code>real-ag-ss-22463488-…</code> is a whole
+jobID with its tail elided, not a numeric id of some other kind.</p>
+<p><strong>A replay cannot produce two jobIDs.</strong> Redelivery is keyed on the jobID at both seams: the
+listener's <code>provisioned</code>/<code>completed</code>/<code>abandoned</code> sets in
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>, and the provisioner's
+Secret and pod names, which are derived from the jobID and treat <code>AlreadyExists</code> as
+success. The same jobID arriving twice is a no-op even across a process restart, where the
+listener's in-memory sets are empty and the deterministic names are the only guard left.
+<code>oversubscribe_q661_test.go</code> pins both halves against one queue log, and deleting the
+listener's jobID guard turns three deliveries of one assignment into three workers, which
+is the shape the row described.</p>
+<p><strong>So GitHub assigned two distinct jobs carrying <code>workflowRunId</code> 30864091648, and
+provisioning both is the contract.</strong> A workflow run has many jobs; the listener is handed
+one assignment per job and must build one worker per assignment. The run id was never a
+worker identity, which is exactly the defect Q657 found and fixed in the harness. The
+listener has no defect to fix here, and a run-scoped dedup would be a bug.</p>
+<p><strong>What is still open is on GitHub's side</strong>, not the AGC's: why the second job's runner
+never received a job. That is the Q420 class (an assignment that lapses leaves a worker at
+<code>Listening for Jobs</code>), whose only bound when no terminal <code>JobCompleted</code> follows is
+<code>maxWorkerLifetime</code>. The capture cannot say more, because the raw AGC log was not kept and
+the surviving prose cannot separate "the first job's Secret was reclaimed in the second it
+was provisioned" from "reclaimed later, in the same second as its completion stamp". The
+first would be a real anomaly against GitHub reporting that same runner ran the job to
+completion; the second is the ordinary lifecycle. <strong>Settling it needs a fresh capture,
+not more reading</strong>: the scale-set tenant's unfiltered AGC log retained as a run artifact,
+read against the per-job records. The provisioning log line now carries <code>runID</code> alongside
+<code>jobID</code> so that capture can be read without reconstructing the pairing from pod
+annotations.</p>
 <h3 id="the-scale-set-half-how-it-was-measured">The scale-set half: how it was measured<a class="headerlink" href="#the-scale-set-half-how-it-was-measured" title="Permanent link">&para;</a></h3>
 <p>The harness behind the result above, and the two verifications that rode the same work.</p>
 <p><strong>The run is pinned to published images, so the result can be cited.</strong> The 2026-07-29

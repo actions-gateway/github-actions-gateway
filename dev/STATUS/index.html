@@ -2740,14 +2740,6 @@
 <td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Q597 bounded the guards, so persisting them is the sharper candidate; the other needs a live measurement. The plan doc states which.</td>
 </tr>
 <tr>
-<td><a id="Q661"></a>Q661</td>
-<td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">The scale-set listener provisioned a second worker for a run that already had one</a></td>
-<td><code>bug</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-03: a worker for jobID <code>22463488</code> created 4s before the dispatch, Secret reclaimed and completion stamped the same second, then a second for <code>cec0e443</code>. GitHub ran the job on the first. Replayed queue message suspected, unverified.</td>
-</tr>
-<tr>
 <td><a id="Q595"></a>Q595</td>
 <td><a href="../operations/troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">The cancel runbook's manual pod delete may re-run the job GitHub cancelled</a></td>
 <td><code>bug</code> <code>docs</code></td>
