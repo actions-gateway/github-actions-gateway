@@ -25,6 +25,7 @@ on:
       - 'scripts/docs/check-release-links.sh'
       - 'scripts/docs/docs-preview.sh'
       - 'scripts/ci/gate-list.sh'
+      - 'scripts/**/*-test.sh'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - 'Makefile'
@@ -41,6 +42,7 @@ on:
       - 'scripts/docs/check-release-links.sh'
       - 'scripts/docs/docs-preview.sh'
       - 'scripts/ci/gate-list.sh'
+      - 'scripts/**/*-test.sh'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - 'Makefile'
@@ -80,11 +82,14 @@ jobs:
       - name: em-dash density (make em-dash-check)
         run: make em-dash-check
 
-  # Reconcile `make check`'s gate list with everything derived from it (Q649).
-  # It lives here rather than in unit-test.yml's lint job because it spans the
-  # Makefile and a doc, and this is the only workflow whose triggers cover both:
-  # unit-test.yml path-ignores docs, so a docs-only change that dropped the
-  # `make list-gates` pointer would skip the gate that exists to catch it.
+  # Reconcile `make check`'s gate and suite lists with everything derived from
+  # them (Q649, Q671). It lives here rather than in unit-test.yml's lint job
+  # because it spans the Makefile, a doc and the scripts/ tree, and this is the
+  # only workflow whose triggers cover all three: unit-test.yml path-ignores
+  # docs, so a docs-only change that dropped the `make list-gates` pointer would
+  # skip the gate that exists to catch it. The `scripts/**/*-test.sh` trigger is
+  # the suite half: a suite added without touching the Makefile is exactly the
+  # unlisted-suite case, and it reaches no other trigger here.
   gate-lists:
     runs-on: ubuntu-latest
     timeout-minutes: 5
