@@ -35,9 +35,10 @@
 //     so no concurrent session can be handed it (Q656).
 //
 // Rules 8, 9, 10 and 12 compare against a git baseline, since a deletion — or
-// a newly added row — is invisible from the file alone. They are no-ops when no
-// baseline resolves, and rule 12 is additionally skipped when the remote is
-// unreachable.
+// a newly added row — is invisible from the file alone. That baseline is the
+// merge base with origin/main, not its tip (Q684); see baselineRef. They are
+// no-ops when no baseline resolves, and rule 12 is additionally skipped when
+// the remote is unreachable.
 //
 // Usage:
 //
