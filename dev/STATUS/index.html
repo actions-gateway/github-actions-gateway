@@ -2892,20 +2892,20 @@
 <td><code>[file.md](file.md) § Heading</code> renders like the anchored form but nothing checks the section name: verbatim when written, silently wrong after a rename. 11 in the tree vs 1,051 anchored.</td>
 </tr>
 <tr>
+<td><a id="Q688"></a>Q688</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">15 test scripts have no <code>scripts/README.md</code> mention, blocking a coverage gate</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-04 under Q660: 15 <code>*-test.sh</code> across agent/, ci/, docs/, fetch/, go/ appear nowhere in the README. The convention names a test in its subject's row, applied unevenly.</td>
+</tr>
+<tr>
 <td><a id="Q569"></a>Q569</td>
 <td><a href="../plan/docs-page-boundaries/#phase-2-splitting-the-parked-register-q569">Split Deferred + Flake watch off <code>STATUS.md</code></a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>Phase 2 of the page-boundary split: the Queue is read top-down to pick work; the parked rows under it are only grepped on a trigger. Needs <code>check-roadmap.sh</code> given a second path, rule 8 spanning two files, <code>#QNNN</code> links retargeted.</td>
-</tr>
-<tr>
-<td><a id="Q660"></a>Q660</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">Three <code>scripts/</code> groups have no table, so the doc-update-matrix step that adds one is unfollowable</a></td>
-<td><code>docs</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>dogfood/</code>, <code>lib/</code> and <code>updatecli/</code> appear only as directory rows, so the matrix step sending a new script to its group's table points at one they lack: #1106, Q581 and <code>dogfood/lib/lease.sh</code> each added none. Give them tables, or name the exception.</td>
 </tr>
 <tr>
 <td><a id="Q599"></a>Q599</td>
