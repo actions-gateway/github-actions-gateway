@@ -296,6 +296,48 @@ because each one produced a plausible-looking false reading:
 identity check, enough of them to see whether a fast conclusion ever occurs on a worker
 confirmed to be executing the job.
 
+### The second worker was not a replay (Q661, 2026-08-04)
+
+Attempt 1's two workers were filed as a listener defect on the reading that a replayed
+queue message had built the second one. The two identifiers the capture recorded refute
+that on their own, before any code is read.
+
+**Both identifiers are jobIDs, and they are different jobs.** `22463488…` and `cec0e443…`
+look like different shapes only because the first happens to be all decimal digits; both
+are the first group of a UUID. The runner name is the proof: the listener composes it as
+`<scaleSetName>-<jobID>`, and this document records one in full from the same tier:
+`real-ag-ss-de2978a1-838b-59ae-a1fc-5dcd47d793db`. So `real-ag-ss-22463488-…` is a whole
+jobID with its tail elided, not a numeric id of some other kind.
+
+**A replay cannot produce two jobIDs.** Redelivery is keyed on the jobID at both seams: the
+listener's `provisioned`/`completed`/`abandoned` sets in
+[listener.go](../../cmd/agc/internal/scalesetlistener/listener.go), and the provisioner's
+Secret and pod names, which are derived from the jobID and treat `AlreadyExists` as
+success. The same jobID arriving twice is a no-op even across a process restart, where the
+listener's in-memory sets are empty and the deterministic names are the only guard left.
+`oversubscribe_q661_test.go` pins both halves against one queue log, and deleting the
+listener's jobID guard turns three deliveries of one assignment into three workers, which
+is the shape the row described.
+
+**So GitHub assigned two distinct jobs carrying `workflowRunId` 30864091648, and
+provisioning both is the contract.** A workflow run has many jobs; the listener is handed
+one assignment per job and must build one worker per assignment. The run id was never a
+worker identity, which is exactly the defect Q657 found and fixed in the harness. The
+listener has no defect to fix here, and a run-scoped dedup would be a bug.
+
+**What is still open is on GitHub's side**, not the AGC's: why the second job's runner
+never received a job. That is the Q420 class (an assignment that lapses leaves a worker at
+`Listening for Jobs`), whose only bound when no terminal `JobCompleted` follows is
+`maxWorkerLifetime`. The capture cannot say more, because the raw AGC log was not kept and
+the surviving prose cannot separate "the first job's Secret was reclaimed in the second it
+was provisioned" from "reclaimed later, in the same second as its completion stamp". The
+first would be a real anomaly against GitHub reporting that same runner ran the job to
+completion; the second is the ordinary lifecycle. **Settling it needs a fresh capture,
+not more reading**: the scale-set tenant's unfiltered AGC log retained as a run artifact,
+read against the per-job records. The provisioning log line now carries `runID` alongside
+`jobID` so that capture can be read without reconstructing the pairing from pod
+annotations.
+
 ### The scale-set half: how it was measured
 
 The harness behind the result above, and the two verifications that rode the same work.

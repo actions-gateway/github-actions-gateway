@@ -39,7 +39,9 @@ one session→job→pod through a log pipeline. Filter on `namespace` and `group
 `sessionId` identify a single listener goroutine and its current broker session
 (the `sessionId` is rebound when a session is healed or an agent recycled, so it
 always names the live session); `podName` appears on the provisioner lines for an
-acquired job's worker pod.
+acquired job's worker pod. On the scale-set tier those lines also carry `jobID` and
+`runID`: one workflow run has many jobs, so the pair is what separates sibling jobs of
+one run from a redelivered assignment for a single job.
 
 Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at **info** — they need no debug flag — as `ActionsGateway admission denied` with the `operation`, `namespace`, `name`, and `reason` fields, giving an audit trail of denied attempts.
 

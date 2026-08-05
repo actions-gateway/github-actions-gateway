@@ -727,7 +727,10 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 
 	secretName := scaleSetSecretName(jobID)
 	podName := scaleSetPodName(key.Name, jobID)
-	log = log.With("podName", podName, "jobID", jobID)
+	// runID pairs with jobID because one run has many jobs: without it two provisioning
+	// lines cannot say whether they are sibling jobs or one job redelivered (Q661). The
+	// pod annotation carries the same pairing only once the pod exists.
+	log = log.With("podName", podName, "jobID", jobID, "runID", job.RunID)
 
 	workerVersion := imageVersion(p.resolveWorkerImage(spec))
 
