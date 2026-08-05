@@ -2708,6 +2708,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q685"></a>Q685</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/restart_q583_test.go"><code>TestListener_RestartDoesNotReprovisionAConcludedJob</code> re-provisioned a concluded job</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured: queue run 30962484450 failed <code>assert.Never(second.count() &gt; 0)</code> — a restart re-provisioned a concluded job. Identical candidate passed on rerun (30971927048), no code change. Cost Q625's PR a queue cycle. Race vs test timing unverified.</td>
+</tr>
+<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code></td>
