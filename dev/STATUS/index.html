@@ -2785,7 +2785,7 @@
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>. k8s#124648 covers only eviction. Head of the upstream-report batch; file all four in one session.</td>
+<td>Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>. k8s#124648 covers only eviction. Head of the upstream-report batch; three of four remain (Q426 filed).</td>
 </tr>
 <tr>
 <td><a id="Q402"></a>Q402</td>
@@ -2794,14 +2794,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Google's NodeLocal DNSCache page names DPv2 as exempt from extra NP rules; Q229 measured the opposite (node-local-dns peer required). Capture a minimal repro w/ cluster version and report it — a default-on footgun on Autopilot.</td>
-</tr>
-<tr>
-<td><a id="Q426"></a>Q426</td>
-<td><a href="../development/queue-id-allocation/">File a <code>claude-skills</code> issue: backlog skill teaches the removed <code>Next ID</code> counter</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Report it against <a href="https://github.com/karlkfi/claude-skills">karlkfi/claude-skills</a>, where the skill lives. CLAUDE.md overrides it here so sessions stay correct, but the skill and its vendored lint drift until upstream updates.</td>
 </tr>
 <tr>
 <td><a id="Q531"></a>Q531</td>
