@@ -2844,14 +2844,6 @@
 <td>Q643 shipped the <code>{reason}</code>-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every <code>gridPos</code> below y=52 and needs a <code>render.sh</code> re-shoot. Should <code>AwaitingProbe</code> alert?</td>
 </tr>
 <tr>
-<td><a id="Q681"></a>Q681</td>
-<td><a href="../development/testing/#the-status-you-report-is-a-claim-too">A backgrounded gate's exit code never reaches the task notification</a></td>
-<td><code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Not Q625's pipe, so that hook misses it: <code>make check &gt; log; echo "EXIT=$?"</code> ends in <code>echo</code>, so a backgrounded run notifies <code>exit code 0</code> on a failed gate. Hit 3×, in 2 sessions. Wants a PreToolUse warn when a gate is backgrounded without <code>exit $rc</code>.</td>
-</tr>
-<tr>
 <td><a id="Q665"></a>Q665</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Nothing catches a force-push onto a base that went stale during the local gate</a></td>
 <td><code>debt</code> <code>retro</code></td>
