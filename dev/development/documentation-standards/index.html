@@ -2971,6 +2971,10 @@ Every claim in the table above shipped as a flat assertion instead.</p>
 <td>Point at a section by name or link — "the negative-assertion rule above", never "the two rules above". A counted reference goes silently wrong the moment a section lands between the counter and the counted, and nothing catches it: <code>check-doc-links.sh</code> and <code>mkdocs build</code> resolve anchors, never prose. Inserting one testing.md section left the next one's "the two rules above" naming three.</td>
 </tr>
 <tr>
+<td><strong>Anchor a cross-file section reference</strong></td>
+<td>Cite another file's section with an anchor, never as prose beside a bare file link. Write <code>[testing.md § A negative assertion must be able to fail for only one reason](testing.md#a-negative-assertion-must-be-able-to-fail-for-only-one-reason)</code>, not <code>[testing.md](testing.md) § A negative assertion...</code>. Both render alike and only the first is checked, for the reason the row above gives, so the prose form is verbatim the day it is written and silently wrong after any rename. Measured 2026-08-05: 11 such references in the tree against 1,051 anchored links; <a href="../../STATUS/#Q686">Q686</a> gates it.</td>
+</tr>
+<tr>
 <td><strong>No links to <code>CLAUDE.md</code></strong></td>
 <td><code>CLAUDE.md</code>/<code>AGENTS.md</code> is the agent entrypoint only. Human docs never link to it; the dependency direction is one-way (<code>CLAUDE.md</code> → <code>docs/</code>). Content humans need lives in <code>docs/</code> or <code>CONTRIBUTING.md</code>.</td>
 </tr>

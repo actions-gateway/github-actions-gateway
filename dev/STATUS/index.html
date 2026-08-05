@@ -2892,6 +2892,14 @@
 <td>Adding a suite edits <code>SCRIPTS_TESTS</code> and a 1350-char <code>##</code> line naming all of them, so two such PRs conflict by construction (#1243 vs #1239). Q649 derived the gate list this way; same fix shape.</td>
 </tr>
 <tr>
+<td><a id="Q686"></a>Q686</td>
+<td><a href="../development/documentation-standards/#conventions"><code>check-doc-links</code> is blind to a section named in prose</a></td>
+<td><code>docs</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>[file.md](file.md) § Heading</code> renders like the anchored form but nothing checks the section name: verbatim when written, silently wrong after a rename. 11 in the tree vs 1,051 anchored.</td>
+</tr>
+<tr>
 <td><a id="Q569"></a>Q569</td>
 <td><a href="../plan/docs-page-boundaries/#phase-2-splitting-the-parked-register-q569">Split Deferred + Flake watch off <code>STATUS.md</code></a></td>
 <td><code>docs</code></td>
@@ -3090,6 +3098,14 @@
 <td>🔲</td>
 <td>L</td>
 <td>Measured 2026-08-04, code/headings/link text excluded: 9,993 in 584,490 words, 17.1 per 1,000 vs 3; 231 of 249 files over. <code>make em-dash-report</code> ranks them; the <a href="../development/documentation-standards/#enforcing-the-em-dash-rule">gate</a> ratchets each.</td>
+</tr>
+<tr>
+<td><a id="Q687"></a>Q687</td>
+<td><a href="../development/">Document the predicate for a genuine human prompt in a transcript</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A real prompt is <code>origin.kind == "human"</code> minus four classes that also carry it: hook denial text, <code>&lt;bash-input&gt;</code>, <code>&lt;create-pr-command&gt;</code>, <code>&lt;system-reminder&gt;</code> prefixes. One use so far.</td>
 </tr>
 </tbody>
 </table>
