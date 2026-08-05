@@ -306,29 +306,40 @@ list above). Two things that do:
   exit on `DIRTY`/`BEHIND` or on the PR closing. Unlike a pr-sentinel relaunch
   it sleeps between polls, so it does not spin.
 
-### Standard worker prompt skeleton
+### The worker prompt carries the delta, not the contract
 
-Every worker prompt should be self-contained (a fresh session has no memory of
-the dispatcher conversation) and include:
+The contract is a repo-local skill, [`dispatch-worker`](../../.claude/skills/dispatch-worker/SKILL.md):
+gate placement, boundaries, STATUS.md commit isolation, heavy-gate verification,
+the pr-sentinel loop, and the never-merge rule. Invoke it and stop there. **Do not
+restate any of it in the prompt.**
 
-- **Rules:** follow the repo's contributor instructions; Conventional Commits
-  with no AI attribution; the project's doc-update expectations; test via the
-  repo's `make` gate, not bare tooling.
-- **Gate placement:** once the code is final, start `make check` as a
-  **background** task and do the docs / `docs/STATUS.md` row / PR-body work while
-  it runs, then re-run it over the final tree before opening the PR. Under a
-  batch the gate is mostly slot-queue time, and this is what keeps it off the
-  critical path (see
-  [run the local gate in the background](#run-the-local-gate-in-the-background-not-on-the-critical-path)).
-- **Boundaries:** work only inside this worktree; never touch another branch or
-  PR; never read, print, log, or pass any secret/credential anywhere.
-- **The task:** what to change, which files, the acceptance check, and the bare
-  backlog ID to put in the PR title and body.
-- **Model:** the model the worker should run on, chosen by the dispatcher per
-  [Model selection](#model-selection) — a fresh worker session cannot stop to
-  run `model-advisor` interactively, so the choice is made for it at spawn.
-- **Do not merge** — the dispatcher merges.
-- **The self-healing loop** above.
+Restating was the earlier practice and it was waste twice over. `CLAUDE.md`
+auto-loads into every fresh session, so a "Rules" block duplicates what the worker
+already has; the rest duplicated this file, which the worker can read. It also
+made the chips themselves unreviewable, which matters because the chip list is
+where a maintainer scans what is about to run.
+
+So the prompt carries only what the skill and the Queue row cannot:
+
+- **The item** and the model to run on ([Model selection](#model-selection)); a
+  fresh worker cannot run `model-advisor` interactively.
+- **What the dispatcher measured, and when.** The row's asserted mechanism is a
+  claim; saying it was re-verified saves the worker repeating the check, and
+  saying *where the row is stale* saves it implementing a fixed defect.
+- **The trap worth naming** — the tempting wrong fix, the control the test needs,
+  the decision the row leaves open.
+- **Contention** with work in flight, by file.
+
+A prompt that fits in a few lines is one a maintainer can scan a whole wave of.
+If it is running long, the excess is usually contract that belongs in the skill,
+or task detail that belongs in the Queue row.
+
+> ```
+> /dispatch-worker Q664 — Opus 5. Verified 2026-08-04: the reap wait at
+> worker_lifecycle_test.go:187 times out with two pods still listed. Do NOT
+> raise the timeout; decide test-bug vs reaper-bug on evidence. Q666 is in
+> flight adding the failure dumps this needs.
+> ```
 
 ## Model selection
 
