@@ -94,6 +94,65 @@ item is worth doing later, it must land in the repo — a Queue row, a plan doc,
 this policy. The same applies to the *reason* behind a decision: record the *why*
 on the item, because the next person (or session) acting on it starts cold.
 
+#### A finding has no row to live on
+
+An *item* is work to do, and a Queue row carries it. A *finding* is a fact about how
+the work goes wrong, and nothing in the backlog is shaped to hold one. Left alone it
+stays in the session that produced it, and the next session repeats the mistake.
+
+Findings surface most often at review time, when a claim is checked and does not hold.
+That is late: the approach is already chosen and the code already written, so the
+finding arrives after its cheapest use has passed. Lifting it out of the session is
+what recovers the value.
+
+#### The ladder
+
+Escalate a finding only as far as its failure mode justifies. Each rung costs more to
+maintain and buys a stronger guarantee.
+
+| Rung | Form | Buys | Enough when |
+|---|---|---|---|
+| **Rule** | A paragraph in the `docs/development/` page that owns the action | The next session reads it before acting, because it sits where the action is documented | The failure is a judgement call a reader makes correctly once warned |
+| **Gate** | A check in `make check` or a CI workflow | The failure cannot merge | The failure has a mechanical signature and the check is cheap |
+| **Prompt line** | A line in the [`dispatch-worker`](../../.claude/skills/dispatch-worker/SKILL.md) contract, or in the chip prompt itself | A worker that never opens the doc still complies | The failure recurs across dispatched sessions and the rule alone has not stopped it |
+
+Do not skip to a gate. A gate that cannot first be stated as a rule is one whose
+failure mode is not yet understood, and it will fire on the wrong condition.
+
+#### Where a rule goes
+
+| Destination | For |
+|---|---|
+| The `docs/development/` page owning the action | The default. A rule about testing goes in [testing.md](testing.md), one about clusters in [kind-iteration.md](kind-iteration.md), one about docs in [documentation-standards.md](documentation-standards.md) |
+| `CONTRIBUTING.md` | The rule binds human contributors as much as sessions |
+| The agent instruction file (`CLAUDE.md`) | Only when a session must act on it *before* reading any doc. It auto-loads in full, so a line there is charged against every session's context: put the detail in `docs/` and leave a pointer |
+| A skill | The rule is a procedure with steps, and it applies across repos |
+
+#### A plan doc is not a destination
+
+Plan docs are archived when their plan completes, so a finding recorded only in one is
+scheduled for deletion along with it. `make plan-index-check` enforces the archival,
+not the rescue. Lift the finding into its owning page in the same change that archives
+the plan.
+
+#### Co-location is the mechanism
+
+A rule works because it is read at the moment of the action, not because anything
+detected that the moment had arrived. "A state change you observe is not necessarily
+one you caused" needs no trigger: it lives in [kind-iteration.md](kind-iteration.md),
+which is what you open before touching a cluster. This is why the rung ordering above
+is a ladder and not a menu. A warning that has to recognise its own occasion fires on
+the wrong ones, and a warning nobody reads is worse than none.
+
+Worked examples, each of which began as a single session's finding:
+
+| Finding | Landed as |
+|---|---|
+| A drain that appears to have completed may have been helped by a parallel session | [kind-iteration.md § A state change you observe is not necessarily one you caused](kind-iteration.md#a-state-change-you-observe-is-not-necessarily-one-you-caused) |
+| A skipped job says nothing about whether its steps ran | [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran), which then climbed a rung to the head-SHA check in the worker contract |
+| A green negative assertion is weak evidence: it passes when the mechanism is absent, and equally when the mechanism is present but misdirected | [testing.md § A negative assertion must be able to fail for only one reason](testing.md#a-negative-assertion-must-be-able-to-fail-for-only-one-reason) |
+| Pushing to an open PR is safe until it is green and mergeable | [CONTRIBUTING.md § Pushing to a PR that is already open](../../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open) |
+
 ### Secure-by-default is not negotiable
 
 Security debt has one extra rule: **a security regression may never become a
@@ -279,6 +338,7 @@ absolute bar, so it raises quality without manufacturing low-value work.
 | Deciding fix / flag / defer / decline | this doc |
 | Deciding whether a shell gate should become a Go devtool | this doc ([the criterion](#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length)), pointed to from [bash-style.md](bash-style.md) |
 | Recording and prioritizing an item | [maintaining-backlog.md](maintaining-backlog.md) → [docs/STATUS.md](../STATUS.md) |
+| Escalating a session *finding* into a rule, a gate, or a prompt line | this doc ([the ladder](#the-ladder)) |
 | The automated prevention loops | [backpressure.md](backpressure.md) |
 | Release-blocking gates | [release-1.0.md](../plan/release-1.0.md) (bucket F) |
 | Long-horizon non-commitments | [appendix-g-future-enhancements.md](../design/appendix-g-future-enhancements.md) |
