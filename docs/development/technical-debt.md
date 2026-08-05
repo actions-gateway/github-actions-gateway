@@ -148,10 +148,10 @@ Worked examples, each of which began as a single session's finding:
 
 | Finding | Landed as |
 |---|---|
-| A drain that appears to have completed may have been helped by a parallel session | [kind-iteration.md](kind-iteration.md) § A state change you observe is not necessarily one you caused |
-| A skipped job says nothing about whether its steps ran | [testing.md](testing.md), plus the head-SHA check in the worker contract |
-| An absence verdict holds only if every record the outcome could land on was watched | [testing.md](testing.md) |
-| Pushing to an open PR is safe until it is green and mergeable | [CONTRIBUTING.md](../../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open) |
+| A drain that appears to have completed may have been helped by a parallel session | [kind-iteration.md § A state change you observe is not necessarily one you caused](kind-iteration.md#a-state-change-you-observe-is-not-necessarily-one-you-caused) |
+| A skipped job says nothing about whether its steps ran | [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran), which then climbed a rung to the head-SHA check in the worker contract |
+| A green negative assertion is weak evidence: it passes when the mechanism is absent, and equally when the mechanism is present but misdirected | [testing.md § A negative assertion must be able to fail for only one reason](testing.md#a-negative-assertion-must-be-able-to-fail-for-only-one-reason) |
+| Pushing to an open PR is safe until it is green and mergeable | [CONTRIBUTING.md § Pushing to a PR that is already open](../../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open) |
 
 ### Secure-by-default is not negotiable
 
