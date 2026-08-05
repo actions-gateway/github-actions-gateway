@@ -2559,7 +2559,7 @@
 </ul>
 <p>What rule 12 costs and what it still misses:</p>
 <ul>
-<li>It checks only IDs that are new against the git baseline, so a branch that files no row makes no network call at all.</li>
+<li>It checks only IDs that are new against the git baseline, so a branch that files no row makes no network call at all. That baseline is the merge base with <code>origin/main</code>, not its tip: against the tip a row <code>main</code> deleted while your branch was behind read as one you had filed, and the rule demanded an ID for finished work (Q684).</li>
 <li>IDs below the namespace's lowest claim (Q421) predate the allocator and hold no ref, so they are skipped.</li>
 <li>When <code>git ls-remote</code> cannot reach the remote it skips rather than fails, so an offline clone still lints. CI re-runs it with a network.</li>
 <li><strong>It cannot catch a hand-picked ID that another session has already claimed but not yet filed.</strong> That is the narrow residual: the ref exists, so the row looks reserved. Closing it needs the claim to record <em>who</em> holds it, which no one has needed yet.</li>

@@ -2868,14 +2868,6 @@
 <td>The hook scans the whole Bash string, so a <code>git commit -F -</code> heredoc quoting <code>go test -race</code> reads as a second go invocation and is denied. Skip heredoc bodies and <code>git commit -m</code>/<code>-F</code> arguments; <code>claude-go-throttle-hook-test.sh</code> takes the case.</td>
 </tr>
 <tr>
-<td><a id="Q684"></a>Q684</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/backloglint/baseline.go"><code>lint-backlog</code> fails a stale branch over a row <code>main</code> deleted</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-04: <code>baselineRef</code> is <code>origin/main</code>'s tip, so a row main deleted under a stale branch reads as added here — rule 12 then demanded renumbering another session's done Q526. Merge base is the candidate.</td>
-</tr>
-<tr>
 <td><a id="Q671"></a>Q671</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>make scripts-test</code>'s help line lists every suite, so two PRs adding suites always conflict</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
