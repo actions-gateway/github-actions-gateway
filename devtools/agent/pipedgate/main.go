@@ -1,11 +1,17 @@
 // Command pipedgate decides whether a Claude Code PreToolUse Bash payload
-// reads a gate's exit code through a pipe, and prints the `ask` decision when
-// it does (Q625).
+// throws away a gate's exit status, and prints the `ask` decision when it does.
+// Two routes reach the same false green:
 //
-// A pipeline's status is its LAST stage's, so `make check 2>&1 | tail -30;
-// echo "EXIT=$?"` prints EXIT=0 for a failing gate — a false green that reads
-// identical to a real one. zsh, the shell the Bash tool runs, has no
-// PIPESTATUS to recover it.
+//   - A pipe (Q625). A pipeline's status is its LAST stage's, so
+//     `make check 2>&1 | tail -30; echo "EXIT=$?"` prints EXIT=0 for a failing
+//     gate. zsh, the shell the Bash tool runs, has no PIPESTATUS to recover it.
+//   - A backgrounded call (Q681). A `;`-list also yields its last statement's
+//     status, so `make check > log 2>&1; echo "EXIT=$?"` run with
+//     run_in_background — or ended with `&` — notifies exit code 0 for a failing
+//     gate. Measured 2026-08-04: a backgrounded `false; echo "EXIT=$?"` logged
+//     EXIT=1 and notified exit code 0. The same command in the FOREGROUND is
+//     correct and documented, because the echo lands where it can be read; only
+//     the backgrounded shape loses it, and only there does this warn.
 //
 // Why a parser and not regular expressions: the question is whether a gate sits
 // at command position on the LEFT of a pipe, which means tracking quoting,
@@ -26,7 +32,9 @@
 // including through a subshell or brace group whose status the pipe consumes,
 // inside a command substitution, and in any stage of a longer pipeline. Also a
 // $PIPESTATUS read anywhere, which is a bug on its own: that name is bash's, and
-// in zsh it expands to empty, so every test against it reads as success.
+// in zsh it expands to empty, so every test against it reads as success. And a
+// registered gate in a backgrounded call whose last statement cannot carry the
+// gate's failure out — an `echo`, a `||` fallback, a `&` fork.
 //
 // What it deliberately does not detect:
 //
@@ -42,8 +50,11 @@
 //   - Any command carrying a heavy `go ... -race`, which
 //     claude-go-throttle-hook.sh rewrites; see defersToThrottleHook.
 //
-// Mitigations that suppress the warning: `set -o pipefail` in the same command,
-// zsh's $pipestatus, and redirecting to a file instead of piping.
+// Mitigations that suppress the pipe warning: `set -o pipefail` in the same
+// command, zsh's $pipestatus, and redirecting to a file instead of piping.
+// Neither pipefail nor $pipestatus mitigates a lost background status, so they
+// do not suppress that one; ending the command in `exit $rc` — or in the gate
+// itself — does.
 //
 // Quoting and heredocs need no special case. A gate named inside a string or a
 // heredoc body parses as a literal, never a command, so a commit message
@@ -72,6 +83,9 @@ type payload struct {
 	ToolName  string `json:"tool_name"`
 	ToolInput struct {
 		Command string `json:"command"`
+		// RunInBackground is absent on a foreground call, so the zero value is
+		// the answer there.
+		RunInBackground bool `json:"run_in_background"`
 	} `json:"tool_input"`
 }
 
@@ -117,7 +131,7 @@ func run(registryPath string, stdin io.Reader, stdout io.Writer) int {
 		return 0
 	}
 
-	reason := Decide(p.ToolInput.Command, c)
+	reason := Decide(p.ToolInput.Command, p.ToolInput.RunInBackground, c)
 	if reason == "" {
 		return 0
 	}

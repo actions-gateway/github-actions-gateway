@@ -97,12 +97,19 @@ const (
 		`cmd > tmp/out.log 2>&1; echo "EXIT=$?"; grep -E 'FAILED|Error [0-9]|^make:' tmp/out.log. ` +
 		"Continue only if you want the output and not the status. " +
 		"See docs/development/testing.md#the-status-you-report-is-a-claim-too."
+
+	lostStatusReasonSuffix = " runs in the background, but this call's exit status is its LAST statement's — " +
+		"an echo exits 0 whatever the gate did, so the task notification reports success for a failed gate. " +
+		"Capture the status and re-raise it: " +
+		`cmd > tmp/out.log 2>&1; rc=$?; echo "EXIT=$rc"; exit $rc. ` +
+		"Continue only if you do not need this call's status. " +
+		"See docs/development/testing.md#the-status-you-report-is-a-claim-too."
 )
 
 // Decide returns the permissionDecisionReason for a Bash command, or "" to stay
-// silent. Every failure path returns "": a hook that cannot parse a command has
-// nothing to say about it.
-func Decide(cmd string, reg *compiled) string {
+// silent. background is the payload's run_in_background. Every failure path
+// returns "": a hook that cannot parse a command has nothing to say about it.
+func Decide(cmd string, background bool, reg *compiled) string {
 	if defersToThrottleHook(cmd) {
 		return ""
 	}
@@ -147,21 +154,117 @@ func Decide(cmd string, reg *compiled) string {
 		return pipestatusReason
 	}
 	// Mitigated: pipefail propagates the failure, and zsh's $pipestatus recovers
-	// each stage's status.
-	if pipefail || readsLower {
+	// each stage's status. Neither mitigates a lost background status, so the
+	// suppression is scoped to the pipe verdict.
+	if !pipefail && !readsLower {
+		for _, st := range lhs {
+			head := peelWrappers(headText(statusSource(st)))
+			if head == "" || matchAny(reg.exempt, head) {
+				continue
+			}
+			if matchAny(reg.gates, head) {
+				return "`" + truncate(head, 70) + "`" + pipedReasonSuffix
+			}
+		}
+	}
+	return lostBackgroundStatus(f, background, reg)
+}
+
+// lostBackgroundStatus returns the warning for a gate whose status never
+// reaches the caller because the call is backgrounded and something else runs
+// last (Q681). A `;`-list yields its last statement's status, so a backgrounded
+// `make check > log 2>&1; echo "EXIT=$?"` notifies exit 0 for a failed gate —
+// the same false green as the pipe, arriving by a different route. `&` on the
+// last statement is the other spelling of the same mistake.
+//
+// Foreground calls are silent by construction: there the trailing echo prints
+// the real status where it can be read, which is the documented form.
+func lostBackgroundStatus(f *syntax.File, background bool, reg *compiled) string {
+	if len(f.Stmts) == 0 {
 		return ""
 	}
-
-	for _, st := range lhs {
-		head := peelWrappers(headText(statusSource(st)))
-		if head == "" || matchAny(reg.exempt, head) {
-			continue
-		}
-		if matchAny(reg.gates, head) {
-			return "`" + truncate(head, 70) + "`" + pipedReasonSuffix
-		}
+	last := f.Stmts[len(f.Stmts)-1]
+	if !background && !last.Background {
+		return ""
 	}
-	return ""
+	if carriesStatus(last, reg) {
+		return ""
+	}
+	gate := firstGate(f, reg)
+	if gate == "" {
+		return ""
+	}
+	return "`" + truncate(gate, 70) + "`" + lostStatusReasonSuffix
+}
+
+// carriesStatus reports whether a failing gate could still surface as st's own
+// exit status. Anything it cannot reason about counts as carrying, so an
+// unfamiliar shape gets silence rather than a guess.
+func carriesStatus(st *syntax.Stmt, reg *compiled) bool {
+	if st == nil {
+		return true
+	}
+	if st.Background {
+		return false // the status is the fork's, never the job's
+	}
+	switch c := st.Cmd.(type) {
+	case *syntax.CallExpr:
+		if len(c.Args) == 0 {
+			return true // a bare assignment yields its own substitution's status
+		}
+		// `exit $rc` is the fix, and a literal `exit 0` is a deliberate discard.
+		if literal(c.Args[0]) == "exit" {
+			return true
+		}
+		head := peelWrappers(headText(c))
+		return matchAny(reg.gates, head) && !matchAny(reg.exempt, head)
+	case *syntax.BinaryCmd:
+		switch c.Op {
+		case syntax.AndStmt:
+			// Either side can be the last to run, and a failing left side ends
+			// the chain with its own status.
+			return carriesStatus(c.X, reg) || carriesStatus(c.Y, reg)
+		case syntax.OrStmt, syntax.Pipe, syntax.PipeAll:
+			// `a || b` yields 0 whenever a succeeds, and a pipeline yields its
+			// last stage's: only the right side can carry a failure out.
+			return carriesStatus(c.Y, reg)
+		}
+	case *syntax.Subshell:
+		return lastCarries(c.Stmts, reg)
+	case *syntax.Block:
+		return lastCarries(c.Stmts, reg)
+	}
+	return true
+}
+
+func lastCarries(stmts []*syntax.Stmt, reg *compiled) bool {
+	if len(stmts) == 0 {
+		return true
+	}
+	return carriesStatus(stmts[len(stmts)-1], reg)
+}
+
+// firstGate returns the head of the first registered gate at command position
+// anywhere in the tree, or "". Walking the tree rather than the raw string is
+// what keeps a gate merely NAMED in a commit message or a grep pattern from
+// counting: quoted text parses as a word, never a call.
+func firstGate(f *syntax.File, reg *compiled) string {
+	var found string
+	syntax.Walk(f, func(node syntax.Node) bool {
+		if found != "" {
+			return false
+		}
+		c, ok := node.(*syntax.CallExpr)
+		if !ok {
+			return true
+		}
+		head := peelWrappers(headText(c))
+		if head != "" && !matchAny(reg.exempt, head) && matchAny(reg.gates, head) {
+			found = head
+		}
+		return true
+	})
+	return found
 }
 
 // setsPipefail reports whether a call is `set -o pipefail` (in any of its

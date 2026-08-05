@@ -26,6 +26,7 @@ fail() {
 }
 
 payload() { jq -cn --arg c "$1" '{tool_name: "Bash", tool_input: {command: $c}}'; }
+bg_payload() { jq -cn --arg c "$1" '{tool_name: "Bash", tool_input: {command: $c, run_in_background: true}}'; }
 decision() { printf '%s' "$1" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null || true; }
 
 # --- Wiring: the installed script reaches the real binary and registry --------
@@ -42,6 +43,24 @@ if [[ -z "$out" ]]; then
 	pass 'end-to-end: the documented redirect stays silent'
 else
 	fail "end-to-end: want silence, got: $out"
+fi
+
+# The same command decided both ways by run_in_background alone (Q681) — the
+# one field that separates the correct foreground form from the bug, and the
+# one this seam has to carry through from the payload.
+out="$(bg_payload 'make check > tmp/check.log 2>&1; echo "EXIT=$?"' | "$HOOK")"
+if [[ "$(decision "$out")" == "ask" ]]; then
+	pass 'end-to-end: a backgrounded gate ending in echo asks'
+else
+	fail "end-to-end background: want ask, got: ${out:-<silence>}"
+fi
+
+# shellcheck disable=SC2016 # the payload is literal shell text; expanding $rc here is the bug
+out="$(bg_payload 'make check > tmp/check.log 2>&1; rc=$?; echo "EXIT=$rc"; exit $rc' | "$HOOK")"
+if [[ -z "$out" ]]; then
+	pass 'end-to-end: the backgrounded fix stays silent'
+else
+	fail "end-to-end background fix: want silence, got: $out"
 fi
 
 # --- The binary is built on demand -------------------------------------------
