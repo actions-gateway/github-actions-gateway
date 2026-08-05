@@ -43,6 +43,8 @@ func TestDecide(t *testing.T) {
 	cases := []struct {
 		name string
 		cmd  string
+		// bg is the payload's run_in_background.
+		bg   bool
 		warn bool
 		// substr, when set, must appear in the reason.
 		substr string
@@ -112,11 +114,45 @@ func TestDecide(t *testing.T) {
 		// --- Owned by the sibling throttle hook --------------------------------
 		{name: "go test -race defers", cmd: "go test -race ./... | tee tmp/race.log"},
 		{name: "already-throttled -race does not defer", cmd: "nice -n 10 taskpolicy -d throttle go test -race ./... | tail"},
+
+		// --- A backgrounded gate whose status the last statement drops (Q681) --
+		// Measured: a backgrounded `false; echo "EXIT=$?"` logs EXIT=1 and
+		// notifies exit code 0.
+		{name: "the canonical lost background status", cmd: `make check > tmp/check.log 2>&1; echo "EXIT=$?"`, bg: true, warn: true, substr: "task notification reports success"},
+		{name: "background gate then an unrelated last statement", cmd: "make check > tmp/check.log 2>&1; grep -c FAILED tmp/check.log", bg: true, warn: true},
+		{name: "background scripts gate", cmd: `bash scripts/docs/lint-backlog.sh > tmp/l.log 2>&1; echo "EXIT=$?"`, bg: true, warn: true},
+		{name: "background git push", cmd: `git push -u origin HEAD > tmp/p.log 2>&1; echo "EXIT=$?"`, bg: true, warn: true},
+		{name: "leading segment before the gate", cmd: `mkdir -p tmp; make check > tmp/c.log 2>&1; echo "EXIT=$?"`, bg: true, warn: true},
+		// `||` swallows the failure it was written to report.
+		{name: "|| fallback swallows it", cmd: `make check > tmp/c.log 2>&1 || echo "gate failed"`, bg: true, warn: true},
+		// `&` is the other spelling, and loses the status even in the foreground.
+		{name: "trailing & forks, foreground call", cmd: "make check > tmp/c.log 2>&1 &", warn: true},
+		{name: "backgrounded subshell ending in echo", cmd: `(make check > tmp/c.log 2>&1; echo "EXIT=$?")`, bg: true, warn: true},
+		// pipefail and $pipestatus are pipe mitigations; neither re-raises a
+		// status the last statement already discarded.
+		{name: "pipefail does not mitigate this", cmd: `set -o pipefail; make check > tmp/c.log 2>&1; echo "EXIT=$?"`, bg: true, warn: true},
+
+		// --- Backgrounded forms that keep the status ---------------------------
+		{name: "the documented fix re-raises it", cmd: `make check > tmp/check.log 2>&1; rc=$?; echo "EXIT=$rc"; exit $rc`, bg: true},
+		{name: "gate is the last statement", cmd: "make check > tmp/check.log 2>&1", bg: true},
+		{name: "&& chain ending in the gate", cmd: "mkdir -p tmp && make check > tmp/check.log 2>&1", bg: true},
+		{name: "&& chain starting with the gate", cmd: `make check > tmp/c.log 2>&1 && echo "clean"`, bg: true},
+		// An explicit `exit 0` is a deliberate discard, and the escape hatch for
+		// a background call whose status genuinely does not matter.
+		{name: "explicit exit 0 is deliberate", cmd: `make check > tmp/c.log 2>&1; echo "EXIT=$?"; exit 0`, bg: true},
+		// The SAME command in the foreground is the documented correct form: the
+		// echo prints the real status where it can be read.
+		{name: "foreground redirect-then-echo is correct", cmd: `make check > tmp/check.log 2>&1; echo "EXIT=$?"`},
+		{name: "background non-gate loses nothing worth warning about", cmd: `gh run list > tmp/r.log 2>&1; echo "EXIT=$?"`, bg: true},
+		{name: "background pr-sentinel watcher", cmd: "bash /Users/x/.claude/plugins/pr-sentinel/watch.sh 1288", bg: true},
+		// The Q624 shape, backgrounded: a gate named inside a string is a word.
+		{name: "background echo naming the bug form", cmd: `echo "never background: make check; echo EXIT=$?"`, bg: true},
+		{name: "background grep for the pattern", cmd: `grep -rn "make check" docs/ > tmp/o.log 2>&1; echo "EXIT=$?"`, bg: true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Decide(tc.cmd, reg)
+			got := Decide(tc.cmd, tc.bg, reg)
 			if tc.warn && got == "" {
 				t.Fatalf("want a warning, got silence\ncommand: %s", tc.cmd)
 			}
@@ -153,18 +189,23 @@ func TestShippedRegistryPatternsAreAnchored(t *testing.T) {
 func TestUnparseableCommandIsSilent(t *testing.T) {
 	reg := shippedRegistry(t)
 	for _, cmd := range []string{"make check | tail 'unterminated", "make check | | tail", "for do done"} {
-		if got := Decide(cmd, reg); got != "" {
-			t.Errorf("want silence for unparseable %q, got: %s", cmd, got)
+		for _, bg := range []bool{false, true} {
+			if got := Decide(cmd, bg, reg); got != "" {
+				t.Errorf("want silence for unparseable %q (bg=%v), got: %s", cmd, bg, got)
+			}
 		}
 	}
 }
 
 // A registry with no gates cannot warn — detection is driven by the registry,
 // not by an incidental match somewhere in the walk.
-func TestEmptyRegistryNeverWarnsAboutAPipe(t *testing.T) {
+func TestEmptyRegistryNeverWarns(t *testing.T) {
 	empty, _ := Registry{}.compile()
-	if got := Decide(`make check 2>&1 | tail -30; echo "EXIT=$?"`, empty); got != "" {
+	if got := Decide(`make check 2>&1 | tail -30; echo "EXIT=$?"`, false, empty); got != "" {
 		t.Errorf("want silence with an empty registry, got: %s", got)
+	}
+	if got := Decide(`make check > tmp/c.log 2>&1; echo "EXIT=$?"`, true, empty); got != "" {
+		t.Errorf("want silence with an empty registry (background), got: %s", got)
 	}
 }
 
@@ -175,7 +216,17 @@ func TestBadPatternIsDroppedNotFatal(t *testing.T) {
 	if len(errs) != 1 {
 		t.Fatalf("want 1 rejected pattern, got %d", len(errs))
 	}
-	if got := Decide("make check | tail", c); got == "" {
+	if got := Decide("make check | tail", false, c); got == "" {
 		t.Error("the surviving pattern should still warn")
+	}
+}
+
+// The pipe verdict wins when a backgrounded call is also piped: both routes
+// lose the same status, and the pipe reason names the nearer cause.
+func TestPipeVerdictWinsOverBackground(t *testing.T) {
+	reg := shippedRegistry(t)
+	got := Decide(`make check 2>&1 | tail -30; echo "EXIT=$?"`, true, reg)
+	if !strings.Contains(got, "exit status is the filter's") {
+		t.Errorf("want the pipe reason, got: %s", got)
 	}
 }
