@@ -6,6 +6,7 @@
 !.claude/settings.json
 !.claude/prod-guard.json
 !.claude/foreground-guard.json
+!.claude/piped-gate-guard.json
 !.claude/commands/
 !.claude/agents/
 !.claude/skills/
