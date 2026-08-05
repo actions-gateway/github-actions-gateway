@@ -39,7 +39,7 @@ There were two ways to hold an ID without reserving it, and both are closed:
 
 What rule 12 costs and what it still misses:
 
-- It checks only IDs that are new against the git baseline, so a branch that files no row makes no network call at all.
+- It checks only IDs that are new against the git baseline, so a branch that files no row makes no network call at all. That baseline is the merge base with `origin/main`, not its tip: against the tip a row `main` deleted while your branch was behind read as one you had filed, and the rule demanded an ID for finished work (Q684).
 - IDs below the namespace's lowest claim (Q421) predate the allocator and hold no ref, so they are skipped.
 - When `git ls-remote` cannot reach the remote it skips rather than fails, so an offline clone still lints. CI re-runs it with a network.
 - **It cannot catch a hand-picked ID that another session has already claimed but not yet filed.** That is the narrow residual: the ref exists, so the row looks reserved. Closing it needs the claim to record *who* holds it, which no one has needed yet.

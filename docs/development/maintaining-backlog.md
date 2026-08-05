@@ -166,16 +166,19 @@ Git raises a delete/modify conflict only when both sides touch the *same* lines.
 
 This is the second and more dangerous of the two ways a done row comes back — the squash-merge case at least leaves a conflict to notice. Both occurred on 2026-07-25: the squash case in [#766](https://github.com/actions-gateway/github-actions-gateway/pull/766)/[#768](https://github.com/actions-gateway/github-actions-gateway/pull/768), and the reorder case while rebasing a release-planning branch across [#805](https://github.com/actions-gateway/github-actions-gateway/pull/805), which had shipped the very row that branch was relabelling. A third near-miss on 2026-07-26 — a row inserted directly above one `main` had just deleted — is what finally bought the automated check below.
 
-**`make lint-backlog` checks this for you** (rule 10). An ID present in your `docs/STATUS.md` but absent from `origin/main`'s is *new* when the baseline's history never carried its anchor, and a *resurrection* when it did — the distinction a manual eyeball can't make cheaply. The rule fires only once your branch already contains the commit that did the deleting, so a branch that is merely behind `main` isn't flagged for a deletion a rebase will apply anyway.
+**`make lint-backlog` checks this for you** (rule 10). An ID present in your `docs/STATUS.md` but absent from the baseline's is *new* when the baseline's history never carried its anchor, and a *resurrection* when it did — the distinction a manual eyeball can't make cheaply. The rule fires only once your branch already contains the commit that did the deleting, so a branch that is merely behind `main` isn't flagged for a deletion a rebase will apply anyway.
+
+**That baseline is the merge base with `origin/main`, not its tip.** Every git-backed rule here asks what *your branch* changed, which is a question about the branch point. Against the tip, a row `main` deleted while your branch was behind read as one you had added, and rule 12 then demanded you allocate an ID for a row another session had already finished (Q684). Under `--staged` the baseline is the pre-commit tree instead, because that mode asks what the *commit* changes.
 
 The [merge driver](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) closes the reorder-over-delete path at the source — it decides by ID, so a relocated row cannot outvote a deletion — but only for people who installed it, and only for local merges. The lint rule stays the load-bearing check.
 
 Deliberately re-opening a closed item? `BACKLOG_ALLOW_RESURRECT="Q1 Q2" make lint-backlog`.
 
-**To inspect by hand**, list the IDs your branch has that `origin/main` does not:
+**To inspect by hand**, list the IDs your branch has that the branch point did not. Read the branch point, not `origin/main` — against the tip this prints every row `main` has deleted since you branched:
 
 ```bash
-comm -23 <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u) <(git show origin/main:docs/STATUS.md | grep -o 'id="Q[0-9]*"' | sort -u)
+base="$(git merge-base HEAD origin/main)"
+comm -23 <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u) <(git show "${base}:docs/STATUS.md" | grep -o 'id="Q[0-9]*"' | sort -u)
 ```
 
 Every ID it prints should be one *you* filed. Anything else is a row `main` deleted and your rebase brought back — check whether its work shipped before you push.
@@ -230,7 +233,7 @@ addressed a specific one: [Q549](../STATUS.md#Q549)'s second sighting was a
 mode its fix never covered, and a row naming only the fixed mode would have
 sent the next session to re-diagnose the wrong thing.
 
-This is the one place the general "done rows are deleted" rule does **not** apply, which makes it easy to miss when a flake fix otherwise looks like a routine change. `scripts/docs/lint-backlog.sh` enforces it (rule 8): a `flake`-labelled Queue row that disappears entirely — measured against `origin/main`, or the pre-commit state under `--staged` — fails the lint, naming the row and pointing here. Retiring a row per the ledger rules below is the deliberate exception: `BACKLOG_ALLOW_FLAKE_DELETE="Q123"` lets specific IDs through.
+This is the one place the general "done rows are deleted" rule does **not** apply, which makes it easy to miss when a flake fix otherwise looks like a routine change. `scripts/docs/lint-backlog.sh` enforces it (rule 8): a `flake`-labelled Queue row that disappears entirely — measured against the [merge base](#a-moved-row-defeats-conflict-detection) with `origin/main`, or the pre-commit state under `--staged` — fails the lint, naming the row and pointing here. Retiring a row per the ledger rules below is the deliberate exception: `BACKLOG_ALLOW_FLAKE_DELETE="Q123"` lets specific IDs through.
 
 ### Retiring a flake-watch row
 

@@ -39,10 +39,16 @@ repeat_str() {
 # fixture ROW... — write a STATUS.md whose Queue holds the given rows (one
 # argument per full `| ... |` line) and whose Deferred table holds any rows
 # passed after a `--deferred` separator. Echoes the file path.
+#
+# The vocabulary line declares `flake` because rule 11 fires on any backticked
+# label with no declaration, and a case built around a flake row is about rule 8.
+# Rows built by qrow wear a bare `infra`, which carries no vocabulary at all.
 fixture() {
 	local file="$WORKDIR/STATUS.md" in_deferred=0
 	{
 		printf '# Project Status\n\n'
+		# shellcheck disable=SC2016  # the backticks are markdown, not a subshell
+		printf '**Labels:** `flake`\n\n'
 		printf '## Queue\n\n'
 		printf '| ID | Item | Labels | St | Sz | Notes |\n'
 		printf '|---|---|---|---|---|---|\n'
@@ -629,6 +635,107 @@ git -C "$claim_repo" update-ref refs/remotes/origin/main HEAD
 run_claim env
 if [[ "$rc" == 0 ]]; then printf 'ok   rule 12: unclaimed but not new    -> pass\n'; else
 	printf 'FAIL rule 12: a pre-existing unclaimed row was flagged (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# --- The baseline is the merge base, not main's tip (Q684) --------------------
+#
+# Every git-baseline rule asks what THIS branch changed, which is a question
+# about the branch point. Measured against origin/main's tip, a row main deleted
+# while the branch was behind read as added here, and rule 12 demanded an ID for
+# a row another session had already finished — the observed failure was
+# `Q526 is a new row here but holds no refs/queue-ids/Q526 claim` on a stale
+# worktree, which is indistinguishable from a genuinely broken main.
+stale_repo="$WORKDIR/stale"
+stale_origin="$WORKDIR/stale-origin.git"
+mkdir -p "$stale_repo/docs"
+git -C "$stale_repo" init -q
+git init -q --bare "$stale_origin"
+git -C "$stale_repo" remote add origin "$stale_origin"
+
+BASE_ROW="$(qrow Q500 "$PLAIN_ITEM" 🔲 'base')"
+DONE_ROW="$(qrow Q501 "$PLAIN_ITEM" 🔲 'ships on main while this branch is open')"
+NEW_ROW="$(qrow Q502 "$PLAIN_ITEM" 🔲 'filed here, never reserved')"
+# shellcheck disable=SC2016  # the backticks are markdown; rule 8 matches /`flake`/
+STALE_FLAKE_ROW="$(qrow Q503 "$PLAIN_ITEM" 🔲 'flaky' '`flake`')"
+MAIN_ROW="$(qrow Q504 "$PLAIN_ITEM" 🔲 'filed on main after the branch point')"
+
+# The branch point.
+cp "$(fixture "$BASE_ROW" "$DONE_ROW" "$STALE_FLAKE_ROW")" "$stale_repo/docs/STATUS.md"
+git -C "$stale_repo" add docs/STATUS.md
+git -C "$stale_repo" "${git_id[@]}" commit -qm 'branch point'
+git -C "$stale_repo" update-ref refs/heads/branch HEAD
+
+# main moves on: Q501 ships and its row is deleted, Q504 is filed.
+cp "$(fixture "$BASE_ROW" "$STALE_FLAKE_ROW" "$MAIN_ROW")" "$stale_repo/docs/STATUS.md"
+git -C "$stale_repo" add docs/STATUS.md
+git -C "$stale_repo" "${git_id[@]}" commit -qm 'Q501 ships; file Q504'
+git -C "$stale_repo" push -q origin HEAD:refs/heads/main
+git -C "$stale_repo" update-ref refs/remotes/origin/main HEAD
+
+# Rule 12 only checks IDs at or above the namespace's lowest claim. The claim
+# points at a commit the bare origin actually carries.
+stale_sha="$(git -C "$stale_repo" rev-parse HEAD)"
+git -C "$stale_origin" update-ref refs/queue-ids/Q500 "$stale_sha"
+
+# The branch is now both behind main and ahead of the branch point, which is
+# what an open PR looks like. The extra commit touches another file so the
+# backlog stays exactly as it was at the branch point.
+git -C "$stale_repo" checkout -q branch
+printf 'notes\n' >"$stale_repo/docs/NOTES.md"
+git -C "$stale_repo" add docs/NOTES.md
+git -C "$stale_repo" "${git_id[@]}" commit -qm 'branch work'
+
+run_stale() {
+	rc=0
+	(cd "$stale_repo" && "$LINT" "$stale_repo/docs/STATUS.md") >"$WORKDIR/stale.out" 2>&1 || rc=$?
+}
+
+# The defect. The branch carries the rows it always had; Q501 is absent from
+# main's tip only because main deleted it.
+cp "$(fixture "$BASE_ROW" "$DONE_ROW" "$STALE_FLAKE_ROW")" "$stale_repo/docs/STATUS.md"
+run_stale
+if [[ "$rc" == 0 ]]; then printf 'ok   baseline: row main deleted        -> pass\n'; else
+	printf 'FAIL baseline: a row main deleted was read as added by the branch (rc=%s)\n' "$rc" >&2
+	cat "$WORKDIR/stale.out" >&2
+	fails=$((fails + 1))
+fi
+
+# Control: rule 12 must still bite on the same stale branch. A row the branch
+# genuinely adds is absent from the merge base too, and holds no claim.
+cp "$(fixture "$BASE_ROW" "$DONE_ROW" "$STALE_FLAKE_ROW" "$NEW_ROW")" "$stale_repo/docs/STATUS.md"
+run_stale
+if [[ "$rc" == 1 ]] && grep -q 'Q502 is a new row here' "$WORKDIR/stale.out"; then
+	printf 'ok   baseline: genuinely new row       -> fail\n'
+else
+	printf 'FAIL rule 12: an unreserved new row on a stale branch was not flagged (rc=%s)\n' "$rc" >&2
+	fails=$((fails + 1))
+fi
+
+# Control: a deletion the branch itself makes is still the branch's deletion,
+# even though the merge base is no longer main's tip.
+cp "$(fixture "$BASE_ROW" "$DONE_ROW")" "$stale_repo/docs/STATUS.md"
+run_stale
+if [[ "$rc" == 1 ]] && grep -q 'Q503 was a flake-labelled Queue row' "$WORKDIR/stale.out"; then
+	printf 'ok   baseline: flake row deleted here  -> fail\n'
+else
+	printf 'FAIL rule 8: a flake row the branch deleted was not flagged (rc=%s)\n' "$rc" >&2
+	fails=$((fails + 1))
+fi
+
+# --staged asks a different question — what this COMMIT changes — so its baseline
+# stays the pre-commit tree and no merge base enters it. On the same stale
+# branch: the staged row is flagged, and the row main deleted is not, because
+# HEAD still carries it.
+cp "$(fixture "$BASE_ROW" "$DONE_ROW" "$STALE_FLAKE_ROW" "$NEW_ROW")" "$stale_repo/docs/STATUS.md"
+git -C "$stale_repo" add docs/STATUS.md
+rc=0
+(cd "$stale_repo" && "$LINT" --staged) >"$WORKDIR/stale.out" 2>&1 || rc=$?
+if [[ "$rc" == 1 ]] && grep -q 'Q502 is a new row here' "$WORKDIR/stale.out" &&
+	! grep -q 'Q501 is a new row here' "$WORKDIR/stale.out"; then
+	printf 'ok   baseline: --staged reads HEAD     -> fail\n'
+else
+	printf 'FAIL --staged: want only the staged row flagged (rc=%s)\n' "$rc" >&2
+	fails=$((fails + 1))
+fi
 
 rc=0
 "$LINT" "$REPO_ROOT/docs/STATUS.md" >/dev/null 2>&1 || rc=$?

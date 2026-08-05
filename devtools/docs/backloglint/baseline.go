@@ -77,17 +77,36 @@ func (r *repo) relpath(file string) string {
 	return r.prefix + filepath.Base(file)
 }
 
-// baselineRef is the ref the backlog is compared against: the pre-commit state
-// in --staged mode, otherwise origin/main (the branch point for any PR).
-// Empty when neither resolves.
-func (r *repo) baselineRef(staged bool) string {
+// baseline is the state the working file is measured against: a ref git reads,
+// and the name a finding quotes for it. An empty ref means git could not answer,
+// which is what makes the git-baseline rules no-ops rather than failures.
+type baseline struct {
+	ref   string
+	label string
+}
+
+// baselineRef is the state the backlog is compared against: the pre-commit tree
+// in --staged mode, otherwise the merge base with origin/main.
+//
+// The merge base, not origin/main's tip: every rule below asks what THIS branch
+// changed, which is a question about the branch point. A row main deleted while
+// the branch was behind is still present at the merge base, so it reads as
+// pre-existing rather than added here — against the tip it read as new, and rule
+// 12 then demanded an ID for a row another session had already finished (Q684).
+func (r *repo) baselineRef(staged bool) baseline {
 	if staged {
-		return "HEAD"
+		return baseline{ref: "HEAD", label: "HEAD"}
 	}
-	if r.ok("rev-parse", "--verify", "--quiet", "origin/main") {
-		return "origin/main"
+	if !r.ok("rev-parse", "--verify", "--quiet", "origin/main") {
+		return baseline{}
 	}
-	return ""
+	// A shallow clone can carry origin/main with the common ancestor cut off. The
+	// tip is then the only answer available, and the per-rule ancestry checks
+	// below are what hold that case together.
+	if base, ok := r.runOK("merge-base", "HEAD", "origin/main"); ok && base != "" {
+		return baseline{ref: base, label: "origin/main"}
+	}
+	return baseline{ref: "origin/main", label: "origin/main"}
 }
 
 // show returns a file's content at a ref, or "" when it is absent there.
@@ -132,20 +151,20 @@ func (l *linter) checkBaseline(b *backlog) {
 	if l.rel == "" {
 		return
 	}
-	ref := l.git.baselineRef(l.cfg.staged)
-	if ref == "" {
+	from := l.git.baselineRef(l.cfg.staged)
+	if from.ref == "" {
 		return
 	}
-	baselineSrc := l.git.show(ref, l.rel)
+	baselineSrc := l.git.show(from.ref, l.rel)
 	if baselineSrc == "" {
 		return
 	}
 	base := parseBacklog([]byte(baselineSrc))
 
-	l.checkFlakeRowsPreserved(b, base, ref)
-	l.checkNoResurrectedRows(b, base, ref)
+	l.checkFlakeRowsPreserved(b, base, from)
+	l.checkNoResurrectedRows(b, base, from)
 	l.checkNewIDsClaimed(b, base)
-	l.checkProgressRederived(b, base, ref)
+	l.checkProgressRederived(b, base, from)
 }
 
 // queueIDRefNS is the allocator's claim namespace. An ID with no claim was
@@ -222,7 +241,7 @@ var queueIDRE = regexp.MustCompile(`^Q[0-9]+$`)
 // checkFlakeRowsPreserved is rule 8. Once a flake mitigation ships the row
 // moves to Deferred § Flake watch, so a recurrence reads as a recurrence
 // rather than a fresh find.
-func (l *linter) checkFlakeRowsPreserved(b, base *backlog, ref string) {
+func (l *linter) checkFlakeRowsPreserved(b, base *backlog, from baseline) {
 	present := b.anchorIDs()
 	for _, r := range base.queue {
 		if r.id == "" || !strings.Contains(r.cell(2), "`flake`") {
@@ -236,7 +255,7 @@ func (l *linter) checkFlakeRowsPreserved(b, base *backlog, ref string) {
 		// delete. Only flag when HEAD already carries the commit that added it;
 		// otherwise every branch that is merely behind main reports a deletion
 		// it did not make. (Same staleness trap as rule 9.)
-		if added := l.git.touchedBy(ref, l.rel, anchorNeedle(r.id)); added != "" {
+		if added := l.git.touchedBy(from.ref, l.rel, anchorNeedle(r.id)); added != "" {
 			if !l.git.isAncestorOfHEAD(added) {
 				continue
 			}
@@ -246,7 +265,7 @@ func (l *linter) checkFlakeRowsPreserved(b, base *backlog, ref string) {
 		}
 		l.failWith(0, fmt.Sprintf(
 			"%s was a flake-labelled Queue row in %s and is now gone; a shipped flake mitigation moves the row to Deferred, Flake watch (trigger: Event: recurs on main after the fix) — it is not deleted. See docs/development/maintaining-backlog.md#flake-fixes-go-first",
-			r.id, ref),
+			r.id, from.label),
 			"  A shipped flake mitigation moves the row to Deferred, Flake watch, with an\n"+
 				"  \"Event: recurs on main after the fix\" trigger — kept, not closed, so a second\n"+
 				"  occurrence reads as a recurrence rather than a fresh find. See\n"+
@@ -258,7 +277,7 @@ func (l *linter) checkFlakeRowsPreserved(b, base *backlog, ref string) {
 // checkNoResurrectedRows is rule 10. It distinguishes the two cases a manual
 // `comm` cannot: an ID missing from the baseline FILE is a new row when the
 // baseline's HISTORY never carried it, and a resurrected done row when it did.
-func (l *linter) checkNoResurrectedRows(b, base *backlog, ref string) {
+func (l *linter) checkNoResurrectedRows(b, base *backlog, from baseline) {
 	baseline := base.anchorIDs()
 	for _, id := range b.sortedAnchorIDs() {
 		// Still in the baseline file: not a deletion, nothing to resurrect.
@@ -267,7 +286,7 @@ func (l *linter) checkNoResurrectedRows(b, base *backlog, ref string) {
 		}
 		// Absent from the baseline file. If its history never held the anchor
 		// either, this is simply a newly filed row.
-		removedIn := l.git.touchedBy(ref, l.rel, anchorNeedle(id))
+		removedIn := l.git.touchedBy(from.ref, l.rel, anchorNeedle(id))
 		if removedIn == "" {
 			continue
 		}
@@ -284,12 +303,12 @@ func (l *linter) checkNoResurrectedRows(b, base *backlog, ref string) {
 		}
 		l.failWith(0, fmt.Sprintf(
 			"%s is back in %s but %s deleted it — done rows are deleted, so this re-opens finished work. A reordered row merges cleanly over a delete, so a clean rebase is not evidence of a correct one. See docs/development/maintaining-backlog.md#a-moved-row-defeats-conflict-detection",
-			id, filepath.Base(l.cfg.file), ref),
+			id, filepath.Base(l.cfg.file), from.label),
 			"  Done rows are deleted (git is the archive), so a row that comes back\n"+
 				"  re-opens finished work. Reordering a row moves it, so a branch that\n"+
 				"  relocates a row while main deletes it merges with NO conflict — a clean\n"+
 				"  rebase is not evidence of a correct one. Check whether the work shipped:\n"+
-				fmt.Sprintf("    git log -S'%s' --oneline %s -- %s\n", anchorNeedle(id), ref, l.rel)+
+				fmt.Sprintf("    git log -S'%s' --oneline %s -- %s\n", anchorNeedle(id), from.label, l.rel)+
 				"  See docs/development/maintaining-backlog.md#a-moved-row-defeats-conflict-detection.\n"+
 				fmt.Sprintf("  Deliberately re-opening it? BACKLOG_ALLOW_RESURRECT=%s\n", id))
 	}
@@ -300,7 +319,7 @@ func (l *linter) checkNoResurrectedRows(b, base *backlog, ref string) {
 // count), and the flip must land in the same edit. Only plans whose last row
 // just disappeared are checked: a steady-state scan would misread the many rows
 // that merely cite a completed plan as evidence.
-func (l *linter) checkProgressRederived(b, base *backlog, ref string) {
+func (l *linter) checkProgressRederived(b, base *backlog, from baseline) {
 	now := b.queuePlanLinks()
 	for _, plan := range base.queuePlanLinks() {
 		if contains(now, plan) {
@@ -317,7 +336,7 @@ func (l *linter) checkProgressRederived(b, base *backlog, ref string) {
 		l.failWith(line, fmt.Sprintf(
 			"the last Queue row pointing at %s is gone, but its Progress row is still ⚠️; a plan with only deferred residuals is ✅. Flip it in this same edit. See docs/development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count",
 			plan),
-			fmt.Sprintf("  It was in %s. ⚠️ means an open *Queue* row remains; deferred residuals do\n", ref)+
+			fmt.Sprintf("  It was in %s. ⚠️ means an open *Queue* row remains; deferred residuals do\n", from.label)+
 				"  not count, so the row is now ✅. Flip it in this same edit — the Progress\n"+
 				"  table is only ever re-derived by hand. See\n"+
 				"  docs/development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count.\n"+
