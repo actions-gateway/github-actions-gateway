@@ -2722,7 +2722,7 @@ field, measured:</p>
 <p><code>St</code> then reads the label cell and <code>Notes</code> reads the size, so the row's rules evaluate
 the wrong cells and pass. This fails <em>silently wrong</em>, not loudly, which is why it is
 worth closing before it happens rather than after. Filed as latent: "zero occurrences
-in <code>STATUS.md</code> today", which the build disproved: <a href="../../STATUS/#Q625">Q625</a> carries one,
+in <code>STATUS.md</code> today", which the build disproved: Q625 carried one,
 and the gate was reading 13 characters of a 243-character cell (<a href="#phase-2-result-q613">Phase 2
 result</a>).</p>
 <p>Second defect, latent: <code>awk</code>'s <code>length()</code> counts <strong>bytes</strong> on this host (BWK awk
@@ -3006,7 +3006,7 @@ negative was.</p>
 this was in flight and was ported the same way. Its six cases — written against
 the <code>awk</code>, not against this — pass unchanged, which is the check that matters:
 a rule dropped in a port disarms a gate that still reports green.</p>
-<p><strong>The escaped-pipe defect had a live instance.</strong> <a href="../../STATUS/#Q625">Q625</a>'s
+<p><strong>The escaped-pipe defect had a live instance.</strong> Q625's
 Notes carry <code>`make check \| tail`</code>, so the <code>awk</code> read a 13-character cell
 where the row holds 243. Pushing that cell to 264 characters left the <code>awk</code>
 green; the rewrite fails it at <code>docs/STATUS.md:77</code>. The control — the same

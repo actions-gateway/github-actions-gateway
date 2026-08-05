@@ -2859,9 +2859,15 @@ have drifted since.</p>
 <td>One line invoking <code>awk</code>/<code>jq</code>/<code>sed</code>. The longest script under <code>scripts/</code>, and the least parsing of the four</td>
 <td><strong>Stays shell</strong></td>
 </tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh"><code>scripts/agent/claude-piped-gate-hook.sh</code></a></td>
+<td>393, now 74</td>
+<td>175 of its 257 code lines were a hand-rolled shell-grammar scanner: quote state, heredoc bodies, subshell nesting, matched delimiters</td>
+<td><strong>Rewritten</strong> (Q625): the decision is <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/agent/pipedgate"><code>devtools/agent/pipedgate</code></a> over <code>mvdan.cc/sh</code>; the script keeps the build seam and the registry path</td>
+</tr>
 </tbody>
 </table>
-<p>Sorted by length, the verdicts run backwards: the two shortest are the rewrites and the
+<p>Sorted by length, the verdicts run backwards: the three shortest are the rewrites and the
 two longest stay shell. That is why length is not the signal.</p>
 <h4 id="what-the-rewrite-costs">What the rewrite costs<a class="headerlink" href="#what-the-rewrite-costs" title="Permanent link">&para;</a></h4>
 <p>Moving a gate to Go buys a parser that handles nesting and escaping correctly, rune

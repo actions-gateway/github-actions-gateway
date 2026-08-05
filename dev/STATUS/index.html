@@ -2836,14 +2836,6 @@
 <td>Q643 shipped the <code>{reason}</code>-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every <code>gridPos</code> below y=52 and needs a <code>render.sh</code> re-shoot. Should <code>AwaitingProbe</code> alert?</td>
 </tr>
 <tr>
-<td><a id="Q625"></a>Q625</td>
-<td><a href="../development/testing/#the-status-you-report-is-a-claim-too">Nothing catches a gate's exit code read through a pipe</a></td>
-<td><code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>make check \| tail</code> reports <code>tail</code>'s status, so a false green reads identical to a real one. The rule sits in CLAUDE.md and testing.md and a session tripped it anyway. Wants a PreToolUse warning when a gate is piped into <code>tail</code>/<code>head</code>/<code>grep</code>.</td>
-</tr>
-<tr>
 <td><a id="Q681"></a>Q681</td>
 <td><a href="../development/testing/#the-status-you-report-is-a-claim-too">A backgrounded gate's exit code never reaches the task notification</a></td>
 <td><code>tests</code> <code>retro</code></td>
@@ -2865,7 +2857,7 @@
 <td><code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q543 wrote the rule; the slip happens at <code>gh pr create</code>, in flow, not while reading CONTRIBUTING — same shape as <a href="#Q625">Q625</a>/<a href="#Q665">Q665</a>. Wants a PreToolUse warning when an open PR's files overlap <code>origin/main...HEAD</code>.</td>
+<td>Q543 wrote the rule; the slip happens at <code>gh pr create</code>, in flow, not while reading CONTRIBUTING — same shape as <a href="#Q665">Q665</a>, whose piped-gate sibling Q625 shipped. Wants a PreToolUse warning when an open PR's files overlap <code>origin/main...HEAD</code>.</td>
 </tr>
 <tr>
 <td><a id="Q624"></a>Q624</td>
