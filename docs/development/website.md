@@ -313,6 +313,28 @@ symptom is "my CSS does nothing," with nothing in the build to explain it. A
 utility that must never change behaviour and a component that must change it at a
 breakpoint are different classes, even when the declaration is identical.
 
+### Page-scoped table rules
+
+Two pages pin their own table columns, each selected by an element only that page
+has: `.md-content__inner:has(.gag-vs-hero)` for the why-GAG comparison, and
+`.md-typeset:has(> h1#api-reference)` for the generated
+[API reference](../reference/api.md). Both are there for the same reason. `auto`
+table layout splits width by each column's max-content demand, so a column of
+paragraphs takes width from the columns that carry the row's identity, and the
+split moves as the container does. Pin the columns with `table-layout: fixed`
+rather than tuning the prose.
+
+The comparison table's scope also owns the **last-column accent** (the tinted
+`td:last-child` and accent-coloured header), and it has to. "Last column" means
+GAG on that one table; everywhere else it is whatever the author put rightmost.
+The accent was global once, which put it on all ~660 tables in the tree, tinting
+Validation on the API reference and Fix on the troubleshooting page. Nothing in
+the build catches that, because the reveal JS classes every plain table
+(see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs)),
+so the rule reaches far past the "marketing tables" its comment claimed. **A new
+table rule that means something about a specific column belongs in a page scope,
+not in the global block.**
+
 ### Changing the hero headline
 
 The headline's type size and its two breakpoints are **derived from the longest

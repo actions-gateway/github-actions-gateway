@@ -1,6 +1,9 @@
 {{- /*
-Fork of crd-ref-docs' built-in markdown type template. The one change is the
-type doc: same `# Title` godoc-heading treatment as gv_details.tpl.
+Fork of crd-ref-docs' built-in markdown type template. Three changes: the type
+doc gets the same `# Title` godoc-heading treatment as gv_details.tpl; both doc
+cells render through the field_doc helper in type_members.tpl (unwraps the Go
+source's hard line breaks); and the validation list joins with <br /> instead of
+trailing one, which left every validation cell ending in a blank line.
 */ -}}
 {{- define "type" -}}
 {{- $type := . -}}
@@ -35,7 +38,7 @@ _Appears in:_
 {{ end -}}
 
 {{ range $type.Members -}}
-| `{{ .Name  }}` _{{ markdownRenderType .Type }}_ | {{ template "type_members" . }} | {{ markdownRenderDefault .Default }} | {{ range .Validation -}} {{ markdownRenderFieldDoc . }} <br />{{ end }} |
+| `{{ .Name  }}` _{{ markdownRenderType .Type }}_ | {{ template "type_members" . }} | {{ markdownRenderDefault .Default }} | {{ range $i, $v := .Validation }}{{ if $i }}<br />{{ end }}{{ markdownRenderFieldDoc $v }}{{ end }} |
 {{ end -}}
 
 {{ end -}}
@@ -44,7 +47,7 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 {{ range $type.EnumValues -}}
-| `{{ .Name }}` | {{ markdownRenderFieldDoc .Doc }} |
+| `{{ .Name }}` | {{ template "field_doc" .Doc }} |
 {{ end -}}
 {{ end -}}
 
