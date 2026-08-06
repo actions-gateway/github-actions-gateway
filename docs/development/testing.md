@@ -1085,7 +1085,7 @@ So: **name the process the assertion depends on, pin its identity before the win
 
 ### Script tests: neutralize the clock, never measure it
 
-The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 35 suites concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
+The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs every `scripts/` suite concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh) (`make list-script-tests` names them), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
 
 **So a script test must never assert on wall-clock time it actually spent.** Stub `sleep` — it is a plain command, so a shell function shadows it — and assert on what the stub recorded. Two established shapes, both in-tree:
 
@@ -1103,6 +1103,24 @@ The margin can look absurd and still be a race. [`progress-watch-test.sh`](../..
 So **bound the subject's loop, not its wall clock**. A stub `sleep` ahead of the real one on `PATH` records the tick and kills the process; the assertion reads the recorded ticks. "Off" becomes zero ticks, a regression fails on the tick it took instead of spinning for the length of the gate, and both outcomes terminate through the program's own control flow — so neither end needs a deadline. The kill still surfaces as a non-zero exit, which keeps a genuine hang from passing as a clean one.
 
 Prove it by widening the window, exactly as [Q490](#synchronize-on-the-signal-you-assert-on) does: a `/bin/sleep 12` injected into `main` reproduces the reported `exit 137` on the old assertion every time, and the rewritten one passes against that same delay. `/bin/sleep`, not `sleep`, so the injected delay bypasses the stub on `PATH`.
+
+#### Two clocks in one assertion
+
+A test that waits on one clock and asserts about another has a bug that no amount of margin closes, because the two can move apart by any amount. [`release-sentinel-test.sh`](../../scripts/dogfood/release-sentinel-test.sh) held the watcher to a 60 s budget (`RELEASE_SENTINEL_TIMEOUT`) and then observed it through a 3 s window (`sleep 3`, then `kill -0`). The budget is spent against `date +%s`, which is wall clock and can step; the window is spent against `sleep`, which is a timer and cannot. Any forward step of the wall clock between the two retires the whole budget inside the window, and the watcher reports `timeout` before the test ever looks (Q690).
+
+The 20× margin is what makes this hard to read as a race, so **the margin is the tell, not the reassurance**: a budget that cannot plausibly elapse, elapsing anyway, means the assertion is not measuring the quantity it names.
+
+Contention alone does not explain this one, and it is worth separating the two causes. Measured 2026-08-05 on an 18-core machine: 240 suite runs under concurrent full `make scripts-test` fan-outs (56 suites each) and repeated `make check` (load average 31 to 59) produced no failure; 102 timed windows stretched to 4 s at worst, never past 5; and 4,000 `date +%s` calls under the same load returned a sane value every time. A clock that runs ahead of the timer reproduces the reported failure verbatim, down to the assertion name and the `EVENT: timeout` payload. So Q642 above and Q690 are one class (an assertion bounded by real seconds around a subprocess) reached by two different triggers: scheduler delay there, clock discontinuity here. Q596's `tree-in-sync` is *not* a third instance of it, whatever the symptom line suggests. Its measured mechanism was a subprocess whose exit status was unobservable through a process substitution, which left one side of a diff empty and read as drift ([the v2 API sync gate](#the-v2-api-sync-gate)). An unchecked status, not a clock.
+
+The fix is to leave the suite with **one clock, and let the subject drive it**. The watcher reads time through `date` and paces itself through `sleep`, both `PATH` commands, so stubbing the pair gives a virtual clock that advances by exactly the interval the subject asked to sleep and at no other time:
+
+- **"Still asleep" becomes a count of the subject's own polls**, not a span of seconds. The stub caps the loop and kills at the cap, so both outcomes terminate through the subject's control flow and neither end needs a deadline.
+- **A transition lands on a poll.** The stub runs a per-case hook, so the event is appended strictly after the watcher captured its baseline and strictly before its next read. That is synchronization, where the `sleep 3` it replaced was a guess.
+- **The budget becomes exact.** Two polls of a 2 s budget retire it, every run, on any machine.
+
+**A frozen clock needs a positive control, or the freeze hides the assertions it was meant to protect.** With time stopped, every "stays asleep" case passes whatever the subject does, including doing nothing. One case therefore has to spend the budget and reach the timeout; it is what proves the stub is wired to the thing the other cases depend on. The same reasoning applies to the stubs themselves: each new assertion here was checked by deleting the mechanism it names from `release-sentinel.sh` and requiring it to go red, and the mutations were first written as text patterns that `perl` silently emptied by interpolating `$json`, so the harness also asserts that the mutation changed the file at all.
+
+Removing the real seconds took the suite from 11.4 s to 3.6 s, which is the same secondary effect Q471 reported: a test that stubs `sleep` does not wait for anything.
 
 ### Testing a `main`-shaped script: the entry-point seam, and the errexit trap
 
