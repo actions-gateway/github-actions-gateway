@@ -77,8 +77,42 @@ Held here so the reasoning is not lost, not committed to the release:
   set with more than one `runnerLabel` at admission. This is a migration blocker
   in the ARC → GAG direction and currently has no Queue row.
 
+## In scope: reconcile the marketing surfaces
+
+1.5 carries the marketing-claim work identified by the 2026-08-06 competitive
+review. It touches no shipped artifact, so individual corrections can land
+continuously as docs PRs, but the release does not tag until the reconciliation
+has been done and its verdict recorded here.
+
+Three bodies of work, in dependency order:
+
+1. **Corrections.** Claims that are wrong or stale today. The largest are the
+   ARC-side cells of the `why-gag.md` comparison table: 11 of them assert a gap
+   with no ARC version and no measurement date, and two went false at datable
+   upstream releases (0.13.1 fixed quota-blocked pod creation; 0.14.0 added
+   multi-label scale sets, which GAG does not have). Also the listener-footprint
+   wording, which is substantively right but uses "cluster IP" to mean a pod IP,
+   inviting a reader to check `Service` objects and conclude the table is wrong.
+2. **Under-claims.** Nine capabilities shipped and appear only in
+   `features.md`. The largest are no-PEM workload identity (the GitHub App
+   private key never enters the cluster), the live-validated per-tenant egress
+   IP result, and the durability programme whose motivating incident was five
+   worker pods running 16 hours on 82 spot node-hours.
+3. **Structure.** Q713 blocks any number-bearing claim, since the shipped tier
+   emits no latency or duration series to measure. Q712 blocks publishing
+   tenant-isolation marketing, because the runner-group binding it would be
+   claiming is unwired.
+
+The recurring form of this is now [release.md § Pre-flight](../operations/release.md#1-pre-flight),
+which asks the same three questions before every tag. 1.5 is the first release
+to run it, and the backlog it produced is the reason the step exists.
+
 ## Open question for scoping
 
-Whether 1.5 also carries the marketing-claim corrections identified on
-2026-08-06, or whether those land continuously as docs PRs independent of the
-release train. They touch no shipped artifact, so the default is continuous.
+Whether the comparison table keeps its verdict-table shape at all. The 2026-08-06
+review traced the 11 undated cells to the format: a green-check/red-X table needs
+a definite cell in every row, and the working notes it was built from had marked
+most competitor-side facts as unverified. The format had nowhere to put "we
+believe this but have not checked it", so unverified became a red X. Patching
+cells does not fix that; either every competitor-side cell carries a version and
+a date, or the page stops rendering competitor claims as verdicts.

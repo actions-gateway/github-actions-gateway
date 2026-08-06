@@ -224,6 +224,37 @@ and let the ledger's `-gate` rows answer "is it done?" until the tag.
   `capacityGate.mode: On` days before 1.3.0 would have published it, and only
   because the question came up in an unrelated conversation.
 
+- **Reconcile the marketing surfaces against what this tag actually ships.**
+  `docs/index.md`, `docs/why-gag.md`, `README.md`, and `docs/features.md` make
+  claims about GAG *and* about alternatives, and both halves rot: GAG gains
+  capabilities the pages never learn about, and a competitor closes a gap the
+  pages still assert. Neither is caught by any gate, because both are prose.
+
+  Three questions, in this order:
+
+  1. **Does anything shipped since the last tag belong on a marketing surface?**
+     `docs/features.md` is the accurate inventory; the other three are curated.
+     Nothing propagates upward on its own, so a capability that lands only in
+     `features.md` is a capability nobody selling the project knows about.
+  2. **Does every claim about GAG still describe GAG?** Check especially claims
+     written against an older acquisition tier or API version, and any "by
+     default" wording against the actual kubebuilder defaults in `api/`.
+  3. **Does every claim about an alternative still hold, and does it say when it
+     was measured?** A competitive claim without a version and a date cannot be
+     re-checked, so it silently becomes false rather than becoming stale.
+
+  Record the verdict in the release's plan doc and file corrections as Queue
+  rows carrying this release's gate label.
+
+  This step exists because the 2026-08-06 competitive review found 11 rows in
+  `why-gag.md` asserting a gap in Actions Runner Controller (ARC) with **no ARC
+  version and no measurement date on any of them**. Two had gone false at
+  datable upstream releases (ARC 0.13.1 and 0.14.0) and nobody noticed, one
+  contradicted an explicit instruction in the project's own working notes, and
+  one promised a recovery behaviour the code deliberately refuses. The same
+  review found nine shipped capabilities that no marketing surface mentioned.
+  Rot runs in both directions and only a deliberate pass catches it.
+
 - **Review the operator-facing caveats this tag publishes, and curate the notes
   if there are any.** `publish.yml` writes a generated body from the commit log,
   which never says "this upgrade needs a manual step first". Richer notes are

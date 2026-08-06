@@ -79,6 +79,45 @@ and each further item moves that out. The three admitted are the ones where
 waiting costs something concrete: a served-unenforced API field, templates CI
 already proves, and a manual step this cycle introduced.
 
+## Also in scope: the feature list and the marketing surfaces
+
+Added 2026-08-06, after a competitive review found both halves of the marketing
+rotting at once. This is docs-only, touches no shipped artifact, and does not
+need a gate row; it does need to happen before the tag.
+
+**The inaccurate claims land here, not in 1.5.** They are wrong now, and every
+day they stay up is a day a prospect can check one and stop trusting the page:
+
+- The executive summary promised OOM-killed and node-lost jobs re-run
+  automatically, in three places. The provisioner recovers eviction, preemption,
+  and external graceful deletion; an OOM-killed container is explicitly excluded
+  as "the job failed on its own merits". **Corrected 2026-08-06.**
+- The ~10 minute recovery figure was the worst case quoted as the case. A
+  preemption or drain concludes in a measured 15-26s. **Corrected 2026-08-06.**
+- GitHub's queue timeout is 24 hours; "up to 48 h" came from a GHES page that
+  has since been rewritten. **Corrected 2026-08-06.**
+- Two ARC-side comparison rows went false at datable upstream releases: 0.13.1
+  made quota-blocked pod creation self-healing, and 0.14.0 added multi-label
+  scale sets, which GAG does not have. **Open.**
+- `why-gag.md` states ARC ships no bundled dashboard; it ships a per-scale-set
+  Grafana sample. The defensible claim is that nothing aggregates across scale
+  sets or per tenant. **Open.**
+
+**`docs/features.md` is the inventory and needs a sweep.** It was created
+2026-08-01 and is close to complete, but 1.4 adds six user-facing features ahead
+of the three gating rows, and a feature that never reaches the inventory never
+reaches the curated surfaces either.
+
+**One under-claim is worth pulling up now** rather than waiting for 1.5's larger
+pass: no-PEM workload identity gets a single line in `features.md` and a
+nine-word aside inside a YAML footnote, while the weaker claim ("App keys never
+in env") occupies a security pillar. ARC reads the App private key from a
+Secret, so "the key never enters the cluster" is a row that writes itself.
+
+The rest of the reconciliation, including whether the comparison table keeps its
+verdict-table shape, is [1.5 scope](release-1.5.md#in-scope-reconcile-the-marketing-surfaces).
+The recurring form is [release.md § Pre-flight](../operations/release.md#1-pre-flight).
+
 ## The discipline this cycle could not apply
 
 "Do not let a feature force a minor when the accumulated patches could ship
