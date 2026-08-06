@@ -3590,9 +3590,9 @@ converges without an operator edit and without a hot reconcile loop.</p>
 <tbody>
 <tr>
 <td><code>mode</code> <em><a href="#vpaupdatemode">VPAUpdateMode</a></em></td>
-<td>Mode is the managed VerticalPodAutoscaler's updateMode. Defaults to Off —<br />recommendation-only, so opting in never restarts the AGC by itself. Set<br />Recreate to let the autoscaler actuate by evicting the AGC pod, or Initial to<br />apply the recommendation only at the next restart.</td>
+<td>Mode is the managed VerticalPodAutoscaler's updateMode. Defaults to Off — recommendation-only, so opting in never restarts the AGC by itself. Set Recreate to let the autoscaler actuate by evicting the AGC pod, or Initial to apply the recommendation only at the next restart.</td>
 <td>Off</td>
-<td>Enum: [Off Initial Recreate] <br />Optional: {} <br /></td>
+<td>Enum: [Off Initial Recreate]<br />Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -3670,69 +3670,69 @@ docs/operations/security-operations.md.</p>
 <tbody>
 <tr>
 <td><code>credentials</code> <em><a href="#githubcredentials">GitHubCredentials</a></em></td>
-<td>Credentials configures how this gateway authenticates to GitHub. It is a<br />discriminated union keyed by credentials.type: exactly the member the discriminator<br />names is set (GitHubApp today; workload identity joins as an additive second member,<br />Q197). v2 nests the credential under this explicit-discriminator parent before the<br />v2beta1 freeze so adding an auth method never reshapes the spec again<br />(§H.15).</td>
+<td>Credentials configures how this gateway authenticates to GitHub. It is a discriminated union keyed by credentials.type: exactly the member the discriminator names is set (GitHubApp today; workload identity joins as an additive second member, Q197). v2 nests the credential under this explicit-discriminator parent before the v2beta1 freeze so adding an auth method never reshapes the spec again (§H.15).</td>
 <td></td>
 <td></td>
 </tr>
 <tr>
 <td><code>githubURL</code> <em>string</em></td>
-<td>GitHubURL is the GitHub organization, enterprise, or repository URL this<br />gateway's runners register against (e.g. "https://github.com/my-org"). It is<br />immutable: rebinding a running gateway's GitHub org is a footgun, so v2 freezes<br />it via a CEL transition rule (§H.15). Casing follows the v2 convention —<br />"github" is one lowercased word, the trailing initialism stays uppercase.</td>
+<td>GitHubURL is the GitHub organization, enterprise, or repository URL this gateway's runners register against (e.g. "https://github.com/my-org"). It is immutable: rebinding a running gateway's GitHub org is a footgun, so v2 freezes it via a CEL transition rule (§H.15). Casing follows the v2 convention — "github" is one lowercased word, the trailing initialism stays uppercase.</td>
 <td></td>
-<td>MaxLength: 2048 <br />MinLength: 1 <br />Pattern: <code>^https://</code> <br /></td>
+<td>MaxLength: 2048<br />MinLength: 1<br />Pattern: <code>^https://</code></td>
 </tr>
 <tr>
 <td><code>githubCABundleRef</code> <em><a href="#localconfigmapreference">LocalConfigMapReference</a></em></td>
-<td>GitHubCABundleRef names a ConfigMap in this namespace holding, under the key<br />"ca.crt", a PEM certificate bundle to trust when reaching githubURL. Set it when<br />a GitHub Enterprise Server appliance is fronted by a private or internal<br />certificate authority: the AGC and its worker pods otherwise trust the system<br />roots (plus the egress proxy's own CA) and the TLS handshake fails.<br />The bundle is additive — the system roots stay trusted — so a gateway that also<br />reaches public hosts is unaffected. Certificates are public material, which is<br />why the carrier is a ConfigMap rather than a Secret.<br />Resolved at runtime, not at admission (§H.7): a ref naming a ConfigMap that is<br />missing, or whose ca.crt holds no parseable certificate, fails the gateway closed<br />(Degraded, reason CABundleNotFound / CABundleInvalid) until it resolves.<br />Unset (the default) trusts the system roots only. It does not affect egress<br />reachability — a GHES appliance's address space must still be allowed by the<br />egress policy (see the GitHubEgressIncomplete condition).</td>
+<td>GitHubCABundleRef names a ConfigMap in this namespace holding, under the key "ca.crt", a PEM certificate bundle to trust when reaching githubURL. Set it when a GitHub Enterprise Server appliance is fronted by a private or internal certificate authority: the AGC and its worker pods otherwise trust the system roots (plus the egress proxy's own CA) and the TLS handshake fails.<br />The bundle is additive — the system roots stay trusted — so a gateway that also reaches public hosts is unaffected. Certificates are public material, which is why the carrier is a ConfigMap rather than a Secret.<br />Resolved at runtime, not at admission (§H.7): a ref naming a ConfigMap that is missing, or whose ca.crt holds no parseable certificate, fails the gateway closed (Degraded, reason CABundleNotFound / CABundleInvalid) until it resolves.<br />Unset (the default) trusts the system roots only. It does not affect egress reachability — a GHES appliance's address space must still be allowed by the egress policy (see the GitHubEgressIncomplete condition).</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>defaultProxyRef</code> <em><a href="#localobjectref">LocalObjectRef</a></em></td>
-<td>DefaultProxyRef names an EgressProxy used for AGC control-plane egress and<br />inherited by RunnerSets under this gateway that do not set their own proxyRef.<br />Optional: unset means the control plane egresses directly (subject to<br />NetworkPolicy). Same-namespace unless the target EgressProxy grants<br />cross-namespace use (§H.4, §H.9).</td>
+<td>DefaultProxyRef names an EgressProxy used for AGC control-plane egress and inherited by RunnerSets under this gateway that do not set their own proxyRef. Optional: unset means the control plane egresses directly (subject to NetworkPolicy). Same-namespace unless the target EgressProxy grants cross-namespace use (§H.4, §H.9).</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>defaultTemplateRef</code> <em><a href="#objectref">ObjectRef</a></em></td>
-<td>DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate<br />(set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets<br />under this gateway that set no spec.templateRef of their own (Q172). Optional: it<br />is the second rung of the template-resolution chain — an unset RunnerSet templateRef<br />resolves rs.templateRef → this defaultTemplateRef → the single cluster-default<br />ClusterRunnerTemplate → fail-closed TemplateNotFound (§H.4). Resolved at runtime in<br />the gateway's own namespace (for a RunnerTemplate); a ClusterRunnerTemplate referent<br />is cluster-scoped. A defaultTemplateRef that names a <em>missing</em> template fails the<br />inheriting set closed (TemplateNotFound), exactly like an explicit templateRef.</td>
+<td>DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate (set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets under this gateway that set no spec.templateRef of their own (Q172). Optional: it is the second rung of the template-resolution chain — an unset RunnerSet templateRef resolves rs.templateRef → this defaultTemplateRef → the single cluster-default ClusterRunnerTemplate → fail-closed TemplateNotFound (§H.4). Resolved at runtime in the gateway's own namespace (for a RunnerTemplate); a ClusterRunnerTemplate referent is cluster-scoped. A defaultTemplateRef that names a <em>missing</em> template fails the inheriting set closed (TemplateNotFound), exactly like an explicit templateRef.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>agcResources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
-<td>AGCResources tunes the CPU/memory requests and limits stamped on this<br />gateway's AGC control-plane container (Q171). It is an additive, per-key<br />override of the platform default — the documented Appendix A sizing of<br />requests {cpu: 500m, memory: 2Gi}, limits {cpu: 2, memory: 4Gi}. The GMC<br />starts from that default and overlays only the request/limit keys set<br />here, so a value that sets just one knob keeps the sensible default for<br />the others. Unset ⇒ the platform default unchanged. Changing it is a<br />rolling restart of the AGC, not a hot reload.<br />Tune cautiously: the AGC is a single pod holding all listener-goroutine<br />state in memory. A memory limit below the AGC's working set OOMKills the<br />control plane, and a request larger than any node (or the namespace<br />ResourceQuota) leaves the AGC pod unschedulable (Pending). See<br />docs/operations/tenant-onboarding.md and<br />docs/design/appendix-e-capacity-planning.md for sizing guidance and the<br />recommended floor.</td>
+<td>AGCResources tunes the CPU/memory requests and limits stamped on this gateway's AGC control-plane container (Q171). It is an additive, per-key override of the platform default — the documented Appendix A sizing of requests {cpu: 500m, memory: 2Gi}, limits {cpu: 2, memory: 4Gi}. The GMC starts from that default and overlays only the request/limit keys set here, so a value that sets just one knob keeps the sensible default for the others. Unset ⇒ the platform default unchanged. Changing it is a rolling restart of the AGC, not a hot reload.<br />Tune cautiously: the AGC is a single pod holding all listener-goroutine state in memory. A memory limit below the AGC's working set OOMKills the control plane, and a request larger than any node (or the namespace ResourceQuota) leaves the AGC pod unschedulable (Pending). See docs/operations/tenant-onboarding.md and docs/design/appendix-e-capacity-planning.md for sizing guidance and the recommended floor.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>agcAutoscaling</code> <em><a href="#agcverticalautoscaling">AGCVerticalAutoscaling</a></em></td>
-<td>AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical<br />right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC<br />Deployment so the autoscaler observes actual usage and sizes the container's<br />resource <em>requests</em> for it. Unset (the default) ⇒ no VerticalPodAutoscaler is<br />created and any one the GMC previously stamped is deleted, so the opt-in is<br />off by default and fully reversible.<br />It composes with — it does not replace — agcResources. See<br />AGCVerticalAutoscaling for the precedence rules and the behavior when the<br />VerticalPodAutoscaler CRD is not installed in the cluster.</td>
+<td>AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC Deployment so the autoscaler observes actual usage and sizes the container's resource <em>requests</em> for it. Unset (the default) ⇒ no VerticalPodAutoscaler is created and any one the GMC previously stamped is deleted, so the opt-in is off by default and fully reversible.<br />It composes with — it does not replace — agcResources. See AGCVerticalAutoscaling for the precedence rules and the behavior when the VerticalPodAutoscaler CRD is not installed in the cluster.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>logLevel</code> <em>string</em></td>
-<td>LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info<br />(default), debug. Changing it is a rolling restart of the AGC, not a hot<br />reload. Use debug only for a bug repro.</td>
+<td>LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info (default), debug. Changing it is a rolling restart of the AGC, not a hot reload. Use debug only for a bug repro.</td>
 <td>info</td>
-<td>Enum: [info debug] <br />Optional: {} <br /></td>
+<td>Enum: [info debug]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>tracing</code> <em><a href="#tracingconfig">TracingConfig</a></em></td>
-<td>Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's<br />AGC. Tracing stays off unless tracing.endpoint is set.</td>
+<td>Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's AGC. Tracing stays off unless tracing.endpoint is set.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>scheduling</code> <em><a href="#podscheduling">PodScheduling</a></em></td>
-<td>Scheduling places this gateway's AGC control-plane pod on specific nodes — for<br />example onto the same tenant node pool as the proxy pool, or onto a<br />control-plane pool distinct from where workers run (Q282). Unlike the<br />EgressProxy, the AGC pod carries no built-in affinity, so the block applies<br />verbatim. See PodScheduling.</td>
+<td>Scheduling places this gateway's AGC control-plane pod on specific nodes — for example onto the same tenant node pool as the proxy pool, or onto a control-plane pool distinct from where workers run (Q282). Unlike the EgressProxy, the AGC pod carries no built-in affinity, so the block applies verbatim. See PodScheduling.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>clusterCapacity</code> <em><a href="#clustercapacity">ClusterCapacity</a></em></td>
-<td>ClusterCapacity states facts about the cluster this gateway runs in that the<br />AGC cannot safely determine for itself (Q470). It is platform-operator<br />knowledge, not tenant knowledge, which is why it lives here rather than on the<br />RunnerSets that consume it.</td>
+<td>ClusterCapacity states facts about the cluster this gateway runs in that the AGC cannot safely determine for itself (Q470). It is platform-operator knowledge, not tenant knowledge, which is why it lives here rather than on the RunnerSets that consume it.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -3753,21 +3753,21 @@ uniform v2 status/condition contract (§H.7).</p>
 <tbody>
 <tr>
 <td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
-<td>Conditions are the observed conditions of the gateway. Known types: Ready,<br />AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed,<br />RunnerSetsDegraded.</td>
+<td>Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed, RunnerSetsDegraded.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>proxyMode</code> <em>string</em></td>
-<td>ProxyMode records how this gateway's AGC control-plane egress reaches GitHub:<br />"Proxied" (through the EgressProxy named by defaultProxyRef, with stable<br />per-tenant egress IPs) or "Direct" (no defaultProxyRef, still NetworkPolicy-<br />restricted to GitHub + DNS + kube API but without per-tenant IP attribution).<br />Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10).</td>
+<td>ProxyMode records how this gateway's AGC control-plane egress reaches GitHub: "Proxied" (through the EgressProxy named by defaultProxyRef, with stable per-tenant egress IPs) or "Direct" (no defaultProxyRef, still NetworkPolicy- restricted to GitHub + DNS + kube API but without per-tenant IP attribution). Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10).</td>
 <td></td>
-<td>Enum: [Proxied Direct] <br />Optional: {} <br /></td>
+<td>Enum: [Proxied Direct]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>observedGeneration</code> <em>integer</em></td>
 <td>ObservedGeneration is the .metadata.generation the most recent reconcile acted on.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -3801,9 +3801,9 @@ tenant.</p>
 <tbody>
 <tr>
 <td><code>mode</code> <em>string</em></td>
-<td>Mode selects how hard this set tries not to claim work it cannot run, by naming<br />how the AGC learns the cluster cannot place a worker; see the CapacityGateMode*<br />constants. Off is the default and is today's behavior. Observe gates on evidence<br />an already-stuck pod produced — it is not a report-only tier.<br />It does NOT select the signal. Which signal is sound depends on whether the<br />cluster can grow, which is stated once by the platform operator on<br />ActionsGateway.spec.clusterCapacity.nodeAutoscaling — so a tenant enabling the<br />gate cannot pick a signal that is wrong for the cluster they are running in.</td>
+<td>Mode selects how hard this set tries not to claim work it cannot run, by naming how the AGC learns the cluster cannot place a worker; see the CapacityGateMode* constants. Off is the default and is today's behavior. Observe gates on evidence an already-stuck pod produced — it is not a report-only tier.<br />It does NOT select the signal. Which signal is sound depends on whether the cluster can grow, which is stated once by the platform operator on ActionsGateway.spec.clusterCapacity.nodeAutoscaling — so a tenant enabling the gate cannot pick a signal that is wrong for the cluster they are running in.</td>
 <td>Off</td>
-<td>Enum: [Off Observe] <br />Optional: {} <br /></td>
+<td>Enum: [Off Observe]<br />Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -3829,9 +3829,9 @@ would let two sets in one cluster disagree about a fact that has one answer.</p>
 <tbody>
 <tr>
 <td><code>nodeAutoscaling</code> <em>string</em></td>
-<td>NodeAutoscaling states whether anything in this cluster adds nodes in response<br />to unschedulable pods; see the NodeAutoscaling* constants. It selects which<br />signal an opted-in RunnerSet capacity gate may trust, because an unschedulable<br />pod means opposite things depending on the answer: where a node may still<br />arrive, that pod is a REQUEST and only the autoscaler's own declination proves<br />nothing is coming; where none can, the pod is pure waste and the scheduler's<br />verdict is enough.</td>
+<td>NodeAutoscaling states whether anything in this cluster adds nodes in response to unschedulable pods; see the NodeAutoscaling* constants. It selects which signal an opted-in RunnerSet capacity gate may trust, because an unschedulable pod means opposite things depending on the answer: where a node may still arrive, that pod is a REQUEST and only the autoscaler's own declination proves nothing is coming; where none can, the pod is pure waste and the scheduler's verdict is enough.</td>
 <td>Present</td>
-<td>Enum: [Present Absent] <br />Optional: {} <br /></td>
+<td>Enum: [Present Absent]<br />Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -3904,45 +3904,45 @@ jobs for no packing benefit).</p>
 <tbody>
 <tr>
 <td><code>container</code> <em>string</em></td>
-<td>Container is the container name in the worker pod template this<br />recommendation applies to.</td>
+<td>Container is the container name in the worker pod template this recommendation applies to.</td>
 <td></td>
 <td></td>
 </tr>
 <tr>
 <td><code>requests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
-<td>Requests are the recommended resource requests (cpu, memory), derived from<br />the p95 of observed per-job usage peaks and rounded up to coarse increments<br />(sizing is bucket-granular, not exact).</td>
+<td>Requests are the recommended resource requests (cpu, memory), derived from the p95 of observed per-job usage peaks and rounded up to coarse increments (sizing is bucket-granular, not exact).</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>limits</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
-<td>Limits are the recommended resource limits. Memory only, at the observed<br />maximum peak plus OOM headroom; no CPU limit is ever recommended.</td>
+<td>Limits are the recommended resource limits. Memory only, at the observed maximum peak plus OOM headroom; no CPU limit is ever recommended.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>observedPeak</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
-<td>ObservedPeak is the highest per-job usage peak (cpu, memory) observed in<br />the window — the input to the recommended memory limit.</td>
+<td>ObservedPeak is the highest per-job usage peak (cpu, memory) observed in the window — the input to the recommended memory limit.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>observedP95</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
-<td>ObservedP95 is the 95th percentile of per-job usage peaks (cpu, memory),<br />bucket-interpolated — the input to the recommended requests.</td>
+<td>ObservedP95 is the 95th percentile of per-job usage peaks (cpu, memory), bucket-interpolated — the input to the recommended requests.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>sampleCount</code> <em>integer</em></td>
-<td>SampleCount is the number of finished jobs whose usage peaks fed this<br />recommendation — the operator's confidence signal. Jobs shorter than one<br />sampling interval are not counted (see the worker usage metrics).</td>
+<td>SampleCount is the number of finished jobs whose usage peaks fed this recommendation — the operator's confidence signal. Jobs shorter than one sampling interval are not counted (see the worker usage metrics).</td>
 <td></td>
 <td></td>
 </tr>
 <tr>
 <td><code>windowStartTime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta">Time</a></em></td>
-<td>WindowStartTime is when this container's observation window began (first<br />sampled job, surviving AGC restarts via the re-seed).</td>
+<td>WindowStartTime is when this container's observation window began (first sampled job, surviving AGC restarts via the re-seed).</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -3969,11 +3969,11 @@ discriminated-union shape was fixed before the v2beta1 cut (§H.15).</p>
 <tbody>
 <tr>
 <td><code>GitHubApp</code></td>
-<td>CredentialTypeGitHubApp selects GitHub App authentication (the possession model):<br />the gateway holds the App's RSA private key in a namespace Secret named by<br />GitHubCredentials.GitHubApp.<br /></td>
+<td>CredentialTypeGitHubApp selects GitHub App authentication (the possession model): the gateway holds the App's RSA private key in a namespace Secret named by GitHubCredentials.GitHubApp.</td>
 </tr>
 <tr>
 <td><code>WorkloadIdentity</code></td>
-<td>CredentialTypeWorkloadIdentity selects workload-identity authentication (the<br />delegation model, Q197): no App private key is held in the cluster. The AGC proves<br />its pod identity to an external trust anchor (Vault Kubernetes auth in the MVP) and<br />the anchor signs the App JWT via an external signer. Configured by<br />GitHubCredentials.WorkloadIdentity.<br /></td>
+<td>CredentialTypeWorkloadIdentity selects workload-identity authentication (the delegation model, Q197): no App private key is held in the cluster. The AGC proves its pod identity to an external trust anchor (Vault Kubernetes auth in the MVP) and the anchor signs the App JWT via an external signer. Configured by GitHubCredentials.WorkloadIdentity.</td>
 </tr>
 </tbody>
 </table>
@@ -4001,27 +4001,27 @@ docs/design/appendix-g-future-enhancements.md §G.9.</p>
 <tbody>
 <tr>
 <td><code>podSelector</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#labelselector-v1-meta">LabelSelector</a></em></td>
-<td>PodSelector selects the in-cluster peer pods the AGC may reach (e.g. {app.kubernetes.io/name:<br />vault}). Combined with NamespaceSelector when both are set, matching NetworkPolicy peer<br />semantics. Mutually exclusive with CIDR.</td>
+<td>PodSelector selects the in-cluster peer pods the AGC may reach (e.g. {app.kubernetes.io/name: vault}). Combined with NamespaceSelector when both are set, matching NetworkPolicy peer semantics. Mutually exclusive with CIDR.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>namespaceSelector</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#labelselector-v1-meta">LabelSelector</a></em></td>
-<td>NamespaceSelector selects the namespace(s) the in-cluster peer runs in (e.g.<br />{kubernetes.io/metadata.name: vault}). Combined with PodSelector when both are set.<br />Mutually exclusive with CIDR.</td>
+<td>NamespaceSelector selects the namespace(s) the in-cluster peer runs in (e.g. {kubernetes.io/metadata.name: vault}). Combined with PodSelector when both are set. Mutually exclusive with CIDR.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>cidr</code> <em>string</em></td>
-<td>CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually<br />exclusive with the pod/namespace selectors.</td>
+<td>CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually exclusive with the pod/namespace selectors.</td>
 <td></td>
-<td>MaxLength: 43 <br />Pattern: <code>^([0-9]\{1,3\}\.)\{3\}[0-9]\{1,3\}/[0-9]\{1,2\}$\|^([0-9a-fA-F:]+)/[0-9]\{1,3\}$</code> <br />Optional: {} <br /></td>
+<td>MaxLength: 43<br />Pattern: <code>^([0-9]\{1,3\}\.)\{3\}[0-9]\{1,3\}/[0-9]\{1,2\}$\|^([0-9a-fA-F:]+)/[0-9]\{1,3\}$</code><br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>port</code> <em>integer</em></td>
-<td>Port optionally pins the destination port (1–65535) the egress rule permits. Leave it<br />unset for a peer whose port is derivable elsewhere — the Vault signer derives it from<br />VaultSigner.Address, so an unset Port preserves that behavior. Set it for peers whose<br />port is not otherwise derivable, or to override the derived port.</td>
+<td>Port optionally pins the destination port (1–65535) the egress rule permits. Leave it unset for a peer whose port is derivable elsewhere — the Vault signer derives it from VaultSigner.Address, so an unset Port preserves that behavior. Set it for peers whose port is not otherwise derivable, or to override the derived port.</td>
 <td></td>
-<td>Maximum: 65535 <br />Minimum: 1 <br />Optional: {} <br /></td>
+<td>Maximum: 65535<br />Minimum: 1<br />Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4073,19 +4073,19 @@ Selecting an FQDN mode therefore never silently weakens the default.</p>
 <tbody>
 <tr>
 <td><code>CIDR</code></td>
-<td>EgressPolicyModeCIDR is the default: a standard NetworkPolicy with the GitHub<br />IP-range allowlist, refreshed every 24h. Works on every CNI.<br /></td>
+<td>EgressPolicyModeCIDR is the default: a standard NetworkPolicy with the GitHub IP-range allowlist, refreshed every 24h. Works on every CNI.</td>
 </tr>
 <tr>
 <td><code>FQDN</code></td>
-<td>EgressPolicyModeFQDN expresses the GitHub egress allowlist by hostname. The<br />concrete CNI-native policy kind is chosen by the operator's --fqdn-policy-backend<br />(cilium/calico/gke); FQDN intent with no backend is rejected at admission.<br /></td>
+<td>EgressPolicyModeFQDN expresses the GitHub egress allowlist by hostname. The concrete CNI-native policy kind is chosen by the operator's --fqdn-policy-backend (cilium/calico/gke); FQDN intent with no backend is rejected at admission.</td>
 </tr>
 <tr>
 <td><code>CiliumFQDN</code></td>
-<td>EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium<br />backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend.<br />Prefer FQDN + --fqdn-policy-backend=cilium. Removable no earlier than v3.0.0; see<br />the EgressPolicyMode doc comment for why v2.0.0 cannot remove it.<br /></td>
+<td>EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=cilium. Removable no earlier than v3.0.0; see the EgressPolicyMode doc comment for why v2.0.0 cannot remove it.</td>
 </tr>
 <tr>
 <td><code>CalicoFQDN</code></td>
-<td>EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico<br />backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless<br />of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico. Removable no<br />earlier than v3.0.0; see the EgressPolicyMode doc comment for why v2.0.0 cannot<br />remove it.<br /></td>
+<td>EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico. Removable no earlier than v3.0.0; see the EgressPolicyMode doc comment for why v2.0.0 cannot remove it.</td>
 </tr>
 </tbody>
 </table>
@@ -4156,79 +4156,79 @@ GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2
 <td><code>minReplicas</code> <em>integer</em></td>
 <td>MinReplicas is the floor of the proxy pool's HPA.</td>
 <td>2</td>
-<td>Minimum: 1 <br />Optional: {} <br /></td>
+<td>Minimum: 1<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>maxReplicas</code> <em>integer</em></td>
 <td>MaxReplicas is the ceiling of the proxy pool's HPA.</td>
 <td>10</td>
-<td>Maximum: 100 <br />Minimum: 1 <br />Optional: {} <br /></td>
+<td>Maximum: 100<br />Minimum: 1<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>targetCPUUtilizationPercentage</code> <em>integer</em></td>
-<td>TargetCPUUtilizationPercentage is the proxy HPA's target CPU utilization. This<br />is the managed-default knob; set managedAutoscaling: false to bring your own<br />autoscaler instead.</td>
+<td>TargetCPUUtilizationPercentage is the proxy HPA's target CPU utilization. This is the managed-default knob; set managedAutoscaling: false to bring your own autoscaler instead.</td>
 <td>60</td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>managedAutoscaling</code> <em>boolean</em></td>
-<td>ManagedAutoscaling controls whether the GMC manages this proxy pool's<br />HorizontalPodAutoscaler (Q173). Defaults to true: the GMC provisions an HPA<br />scaling the pool on CPU between minReplicas and maxReplicas. Set to false to<br />bring your own autoscaler — the GMC then creates only the proxy Deployment<br />(stable "<name>-proxy" name and labels, replicas left to the external scaler)<br />and deletes any HPA it previously managed, so KEDA, VPA, or a custom HPA can<br />target the Deployment without fighting the managed one. While false:<br />maxReplicas and targetCPUUtilizationPercentage are inert; minReplicas seeds<br />only the Deployment's initial replica count; the Ready condition compares<br />ready pods against the Deployment's own desired replicas (an intentional<br />external scale-to-zero is Ready, not a wedge); and the managed<br />"<name>-proxy" HPA name stays reserved. Mirrors the managedNetworkPolicy<br />opt-out pattern; it shifts autoscaling ownership only and relaxes no<br />security property.</td>
+<td>ManagedAutoscaling controls whether the GMC manages this proxy pool's HorizontalPodAutoscaler (Q173). Defaults to true: the GMC provisions an HPA scaling the pool on CPU between minReplicas and maxReplicas. Set to false to bring your own autoscaler — the GMC then creates only the proxy Deployment (stable "<name>-proxy" name and labels, replicas left to the external scaler) and deletes any HPA it previously managed, so KEDA, VPA, or a custom HPA can target the Deployment without fighting the managed one. While false: maxReplicas and targetCPUUtilizationPercentage are inert; minReplicas seeds only the Deployment's initial replica count; the Ready condition compares ready pods against the Deployment's own desired replicas (an intentional external scale-to-zero is Ready, not a wedge); and the managed "<name>-proxy" HPA name stays reserved. Mirrors the managedNetworkPolicy opt-out pattern; it shifts autoscaling ownership only and relaxes no security property.</td>
 <td>true</td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>resources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
 <td>Resources are the proxy container's resource requirements.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>logLevel</code> <em>string</em></td>
-<td>LogLevel controls the log verbosity of this proxy pool. Allowed values: info<br />(default), debug. The GMC threads it to the proxy container as the LOG_LEVEL<br />environment variable; changing it is a rolling restart of the proxy pool (not<br />a hot reload), so the new level takes effect once the pods roll. Use debug<br />only for a bug repro — per-CONNECT debug lines dominate log volume under<br />load. The default is info so a pool never silently runs at debug verbosity.</td>
+<td>LogLevel controls the log verbosity of this proxy pool. Allowed values: info (default), debug. The GMC threads it to the proxy container as the LOG_LEVEL environment variable; changing it is a rolling restart of the proxy pool (not a hot reload), so the new level takes effect once the pods roll. Use debug only for a bug repro — per-CONNECT debug lines dominate log volume under load. The default is info so a pool never silently runs at debug verbosity.</td>
 <td>info</td>
-<td>Enum: [info debug] <br />Optional: {} <br /></td>
+<td>Enum: [info debug]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>noProxyCIDRs</code> <em>string array</em></td>
-<td>NoProxyCIDRs lists destinations excluded from the per-tenant egress proxy<br />(appended to NO_PROXY). Entries may be CIDR prefixes, bare IPs, or NO_PROXY<br />domain suffixes for internal destinations. Never list GitHub here — an entry<br />that routes GitHub traffic around the proxy defeats per-tenant egress-IP<br />attribution and is rejected by the GMC admission path. The admission check<br />covers the public GitHub hosts plus the gitHubURL host — a GitHub Enterprise<br />Server host included — of every ActionsGateway or RunnerSet that references<br />this proxy, on both the proxy write and the referrer write.<br />The cluster-internal destinations are appended automatically and need not be<br />listed: svc.cluster.local, localhost and 127.0.0.1 for both the AGC and its<br />workers, plus kubernetes.default.svc and this cluster's API server ClusterIP<br />(read from KUBERNETES_SERVICE_HOST) for the AGC, which dials the API server<br />by IP. Every entry added here bypasses the proxy and so escapes the<br />per-tenant egress-IP attribution: exempt specific internal destinations,<br />never a broad range.</td>
+<td>NoProxyCIDRs lists destinations excluded from the per-tenant egress proxy (appended to NO_PROXY). Entries may be CIDR prefixes, bare IPs, or NO_PROXY domain suffixes for internal destinations. Never list GitHub here — an entry that routes GitHub traffic around the proxy defeats per-tenant egress-IP attribution and is rejected by the GMC admission path. The admission check covers the public GitHub hosts plus the gitHubURL host — a GitHub Enterprise Server host included — of every ActionsGateway or RunnerSet that references this proxy, on both the proxy write and the referrer write.<br />The cluster-internal destinations are appended automatically and need not be listed: svc.cluster.local, localhost and 127.0.0.1 for both the AGC and its workers, plus kubernetes.default.svc and this cluster's API server ClusterIP (read from KUBERNETES_SERVICE_HOST) for the AGC, which dials the API server by IP. Every entry added here bypasses the proxy and so escapes the per-tenant egress-IP attribution: exempt specific internal destinations, never a broad range.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>managedNetworkPolicy</code> <em>boolean</em></td>
-<td>ManagedNetworkPolicy controls whether the GMC manages this proxy's egress<br />NetworkPolicy. Defaults to true (secure default).</td>
+<td>ManagedNetworkPolicy controls whether the GMC manages this proxy's egress NetworkPolicy. Defaults to true (secure default).</td>
 <td>true</td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>egressPolicyMode</code> <em><a href="#egresspolicymode">EgressPolicyMode</a></em></td>
-<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress<br />allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range<br />reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy<br />whose mechanism the operator picks via --fqdn-policy-backend). The deprecated<br />CiliumFQDN/CalicoFQDN aliases pin their namesake backend and stay accepted until<br />v3.0.0 at the earliest. It has no effect when managedNetworkPolicy is false. See<br />the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
+<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). The deprecated CiliumFQDN/CalicoFQDN aliases pin their namesake backend and stay accepted until v3.0.0 at the earliest. It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
 <td>CIDR</td>
-<td>Enum: [CIDR FQDN CiliumFQDN CalicoFQDN] <br />Optional: {} <br /></td>
+<td>Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>destinationFQDNs</code> <em>string array</em></td>
-<td>DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may<br />forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always<br />allowed and need not be listed; empty (the default) means GitHub-only.<br />Host-suffix entries REQUIRE an FQDN egressPolicyMode (FQDN, or the deprecated<br />CiliumFQDN/CalicoFQDN), since the pod-egress layer expresses them as toFQDNs<br />rules. Opening egress<br />beyond GitHub is an admin decision: the GMC rejects any entry not on its<br />--allowed-egress-fqdns platform allowlist (empty allowlist denies all).<br />G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).</td>
+<td>DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always allowed and need not be listed; empty (the default) means GitHub-only. Host-suffix entries REQUIRE an FQDN egressPolicyMode (FQDN, or the deprecated CiliumFQDN/CalicoFQDN), since the pod-egress layer expresses them as toFQDNs rules. Opening egress beyond GitHub is an admin decision: the GMC rejects any entry not on its --allowed-egress-fqdns platform allowlist (empty allowlist denies all). G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).</td>
 <td></td>
-<td>MaxItems: 64 <br />Optional: {} <br /></td>
+<td>MaxItems: 64<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>destinationCIDRs</code> <em>string array</em></td>
-<td>DestinationCIDRs lists EXTRA, non-GitHub IP ranges the proxy may forward to<br />(e.g. an internal 10.x subnet with no DNS, or a cloud private-API range).<br />CIDR entries work in ANY egressPolicyMode — they become ipBlock egress peers<br />(CIDR mode) or toCIDR peers (FQDN mode). The GMC rejects any entry not<br />contained in its --allowed-egress-cidrs platform allowlist (empty denies all).</td>
+<td>DestinationCIDRs lists EXTRA, non-GitHub IP ranges the proxy may forward to (e.g. an internal 10.x subnet with no DNS, or a cloud private-API range). CIDR entries work in ANY egressPolicyMode — they become ipBlock egress peers (CIDR mode) or toCIDR peers (FQDN mode). The GMC rejects any entry not contained in its --allowed-egress-cidrs platform allowlist (empty denies all).</td>
 <td></td>
-<td>MaxItems: 64 <br />Optional: {} <br /></td>
+<td>MaxItems: 64<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>sharing</code> <em><a href="#proxysharing">ProxySharing</a></em></td>
-<td>Sharing controls cross-namespace reference to this proxy. nil means<br />same-namespace only (the default, secure). Consent lives on the provider<br />(proxy owner) side: a consumer-side name alone never authorizes the reference<br />(§H.9). v2 ships the inline allowlist only.</td>
+<td>Sharing controls cross-namespace reference to this proxy. nil means same-namespace only (the default, secure). Consent lives on the provider (proxy owner) side: a consumer-side name alone never authorizes the reference (§H.9). v2 ships the inline allowlist only.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>scheduling</code> <em><a href="#podscheduling">PodScheduling</a></em></td>
-<td>Scheduling pins this proxy pool's pods to specific nodes — the mechanism that<br />binds a tenant to a per-tenant egress IP (Q243/Q282), since the pod's node<br />determines which cloud NAT / egress path its traffic leaves by. A<br />podAntiAffinity set here replaces the built-in required cross-node spread; see<br />PodScheduling for the full precedence rules and the tenant-settable-by-design<br />rationale.</td>
+<td>Scheduling pins this proxy pool's pods to specific nodes — the mechanism that binds a tenant to a per-tenant egress IP (Q243/Q282), since the pod's node determines which cloud NAT / egress path its traffic leaves by. A podAntiAffinity set here replaces the built-in required cross-node spread; see PodScheduling for the full precedence rules and the tenant-settable-by-design rationale.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4251,21 +4251,21 @@ finalizer (§H.8).</p>
 <tbody>
 <tr>
 <td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
-<td>Conditions are the observed conditions of the proxy pool. Known types: Ready,<br />Degraded, ProxyQuotaPressure, ProxyQuotaExceeded, EgressRulesStale (Q320).</td>
+<td>Conditions are the observed conditions of the proxy pool. Known types: Ready, Degraded, ProxyQuotaPressure, ProxyQuotaExceeded, EgressRulesStale (Q320).</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>readyReplicas</code> <em>integer</em></td>
 <td>ReadyReplicas is the number of ready proxy pods.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>observedGeneration</code> <em>integer</em></td>
 <td>ObservedGeneration is the .metadata.generation the most recent reconcile acted on.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4289,15 +4289,15 @@ enforced by a per-provider CEL iff rule that each new provider extends.</p>
 <tbody>
 <tr>
 <td><code>provider</code> <em><a href="#signerprovider">SignerProvider</a></em></td>
-<td>Provider selects the active signer backend (the union discriminator). The member it<br />names must be set and all others absent.</td>
+<td>Provider selects the active signer backend (the union discriminator). The member it names must be set and all others absent.</td>
 <td></td>
-<td>Enum: [Vault] <br />Required: {} <br /></td>
+<td>Enum: [Vault]<br />Required: {}</td>
 </tr>
 <tr>
 <td><code>vault</code> <em><a href="#vaultsigner">VaultSigner</a></em></td>
 <td>Vault configures the HashiCorp Vault transit signer. Set iff Provider is Vault.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4325,21 +4325,21 @@ the union.</p>
 <tbody>
 <tr>
 <td><code>type</code> <em><a href="#credentialtype">CredentialType</a></em></td>
-<td>Type selects the active credential member (the union discriminator). The member it<br />names must be set and all others absent. It is required and explicit — an absent or<br />implicit discriminator would have to become required later, itself a breaking<br />change, so v2 fixes it before beta.</td>
+<td>Type selects the active credential member (the union discriminator). The member it names must be set and all others absent. It is required and explicit — an absent or implicit discriminator would have to become required later, itself a breaking change, so v2 fixes it before beta.</td>
 <td></td>
-<td>Enum: [GitHubApp WorkloadIdentity] <br />Required: {} <br /></td>
+<td>Enum: [GitHubApp WorkloadIdentity]<br />Required: {}</td>
 </tr>
 <tr>
 <td><code>githubApp</code> <em><a href="#localsecretreference">LocalSecretReference</a></em></td>
-<td>GitHubApp configures GitHub App authentication: a name-only reference to the Secret<br />in this gateway's own namespace holding the App credentials ({appId, installationId,<br />privateKey}). Set iff Type is GitHubApp. The reference name is deliberately mutable —<br />changing it is the supported credential-rotation path.</td>
+<td>GitHubApp configures GitHub App authentication: a name-only reference to the Secret in this gateway's own namespace holding the App credentials ({appId, installationId, privateKey}). Set iff Type is GitHubApp. The reference name is deliberately mutable — changing it is the supported credential-rotation path.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>workloadIdentity</code> <em><a href="#workloadidentity">WorkloadIdentity</a></em></td>
-<td>WorkloadIdentity configures workload-identity authentication (Q197): the App JWT is<br />signed by an external signer the AGC reaches by proving its pod identity, so no App<br />private key is ever held in the cluster (the delegation model). Set iff Type is<br />WorkloadIdentity. This is the on-strategy, no-PEM credential method; GitHubApp<br />remains the secure-by-default in-cluster option.</td>
+<td>WorkloadIdentity configures workload-identity authentication (Q197): the App JWT is signed by an external signer the AGC reaches by proving its pod identity, so no App private key is ever held in the cluster (the delegation model). Set iff Type is WorkloadIdentity. This is the on-strategy, no-PEM credential method; GitHubApp remains the secure-by-default in-cluster option.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4364,7 +4364,7 @@ rather than the 52-character v2 object budget (§H.6).</p>
 <td><code>name</code> <em>string</em></td>
 <td>Name of the referenced ConfigMap in the same namespace.</td>
 <td></td>
-<td>MaxLength: 253 <br />MinLength: 1 <br /></td>
+<td>MaxLength: 253<br />MinLength: 1</td>
 </tr>
 </tbody>
 </table>
@@ -4395,7 +4395,7 @@ neutral-module extraction, which is a pure relocation with byte-identical manife
 <td><code>name</code> <em>string</em></td>
 <td>Name of the referenced object. Bounded by the v2 52-char name budget (§H.6).</td>
 <td></td>
-<td>MaxLength: 52 <br />MinLength: 1 <br /></td>
+<td>MaxLength: 52<br />MinLength: 1</td>
 </tr>
 </tbody>
 </table>
@@ -4421,7 +4421,7 @@ referrer's own namespace (§H.15).</p>
 <td><code>name</code> <em>string</em></td>
 <td>Name of the referenced Secret in the same namespace.</td>
 <td></td>
-<td>MaxLength: 253 <br />MinLength: 1 <br /></td>
+<td>MaxLength: 253<br />MinLength: 1</td>
 </tr>
 </tbody>
 </table>
@@ -4445,15 +4445,15 @@ scheduling constraints target.</p>
 <tbody>
 <tr>
 <td><code>allocatable</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
-<td>Allocatable is the node's allocatable cpu/memory to divide (from<br /><code>kubectl describe node</code>, minus any system/sidecar overhead the operator<br />reserves). Keys other than cpu and memory are ignored, so at least one of<br />the two must be present: an envelope carrying neither (empty, or GPUs<br />only) derives nothing while the profile still reports Active (Q484).<br />Declaring just one is legitimate — the other resource keeps the<br />template's ask.</td>
+<td>Allocatable is the node's allocatable cpu/memory to divide (from <code>kubectl describe node</code>, minus any system/sidecar overhead the operator reserves). Keys other than cpu and memory are ignored, so at least one of the two must be present: an envelope carrying neither (empty, or GPUs only) derives nothing while the profile still reports Active (Q484). Declaring just one is legitimate — the other resource keeps the template's ask.</td>
 <td></td>
 <td></td>
 </tr>
 <tr>
 <td><code>workersPerNode</code> <em>integer</em></td>
-<td>WorkersPerNode is the divisor: the number of worker pods that should pack<br />onto one node (for GPU nodes, typically the GPU count).</td>
+<td>WorkersPerNode is the divisor: the number of worker pods that should pack onto one node (for GPU nodes, typically the GPU count).</td>
 <td></td>
-<td>Maximum: 1000 <br />Minimum: 1 <br /></td>
+<td>Maximum: 1000<br />Minimum: 1</td>
 </tr>
 </tbody>
 </table>
@@ -4482,15 +4482,15 @@ surfaces a NotFound condition until it resolves.</p>
 <tbody>
 <tr>
 <td><code>name</code> <em>string</em></td>
-<td>Name of the referenced object. Bounded by the same 52-char budget every v2<br />object name carries (§H.6), so a well-formed ref can always name a valid object.</td>
+<td>Name of the referenced object. Bounded by the same 52-char budget every v2 object name carries (§H.6), so a well-formed ref can always name a valid object.</td>
 <td></td>
-<td>MaxLength: 52 <br />MinLength: 1 <br /></td>
+<td>MaxLength: 52<br />MinLength: 1</td>
 </tr>
 <tr>
 <td><code>kind</code> <em>string</em></td>
-<td>Kind optionally selects the referent kind when more than one is valid. It is<br />load-bearing only on templateRef, where it chooses between RunnerTemplate<br />(the namespaced default) and ClusterRunnerTemplate (a platform golden<br />template). gatewayRef and proxyRef each have a single valid kind, so Kind is<br />left empty there.</td>
+<td>Kind optionally selects the referent kind when more than one is valid. It is load-bearing only on templateRef, where it chooses between RunnerTemplate (the namespaced default) and ClusterRunnerTemplate (a platform golden template). gatewayRef and proxyRef each have a single valid kind, so Kind is left empty there.</td>
 <td></td>
-<td>Enum: [RunnerTemplate ClusterRunnerTemplate] <br />Optional: {} <br /></td>
+<td>Enum: [RunnerTemplate ClusterRunnerTemplate]<br />Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4579,33 +4579,33 @@ is purely additive — no conversion work, no breaking change. Tracked as Q284.<
 <tbody>
 <tr>
 <td><code>nodeSelector</code> <em>object (keys:string, values:string)</em></td>
-<td>NodeSelector constrains the pods to nodes carrying all of these labels — the<br />simplest way to pin a proxy pool to a tenant's node pool (and thus to that<br />pool's egress IP). Merged into the pod spec verbatim.</td>
+<td>NodeSelector constrains the pods to nodes carrying all of these labels — the simplest way to pin a proxy pool to a tenant's node pool (and thus to that pool's egress IP). Merged into the pod spec verbatim.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>tolerations</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#toleration-v1-core">Toleration</a> array</em></td>
-<td>Tolerations let the pods schedule onto nodes carrying matching taints — the<br />companion to NodeSelector when a tenant's node pool is taint-guarded so that<br />unrelated workloads do not land on it. Applied to the pod spec verbatim.</td>
+<td>Tolerations let the pods schedule onto nodes carrying matching taints — the companion to NodeSelector when a tenant's node pool is taint-guarded so that unrelated workloads do not land on it. Applied to the pod spec verbatim.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>affinity</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#affinity-v1-core">Affinity</a></em></td>
-<td>Affinity is the standard pod/node affinity and anti-affinity block.<br />Precedence against the built-in anti-affinity (EgressProxy only). The GMC<br />stamps a REQUIRED cross-node podAntiAffinity on every proxy pool so one node<br />failure cannot take the whole pool down. Composition with this field is:<br />  - nodeAffinity and podAffinity are applied as given, alongside the built-in<br />    anti-affinity, which is preserved.<br />  - podAntiAffinity, when set to any non-nil value, REPLACES the built-in term<br />    entirely — set it and you own it. An explicit empty value<br />    (podAntiAffinity: {}) therefore opts out of cross-node spreading, which is<br />    what a single-node tenant pool needs: the required built-in term would<br />    otherwise strand every replica after the first in Pending. Lowering<br />    minReplicas to 1 is the other way to get there.<br />ActionsGateway has no built-in affinity, so the block applies verbatim there.</td>
+<td>Affinity is the standard pod/node affinity and anti-affinity block.<br />Precedence against the built-in anti-affinity (EgressProxy only). The GMC stamps a REQUIRED cross-node podAntiAffinity on every proxy pool so one node failure cannot take the whole pool down. Composition with this field is:<br />- nodeAffinity and podAffinity are applied as given, alongside the built-in anti-affinity, which is preserved.<br />- podAntiAffinity, when set to any non-nil value, REPLACES the built-in term entirely — set it and you own it. An explicit empty value (podAntiAffinity: {}) therefore opts out of cross-node spreading, which is what a single-node tenant pool needs: the required built-in term would otherwise strand every replica after the first in Pending. Lowering minReplicas to 1 is the other way to get there.<br />ActionsGateway has no built-in affinity, so the block applies verbatim there.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>topologySpreadConstraints</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#topologyspreadconstraint-v1-core">TopologySpreadConstraint</a> array</em></td>
-<td>TopologySpreadConstraints spreads the pods across failure domains (zones,<br />nodes) — the modern successor to the cross-node podAntiAffinity this proxy<br />pool already relies on. It expresses "spread across zones, tolerate a skew of<br />1", which anti-affinity cannot. Applied to the pod spec verbatim.<br />Composition with the built-in anti-affinity (EgressProxy only). Unlike<br />Affinity, this field COMPOSES with the built-in required cross-node<br />anti-affinity — it never replaces it. <code>podAntiAffinity: \{\}</code> on Affinity stays<br />the single opt-out for the built-in cross-node spread; this field does not add<br />a second one. That asymmetry is deliberate: Affinity has to be able to displace<br />the built-in term because podAntiAffinity occupies the same field with nowhere<br />else to go, whereas topologySpreadConstraints is a different field with no such<br />collision, so composing is safe (it can only NARROW the candidate node set,<br />like nodeSelector AND-ing with nodeAffinity) and having one author silently<br />lose cross-node spread by asking for zonal spread would be a footgun. Its<br />labelSelector counts only pods in the constraint's own namespace, so one<br />tenant's spread cannot be skewed by another tenant's pods.<br />The Pending trap. An author who asks for a SOFT zonal spread<br />(whenUnsatisfiable: ScheduleAnyway) still inherits the REQUIRED built-in<br />cross-node anti-affinity, so replicas beyond the pinned pool's node count<br />strand in Pending — the same behavior as any proxy pool whose minReplicas<br />exceeds its node count. The escapes are the same: <code>podAntiAffinity: \{\}</code> to opt<br />out of the built-in cross-node spread, or lower minReplicas.<br />Unlike PriorityClassName, this needs no allowlist: it is namespace-scoped and<br />can only narrow placement, so it carries no cross-tenant lever.</td>
+<td>TopologySpreadConstraints spreads the pods across failure domains (zones, nodes) — the modern successor to the cross-node podAntiAffinity this proxy pool already relies on. It expresses "spread across zones, tolerate a skew of 1", which anti-affinity cannot. Applied to the pod spec verbatim.<br />Composition with the built-in anti-affinity (EgressProxy only). Unlike Affinity, this field COMPOSES with the built-in required cross-node anti-affinity — it never replaces it. <code>podAntiAffinity: \{\}</code> on Affinity stays the single opt-out for the built-in cross-node spread; this field does not add a second one. That asymmetry is deliberate: Affinity has to be able to displace the built-in term because podAntiAffinity occupies the same field with nowhere else to go, whereas topologySpreadConstraints is a different field with no such collision, so composing is safe (it can only NARROW the candidate node set, like nodeSelector AND-ing with nodeAffinity) and having one author silently lose cross-node spread by asking for zonal spread would be a footgun. Its labelSelector counts only pods in the constraint's own namespace, so one tenant's spread cannot be skewed by another tenant's pods.<br />The Pending trap. An author who asks for a SOFT zonal spread (whenUnsatisfiable: ScheduleAnyway) still inherits the REQUIRED built-in cross-node anti-affinity, so replicas beyond the pinned pool's node count strand in Pending — the same behavior as any proxy pool whose minReplicas exceeds its node count. The escapes are the same: <code>podAntiAffinity: \{\}</code> to opt out of the built-in cross-node spread, or lower minReplicas.<br />Unlike PriorityClassName, this needs no allowlist: it is namespace-scoped and can only narrow placement, so it carries no cross-tenant lever.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>priorityClassName</code> <em>string</em></td>
-<td>PriorityClassName names a cluster-scoped PriorityClass for these pods, raising<br />them above best-effort workloads under node pressure. It matters because an<br />evicted proxy pod takes that tenant's ENTIRE egress path down, and an evicted<br />AGC pod takes that tenant's control plane down; without a priority class both<br />are as evictable as any best-effort pod.<br />Gated by a SEPARATE, infra-only allowlist. This field is validated against the<br />GMC --allowed-infra-priority-classes flag, which is DISJOINT by construction<br />from the worker-facing --allowed-priority-classes that gates priorityTiers and<br />RunnerTemplate podTemplate.spec.priorityClassName. The two must not intersect,<br />and the GMC refuses to start if they do.<br />Why a second allowlist rather than reusing the worker one. Infra pods must sit<br />ABOVE workers — that is the whole point of prioritizing them. If the worker<br />allowlist were reused and a high class added so a proxy could name it, that<br />same class would become nameable from a worker pod, and any tenant could lift<br />its WORKERS to infra priority and preempt OTHER tenants' proxy pods. The gate<br />meant to protect the proxy would become the mechanism for evicting it.<br />Why gated at all, when nodeSelector/tolerations/affinity are not. Placement is<br />a choice about the tenant's own traffic; it weakens attribution, not isolation.<br />Priority is a cluster-wide, cross-tenant preemption lever: a pod naming a<br />preempting class can evict OTHER tenants' pods off a node. And <code>system-*</code><br />PriorityClasses are NOT kube-system-scoped — a pod in any namespace may name<br />system-cluster-critical (value 2000000000, PreemptLowerPriority), with no<br />built-in admission check restricting it (verified against a real apiserver).<br />So an ungated priorityClassName on a tenant-writable CR is a cluster-wide<br />preemption escape, which is why it is the one PodScheduling field behind a gate.<br />The empty string (the default) names no class and is always permitted, so an<br />unset allowlist forbids every NAMED class without forbidding unprioritized pods.</td>
+<td>PriorityClassName names a cluster-scoped PriorityClass for these pods, raising them above best-effort workloads under node pressure. It matters because an evicted proxy pod takes that tenant's ENTIRE egress path down, and an evicted AGC pod takes that tenant's control plane down; without a priority class both are as evictable as any best-effort pod.<br />Gated by a SEPARATE, infra-only allowlist. This field is validated against the GMC --allowed-infra-priority-classes flag, which is DISJOINT by construction from the worker-facing --allowed-priority-classes that gates priorityTiers and RunnerTemplate podTemplate.spec.priorityClassName. The two must not intersect, and the GMC refuses to start if they do.<br />Why a second allowlist rather than reusing the worker one. Infra pods must sit ABOVE workers — that is the whole point of prioritizing them. If the worker allowlist were reused and a high class added so a proxy could name it, that same class would become nameable from a worker pod, and any tenant could lift its WORKERS to infra priority and preempt OTHER tenants' proxy pods. The gate meant to protect the proxy would become the mechanism for evicting it.<br />Why gated at all, when nodeSelector/tolerations/affinity are not. Placement is a choice about the tenant's own traffic; it weakens attribution, not isolation. Priority is a cluster-wide, cross-tenant preemption lever: a pod naming a preempting class can evict OTHER tenants' pods off a node. And <code>system-*</code> PriorityClasses are NOT kube-system-scoped — a pod in any namespace may name system-cluster-critical (value 2000000000, PreemptLowerPriority), with no built-in admission check restricting it (verified against a real apiserver). So an ungated priorityClassName on a tenant-writable CR is a cluster-wide preemption escape, which is why it is the one PodScheduling field behind a gate.<br />The empty string (the default) names no class and is always permitted, so an unset allowlist forbids every NAMED class without forbidding unprioritized pods.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4680,15 +4680,15 @@ lift its workers to infra priority and preempt other tenants' proxy pods.</p>
 <tbody>
 <tr>
 <td><code>allowedPriorityClasses</code> <em>string array</em></td>
-<td>AllowedPriorityClasses is the set of cluster-scoped PriorityClass names<br />tenants may reference from RunnerSet.spec.priorityTiers[].priorityClassName<br />and RunnerTemplate.spec.podTemplate.spec.priorityClassName (and, while<br />v1alpha1 is served, RunnerGroup.spec.priorityTiers[].priorityClassName).<br />A PriorityClass sets cluster-wide scheduling preemption order, so a tenant<br />naming a high-priority class could evict another tenant's worker pods. The<br />platform admin pre-creates each class (with preemptionPolicy: Never unless a<br />tier is genuinely meant to preempt across tenants) and lists its name here.<br />Unset or empty forbids every named class — the secure default. This list is<br />additive to the GMC's static --allowed-priority-classes flag for the<br />admission webhook, and is the SOLE source for the<br />priorityclass-allowlist-guard ValidatingAdmissionPolicy, which cannot read a<br />controller flag. Keep it a superset of the flag, or direct writes naming a<br />flag-only class are denied by the policy.</td>
+<td>AllowedPriorityClasses is the set of cluster-scoped PriorityClass names tenants may reference from RunnerSet.spec.priorityTiers[].priorityClassName and RunnerTemplate.spec.podTemplate.spec.priorityClassName (and, while v1alpha1 is served, RunnerGroup.spec.priorityTiers[].priorityClassName).<br />A PriorityClass sets cluster-wide scheduling preemption order, so a tenant naming a high-priority class could evict another tenant's worker pods. The platform admin pre-creates each class (with preemptionPolicy: Never unless a tier is genuinely meant to preempt across tenants) and lists its name here.<br />Unset or empty forbids every named class — the secure default. This list is additive to the GMC's static --allowed-priority-classes flag for the admission webhook, and is the SOLE source for the priorityclass-allowlist-guard ValidatingAdmissionPolicy, which cannot read a controller flag. Keep it a superset of the flag, or direct writes naming a flag-only class are denied by the policy.</td>
 <td></td>
-<td>MaxItems: 128 <br />items:MaxLength: 253 <br />items:Pattern: <code>^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$</code> <br />Optional: {} <br /></td>
+<td>MaxItems: 128<br />items:MaxLength: 253<br />items:Pattern: <code>^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$</code><br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>allowedInfraPriorityClasses</code> <em>string array</em></td>
-<td>AllowedInfraPriorityClasses is the set of cluster-scoped PriorityClass names<br />a tenant may reference from EgressProxy.spec.scheduling.priorityClassName and<br />ActionsGateway.spec.scheduling.priorityClassName — the INFRA pods, meaning the<br />per-tenant egress proxy pool and the AGC control plane.<br />Infra pods are meant to outrank workers: an evicted proxy takes a tenant's<br />whole egress path down. That is why this is a SEPARATE set, and why it must<br />stay disjoint from AllowedPriorityClasses — a class on both is nameable from a<br />worker pod, so any tenant could lift its workers to infra priority and preempt<br />another tenant's proxy. The spec-level CEL rule rejects an overlap within this<br />object; the GMC additionally refuses an overlap against its static flags.<br />Unset or empty forbids every named class — the secure default. This list is<br />additive to the GMC's static --allowed-infra-priority-classes flag. The<br />priorityclass-allowlist-guard ValidatingAdmissionPolicy does not read it: the<br />infra surfaces are gated by failurePolicy=fail webhooks, not by that policy.</td>
+<td>AllowedInfraPriorityClasses is the set of cluster-scoped PriorityClass names a tenant may reference from EgressProxy.spec.scheduling.priorityClassName and ActionsGateway.spec.scheduling.priorityClassName — the INFRA pods, meaning the per-tenant egress proxy pool and the AGC control plane.<br />Infra pods are meant to outrank workers: an evicted proxy takes a tenant's whole egress path down. That is why this is a SEPARATE set, and why it must stay disjoint from AllowedPriorityClasses — a class on both is nameable from a worker pod, so any tenant could lift its workers to infra priority and preempt another tenant's proxy. The spec-level CEL rule rejects an overlap within this object; the GMC additionally refuses an overlap against its static flags.<br />Unset or empty forbids every named class — the secure default. This list is additive to the GMC's static --allowed-infra-priority-classes flag. The priorityclass-allowlist-guard ValidatingAdmissionPolicy does not read it: the infra surfaces are gated by failurePolicy=fail webhooks, not by that policy.</td>
 <td></td>
-<td>MaxItems: 128 <br />items:MaxLength: 253 <br />items:Pattern: <code>^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$</code> <br />Optional: {} <br /></td>
+<td>MaxItems: 128<br />items:MaxLength: 253<br />items:Pattern: <code>^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$</code><br />Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4710,15 +4710,15 @@ from v1alpha1; carried onto the RunnerSet (was RunnerGroup).</p>
 <tbody>
 <tr>
 <td><code>priorityClassName</code> <em>string</em></td>
-<td>PriorityClassName is the name of an existing cluster-scoped PriorityClass.<br />The platform owns which classes a tenant may reference: the GMC admission<br />path rejects any name not on the platform allowlist (--allowed-priority-classes),<br />so a tenant cannot name a high-priority, preempting class and evict other<br />tenants' worker pods. The named class — including its preemptionPolicy — is<br />platform-created; see docs/operations/security-operations.md.</td>
+<td>PriorityClassName is the name of an existing cluster-scoped PriorityClass. The platform owns which classes a tenant may reference: the GMC admission path rejects any name not on the platform allowlist (--allowed-priority-classes), so a tenant cannot name a high-priority, preempting class and evict other tenants' worker pods. The named class — including its preemptionPolicy — is platform-created; see docs/operations/security-operations.md.</td>
 <td></td>
-<td>MaxLength: 253 <br />MinLength: 1 <br /></td>
+<td>MaxLength: 253<br />MinLength: 1</td>
 </tr>
 <tr>
 <td><code>threshold</code> <em>integer</em></td>
 <td>Threshold is the cumulative active-pod count at which this tier is exhausted.</td>
 <td></td>
-<td>Minimum: 1 <br /></td>
+<td>Minimum: 1</td>
 </tr>
 </tbody>
 </table>
@@ -4741,9 +4741,9 @@ ships the inline allowlist only; ReferenceGrant support is additive later.</p>
 <tbody>
 <tr>
 <td><code>allowedNamespaces</code> <em>string array</em></td>
-<td>AllowedNamespaces lists namespaces permitted to reference this proxy. A<br />consumer-side name alone never authorizes a cross-namespace reference.</td>
+<td>AllowedNamespaces lists namespaces permitted to reference this proxy. A consumer-side name alone never authorizes a cross-namespace reference.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4827,99 +4827,99 @@ lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
 <tbody>
 <tr>
 <td><code>gatewayRef</code> <em><a href="#objectref">ObjectRef</a></em></td>
-<td>GatewayRef names the ActionsGateway that supplies this runner set's GitHub<br />binding and control plane. Under multi-gateway-per-namespace each AGC<br />reconciles only the RunnerSets whose gatewayRef targets it — which is why<br />spec.gatewayRef.name is a CRD selectable field (KEP-4358), so that scoping<br />runs server-side (§H.7). Required: a runner set with no gateway has no GitHub<br />connection to register against. Resolved at runtime, not admission.</td>
+<td>GatewayRef names the ActionsGateway that supplies this runner set's GitHub binding and control plane. Under multi-gateway-per-namespace each AGC reconciles only the RunnerSets whose gatewayRef targets it — which is why spec.gatewayRef.name is a CRD selectable field (KEP-4358), so that scoping runs server-side (§H.7). Required: a runner set with no gateway has no GitHub connection to register against. Resolved at runtime, not admission.</td>
 <td></td>
 <td></td>
 </tr>
 <tr>
 <td><code>templateRef</code> <em><a href="#objectref">ObjectRef</a></em></td>
-<td>TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate<br />(set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Unset means<br />inherit the gateway's defaultTemplateRef; both unset means the single cluster-default<br />ClusterRunnerTemplate (the one marked IsDefaultTemplateAnnotation). If none of the<br />three resolves the set fails closed Ready=False/TemplateNotFound — the AGC never<br />synthesizes a phantom worker pod without a pod shape (Q172, §H.4). This relaxes the<br />GA-era required templateRef to optional-with-a-default (a backward-compatible<br />required→optional change): a set that sets templateRef behaves exactly as before.<br />The referent is resolved at runtime; a set pointing at a not-yet-applied template<br />sits Ready=False/TemplateNotFound until it syncs (§H.7). status.templateSource<br />reports which rung resolved.</td>
+<td>TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate (set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Unset means inherit the gateway's defaultTemplateRef; both unset means the single cluster-default ClusterRunnerTemplate (the one marked IsDefaultTemplateAnnotation). If none of the three resolves the set fails closed Ready=False/TemplateNotFound — the AGC never synthesizes a phantom worker pod without a pod shape (Q172, §H.4). This relaxes the GA-era required templateRef to optional-with-a-default (a backward-compatible required→optional change): a set that sets templateRef behaves exactly as before. The referent is resolved at runtime; a set pointing at a not-yet-applied template sits Ready=False/TemplateNotFound until it syncs (§H.7). status.templateSource reports which rung resolved.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>proxyRef</code> <em><a href="#objectref">ObjectRef</a></em></td>
-<td>ProxyRef optionally names the EgressProxy this runner set's traffic egresses<br />through. Unset means inherit the gateway's defaultProxyRef; both unset means<br />direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined<br />behavior, so the dependency is simply droppable, which is why proxyRef is<br />optional where templateRef is required (§H.4, §H.10). Direct egress is reflected<br />in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a<br />proxyRef/defaultProxyRef that names a <em>missing</em> proxy still fails closed<br />(ProxyNotFound), not direct egress (Q168).</td>
+<td>ProxyRef optionally names the EgressProxy this runner set's traffic egresses through. Unset means inherit the gateway's defaultProxyRef; both unset means direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined behavior, so the dependency is simply droppable, which is why proxyRef is optional where templateRef is required (§H.4, §H.10). Direct egress is reflected in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a proxyRef/defaultProxyRef that names a <em>missing</em> proxy still fails closed (ProxyNotFound), not direct egress (Q168).</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>maxWorkers</code> <em>integer</em></td>
-<td>MaxWorkers caps the number of worker pods this RunnerSet may run concurrently.<br />A soft, in-process ceiling; pair it with a namespace ResourceQuota for a hard,<br />cluster-enforced limit.</td>
+<td>MaxWorkers caps the number of worker pods this RunnerSet may run concurrently. A soft, in-process ceiling; pair it with a namespace ResourceQuota for a hard, cluster-enforced limit.</td>
 <td></td>
-<td>Minimum: 1 <br />Optional: {} <br /></td>
+<td>Minimum: 1<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>runnerLabels</code> <em>string array</em></td>
-<td>RunnerLabels is the label set matched against workflow runs-on values. v2beta1<br />is ScaleSet-only, so exactly one label is required (enforced by the CEL rule on<br />this field): the scale set's single runnerLabel is its runs-on match target,<br />and the label doubles as the scale-set name registered at GitHub. Each label<br />must be non-empty and contain no whitespace or commas (comma is the runs-on list<br />separator). A workload needing multi-label matching must stay on a v2alpha1<br />Classic RunnerSet during the deprecation window (Q264 §5a-U7).<br />The single-label rule lives on THIS FIELD rather than on the spec, so CRD<br />validation ratcheting (KEP-4008; on by default since Kubernetes 1.30, and the<br />v2 floor is 1.31) suppresses it on an update that leaves runnerLabels<br />untouched. A Classic multi-label set authored through v2alpha1 is STORED as a<br />hub object that violates this rule, so a spec-level rule made every unqualified<br /><code>kubectl edit/patch</code> of such a set fail on a field unrelated to labels (Q398).<br />Ratcheting only forgives an unchanged value: creating a multi-label set through<br />v2beta1, or editing a stored set's labels through v2beta1, is still rejected.</td>
+<td>RunnerLabels is the label set matched against workflow runs-on values. v2beta1 is ScaleSet-only, so exactly one label is required (enforced by the CEL rule on this field): the scale set's single runnerLabel is its runs-on match target, and the label doubles as the scale-set name registered at GitHub. Each label must be non-empty and contain no whitespace or commas (comma is the runs-on list separator). A workload needing multi-label matching must stay on a v2alpha1 Classic RunnerSet during the deprecation window (Q264 §5a-U7).<br />The single-label rule lives on THIS FIELD rather than on the spec, so CRD validation ratcheting (KEP-4008; on by default since Kubernetes 1.30, and the v2 floor is 1.31) suppresses it on an update that leaves runnerLabels untouched. A Classic multi-label set authored through v2alpha1 is STORED as a hub object that violates this rule, so a spec-level rule made every unqualified <code>kubectl edit/patch</code> of such a set fail on a field unrelated to labels (Q398). Ratcheting only forgives an unchanged value: creating a multi-label set through v2beta1, or editing a stored set's labels through v2beta1, is still rejected.</td>
 <td></td>
-<td>MinItems: 1 <br />items:MaxLength: 256 <br />items:Pattern: <code>^[^,\s]+$</code> <br /></td>
+<td>MinItems: 1<br />items:MaxLength: 256<br />items:Pattern: <code>^[^,\s]+$</code></td>
 </tr>
 <tr>
 <td><code>priorityTiers</code> <em><a href="#prioritytier">PriorityTier</a> array</em></td>
-<td>PriorityTiers defines PriorityClass assignments and cumulative pod-count<br />thresholds. Tiers must be in strictly ascending threshold order.</td>
+<td>PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds. Tiers must be in strictly ascending threshold order.</td>
 <td></td>
-<td>MaxItems: 10 <br />Optional: {} <br /></td>
+<td>MaxItems: 10<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>maxEvictionRetries</code> <em>integer</em></td>
-<td>MaxEvictionRetries controls how many times the AGC automatically re-queues a<br />job whose worker pod was evicted. Set to 0 to disable auto-retry entirely.<br />Defaults to 2 when omitted.<br />Honored on both acquisition tiers as of Q417. On ScaleSet — the only tier this<br />API version offers — the worker is provisioned fire-and-forget, so the eviction<br />is detected by the owning reconciler from the worker pod rather than by a<br />goroutine watching it; the budget itself is shared, keyed by workflow run, so<br />this cap applies per run across both tiers rather than once each.</td>
+<td>MaxEvictionRetries controls how many times the AGC automatically re-queues a job whose worker pod was evicted. Set to 0 to disable auto-retry entirely. Defaults to 2 when omitted.<br />Honored on both acquisition tiers as of Q417. On ScaleSet — the only tier this API version offers — the worker is provisioned fire-and-forget, so the eviction is detected by the owning reconciler from the worker pod rather than by a goroutine watching it; the budget itself is shared, keyed by workflow run, so this cap applies per run across both tiers rather than once each.</td>
 <td></td>
-<td>Maximum: 10 <br />Minimum: 0 <br />Optional: {} <br /></td>
+<td>Maximum: 10<br />Minimum: 0<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>evictionRetryDelay</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
-<td>EvictionRetryDelay is the minimum time to wait before re-queuing an evicted<br />job. Must be at least 1s. Defaults to "5s" when omitted.<br />Honored on both acquisition tiers as of Q417, as for MaxEvictionRetries.</td>
+<td>EvictionRetryDelay is the minimum time to wait before re-queuing an evicted job. Must be at least 1s. Defaults to "5s" when omitted.<br />Honored on both acquisition tiers as of Q417, as for MaxEvictionRetries.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>maxQuotaRetries</code> <em>integer</em></td>
-<td>MaxQuotaRetries controls how many times the AGC retries pod creation when the<br />namespace ResourceQuota is exhausted. Set to 0 to disable quota retry.<br />Defaults to 5 when omitted.</td>
+<td>MaxQuotaRetries controls how many times the AGC retries pod creation when the namespace ResourceQuota is exhausted. Set to 0 to disable quota retry. Defaults to 5 when omitted.</td>
 <td></td>
-<td>Maximum: 20 <br />Minimum: 0 <br />Optional: {} <br /></td>
+<td>Maximum: 20<br />Minimum: 0<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>quotaRetryDelay</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
-<td>QuotaRetryDelay is the time to wait between pod creation retries when the<br />namespace ResourceQuota is exhausted. Must be at least 1s. Defaults to "30s"<br />when omitted.</td>
+<td>QuotaRetryDelay is the time to wait between pod creation retries when the namespace ResourceQuota is exhausted. Must be at least 1s. Defaults to "30s" when omitted.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>completedPodTTL</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
-<td>CompletedPodTTL is how long a worker pod that has reached a terminal phase is<br />retained before the AGC deletes it. Set to "0s" to delete immediately on<br />completion. Must not be negative. Defaults to "5m" when omitted.</td>
+<td>CompletedPodTTL is how long a worker pod that has reached a terminal phase is retained before the AGC deletes it. Set to "0s" to delete immediately on completion. Must not be negative. Defaults to "5m" when omitted.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>pendingPodDeadline</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
-<td>PendingPodDeadline is the maximum time a worker pod may remain Pending before<br />the AGC deletes it, releasing the concurrency-ceiling slot. Must be at least<br />1s. Defaults to "10m" when omitted.</td>
+<td>PendingPodDeadline is the maximum time a worker pod may remain Pending before the AGC deletes it, releasing the concurrency-ceiling slot. Must be at least 1s. Defaults to "10m" when omitted.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>maxWorkerLifetime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
-<td>MaxWorkerLifetime is the maximum time a worker pod may be active on its node<br />before the kubelet kills it, applied as the pod's activeDeadlineSeconds. It<br />bounds a worker whose job ended while the AGC was down — a pod nothing the AGC<br />observes later can distinguish from one running a long job (Q438). The kubelet<br />enforces it, so it holds even while the AGC is unavailable.<br />A pod killed this way lands in Failed with reason DeadlineExceeded and is<br />reaped under reason "lifetime_exceeded", with a Warning Event<br />(WorkerPodLifetimeExceeded). Jobs declaring a <code>timeout-minutes</code> above this will<br />be killed mid-run. Set to "0s" to disable. An activeDeadlineSeconds set<br />explicitly on the RunnerTemplate's podTemplate takes precedence. Must not be<br />negative. Defaults to "12h" when omitted.</td>
+<td>MaxWorkerLifetime is the maximum time a worker pod may be active on its node before the kubelet kills it, applied as the pod's activeDeadlineSeconds. It bounds a worker whose job ended while the AGC was down — a pod nothing the AGC observes later can distinguish from one running a long job (Q438). The kubelet enforces it, so it holds even while the AGC is unavailable.<br />A pod killed this way lands in Failed with reason DeadlineExceeded and is reaped under reason "lifetime_exceeded", with a Warning Event (WorkerPodLifetimeExceeded). Jobs declaring a <code>timeout-minutes</code> above this will be killed mid-run. Set to "0s" to disable. An activeDeadlineSeconds set explicitly on the RunnerTemplate's podTemplate takes precedence. Must not be negative. Defaults to "12h" when omitted.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>scaleUp</code> <em><a href="#scaleupratelimit">ScaleUpRateLimit</a></em></td>
-<td>ScaleUp optionally caps the RATE at which the AGC creates new worker pods for<br />this RunnerSet, smoothing cold-start stampedes on a shared, rate-sensitive<br />egress path (NAT/SNAT gateway, stateful-firewall conntrack table, site-to-site<br />VPN) when a burst of jobs is acquired at once. It is a token bucket over pod<br />CREATION and is distinct from maxWorkers (a ceiling on the concurrent pod<br />COUNT): the ceiling bounds how many run, this bounds how fast they start.<br />Omitted ⇒ no rate limit (the default): immediate provisioning, zero added<br />latency. An availability knob for the narrow stampede case; prefer a<br />peer-to-peer image mirror for image-pull storms and workflow-level<br /><code>concurrency:</code> or the maxWorkers ceiling for fairness/sustained load.</td>
+<td>ScaleUp optionally caps the RATE at which the AGC creates new worker pods for this RunnerSet, smoothing cold-start stampedes on a shared, rate-sensitive egress path (NAT/SNAT gateway, stateful-firewall conntrack table, site-to-site VPN) when a burst of jobs is acquired at once. It is a token bucket over pod CREATION and is distinct from maxWorkers (a ceiling on the concurrent pod COUNT): the ceiling bounds how many run, this bounds how fast they start. Omitted ⇒ no rate limit (the default): immediate provisioning, zero added latency. An availability knob for the narrow stampede case; prefer a peer-to-peer image mirror for image-pull storms and workflow-level <code>concurrency:</code> or the maxWorkers ceiling for fairness/sustained load.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>sizing</code> <em><a href="#workersizing">WorkerSizing</a></em></td>
-<td>Sizing opts this runner set into measured worker sizing at pod-build time<br />(Q359 Phase 3): the AGC derives the worker containers' CPU/memory<br />requests/limits from the observed per-job usage history<br />(status.sizingRecommendation) — or, for the NodeShare profile, from a<br />declared per-node share — instead of the template's static values. Omitted<br />(or profile Static) keeps today's behavior: the template is authoritative.<br />Extended resources (GPUs) are never modified by any profile: they are<br />job-selected shape identity, and only the cpu/memory keys are ever derived.</td>
+<td>Sizing opts this runner set into measured worker sizing at pod-build time (Q359 Phase 3): the AGC derives the worker containers' CPU/memory requests/limits from the observed per-job usage history (status.sizingRecommendation) — or, for the NodeShare profile, from a declared per-node share — instead of the template's static values. Omitted (or profile Static) keeps today's behavior: the template is authoritative. Extended resources (GPUs) are never modified by any profile: they are job-selected shape identity, and only the cpu/memory keys are ever derived.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>capacityGate</code> <em><a href="#capacitygate">CapacityGate</a></em></td>
-<td>CapacityGate opts this runner set into the placeability rung of the admission<br />ladder (Q405): the AGC refuses to take on jobs whose worker pod the cluster<br />cannot currently place, instead of claiming them and stalling. Omitted (or<br />mode Off) keeps today's behavior exactly — no capacity rung.</td>
+<td>CapacityGate opts this runner set into the placeability rung of the admission ladder (Q405): the AGC refuses to take on jobs whose worker pod the cluster cannot currently place, instead of claiming them and stalling. Omitted (or mode Off) keeps today's behavior exactly — no capacity rung.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -4944,57 +4944,57 @@ missing object.</p>
 <tbody>
 <tr>
 <td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
-<td>Conditions are the observed conditions of the runner set. Known types: Ready,<br />Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,<br />WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld,<br />SizingDrift.</td>
+<td>Conditions are the observed conditions of the runner set. Known types: Ready, Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld, SizingDrift.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>activeSessions</code> <em>integer</em></td>
 <td>ActiveSessions is the number of currently open long-poll sessions.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>activeJobs</code> <em>integer</em></td>
-<td>ActiveJobs is the number of worker pods currently in the Running phase<br />(a job is actively executing). Derived from the worker pod phase count<br />during each reconcile; see also PendingJobs.</td>
+<td>ActiveJobs is the number of worker pods currently in the Running phase (a job is actively executing). Derived from the worker pod phase count during each reconcile; see also PendingJobs.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>pendingJobs</code> <em>integer</em></td>
-<td>PendingJobs is the number of worker pods currently in the Pending phase<br />(a job has been acquired and a pod spawned, but the pod is not yet<br />running — waiting on scheduling, image pull, or node readiness). Pods<br />that remain Pending past spec.pendingPodDeadline are deleted by the<br />controller; a sustained non-zero count warrants checking events and<br />scheduling constraints.</td>
+<td>PendingJobs is the number of worker pods currently in the Pending phase (a job has been acquired and a pod spawned, but the pod is not yet running — waiting on scheduling, image pull, or node readiness). Pods that remain Pending past spec.pendingPodDeadline are deleted by the controller; a sustained non-zero count warrants checking events and scheduling constraints.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>proxyMode</code> <em>string</em></td>
-<td>ProxyMode records how this runner set's worker egress reaches GitHub:<br />"Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs)<br />or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to<br />GitHub + DNS but without per-tenant IP attribution). Explicit so "no proxy" is<br />an auditable state, not an inferred absence (§H.10). Paired with the advisory<br />EgressUnattributed condition when Direct.</td>
+<td>ProxyMode records how this runner set's worker egress reaches GitHub: "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs) or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to GitHub + DNS but without per-tenant IP attribution). Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10). Paired with the advisory EgressUnattributed condition when Direct.</td>
 <td></td>
-<td>Enum: [Proxied Direct] <br />Optional: {} <br /></td>
+<td>Enum: [Proxied Direct]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>templateSource</code> <em>string</em></td>
-<td>TemplateSource records which rung of the template-resolution chain supplied this<br />runner set's worker pod shape (Q172, §H.4): "TemplateRef" (its own spec.templateRef),<br />"GatewayDefault" (the gateway's spec.defaultTemplateRef, inherited because templateRef<br />was unset), or "ClusterDefault" (the single cluster-default ClusterRunnerTemplate,<br />resolved because neither was set). Explicit so an operator can audit whether a set<br />runs on an explicit template or a default without inspecting the gateway and cluster<br />state. Empty until the references resolve.</td>
+<td>TemplateSource records which rung of the template-resolution chain supplied this runner set's worker pod shape (Q172, §H.4): "TemplateRef" (its own spec.templateRef), "GatewayDefault" (the gateway's spec.defaultTemplateRef, inherited because templateRef was unset), or "ClusterDefault" (the single cluster-default ClusterRunnerTemplate, resolved because neither was set). Explicit so an operator can audit whether a set runs on an explicit template or a default without inspecting the gateway and cluster state. Empty until the references resolve.</td>
 <td></td>
-<td>Enum: [TemplateRef GatewayDefault ClusterDefault] <br />Optional: {} <br /></td>
+<td>Enum: [TemplateRef GatewayDefault ClusterDefault]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>sizingProfileState</code> <em>string</em></td>
-<td>SizingProfileState reports whether the opt-in sizing profile<br />(spec.sizing.profile) is actuating: "Active" — derived values are applied<br />at pod build; "AwaitingSamples" — a history-based profile (Binpack /<br />Throughput) is selected but not every template container has a confident<br />recommendation yet, so pods provision with the template's static values<br />until the history accumulates (whole-pod fallback, keeping QoS<br />predictable). Empty when no profile (or Static) is selected. Explicit so<br />"is the profile live yet" is auditable status, not something to infer from<br />pod specs (the proxyMode precedent).</td>
+<td>SizingProfileState reports whether the opt-in sizing profile (spec.sizing.profile) is actuating: "Active" — derived values are applied at pod build; "AwaitingSamples" — a history-based profile (Binpack / Throughput) is selected but not every template container has a confident recommendation yet, so pods provision with the template's static values until the history accumulates (whole-pod fallback, keeping QoS predictable). Empty when no profile (or Static) is selected. Explicit so "is the profile live yet" is auditable status, not something to infer from pod specs (the proxyMode precedent).</td>
 <td></td>
-<td>Enum: [Active AwaitingSamples] <br />Optional: {} <br /></td>
+<td>Enum: [Active AwaitingSamples]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>sizingRecommendation</code> <em><a href="#containersizingrecommendation">ContainerSizingRecommendation</a> array</em></td>
-<td>SizingRecommendation is the per-container worker resource recommendation<br />derived from measured per-job usage peaks (Q359 Phase 2), refreshed by the<br />AGC as jobs complete. Advisory only: nothing is applied to worker pods —<br />the operator (or a future opt-in sizing profile) acts on it. It doubles as<br />the persistence for the usage aggregates: the AGC re-seeds its in-memory<br />history from this field on restart, so the observation window survives<br />control-plane rollouts (status is the store; no separate backing store).</td>
+<td>SizingRecommendation is the per-container worker resource recommendation derived from measured per-job usage peaks (Q359 Phase 2), refreshed by the AGC as jobs complete. Advisory only: nothing is applied to worker pods — the operator (or a future opt-in sizing profile) acts on it. It doubles as the persistence for the usage aggregates: the AGC re-seeds its in-memory history from this field on restart, so the observation window survives control-plane rollouts (status is the store; no separate backing store).</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>observedGeneration</code> <em>integer</em></td>
 <td>ObservedGeneration is the .metadata.generation the most recent reconcile acted on.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -5072,7 +5072,7 @@ webhook in M2 (the milestone that adds the data-kind reconcilers).</p>
 <tbody>
 <tr>
 <td><code>podTemplate</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#podtemplatespec-v1-core">PodTemplateSpec</a></em></td>
-<td>PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods — the<br />large field this kind exists to isolate.<br />On the namespaced (tenant-authored) RunnerTemplate, podTemplate.spec.priorityClassName<br />is gated by the GMC validating webhook against the platform PriorityClass allowlist<br />(--allowed-priority-classes; empty forbids every named class). PriorityClass is<br />cluster-scoped and sets the scheduler's preemption order cluster-wide, so it is the<br />platform's to grant, not the tenant's (Q132/Q289). The cluster-scoped<br />ClusterRunnerTemplate is platform-authored and therefore exempt.</td>
+<td>PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods — the large field this kind exists to isolate.<br />On the namespaced (tenant-authored) RunnerTemplate, podTemplate.spec.priorityClassName is gated by the GMC validating webhook against the platform PriorityClass allowlist (--allowed-priority-classes; empty forbids every named class). PriorityClass is cluster-scoped and sets the scheduler's preemption order cluster-wide, so it is the platform's to grant, not the tenant's (Q132/Q289). The cluster-scoped ClusterRunnerTemplate is platform-authored and therefore exempt.</td>
 <td></td>
 <td></td>
 </tr>
@@ -5080,7 +5080,7 @@ webhook in M2 (the milestone that adds the data-kind reconcilers).</p>
 <td><code>workerImage</code> <em>string</em></td>
 <td>WorkerImage is the fully-qualified container image for the runner container.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -5104,15 +5104,15 @@ no condition type is set on a template today (Q309).</p>
 <tbody>
 <tr>
 <td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
-<td>Conditions are the observed conditions of the template. No condition types<br />are populated today: the templates are pure data with no reconciler; the<br />field exists for the uniform v2 status contract.</td>
+<td>Conditions are the observed conditions of the template. No condition types are populated today: the templates are pure data with no reconciler; the field exists for the uniform v2 status contract.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>observedGeneration</code> <em>integer</em></td>
 <td>ObservedGeneration is the .metadata.generation the most recent reconcile acted on.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -5137,15 +5137,15 @@ namespace-quota retry wait rather than adding a new state machine.</p>
 <tbody>
 <tr>
 <td><code>maxPerSecond</code> <em>integer</em></td>
-<td>MaxPerSecond is the sustained rate, in worker pods created per second, once<br />the initial burst is spent. Required when scaleUp is set.</td>
+<td>MaxPerSecond is the sustained rate, in worker pods created per second, once the initial burst is spent. Required when scaleUp is set.</td>
 <td></td>
-<td>Maximum: 10000 <br />Minimum: 1 <br /></td>
+<td>Maximum: 10000<br />Minimum: 1</td>
 </tr>
 <tr>
 <td><code>burst</code> <em>integer</em></td>
-<td>Burst is the maximum number of worker pods that may be created in an<br />instantaneous batch before the MaxPerSecond rate throttles subsequent<br />creations — the token-bucket depth. Defaults to MaxPerSecond when omitted.</td>
+<td>Burst is the maximum number of worker pods that may be created in an instantaneous batch before the MaxPerSecond rate throttles subsequent creations — the token-bucket depth. Defaults to MaxPerSecond when omitted.</td>
 <td></td>
-<td>Maximum: 100000 <br />Minimum: 1 <br />Optional: {} <br /></td>
+<td>Maximum: 100000<br />Minimum: 1<br />Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -5169,7 +5169,7 @@ interface, by extending this enum and the union — no breaking change.</p>
 <tbody>
 <tr>
 <td><code>Vault</code></td>
-<td>SignerProviderVault selects a HashiCorp Vault transit signer (the MVP). Configured<br />by ExternalSigner.Vault.<br /></td>
+<td>SignerProviderVault selects a HashiCorp Vault transit signer (the MVP). Configured by ExternalSigner.Vault.</td>
 </tr>
 </tbody>
 </table>
@@ -5193,33 +5193,33 @@ the collector at the network layer instead. See docs/operations/observability.md
 <tbody>
 <tr>
 <td><code>endpoint</code> <em>string</em></td>
-<td>Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the<br />AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.</td>
+<td>Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>insecure</code> <em>boolean</em></td>
-<td>Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS<br />required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.</td>
+<td>Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>sampler</code> <em>string</em></td>
-<td>Sampler selects the trace sampler. When empty the SDK default applies. Maps to<br />OTEL_TRACES_SAMPLER.</td>
+<td>Sampler selects the trace sampler. When empty the SDK default applies. Maps to OTEL_TRACES_SAMPLER.</td>
 <td></td>
-<td>Enum: [always_on always_off traceidratio parentbased_always_on parentbased_always_off parentbased_traceidratio] <br />Optional: {} <br /></td>
+<td>Enum: [always_on always_off traceidratio parentbased_always_on parentbased_always_off parentbased_traceidratio]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>samplerArg</code> <em>string</em></td>
-<td>SamplerArg is the argument for the chosen Sampler — for ratio-based samplers<br />the sampling probability in [0,1]. Maps to OTEL_TRACES_SAMPLER_ARG.</td>
+<td>SamplerArg is the argument for the chosen Sampler — for ratio-based samplers the sampling probability in [0,1]. Maps to OTEL_TRACES_SAMPLER_ARG.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>resourceAttributes</code> <em>object (keys:string, values:string)</em></td>
-<td>ResourceAttributes are extra OpenTelemetry resource attributes merged onto<br />every AGC span. Maps to OTEL_RESOURCE_ATTRIBUTES.</td>
+<td>ResourceAttributes are extra OpenTelemetry resource attributes merged onto every AGC span. Maps to OTEL_RESOURCE_ATTRIBUTES.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -5246,15 +5246,15 @@ behavior on a VPA upgrade. Naming Recreate makes the eviction explicit.</p>
 <tbody>
 <tr>
 <td><code>Off</code></td>
-<td>VPAUpdateModeOff is recommendation-only: the VerticalPodAutoscaler observes the<br />AGC and publishes a recommendation in its own status, but never mutates a pod.<br />It is the default for agcAutoscaling so that opting in is observable before it<br />is disruptive — nothing about the running AGC changes.<br /></td>
+<td>VPAUpdateModeOff is recommendation-only: the VerticalPodAutoscaler observes the AGC and publishes a recommendation in its own status, but never mutates a pod. It is the default for agcAutoscaling so that opting in is observable before it is disruptive — nothing about the running AGC changes.</td>
 </tr>
 <tr>
 <td><code>Initial</code></td>
-<td>VPAUpdateModeInitial applies the recommendation only at pod creation. A running<br />AGC pod is never evicted by the autoscaler; it picks up a new size the next time<br />it restarts for another reason (image change, node drain, spec edit).<br /></td>
+<td>VPAUpdateModeInitial applies the recommendation only at pod creation. A running AGC pod is never evicted by the autoscaler; it picks up a new size the next time it restarts for another reason (image change, node drain, spec edit).</td>
 </tr>
 <tr>
 <td><code>Recreate</code></td>
-<td>VPAUpdateModeRecreate lets the autoscaler evict the AGC pod to apply a new<br />recommendation. The AGC tolerates this: on SIGTERM in-flight listener goroutines<br />deregister their sessions and the AGC re-registers them within GitHub's 2-minute<br />redelivery window on restart (docs/design/appendix-e-capacity-planning.md §E.9).<br />It is still a control-plane restart, so it is opt-in rather than the default.<br /></td>
+<td>VPAUpdateModeRecreate lets the autoscaler evict the AGC pod to apply a new recommendation. The AGC tolerates this: on SIGTERM in-flight listener goroutines deregister their sessions and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (docs/design/appendix-e-capacity-planning.md §E.9). It is still a control-plane restart, so it is opt-in rather than the default.</td>
 </tr>
 </tbody>
 </table>
@@ -5277,15 +5277,15 @@ configured in Vault by the operator, out of band — only its name is named here
 <tbody>
 <tr>
 <td><code>role</code> <em>string</em></td>
-<td>Role is the Vault Kubernetes auth role the AGC logs in as. The operator binds this<br />role to the AGC ServiceAccount and namespace in Vault.</td>
+<td>Role is the Vault Kubernetes auth role the AGC logs in as. The operator binds this role to the AGC ServiceAccount and namespace in Vault.</td>
 <td></td>
-<td>MaxLength: 255 <br />MinLength: 1 <br /></td>
+<td>MaxLength: 255<br />MinLength: 1</td>
 </tr>
 <tr>
 <td><code>mount</code> <em>string</em></td>
-<td>Mount is the path the Vault Kubernetes auth method is mounted at. Optional; defaults<br />to "kubernetes", Vault's conventional mount path.</td>
+<td>Mount is the path the Vault Kubernetes auth method is mounted at. Optional; defaults to "kubernetes", Vault's conventional mount path.</td>
 <td>kubernetes</td>
-<td>MaxLength: 255 <br />Optional: {} <br /></td>
+<td>MaxLength: 255<br />Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -5309,33 +5309,33 @@ not stored in a Secret.</p>
 <tbody>
 <tr>
 <td><code>address</code> <em>string</em></td>
-<td>Address is the Vault API base URL (e.g. https://vault.vault.svc:8200). HTTPS is<br />required for production because the AGC's ServiceAccount token transits this channel<br />at login; a plaintext address is permitted only under an explicit dev/test opt-in in<br />the AGC (mirroring the GitHub token-exchange channel, docs/design/05-security.md).</td>
+<td>Address is the Vault API base URL (e.g. https://vault.vault.svc:8200). HTTPS is required for production because the AGC's ServiceAccount token transits this channel at login; a plaintext address is permitted only under an explicit dev/test opt-in in the AGC (mirroring the GitHub token-exchange channel, docs/design/05-security.md).</td>
 <td></td>
-<td>MaxLength: 2048 <br />MinLength: 1 <br />Pattern: <code>^https?://</code> <br /></td>
+<td>MaxLength: 2048<br />MinLength: 1<br />Pattern: <code>^https?://</code></td>
 </tr>
 <tr>
 <td><code>transitMount</code> <em>string</em></td>
-<td>TransitMount is the path the Vault transit secrets engine is mounted at. Optional;<br />defaults to "transit", Vault's conventional mount path.</td>
+<td>TransitMount is the path the Vault transit secrets engine is mounted at. Optional; defaults to "transit", Vault's conventional mount path.</td>
 <td>transit</td>
-<td>MaxLength: 255 <br />Optional: {} <br /></td>
+<td>MaxLength: 255<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>keyName</code> <em>string</em></td>
-<td>KeyName is the name of the Vault transit key that signs the App JWT. The key must be<br />an RSA key (GitHub App keys are RSA); transit signs it as RS256<br />(pkcs1v15 + sha2-256).</td>
+<td>KeyName is the name of the Vault transit key that signs the App JWT. The key must be an RSA key (GitHub App keys are RSA); transit signs it as RS256 (pkcs1v15 + sha2-256).</td>
 <td></td>
-<td>MaxLength: 255 <br />MinLength: 1 <br /></td>
+<td>MaxLength: 255<br />MinLength: 1</td>
 </tr>
 <tr>
 <td><code>auth</code> <em><a href="#vaultkubernetesauth">VaultKubernetesAuth</a></em></td>
-<td>Auth configures how the AGC authenticates to Vault (Vault Kubernetes auth in the<br />MVP).</td>
+<td>Auth configures how the AGC authenticates to Vault (Vault Kubernetes auth in the MVP).</td>
 <td></td>
 <td></td>
 </tr>
 <tr>
 <td><code>networkPolicy</code> <em><a href="#egresspeer">EgressPeer</a></em></td>
-<td>NetworkPolicy optionally tells the GMC how to reach Vault as a NetworkPolicy egress<br />peer (Q202). On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies<br />egress (DNS + GitHub + the kube API server); Vault is not otherwise expressible as a<br />peer because Address is an opaque URL, so set this and the GMC emits a scoped AGC→Vault<br />egress rule on the Vault API port (parsed from Address). Leave it unset on a non-<br />enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band — the rule<br />is a strict tightening that is only ever added, never a broaden-to-all-egress. Set on a<br />GitHubApp gateway it has no effect (no Vault egress is emitted for the possession model).<br />The value is a shared EgressPeer (Q204): the selector/CIDR peer the GMC scopes the rule<br />to. Its Port is left unset for Vault (the port is derived from Address); set it only to<br />override that derived port.</td>
+<td>NetworkPolicy optionally tells the GMC how to reach Vault as a NetworkPolicy egress peer (Q202). On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies egress (DNS + GitHub + the kube API server); Vault is not otherwise expressible as a peer because Address is an opaque URL, so set this and the GMC emits a scoped AGC→Vault egress rule on the Vault API port (parsed from Address). Leave it unset on a non- enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band — the rule is a strict tightening that is only ever added, never a broaden-to-all-egress. Set on a GitHubApp gateway it has no effect (no Vault egress is emitted for the possession model).<br />The value is a shared EgressPeer (Q204): the selector/CIDR peer the GMC scopes the rule to. Its Port is left unset for Vault (the port is derived from Address); set it only to override that derived port.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -5359,31 +5359,31 @@ spec edit takes effect on the next job without a restart (Q117).</p>
 <td><code>profile</code> <em>string</em></td>
 <td>Profile selects the sizing behavior; see the SizingProfile* constants.</td>
 <td>Static</td>
-<td>Enum: [Static Binpack Throughput NodeShare] <br />Optional: {} <br /></td>
+<td>Enum: [Static Binpack Throughput NodeShare]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>limitHeadroomPercent</code> <em>integer</em></td>
-<td>LimitHeadroomPercent (Throughput only) scales the observed per-job memory<br />peak into the derived memory limit: limit = peak × percent / 100. Defaults<br />to 150 (the dogfood-validated OOM-headroom band, rounded up for the<br />burst-friendly profile). Memory only — no CPU limit is ever derived.</td>
+<td>LimitHeadroomPercent (Throughput only) scales the observed per-job memory peak into the derived memory limit: limit = peak × percent / 100. Defaults to 150 (the dogfood-validated OOM-headroom band, rounded up for the burst-friendly profile). Memory only — no CPU limit is ever derived.</td>
 <td></td>
-<td>Maximum: 1000 <br />Minimum: 100 <br />Optional: {} <br /></td>
+<td>Maximum: 1000<br />Minimum: 100<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>nodeShare</code> <em><a href="#nodesharesizing">NodeShareSizing</a></em></td>
-<td>NodeShare declares the per-node envelope the NodeShare profile divides.<br />Required when (and only meaningful when) profile is NodeShare.</td>
+<td>NodeShare declares the per-node envelope the NodeShare profile divides. Required when (and only meaningful when) profile is NodeShare.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>minRequests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
-<td>MinRequests / MaxRequests clamp every derived cpu/memory request (and the<br />limits that track them) within an operator-set floor/ceiling, bounding how<br />far a skewed usage history can push the derived values. Keys other than<br />cpu and memory are ignored.</td>
+<td>MinRequests / MaxRequests clamp every derived cpu/memory request (and the limits that track them) within an operator-set floor/ceiling, bounding how far a skewed usage history can push the derived values. Keys other than cpu and memory are ignored.</td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>maxRequests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
 <td></td>
 <td></td>
-<td>Optional: {} <br /></td>
+<td>Optional: {}</td>
 </tr>
 </tbody>
 </table>
@@ -5407,19 +5407,19 @@ enters the cluster (§H.15, docs/design/05-security.md).</p>
 <tbody>
 <tr>
 <td><code>appId</code> <em>integer</em></td>
-<td>AppID is the GitHub App's numeric ID (the JWT issuer). Non-secret; inline rather<br />than in a Secret because it identifies, not authenticates.</td>
+<td>AppID is the GitHub App's numeric ID (the JWT issuer). Non-secret; inline rather than in a Secret because it identifies, not authenticates.</td>
 <td></td>
-<td>Minimum: 1 <br /></td>
+<td>Minimum: 1</td>
 </tr>
 <tr>
 <td><code>installationId</code> <em>integer</em></td>
 <td>InstallationID is the GitHub App installation's numeric ID. Non-secret; inline.</td>
 <td></td>
-<td>Minimum: 1 <br /></td>
+<td>Minimum: 1</td>
 </tr>
 <tr>
 <td><code>signer</code> <em><a href="#externalsigner">ExternalSigner</a></em></td>
-<td>Signer configures the external signer that signs the App JWT. The signing key lives<br />in the signer's trust anchor (Vault transit in the MVP), never in the cluster.</td>
+<td>Signer configures the external signer that signs the App JWT. The signing key lives in the signer's trust anchor (Vault transit in the MVP), never in the cluster.</td>
 <td></td>
 <td></td>
 </tr>

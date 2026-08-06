@@ -2579,6 +2579,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#page-scoped-table-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Page-scoped table rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#changing-the-hero-headline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3105,6 +3116,25 @@ by specificity, silently. <code>.md-typeset .gag-nowrap</code> (0,2,0) beats a p
 symptom is "my CSS does nothing," with nothing in the build to explain it. A
 utility that must never change behaviour and a component that must change it at a
 breakpoint are different classes, even when the declaration is identical.</p>
+<h3 id="page-scoped-table-rules">Page-scoped table rules<a class="headerlink" href="#page-scoped-table-rules" title="Permanent link">&para;</a></h3>
+<p>Two pages pin their own table columns, each selected by an element only that page
+has: <code>.md-content__inner:has(.gag-vs-hero)</code> for the why-GAG comparison, and
+<code>.md-typeset:has(&gt; h1#api-reference)</code> for the generated
+<a href="../../reference/api/">API reference</a>. Both are there for the same reason. <code>auto</code>
+table layout splits width by each column's max-content demand, so a column of
+paragraphs takes width from the columns that carry the row's identity, and the
+split moves as the container does. Pin the columns with <code>table-layout: fixed</code>
+rather than tuning the prose.</p>
+<p>The comparison table's scope also owns the <strong>last-column accent</strong> (the tinted
+<code>td:last-child</code> and accent-coloured header), and it has to. "Last column" means
+GAG on that one table; everywhere else it is whatever the author put rightmost.
+The accent was global once, which put it on all ~660 tables in the tree, tinting
+Validation on the API reference and Fix on the troubleshooting page. Nothing in
+the build catches that, because the reveal JS classes every plain table
+(see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>),
+so the rule reaches far past the "marketing tables" its comment claimed. <strong>A new
+table rule that means something about a specific column belongs in a page scope,
+not in the global block.</strong></p>
 <h3 id="changing-the-hero-headline">Changing the hero headline<a class="headerlink" href="#changing-the-hero-headline" title="Permanent link">&para;</a></h3>
 <p>The headline's type size and its two breakpoints are <strong>derived from the longest
 unbreakable phrase</strong>, not chosen for looks. The display face is monospace, so a

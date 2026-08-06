@@ -2727,10 +2727,17 @@ completeness assertion (below).</p>
   actually embed (<code>k8s.io/api</code> v0.36.x is Kubernetes 1.36).</li>
 <li><strong><code>templates/*.tpl</code></strong> — a fork of the tool's built-in markdown set. A
   <code>--templates-dir</code> replaces the whole set, so all four are present even where
-  only one changed. Two changes: the page preamble in <code>gv_list.tpl</code>, and a
+  only one changed. Three changes: the page preamble in <code>gv_list.tpl</code>; a
   regex in <code>gv_details.tpl</code>/<code>type.tpl</code> that renders godoc's <code># Section</code> heading
-  syntax as a bold lead. Left alone those become <code>&lt;h1&gt;</code>s in the middle of the
-  page and put package-internal asides in the site TOC beside the kinds.
+  syntax as a bold lead (left alone those become <code>&lt;h1&gt;</code>s in the middle of the
+  page and put package-internal asides in the site TOC beside the kinds); and
+  the <code>field_doc</code> helper in <code>type_members.tpl</code> that every doc cell renders
+  through. The tool's <code>markdownRenderFieldDoc</code> turns <em>every</em> newline into
+  <code>&lt;br /&gt;</code>, so a description reached the table cell still wrapped at the Go
+  source's ~80 columns and broke mid-sentence at a width the browser never
+  chose; <code>field_doc</code> joins the soft wraps back into prose and keeps a break only
+  for a blank line or a list item. <strong>Doc comments are reflowed, so write them
+  for godoc</strong>: the site no longer inherits their wrap points.
   <strong>Re-diff the fork against
   <code>tools/vendor/github.com/elastic/crd-ref-docs/templates/markdown/</code> when the
   pinned <code>crd-ref-docs</code> version moves.</strong> A Dependabot bump that changes the
