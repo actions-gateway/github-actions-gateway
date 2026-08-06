@@ -9,6 +9,13 @@
 # and a `-race` form the hook cannot pin a single go token in is denied with a
 # specific reason. These are asserted against synthetic hook payloads. Runs under
 # `make check` (via `make scripts-test`) and the CI shellcheck job.
+#
+# Both directions are asserted, because both fail silently (Q624). The hook now
+# counts only a `go` in *command position*, so a command that merely NAMES one —
+# a `git commit` message, a heredoc body — must pass through untouched; but a
+# matcher that stopped matching would let a real unthrottled `-race` run freeze
+# the GUI, which is the more expensive error. Every must-not-match case below is
+# paired with a must-match one built from the same text.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -118,6 +125,109 @@ if [[ "$deny_decision" == "deny" && "$deny_reason" == *"more than one go build/t
 else
 	fail "unrewritable: want deny w/ specific reason, got decision=$deny_decision reason=$deny_reason"
 fi
+
+# --- Q624: text that only NAMES a go command is not an invocation -------------
+#
+# Each must-not-match case is followed by a must-match one built from the same
+# text, so a matcher that quietly stopped seeing real invocations fails here.
+
+# `read -d ''` returns non-zero at EOF; the payloads are multi-line by design.
+read -r -d '' commit_two_mentions <<'CASE' || true
+git commit -F - <<'MSG'
+fix(agent): stop denying a commit that quotes a throttled command
+
+Before this, `go test -race ./...` in the message read as an invocation, so a
+message naming `go test -race` twice was denied outright.
+MSG
+CASE
+
+read -r -d '' commit_one_mention <<'CASE' || true
+git commit -F - <<'MSG'
+docs(testing): note the throttle prefix
+
+Running `go test -race ./...` locally needs the prefix.
+MSG
+CASE
+
+read -r -d '' commit_then_race <<'CASE' || true
+git commit -F - <<'MSG'
+docs(testing): note the throttle prefix
+
+Running `go test -race ./...` locally needs the prefix.
+MSG
+go test -race ./...
+CASE
+
+read -r -d '' commit_dash_heredoc <<'CASE' || true
+git commit -F - <<-'MSG'
+	docs(testing): note the throttle prefix
+
+	Running `go test -race ./...` locally needs the prefix.
+	MSG
+CASE
+
+expect_unchanged 'commit heredoc: two -race mentions -> unchanged (was deny)' \
+	"$commit_two_mentions"
+expect_unchanged 'commit heredoc: one -race mention  -> unchanged (was ask+rewrite)' \
+	"$commit_one_mention"
+expect_unchanged 'commit heredoc: <<- tab-indented   -> unchanged' \
+	"$commit_dash_heredoc"
+expect_unchanged 'commit -m: message quotes -race    -> unchanged' \
+	'git commit -m "docs: note that go test -race needs the throttle prefix"'
+expect_unchanged 'commit -m: quoted, then chained    -> unchanged' \
+	'git commit -m "docs: go test -race notes" && git push'
+expect_unchanged 'grep: pattern names go test -race  -> unchanged' \
+	"grep -rn 'go test -race' scripts/agent"
+# `-race` inside a message must not upgrade a plain `go test` to the -race path:
+# the flag is read from the invocation's own arguments, not the whole string.
+expect_unchanged 'mention: -race in msg, plain go test -> unchanged' \
+	'go test ./... ; git commit -m "docs: go test -race notes"'
+
+# The paired must-match direction: the very same message text with a real
+# invocation after it is still seen, throttled, and asked.
+race_after_out="$(run_hook "$commit_then_race")"
+race_after_decision="$(field "$race_after_out" '.hookSpecificOutput.permissionDecision')"
+race_after_cmd="$(field "$race_after_out" '.hookSpecificOutput.updatedInput.command')"
+# The backticks are literal message text, not a command substitution: this
+# asserts the commit message still reads un-prefixed.
+# shellcheck disable=SC2016
+if [[ "$race_after_decision" == "ask" &&
+	"$race_after_cmd" == *"MSG"$'\n'"$PREFIX go test -race ./..." &&
+	"$race_after_cmd" == *'Running `go test -race ./...` locally'* ]]; then
+	pass 'commit heredoc + real -race: ask, prefix outside the message'
+else
+	fail "commit heredoc + real -race: want ask w/ prefix only on the real go; got decision=$race_after_decision cmd=[$race_after_cmd]"
+fi
+
+# Two genuine invocations still deny, even when a message mentions a third.
+read -r -d '' two_real_with_mention <<'CASE' || true
+go build ./... && go test -race ./...
+git commit -m "docs: go test -race notes"
+CASE
+deny2_out="$(run_hook "$two_real_with_mention")"
+if [[ "$(field "$deny2_out" '.hookSpecificOutput.permissionDecision')" == "deny" ]]; then
+	pass 'two real invocations + a mention -> still deny'
+else
+	fail "two real invocations + a mention: want deny, got $deny2_out"
+fi
+
+# Command position is the mechanism, so isolate it: a `go` that is an *argument*
+# to another command is not an invocation. `timeout` stands in for any wrapper
+# `already_throttled` does not recognise, so this case fails if the command-
+# position gate is dropped — the wrapper cases below cannot show that, because
+# `already_throttled` short-circuits them first. Unchanged is parity with the
+# pre-Q624 hook (its head check rejected a non-`go` head the same way); the
+# resulting unthrottled wrapper run is tracked as its own item, not widened here.
+expect_unchanged 'wrapper: timeout … go -race   -> unchanged (go is an argument)' \
+	'timeout 900 go test -race ./...'
+
+# Command position is what counts, not a subshell: a newline-separated and a
+# bare `cd … && …` form must both still be caught.
+expect_decision 'newline: cd then -race    -> ask + prefix before go' \
+	"$(printf 'cd cmd/agc\ngo test -race ./...')" ask \
+	"$(printf 'cd cmd/agc\n%s go test -race ./...' "$PREFIX")"
+expect_decision 'chain: cd && -race        -> ask + prefix before go' \
+	'cd cmd/agc && go test -race ./...' ask "cd cmd/agc && $PREFIX go test -race ./..."
 
 # --- Cases the hook must leave untouched --------------------------------------
 
