@@ -2860,6 +2860,38 @@
 <td>The hook scans the whole Bash string, so a <code>git commit -F -</code> heredoc quoting <code>go test -race</code> reads as a second go invocation and is denied. Skip heredoc bodies and <code>git commit -m</code>/<code>-F</code> arguments; <code>claude-go-throttle-hook-test.sh</code> takes the case.</td>
 </tr>
 <tr>
+<td><a id="Q699"></a>Q699</td>
+<td><a href="../development/documentation-standards/#enforcing-the-em-dash-rule">The fast doc-gate list omits the gate that fires when you <em>write</em> prose</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The agent workflow's run-them-directly list is <code>doc-links</code>, <code>plan-index-check</code>, <code>no-plan-refs-check</code> — all three fire on <em>moving</em> a doc. <code>em-dash-check</code> fires on writing one, runs in ~2s, and cost a full <code>make check</code> cycle by surfacing at the end.</td>
+</tr>
+<tr>
+<td><a id="Q700"></a>Q700</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.gitignore"><code>.gitignore</code> covers only the root <code>tmp/</code>, so a scratch dir one level down is unignored</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>/tmp/*</code> is root-anchored, so a <code>cd</code>-drifted command writing <code>cmd/agc/tmp/</code> leaves it untracked-but-not-ignored, one directory <code>git add</code> from shipping (the #847 shape). Only <code>tmp/.gitkeep</code> is tracked, so widening to <code>**/tmp/</code> is safe.</td>
+</tr>
+<tr>
+<td><a id="Q701"></a>Q701</td>
+<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on">No doc records how to hold the scale-set poll loop out of its own poll</a></td>
+<td><code>tests</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Two techniques, and picking wrong costs a session: <code>parkInPoll</code> (Q603) fails when the event under test wakes parked polls, as <code>CompleteAssignedJob</code> does, so Q689 blocked in Provision instead. Only the archived Q603 plan names either.</td>
+</tr>
+<tr>
+<td><a id="Q702"></a>Q702</td>
+<td><a href="../development/maintaining-backlog/#flake-fixes-go-first">A flake row whose investigation measured a production defect does not link it</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q685 and Q689 were one defect from two sides, and Q689's only measurement sat inside Q685's <code>testing.md</code> paragraph. Nothing connected them; a dispatcher had to ask. Rule: cross-link the pair, and say which row owns the measurement.</td>
+</tr>
+<tr>
 <td><a id="Q694"></a>Q694</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible-test.sh"><code>pr-requeue-eligible</code>'s timeline and GraphQL reads are untested behind the <code>gh</code> stub</a></td>
 <td><code>tests</code> <code>retro</code></td>
