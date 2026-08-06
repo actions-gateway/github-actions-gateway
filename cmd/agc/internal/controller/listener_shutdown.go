@@ -27,8 +27,9 @@ import (
 // GracefulShutdownTimeout (30s by default) caps the wait; each session DELETE is
 // itself bounded well inside that (listener.sessionDeleteTimeout).
 type listenerShutdown struct {
-	// stop drains the owning reconciler's multiplexers and returns a channel
-	// closed once every listener goroutine has exited.
+	// stop drains every listener the owning reconciler runs — multiplexers on the
+	// classic tier, poll loops on the scale-set one — and returns a channel closed
+	// once every listener goroutine has exited.
 	stop func() <-chan struct{}
 	log  *slog.Logger
 	// owner names the reconciler in the shutdown log line ("RunnerGroup"/"RunnerSet").
@@ -98,8 +99,65 @@ func (r *RunnerGroupReconciler) stopListeners() <-chan struct{} {
 	return stopMultiplexers(snapshotMultiplexers(&r.multiplexersMu, r.multiplexers))
 }
 
-// stopListeners drains every listener goroutine this RunnerSet reconciler owns.
-// See RunnerGroupReconciler.stopListeners.
+// stopListeners drains every listener goroutine this RunnerSet reconciler owns, on
+// both acquisition tiers. See RunnerGroupReconciler.stopListeners.
+//
+// The scale-set tier needs the barrier at least as much as the classic one: its poll
+// loop's exit defers read the conclusions the queue is still holding (Q689), delete the
+// messages those conclusions release (Q603), and only then delete the session. A process
+// that exits out from under them strands a concluded job's assignment in the queue, and
+// the next AGC provisions a worker for a job that is over.
+//
+// The two tiers drain concurrently: both helpers spawn before either is awaited, so
+// shutdown costs the slower tier rather than their sum.
 func (r *RunnerSetReconciler) stopListeners() <-chan struct{} {
-	return stopMultiplexers(snapshotMultiplexers(&r.multiplexersMu, r.multiplexers))
+	classic := stopMultiplexers(snapshotMultiplexers(&r.multiplexersMu, r.multiplexers))
+	scaleSet := stopScaleSetHandles(snapshotScaleSetListeners(&r.scaleSetListenersMu, r.scaleSetListeners))
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		<-classic
+		<-scaleSet
+	}()
+	return done
+}
+
+// stopScaleSetHandles cancels every scale-set listener in handles concurrently and
+// returns a done channel closed once all of their poll loops have exited — and so have
+// run their exit teardown. Concurrent for the same reason multiplexers are: an AGC
+// serving many RunnerSets must not spend the manager's GracefulShutdownTimeout on the
+// sum of their teardown budgets.
+func stopScaleSetHandles(handles []*scaleSetListenerHandle) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var wg sync.WaitGroup
+		for _, h := range handles {
+			wg.Add(1)
+			go func(h *scaleSetListenerHandle) {
+				defer wg.Done()
+				h.cancel()
+				<-h.done
+			}(h)
+		}
+		wg.Wait()
+	}()
+	return done
+}
+
+// snapshotScaleSetListeners copies the live scale-set listeners out of m under mu and
+// clears the map, so a concurrent reconcile cannot resurrect one the drain has already
+// stopped. Returns nil when there is nothing to drain.
+func snapshotScaleSetListeners(mu *sync.Mutex, m map[types.NamespacedName]*scaleSetListenerHandle) []*scaleSetListenerHandle {
+	mu.Lock()
+	defer mu.Unlock()
+	if len(m) == 0 {
+		return nil
+	}
+	handles := make([]*scaleSetListenerHandle, 0, len(m))
+	for key, h := range m {
+		handles = append(handles, h)
+		delete(m, key)
+	}
+	return handles
 }

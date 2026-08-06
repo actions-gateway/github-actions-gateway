@@ -1,6 +1,13 @@
 package controller
 
-import "testing"
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"testing"
+
+	"github.com/actions-gateway/github-actions-gateway/scaleset"
+)
 
 // TestScaleSetStubConfigURL pins the fake-GitHub re-point, whose whole job is to swap
 // the https scheme a gateway is FORCED to declare (CRD pattern + webhook) for the
@@ -81,5 +88,31 @@ func TestScaleSetStubConfigURL(t *testing.T) {
 				t.Errorf("configURL = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestScaleSetSessionHeld_MatchesThroughTheStartWrap pins the error chain the rollout
+// path depends on. A predecessor's session makes CreateSession answer 409, and the
+// reconciler must recognise that through Listener.Start's own wrap so the retry stays a
+// short flat wait rather than the work queue's backoff — which climbs past the teardown
+// it is waiting on and idles the set with the session already free. A wrap that stopped
+// using %w would restore that failure silently, so the match is asserted through one.
+func TestScaleSetSessionHeld_MatchesThroughTheStartWrap(t *testing.T) {
+	conflict := fmt.Errorf("scalesetlistener: open session for %q: %w", "linux",
+		&scaleset.SessionConflictError{StatusCode: http.StatusConflict})
+	if !scaleSetSessionHeld(conflict) {
+		t.Error("a wrapped SessionConflictError must be recognised as a held session")
+	}
+
+	// The failures that must keep the loud path: they are not a predecessor finishing.
+	for name, err := range map[string]error{
+		"unrelated": errors.New("dial tcp: connection refused"),
+		"nil":       nil,
+		"other conflict": fmt.Errorf("generate jit config: %w",
+			&scaleset.RunnerNameConflictError{StatusCode: http.StatusConflict}),
+	} {
+		if scaleSetSessionHeld(err) {
+			t.Errorf("%s must not be treated as a held session", name)
+		}
 	}
 }
