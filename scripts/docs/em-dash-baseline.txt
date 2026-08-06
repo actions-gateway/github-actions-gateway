@@ -213,7 +213,7 @@
 19 docs/plan/q501-cancel-relay.md
 17 docs/plan/q511-live-github-run-isolation.md
 22 docs/plan/q549-scaleset-rerun-flake.md
-20 docs/plan/q603-settle-delete-gap.md
+20 docs/plan/archive/q603-settle-delete-gap.md
 45 docs/plan/release-1.0.md
 117 docs/plan/release-1.3.md
 64 docs/plan/runner-sizing-profiles.md
