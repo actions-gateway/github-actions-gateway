@@ -3,7 +3,9 @@
 **Status:** done 2026-08-02. The graceful-stop half is closed and regression-tested;
 the hard-kill residual was closed by Q606: the concluded-job guards are persisted to a
 per-RunnerSet ConfigMap ahead of every delete
-([02-architecture.md](../../design/02-architecture.md)).
+([02-architecture.md](../../design/02-architecture.md)). A third window this doc did not
+see, a conclusion the listener never read, was closed by Q689 on 2026-08-05; see
+[What this does not close](#what-this-does-not-close).
 
 Q583 made acking two halves: advance the cursor, then delete the message once every
 job it names has concluded. The two halves are not atomic, and nothing carries the
@@ -78,6 +80,15 @@ so a 10s flush budget mirroring `deleteSession`'s fits alongside it with room fo
 manager's own shutdown.
 
 ### What this does not close
+
+**Update 2026-08-05 (Q689):** the two residuals below are both on the far side of a
+conclusion the listener has already read. There is a third window before it: the job
+concludes at GitHub and the process stops before a poll delivers the `JobCompleted`,
+and it needs no hard kill, since a graceful stop lands in it. Measured over the 60 stops
+recorded for Q685, all 4 taken before the completion was read replayed and re-provisioned;
+none of the 56 taken after it did. Closed by draining the queue's outstanding conclusions
+on the way out, ahead of the exit flush
+([02-architecture.md](../../design/02-architecture.md)).
 
 A hard kill — SIGKILL at grace expiry, OOM, node loss — between `settle` and a
 successful DELETE still strands the message, and no ordering can prevent that: the

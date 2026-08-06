@@ -40,6 +40,8 @@
 // rather than the scale set's whole history (Q583). The conclusions themselves are
 // persisted through Config.Guards before any delete is issued, so a hard kill between
 // a conclusion and its DELETE does not turn the replay back into a re-provision (Q606).
+// A conclusion the loop had not yet read is the third case, and needs no kill at all:
+// the exit path reads what the queue is still holding before it flushes (Q689).
 //
 // One job class is outside that replay: an assignment the Listener acked past because it
 // could not be provisioned — a runner name a stale registration holds (Q551), or a worker
@@ -120,6 +122,15 @@ const sweepTimeout = 30 * time.Second
 // enough for a slow answer and small enough that a queue which never answers cannot
 // spend the budget the other one needs.
 const teardownBudget = 10 * time.Second
+
+// drainBudget bounds the exit read of conclusions the loop had not got to yet (Q689).
+// Smaller than teardownBudget because it is the one teardown call that can be asked to
+// wait on an empty queue: the backlog it exists to read is delivered without blocking,
+// and only the poll that finds nothing left is held server-side — so a stop taken while
+// any job is still running spends this whole budget on that hold. The three exit calls
+// are sequential, so their worst case is their sum, and it has to fit the manager's
+// GracefulShutdownTimeout (30s) rather than only the pod's 60s grace.
+const drainBudget = 5 * time.Second
 
 // defaultRateLimitConditionAfter is how long GetMessage must have been answered 429
 // before the Listener surfaces RateLimited=True on the owning RunnerSet — the same
@@ -777,6 +788,9 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 	// Ordered before the session delete by defer's LIFO: DeleteMessage is issued against
 	// the session, and a dead one answers the 404 the client reads as a successful ack.
 	defer l.flushDeletesOnExit(sess)
+	// Ordered before the flush, for the same reason the flush is ordered before the
+	// session delete: it is what gives the flush something to delete (Q689).
+	defer l.drainConclusionsOnExit(sess)
 
 	for {
 		if ctx.Err() != nil {
@@ -1919,6 +1933,89 @@ func sortedKeys(m map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// drainConclusionsOnExit reads the conclusions the queue is already holding for the jobs
+// this Listener still owes a delete, so the flush that follows can release their
+// messages (Q689). A job concludes at GitHub, not here: its JobCompleted sits in the
+// queue until a poll reads it, and the loop is single-goroutine, so everything it does
+// between two polls — provisioning, re-offering a deferred job, refreshing the session —
+// is a window in which a stop takes the process away with the conclusion unread. The
+// held assignment then replays and the next process builds a worker for a job that ran.
+//
+// It settles nothing on its own authority. A job is concluded only by completeJob, off a
+// terminal JobCompleted GitHub published, which is the same authority the poll loop acts
+// on; the messages it reads go through the same holdForDelete bookkeeping, so one still
+// naming an unconcluded job stays in the queue and replays. An assignment it reads is
+// neither provisioned nor acked — the cursor it walks is local, and a cursor ack is
+// session-scoped at the backend (Q583, measured 2026-08-01), so a message this skips
+// still replays to the next session.
+//
+// The poll advertises zero capacity: the process is leaving and must not invite another
+// assignment. That does not cost it the completions it came for — a Listener at its
+// ceiling polls with zero capacity for as long as it is full, and a saturated scale set
+// drains because those polls keep delivering JobCompleted.
+func (l *Listener) drainConclusionsOnExit(sess *scaleset.RunnerScaleSetSession) {
+	if sess == nil || sess.SessionID == "" {
+		return
+	}
+	if !l.awaitingConclusion() {
+		return
+	}
+	l.mu.Lock()
+	cursor := l.lastMessageID
+	l.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), drainBudget)
+	defer cancel()
+	settled := 0
+	defer func() {
+		if settled > 0 {
+			l.log.Info("scaleset: read conclusions the queue was still holding at shutdown",
+				"scaleSet", l.cfg.ScaleSetName, "jobs", settled)
+		}
+	}()
+	for l.awaitingConclusion() {
+		msg, err := l.cfg.Client.GetMessage(ctx, sess, 0, cursor)
+		if err != nil {
+			l.log.Debug("scaleset: read outstanding conclusions on shutdown",
+				"scaleSet", l.cfg.ScaleSetName, "err", err)
+			return
+		}
+		if msg == nil { // 202 — the queue has nothing more to say
+			return
+		}
+		if msg.MessageID <= cursor {
+			// A backend that ignores the cursor would otherwise spin this loop between
+			// two deadline checks, since a delivered message costs no wait.
+			return
+		}
+		cursor = msg.MessageID
+		jobs, jerr := msg.Jobs()
+		if jerr != nil {
+			continue // names no job, so it holds nothing back; the loop deletes it on the next start
+		}
+		cleaned := make(map[string]bool)
+		for _, cj := range completedJobs(jobs) {
+			if l.completeJob(ctx, cj) {
+				cleaned[cj.JobID] = true
+				settled++
+			}
+		}
+		l.holdForDelete(msg.MessageID, assignedJobIDs(jobs), l.unsettledJobs(jobs, cleaned))
+	}
+}
+
+// awaitingConclusion reports whether any cursor-acked message is still held back from its
+// delete by a job that has not concluded — the only state the exit drain can improve.
+func (l *Listener) awaitingConclusion() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, p := range l.pending {
+		if len(p.unsettled) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // flushDeletesOnExit issues the outstanding delete half of the ack as the loop exits,
