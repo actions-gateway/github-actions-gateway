@@ -131,40 +131,46 @@ dashboard and no alert rules; its listener metrics are opt-in, shipping
 commented out in the chart. Its request for a listener metrics dashboard has
 been open since 2025-01-13.
 
-## Where GAG loses
+## Where GAG loses, and to whom
 
-Stated plainly, because you will find these anyway.
+Stated plainly, because you will find these anyway. **No single alternative
+holds all of these**, which is why the column naming the winner matters as much
+as the gap itself.
 
-**Install base.** Measured on 2026-08-06: ARC has 6,417 GitHub stars, ForgeMT
-has 211, GAG has 3. GAG's repository was created 2026-05-16. If being the first
-production deployment of a control plane is unacceptable, that is a complete
-answer and no capability changes it.
+| What GAG lacks | Who has it | The catch, and where it is tracked |
+|---|---|---|
+| Install base and production evidence | ARC, and ForgeMT | Measured 2026-08-06: ARC 6,417 GitHub stars, ForgeMT 211, GAG 3, repository created 2026-05-16. Nothing offsets this. A [quantified benchmark](roadmap.md) is planned but needs a funded scale run |
+| Commercial support | ARC, and every managed service | ARC's GitHub Support entitlement excludes Kubernetes orchestration, policy application, and template customization, which is most of what a multi-tenant platform team pages about. GAG has none by design and none planned |
+| Multi-label `runs-on` targeting | ARC, since 0.14.0 (2026-03-19) | A workflow using `runs-on: [linux, gpu]` needs one edit per target to migrate. Q726 |
+| `container:` and `services:` steps without privilege | ARC, via `containerMode: kubernetes` | ARC's path needs dynamically provisioned volumes; GAG's is Docker-in-Docker, unprivileged only under Kata. Q727 |
+| An in-cluster cache backend | GitLab Runner, and the managed services. **Not ARC** | ARC has no cache feature either; it documents mounting your own volume. See below, because this one is usually misread |
+| GitHub Enterprise Server validated against a real appliance | ARC | GAG serves GHES gateways and a private certificate authority bundle, and [says on both entries](features.md) that neither is tested. Needs an operator with an appliance more than it needs engineering |
+| A bound GitHub runner group | ARC, via `runnerGroup` | Which repositories may target a tenant's runners is currently unbounded. Q712, gating the next release |
+| Duration and latency metrics on the default tier | nobody: this is a defect, not a rival's feature | Some shipped dashboard panels read empty until it lands. Q713, gating the next release |
 
-**No commercial support**, by design. GAG is Apache-2.0 with no paid tier and no
-commercial roadmap. ARC has a GitHub Support entitlement, though it is worth
-reading its scope exclusions, which put Kubernetes orchestration, policy
-application, and template customization out of scope.
+Two of those need more than a table cell.
 
-**Multi-label runner sets.** ARC gained these in 0.14.0 (2026-03-19). GAG admits
-exactly one label per runner set, so a workflow targeting
-`runs-on: [linux, gpu]` needs one edit per target to move across.
+**The cache row is the one most often misread.** `actions/cache` **works** on
+GAG today, because GitHub's cache service is reachable through the default
+egress policy, and an end-to-end run was measured restoring five caches
+totalling about 353 MB. What GAG lacks is a cache *inside your cluster*, which
+would cut egress cost and restore latency. ARC does not have one either, so this
+is not a reason to prefer ARC. It is a reason to look at GitLab Runner, which
+ships a first-class distributed cache backed by S3, Google Cloud Storage, or
+Azure Blob, if you are choosing a forge rather than a runner platform; or at the
+managed services, which compete on cache speed as a headline. GAG's own work is
+[a worker cache backend](roadmap.md) plus
+[persistent shared storage](roadmap.md), both gated on a cross-tenant isolation
+review, because a cache shared between tenants is an exfiltration path.
 
-**Container and service steps without privilege.** ARC's `containerMode:
-kubernetes` runs `container:` and `services:` job steps as separate pods with a
-provisioned volume. GAG runs one worker pod per job, so that path is
-Docker-in-Docker, unprivileged under Kata rather than a pod per step.
-
-**No cache backend.** Workers are storage-less by design, so `actions/cache` and
-Docker layer caching have no home. A shared cache between tenants is an
-exfiltration path, and the security review comes before the feature.
-
-**GitHub Enterprise Server is served but untested** against a real appliance.
-
-**Two open defects** that an evaluator should know about rather than discover:
-the GitHub-side runner group is not yet bound, so which repositories may target
-a tenant's runners is unbounded; and job duration and pod-creation latency are
-not emitted on the default acquisition tier, so some shipped dashboard panels
-read empty. Both are on the [roadmap](roadmap.md) and gate the next release.
+**The install-base row has no engineering answer.** If being the first
+production deployment of a shared CI control plane is unacceptable, that is a
+complete answer and no capability on this page changes it. The honest
+counterweight is not a feature, it is the evidence trail: measured claims with
+dates, a published retraction of the project's own best number when it turned
+out to be unmeasurable, and failure modes documented with the incidents that
+found them. Weigh that as you like; it is not the same thing as other people
+running it.
 
 ## Reading further
 
