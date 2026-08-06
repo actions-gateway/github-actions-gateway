@@ -82,6 +82,25 @@ same gap seen from a different angle.
 
 ## What changes with GAG
 
+The first two rows below are one argument, and it is an operational one before
+it is a cost one. **Quota-aware intake and automatic re-run are what make shared
+capacity safe to actually use.**
+
+Enforcing a tight per-tenant quota is only reasonable if a blocked job waits
+instead of stalling. Bin-packing tenants onto the same expensive nodes is only
+reasonable if a preempted job comes back on its own. Running on preemptible or
+spot capacity is only reasonable if the cluster taking a worker away is a
+non-event. Take either away and the platform team's options collapse to
+over-provisioning, loose quotas, and a ticket queue, which is the path back to a
+cluster per team.
+
+So the outcomes compound in one direction: **fewer manual interventions, fewer
+pages, higher utilization of the hardware you already pay for, and more jobs
+finishing per node-hour.** The [cost model](design/appendix-f-cost-model.md)
+works the utilization argument through in numbers; a published benchmark at
+scale is [on the roadmap](roadmap.md) and not yet done, so treat the figures
+there as a model rather than a measurement.
+
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
     <span class="gag-stat__num">1&nbsp;pod</span>
