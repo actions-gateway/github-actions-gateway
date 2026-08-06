@@ -93,11 +93,17 @@ func TestListener_RestartDoesNotReprovisionAConcludedJob(t *testing.T) {
 		"the first listener must provision the job")
 	require.Equal(t, []string{jobID}, first.jobIDs())
 
-	// The provisioner auto-completes, so let the completion reach the listener before
-	// the process goes away — a job still in flight is a different case, and one where
-	// replay is the recovery path rather than the bug.
+	// The provisioner auto-completes, so let the completion reach the listener before the
+	// process goes away — a job still in flight is a different case, and one where replay
+	// is the recovery path rather than the bug. The backend draining is not that signal:
+	// CompleteAssignedJob runs inside Provision, so it lands while the listener is still
+	// inside handleMessage for the assignment, and the JobCompleted it appends is only
+	// read a poll later. Waiting on the delete attempt waits for that read, because the
+	// assignment's message names an unsettled job until it happens (Q685).
 	require.Eventually(t, func() bool { return srv.AssignedJobCount(ssID) == 0 }, 5*time.Second,
 		10*time.Millisecond, "the job must conclude at the backend before the restart")
+	require.Eventually(t, func() bool { return deleteAttempts(srv) > 0 }, 5*time.Second,
+		10*time.Millisecond, "the completion must reach the listener and settle its message")
 
 	stopFirst()
 
@@ -155,6 +161,11 @@ func TestListener_UndeletedMessageStillReplays(t *testing.T) {
 		"the first listener must provision the job")
 	require.Eventually(t, func() bool { return srv.AssignedJobCount(ssID) == 0 }, 5*time.Second,
 		10*time.Millisecond, "the job must conclude at the backend before the restart")
+	// The same precondition as the test above, so the pair differs only in whether the
+	// queue honours the delete: without it this could replay because the completion never
+	// reached the listener, which proves nothing about the refusal (Q685).
+	require.Eventually(t, func() bool { return deleteAttempts(srv) > 0 }, 5*time.Second,
+		10*time.Millisecond, "the completion must reach the listener and settle its message")
 	stopFirst()
 
 	second := &recordingProvisioner{srv: srv}
