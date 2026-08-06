@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/ci/gate-list.sh (Q649). The gate is only worth having if
-# it goes red on the drift it exists to catch, so every assertion here injects
-# one defect into a healthy fixture and requires a failure: a gate that runs
-# without a .PHONY or a `##` line, a heavy phase in the recipe that is not in
+# Unit tests for scripts/ci/gate-list.sh (Q649, Q671). The gate is only worth
+# having if it goes red on the drift it exists to catch, so every assertion here
+# injects one defect into a healthy fixture and requires a failure: a gate that
+# runs without a .PHONY or a `##` line, a heavy phase in the recipe that is not in
 # CHECK_HEAVY_GATES, a gate hand-wired into the fan-out line, a target declared
-# .PHONY twice, a STATUS_GATES member outside CHECK_FAST_GATES, and a doc that
-# stopped pointing at `make list-gates`. Reading the Makefile predicts these;
-# only running the checker measures them.
+# .PHONY twice, a STATUS_GATES member outside CHECK_FAST_GATES, a doc that
+# stopped pointing at the list targets, and a scripts/ suite on disk that
+# SCRIPTS_TESTS omits — the one whose symptom is a green `make scripts-test` that
+# never ran it. Reading the Makefile predicts these; only running the checker
+# measures them.
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 
@@ -20,9 +22,17 @@ mkdir -p "$FIXTURE_DIR"
 trap 'rm -rf "$FIXTURE_DIR"' EXIT INT TERM
 
 DOC="$FIXTURE_DIR/doc.md"
-printf 'Run make list-gates to see the set.\n' >"$DOC"
+printf 'Run make list-gates and make list-script-tests to see the sets.\n' >"$DOC"
 STALE_DOC="$FIXTURE_DIR/stale.md"
 printf 'The gate runs alpha and beta.\n' >"$STALE_DOC"
+
+# A scripts/ tree standing in for the real one: two suites, plus a runner whose
+# name ends in -test.sh but which is not a suite. NON_SUITE_TESTS is keyed to the
+# real tree, so the fixture reuses one of its entries to assert the exemption.
+SCRIPTS="$FIXTURE_DIR/scripts"
+mkdir -p "$SCRIPTS/one" "$SCRIPTS/go"
+touch "$SCRIPTS/one/first-test.sh" "$SCRIPTS/one/second-test.sh" "$SCRIPTS/go/go-test.sh"
+SUITES='one/first-test one/second-test'
 
 fails=0
 
@@ -47,8 +57,10 @@ write_makefile() {
 	} >"$path"
 }
 
-# expect NAME WANT_RC ARGS... — run the checker and assert the exit code. The
-# checker's own output lands in LAST_OUT for the assertions that inspect it.
+# expect NAME WANT_RC ARGS... — run the checker and assert the exit code. Every
+# --check case reads the fixture scripts/ tree and the healthy suite list unless
+# it overrides them, so a case aimed at a gate rule cannot fail on a suite rule.
+# The checker's own output lands in LAST_OUT for the assertions that inspect it.
 LAST_OUT=""
 expect() {
 	local name="$1" want_rc="$2" got_rc=0
@@ -78,48 +90,80 @@ write_makefile "$MK"
 write_makefile "$FIXTURE_DIR/Makefile.wired" '' ' "gamma:$(MAKE) gamma"'
 write_makefile "$FIXTURE_DIR/Makefile.dupe" '.PHONY: alpha beta'
 
+# expect_check NAME WANT_RC ARGS... — a --check run over the healthy fixture,
+# with ARGS appended. The parser takes the last occurrence of an option, so a
+# case overrides a default just by naming it again.
+expect_check() {
+	local name="$1" want_rc="$2"
+	shift 2
+	expect "$name" "$want_rc" --check --makefile "$MK" --doc "$DOC" \
+		--scripts-dir "$SCRIPTS" --suites "$SUITES" "$@"
+}
+
 # The healthy fixture passes — without this the red cases below prove nothing.
-expect healthy 0 --check --makefile "$MK" --doc "$DOC" \
-	--fast 'alpha beta' --heavy 'heavy-one' --status 'alpha'
+expect_check healthy 0 --fast 'alpha beta' --heavy 'heavy-one' --status 'alpha'
 
 # A gate that runs but has no .PHONY and no `##` line: `make list-gates` would
 # print it blank and make would look for a file by that name.
-expect undeclared-gate 1 --check --makefile "$MK" --doc "$DOC" \
-	--fast 'alpha beta gamma' --heavy 'heavy-one'
+expect_check undeclared-gate 1 --fast 'alpha beta gamma' --heavy 'heavy-one'
 assert_output undeclared-gate gamma
 
 # A heavy phase the recipe runs but CHECK_HEAVY_GATES omits — and the reverse.
-expect heavy-recipe-drift 1 --check --makefile "$MK" --doc "$DOC" \
-	--fast 'alpha beta' --heavy 'heavy-one heavy-two'
+expect_check heavy-recipe-drift 1 --fast 'alpha beta' --heavy 'heavy-one heavy-two'
 assert_output heavy-recipe-drift CHECK_HEAVY_GATES
-expect heavy-swapped 1 --check --makefile "$MK" --doc "$DOC" \
-	--fast 'alpha beta' --heavy 'heavy-two'
+expect_check heavy-swapped 1 --fast 'alpha beta' --heavy 'heavy-two'
 
 # A gate hand-wired into the fan-out line instead of into CHECK_FAST_GATES: it
 # would run on every `make check` while never appearing in `make list-gates`.
-expect fanout-hand-wired 1 --check --makefile "$FIXTURE_DIR/Makefile.wired" --doc "$DOC" \
-	--fast 'alpha beta' --heavy 'heavy-one'
+expect_check fanout-hand-wired 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--makefile "$FIXTURE_DIR/Makefile.wired"
 assert_output fanout-hand-wired CHECK_FAST_GATES
 
 # A target declared .PHONY twice — the bulk block coming back.
-expect duplicate-phony 1 --check --makefile "$FIXTURE_DIR/Makefile.dupe" --doc "$DOC" \
-	--fast 'alpha beta' --heavy 'heavy-one'
+expect_check duplicate-phony 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--makefile "$FIXTURE_DIR/Makefile.dupe"
 assert_output duplicate-phony 'more than once'
 
 # STATUS_GATES must stay a subset of CHECK_FAST_GATES, the claim its comment makes.
-expect status-gates-not-subset 1 --check --makefile "$MK" --doc "$DOC" \
-	--fast 'alpha beta' --heavy 'heavy-one' --status 'alpha heavy-one'
+expect_check status-gates-not-subset 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--status 'alpha heavy-one'
 assert_output status-gates-not-subset 'heavy-one'
 
-# The doc has to keep naming the target rather than re-transcribing the list.
-expect doc-lost-pointer 1 --check --makefile "$MK" --doc "$STALE_DOC" \
-	--fast 'alpha beta' --heavy 'heavy-one'
+# The doc has to keep naming both targets rather than re-transcribing the lists.
+expect_check doc-lost-pointer 1 --fast 'alpha beta' --heavy 'heavy-one' --doc "$STALE_DOC"
 assert_output doc-lost-pointer 'list-gates'
+printf 'Run make list-gates to see the set.\n' >"$FIXTURE_DIR/half.md"
+expect_check doc-lost-suites-pointer 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--doc "$FIXTURE_DIR/half.md"
+assert_output doc-lost-suites-pointer 'list-script-tests'
+
+# The suite rules (Q671). A *-test.sh on disk that SCRIPTS_TESTS omits is the
+# case that matters: `make scripts-test` reports green having never run it, so
+# the failure is invisible from the gate's own output.
+expect_check suite-on-disk-unlisted 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--suites 'one/first-test'
+assert_output suite-on-disk-unlisted 'one/second-test'
+assert_output suite-on-disk-unlisted 'never runs them'
+
+# And the reverse: a listed suite whose file is gone would fail the fan-out on a
+# missing path, so the gate names it first.
+expect_check suite-listed-missing 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--suites "$SUITES one/third-test"
+assert_output suite-listed-missing 'one/third-test'
+
+# go/go-test.sh sits in the fixture tree and is exempt, so the healthy case above
+# already proves NON_SUITE_TESTS is honoured. Claiming an exemption *and* listing
+# it is the contradiction that must fail rather than resolve silently.
+expect_check non-suite-also-listed 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--suites "$SUITES go/go-test"
+assert_output non-suite-also-listed 'cannot be both'
 
 # Mode and argument validation, so a malformed call fails loudly instead of
 # reporting a clean list of nothing.
 expect no-mode 2 --makefile "$MK" --fast 'alpha' --heavy 'heavy-one'
 expect no-lists 2 --check --makefile "$MK"
+expect no-suites 2 --check --makefile "$MK" --fast 'alpha' --heavy 'heavy-one'
+expect list-suites-no-suites 2 --list-suites
 expect unknown-arg 2 --check --makefile "$MK" --fast 'alpha' --heavy 'heavy-one' --bogus
 
 # --list names every gate it was given, with each one's `##` description.
@@ -134,6 +178,22 @@ if [[ -n "$missing" ]]; then
 	fails=$((fails + 1))
 else
 	printf 'ok   %-28s every gate and description rendered\n' list-renders-every-gate
+fi
+
+# --list-suites is what the `scripts-test` help line now points at, so it has to
+# name every suite it was given and count them.
+suite_listing="$("$CHECKER" --list-suites --suites "$SUITES" --scripts-dir "$SCRIPTS")"
+missing=""
+for suite in $SUITES; do
+	grep -qF "    $SCRIPTS/$suite.sh" <<<"$suite_listing" || missing="$missing $suite"
+done
+grep -q 'runs 2 scripts/ suites' <<<"$suite_listing" || missing="$missing (count)"
+if [[ -n "$missing" ]]; then
+	printf 'FAIL %-28s absent from --list-suites output:%s\n%s\n' \
+		list-renders-every-suite "$missing" "$suite_listing" >&2
+	fails=$((fails + 1))
+else
+	printf 'ok   %-28s every suite rendered\n' list-renders-every-suite
 fi
 
 if ((fails > 0)); then

@@ -134,11 +134,12 @@ list-gates: ## List every gate `make check` runs, in order, with what each one c
 # the heavy phases line by line (one $(MAKE) each, so a `make -j check` cannot
 # overlap them), so this asserts those lines match CHECK_HEAVY_GATES, that the
 # fast phase runs nothing beyond the CHECK_FAST_GATES fan-out, that every gate is
-# a documented .PHONY target, that no target is declared .PHONY twice, and that
-# testing.md still points at `make list-gates` rather than re-transcribing.
+# a documented .PHONY target, that no target is declared .PHONY twice, that
+# SCRIPTS_TESTS names exactly the scripts/**/*-test.sh files on disk, and that
+# testing.md still points at the list targets rather than re-transcribing them.
 .PHONY: gate-lists-check
-gate-lists-check: ## Fail when `make check`'s gate list and its derived consumers disagree
-	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --status '$(STATUS_GATES)'
+gate-lists-check: ## Fail when `make check`'s gate and suite lists disagree with their derived consumers
+	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --status '$(STATUS_GATES)' --suites '$(SCRIPTS_TESTS)'
 
 # The complete set of gates a docs/STATUS.md-only change can fail, so a backlog
 # edit can be verified in seconds instead of waiting out the full `make check`:
@@ -304,6 +305,14 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 # The suites are independent and each isolates its own scratch state (mktemp -d,
 # or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
 # run-parallel.sh keeps a failure attributable to its suite.
+#
+# This variable is the single source of truth for what `make scripts-test` runs,
+# so adding a suite is one edit here. `make list-script-tests` renders it, which
+# is why the target's `##` help names that target instead of enumerating: the
+# enumeration it replaced was 1,399 characters that every suite-adding PR
+# rewrote — two of them conflicted by construction (#1243 vs #1239) — and it had
+# already drifted to 50 names for 55 suites (Q671). `gate-lists-check`
+# reconciles this list against the scripts/**/*-test.sh files on disk, both ways.
 SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  agent/claude-piped-gate-hook-test \
                  agent/foreground-guard-patterns-test \
@@ -337,8 +346,12 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog near-duplicate search, concurrent Q-ID reservation, backlog metrics replay, dep-advisory, go-throttle hook, piped-gate hook seam, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate, release-note site-link resolution, release-gate ownership lease, gate-list reconciliation, doc-link gate file selection, tidy-flow module coverage)
+scripts-test: ## Run every scripts/ behavioural suite; `make list-script-tests` names them
 	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
+
+.PHONY: list-script-tests
+list-script-tests: ## List every scripts/ suite `make scripts-test` runs, grouped by directory
+	@scripts/ci/gate-list.sh --list-suites --suites '$(SCRIPTS_TESTS)'
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of
 # the project's Claude Code usage, and its merge rule is what guarantees a re-run
