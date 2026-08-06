@@ -26,11 +26,12 @@ copyright: Licensed under the Apache License 2.0.
 # equivalent and would publish as literal text, and their links already point at
 # the versioned site. The dev override in pages.yml carries this entry too.
 # See website.md § Publication scope.
-exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/development/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
+exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/development/\n/postmortems/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
 
 # Published but deliberately absent from the nav, which stays the operator-facing
 # table of contents on every version: the repo-internal tree the `dev` version
-# publishes (Q558), plus `/operations/examples/` — sample manifests reached from
+# publishes (Q558, and `/postmortems/` joins it — an incident record is written
+# for contributors, not operators), plus `/operations/examples/` — sample manifests reached from
 # the page that explains them (admission-policies.md), not a TOC entry.
 #
 # Declaring every deliberate omission is what makes MkDocs' "not included in the
@@ -47,6 +48,7 @@ not_in_nav: |
   /STATUS.md
   /plan/
   /development/
+  /postmortems/
   /assets/README.md
   /assets/fonts/README.md
   /operations/examples/
