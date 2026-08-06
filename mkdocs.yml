@@ -199,6 +199,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Why GAG: why-gag.md
+  - Alternatives: alternatives.md
   - Features: features.md
   - Demo: demo.md
   - Get started: getting-started.md
