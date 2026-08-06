@@ -23,10 +23,10 @@ Actions Gateway (GAG) is probably right.
     The nodes are big and expensive, several teams have to share them, and that
     sharing has to be safe.
 
-## Where each option can actually run
+## Location, location, location
 
-"Self-hosted" usually means "self-hosted on AWS". This is the fastest filter and
-most comparisons omit it.
+Where each option can actually run is the fastest filter, and most comparisons
+omit it: "self-hosted" usually means "self-hosted on AWS".
 
 | Option | Runs on |
 |---|---|
