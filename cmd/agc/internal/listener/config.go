@@ -52,7 +52,8 @@ var RealClock Clock = realClock{}
 // runner registered and nothing will ever report this delivery. The listener
 // reports nothing for it either — completing the winner's own sole delivery
 // concludes the whole run as success, a false green (measured, Q645/Q676; see
-// handleJob) — and leaves the job to the acquire lock's lapse.
+// handleJob). The provisioner force-cancels the run before reporting abandoned
+// (Q683), with GitHub's ~15-minute unstarted-job timeout as the backstop.
 //
 // The error return is the provisioning error as before (recoverable; the poll loop
 // logs and continues).

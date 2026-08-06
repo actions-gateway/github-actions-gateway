@@ -625,7 +625,8 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// job never ran, and the listener had nothing to distinguish it from a clean run
 	// (Q628). It is reported abandoned instead, which tells the listener to report
 	// nothing for the delivery — completing it would conclude the run green
-	// (Q645/Q676) — and leave the job to the acquire lock's lapse.
+	// (Q645/Q676) — and the run is force-cancelled here so it ends honestly in about
+	// a second rather than at GitHub's ~15-minute unstarted-job timeout (Q683).
 	//
 	// Not when a recovery armed above: those causes already re-run the job, and
 	// preemption's own victim is most often a pod that never started (Q497). One
@@ -633,8 +634,9 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	switch {
 	case outcome.DeletedBeforeStart && cause == "":
 		result = broker.TaskResultAbandoned
-		log.Warn("worker pod was removed before it ran; reporting the job as abandoned so the assignment is left to GitHub's lock lapse",
+		log.Warn("worker pod was removed before it ran; reporting the job as abandoned and force-cancelling its run",
 			"phase", outcome.Phase, "duration", duration)
+		p.forceCancelAbandonedRun(ctx, target, owner, repo, runID, log)
 	case outcome.Phase == corev1.PodFailed:
 		result = broker.TaskResultFailed
 	default:

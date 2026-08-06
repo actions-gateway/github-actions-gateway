@@ -1364,16 +1364,19 @@ func TestProvisioner_PendingPodsCountTowardCeiling(t *testing.T) {
 }
 
 // TestProvisioner_PodDeletedExternallySucceeds verifies that an operator
-// manually deleting the pod mid-run is treated as successful completion:
-// provision returns nil and the rerun API is not called.
+// manually deleting the pod is not read as an eviction: provision returns nil
+// and the rerun API is not called. The pod here never ran a container, so the
+// deletion is a removed-before-start shape: the job is abandoned and its run
+// force-cancelled — the honest fast ending (Q683) — not re-run.
 func TestProvisioner_PodDeletedExternallySucceeds(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
 
-	// Stub server to detect any unexpected rerun API calls.
-	rerunCalls := make(chan struct{}, 5)
+	// Stub server recording every REST call so rerun and force-cancel are
+	// distinguishable.
+	apiCalls := make(chan string, 5)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunCalls <- struct{}{}
+		apiCalls <- r.URL.Path
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer srv.Close()
@@ -1399,10 +1402,18 @@ func TestProvisioner_PodDeletedExternallySucceeds(t *testing.T) {
 	// M4: provision must return nil (external deletion is treated as success).
 	require.NoError(t, <-done)
 
-	// The rerun API must not be called (not-found is not an eviction).
+	// The rerun API must not be called (not-found is not an eviction); the one
+	// REST call is the abandoned run's force-cancel (Q683).
 	select {
-	case <-rerunCalls:
-		t.Fatal("rerun API must not be called when pod is deleted externally")
+	case path := <-apiCalls:
+		assert.Equal(t, "/repos/org-del/repo-del/actions/runs/77/force-cancel", path,
+			"the only REST call for a worker deleted before it ran is the run's force-cancel")
+	default:
+		t.Fatal("the abandoned run must be force-cancelled (Q683)")
+	}
+	select {
+	case path := <-apiCalls:
+		t.Fatalf("unexpected extra REST call %s: rerun must not fire for an external delete", path)
 	default:
 	}
 

@@ -60,6 +60,9 @@ func TestParseAbandonedConfig_Defaults(t *testing.T) {
 	if cfg.RerunCheck {
 		t.Error("RerunCheck = true, want false by default")
 	}
+	if cfg.ForceCancel {
+		t.Error("ForceCancel = true, want false by default")
+	}
 	if cfg.Timeout != 5*time.Minute || cfg.Window != 20*time.Minute {
 		t.Errorf("Timeout/Window = %v/%v, want 5m/20m", cfg.Timeout, cfg.Window)
 	}
@@ -81,6 +84,7 @@ func TestParseAbandonedConfig_Overrides(t *testing.T) {
 		"PROBE_ABANDONED_LABEL":          "my-label",
 		"PROBE_ABANDONED_RESULT":         "failed",
 		"PROBE_ABANDONED_RERUN_CHECK":    "true",
+		"PROBE_ABANDONED_FORCECANCEL":    "true",
 		"PROBE_ABANDONED_WORKFLOW":       "other.yml",
 		"PROBE_ABANDONED_RUNNER_VERSION": "2.999.0",
 		"PROBE_ABANDONED_TIMEOUT":        "30s",
@@ -92,8 +96,9 @@ func TestParseAbandonedConfig_Overrides(t *testing.T) {
 	if cfg.Label != "my-label" || cfg.WorkflowFile != "other.yml" || cfg.RunnerVersion != "2.999.0" {
 		t.Errorf("overrides not applied: %+v", cfg)
 	}
-	if cfg.Result != broker.TaskResultFailed || !cfg.RerunCheck {
-		t.Errorf("Result/RerunCheck = %q/%v, want failed/true", cfg.Result, cfg.RerunCheck)
+	if cfg.Result != broker.TaskResultFailed || !cfg.RerunCheck || !cfg.ForceCancel {
+		t.Errorf("Result/RerunCheck/ForceCancel = %q/%v/%v, want failed/true/true",
+			cfg.Result, cfg.RerunCheck, cfg.ForceCancel)
 	}
 	if cfg.Timeout != 30*time.Second || cfg.Window != time.Minute {
 		t.Errorf("Timeout/Window = %v/%v, want 30s/1m", cfg.Timeout, cfg.Window)
@@ -201,10 +206,16 @@ type abandonedRESTStub struct {
 	// (default 201).
 	rerunStatus atomic.Int32
 
+	// forceCancelStatus is the status code POST …/force-cancel answers with
+	// (default 202); onForceCancel, when set, runs on each call.
+	forceCancelStatus atomic.Int32
+	onForceCancel     atomic.Value // func()
+
 	registrations atomic.Int64
 	deregistered  atomic.Int64
 	cancels       atomic.Int64
 	reruns        atomic.Int64
+	forceCancels  atomic.Int64
 }
 
 func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *abandonedRESTStub {
@@ -214,6 +225,7 @@ func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *
 	s.runStatus.Store(func() (string, string) { return "queued", "" })
 	s.runners.Store([]restRunner{})
 	s.rerunStatus.Store(int32(http.StatusCreated))
+	s.forceCancelStatus.Store(int32(http.StatusAccepted))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /oauth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -267,6 +279,13 @@ func newAbandonedRESTStub(t *testing.T, key *rsa.PrivateKey, brokerURL string) *
 		s.reruns.Add(1)
 		w.WriteHeader(int(s.rerunStatus.Load()))
 	})
+	mux.HandleFunc("POST /repos/my-org/my-repo/actions/runs/7/force-cancel", func(w http.ResponseWriter, _ *http.Request) {
+		s.forceCancels.Add(1)
+		if fn, ok := s.onForceCancel.Load().(func()); ok && fn != nil {
+			fn()
+		}
+		w.WriteHeader(int(s.forceCancelStatus.Load()))
+	})
 	s.srv = httptest.NewServer(mux)
 	t.Cleanup(s.srv.Close)
 	return s
@@ -303,6 +322,7 @@ func startAbandonedRun(t *testing.T, window time.Duration, env map[string]string
 		rest.srv.URL, bs.HTTPClient(), bs.HTTPClient())
 	p.restPollInterval = 100 * time.Millisecond
 	p.rerunWait = 3 * time.Second
+	p.jobTailWait = 300 * time.Millisecond
 
 	// The fixture delivery for A. Session IDs are minted sequentially by the
 	// stub, and the probe opens A's session first.
@@ -425,26 +445,47 @@ func TestAbandonedProbe_NoneSendsNoCompletion(t *testing.T) {
 	}
 }
 
-// TestAbandonedProbe_SiblingRedeliveryIsNotRedispatch: a fan-out sibling the
-// observer saw before T0 keeps redelivering unacked after T0 (measured
-// 2026-08-04); its request id must not produce a REDISPATCHED verdict.
-func TestAbandonedProbe_SiblingRedeliveryIsNotRedispatch(t *testing.T) {
+// TestObserve_SiblingRedeliveryFiltering: a fan-out sibling first seen before
+// T0 keeps redelivering unacked after T0 (measured 2026-08-04); its request id
+// must not produce a REDISPATCHED verdict, while a fresh post-T0 id must.
+// Driven at the observe level with a fabricated delivery record so the pre-T0
+// receipt is a fact of the test, not a race: the end-to-end form enqueued the
+// sibling and raced the observer's first poll against the probe's autonomous
+// acquire, and under CI load the receipt landed after T0 and read as fresh.
+func TestObserve_SiblingRedeliveryFiltering(t *testing.T) {
 	t.Parallel()
-	bs, _, verdictCh := startAbandonedRun(t, 3*time.Second, nil, nil)
+	mux := http.NewServeMux()
+	queued := func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "queued", "conclusion": ""})
+	}
+	mux.HandleFunc("GET /repos/o/r/actions/runs/7", queued)
+	mux.HandleFunc("GET /repos/o/r/actions/jobs/99", queued)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
 
-	// The pre-T0 sibling delivery on B's session.
-	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-sibling"})
-	waitForCompleteJob(t, bs)
-	// The same sibling redelivered after T0: fan-out noise, not a re-dispatch.
-	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-sibling"})
+	newProbe := func(window time.Duration) *abandonedProbe {
+		p := newAbandonedProbe(discardLogger(), abandonedConfig{Owner: "o", Repo: "r", Window: window},
+			staticTokenProvider{token: "tok"}, srv.URL, http.DefaultClient, http.DefaultClient)
+		p.restPollInterval = 50 * time.Millisecond
+		return p
+	}
+	t0 := time.Now()
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictNoSignal {
-			t.Fatalf("verdict = %q, want %q (sibling redelivery filtered)", verdict, verdictNoSignal)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	// The sibling's id was recorded before T0, so its post-T0 redelivery is
+	// fan-out noise and the window closes quietly.
+	obs := &sessionObserver{done: make(chan struct{})}
+	obs.record(observedDelivery{At: t0.Add(-time.Second), MessageID: 1, RequestID: "req-sibling"})
+	obs.record(observedDelivery{At: t0.Add(50 * time.Millisecond), MessageID: 2, RequestID: "req-sibling"})
+	if got := newProbe(400*time.Millisecond).observe(context.Background(), obs, "req-a", 7, 99, t0); got != verdictNoSignal {
+		t.Fatalf("verdict = %q, want %q (sibling redelivery filtered)", got, verdictNoSignal)
+	}
+
+	// A post-T0 delivery with an id never seen before T0 is a re-dispatch.
+	obs = &sessionObserver{done: make(chan struct{})}
+	obs.record(observedDelivery{At: t0.Add(-time.Second), MessageID: 1, RequestID: "req-sibling"})
+	obs.record(observedDelivery{At: t0.Add(50 * time.Millisecond), MessageID: 3, RequestID: "req-fresh"})
+	if got := newProbe(5*time.Second).observe(context.Background(), obs, "req-a", 7, 99, t0); got != verdictRedispatched {
+		t.Fatalf("verdict = %q, want %q (fresh post-T0 id)", got, verdictRedispatched)
 	}
 }
 
@@ -521,6 +562,63 @@ func TestAbandonedProbe_RerunRefused(t *testing.T) {
 	}
 	if got := rest.cancels.Load(); got != 1 {
 		t.Errorf("cleanup cancels = %d, want 1", got)
+	}
+}
+
+// TestAbandonedProbe_ForceCancel drives the Q683 candidate remedy arm: the
+// told-nothing walk-away plus a standalone force-cancel, which the stub answers
+// 202 and concludes the run and job cancelled on. No completejob reaches the
+// wire.
+func TestAbandonedProbe_ForceCancel(t *testing.T) {
+	t.Parallel()
+	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, map[string]string{
+		"PROBE_ABANDONED_RESULT":      "none",
+		"PROBE_ABANDONED_FORCECANCEL": "true",
+	}, func(s *abandonedRESTStub) {
+		s.onForceCancel.Store(func() {
+			s.runStatus.Store(func() (string, string) { return "completed", "cancelled" })
+			s.jobStatus.Store(func() (string, string) { return "completed", "cancelled" })
+		})
+	})
+
+	select {
+	case verdict := <-verdictCh:
+		if verdict != verdictConcluded+"-run-cancelled" {
+			t.Fatalf("verdict = %q, want %s-run-cancelled", verdict, verdictConcluded)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("probe did not reach a verdict")
+	}
+	if got := rest.forceCancels.Load(); got != 1 {
+		t.Errorf("force-cancel calls = %d, want 1", got)
+	}
+	if got := bs.CompleteJobCalls(); got != 0 {
+		t.Errorf("completejob calls = %d, want 0 for result=none", got)
+	}
+}
+
+// TestAbandonedProbe_ForceCancelRefused: a non-2xx force-cancel answer is a
+// recorded outcome, not a failure — the probe still watches the window and
+// reaches its verdict.
+func TestAbandonedProbe_ForceCancelRefused(t *testing.T) {
+	t.Parallel()
+	_, rest, verdictCh := startAbandonedRun(t, 2*time.Second, map[string]string{
+		"PROBE_ABANDONED_RESULT":      "none",
+		"PROBE_ABANDONED_FORCECANCEL": "true",
+	}, func(s *abandonedRESTStub) {
+		s.forceCancelStatus.Store(int32(http.StatusConflict))
+	})
+
+	select {
+	case verdict := <-verdictCh:
+		if verdict != verdictNoSignal {
+			t.Fatalf("verdict = %q, want %q after a refused force-cancel", verdict, verdictNoSignal)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("probe did not reach a verdict")
+	}
+	if got := rest.forceCancels.Load(); got != 1 {
+		t.Errorf("force-cancel calls = %d, want 1", got)
 	}
 }
 
@@ -880,10 +978,23 @@ func TestDeregisterRunner_Statuses(t *testing.T) {
 		t.Fatalf("DELETE calls after repeat = %d, want still 1", got)
 	}
 
+	// A 422 (the record pinned by an orphaned in_progress acquire) leaves the
+	// guard unset, so a later call retries the DELETE — the post-conclusion
+	// deletability datum (Q683/Q418).
 	status.Store(http.StatusUnprocessableEntity)
-	p.deregisterRunner(context.Background(), &jitRunner{ID: 6, Name: "busy"})
+	busy := &jitRunner{ID: 6, Name: "busy"}
+	p.deregisterRunner(context.Background(), busy)
 	if got := calls.Load(); got != 2 {
 		t.Fatalf("DELETE calls = %d, want 2", got)
+	}
+	status.Store(http.StatusNoContent)
+	p.deregisterRunner(context.Background(), busy)
+	if got := calls.Load(); got != 3 {
+		t.Fatalf("DELETE calls after 422 retry = %d, want 3", got)
+	}
+	p.deregisterRunner(context.Background(), busy)
+	if got := calls.Load(); got != 3 {
+		t.Fatalf("DELETE calls after successful retry = %d, want still 3", got)
 	}
 
 	// cancelFixtureRun's failure branch is log-only.

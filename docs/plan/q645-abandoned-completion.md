@@ -4,8 +4,10 @@
 is **success**. See [Findings](#findings). The remedy (Q676) is measured and
 decided the same day: the listener reports **nothing** for its own unrun
 delivery, per [the remedy measurements](#q676--the-remedy-measurements-2026-08-04).
-Follow-ups: Q682 (sibling `skipped` arm), Q683 (faster ending than the
-15-minute cancel).
+The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST
+force-cancel concludes run and job `cancelled` in ~1 s, per
+[the fast-ending measurement](#q683--the-fast-ending-measurement-2026-08-05).
+Remaining follow-up: Q682 (sibling `skipped` arm).
 
 Queue item: Q645 (completed; done rows are deleted). Origin:
 [release-1.3.md § The rc.5 re-run](release-1.3.md#the-rc5-re-run-2026-08-02).
@@ -230,10 +232,9 @@ ends in the measured told-nothing cancel. The Q260 sibling fan-out completion
 is untouched: with the winner's own delivery still open, sibling completions
 conclude nothing (the 2026-07-04 dogfood re-route #5 measured per-delivery
 scoping), though the sibling `skipped` value has no live probe measurement.
-That arm is Q682. Making the released job's ending faster than 15 minutes
-(REST `force-cancel`, or a recovery re-run; plain `cancel` was measured
-sluggish against an orphaned acquire, and production deregisters the consumed
-runner record promptly where the probe held it, an unpinned variable) is Q683.
+That arm is Q682. Making the released job's ending faster than 15 minutes was
+Q683, measured and shipped 2026-08-05:
+[the fast-ending measurement](#q683--the-fast-ending-measurement-2026-08-05).
 
 Secondary observations, each load-bearing for the remedy choice:
 
@@ -257,3 +258,36 @@ Secondary observations, each load-bearing for the remedy choice:
   acquiring runner answers 422 `currently running a job` until the run
   concludes, so the release path's recycle cannot remove the runner while the
   orphan lives; measured twice via the probe's own cleanup.
+
+## Q683 — the fast-ending measurement (2026-08-05)
+
+The instrument gained a `PROBE_ABANDONED_FORCECANCEL=true` arm: after the
+told-nothing walk-away (`result=none`), a **standalone** REST
+`POST …/actions/runs/{id}/force-cancel` — no prior plain cancel, the call shape
+a listener remedy would use (the 2026-08-04 force-cancels all followed a
+202-accepted plain cancel, and plain cancel alone was measured sluggish against
+an orphaned acquire). One run,
+[31022925992](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31022925992),
+first attempt (T0 = the acquire + walk-away, 15:59:39 UTC):
+
+| t | Event |
+|---|---|
+| T0+0.5 s | `force-cancel` → **202 Accepted**, standalone |
+| T0+~1 s | The REST **job** is `completed`/`cancelled` (`completed_at` pins it to T0's second) and the **run** is `completed`/`cancelled` (`updated_at` T0+1 s) — before the probe's cleanup plain-cancel at T0+2.4 s, so the conclusion is the force-cancel's own |
+| T0+1.1 s | `DELETE` runner A → **204**: the cancelled conclusion unpins the record the orphaned acquire held (no 422) |
+| post-run | `rerun-failed-jobs` on the cancelled run → **2xx accepted**, job re-queued — where the false-green `success` conclusion refused it with 403 |
+
+Every property the remedy needs, measured on one run: honest (`cancelled`),
+~1 s instead of 15 m 14 s, no orphaned `in_progress` job record, the runner
+record immediately deletable, and the ending is recoverable via re-run. The
+deregistration candidate (Q418's mechanism) is moot for this scenario: the
+record is deletable only *after* a conclusion, so it cannot cause one.
+
+Shipped the same day: the classic-tier provisioner force-cancels the run
+(identity from the acquire payload's `github` context, the same
+`repoInfo()` read the eviction re-run uses) before reporting `abandoned`,
+counted by `actions_gateway_abandoned_run_force_cancels_total`; the
+unstarted-job timeout stays the backstop for `identity_unknown`/`error`
+outcomes. A recovery re-run arm (auto-`rerun-failed-jobs` once capacity
+returns) remains unbuilt; the measurement above shows the cancelled conclusion
+arms it.
