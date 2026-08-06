@@ -2716,6 +2716,14 @@
 <td>Measured 2026-08-05: <code>a 25-minute silence on a live run does not wake it</code> reported <code>EVENT: timeout</code> inside its 3s window, on a 60s budget; 49/49 pass standalone. Same shape as Q642/Q596, different subject. Mechanism unverified.</td>
 </tr>
 <tr>
+<td><a id="Q697"></a>Q697</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/main.go"><code>piped-gate</code> asks instead of denying, so its reason has to be hand-relayed to the session</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured: <code>permissionDecision</code> is hardcoded <code>ask</code> (main.go:141), no <code>Getenv</code> in the package. A right catch costs a deny-and-paste; a wrong one has no break-glass. Wants deny + <code>PIPED_GATE_OVERRIDE=&lt;reason&gt;</code> per prod-guard, its text hinting a row.</td>
+</tr>
+<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code></td>
@@ -2858,6 +2866,22 @@
 <td>🔲</td>
 <td>S</td>
 <td>The hook scans the whole Bash string, so a <code>git commit -F -</code> heredoc quoting <code>go test -race</code> reads as a second go invocation and is denied. Skip heredoc bodies and <code>git commit -m</code>/<code>-F</code> arguments; <code>claude-go-throttle-hook-test.sh</code> takes the case.</td>
+</tr>
+<tr>
+<td><a id="Q694"></a>Q694</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible-test.sh"><code>pr-requeue-eligible</code>'s timeline and GraphQL reads are untested behind the <code>gh</code> stub</a></td>
+<td><code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The checker gates an unattended merge, but the stub returns post-<code>--jq</code> text, so a malformed <code>--jq</code> in <code>human_enqueued</code> or <code>in_queue</code> fails as a live crash, not a red suite. Only <code>gh pr view</code>'s read has run against a real PR.</td>
+</tr>
+<tr>
+<td><a id="Q693"></a>Q693</td>
+<td><a href="../development/maintaining-backlog/#search-before-you-file"><code>find-duplicate-rows</code> cannot see a limitation already documented in <code>docs/</code> prose</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Searches STATUS.md's three tables only, so "known and accepted" is invisible: Q692's session nearly filed the merge-driver gap this page already states. Grep the page a row links, or say so in the rule. Distinct from <a href="#Q686">Q686</a>, doc-link anchors.</td>
 </tr>
 <tr>
 <td><a id="Q686"></a>Q686</td>
