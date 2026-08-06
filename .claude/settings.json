@@ -1,6 +1,7 @@
 {
   "env": {
-    "PR_SENTINEL_TIMEOUT": "21600"
+    "PR_SENTINEL_TIMEOUT": "21600",
+    "PR_SENTINEL_WATCH_UNTIL": "closed"
   },
   "hooks": {
     "PreToolUse": [

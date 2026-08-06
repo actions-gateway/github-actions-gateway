@@ -412,6 +412,16 @@ This is the key design decision; get it right up front.
   green-ness, freshness, and the jointly-red case. It does **not** decide whether a
   change should land, so enqueueing is the maintainer's action, taken after their
   review. Neither workers nor the dispatcher enqueue.
+- **One carve-out: restoring an enqueue the maintainer already made** (Q692). The
+  queue evicts a PR when something merges ahead of it and dirties the branch, and
+  that eviction is mechanical — it says nothing about whether the change should
+  land, because the maintainer already answered that by enqueueing. A worker may
+  rebase and re-enqueue **only** when
+  [`scripts/agent/pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh)
+  says so, which requires a prior human enqueue, an open non-draft PR, no current
+  queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned
+  files. A conflict anywhere else changes what was reviewed, so it wakes the
+  maintainer instead. A **first** enqueue is still never an agent's to make.
 - **What the dispatcher owes at handoff**, so the review is cheap rather than a
   re-derivation: which heavy gates ran and on which head SHA, what the scope review
   found, and the mergeability state as of *now*.
