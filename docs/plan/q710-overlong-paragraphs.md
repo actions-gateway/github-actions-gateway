@@ -13,7 +13,7 @@ bound, or a named exception, the paragraph stays long and the phase says so.
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Top-level prose paragraphs in the numbered design chapters (`01`–`08`) | ✅ Done, one paragraph deliberately left long |
+| 1 | Top-level prose paragraphs in the numbered design chapters (`01`–`08`) | ✅ Done, three paragraphs deliberately left long |
 | 2 | Long list items in `02-architecture.md` (24) and `04-operational-flows.md` (5) | ❌ Open |
 | 3 | `appendix-h-v2-api-decomposition.md` (16 prose) and the other design appendices | ❌ Open |
 | 4 | `docs/operations/`, starting with `troubleshooting.md` (5 prose, 3 list, 2 quote) | ❌ Open |
@@ -87,10 +87,15 @@ The change moves paragraph boundaries. It does not move meaning.
 - **Never open a new paragraph with a bare pronoun.** A split turns a harmless
   mid-paragraph "It is enabled…" into the first word a scanner reads. Name the
   subject.
-- **Count the paragraphs a section ends up with.** Nine short paragraphs under
-  one heading is a different wall, not a shorter one. A section that lands above
-  roughly six wants `####` subheadings, and the split is not finished until it
-  has them.
+- **A bold run-in lead is a paragraph-scoped label, so splitting its block
+  silently shrinks what it covers.** This docset uses the run-in where other docs
+  use `####`, and `07-test-plan.md` uses nothing else. After a split, the lead
+  governs one paragraph and the rest read as unlabelled. Give each new paragraph
+  its own run-in, promote the lead to a real heading, or leave the block whole —
+  but check, because no count shows this.
+- **Match the file's own heading depth before promoting anything.** `07-test-plan.md`
+  has no `###` at all, so a `####` under its `## 7.3` both skips a level and
+  invents a convention the page does not use.
 - **Do not orphan a bare cross-reference.** A lone "See [runbook] for X" left as
   its own paragraph is the word count being served rather than the reader.
 
@@ -106,11 +111,11 @@ and after. Every token the diff drops has to be justified one by one: a `;` that
 became a `.`, an `(a)` that became a `*`, an article dropped by a deliberate
 rewrite. A content word in that list is a lost qualifier.
 
-Phase 1 reconciled to +16 tokens across five files, every one accounted for, and
+Phase 1 reconciled to +19 tokens across five files, every one accounted for, and
 to +64 more once the `####` subheadings landed, which the same check showed to be
-exactly the heading texts and nothing else. `01-executive-summary.md` and
-`07-test-plan.md` both finished on an *identical* multiset, which is what a pure
-paragraph break looks like and is the target for every file.
+exactly the heading texts and nothing else. `01-executive-summary.md` finished on
+an *identical* multiset, which is what a pure paragraph break looks like and is
+the target for every file.
 
 **Reconciliation does not prove the split is correct.** It catches a *deletion*.
 It is blind to words the edit *adds*, and that is where the one real defect in
@@ -132,8 +137,8 @@ zero, that is the signal the paragraph did not want splitting.
 
 ## Phase 1: what changed
 
-One top-level prose paragraph of 140 words or more remains in `01`–`08`, left
-long on purpose. The corpus went from 154 such paragraphs to 125.
+Three top-level prose paragraphs of 140 words or more remain in `01`–`08`, each
+left long on purpose. The corpus went from 154 such paragraphs to 127.
 
 Five files: `01-executive-summary.md`, `02-architecture.md`,
 `04-operational-flows.md`, `05-security.md`, `07-test-plan.md`.
@@ -151,7 +156,16 @@ One wording fix rode along, because the split exposed it. The sentence after the
 three-disruption enumeration read "on detecting either", left over from a
 two-disruption version of the list. It now reads "on detecting any of these".
 
-### The one paragraph left long
+### The three paragraphs left long
+
+Two more joined the `priorityTiers` paragraph once the bold-run-in problem
+surfaced, both in
+[`04-operational-flows.md`](../design/04-operational-flows.md): the Q421
+drain-recovery block (278 words) and the Q628/Q676 abandoned-completion block
+(261 words). Each opens with a bold run-in lead governing the whole block, and
+each sits under a `###`/`####` where a further heading level would be `#####`.
+Splitting them left three and three paragraphs reading as unlabelled, so the
+splits were reverted. Same trade as below: precision and structure over the count.
 
 The `priorityTiers` paragraph in
 [`01-executive-summary.md`](../design/01-executive-summary.md) stays at 152
@@ -205,6 +219,17 @@ reading only the final diff cannot see them:
   enabled…".
 - **An orphaned cross-reference.** A 23-word `See [security-operations.md § …]`
   had been split off purely to bring the paragraph above it under 140 words.
+- **Bold run-in leads left governing only their first paragraph**, at eight sites
+  across the five files. Three were bad enough to act on: `**The fake.**` in
+  `07-test-plan.md` went from labelling one paragraph to labelling one of seven,
+  and two blocks in `04-operational-flows.md` lost three each. The fake's
+  continuations gained run-in leads of their own, the file's existing idiom; the
+  other two were re-merged.
+- **A count that measured the wrong thing.** The first sweep for this reported 22
+  affected sites by finding every bold lead with an unbolded paragraph after it,
+  never checking whether *this change* produced the tail. Comparing tail length
+  before against after gives eight. Two `####` promotions had already been made on
+  the strength of the wrong number and were reverted.
 
 ## What Phase 2 inherits
 
