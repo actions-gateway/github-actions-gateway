@@ -191,7 +191,8 @@ want 'API diffstat lists the API tree' "$api_section" 'cmd/agc/api/v1alpha1/type
 want_no 'API diffstat excludes non-API files' "$api_section" 'README'
 want 'operator docs diffstat' "$(section_of "$out" 'Operator-facing docs')" 'docs/operations/upgrade\.md'
 
-want 'semver signal reads feat as minor' "$out" '^Semver signal: minor \(v1\.1\.0\) — 1 feat, 1 fix, 1 perf\.$'
+want 'commit-type counts are reported' "$out" '^Commit-type counts: 1 feat, 1 fix, 1 perf\.$'
+want 'counts point at the floor for what ships' "$out" 'scripts/release/semver-floor\.sh v1\.0\.0$'
 want 'breaking commits are flagged for judgement' "$out" '^ +2 breaking-marked commit'
 
 # A window with no api/ tree at either end must print "(none)", not the whole
@@ -200,14 +201,14 @@ out="$(cd "$repo" && "$SCRIPT" v1.0.0 "$c_docs")"
 api_section="$(section_of "$out" 'API surface')"
 want 'empty API window prints none' "$api_section" '^ +\(none\)$'
 want_no 'empty API window does not widen the diff' "$api_section" 'README\.md'
-want 'docs-only window has no semver signal' "$out" '^Semver signal: no feat/fix/perf commits'
+want 'docs-only window reports no typed commits' "$out" '^Commit-type counts: no feat/fix/perf commits'
 
 out="$(cd "$repo" && "$SCRIPT" v1.0.0 "$c_fix")"
-want 'fix-only window reads as patch' "$out" '^Semver signal: patch \(v1\.0\.1\) — 0 feat, 1 fix, 0 perf\.$'
+want 'fix-only window counts the fix' "$out" '^Commit-type counts: 0 feat, 1 fix, 0 perf\.$'
 
-# An arbitrary (non-tag) FROM has no version to increment from.
+# An arbitrary (non-tag) FROM still counts, and still points at the floor.
 out="$(cd "$repo" && "$SCRIPT" "$c_docs" "$c_fix")"
-want 'non-tag FROM suggests a bump without a version' "$out" '^Semver signal: patch — '
+want 'non-tag FROM still counts commits' "$out" '^Commit-type counts: 0 feat, 1 fix, 0 perf\.$'
 
 # With no watched tree present at all, both diffstats run on an empty pathspec
 # list — which `git diff` would read as "everything".

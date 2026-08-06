@@ -112,7 +112,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     v2-api-sync-check path-filters-check gate-lists-check shellcheck \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
-                    doc-links release-pins-check em-dash-check
+                    doc-links release-pins-check em-dash-check semver-floor-sources-check
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
 .PHONY: check
@@ -201,6 +201,20 @@ em-dash-report: ## Print every doc's em-dash density, worst first — the workli
 .PHONY: release-pins-check
 release-pins-check: ## Fail when an install/upgrade page pins a release older than the newest stable tag
 	scripts/docs/check-release-pins.sh
+
+# The semver floor reads which paths ship from publish.yml's image matrix, the
+# Dockerfile stages behind it, and `go list -deps` over the resulting builds —
+# so a new image or chart is picked up with no list to maintain. What is NOT
+# derivable is a release asset built by a script (the gag-migrate CLI), and that
+# declaration is what can outlive the pipeline. This gate is that one seam; the
+# floor itself is a report, for the reasons in the devtool's package comment.
+.PHONY: semver-floor-sources-check
+semver-floor-sources-check: ## Fail when publish.yml grows a release artifact the semver floor's surface derivation misses
+	scripts/release/semver-floor.sh --check-sources
+
+.PHONY: semver-floor
+semver-floor: ## Report the minimum semver bump the merged work already requires (never fails)
+	scripts/release/semver-floor.sh
 
 # Release notes are the one doc whose links are all absolute — they point into
 # the versioned site — and check-doc-links skips external URLs by design, so
