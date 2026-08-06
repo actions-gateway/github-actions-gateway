@@ -2868,14 +2868,6 @@
 <td>Measured 2026-08-05: at WAIT=660, <code>int(rate*elapsed)</code> truncates to 0 for 5 rates under 0.002, so 6 series never move. "Quota retries (1h)" is empty in the shipped shot. Same class as Q651.</td>
 </tr>
 <tr>
-<td><a id="Q699"></a>Q699</td>
-<td><a href="../development/documentation-standards/#enforcing-the-em-dash-rule">The fast doc-gate list omits the gate that fires when you <em>write</em> prose</a></td>
-<td><code>docs</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The agent workflow's run-them-directly list is <code>doc-links</code>, <code>plan-index-check</code>, <code>no-plan-refs-check</code> — all three fire on <em>moving</em> a doc. <code>em-dash-check</code> fires on writing one, runs in ~2s, and cost a full <code>make check</code> cycle by surfacing at the end.</td>
-</tr>
-<tr>
 <td><a id="Q700"></a>Q700</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.gitignore"><code>.gitignore</code> covers only the root <code>tmp/</code>, so a scratch dir one level down is unignored</a></td>
 <td><code>debt</code> <code>retro</code></td>

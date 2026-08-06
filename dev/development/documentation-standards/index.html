@@ -2842,7 +2842,7 @@ version it was measured against and when, or name the gate that keeps re-measuri
 The Queue-row form of the same rule is <a href="../maintaining-backlog/#a-rows-asserted-defect-is-a-claim-not-a-finding">maintaining-backlog.md § A row's asserted defect
 is a claim</a>;
 this section is its other two homes, prose docs and code comments.</p>
-<p>Three such claims shipped here from source inspection. All three were wrong:</p>
+<p>Four such claims shipped here from source inspection. All four were wrong:</p>
 <table>
 <thead>
 <tr>
@@ -2863,9 +2863,13 @@ this section is its other two homes, prose docs and code comments.</p>
 <td>Q584's own filing: <code>check-path-filters.sh</code>'s awk YAML parsing could "mis-read as full coverage, failing green"</td>
 <td>The gate iterates a hardcoded filter registry against <code>go.work</code>, so a parse failure removes patterns and fails <strong>closed</strong>. The row reached <code>main</code> first and cost a second PR to correct.</td>
 </tr>
+<tr>
+<td>"Never <code>/tmp</code> <strong>or the session scratchpad</strong>", the <code>CLAUDE.md</code> workspace-guard bullet (#869)</td>
+<td>Probed on workspace-guard 1.8.0: writing under this session's own scratchpad and reading it back both succeed silently, because <code>is_session_tmp_path</code> returns before the read/write split. The rule generalised a single prompt in a friction log that reached back before the guard widened the exemption to native <code>Edit</code>/<code>Write</code>. Eleven days of sessions routed temp files away from a directory they were allowed to use (#1319).</td>
+</tr>
 </tbody>
 </table>
-<p>Q594 is the fourth, and the one caught in time: it asserted that <code>plan-hygiene.yml</code>'s
+<p>Q594 is the fifth, and the one caught in time: it asserted that <code>plan-hygiene.yml</code>'s
 <code>**.go</code> filter matched no Go file. Running the pinned action measured the opposite, so
 no fix was needed, and what landed instead is a compliant version of the finding
 (<a href="../testing/#where-a-globstar-works-in-a-filter-glob">testing.md § Where a globstar works in a filter
@@ -2873,9 +2877,16 @@ glob</a>).</p>
 <h3 id="what-counts-as-upstream">What counts as upstream<a class="headerlink" href="#what-counts-as-upstream" title="Permanent link">&para;</a></h3>
 <p>Anything whose behavior can change with no commit in this repo: a third-party library,
 a Kubernetes API behavior, a GitHub API or Actions Service response, a CI action's
-matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary.
-The test is whether the sentence could go false while <code>make check</code> stays green and
-nobody here touched anything.</p>
+matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary,
+<strong>or a Claude Code hook, plugin, or harness decision</strong> (what workspace-guard denies,
+which paths are exempt, what a slash command does). The test is whether the sentence
+could go false while <code>make check</code> stays green and nobody here touched anything.</p>
+<p><strong><code>CLAUDE.md</code> is in scope, and is the worst place for a stale one.</strong> Its process rules
+read as house convention rather than as claims, so they attract no citation and get no
+review, while every session loads them and acts on them. A rule that says a tool denies
+something is an upstream-behavior claim wearing a procedural hat: cite the version you
+measured against, or say which command you ran. The scratchpad row above cost eleven
+days precisely because "never the session scratchpad" looked like a preference.</p>
 <p>Two edges keep the rule from swallowing every sentence in the docset:</p>
 <ul>
 <li><strong>Our own behavior is not upstream.</strong> A wrong claim about this repo's code goes red
