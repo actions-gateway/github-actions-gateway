@@ -12,6 +12,24 @@ why they generally do not have a primitive for it.
 This page defines each role by **what it owns** and, more usefully, **what it
 cannot do**. A boundary that a role can talk its way past is not a boundary.
 
+## One boundary is enforced; the rest are just labels
+
+Only one line here is a **privilege** boundary the system enforces: **platform
+side versus tenant side.** A tenant operator cannot raise their own quota or
+self-grant privilege no matter who they report to, and that is checked by RBAC,
+admission, and a quota the control plane cannot write.
+
+Everything else is a routing label for finding the right document. In
+particular, **platform engineer and SRE are the same side and often the same
+person.** The split between them is build-time against run-time, not permission:
+one installs and configures the control plane, the other responds when it pages
+at 03:00. That is why nine of the ten SRE-tagged pages in the
+[index](README.md) also carry Platform engineer, and why none of them carries
+Tenant operator.
+
+Read it as two questions rather than a job title. Which side of the tenancy
+boundary are you on, and are you setting this up or running it?
+
 ## The roles
 
 ### Platform engineer
@@ -35,8 +53,10 @@ quota a real cap rather than a suggestion.
 
 ### Tenant operator
 
-Owns one namespace's CI, and is usually an SRE or developer-experience engineer
-on a product team rather than a platform specialist.
+Owns one namespace's CI. Often an SRE by job title, which is exactly why the
+title is not the useful axis: what separates this role from the two above is
+that it sits on the **tenant** side of the boundary, with a smaller set of
+powers that the platform enforces rather than grants by convention.
 
 **Owns:** the `ActionsGateway`, its `RunnerSet`s and `RunnerTemplate`s, the
 GitHub App credential Secret for their own organization, worker pod shape,
@@ -53,6 +73,8 @@ and the per-tenant metrics exist to pass.
 ### SRE / on-call
 
 Owns keeping it running, often across tenants, often at an unsociable hour.
+**Platform side**, with the same privileges as the platform engineer above; the
+difference is the moment, not the permission set.
 
 **Owns:** responding to the [shipped alerts](observability-alerting.md), the
 [runbook](runbook.md), [backup and restore](backup-restore.md), and upgrades.
