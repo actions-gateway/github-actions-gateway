@@ -152,7 +152,7 @@ func TestDecide(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Decide(tc.cmd, tc.bg, reg)
+			got := Decide(tc.cmd, tc.bg, reg, nil)
 			if tc.warn && got == "" {
 				t.Fatalf("want a warning, got silence\ncommand: %s", tc.cmd)
 			}
@@ -190,7 +190,7 @@ func TestUnparseableCommandIsSilent(t *testing.T) {
 	reg := shippedRegistry(t)
 	for _, cmd := range []string{"make check | tail 'unterminated", "make check | | tail", "for do done"} {
 		for _, bg := range []bool{false, true} {
-			if got := Decide(cmd, bg, reg); got != "" {
+			if got := Decide(cmd, bg, reg, nil); got != "" {
 				t.Errorf("want silence for unparseable %q (bg=%v), got: %s", cmd, bg, got)
 			}
 		}
@@ -201,10 +201,10 @@ func TestUnparseableCommandIsSilent(t *testing.T) {
 // not by an incidental match somewhere in the walk.
 func TestEmptyRegistryNeverWarns(t *testing.T) {
 	empty, _ := Registry{}.compile()
-	if got := Decide(`make check 2>&1 | tail -30; echo "EXIT=$?"`, false, empty); got != "" {
+	if got := Decide(`make check 2>&1 | tail -30; echo "EXIT=$?"`, false, empty, nil); got != "" {
 		t.Errorf("want silence with an empty registry, got: %s", got)
 	}
-	if got := Decide(`make check > tmp/c.log 2>&1; echo "EXIT=$?"`, true, empty); got != "" {
+	if got := Decide(`make check > tmp/c.log 2>&1; echo "EXIT=$?"`, true, empty, nil); got != "" {
 		t.Errorf("want silence with an empty registry (background), got: %s", got)
 	}
 }
@@ -216,7 +216,7 @@ func TestBadPatternIsDroppedNotFatal(t *testing.T) {
 	if len(errs) != 1 {
 		t.Fatalf("want 1 rejected pattern, got %d", len(errs))
 	}
-	if got := Decide("make check | tail", false, c); got == "" {
+	if got := Decide("make check | tail", false, c, nil); got == "" {
 		t.Error("the surviving pattern should still warn")
 	}
 }
@@ -225,7 +225,7 @@ func TestBadPatternIsDroppedNotFatal(t *testing.T) {
 // lose the same status, and the pipe reason names the nearer cause.
 func TestPipeVerdictWinsOverBackground(t *testing.T) {
 	reg := shippedRegistry(t)
-	got := Decide(`make check 2>&1 | tail -30; echo "EXIT=$?"`, true, reg)
+	got := Decide(`make check 2>&1 | tail -30; echo "EXIT=$?"`, true, reg, nil)
 	if !strings.Contains(got, "exit status is the filter's") {
 		t.Errorf("want the pipe reason, got: %s", got)
 	}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Seam tests for scripts/agent/claude-piped-gate-hook.sh (Q625).
+# Seam tests for scripts/agent/claude-piped-gate-hook.sh (Q625, Q665, Q668).
 #
 # The decision matrix — which commands warn and which stay silent — is a table
 # test in devtools/agent/pipedgate. What cannot be asserted from Go is the seam
@@ -61,6 +61,26 @@ if [[ -z "$out" ]]; then
 	pass 'end-to-end: the backgrounded fix stays silent'
 else
 	fail "end-to-end background fix: want silence, got: $out"
+fi
+
+# The repo-state checks (Q665, Q668) reach real `git` and `gh`, so whether they
+# warn depends on what has merged and what is open — the decision matrix for
+# them is the Go table test against a fake probe. What is deterministic here,
+# and worth asserting against the installed binary, is the direction that must
+# never cost a subprocess: a command that merely NAMES the trigger. If a trigger
+# regressed to whole-string matching, these would start probing.
+out="$(payload 'git commit -m "docs: say when to git push after a rebase"' | "$HOOK")"
+if [[ -z "$out" ]]; then
+	pass 'end-to-end: a commit message quoting git push stays silent'
+else
+	fail "end-to-end commit message: want silence, got: $out"
+fi
+
+out="$(payload 'grep -rn "gh pr create" CONTRIBUTING.md' | "$HOOK")"
+if [[ -z "$out" ]]; then
+	pass 'end-to-end: a grep for gh pr create stays silent'
+else
+	fail "end-to-end grep: want silence, got: $out"
 fi
 
 # --- The binary is built on demand -------------------------------------------

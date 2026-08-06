@@ -15,12 +15,28 @@ import (
 type Registry struct {
 	Gates  []string `json:"gates"`
 	Exempt []string `json:"exempt"`
+	// BaseRef is the branch the repo-state checks compare against; defaults to
+	// defaultBaseRef.
+	BaseRef string `json:"base_ref"`
+	// OverlapIgnore are paths a file-overlap check discounts, because a
+	// concurrent edit to them is expected and mechanically resolved.
+	OverlapIgnore []string `json:"overlap_ignore"`
 }
+
+const defaultBaseRef = "origin/main"
+
+// refPattern is what a base_ref may look like. The registry is repo-local and
+// as trusted as the hook itself, but the value reaches `git diff` as an
+// argument: a leading `-` would be read as an option rather than a ref, and an
+// empty one as the working tree. Anything else falls back to defaultBaseRef.
+var refPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 
 // compiled holds a Registry with its patterns compiled once.
 type compiled struct {
-	gates  []*regexp.Regexp
-	exempt []*regexp.Regexp
+	gates         []*regexp.Regexp
+	exempt        []*regexp.Regexp
+	baseRef       string
+	overlapIgnore map[string]bool
 }
 
 // compile builds the matchers. A pattern that does not compile is dropped
@@ -41,7 +57,20 @@ func (r Registry) compile() (*compiled, []string) {
 		}
 		return out
 	}
-	return &compiled{gates: compileAll(r.Gates), exempt: compileAll(r.Exempt)}, errs
+	base := r.BaseRef
+	if !refPattern.MatchString(base) {
+		base = defaultBaseRef
+	}
+	ignore := make(map[string]bool, len(r.OverlapIgnore))
+	for _, p := range r.OverlapIgnore {
+		ignore[p] = true
+	}
+	return &compiled{
+		gates:         compileAll(r.Gates),
+		exempt:        compileAll(r.Exempt),
+		baseRef:       base,
+		overlapIgnore: ignore,
+	}, errs
 }
 
 func matchAny(res []*regexp.Regexp, s string) bool {
@@ -107,9 +136,10 @@ const (
 )
 
 // Decide returns the permissionDecisionReason for a Bash command, or "" to stay
-// silent. background is the payload's run_in_background. Every failure path
-// returns "": a hook that cannot parse a command has nothing to say about it.
-func Decide(cmd string, background bool, reg *compiled) string {
+// silent. background is the payload's run_in_background, and repo answers the
+// repo-state checks (nil disables them). Every failure path returns "": a hook
+// that cannot parse a command has nothing to say about it.
+func Decide(cmd string, background bool, reg *compiled, repo Repo) string {
 	if defersToThrottleHook(cmd) {
 		return ""
 	}
@@ -167,7 +197,12 @@ func Decide(cmd string, background bool, reg *compiled) string {
 			}
 		}
 	}
-	return lostBackgroundStatus(f, background, reg)
+	if reason := lostBackgroundStatus(f, background, reg); reason != "" {
+		return reason
+	}
+	// Last, because it is the only check that costs a subprocess: the status
+	// verdicts are decided from the parse tree alone.
+	return repoStateWarning(f, reg, repo)
 }
 
 // lostBackgroundStatus returns the warning for a gate whose status never
@@ -245,10 +280,18 @@ func lastCarries(stmts []*syntax.Stmt, reg *compiled) bool {
 }
 
 // firstGate returns the head of the first registered gate at command position
-// anywhere in the tree, or "". Walking the tree rather than the raw string is
-// what keeps a gate merely NAMED in a commit message or a grep pattern from
-// counting: quoted text parses as a word, never a call.
+// anywhere in the tree, or "".
 func firstGate(f *syntax.File, reg *compiled) string {
+	return findCall(f, func(head string) bool {
+		return !matchAny(reg.exempt, head) && matchAny(reg.gates, head)
+	})
+}
+
+// findCall returns the head of the first call at command position anywhere in
+// the tree whose head satisfies match, or "". Walking the tree rather than the
+// raw string is what keeps a command merely NAMED in a commit message or a grep
+// pattern from counting: quoted text parses as a word, never a call.
+func findCall(f *syntax.File, match func(head string) bool) string {
 	var found string
 	syntax.Walk(f, func(node syntax.Node) bool {
 		if found != "" {
@@ -259,7 +302,7 @@ func firstGate(f *syntax.File, reg *compiled) string {
 			return true
 		}
 		head := peelWrappers(headText(c))
-		if head != "" && !matchAny(reg.exempt, head) && matchAny(reg.gates, head) {
+		if head != "" && match(head) {
 			found = head
 		}
 		return true
