@@ -450,6 +450,12 @@ This is the key design decision; get it right up front.
   stream.** Two PRs editing the same CI workflow or `Makefile` will conflict; run
   them one after another, and run *different* streams in parallel. Self-healing
   covers accidental overlaps, but sequencing avoids needless rebase churn.
+- **A stream is defined by the *docs* a change touches too, not just its code.**
+  Some shared surfaces are invisible in the task description: every agent-hook
+  change edits the same six-bullet hook list in `CLAUDE.md`, so two hook tasks on
+  different hook files still collide there by construction. Q624 and Q665/Q668 ran
+  as separate streams on that reasoning and conflicted twice, once on `CLAUDE.md`
+  content. When two tasks share a doc section, they share a stream.
 - **Land foundational/shared-file changes first, then fan out dependents.** If
   one task introduces a fix that others will inherit (e.g. a shared `Makefile`
   setting), merge it before the dependents run so they do not rediscover the same
