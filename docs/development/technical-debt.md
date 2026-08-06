@@ -255,6 +255,17 @@ with its vendor tree and CI wiring, so the second and third gates onto the same 
 layer are cheap where the first was not. The gate keeps its `scripts/` entry point
 either way, so the [script map](../../scripts/README.md) stays in one place.
 
+**A Claude Code `PreToolUse` hook is in scope, and fail-open survives the move.** The
+objection that keeps a hook in shell is that it runs on every Bash call and must never be
+the reason one fails, so it cannot depend on a binary someone remembered to build. The
+[`claude-piped-gate-hook.sh`](../../scripts/agent/claude-piped-gate-hook.sh) shim answers
+that and is the pattern to copy: build on demand, cache in `.build/`, decide staleness with
+one `find` against the sources, write PID-suffixed and `mv` into place so concurrent
+sessions exec a whole binary, and exit 0 with no output on every failure — no toolchain, a
+build error, a missing registry. It is also *faster* than the shell it replaced (18 ms per
+Bash call against 33 ms), because two `jq` spawns and bash startup cost more than the
+decision does.
+
 None of this argues for rewriting shell in general. Almost every script under
 `scripts/` sits on the orchestration side of the line and should stay there; the
 criterion exists to find the few that do not.

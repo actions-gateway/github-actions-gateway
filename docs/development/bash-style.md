@@ -22,6 +22,8 @@ Before writing a new helper function, check [`scripts/lib/common.sh`](../../scri
 
 A script that sequences `kubectl`/`helm`/`gcloud` calls belongs here however long it gets. A script that parses a structured format into fields and reasons over them wants a real parser and a test suite, and belongs in `devtools/` as a Go program with a thin `scripts/` entry point. The criterion is parsing density, not length; it, its corroborating signals, and what the rewrite costs are in [technical-debt.md § A shell gate becomes a Go devtool on parsing density, not length](technical-debt.md#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length).
 
+**A Claude Code `PreToolUse` hook is not an exception**, however much its must-never-block contract makes it feel like one: a hook that scans the Bash command string is parsing shell grammar, and fail-open survives the move to Go via the build seam that section documents. Read it before hand-rolling quote state, heredoc bodies, or command position in `case`.
+
 ## Accepted shellcheck findings
 
 A finding that is accepted rather than fixed carries a targeted `# shellcheck disable=SCxxxx` directive with a justifying comment immediately above the line (example: the dynamic-name `read`/`export` in [`scripts/dev/probe-investigations-cd.sh`](../../scripts/dev/probe-investigations-cd.sh)). Everything else is fixed to match the rules above.

@@ -888,6 +888,11 @@ the first try. It costs one edit and one run.
 
 - **Delete the mechanism, not the assertion.** Comment out the call, drop the retry loop,
   return early from the reconcile branch. Removing the *assertion* proves nothing.
+- **Delete one mechanism, not the branch around it.** A deletion coarse enough to redden
+  every assertion has measured only that the code path is reached. Q624 first stubbed a
+  whole word-classification branch to `true` and took 22 of 22 red, which discriminated
+  nothing; flipping the single condition that made command position load-bearing took
+  exactly one assertion red, which is the answer.
 - **Read the failure, not just the colour.** Red for the wrong reason (a compile error, a
   fixture that no longer builds, an unrelated timeout) is not evidence. The test must fail
   on the assertion that names the behaviour.
@@ -902,6 +907,14 @@ the first try. It costs one edit and one run.
   pattern containing `$json` or `$baseline` had those spliced out as undefined Perl
   variables before matching. Anchor a scripted mutation on a line number, or escape every
   `$`; either way the did-it-apply assertion is what tells you which happened.
+
+**A green after deletion can mean a redundant guard is standing in, not that the mechanism
+is dead.** Q624's suite passed in full with command position deleted, because an
+`already_throttled` short-circuit upstream rescued every case that would have exercised it.
+The mechanism was load-bearing in production and unasserted by the suite — so the answer is
+a case pitched into the gap the redundant guard does not cover (there, a wrapper the
+short-circuit does not recognise), not a conclusion that the code is unnecessary. Ask which
+*other* code is keeping the test green before deleting anything else.
 
 Q506 needed two rounds of this before a spec's green meant what it claimed. Q551's
 re-offer test is the routine case: disabling the one call the fix added turned it red on
