@@ -84,6 +84,15 @@ The change moves paragraph boundaries. It does not move meaning.
   measured is how a figure ends up quoted without its conditions.
 - **Repair a referent the split breaks.** A paragraph opening "Both halves of
   that…" needs naming once the antecedent is two paragraphs back.
+- **Never open a new paragraph with a bare pronoun.** A split turns a harmless
+  mid-paragraph "It is enabled…" into the first word a scanner reads. Name the
+  subject.
+- **Count the paragraphs a section ends up with.** Nine short paragraphs under
+  one heading is a different wall, not a shorter one. A section that lands above
+  roughly six wants `####` subheadings, and the split is not finished until it
+  has them.
+- **Do not orphan a bare cross-reference.** A lone "See [runbook] for X" left as
+  its own paragraph is the word count being served rather than the reader.
 
 ## How the split is verified
 
@@ -97,7 +106,22 @@ and after. Every token the diff drops has to be justified one by one: a `;` that
 became a `.`, an `(a)` that became a `*`, an article dropped by a deliberate
 rewrite. A content word in that list is a lost qualifier.
 
-Phase 1 reconciled to +28 tokens across five files, every one accounted for.
+Phase 1 reconciled to +28 tokens across five files, every one accounted for, and
+to +66 more once the `####` subheadings landed, which the same check showed to be
+exactly the heading texts and nothing else.
+
+**Reconciliation does not prove the split is correct.** It catches a *deletion*.
+It is blind to words the edit *adds*, and that is where the one real defect in
+Phase 1 came from. A split moved the sentence "This lets a platform team express
+'GPU runners always get at least 5 slots…'" two paragraphs away from
+`priorityTiers`, and the reopened sentence read "Together these let a platform
+team express…". "These" then pointed at the two platform-owned settings named in
+the intervening paragraph, which are not what expresses 5/20/30. Nothing was
+dropped, so the multiset was clean and the gates were green.
+
+So the check has two halves, and the second one is manual: reconcile the tokens,
+then re-read every paragraph the split *reopened* and ask what its first pronoun
+now points at.
 
 ## Phase 1: what changed
 
@@ -123,6 +147,32 @@ two-disruption version of the list. It now reads "on detecting any of these".
 Nothing was left long on precision grounds in Phase 1. Every paragraph in these
 five chapters had a seam that cost nothing to cut. Expect that to stop holding in
 Phase 3, where `appendix-h` reasons about API decomposition across versions.
+
+Two sections in `05-security.md` came out of the split as walls of short
+paragraphs rather than one long one, so they gained `####` subheadings: four
+under [Supply-chain compromise of the worker
+image](../design/05-security.md#supply-chain-compromise-of-the-worker-image) (9
+paragraphs) and three under [Cross-tenant pod preemption via
+PriorityClass](../design/05-security.md#cross-tenant-pod-preemption-via-priorityclass)
+(12). The first paragraph of each stays unheaded as the section lead: a `###`
+followed immediately by a `####` appears nowhere else in `docs/design/` or
+`docs/operations/`, and this change does not introduce the first one.
+
+### What the first pass got wrong
+
+Recorded because the corrections are the useful part, and because a reviewer
+reading only the final diff cannot see them:
+
+- **The `priorityTiers` referent**, above. The one defect that changed meaning.
+- **A broken contrast pair.** `:8443` (mTLS) and `:8081` (plaintext probes) in
+  `02-architecture.md` explain each other, and the first split put the
+  `TokenReview` rationale between them. Regrouped by port instead, with the
+  kubelet-exemption sentence moved to sit directly after the NetworkPolicy rule
+  it is an exception to.
+- **A pronoun opener.** "It is enabled…" began a paragraph; now "Tracing is
+  enabled…".
+- **An orphaned cross-reference.** A 23-word `See [security-operations.md § …]`
+  had been split off purely to bring the paragraph above it under 140 words.
 
 ## What Phase 2 inherits
 
