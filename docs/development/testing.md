@@ -698,6 +698,8 @@ Q482 established this for the Go toolchain only. It covers both languages and ev
 
 Repeated passes do not validate a flake fix. A green `-count=20` is equally consistent with *"the race is closed"* and *"the race didn't fire this time"* — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.
 
+The same holds at the other end of the job: repeated runs rarely *reproduce* one either, so `-count` is the wrong opening move. Name the interleaving the failure needs, then [widen the window and drive it](#synchronize-on-the-signal-you-assert-on). Q685 spent 200 clean repetitions on a test CI had just failed, and reproduced it 4 times in 60 as soon as the stop was taken at maximum pressure rather than on the test's own ticker.
+
 Run the **negative control** before concluding: invert the fix — restore the old value, remove the pin, revert the ordering — and confirm the suite *fails*. A fix you cannot make fail on demand has not been shown to be load-bearing, and shipping it closes the backlog row while leaving the flake live. When the inverted form refuses to fail either, that is itself the finding: the diagnosis is wrong, or the mechanism isn't the one you think it is.
 
 Q378 is the worked example. Pinning `BaselineRecheckInterval` in the reaper tests passed 10× under `-race`, which on its own proved nothing; setting the pin to 1s instead — and watching the suite fail — is what established that the pin was the thing closing the race.
