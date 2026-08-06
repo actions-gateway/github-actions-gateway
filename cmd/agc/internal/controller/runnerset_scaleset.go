@@ -219,6 +219,9 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		Cleanup: func(ctx context.Context, jobID string) error {
 			return r.Provisioner.CleanupScaleSetJob(ctx, target, jobID)
 		},
+		// Per-RunnerSet ConfigMap persisting the concluded-job guards, so a hard-killed
+		// AGC does not replay an assignment it concluded but had not yet deleted (Q606).
+		Guards:   r.scaleSetGuardStore(rs),
 		Capacity: r.scaleSetCapacityFunc(key, target),
 		// Per-RunnerSet Prometheus recorder over the scale-set tier's counters
 		// (Q264 P4 observability). Nil ScaleSetMetrics yields a nil recorder, which

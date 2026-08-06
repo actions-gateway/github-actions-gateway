@@ -1,7 +1,5 @@
 package scalesetlistener
 
-import "sort"
-
 // GuardedJobIDs returns the jobIDs the three replay guards currently hold, each sorted.
 // It exists so a test can assert on WHICH entries a delete retired rather than on a
 // count: a total that fell says nothing about the specific job whose guard had to
@@ -18,13 +16,4 @@ func (l *Listener) PendingMessageCount() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return len(l.pending)
-}
-
-func sortedKeys(m map[string]bool) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

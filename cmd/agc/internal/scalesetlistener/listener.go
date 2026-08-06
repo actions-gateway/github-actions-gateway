@@ -37,7 +37,9 @@
 //
 // What bounds that replay is the delete half of the ack: a message is deleted once
 // every job it names has concluded, so a restart re-reads only work still owed a worker
-// rather than the scale set's whole history (Q583).
+// rather than the scale set's whole history (Q583). The conclusions themselves are
+// persisted through Config.Guards before any delete is issued, so a hard kill between
+// a conclusion and its DELETE does not turn the replay back into a re-provision (Q606).
 //
 // One job class is outside that replay: an assignment the Listener acked past because it
 // could not be provisioned — a runner name a stale registration holds (Q551), or a worker
@@ -235,6 +237,31 @@ type CapacityCheckFunc func(ctx context.Context) error
 // reconciler's reaper collects terminal pods on spec.completedPodTTL.
 type CleanupFunc func(ctx context.Context, jobID string) error
 
+// GuardState is the durable half of the replay guards: the jobs this listener has
+// concluded — completed or abandoned — whose queue messages may not all be deleted yet.
+// provisioned is deliberately absent: replaying a still-running job is the recovery
+// path (provisioning is idempotent per jobID), so losing that set costs nothing.
+type GuardState struct {
+	Completed []string `json:"completed,omitempty"`
+	Abandoned []string `json:"abandoned,omitempty"`
+}
+
+// GuardStore persists GuardState across a process boundary (Q606). The in-memory
+// guards close every stop the exit flush can reach, but a hard kill — SIGKILL at grace
+// expiry, OOM, node loss — between a conclusion and its message's DELETE loses the
+// conclusion, and the next process replays the assignment and provisions a worker for a
+// job that is over. The store is written ahead of the deletes (flushDeletes), so once a
+// DELETE is even attempted the conclusion that authorised it survives a kill.
+//
+// Load is called once, before the poll loop starts; a Load error fails Start, because
+// polling without the guards silently reopens the window. Save replaces the whole
+// state — it is bounded by the messages still in the queue (Q597), not by history.
+// Both are called from the poll goroutine only. Nil disables persistence.
+type GuardStore interface {
+	Load(ctx context.Context) (GuardState, error)
+	Save(ctx context.Context, state GuardState) error
+}
+
 // CapacityFunc returns the value to advertise as X-ScaleSetMaxCapacity on the next
 // poll. It is a TOTAL, not a free-slot delta: GitHub holds totalAssignedJobs at or
 // below it, so jobs already assigned to this set count against it and a return equal
@@ -348,6 +375,10 @@ type Config struct {
 	// Secret). Nil disables reclaim, which leaks one Secret per job until the owning
 	// RunnerSet is deleted — so the reconciler always wires it (Q373).
 	Cleanup CleanupFunc
+	// Guards persists the concluded-job guards across a process boundary, closing the
+	// hard-kill half of the settle→DELETE gap (Q606). Nil disables persistence, leaving
+	// the guards process-scoped (the pre-Q606 behaviour).
+	Guards GuardStore
 	// Metrics records job accounting. Nil is safe.
 	Metrics MetricsRecorder
 	// PollErrors counts GetMessage failures into the shared cross-tier poll-error
@@ -449,7 +480,9 @@ type Listener struct {
 	// The three replay guards. Each answers a redelivered JobAssigned, and each is retired
 	// by retireGuards once every message carrying one for its job has been deleted — so
 	// they are bounded by the work still in the queue, not by the jobs the listener has
-	// handled over its lifetime (Q597).
+	// handled over its lifetime (Q597). completed and abandoned — the conclusions — are
+	// additionally persisted through Config.Guards ahead of each delete, so a hard kill
+	// between a conclusion and its DELETE no longer loses them (Q606).
 	provisioned map[string]bool // jobIDs provisioned this process (idempotency + replay guard)
 	// completed holds jobIDs GitHub has reported terminal. It guards double-counting on
 	// replay, and gates provisioning: a worker for a completed job would stall on the
@@ -466,6 +499,15 @@ type Listener struct {
 	pending       map[int64]*pendingMessage
 	lastStats     scaleset.RunnerScaleSetStatistic
 	lastMessageID int64
+	// guardsDirty is set whenever completed/abandoned membership changes, and cleared
+	// by a successful GuardStore save. flushDeletes refuses to issue any DELETE while
+	// it is set and the save fails — the write-ahead ordering Q606 rests on.
+	guardsDirty bool
+	// retained holds the jobIDs whose guards must survive the drained-queue sweep: a
+	// delete the wire reported as removing nothing dropped their message from pending
+	// while its replay may still be in the queue, so the guards are the only thing left
+	// that would recognise it (the Q609 rule, extended to sweepStaleGuards).
+	retained map[string]bool
 }
 
 // pendingMessage is one cursor-acked message the Listener has not yet deleted.
@@ -507,6 +549,7 @@ func New(cfg Config) (*Listener, error) {
 		abandoned:          make(map[string]bool),
 		pending:            make(map[int64]*pendingMessage),
 		deferred:           make(map[string]*deferredJob),
+		retained:           make(map[string]bool),
 	}
 	if l.log == nil {
 		l.log = slog.Default()
@@ -574,6 +617,13 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 	l.mu.Lock()
 	l.scaleSetID = ssID
 	l.mu.Unlock()
+
+	// Before the session exists: a failure here must not leak a session, and the poll
+	// loop must never run without the persisted guards — that would silently reopen the
+	// very window the store closes (Q606).
+	if err := l.loadGuards(ctx); err != nil {
+		return nil, fmt.Errorf("scalesetlistener: load concluded-job guards for %q: %w", l.cfg.ScaleSetName, err)
+	}
 
 	sess, err := l.createSession(ctx, ssID)
 	if err != nil {
@@ -762,6 +812,9 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 		}
 		l.pollHealthy()
 		if msg == nil { // 202 — nothing to deliver
+			// The queue is drained, so a guard no held message assigns has nothing left
+			// to answer (Q606).
+			l.sweepStaleGuards()
 			// Pace the empty path: a server that did not actually hold the poll must not
 			// spin the loop (minPollInterval). A real long-poll already outlasts the floor.
 			if !l.paceEmptyPoll(ctx, time.Since(polledAt)) {
@@ -1207,6 +1260,7 @@ func (l *Listener) abandonDeferredBefore(cutoff time.Time) {
 		delete(l.deferred, id)
 		l.abandoned[id] = true
 	}
+	l.guardsDirty = true
 	l.mu.Unlock()
 	// A job GitHub has stopped holding has concluded as far as the queue goes, so it
 	// releases the message that was held for it (Q583). Without this the assignment
@@ -1571,6 +1625,9 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool
 	l.mu.Lock()
 	first := !l.completed[cj.JobID]
 	l.completed[cj.JobID] = true
+	if first {
+		l.guardsDirty = true
+	}
 	l.mu.Unlock()
 	// A deferred job GitHub has given up on (timed out, or the run was cancelled) stops
 	// being re-offered here. It is the prompt signal that an assignment is gone, but not
@@ -1649,6 +1706,9 @@ func (l *Listener) settle(jobID string) {
 // itself gated on the job having concluded, so this cannot retire a guard for work still
 // in flight (Q597). The caller gates this on the wire confirming the delete removed
 // something, so "deleted" here means the queue really no longer holds it.
+//
+// This is the prompt retirement path; sweepStaleGuards is the drained-queue backstop
+// for the entries it structurally cannot reach (Q606).
 func (l *Listener) retireGuards(p *pendingMessage) {
 	if p == nil {
 		return
@@ -1658,6 +1718,11 @@ func (l *Listener) retireGuards(p *pendingMessage) {
 			continue
 		}
 		delete(l.provisioned, jobID)
+		// A retirement is a store change too; the next cycle's save garbage-collects
+		// the entry (Q606). provisioned is not persisted, so it dirties nothing.
+		if l.completed[jobID] || l.abandoned[jobID] {
+			l.guardsDirty = true
+		}
 		delete(l.completed, jobID)
 		delete(l.abandoned, jobID)
 	}
@@ -1696,6 +1761,12 @@ func assignedJobIDs(jobs []scaleset.JobMessage) map[string]bool {
 // serving deletes and the queue is no longer being pruned, and nothing else would say
 // so (Q609).
 func (l *Listener) flushDeletes(ctx context.Context, sess *scaleset.RunnerScaleSetSession) {
+	// Write-ahead: a DELETE is irreversible at the queue, so the conclusion that
+	// authorised it must be durable before any is issued. A failed save skips the whole
+	// cycle's deletes — they retry next cycle, exactly like a failed delete (Q606).
+	if !l.saveGuards(ctx) {
+		return
+	}
 	l.mu.Lock()
 	var ready []int64
 	for messageID, p := range l.pending {
@@ -1726,9 +1797,14 @@ func (l *Listener) flushDeletes(ctx context.Context, sess *scaleset.RunnerScaleS
 		// Retire only on a delete the wire confirms removed something. A 404 completes the
 		// ack, but it is also how a backend that does not serve the endpoint answers — and
 		// there the message is still in the queue, leaving the guards as the only thing
-		// that would recognise its replay (Q609).
+		// that would recognise its replay (Q609). Such guards are marked retained so the
+		// drained-queue sweep leaves them alone too.
 		if deleted {
 			l.retireGuards(p)
+		} else if p != nil {
+			for jobID := range p.assigned {
+				l.retained[jobID] = true
+			}
 		}
 		l.mu.Unlock()
 	}
@@ -1754,6 +1830,95 @@ func (l *Listener) unsettledJobs(jobs []scaleset.JobMessage, cleaned map[string]
 		unsettled[j.JobID] = true
 	}
 	return unsettled
+}
+
+// loadGuards seeds the completed/abandoned guards from the store before the poll loop
+// starts, so a replayed assignment for a job a hard-killed predecessor concluded is
+// acked past instead of provisioned (Q606). An entry whose assignment does replay is
+// retired by that message's confirmed delete; one whose messages are already gone is
+// retired by sweepStaleGuards once the queue proves drained.
+func (l *Listener) loadGuards(ctx context.Context) error {
+	if l.cfg.Guards == nil {
+		return nil
+	}
+	state, err := l.cfg.Guards.Load(ctx)
+	if err != nil {
+		return err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, jobID := range state.Completed {
+		l.completed[jobID] = true
+	}
+	for _, jobID := range state.Abandoned {
+		l.abandoned[jobID] = true
+	}
+	return nil
+}
+
+// saveGuards persists the concluded-job guards when they have changed since the last
+// successful save, returning whether the store now reflects them. Snapshot and flag are
+// consistent without holding mu across the write: every mutation happens on the poll
+// goroutine, which is also the only caller.
+func (l *Listener) saveGuards(ctx context.Context) bool {
+	if l.cfg.Guards == nil {
+		return true
+	}
+	l.mu.Lock()
+	if !l.guardsDirty {
+		l.mu.Unlock()
+		return true
+	}
+	state := GuardState{Completed: sortedKeys(l.completed), Abandoned: sortedKeys(l.abandoned)}
+	l.mu.Unlock()
+	if err := l.cfg.Guards.Save(ctx, state); err != nil {
+		l.log.Warn("scaleset: persist concluded-job guards; holding message deletes until it succeeds",
+			"scaleSet", l.cfg.ScaleSetName, "err", err)
+		return false
+	}
+	l.mu.Lock()
+	l.guardsDirty = false
+	l.mu.Unlock()
+	return true
+}
+
+// sweepStaleGuards retires, on an empty poll, every guard no held message assigns —
+// the entries retireGuards structurally cannot reach: a store-loaded guard whose
+// messages a previous process already deleted, and a completed guard re-added by a
+// replayed completion after its assignment's message was gone. A 202 is what makes the
+// judgement sound: it means the queue is drained (an unacked message redelivers
+// instead), so a guard with no pending assignment has no message left anywhere that
+// could replay it. Without this the persisted set would accrete such entries forever —
+// the unbounded set again, in etcd (Q606).
+//
+// The retained set is the one exemption: a delete the wire reported as removing
+// nothing dropped its message from pending while the message may still be in the
+// queue, and there the guard is the only recognition left (Q609). Between 202s,
+// nothing here fires — prompt retirement stays the confirmed delete's.
+func (l *Listener) sweepStaleGuards() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, guards := range []map[string]bool{l.completed, l.abandoned} {
+		for jobID := range guards {
+			if l.assignmentPending(jobID) || l.retained[jobID] {
+				continue
+			}
+			delete(guards, jobID)
+			delete(l.provisioned, jobID)
+			l.guardsDirty = true
+		}
+	}
+}
+
+// sortedKeys returns a map's keys in a stable order, for the persisted guard state and
+// the test hooks that assert on it.
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // flushDeletesOnExit issues the outstanding delete half of the ack as the loop exits,
