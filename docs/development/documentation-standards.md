@@ -183,15 +183,16 @@ The Queue-row form of the same rule is [maintaining-backlog.md § A row's assert
 is a claim](maintaining-backlog.md#a-rows-asserted-defect-is-a-claim-not-a-finding);
 this section is its other two homes, prose docs and code comments.
 
-Three such claims shipped here from source inspection. All three were wrong:
+Four such claims shipped here from source inspection. All four were wrong:
 
 | Claim, as shipped | What refuted it |
 |---|---|
 | "Karpenter sets `eventTime`", in the operator runbook, with the same premise in two places in the capacity plan | Q479's live run: at Karpenter v1.14.0 the events come from the **legacy** recorder, `lastTimestamp` set and `eventTime` null, the same generation as cluster autoscaler ([§9i](../plan/capacity-aware-intake.md#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479)). |
 | "The skipped job is re-assigned or timed out server-side", a [`listener.go`](../../cmd/agc/internal/scalesetlistener/listener.go) comment (Q270) that was also the safety argument for dropping the job | Q551: the scale-set queue does **not** re-assign it. Skipped jobs sat queued at GitHub forever with no condition, Event, or metric naming them. The comment now reads "the queue does not re-assign it". |
 | Q584's own filing: `check-path-filters.sh`'s awk YAML parsing could "mis-read as full coverage, failing green" | The gate iterates a hardcoded filter registry against `go.work`, so a parse failure removes patterns and fails **closed**. The row reached `main` first and cost a second PR to correct. |
+| "Never `/tmp` **or the session scratchpad**", the `CLAUDE.md` workspace-guard bullet (#869) | Probed on workspace-guard 1.8.0: writing under this session's own scratchpad and reading it back both succeed silently, because `is_session_tmp_path` returns before the read/write split. The rule generalised a single prompt in a friction log that reached back before the guard widened the exemption to native `Edit`/`Write`. Eleven days of sessions routed temp files away from a directory they were allowed to use (#1319). |
 
-Q594 is the fourth, and the one caught in time: it asserted that `plan-hygiene.yml`'s
+Q594 is the fifth, and the one caught in time: it asserted that `plan-hygiene.yml`'s
 `**.go` filter matched no Go file. Running the pinned action measured the opposite, so
 no fix was needed, and what landed instead is a compliant version of the finding
 ([testing.md § Where a globstar works in a filter
@@ -201,9 +202,17 @@ glob](testing.md#where-a-globstar-works-in-a-filter-glob)).
 
 Anything whose behavior can change with no commit in this repo: a third-party library,
 a Kubernetes API behavior, a GitHub API or Actions Service response, a CI action's
-matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary.
-The test is whether the sentence could go false while `make check` stays green and
-nobody here touched anything.
+matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary,
+**or a Claude Code hook, plugin, or harness decision** (what workspace-guard denies,
+which paths are exempt, what a slash command does). The test is whether the sentence
+could go false while `make check` stays green and nobody here touched anything.
+
+**`CLAUDE.md` is in scope, and is the worst place for a stale one.** Its process rules
+read as house convention rather than as claims, so they attract no citation and get no
+review, while every session loads them and acts on them. A rule that says a tool denies
+something is an upstream-behavior claim wearing a procedural hat: cite the version you
+measured against, or say which command you ran. The scratchpad row above cost eleven
+days precisely because "never the session scratchpad" looked like a preference.
 
 Two edges keep the rule from swallowing every sentence in the docset:
 
