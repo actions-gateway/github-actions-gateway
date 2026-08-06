@@ -9,8 +9,20 @@ Conventions for every shell script in this repo — `scripts/`, `.githooks/`, an
 - Use `[[ ]]` for conditionals and `(( ))` for arithmetic — never `[ ]`.
 - Quote all variable expansions (`"$var"`, `"${arr[@]}"`) unless word-splitting is explicitly intended — annotate that intent with a comment.
 - When background processes need cleanup, register a `trap cleanup EXIT INT TERM` function that kills tracked PIDs.
+- Every loop must be able to stop itself: a bounded iteration count or a stop-file it polls, never an unbounded loop that an external kill has to end (see [§ A loop must be able to stop itself](#a-loop-must-be-able-to-stop-itself)).
 - Prefer `awk -v name="$value" '...'` over `sed` for substitutions involving variables — `sed` delimiter and metacharacter (`/`, `&`, `\`) issues are a common source of bugs.
 - When capturing the exit code of a pipeline via `wait`, wrap it in a subshell (`( cmd | other ) &`) so `$!` is the subshell's PID and `wait` reflects the pipeline result under `pipefail`, not just the last process's exit code.
+
+## A loop must be able to stop itself
+
+An unbounded loop can only be ended from outside, and that external kill is the problem: it gets issued as a `pkill -f <pattern>`, the pattern matches every parallel worktree, and it carries no record of whose run it is hitting ([testing.md § Stopping a run](testing.md#stopping-a-run-name-the-target-never-the-program)). Give the loop its own stop condition and the kill is never needed.
+
+- A **bounded iteration count** when the work is countable: `for i in $(seq 1 40)`.
+- A **stop-file the loop polls** when it is not: `while [[ ! -f "${stop_file}" ]]`. Touching the file ends the run through the normal exit path, so the cleanup `trap` still runs.
+
+**Do not reach for `timeout`.** It ships with GNU coreutils and is absent from a stock macOS, where neither `timeout` nor `gtimeout` is on `PATH`. A script that depends on it runs unbounded on a dev Mac while looking correct. That is the same silent-absence trap that broke Q690's load harness, which backgrounded its generators with `setsid`: also absent on macOS, so all three died instantly and 40 samples passed against an idle machine, reading as strong evidence of no flake. `timeout` is also still a kill, just one on a timer, so the signal can skip the cleanup `trap` that a self-terminating loop unwinds through.
+
+This applies hardest to throwaway harnesses under the gitignored `tmp/`. Being a throwaway is exactly why such a script gets none of the review a tracked one does, and it is where every unbounded loop in this repo's history has actually come from.
 
 ## Shared helpers and Makefile wiring
 
