@@ -2600,6 +2600,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#card-bullets-fit-on-one-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Card bullets fit on one line
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3153,9 +3164,58 @@ console read the column against the phrase:</p>
 the logomark hits its 132px size cap while the hero is already at its 44rem max.
 Editing the headline <strong>text</strong> is subject to the same arithmetic: a phrase longer
 than 26 characters needs the cap lowered again, or it will overrun the column.</p>
+<h3 id="card-bullets-fit-on-one-line">Card bullets fit on one line<a class="headerlink" href="#card-bullets-fit-on-one-line" title="Permanent link">&para;</a></h3>
+<p>Every bullet inside a <code>.gag-pillars</code> card renders on a single line. The grid is a
+scanning surface: one wrapped bullet reads as prose among labels, so the copy is
+written to the column rather than the column widened to the copy. Two column
+widths exist, both measured at 1440px with mixed-case prose:</p>
+<table>
+<thead>
+<tr>
+<th>Grid</th>
+<th>Card</th>
+<th>Bullet column</th>
+<th>Budget</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.gag-pillars</code> (three across)</td>
+<td>417px</td>
+<td>347px</td>
+<td><strong>50 characters</strong></td>
+</tr>
+<tr>
+<td><code>.gag-pillars.gag-cols-2</code> (two across)</td>
+<td>630px</td>
+<td>559px</td>
+<td><strong>77 characters</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Count the <strong>rendered</strong> text: link text without its URL, code spans without their
+backticks. The budget is a proxy rather than arithmetic, because the body face is
+proportional: the same column takes 90 narrow characters, 25 wide ones, and 42
+inside a code span. Treat a bullet within a few characters of its budget as
+unverified.</p>
+<p>An expansion that does not fit is the wrong fix, not the bullet's fault. Prefer
+the plain term over <code>Term (ACR)</code> in a card, and bind the acronym in prose
+elsewhere on the page, where the layout imposes no budget. Where no such prose
+exists, let the linked detail page carry the definition.</p>
+<p>Verify by rendering. Reading the Markdown cannot answer this question, and
+neither can counting characters:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">// make docs-serve, then on / or /why-gag/</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">&#39;.gag-pillars li li&#39;</span><span class="p">)]</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">b</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">round</span><span class="p">(</span><span class="nx">b</span><span class="p">.</span><span class="nx">getBoundingClientRect</span><span class="p">().</span><span class="nx">height</span><span class="w"> </span><span class="o">/</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">                          </span><span class="nb">parseFloat</span><span class="p">(</span><span class="nx">getComputedStyle</span><span class="p">(</span><span class="nx">b</span><span class="p">).</span><span class="nx">lineHeight</span><span class="p">))</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">1</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">b</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">b</span><span class="p">.</span><span class="nx">innerText</span><span class="p">.</span><span class="nx">trim</span><span class="p">());</span><span class="w">   </span><span class="c1">// must be []</span>
+</code></pre></div>
+<p>Below roughly 1440px the cards narrow and bullets wrap whatever the copy says, so
+the invariant is defined at full width on a laptop, where the grid is three
+across. Only <code>docs/index.md</code> and <code>docs/why-gag.md</code> use these cards.</p>
 <h2 id="local-preview">Local preview<a class="headerlink" href="#local-preview" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
 </code></pre></div>
 <p>Both targets provision an <strong>isolated venv</strong> (<code>.venv-docs/</code>, gitignored) from the
 pinned <code>requirements-docs.txt</code> and reuse it across runs, so the docs toolchain
@@ -3165,6 +3225,12 @@ module ships separately: <code>apt-get install python3-venv</code> if <code>pyth
 fails.</p>
 <p>The toolchain is pinned <strong>exactly</strong> — MkDocs 2.0 is incompatible with Material 9.x,
 so don't float the versions in <code>requirements-docs.txt</code>.</p>
+<p><strong><code>make check</code> does not run <code>make docs-build</code>.</strong> The fast gate covers <code>doc-links</code>,
+which resolves links and anchors against the Markdown; MkDocs' own strict
+validation runs in CI (<code>pages.yml</code>) and locally only when you invoke it. A change
+that alters rendering is therefore not verified by a green <code>make check</code> alone.
+Run <code>make docs-build</code> too, and for the card grids or a wide table, serve the site
+and look.</p>
 <h2 id="the-two-link-gates">The two link gates<a class="headerlink" href="#the-two-link-gates" title="Permanent link">&para;</a></h2>
 <p><code>docs/</code> is rendered by two engines with different link semantics, so <strong>one gate
 cannot cover both</strong> (Q560):</p>
@@ -3311,9 +3377,9 @@ never fails a build, so <code>mkdocs.yml</code> raises <code>validation.nav.omit
 <code>warn</code> and <code>--strict</code> turns it into an error — the same INFO-to-warning move
 <a href="#the-two-link-gates">§ The two link gates</a> makes for links. Add a page and
 <code>make docs-build</code> fails until it is either in <code>nav</code> or declared in <code>not_in_nav</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>The following pages exist in the docs directory, but are not included in the &quot;nav&quot; configuration:
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  - operations/your-new-page.md
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Aborted with 1 warnings in strict mode!
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>The following pages exist in the docs directory, but are not included in the &quot;nav&quot; configuration:
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  - operations/your-new-page.md
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>Aborted with 1 warnings in strict mode!
 </code></pre></div>
 <p>Both scopes are checked, because nav coverage is decided per build: a
 <code>development/</code> page is a page only on <code>dev</code>, so the release-scope build cannot
