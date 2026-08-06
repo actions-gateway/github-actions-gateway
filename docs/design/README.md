@@ -4,7 +4,7 @@ The gateway is a **four-tier system** for running GitHub Actions self-hosted run
 
 | Tier | Component | Scope | Role |
 | --- | --- | --- | --- |
-| 1 | [Gateway Manager Controller (GMC)](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) | Cluster | Watches `ActionsGateway` custom resources (CRs), provisions per-tenant resources |
+| 1 | [Gateway Manager Controller (GMC)](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) | Cluster | Watches `ActionsGateway` custom resources, provisions per-tenant resources |
 | 2 | [Actions Gateway Controller (AGC)](02-architecture.md#22-tier-2--actions-gateway-controller-agc) | Namespace | Multiplexes GitHub broker sessions, acquires jobs, spawns worker pods |
 | 3 | [Egress Proxy Pool](02-architecture.md#23-tier-3--egress-proxy-pool) | Namespace | Stateless HTTPS CONNECT proxy pool; isolated egress IPs per tenant |
 | 4 | [Ephemeral Worker Pod](02-architecture.md#24-tier-4--ephemeral-worker-pod) | Namespace | Single-use pod that executes exactly one workflow job |

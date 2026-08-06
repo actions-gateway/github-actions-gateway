@@ -143,10 +143,10 @@ Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-
 
     Hardening reconciled by default:
 
-    - `baseline` Pod Security Admission (PSA) per namespace
+    - `baseline` Pod Security Admission per namespace
     - Default-deny NetworkPolicies
     - Credentials never in env vars
-    - Signed images + Software Bill of Materials (SBOM) + SLSA
+    - Signed images, SBOM, and SLSA provenance
     - [Kata micro-VM workers](operations/kata-dind-workloads.md), proven in our own CI
 
 -   :material-tape-measure:{ .lg .middle } __Right-size from measured usage__ <span class="gag-v2-badge">v2</span>
