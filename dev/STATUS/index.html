@@ -2868,14 +2868,6 @@
 <td>The hook scans the whole Bash string, so a <code>git commit -F -</code> heredoc quoting <code>go test -race</code> reads as a second go invocation and is denied. Skip heredoc bodies and <code>git commit -m</code>/<code>-F</code> arguments; <code>claude-go-throttle-hook-test.sh</code> takes the case.</td>
 </tr>
 <tr>
-<td><a id="Q671"></a>Q671</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>make scripts-test</code>'s help line lists every suite, so two PRs adding suites always conflict</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Adding a suite edits <code>SCRIPTS_TESTS</code> and a 1350-char <code>##</code> line naming all of them, so two such PRs conflict by construction (#1243 vs #1239). Q649 derived the gate list this way; same fix shape.</td>
-</tr>
-<tr>
 <td><a id="Q686"></a>Q686</td>
 <td><a href="../development/documentation-standards/#conventions"><code>check-doc-links</code> is blind to a section named in prose</a></td>
 <td><code>docs</code> <code>ci</code> <code>retro</code></td>
