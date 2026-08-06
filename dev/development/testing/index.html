@@ -3130,6 +3130,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A throwaway load harness is a measuring instrument, so calibrate it
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4285,6 +4296,15 @@ the first try. It costs one edit and one run.</p>
   on the assertion that names the behaviour.</li>
 <li><strong>Round-trip it.</strong> Restore the mechanism and confirm green in the same sitting, so the
   check cannot end with a half-reverted tree.</li>
+<li><strong>Assert that the deletion applied</strong>, when a script drives it rather than your hands. A
+  mutation that matched nothing leaves the mechanism intact, so the test passes and reads
+  as "this assertion does not bite", which is the exact conclusion the check exists to
+  rule out, reached backwards. Diff the file against its backup and fail the check when they match.
+  Q690 mutated by <code>perl -i -pe 's{\Q…\E}{…}'</code> and three of four patterns silently matched
+  nothing: <code>\Q</code> quotes regex metacharacters but does <strong>not</strong> stop interpolation, so a
+  pattern containing <code>$json</code> or <code>$baseline</code> had those spliced out as undefined Perl
+  variables before matching. Anchor a scripted mutation on a line number, or escape every
+  <code>$</code>; either way the did-it-apply assertion is what tells you which happened.</li>
 </ul>
 <p>Q506 needed two rounds of this before a spec's green meant what it claimed. Q551's
 re-offer test is the routine case: disabling the one call the fix added turned it red on
@@ -4506,6 +4526,13 @@ the invariant itself reads.</p>
 </ul>
 <p><strong>A frozen clock needs a positive control, or the freeze hides the assertions it was meant to protect.</strong> With time stopped, every "stays asleep" case passes whatever the subject does, including doing nothing. One case therefore has to spend the budget and reach the timeout; it is what proves the stub is wired to the thing the other cases depend on. The same reasoning applies to the stubs themselves: each new assertion here was checked by deleting the mechanism it names from <code>release-sentinel.sh</code> and requiring it to go red, and the mutations were first written as text patterns that <code>perl</code> silently emptied by interpolating <code>$json</code>, so the harness also asserts that the mutation changed the file at all.</p>
 <p>Removing the real seconds took the suite from 11.4 s to 3.6 s, which is the same secondary effect Q471 reported: a test that stubs <code>sleep</code> does not wait for anything.</p>
+<h4 id="a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it">A throwaway load harness is a measuring instrument, so calibrate it<a class="headerlink" href="#a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it" title="Permanent link">&para;</a></h4>
+<p>Reproducing a load-sensitive flake means writing a scratch harness that generates load and samples the suite. It is throwaway code, which is exactly why it gets written without the checks the suite itself would get, and its two failure modes both produce <strong>confident, wrong green</strong>:</p>
+<ul>
+<li><strong>The load never started.</strong> Q690's first harness backgrounded its generators with <code>setsid</code>, which does not exist on macOS. All three generators died instantly, 40 samples passed against an idle machine, and the run looked like strong evidence of no flake. A load harness must <strong>assert its own load is running</strong> before it draws any conclusion from a green sample, and print the figure it measured, exactly as <a href="#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">an empty search result is only evidence once the command is known to have run</a>.</li>
+<li><strong>The harness killed the thing it was measuring.</strong> That same harness cleaned up with <code>pkill -f 'make scripts-test'</code>, which matched the <code>make check</code> running for verification in the same worktree. The gate died mid-run and reported a non-zero exit, and a sampled suite that had printed <code>all assertions passed</code> was recorded as a failure because <code>wait</code> returned non-zero. Both read as genuine red. <strong>Scope a harness's cleanup to its own processes</strong>, with a stop file the loops poll or a marker in the command line that the pattern anchors on, and never <code>pkill</code> a pattern that a real gate's own command line matches.</li>
+</ul>
+<p>The general rule is the one this whole section is about, turned on the instrument: a measurement you cannot show ran is not a measurement. Reconcile the harness's status against its output before believing either.</p>
 <h3 id="testing-a-main-shaped-script-the-entry-point-seam-and-the-errexit-trap">Testing a <code>main</code>-shaped script: the entry-point seam, and the errexit trap<a class="headerlink" href="#testing-a-main-shaped-script-the-entry-point-seam-and-the-errexit-trap" title="Permanent link">&para;</a></h3>
 <p>A script whose logic lives in <code>main()</code> needs a seam before it can be sourced at all. The dogfood scripts use an env guard on the last line — <code>[[ -n "${START_LIB_ONLY:-}" ]] || main "$@"</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/start.sh"><code>start.sh</code></a>, and the same shape in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-start.sh"><code>e2e-start.sh</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-stop.sh"><code>e2e-stop.sh</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/delete.sh"><code>delete.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh"><code>validate-release.sh</code></a> — so a test sources the file for its functions without running it. It is the <code>BASH_SOURCE</code>-guard idea applied to an entry point; <strong>keep the guard when editing these scripts</strong>, or their suites stop being able to load them.</p>
 <p>The guard earns most on a script that is destructive at rest. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/delete.sh"><code>delete.sh</code></a> tears down the whole dogfood cluster, so its suite must never be one stray invocation away from running it; sourcing under <code>DELETE_LIB_ONLY=1</code> with <code>gcloud</code>/<code>kubectl</code>/<code>gh</code> stubbed is what makes the confirmation, the occupancy probes it quotes, and the delete ordering assertable at all. Teardown is the half worth asserting hardest: a drain that reports convergence it did not reach deletes an AGC out from under live work, and worker pods outlive their AGC with do-not-disrupt annotations pinning billable nodes (Q581, and the 82 stranded spot node-hours behind Q434).</p>

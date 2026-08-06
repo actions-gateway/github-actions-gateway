@@ -2724,6 +2724,14 @@
 <td>Measured: <code>permissionDecision</code> is hardcoded <code>ask</code> (main.go:141), no <code>Getenv</code> in the package. A right catch costs a deny-and-paste; a wrong one has no break-glass. Wants deny + <code>PIPED_GATE_OVERRIDE=&lt;reason&gt;</code> per prod-guard, its text hinting a row.</td>
 </tr>
 <tr>
+<td><a id="Q706"></a>Q706</td>
+<td><a href="../development/testing/#two-clocks-in-one-assertion"><code>alloc-queue-id-test</code> bounds fleet startup on the wall clock</a></td>
+<td><code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Read 2026-08-05: <code>alloc-queue-id-test.sh:166</code> waits ~1000×<code>sleep 0.01</code> for the fleet, then fails <code>fleet startup</code>; it bounds the scheduler, not the subject. Q642 measured p99 469ms and 0.45% still starting at 10s. The last such site.</td>
+</tr>
+<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code> <code>1.4-gate</code></td>
