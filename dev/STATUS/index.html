@@ -2729,7 +2729,7 @@
 <td><code>security</code></td>
 <td>🔲</td>
 <td>L</td>
-<td>Phase 0 measured 2026-08-03 (dogfood run 30786972228): job-time egress is not registry-only. <code>get.helm.sh</code> and the Actions cache data plane block a mirror-scoped NP; helm's OCI client is a fourth one. New Phase 1 shrinks that residual first.</td>
+<td>Phase 1 (self-hosted lane drops <code>get.helm.sh</code> + the Actions-cache data plane; hosted lane keeps caches) awaits its validation run: green Kata e2e whose log names no non-GitHub non-registry host. Then Phase 2 mirror manifests.</td>
 </tr>
 <tr>
 <td><a id="Q689"></a>Q689</td>

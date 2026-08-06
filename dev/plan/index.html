@@ -2662,7 +2662,7 @@ to track). A plan with only deferred residuals is ✅, not ⚠️ — see
 <tr>
 <td><a href="q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a></td>
 <td>Untrusted-PR posture for Kata workers (G.14): in-cluster registry pull-through mirrors (the Athens pattern applied to images) + delete the e2e open-egress NetworkPolicy, so a Kata worker's reachable set is DNS + GitHub + mirror only</td>
-<td>❌ Open — design written 2026-07-31; Phase 0 (measured job-time egress inventory on a live Kata e2e run) is next (<a href="../STATUS/#Q408">Q408</a>)</td>
+<td>❌ Open — Phase 0 measured 2026-08-03; Phase 1 (hosted-only gating of <code>get.helm.sh</code> + the Actions cache data plane) implemented, its live validation run next, then Phase 2 mirror manifests (<a href="../STATUS/#Q408">Q408</a>)</td>
 </tr>
 </tbody>
 </table>

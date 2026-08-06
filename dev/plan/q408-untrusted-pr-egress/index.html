@@ -2506,10 +2506,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#24-open-decisions-phase-1-inputs" class="md-nav__link">
+  <a href="#24-phase-1-decisions-resolved-2026-08-05" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2.4 Open decisions (Phase 1 inputs)
+        2.4 Phase 1 decisions (resolved 2026-08-05)
       
     </span>
   </a>
@@ -2659,12 +2659,13 @@
 
 <h1 id="untrusted-pr-egress-posture-for-kata-workers--q408">Untrusted-PR Egress Posture for Kata Workers — Q408<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers--q408" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-08-03): Phase 0 measured; §2 rewritten from the measurement;
-Phases 1–4 re-sequenced because of what it found.</strong> The design (§3) survives
-for the registry half. The measurement killed the assumption that job-time
-egress <em>is</em> the registry half — see <a href="#23-what-the-measurement-changes">§2.3</a>
-and the new Phase 1. Next step: the <a href="#24-open-decisions-phase-1-inputs">§2.4</a>
-decisions, then Phase 1.</p>
+<p><strong>Status (2026-08-05): Phase 1 implemented; its live validation run is
+next.</strong> Phase 0 (2026-08-03) measured the job-time egress inventory (<a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>)
+and re-sequenced Phases 1–4. Phase 1's workflow change gates
+<code>azure/setup-helm</code> (<code>get.helm.sh</code>), every <code>actions/cache</code> step, and the
+bake's <code>GHA_CACHE</code> to the hosted lane, per the resolved
+<a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a> decisions. After the
+validation run: Phase 2 (mirror manifests).</p>
 </blockquote>
 <p>Design and phased plan for the posture named in
 <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a>
@@ -2907,19 +2908,24 @@ design — but neither is measured.</p>
    substitutes: the tight lane can drop the image caches and let the mirror
    serve them warm instead of allowlisting the cache data plane.</li>
 </ol>
-<h3 id="24-open-decisions-phase-1-inputs">2.4 Open decisions (Phase 1 inputs)<a class="headerlink" href="#24-open-decisions-phase-1-inputs" title="Permanent link">&para;</a></h3>
+<h3 id="24-phase-1-decisions-resolved-2026-08-05">2.4 Phase 1 decisions (resolved 2026-08-05)<a class="headerlink" href="#24-phase-1-decisions-resolved-2026-08-05" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>The non-registry residual.</strong> Two ways to close it. Shrink it to
-  GitHub-only: helm and kubectl are <em>already baked into the e2e runner image</em>
-  (<code>scripts/dogfood/e2e-runner/Dockerfile</code>), so <code>azure/setup-helm</code> is redundant
-  on the self-hosted lane; the kind binary could join them; the three upstream
-  manifests already come from <code>github.com</code>, which the managed rule admits. Or
-  stand up an allowlisted forward proxy for whatever is left. The first is
-  smaller and adds no component.</li>
-<li><strong><code>actions/cache</code> on the tight lane.</strong> Keep it and allowlist its data plane
-  (host unmeasured; it is not GitHub), or drop the five image caches and let
-  the mirror be the cache. Dropping it is what makes the residual GitHub-only,
-  at the cost of a cold mirror on the first run after a bump.</li>
+<li><strong>The non-registry residual shrinks to GitHub-only; no forward proxy.</strong>
+  <code>azure/setup-helm</code> is <code>runner.environment</code>-gated to the hosted lane, since
+  helm and kubectl are already baked into the e2e runner image
+  (<code>scripts/dogfood/e2e-runner/Dockerfile</code>), so <code>get.helm.sh</code> is never
+  fetched on the self-hosted lane. The kind binary keeps its workflow
+  download: it comes from <code>github.com</code>, which the managed rule admits, and
+  the runner image deliberately does not bake it.</li>
+<li><strong><code>actions/cache</code> is dropped on the self-hosted lane, kept on the hosted
+  lane.</strong> Every <code>actions/cache</code> step is <code>runner.environment</code>-gated, and so is
+  the bake's buildx <code>type=gha</code> cache (<code>GHA_CACHE</code>, the same data plane,
+  missed by the Phase 0 host inventory because buildkit's log names no
+  host). The self-hosted lane falls back to the retried upstream pulls the
+  cache-miss path already had: registry traffic, still admitted until
+  Phase 4 and mirror-served from Phase 3. Interim cost per self-hosted run:
+  the cold pulls and a cold bake, against a measured 21-minute warm run
+  inside a 50-minute timeout. The per-PR hosted lane is unchanged.</li>
 </ul>
 <h2 id="3-design">3. Design<a class="headerlink" href="#3-design" title="Permanent link">&para;</a></h2>
 <h3 id="31-the-mirror--one-pull-through-cache-per-upstream">3.1 The mirror — one pull-through cache per upstream<a class="headerlink" href="#31-the-mirror--one-pull-through-cache-per-upstream" title="Permanent link">&para;</a></h3>
@@ -3018,7 +3024,7 @@ the metadata server on its service ports.</p>
 <p><strong>This swap is only green once the non-registry residual is gone.</strong> Phase 0
 measured <code>get.helm.sh</code> and the Actions cache data plane as job-time fetches
 that no mirror serves and no managed rule admits, so Phase 1 has to close them
-before this policy can be applied — <a href="#24-open-decisions-phase-1-inputs">§2.4</a>.</p>
+before this policy can be applied — <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a>.</p>
 <h3 id="34-residual-channels-stated-honestly">3.4 Residual channels, stated honestly<a class="headerlink" href="#34-residual-channels-stated-honestly" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>GitHub via the managed rule</strong> — inherent to running GitHub CI (job code
@@ -3062,10 +3068,12 @@ tests can substitute — Dragonfly is the scheduled candidate (<a href="#6-follo
   one; <a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>
   is the deliverable, and <a href="#23-what-the-measurement-changes">§2.3</a> is what it
   cost the design.</li>
-<li><strong>Phase 1 — shrink the non-registry residual to GitHub.</strong> New phase, forced
-  by Phase 0. Resolve the <a href="#24-open-decisions-phase-1-inputs">§2.4</a> decisions,
-  then make the e2e workflow's job-time non-registry fetches land only on hosts
-  the managed GitHub rule already admits. Validation: a green Kata e2e run with
+<li><strong>Phase 1 — shrink the non-registry residual to GitHub. Implemented
+  (2026-08-05); validation pending.</strong> New phase, forced by Phase 0. The
+  <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a> decisions are resolved:
+  <code>e2e-reusable.yml</code> gates <code>azure/setup-helm</code>, every <code>actions/cache</code> step,
+  and <code>GHA_CACHE</code> to <code>runner.environment == 'github-hosted'</code>. Validation
+  still to run (operator-driven dogfood session): a green Kata e2e run with
   open egress still present, and the run log naming no non-GitHub,
   non-registry host.</li>
 <li><strong>Phase 2 — mirror manifests.</strong> <code>deploy/registry-mirror/</code> (Athens-shaped:
