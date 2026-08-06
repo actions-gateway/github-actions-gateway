@@ -29,6 +29,11 @@ SCALESETS = [
     ("team-b", "cpu-standard"),
 ]
 
+# The worker-capacity gate is opt-in, and the collector emits its gauge only for a
+# RunnerSet that enables one (Q643). Gate a subset so the preview shows the tile
+# populated without implying every set carries the condition.
+GATED_SCALESETS = {("team-a", "gpu-a100"), ("team-b", "cpu-standard")}
+
 POD_BUCKETS = [0.5, 1, 2.5, 5, 10, 15, 30, 60, 120, 300]   # +Inf appended
 JOB_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 PROXY_BUCKETS = [0.1, 0.5, 1, 5, 10, 60, 300, 1800, 3600, 21600]
@@ -118,9 +123,11 @@ def render():
         # single-use JIT agent recycling: routine post-job recycles, no errors
         L.append(f'actions_gateway_agent_recycles_total{{namespace="{ns}",runner_group="{rg}",trigger="post_job"}} {int(0.15 * elapsed)}')
         L.append(f'actions_gateway_agent_recycle_errors_total{{namespace="{ns}",runner_group="{rg}"}} 0')
-        # worker-pod reaper: routine completed_ttl cleanup, occasional pending_deadline
-        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",reason="completed_ttl"}} {int(0.14 * elapsed)}')
-        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",reason="pending_deadline"}} {int(0.0002 * elapsed)}')
+        # worker-pod reaper: routine completed_ttl cleanup, occasional pending_deadline.
+        # The real counter always carries all four labels; runner_set is empty on the
+        # classic tier and non-empty only on scale-set reaps (Q514).
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",runner_set="",reason="completed_ttl"}} {int(0.14 * elapsed)}')
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",runner_set="",reason="pending_deadline"}} {int(0.0002 * elapsed)}')
         # broker OAuth token-propagation retries during recycle churn (Q267)
         L.append(f'actions_gateway_broker_token_propagation_retries_total{{namespace="{ns}",runner_group="{rg}"}} {int(0.004 * elapsed)}')
         # fan-out safety trio (Q260 / Q266): benign steady rates during bursts
@@ -153,6 +160,16 @@ def render():
         L.append(f'actions_gateway_runnerset_worker_quota_pressure{{namespace="{ns}",runner_set="{rs}"}} 0')
         L.append(f'actions_gateway_runnerset_worker_quota_exceeded{{namespace="{ns}",runner_set="{rs}"}} 0')
         L.append(f'actions_gateway_runnerset_workers_unschedulable{{namespace="{ns}",runner_set="{rs}"}} 0')
+        # Scale-set reaps carry the CR name on both runner_group and runner_set, which
+        # is what joins them to the runner_set-labelled gauges above (Q514/Q651).
+        # orphaned_running is the scale-set-specific reason: a worker that registered
+        # but never received its job.
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="completed_ttl"}} {int(0.12 * elapsed)}')
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="orphaned_running"}} {int(0.005 * elapsed)}')
+        # Opt-in capacity gate healthy: condition False with the reason that says the
+        # gate evaluated and found room, not the latched AwaitingProbe (Q512/Q643).
+        if (ns, rs) in GATED_SCALESETS:
+            L.append(f'actions_gateway_runnerset_worker_capacity_declined{{namespace="{ns}",runner_set="{rs}",reason="CapacityAvailable"}} 0')
 
     # Per-tenant egress proxy. The proxy exposes no intrinsic namespace label, but
     # the per-tenant ServiceMonitor stamps one from the scrape target's namespace
