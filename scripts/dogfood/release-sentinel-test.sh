@@ -238,64 +238,147 @@ want_contains 'a transition asks for a relaunch' 'release-sentinel.sh' "$out"
 
 echo
 echo '== live: the watcher exits when the stream transitions under it =='
-# The claim the helpers cannot make on their own. A watcher is started against a
-# stream mid-run, the stream then moves, and the watcher must exit with the
-# phase report — that exit is what wakes a session.
-# Real timestamps: the stall check reads the age of the newest event, so a
-# fixture stamped in 1970 is a wedged gate by definition.
-live_t="$(date +%s)"
-{
-	echo "{\"kind\":\"phase\",\"t\":${live_t},\"phase\":\"gate\",\"state\":\"start\",\"detail\":\"v1.2.3-rc.4\"}"
-	echo "{\"kind\":\"phase\",\"t\":${live_t},\"phase\":\"deploy\",\"state\":\"start\"}"
-} >"$RELEASE_PROGRESS_FILE"
+# The claims the helpers cannot make on their own: a watcher started against a
+# stream mid-run must exit with the phase report when the stream moves, and must
+# stay asleep when it does not.
+#
+# Nothing below bounds real seconds. The watcher reads the clock through `date`
+# and paces itself through `sleep`, both PATH commands, so stubbing the two
+# gives every case a virtual clock that advances only when the watcher sleeps.
+# "Still asleep" becomes a count of the watcher's own polls, and the transition
+# lands on a poll rather than after a wall-clock guess.
+#
+# The two clocks are what made this suite fail only under a loaded `make check`:
+# the window was `sleep`, a timer, while the watch budget was `date +%s`, wall
+# clock. Any forward step of the clock between them retires a 60s budget inside
+# a 3s window, and the watcher reports `timeout` before the window is up (Q690,
+# and testing.md § Two clocks in one assertion).
+mkdir -p "${WORK}/bin" "${WORK}/hooks"
 
-live_out="${WORK}/live.out"
-(
-	RELEASE_SENTINEL_INTERVAL=1 RELEASE_SENTINEL_TIMEOUT=30 \
-		bash "${REPO_ROOT}/scripts/dogfood/release-sentinel.sh" "$RELEASE_PROGRESS_FILE" >"$live_out" 2>&1
-) &
-watcher=$!
+# Resolved before ${WORK}/bin goes on PATH, so the stub can still reach the real
+# thing for the formats it does not serve.
+SENTINEL_REAL_DATE="$(command -v date)"
+SENTINEL_TICKS="${WORK}/ticks"
+SENTINEL_ELAPSED="${WORK}/elapsed"
+# The fixtures below are stamped relative to real now, so the virtual clock
+# starts there and their ages mean what they say.
+SENTINEL_BASE="$(date +%s)"
+export SENTINEL_REAL_DATE SENTINEL_TICKS SENTINEL_ELAPSED SENTINEL_BASE
 
-# Two intervals of quiet first: a watcher that reports without a transition is
-# the clock-driven behaviour this design rejects.
-sleep 3
-if kill -0 "$watcher" 2>/dev/null; then
-	ok 'still asleep while nothing changes' 'running'
-else
-	bad 'still asleep while nothing changes' "exited early: $(cat "$live_out")"
+cat >"${WORK}/bin/sleep" <<'STUB'
+#!/usr/bin/env bash
+# Records the poll, advances the virtual clock by the interval the watcher asked
+# for, runs the case's hook, then caps the loop. Both outcomes terminate through
+# the watcher's own control flow, so neither end needs a deadline. The cap kills
+# with SIGKILL, so a watcher that should have reported and did not still exits
+# non-zero rather than passing as a clean exit.
+printf '%s\n' "${1-}" >>"$SENTINEL_TICKS"
+ticks=$(($(wc -l <"$SENTINEL_TICKS")))
+elapsed="$(cat "$SENTINEL_ELAPSED" 2>/dev/null || true)"
+printf '%s\n' "$((${elapsed:-0} + ${1-0}))" >"$SENTINEL_ELAPSED"
+[[ -n "${SENTINEL_TICK_HOOK:-}" ]] && "$SENTINEL_TICK_HOOK" "$ticks"
+((ticks >= SENTINEL_MAX_TICKS)) && kill -KILL "$PPID"
+exit 0
+STUB
+chmod +x "${WORK}/bin/sleep"
+
+cat >"${WORK}/bin/date" <<'STUB'
+#!/usr/bin/env bash
+# The virtual clock: the base plus everything the watcher has slept.
+if [[ "${1-}" == '+%s' ]]; then
+	elapsed="$(cat "$SENTINEL_ELAPSED" 2>/dev/null || true)"
+	printf '%s\n' "$((SENTINEL_BASE + ${elapsed:-0}))"
+	exit 0
 fi
+exec "$SENTINEL_REAL_DATE" "$@"
+STUB
+chmod +x "${WORK}/bin/date"
 
-echo "{\"kind\":\"phase\",\"t\":$(date +%s),\"phase\":\"e2e\",\"state\":\"start\",\"detail\":\"Running the e2e matrix on GAG runners\"}" \
-	>>"$RELEASE_PROGRESS_FILE"
-
-waited=0
-while kill -0 "$watcher" 2>/dev/null && ((waited < 15)); do
-	sleep 1
-	waited=$((waited + 1))
-done
-if kill -0 "$watcher" 2>/dev/null; then
-	kill "$watcher" 2>/dev/null || true
-	bad 'the transition woke the watcher' 'still running after 15s'
-else
-	wait "$watcher" || true
-	want_contains 'the transition woke the watcher' 'RELEASE-SENTINEL EVENT: phase' "$(cat "$live_out")"
-	want_contains 'the wake names the new phase' 'Phase: e2e (start)' "$(cat "$live_out")"
-fi
-
-echo
-echo '== live: an unreadable log does not wake the watcher, a finished run does =='
-# The helpers above decide it; this asserts the watcher is actually wired to
-# them, which is where Q630 went wrong. `gh` is shimmed onto PATH — these tests
-# never reach GitHub.
-mkdir -p "${WORK}/bin"
+# `gh` is shimmed onto PATH from here down — these tests never reach GitHub.
 fake_gh() {
 	printf '#!/usr/bin/env bash\necho %s\n' "$1" >"${WORK}/bin/gh"
 	chmod +x "${WORK}/bin/gh"
 }
 
+# run_watcher STREAM OUT — run a watcher to completion. In the foreground, and
+# with no pid to track: the watcher either reports and returns, or its own
+# capped poll kills it, so nothing here has to decide when to stop waiting.
+# Leaves the exit status in `watcher_rc` and the polls it took in
+# `watcher_ticks`.
+run_watcher() {
+	local stream="$1" out="$2"
+	: >"$SENTINEL_TICKS"
+	echo 0 >"$SENTINEL_ELAPSED"
+	watcher_rc=0
+	# Whichever shell reaps the capped poll's SIGKILL prints "Killed: 9" to its
+	# own stderr. The subshell below is that shell — it holds two commands, so
+	# bash cannot exec-optimise it away and leave the notice to this one — and
+	# its stderr is discarded. Only the notice is: the watcher's own stderr is
+	# already merged into $out, and 137 still reaches `watcher_rc`, which is what
+	# tells a silenced watcher from a clean exit.
+	(
+		rc=0
+		PATH="${WORK}/bin:${PATH}" RELEASE_SENTINEL_INTERVAL=1 \
+			RELEASE_SENTINEL_TIMEOUT="${sentinel_budget}" RELEASE_SENTINEL_STALL=1200 \
+			bash "${REPO_ROOT}/scripts/dogfood/release-sentinel.sh" "$stream" >"$out" 2>&1 || rc=$?
+		exit "$rc"
+	) 2>/dev/null || watcher_rc=$?
+	watcher_ticks=$(($(wc -l <"$SENTINEL_TICKS")))
+}
+
+# Defaults every case inherits; a case that means something else says so.
+sentinel_budget=60
+export SENTINEL_MAX_TICKS=3
+export SENTINEL_TICK_HOOK=''
+
+# Real timestamps: the stall check reads the age of the newest event, so a
+# fixture stamped in 1970 is a wedged gate by definition.
+live_t="$SENTINEL_BASE"
+{
+	echo "{\"kind\":\"phase\",\"t\":${live_t},\"phase\":\"gate\",\"state\":\"start\",\"detail\":\"v1.2.3-rc.4\"}"
+	echo "{\"kind\":\"phase\",\"t\":${live_t},\"phase\":\"deploy\",\"state\":\"start\"}"
+} >"$RELEASE_PROGRESS_FILE"
+
+fake_gh in_progress
+live_out="${WORK}/live.out"
+run_watcher "$RELEASE_PROGRESS_FILE" "$live_out"
+# A watcher that reports without a transition is the clock-driven behaviour this
+# design rejects, so the claim is that three of its own polls produced nothing.
+if ((watcher_ticks == 3)) && [[ ! -s "$live_out" ]]; then
+	ok 'still asleep while nothing changes' 'three polls, no report'
+else
+	bad 'still asleep while nothing changes' \
+		"polls $watcher_ticks output $(printf '%q' "$(cat "$live_out")")"
+fi
+
+# The transition lands on the watcher's first poll, which is the synchronisation
+# this case needs: strictly after the baseline, strictly before the next read.
+cat >"${WORK}/hooks/transition" <<HOOK
+#!/usr/bin/env bash
+(( \$1 == 1 )) || exit 0
+echo '{"kind":"phase","t":${live_t},"phase":"e2e","state":"start","detail":"Running the e2e matrix on GAG runners"}' \\
+	>>"${RELEASE_PROGRESS_FILE}"
+HOOK
+chmod +x "${WORK}/hooks/transition"
+
+SENTINEL_TICK_HOOK="${WORK}/hooks/transition"
+run_watcher "$RELEASE_PROGRESS_FILE" "$live_out"
+SENTINEL_TICK_HOOK=''
+if ((watcher_rc == 0)); then
+	want_contains 'the transition woke the watcher' 'RELEASE-SENTINEL EVENT: phase' "$(cat "$live_out")"
+	want_contains 'the wake names the new phase' 'Phase: e2e (start)' "$(cat "$live_out")"
+else
+	bad 'the transition woke the watcher' "exit $watcher_rc after $watcher_ticks poll(s)"
+fi
+
+echo
+echo '== live: an unreadable log does not wake the watcher, a finished run does =='
+# The helpers above decide it; this asserts the watcher is actually wired to
+# them, which is where Q630 went wrong.
+
 # A gate 25 minutes into the e2e leg with nothing relayed: exactly the shape a
 # BlobNotFound log leaves behind.
-quiet_t=$(($(date +%s) - 1500))
+quiet_t=$((SENTINEL_BASE - 1500))
 live_quiet_stream="${WORK}/live-quiet.jsonl"
 {
 	echo "{\"kind\":\"phase\",\"t\":${quiet_t},\"phase\":\"gate\",\"state\":\"start\",\"detail\":\"v1.2.3-rc.4\"}"
@@ -305,59 +388,59 @@ live_quiet_stream="${WORK}/live-quiet.jsonl"
 live_dead_stream="${WORK}/live-dead.jsonl"
 cp "$live_quiet_stream" "$live_dead_stream"
 
-# Sets `watcher` to the launched pid rather than printing it: a command
-# substitution would launch it from a subshell, leaving it unwaitable here.
-start_watcher() {
-	local stream="$1" out="$2"
-	(
-		PATH="${WORK}/bin:${PATH}" RELEASE_SENTINEL_INTERVAL=1 \
-			RELEASE_SENTINEL_TIMEOUT=60 RELEASE_SENTINEL_STALL=1200 \
-			bash "${REPO_ROOT}/scripts/dogfood/release-sentinel.sh" "$stream" >"$out" 2>&1
-	) &
-	watcher=$!
-}
-
 fake_gh in_progress
 live_out="${WORK}/live-quiet.out"
-start_watcher "$live_quiet_stream" "$live_out"
-sleep 3
-if kill -0 "$watcher" 2>/dev/null; then
-	ok 'a 25-minute silence on a live run does not wake it' 'still asleep'
-	kill "$watcher" 2>/dev/null || true
-	wait "$watcher" 2>/dev/null || true
+run_watcher "$live_quiet_stream" "$live_out"
+if ((watcher_ticks == 3)) && [[ ! -s "$live_out" ]]; then
+	ok 'a 25-minute silence on a live run does not wake it' 'three polls, no report'
 else
-	bad 'a 25-minute silence on a live run does not wake it' "exited: $(cat "$live_out")"
+	bad 'a 25-minute silence on a live run does not wake it' \
+		"polls $watcher_ticks output $(printf '%q' "$(cat "$live_out")")"
 fi
 
-# The control. Same silence, same threshold, run over: this one must wake.
+# The control. Same silence, same threshold, run over: this one must wake. The
+# stall is evaluated before the first sleep, so it reports without polling.
 fake_gh completed
 live_out="${WORK}/live-dead.out"
-start_watcher "$live_dead_stream" "$live_out"
-waited=0
-while kill -0 "$watcher" 2>/dev/null && ((waited < 15)); do
-	sleep 1
-	waited=$((waited + 1))
-done
-if kill -0 "$watcher" 2>/dev/null; then
-	kill "$watcher" 2>/dev/null || true
-	bad 'the same silence on a finished run wakes it' 'still running after 15s'
-else
-	wait "$watcher" || true
+run_watcher "$live_dead_stream" "$live_out"
+if ((watcher_rc == 0)); then
 	want_contains 'the same silence on a finished run wakes it' \
 		'RELEASE-SENTINEL EVENT: stalled' "$(cat "$live_out")"
+else
+	bad 'the same silence on a finished run wakes it' \
+		"exit $watcher_rc after $watcher_ticks poll(s)"
 fi
 
 # And the second bug: relaunched against the identical quiet, it must not fire
 # again the instant it starts. The marker the report above wrote is the memory.
 live_out="${WORK}/live-refire.out"
-start_watcher "$live_dead_stream" "$live_out"
-sleep 3
-if kill -0 "$watcher" 2>/dev/null; then
-	ok 'a relaunched watcher does not repeat the stall' 'still asleep'
-	kill "$watcher" 2>/dev/null || true
-	wait "$watcher" 2>/dev/null || true
+run_watcher "$live_dead_stream" "$live_out"
+if ((watcher_ticks == 3)) && [[ ! -s "$live_out" ]]; then
+	ok 'a relaunched watcher does not repeat the stall' 'three polls, no report'
 else
-	bad 'a relaunched watcher does not repeat the stall' "exited: $(cat "$live_out")"
+	bad 'a relaunched watcher does not repeat the stall' \
+		"polls $watcher_ticks output $(printf '%q' "$(cat "$live_out")")"
+fi
+
+echo
+echo '== the budget is spent by the watch, not by the wall clock =='
+# The control for the stubbed clock above: with it frozen, every "still asleep"
+# case would pass whatever the watcher did, so one case has to spend the budget
+# and reach the timeout. Two polls of a 2s budget retire it exactly. The run
+# reads as live again, or the quiet stalls before the budget is ever spent.
+fake_gh in_progress
+sentinel_budget=2
+SENTINEL_MAX_TICKS=10
+live_out="${WORK}/live-budget.out"
+run_watcher "$live_quiet_stream" "$live_out"
+sentinel_budget=60
+SENTINEL_MAX_TICKS=3
+if ((watcher_rc == 0)) && ((watcher_ticks == 2)); then
+	want_contains 'a spent budget reports a timeout' \
+		'RELEASE-SENTINEL EVENT: timeout' "$(cat "$live_out")"
+else
+	bad 'a spent budget reports a timeout' \
+		"exit $watcher_rc after $watcher_ticks poll(s): $(printf '%q' "$(cat "$live_out")")"
 fi
 
 echo
