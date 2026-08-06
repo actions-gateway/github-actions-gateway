@@ -1,5 +1,9 @@
-// Command pipedgate decides whether a Claude Code PreToolUse Bash payload
-// throws away a gate's exit status, and prints the `ask` decision when it does.
+// Command pipedgate decides whether a Claude Code PreToolUse Bash payload is
+// about to make an unchecked claim, and prints the `ask` decision when it is.
+// It answers two families of question, both of them warnings.
+//
+// # A gate whose exit status never reaches the caller
+//
 // Two routes reach the same false green:
 //
 //   - A pipe (Q625). A pipeline's status is its LAST stage's, so
@@ -56,6 +60,36 @@
 // do not suppress that one; ending the command in `exit $rc` — or in the gate
 // itself — does.
 //
+// # A command whose correctness depends on repository state
+//
+// Two moments where the rule is written down and the slip happens anyway,
+// because it happens in flow rather than while reading CONTRIBUTING.md:
+//
+//   - `git push` on a base that moved into the branch's own files (Q665). A
+//     stale base is benign — the merge queue validates the candidate merge —
+//     so this warns only when what `main` gained overlaps what the branch
+//     changes, which is where a queue kickback costs a full check cycle a local
+//     re-run would have caught. Measured 2026-08-05: `main` takes ~47 merges a
+//     day, so the bare "the base moved" signal is non-empty at nearly every
+//     push and a warning on it would be accepted reflexively.
+//   - `gh pr create` opening a PR whose files an open PR already changes
+//     (Q668). Duplicated or mutually-invalidating work, which a PR title does
+//     not reveal.
+//
+// Both discount the merge-driver-owned files (overlap_ignore in the registry):
+// nearly every PR edits docs/STATUS.md, and a conflict there is resolved by row
+// ID rather than reviewed.
+//
+// These are the only checks that cost a subprocess, and they run only after the
+// parse finds their trigger at command position — two `git diff`s for the push,
+// one `gh pr list` round trip for the create. Both probes fail silent on any
+// error, which is what offline, an expired or rate-limited gh token, a shallow
+// clone, and a missing origin/main all reduce to; `git` is bounded at 3 s and
+// `gh` at 5 s so a dead network costs a pause rather than a stall. The base is
+// read from the LOCAL origin/main ref — the hook does not fetch, because a
+// PreToolUse hook must not mutate refs behind the session — so a session that
+// has not fetched recently gets an under-report, never a false one.
+//
 // Quoting and heredocs need no special case. A gate named inside a string or a
 // heredoc body parses as a literal, never a command, so a commit message
 // quoting `make check | tail` is silent by construction. The one asymmetry is
@@ -77,6 +111,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 type payload struct {
@@ -131,7 +166,15 @@ func run(registryPath string, stdin io.Reader, stdout io.Writer) int {
 		return 0
 	}
 
-	reason := Decide(p.ToolInput.Command, p.ToolInput.RunInBackground, c)
+	// The registry sits at <root>/.claude/, and the probes must run against the
+	// worktree the hook was installed in rather than wherever the tool was
+	// exec'd from.
+	root, err := filepath.Abs(filepath.Dir(filepath.Dir(registryPath)))
+	if err != nil {
+		return 0
+	}
+
+	reason := Decide(p.ToolInput.Command, p.ToolInput.RunInBackground, c, execRepo{dir: root, baseRef: c.baseRef})
 	if reason == "" {
 		return 0
 	}

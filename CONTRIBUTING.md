@@ -211,6 +211,13 @@ Intel i7 and 102 s on an 18-core M5 Max —
 [measurements](docs/plan/archive/local-gate-throughput.md)), so the longer your gate,
 the more of `main`'s merge traffic lands inside it.
 
+**A hook asks about the overlap at the push itself** (Q665), because the rule above is read
+before the gate starts and the push happens after it. It fires only when what `main` gained
+overlaps the files this branch changes. `main` takes ~47 merges a day, so "the base moved"
+alone is true at nearly every push and would be accepted without reading. It reads the local
+`origin/main` ref and never fetches, so it under-reports until you do, and it stays silent
+when the probe fails. The merge-driver-owned files are discounted.
+
 Whatever happens, verify what actually landed **by content, not SHA** — see below.
 
 ### Re-check concurrent work before opening
@@ -227,6 +234,12 @@ opened mid-session on a topic that overlapped the Q577 change, and carried evide
 disproving the remedy that change was about to ship in `stop.sh`'s error text. The title
 said nothing about that. Revise before opening; if the other PR's evidence invalidates
 yours, put that on the Queue row instead of shipping around it.
+
+**A hook asks when it sees the overlap** (Q668): at `gh pr create` it compares this branch's
+files against every open PR's and names the ones that collide, discounting the
+merge-driver-owned files that every branch edits. It costs one `gh pr list` call and stays
+silent when that fails (offline, or a rate-limited token), so it can miss an overlap but
+never blocks the create.
 
 **The jointly-red case is machine-checked at merge time.** Two individually green PRs
 used to merge into a red `main` because a PR gate only ever sees its own base — #1062
