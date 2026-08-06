@@ -3124,6 +3124,16 @@ auditable and resumable.</p>
   green-ness, freshness, and the jointly-red case. It does <strong>not</strong> decide whether a
   change should land, so enqueueing is the maintainer's action, taken after their
   review. Neither workers nor the dispatcher enqueue.</li>
+<li><strong>One carve-out: restoring an enqueue the maintainer already made</strong> (Q692). The
+  queue evicts a PR when something merges ahead of it and dirties the branch, and
+  that eviction is mechanical — it says nothing about whether the change should
+  land, because the maintainer already answered that by enqueueing. A worker may
+  rebase and re-enqueue <strong>only</strong> when
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>scripts/agent/pr-requeue-eligible.sh</code></a>
+  says so, which requires a prior human enqueue, an open non-draft PR, no current
+  queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned
+  files. A conflict anywhere else changes what was reviewed, so it wakes the
+  maintainer instead. A <strong>first</strong> enqueue is still never an agent's to make.</li>
 <li><strong>What the dispatcher owes at handoff</strong>, so the review is cheap rather than a
   re-derivation: which heavy gates ran and on which head SHA, what the scope review
   found, and the mergeability state as of <em>now</em>.</li>
