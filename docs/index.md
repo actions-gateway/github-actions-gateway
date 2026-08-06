@@ -54,7 +54,7 @@ kubectl apply --server-side -f \
 
 ## What GAG gives you
 
-Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc): no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) · [See every feature →](features.md)
+Most of these ladder up the same way. Enforceable quotas and self-healing disruption make shared capacity **safe to actually use**; that is what lets you bin-pack tenants onto expensive nodes and run on preemptible capacity, which is where the [**lower cost**](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) comes from. Fewer manual reruns and fewer pages are what you feel first. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) · [See every feature →](features.md)
 
 </div>
 
@@ -146,6 +146,7 @@ Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-
     - `baseline` Pod Security Admission per namespace
     - Default-deny NetworkPolicies
     - Credentials never in env vars
+    - [Workload identity](design/05-security.md#57-workload-identity-the-no-pem-delegation-model) keeps the App key out
     - Signed images, SBOM, and SLSA provenance
     - [Kata micro-VM workers](operations/kata-dind-workloads.md), proven in our own CI
 
@@ -207,13 +208,13 @@ GAG targets a specific audience: teams that **must** self-host runners and run t
 </div>
 </div>
 
-<p class="gag-fit-note" markdown="span">:material-information-outline: **Not your setup?** If you're happy running on a vendor's infrastructure, a managed-SaaS runner is the better fit. GAG competes with Actions Runner Controller (ARC) for self-hosted, multi-tenant clusters, not on raw build speed.</p>
+<p class="gag-fit-note" markdown="span">:material-information-outline: **Not your setup?** Three cases where something else is the better answer, and we would rather say so. If you are happy running on a vendor's infrastructure, a managed runner service wins on speed and setup. If managed Kubernetes is cheap where you are and your CI fits in one cloud, a **cluster per tenant** in its own project isolates harder than any shared cluster can. And if you run one team on one cluster, [ARC](https://github.com/actions/actions-runner-controller) is a reasonable choice and is what GAG is built on the same protocol as. GAG is for the case where the nodes are big and expensive, several teams have to share them, and that sharing has to be safe.</p>
 
 <div class="gag-section-intro" markdown>
 
 ## How it fits together
 
-A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its `ActionsGateway`. Jobs are acquired with the **same single-acquirer runner-scale-set protocol ARC uses**, the shipped default. GAG is therefore a strict superset of ARC's model, not a different-architecture trade-off.
+A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its `ActionsGateway`. Jobs are acquired with the **same single-acquirer runner-scale-set protocol ARC uses**, through the same [`actions/scaleset`](https://github.com/actions/scaleset) client library, and it is the shipped default. So `runs-on` keeps working and the protocol is not the difference. What differs is that the acquisition decision lives in the control plane rather than in the runner pod, which is what lets a job be declined before it is claimed.
 
 </div>
 
