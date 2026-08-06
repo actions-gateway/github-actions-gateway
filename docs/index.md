@@ -100,8 +100,8 @@ Most of these ladder up the same way. Enforceable quotas and self-healing disrup
     Each tenant's own proxy pool:
 
     - Allow-list runners on Enterprise Managed Users
-    - No shared cluster allow-list
-    - Flagged tenants stay isolated
+    - Live-validated on GKE, 2026-07-13
+    - [Stable IP needs a gateway or cloud NAT under it](design/network-architecture.md#per-tenant-egress-ip-the-source-ip-mechanism)
     - v2: proxy optional
 
 -   :material-feather:{ .lg .middle } __Lower listener overhead__
