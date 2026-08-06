@@ -13,7 +13,7 @@ bound, or a named exception, the paragraph stays long and the phase says so.
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Top-level prose paragraphs in the numbered design chapters (`01`–`08`) | ✅ Done |
+| 1 | Top-level prose paragraphs in the numbered design chapters (`01`–`08`) | ✅ Done, one paragraph deliberately left long |
 | 2 | Long list items in `02-architecture.md` (24) and `04-operational-flows.md` (5) | ❌ Open |
 | 3 | `appendix-h-v2-api-decomposition.md` (16 prose) and the other design appendices | ❌ Open |
 | 4 | `docs/operations/`, starting with `troubleshooting.md` (5 prose, 3 list, 2 quote) | ❌ Open |
@@ -106,9 +106,11 @@ and after. Every token the diff drops has to be justified one by one: a `;` that
 became a `.`, an `(a)` that became a `*`, an article dropped by a deliberate
 rewrite. A content word in that list is a lost qualifier.
 
-Phase 1 reconciled to +28 tokens across five files, every one accounted for, and
-to +66 more once the `####` subheadings landed, which the same check showed to be
-exactly the heading texts and nothing else.
+Phase 1 reconciled to +16 tokens across five files, every one accounted for, and
+to +64 more once the `####` subheadings landed, which the same check showed to be
+exactly the heading texts and nothing else. `01-executive-summary.md` and
+`07-test-plan.md` both finished on an *identical* multiset, which is what a pure
+paragraph break looks like and is the target for every file.
 
 **Reconciliation does not prove the split is correct.** It catches a *deletion*.
 It is blind to words the edit *adds*, and that is where the one real defect in
@@ -123,10 +125,15 @@ So the check has two halves, and the second one is manual: reconcile the tokens,
 then re-read every paragraph the split *reopened* and ask what its first pronoun
 now points at.
 
+**A non-zero token delta on a prose split is itself a warning.** Every added word
+is connective text invented to hold a seam together, and inventing connective
+text is how a claim the source never made gets in. Where the delta will not go to
+zero, that is the signal the paragraph did not want splitting.
+
 ## Phase 1: what changed
 
-Zero top-level prose paragraphs of 140 words or more remain in `01`–`08`. The
-corpus went from 154 such paragraphs to 124.
+One top-level prose paragraph of 140 words or more remains in `01`–`08`, left
+long on purpose. The corpus went from 154 such paragraphs to 125.
 
 Five files: `01-executive-summary.md`, `02-architecture.md`,
 `04-operational-flows.md`, `05-security.md`, `07-test-plan.md`.
@@ -144,9 +151,29 @@ One wording fix rode along, because the split exposed it. The sentence after the
 three-disruption enumeration read "on detecting either", left over from a
 two-disruption version of the list. It now reads "on detecting any of these".
 
-Nothing was left long on precision grounds in Phase 1. Every paragraph in these
-five chapters had a seam that cost nothing to cut. Expect that to stop holding in
-Phase 3, where `appendix-h` reasons about API decomposition across versions.
+### The one paragraph left long
+
+The `priorityTiers` paragraph in
+[`01-executive-summary.md`](../design/01-executive-summary.md) stays at 152
+words, unchanged from before this plan existed.
+
+It was split, and the split broke it. The paragraph runs
+field → tier behaviour → concurrency cap → who owns the guardrails → what a
+platform team can therefore express, and the closing sentence's "This" reaches
+back across all of it to `priorityTiers`. Moving the guardrail sentence into its
+own paragraph put a second candidate antecedent between the pronoun and its
+referent, and the reopened sentence then read as though the allowlist and the
+preemption policy were what express "5 slots, burst 20, cap 30". They are not.
+
+Two later attempts to keep the split and repair the referent both required
+inventing connective text that made claims the source does not
+("the two settings that keep this safe"). At 152 words, twelve over the line, the
+rule was not worth that. The paragraph is one idea — it just has a long chain of
+consequence, which is what the rule's exception is for.
+
+That is the shape to expect in Phase 3, where `appendix-h` reasons about API
+decomposition across versions. Everything else in these five chapters had a seam
+that cost nothing to cut.
 
 Two sections in `05-security.md` came out of the split as walls of short
 paragraphs rather than one long one, so they gained `####` subheadings: four
@@ -163,7 +190,12 @@ followed immediately by a `####` appears nowhere else in `docs/design/` or
 Recorded because the corrections are the useful part, and because a reviewer
 reading only the final diff cannot see them:
 
-- **The `priorityTiers` referent**, above. The one defect that changed meaning.
+- **The `priorityTiers` referent**, above. The one defect that changed meaning,
+  and the only one where the answer was to revert rather than repair. The first
+  repair kept the split and rewrote around the seam; that is what introduced
+  "the two settings that keep this safe", a purpose the source never states.
+  Repairing damage from a split with more prose is how the second defect gets
+  written.
 - **A broken contrast pair.** `:8443` (mTLS) and `:8081` (plaintext probes) in
   `02-architecture.md` explain each other, and the first split put the
   `TokenReview` rationale between them. Regrouped by port instead, with the
