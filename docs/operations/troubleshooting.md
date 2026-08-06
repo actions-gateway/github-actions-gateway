@@ -27,6 +27,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
 - [Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist](#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
+- [ScaleSet RunnerSet Stuck Not Ready: `ScaleSetListenerStartFailed` Naming the Guard ConfigMap](#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap)
 - [AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing](#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing)
 - [AGC Exits at Startup: Proxy CA Cert Present but Unreadable](#agc-exits-at-startup-proxy-ca-cert-present-but-unreadable)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
@@ -1321,6 +1322,34 @@ kubectl describe runnergroup -n <namespace> <name>
 
 ---
 
+## ScaleSet RunnerSet Stuck Not Ready: `ScaleSetListenerStartFailed` Naming the Guard ConfigMap
+
+**Symptoms.** A `ScaleSet`-protocol `RunnerSet` reports `Ready=False` with reason `NoActiveSessions`, and `kubectl describe runnerset` shows a Warning Event with reason `ScaleSetListenerStartFailed` whose message contains `load concluded-job guards`, typically ending `holds unparseable state (delete the ConfigMap to reset it)`.
+
+**What happened.** Before its listener polls, the AGC loads the set's `scaleset-guards-<runnerset>` ConfigMap (Q606): the record of jobs it concluded whose queue messages may not be deleted yet, written so a hard-killed AGC does not provision workers for jobs that are over. An unreadable or unparseable ConfigMap fails the listener start deliberately: polling without the guards would silently reopen that replay window, so the failure is surfaced instead, and the reconciler keeps retrying. The AGC writes only well-formed JSON here, so unparseable state means the ConfigMap was edited by hand or corrupted.
+
+**Diagnostics.**
+
+```sh
+# The event carries the load error verbatim
+kubectl describe runnerset -n <namespace> <name>
+```
+
+```sh
+# Inspect the guard state (a JSON object with completed/abandoned job-id lists)
+kubectl get configmap -n <namespace> -l actions-gateway.com/runner-set=<name> -o yaml
+```
+
+**Resolution.** Delete the ConfigMap; the next reconcile starts the listener with empty guards and re-creates it on the next conclusion:
+
+```sh
+kubectl delete configmap -n <namespace> scaleset-guards-<name>
+```
+
+The cost of the reset is bounded and one-time: if a hard kill had stranded undeleted messages, their assignments replay once and may each provision one short-lived worker for a job that is already over (the pre-Q606 restart behaviour). A transient apiserver error in the same event message needs no action at all; the reconciler retries and the listener starts once the read succeeds.
+
+---
+
 ## AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing
 
 **Symptoms.** A per-gateway AGC (`<gateway>-agc`) never becomes Ready, and its logs end at:
@@ -1651,7 +1680,7 @@ kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-contro
 **Resolution.** A low background rate needs no action — the reap returns the slot and the node, and the workflow run was already over. Treat a *sustained* or *bursty* rate as the signal:
 
 - A burst right after an AGC restart, on a release before Q583, is the queue replay; it is self-limiting. On a current release the queue is pruned as jobs conclude, so a restart burst instead means messages are **not** being deleted — check the AGC log for two lines. `delete acked message` names the message id and the error each *rejected* delete returned. `queue reported the acked message already gone` is the quieter one: the delete was accepted but removed nothing, which is what a backend that has stopped serving the delete endpoint answers. Either way the queue grows and every subsequent restart is worse; an isolated already-gone line is harmless, a steady stream of them means nothing is being pruned at all.
-- **One or two after a restart, with neither of those lines in the log, is the hard-kill window (Q603).** A job concludes in the AGC's memory a moment before its message is deleted at GitHub. A graceful stop flushes those deletes on the way out, but a pod killed outright — SIGKILL at the end of its grace period, an OOM kill, a lost node — cannot, so the message survives and the next process reads it. Nothing is wrong with the deployment; confirm it by the pod's last state (`kubectl get pod -n <namespace> <agc-pod> -o jsonpath='{.status.containerStatuses[0].lastState}'`) showing a non-zero exit or `OOMKilled` rather than a clean termination. A *recurring* burst means the AGC is being killed rather than stopped — an under-set memory limit, or a grace period shorter than its shutdown.
+- **One or two after a restart, with neither of those lines in the log, is the hard-kill window (Q603) — on releases before Q606.** A job concludes in the AGC's memory a moment before its message is deleted at GitHub. A graceful stop flushes those deletes on the way out, but a pod killed outright (SIGKILL at the end of its grace period, an OOM kill, a lost node) cannot, so the message survived and the next process read it. Since Q606 the conclusion is persisted to the set's `scaleset-guards-*` ConfigMap *before* any delete is issued, so a restarted AGC recognises the replayed assignment and never builds the pod: the residue of a hard kill is at most a re-derived conclusion in the log, not a worker. Seeing one on a current release means the kill landed in the moment between concluding and the ConfigMap write, which is possible but rare; confirm the kill itself by the pod's last state (`kubectl get pod -n <namespace> <agc-pod> -o jsonpath='{.status.containerStatuses[0].lastState}'`) showing a non-zero exit or `OOMKilled` rather than a clean termination. A *recurring* burst means the AGC is being killed rather than stopped — an under-set memory limit, or a grace period shorter than its shutdown.
 - A steady rate with no restarts means jobs are being cancelled faster than pods start. Look at pod startup time (`kubectl describe pod` → image pull duration) rather than at the AGC.
 
 The thirty-second grace is a fixed constant, not a CRD field: the pod has not started, so there is no runner shutdown to wait out — the grace exists only to let a pod that was already mid-start reach `Running`, where the longer [`orphaned_running`](#worker-pod-reaped-while-running-workerpodorphanedrunning) grace takes over.
