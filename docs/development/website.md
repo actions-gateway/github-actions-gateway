@@ -313,6 +313,25 @@ symptom is "my CSS does nothing," with nothing in the build to explain it. A
 utility that must never change behaviour and a component that must change it at a
 breakpoint are different classes, even when the declaration is identical.
 
+### Page-scoped table rules
+
+Two pages pin their own table columns, each selected by an element only that page
+has: `.md-content__inner:has(.gag-vs-hero)` for the why-GAG comparison, and
+`.md-typeset:has(> h1#api-reference)` for the generated
+[API reference](../reference/api.md). Both are there for the same reason. `auto`
+table layout splits width by each column's max-content demand, so a column of
+paragraphs takes width from the columns that carry the row's identity, and the
+split moves as the container does. Pin the columns with `table-layout: fixed`
+rather than tuning the prose.
+
+The API reference block also restates the header background it overrides. The
+global rules tint the **last** column, an idiom from the comparison table where
+last means GAG, and they apply everywhere, because the reveal JS classes every
+plain table (see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs)).
+On the reference page the last column is Validation, so the tint reads as an
+emphasis the page does not mean; dropping it means putting the ordinary `th`
+background back, not just clearing the accent.
+
 ### Changing the hero headline
 
 The headline's type size and its two breakpoints are **derived from the longest

@@ -101,10 +101,17 @@ Three inputs shape the output, all under
   actually embed (`k8s.io/api` v0.36.x is Kubernetes 1.36).
 - **`templates/*.tpl`** — a fork of the tool's built-in markdown set. A
   `--templates-dir` replaces the whole set, so all four are present even where
-  only one changed. Two changes: the page preamble in `gv_list.tpl`, and a
+  only one changed. Three changes: the page preamble in `gv_list.tpl`; a
   regex in `gv_details.tpl`/`type.tpl` that renders godoc's `# Section` heading
-  syntax as a bold lead. Left alone those become `<h1>`s in the middle of the
-  page and put package-internal asides in the site TOC beside the kinds.
+  syntax as a bold lead (left alone those become `<h1>`s in the middle of the
+  page and put package-internal asides in the site TOC beside the kinds); and
+  the `field_doc` helper in `type_members.tpl` that every doc cell renders
+  through. The tool's `markdownRenderFieldDoc` turns *every* newline into
+  `<br />`, so a description reached the table cell still wrapped at the Go
+  source's ~80 columns and broke mid-sentence at a width the browser never
+  chose; `field_doc` joins the soft wraps back into prose and keeps a break only
+  for a blank line or a list item. **Doc comments are reflowed, so write them
+  for godoc**: the site no longer inherits their wrap points.
   **Re-diff the fork against
   `tools/vendor/github.com/elastic/crd-ref-docs/templates/markdown/` when the
   pinned `crd-ref-docs` version moves.** A Dependabot bump that changes the

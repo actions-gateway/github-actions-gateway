@@ -1099,6 +1099,63 @@ body[data-md-color-scheme="slate"] {
   }
 }
 
+/* The generated API reference (docs/reference/api.md): every type renders as the
+   same Field / Description / Default / Validation table, so the columns are
+   pinned rather than left to auto layout. Auto layout splits width by each
+   column's max-content demand, which the descriptions dominate and which shifts
+   with the container: measured at a 748px content column, Description held 38%
+   while Default held 13% for values never longer than "kubernetes"; widen the
+   container and the split inverts, starving Field until `githubCABundleRef` and
+   its type link break mid-word. Scoped by the page's own h1, the same :has()
+   page-scoping the comparison table above uses. */
+.md-typeset:has(> h1#api-reference) table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.md-typeset:has(> h1#api-reference) table th:nth-child(1) {
+  width: 24%;
+}
+
+.md-typeset:has(> h1#api-reference) table th:nth-child(2) {
+  width: 50%;
+}
+
+/* Every default in the generated page is a short scalar (longest: "kubernetes"),
+   so this column only needs room for its own header. */
+.md-typeset:has(> h1#api-reference) table th:nth-child(3) {
+  width: 10%;
+}
+
+/* Enum tables are Field / Description only; the widths above would leave the
+   description at half the row with nothing beside it. */
+.md-typeset:has(> h1#api-reference) table th:nth-child(2):last-child {
+  width: 76%;
+}
+
+/* Rows are tall and uneven (a one-line default beside a five-line description),
+   so cell text starts at the top rather than floating in the middle. */
+.md-typeset:has(> h1#api-reference) table th,
+.md-typeset:has(> h1#api-reference) table td {
+  vertical-align: top;
+}
+
+/* Undo the "last column = GAG" accent from the comparison-table rules above:
+   here the last column is Validation, and tinting it reads as an emphasis the
+   page does not mean. */
+.md-typeset:has(> h1#api-reference) table th:last-child {
+  color: inherit;
+  background: var(--md-default-fg-color--lightest);
+}
+
+.md-typeset:has(> h1#api-reference) table td:last-child {
+  background: none;
+}
+
+.md-typeset:has(> h1#api-reference) table tbody tr:hover td {
+  background: color-mix(in srgb, var(--md-accent-fg-color) 4%, transparent);
+}
+
 /* Verdict icons in the comparison table: green for a GAG win, warm red for an
    ARC shortfall (matching the proof-card and problem-card colour language). */
 .md-typeset .gag-yes,
