@@ -70,7 +70,7 @@ Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-
     - Platform-owned quota cap
     - Blocked jobs auto-recover
     - Zero manual reruns
-    - Self-serve `ActionsGateway` custom resources, no platform ticket per change
+    - Self-serve `ActionsGateway`, no ticket per change
 
 -   :material-layers-triple:{ .lg .middle } __No blocked critical jobs__
 
@@ -99,7 +99,7 @@ Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-
 
     Each tenant's own proxy pool:
 
-    - Allow-list runners on GitHub Enterprise Managed Users (EMU)
+    - Allow-list runners on Enterprise Managed Users
     - No shared cluster allow-list
     - Flagged tenants stay isolated
     - v2: proxy optional

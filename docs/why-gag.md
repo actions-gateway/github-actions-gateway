@@ -41,7 +41,7 @@ letting tenants run their own runners.
     A quota-blocked or evicted job can't recover on its own:
 
     - ARC retries the same runner ([30 s loop](https://github.com/actions/actions-runner-controller/pull/4305)), then marks it `Failed`
-    - the job sits in GitHub's queue until GitHub's queue timeout cancels it (at least 24 h, up to 48 h)
+    - the job queues at GitHub until its 24–48 h timeout cancels it
     - cleared and rerun by hand ([#4155](https://github.com/actions/actions-runner-controller/issues/4155), [#4203](https://github.com/actions/actions-runner-controller/issues/4203)), so teams avoid enforcing quotas
 
 -   :material-trending-down:{ .lg .middle } __Critical jobs starve__
@@ -70,7 +70,7 @@ letting tenants run their own runners.
 
     Every tenant is a manual checklist:
 
-    - namespace, quota, Role-Based Access Control (RBAC), scale sets, NetworkPolicies, egress
+    - namespace, quota, RBAC, scale sets, NetworkPolicies, egress
     - per-team setup; every later change is a ticket
 
 </div>
@@ -200,7 +200,7 @@ ships as reconciled defaults, not a post-install project.
 
     Untrusted job code is boxed in by default:
 
-    - `baseline` Pod Security Admission (PSA) per namespace
+    - `baseline` Pod Security Admission per namespace
     - Default-deny network: DNS + own proxy only
     - App keys read-only; never in env, never cached
     - Controller writes confined to tenant namespaces
@@ -223,7 +223,7 @@ ships as reconciled defaults, not a post-install project.
 
     - Default-deny ingress, cluster-only DNS
     - Per-tenant egress IPs, mutual-TLS metrics
-    - Signed images + Software Bill of Materials (SBOM) + Supply-chain Levels for Software Artifacts (SLSA) provenance
+    - Signed images, SBOM, and SLSA provenance
 
 </div>
 </div>
