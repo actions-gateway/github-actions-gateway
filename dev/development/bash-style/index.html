@@ -2461,6 +2461,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-loop-must-be-able-to-stop-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A loop must be able to stop itself
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#shared-helpers-and-makefile-wiring" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2539,9 +2550,18 @@
 <li>Use <code>[[ ]]</code> for conditionals and <code>(( ))</code> for arithmetic — never <code>[ ]</code>.</li>
 <li>Quote all variable expansions (<code>"$var"</code>, <code>"${arr[@]}"</code>) unless word-splitting is explicitly intended — annotate that intent with a comment.</li>
 <li>When background processes need cleanup, register a <code>trap cleanup EXIT INT TERM</code> function that kills tracked PIDs.</li>
+<li>Every loop must be able to stop itself: a bounded iteration count or a stop-file it polls, never an unbounded loop that an external kill has to end (see <a href="#a-loop-must-be-able-to-stop-itself">§ A loop must be able to stop itself</a>).</li>
 <li>Prefer <code>awk -v name="$value" '...'</code> over <code>sed</code> for substitutions involving variables — <code>sed</code> delimiter and metacharacter (<code>/</code>, <code>&amp;</code>, <code>\</code>) issues are a common source of bugs.</li>
 <li>When capturing the exit code of a pipeline via <code>wait</code>, wrap it in a subshell (<code>( cmd | other ) &amp;</code>) so <code>$!</code> is the subshell's PID and <code>wait</code> reflects the pipeline result under <code>pipefail</code>, not just the last process's exit code.</li>
 </ul>
+<h2 id="a-loop-must-be-able-to-stop-itself">A loop must be able to stop itself<a class="headerlink" href="#a-loop-must-be-able-to-stop-itself" title="Permanent link">&para;</a></h2>
+<p>An unbounded loop can only be ended from outside, and that external kill is the problem: it gets issued as a <code>pkill -f &lt;pattern&gt;</code>, the pattern matches every parallel worktree, and it carries no record of whose run it is hitting (<a href="../testing/#stopping-a-run-name-the-target-never-the-program">testing.md § Stopping a run</a>). Give the loop its own stop condition and the kill is never needed.</p>
+<ul>
+<li>A <strong>bounded iteration count</strong> when the work is countable: <code>for i in $(seq 1 40)</code>.</li>
+<li>A <strong>stop-file the loop polls</strong> when it is not: <code>while [[ ! -f "${stop_file}" ]]</code>. Touching the file ends the run through the normal exit path, so the cleanup <code>trap</code> still runs.</li>
+</ul>
+<p><strong>Do not reach for <code>timeout</code>.</strong> It ships with GNU coreutils and is absent from a stock macOS, where neither <code>timeout</code> nor <code>gtimeout</code> is on <code>PATH</code>. A script that depends on it runs unbounded on a dev Mac while looking correct. That is the same silent-absence trap that broke Q690's load harness, which backgrounded its generators with <code>setsid</code>: also absent on macOS, so all three died instantly and 40 samples passed against an idle machine, reading as strong evidence of no flake. <code>timeout</code> is also still a kill, just one on a timer, so the signal can skip the cleanup <code>trap</code> that a self-terminating loop unwinds through.</p>
+<p>This applies hardest to throwaway harnesses under the gitignored <code>tmp/</code>. Being a throwaway is exactly why such a script gets none of the review a tracked one does, and it is where every unbounded loop in this repo's history has actually come from.</p>
 <h2 id="shared-helpers-and-makefile-wiring">Shared helpers and Makefile wiring<a class="headerlink" href="#shared-helpers-and-makefile-wiring" title="Permanent link">&para;</a></h2>
 <p>Before writing a new helper function, check <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a> — <code>require_cmd</code>, <code>workspace_modules</code>, and the throttle setup already live there. The root <code>Makefile</code> keeps recipes as thin target→script wiring so the logic stays shellcheck-covered; see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> for the script inventory and parameter conventions.</p>
 <p><strong>A new script goes in a <code>scripts/&lt;group&gt;/</code> directory, never at the top level.</strong> The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> and the rule is explained in <a href="../testing/#scripts-is-grouped-by-blast-radius">testing.md § <code>scripts/</code> is grouped by blast radius</a>. Put a <code>*-test.sh</code> beside its subject.</p>

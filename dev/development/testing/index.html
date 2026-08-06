@@ -2799,6 +2799,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#stopping-a-run-name-the-target-never-the-program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stopping a run: name the target, never the program
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ad-hoc-shell-varies-dont-rely-on-word-splitting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3984,6 +3995,16 @@
 <p>Then confirm with <code>grep -n CHECK_EXIT check.log</code> alongside the <code>ok</code> / <code>FAIL</code> lines. Either way the rule is the same: confirm a pass by reading the output, never from the reported exit code alone.</p>
 <p><strong>An empty result set is not a pass.</strong> The recorded status can be a clean <code>0</code> for a run that never happened — a <code>$(MAKE)</code> typo (make syntax; the shell reads it as command substitution) or any unresolvable command leaves a log holding nothing but a <code>command not found</code>, and the trailing <code>echo</code> dutifully records success. So verify by presence, not absence of failure: the log must contain the <code>ok &lt;package&gt;</code> line for every package the tier was supposed to cover. Zero <code>ok</code> lines and zero <code>FAIL</code> lines means the suite did not run.</p>
 <p>Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/<code>sleep</code>-poll forms, and its slow-command registry in <code>.claude/foreground-guard.json</code> names the tiers above (<code>make test-race</code>, <code>make test-integration</code>, the <code>e2e</code> targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.</p>
+<h3 id="stopping-a-run-name-the-target-never-the-program">Stopping a run: name the target, never the program<a class="headerlink" href="#stopping-a-run-name-the-target-never-the-program" title="Permanent link">&para;</a></h3>
+<p>Killing a run to reclaim compute is legitimate and often correct. The machine is shared across parallel worktree sessions, <code>make check</code> is long, and the heavy tiers (the kind e2e clusters, the dogfood validation gate) are effectively singletons that do not run concurrently on a small host. Abandoning a run whose premise died is the right call, not a failure of discipline.</p>
+<p>What is never right is naming the <strong>program</strong> rather than the <strong>run</strong>. <code>pkill -f "usr/bin/make check"</code> matches every parallel session's gate, not just the one you started. Across local session transcripts, of 38 shell-kill targets exactly two carried a worktree anchor; the rest were bare program names (<code>ginkgo run --tags e2e</code>, <code>e2e.test</code>, <code>.build/ginkgo</code>, <code>make scripts-test</code>). Q690's load harness cleaned up with <code>pkill -f 'make scripts-test'</code>, which matched the <code>make check</code> running for verification in the same worktree: the gate died mid-run, a sampled suite that had printed <code>all assertions passed</code> was recorded as a failure, and both contaminated results read as genuine red.</p>
+<p>In order of preference:</p>
+<ul>
+<li><strong>Stop the background task by its handle.</strong> The launching task is the only reference that cannot match somebody else's process.</li>
+<li><strong>If the handle is gone</strong> (a compaction drops the task id while the process keeps running), run <code>pgrep -fl &lt;pattern&gt;</code> first, read what it <em>would</em> hit, then kill by PID.</li>
+<li><strong>If a pattern is unavoidable</strong>, anchor it to the worktree path. Every process a session starts carries its worktree directory in the argv or cwd, so <code>pkill -f "&lt;worktree&gt;/.build/ginkgo"</code> is safe where <code>pkill -f ginkgo</code> is not.</li>
+</ul>
+<p><strong>Never kill another worktree's run to reclaim a singleton.</strong> A process you did not start carries no ownership record you can read, so "it looks stale" is a guess, and a live run and an orphan are indistinguishable from the outside. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/lease.sh"><code>scripts/dogfood/lib/lease.sh</code></a> is the pattern that makes that legible for the billable cluster: a pid plus a command-line marker, host-wide so it survives across worktrees, and no-lease-no-reclaim. No local tier has an equivalent yet (Q707). Note that a lease directory has to be host-wide to be worth anything, which puts it outside the worktree: workspace-guard prompts on every access until its opt-in extra-roots ship (workspace-guard Q23).</p>
 <h3 id="ad-hoc-shell-varies-dont-rely-on-word-splitting">Ad-hoc shell varies: don't rely on word-splitting<a class="headerlink" href="#ad-hoc-shell-varies-dont-rely-on-word-splitting" title="Permanent link">&para;</a></h3>
 <p>Committed scripts under <code>scripts/</code> are <code>#!/usr/bin/env bash</code> and follow <a href="../bash-style/">bash-style.md</a>, so their behaviour is pinned by the shebang. <strong>Ad-hoc commands are not pinned</strong> — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images. Check yours with <code>echo $0</code> rather than assuming.</p>
 <p>That matters because the shells disagree on <strong>word-splitting of unquoted parameter expansions</strong> — bash and <code>sh</code> split, zsh does not:</p>
