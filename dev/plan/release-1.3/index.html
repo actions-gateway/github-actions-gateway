@@ -3059,8 +3059,8 @@ a window Q583 narrows rather than closes.</p>
 restart window. The fix pins the test to the path Q583 actually repairs — wait for
 the stub's <code>delete-message</code> call, not the counter — and the residual window is filed
 as Q603 rather than absorbed into a green test — since
-<a href="../q603-settle-delete-gap/">closed</a> for every stop the process can see coming, with
-the hard-kill remainder as <a href="../../STATUS/#Q606">Q606</a>. Deleting the
+<a href="../archive/q603-settle-delete-gap/">closed</a> for every stop the process can see coming,
+with the hard-kill remainder closed in turn by Q606's persisted guards. Deleting the
 <code>settle</code> call still turns the test red, now naming the missing release directly.</p>
 <p><strong>Q604 is the third gate, and the one that says something about the suite.</strong> The Q602
 fix's own CI run went red again in the same test, but at a different point — its

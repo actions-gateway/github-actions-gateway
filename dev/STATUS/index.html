@@ -2733,19 +2733,11 @@
 </tr>
 <tr>
 <td><a id="Q689"></a>Q689</td>
-<td><a href="../plan/q603-settle-delete-gap/#what-this-does-not-close">A restart before the listener reads a concluded job's <code>JobCompleted</code> re-provisions it</a></td>
+<td><a href="../plan/archive/q603-settle-delete-gap/#what-this-does-not-close">A restart before the listener reads a concluded job's <code>JobCompleted</code> re-provisions it</a></td>
 <td><code>bug</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>Measured 2026-08-05: 4/60 graceful stops taken after the job concluded at GitHub but before the listener read its <code>JobCompleted</code> re-provisioned on restart. Q606 scopes this residual to a hard kill; this needs none.</td>
-</tr>
-<tr>
-<td><a id="Q606"></a>Q606</td>
-<td><a href="../plan/q603-settle-delete-gap/#the-residual-stated-precisely">A hard-killed AGC still replays an assignment it concluded but had not yet deleted</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Q597 bounded the guards, so persisting them is the sharper candidate; the other needs a live measurement. The plan doc states which.</td>
 </tr>
 <tr>
 <td><a id="Q595"></a>Q595</td>
@@ -2772,12 +2764,12 @@
 <td>Inv. H covered only the winner's own delivery. The default-on sibling fan-out sends <code>skipped</code> mid-run; whether it concludes anything is unmeasured (brokertest assumes not). Needs a two-delivery probe arm.</td>
 </tr>
 <tr>
-<td><a id="Q683"></a>Q683</td>
-<td><a href="../plan/q645-abandoned-completion/#the-remedy">Faster honest ending for a pending-reap released job</a></td>
-<td><code>speed</code></td>
+<td><a id="Q691"></a>Q691</td>
+<td><a href="../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">Auto re-run a force-cancelled abandoned run</a></td>
+<td><code>feature</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Told-nothing ends run+job <code>cancelled</code> at ~15m (measured). Candidates: REST <code>force-cancel</code> (plain cancel measured sluggish vs an orphaned acquire), a recovery rerun, or prompt runner deregistration (Q418's mechanism; the probe held the record).</td>
+<td>The Q683 cancelled ending accepts rerun-failed-jobs (measured; the false green 403'd). Operators re-run manually. Needs a capacity-returned trigger and a loop budget: a rerun re-queues into the starved pool.</td>
 </tr>
 <tr>
 <td><a id="Q637"></a>Q637</td>

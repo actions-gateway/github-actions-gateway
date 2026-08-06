@@ -2917,6 +2917,12 @@
 <td>Disrupted <strong>scale-set</strong> worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an <code>EvictionRecoveryIdentityUnknown</code> Warning Event on the owning <code>RunnerSet</code>. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than <code>maxEvictionRetries</code> allows, while this means GitHub did not send the assignment fields (<code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>) the mechanism reads. <strong>Expected to be zero</strong> — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
+<td>REST <code>force-cancel</code>s of the workflow run behind a worker pod removed before it ran: the fast honest ending for a job nothing will ever report (Q683). No <code>completejob</code> value ends such a job honestly (Q645/Q676), and told nothing GitHub cancels run and job at its ~15-minute unstarted-job timeout; the standalone force-cancel reaches the same <strong><code>cancelled</code></strong> conclusion in about a second (measured live 2026-08-05), and the cancelled run accepts <code>rerun-failed-jobs</code> where the false-green ending refused it. <code>outcome="cancelled"</code>: accepted. <code>outcome="identity_unknown"</code>: the acquire payload carried no <code>owner/repo/run_id</code>, so there was no endpoint to address. <code>outcome="error"</code>: GitHub refused the call or the API failed. On the latter two the unstarted-job timeout remains the honest backstop, so they cost latency, not correctness; a sustained non-zero rate on either is worth investigating. Increments alongside <code>worker_pods_reaped_total{reason="pending_deadline"}</code>; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">runbook</a>.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>

@@ -2810,11 +2810,6 @@ markers per item.</p>
 <td>⚠️ Partial — filed 2026-07-31. Reading the code for the fix found the actuator missing too: the classic tier cancelled a job's context on a definitively lost lock and never deleted the pod, so every Q254 teardown orphaned a worker until <code>maxWorkerLifetime</code> (12h). That half shipped as <a href="../STATUS/#Q501">Q501</a>. Phase 0 answered 2026-08-01 off a capture already in the repo — Q468 recorded a live cancelled run queueing a <code>JobCompleted</code> in ~0.2 s, which on ScaleSet stamps the worker and hands it to the reaper's five-minute grace, so the unbounded defect is classic-only and candidate B is not worth building. One measurement remains: whether <code>renewjob</code> reports the loss, which <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is now instrumented to read on its next live run</td>
 </tr>
 <tr>
-<td><a href="q603-settle-delete-gap/">q603-settle-delete-gap.md</a></td>
-<td>The seam Q583's delete-ack left: a job concludes in the listener's memory at <code>settle</code> and its message is deleted separately, so a process stopping in between leaves the assignment in the queue for the next one to replay</td>
-<td>✅ Done 2026-08-02 — the graceful half was unconditional rather than a race (<code>run</code> had no exit flush at all, so every rollout landing in the window stranded the message). Closed by flushing the outstanding deletes as the loop unwinds, before the session teardown and on a detached context, plus moving the per-cycle flush to sit directly after each of the two places a job concludes. Three regression tests, each red with the exit flush removed. Residual (a hard kill between the conclusion and a successful <code>DELETE</code>, which no ordering can close) is <a href="../STATUS/#Q606">Q606</a></td>
-</tr>
-<tr>
 <td><a href="docs/">docs.md</a></td>
 <td>Documentation roadmap across phases</td>
 <td>⚠️ Open — all Phase 1/2/3 items shipped except the Grafana dashboards half of 3.2; the alert rules, SLO recording rules and runbook links landed as <code>observability-alerting.md</code>, leaving dashboards as <a href="../STATUS/#Q568">Q568</a></td>
@@ -2892,7 +2887,7 @@ markers per item.</p>
 <tr>
 <td><a href="q645-abandoned-completion/">q645-abandoned-completion.md</a></td>
 <td>Investigation H (Q645/Q676): what the run service does with a completion for an acquired-but-never-run assignment, which decides the Q628 release path's shape</td>
-<td>✅ Done 2026-08-04 — five live runs: <code>abandoned</code> and <code>canceled</code> conclude the run <strong><code>success</code></strong> in one second (false green, job orphaned <code>in_progress</code>), <code>failed</code> is refused 401, and told-nothing gets an honest run+job <code>cancelled</code> at ~15 min. Remedy shipped: the listener reports nothing for its own unrun delivery. Follow-ups: <a href="../STATUS/#Q682">Q682</a>, <a href="../STATUS/#Q683">Q683</a></td>
+<td>✅ Done 2026-08-04 — five live runs: <code>abandoned</code> and <code>canceled</code> conclude the run <strong><code>success</code></strong> in one second (false green, job orphaned <code>in_progress</code>), <code>failed</code> is refused 401, and told-nothing gets an honest run+job <code>cancelled</code> at ~15 min. Remedies shipped: the listener reports nothing for its own unrun delivery, and the provisioner force-cancels the run (measured 2026-08-05, run+job <code>cancelled</code> in ~1 s, Q683). Follow-up: <a href="../STATUS/#Q682">Q682</a></td>
 </tr>
 <tr>
 <td><a href="docs-page-boundaries/">docs-page-boundaries.md</a></td>
@@ -2921,6 +2916,11 @@ markers per item.</p>
 <td><a href="archive/q583-restart-replay/">archive/q583-restart-replay.md</a></td>
 <td>An AGC restart replays the scale-set queue from cursor 0 and provisions workers for jobs long concluded, because the listener acks by cursor only and its provisioned/completed/abandoned guards are process-scoped</td>
 <td>2026-08-03 — Q583, Q597. The row's "measure at the rc.4 gate first" instruction was discharged without the gate: the premise was already in the repo (a 2026-07-05 dogfood reconnect that provisioned 7 workers for a previous pass's jobs, plus Q468's ≥13 h retention), and <a href="archive/q583-restart-replay/#the-answer-replayed-delete-ok-pruned-2026-08-01">Investigation G</a> then confirmed it live — a cursor-acked <code>JobAssigned</code> replays to a new session, <code>DeleteMessage</code> answers 204, and deleting prunes the queue. That closes Q264's P4 <code>DeleteMessage</code> unknown too. Delete-acking shipped in the same change: the listener issues the delete half of its ack once every job in a message has concluded, so replay still recovers anything in flight. The residual — three process-scoped guard sets that never shrank — closed as Q597 on 2026-08-03, keyed on the same delete: a guard is retired once every held message carrying a <code>JobAssigned</code> for its job is gone, so the sets are bounded by the queue rather than by the process's lifetime. The argument, and the two looser rules that were tried and turned an existing Q575 test red, are in <a href="../design/02-architecture/">02-architecture.md</a></td>
+</tr>
+<tr>
+<td><a href="archive/q603-settle-delete-gap/">archive/q603-settle-delete-gap.md</a></td>
+<td>The seam Q583's delete-ack left: a job concludes in the listener's memory at <code>settle</code> and its message is deleted separately, so a process stopping in between leaves the assignment in the queue for the next one to replay</td>
+<td>2026-08-02 — Q603; hard-kill residual closed 2026-08-05 as Q606. The graceful half was unconditional rather than a race (<code>run</code> had no exit flush at all): closed by flushing outstanding deletes as the loop unwinds, on a detached context, plus moving the per-cycle flush to sit directly after each of the two places a job concludes; three regression tests, each red with the exit flush removed. Q606 then took the residual no ordering could reach: the concluded-job guards are persisted to a per-RunnerSet ConfigMap written ahead of every delete, loaded before the session opens, retired by the confirmed delete and by a drained-queue sweep so the stored set stays bounded by the queue. The write-ahead ordering, the sweep's soundness argument, and the Q609 retained exemption are in <a href="../design/02-architecture/">02-architecture.md</a></td>
 </tr>
 <tr>
 <td><a href="archive/e2e-progress-visibility/">archive/e2e-progress-visibility.md</a></td>

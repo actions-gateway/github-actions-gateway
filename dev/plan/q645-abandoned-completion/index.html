@@ -2577,6 +2577,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#q683--the-fast-ending-measurement-2026-08-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q683 — the fast-ending measurement (2026-08-05)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2602,8 +2613,10 @@
 is <strong>success</strong>. See <a href="#findings">Findings</a>. The remedy (Q676) is measured and
 decided the same day: the listener reports <strong>nothing</strong> for its own unrun
 delivery, per <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>.
-Follow-ups: Q682 (sibling <code>skipped</code> arm), Q683 (faster ending than the
-15-minute cancel).</p>
+The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST
+force-cancel concludes run and job <code>cancelled</code> in ~1 s, per
+<a href="#q683--the-fast-ending-measurement-2026-08-05">the fast-ending measurement</a>.
+Remaining follow-up: Q682 (sibling <code>skipped</code> arm).</p>
 <p>Queue item: Q645 (completed; done rows are deleted). Origin:
 <a href="../release-1.3/#the-rc5-re-run-2026-08-02">release-1.3.md § The rc.5 re-run</a>.</p>
 <h2 id="the-question">The question<a class="headerlink" href="#the-question" title="Permanent link">&para;</a></h2>
@@ -2882,10 +2895,9 @@ ends in the measured told-nothing cancel. The Q260 sibling fan-out completion
 is untouched: with the winner's own delivery still open, sibling completions
 conclude nothing (the 2026-07-04 dogfood re-route #5 measured per-delivery
 scoping), though the sibling <code>skipped</code> value has no live probe measurement.
-That arm is Q682. Making the released job's ending faster than 15 minutes
-(REST <code>force-cancel</code>, or a recovery re-run; plain <code>cancel</code> was measured
-sluggish against an orphaned acquire, and production deregisters the consumed
-runner record promptly where the probe held it, an unpinned variable) is Q683.</p>
+That arm is Q682. Making the released job's ending faster than 15 minutes was
+Q683, measured and shipped 2026-08-05:
+<a href="#q683--the-fast-ending-measurement-2026-08-05">the fast-ending measurement</a>.</p>
 <p>Secondary observations, each load-bearing for the remedy choice:</p>
 <ul>
 <li><strong>Fan-out is real on this flow.</strong> Both runs delivered a sibling
@@ -2909,6 +2921,54 @@ runner record promptly where the probe held it, an unpinned variable) is Q683.</
   concludes, so the release path's recycle cannot remove the runner while the
   orphan lives; measured twice via the probe's own cleanup.</li>
 </ul>
+<h2 id="q683--the-fast-ending-measurement-2026-08-05">Q683 — the fast-ending measurement (2026-08-05)<a class="headerlink" href="#q683--the-fast-ending-measurement-2026-08-05" title="Permanent link">&para;</a></h2>
+<p>The instrument gained a <code>PROBE_ABANDONED_FORCECANCEL=true</code> arm: after the
+told-nothing walk-away (<code>result=none</code>), a <strong>standalone</strong> REST
+<code>POST …/actions/runs/{id}/force-cancel</code> — no prior plain cancel, the call shape
+a listener remedy would use (the 2026-08-04 force-cancels all followed a
+202-accepted plain cancel, and plain cancel alone was measured sluggish against
+an orphaned acquire). One run,
+<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31022925992">31022925992</a>,
+first attempt (T0 = the acquire + walk-away, 15:59:39 UTC):</p>
+<table>
+<thead>
+<tr>
+<th>t</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T0+0.5 s</td>
+<td><code>force-cancel</code> → <strong>202 Accepted</strong>, standalone</td>
+</tr>
+<tr>
+<td>T0+~1 s</td>
+<td>The REST <strong>job</strong> is <code>completed</code>/<code>cancelled</code> (<code>completed_at</code> pins it to T0's second) and the <strong>run</strong> is <code>completed</code>/<code>cancelled</code> (<code>updated_at</code> T0+1 s) — before the probe's cleanup plain-cancel at T0+2.4 s, so the conclusion is the force-cancel's own</td>
+</tr>
+<tr>
+<td>T0+1.1 s</td>
+<td><code>DELETE</code> runner A → <strong>204</strong>: the cancelled conclusion unpins the record the orphaned acquire held (no 422)</td>
+</tr>
+<tr>
+<td>post-run</td>
+<td><code>rerun-failed-jobs</code> on the cancelled run → <strong>2xx accepted</strong>, job re-queued — where the false-green <code>success</code> conclusion refused it with 403</td>
+</tr>
+</tbody>
+</table>
+<p>Every property the remedy needs, measured on one run: honest (<code>cancelled</code>),
+~1 s instead of 15 m 14 s, no orphaned <code>in_progress</code> job record, the runner
+record immediately deletable, and the ending is recoverable via re-run. The
+deregistration candidate (Q418's mechanism) is moot for this scenario: the
+record is deletable only <em>after</em> a conclusion, so it cannot cause one.</p>
+<p>Shipped the same day: the classic-tier provisioner force-cancels the run
+(identity from the acquire payload's <code>github</code> context, the same
+<code>repoInfo()</code> read the eviction re-run uses) before reporting <code>abandoned</code>,
+counted by <code>actions_gateway_abandoned_run_force_cancels_total</code>; the
+unstarted-job timeout stays the backstop for <code>identity_unknown</code>/<code>error</code>
+outcomes. A recovery re-run arm (auto-<code>rerun-failed-jobs</code> once capacity
+returns) remains unbuilt; the measurement above shows the cancelled conclusion
+arms it.</p>
 
 
 

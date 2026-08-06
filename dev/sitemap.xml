@@ -469,10 +469,6 @@
          <lastmod>2026-08-06</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/plan/q603-settle-delete-gap/</loc>
-         <lastmod>2026-08-06</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/plan/q645-abandoned-completion/</loc>
          <lastmod>2026-08-06</lastmod>
     </url>
@@ -822,6 +818,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q583-restart-replay/</loc>
+         <lastmod>2026-08-06</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/q603-settle-delete-gap/</loc>
          <lastmod>2026-08-06</lastmod>
     </url>
     <url>
