@@ -14,7 +14,7 @@
 
 - **GPU utilization that holds under contention.** GPU runners are guaranteed scheduling slots even when cheap CPU runners flood a shared quota, so the most expensive hardware actually runs instead of losing the race. GPU nodes return to the cluster scheduler the moment each job completes, freeing them for other workloads between CI jobs. Per-tenant utilization metrics give finance and platform leadership the data to justify GPU allocations and reclaim under-used capacity.
 
-- **No manual recovery from infrastructure incidents.** Preempted, OOM-killed, and node-lost jobs are cancelled at GitHub when their job lock lapses (within the remaining lock window, ~10 minutes at worst) and rerun automatically, with a per-job retry budget. The recovery needs no human in the loop, so the class of "my CI job died on infrastructure, please rerun it" support tickets is closed by construction, eliminating a recurring source of toil for both tenant teams and on-call.
+- **No manual recovery when the cluster takes a worker away.** Three causes are recovered: kubelet eviction under node pressure, scheduler preemption by a `priorityTiers` floor, and deletion of a running worker by a node drain or a bare `kubectl delete pod`. A preemption or a drain concludes at GitHub in seconds (measured 15–26s) because the runner gets its grace period and reports; a hard eviction has to wait out the job lock instead, ~10 minutes at worst. Either way the run is re-run automatically under a per-run retry budget, so the class of "my CI job died on infrastructure, please rerun it" support tickets is closed by construction. A job that ran and *failed* on its own merits, including an OOM-killed container, is deliberately never re-run: that would mask real breakage. The full boundary is in [Which disruptions auto-re-run a job](../operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
 - **Per-tenant security and audit isolation.** Every tenant's GitHub traffic exits through a dedicated egress IP pool, enabling per-team IP allowlisting on the GitHub side and per-tenant audit attribution. A rate limit, abuse flag, or IP ban triggered by one team is contained to that team — other tenants are unaffected. For organizations with GitHub Enterprise IP allowlist requirements or regulated workloads, this is what makes a shared cluster viable instead of one cluster per tenant.
 
@@ -32,7 +32,7 @@
 
 - **GPU slots that are actually guaranteed under contention.** Priority tiers let you declare a minimum number of GPU runner pods that schedule even when the cluster's GPU quota is otherwise saturated. The cheap CPU runners that today crowd you out of the queue cannot push your GPU jobs out of the schedule.
 
-- **Failed jobs from infrastructure issues just disappear.** When a worker pod is preempted, OOM-killed, or lost to a node failure, the system cancels the job at GitHub as its lock lapses (~10 minutes at worst) and reruns it automatically, with no ticket to file. No more "did this fail for a real reason or was it just infrastructure?" investigations.
+- **Jobs the cluster interrupts recover themselves.** When a worker pod is preempted by a higher-priority tier, drained off a node, or evicted under node pressure, the run concludes at GitHub and is re-run automatically, with no ticket to file. That is exactly the "did this fail for a real reason or was it just infrastructure?" question, answered by construction: infrastructure took it away, so it comes back; the job failed on its own, so it stays failed.
 
 - **No cold-start tax to pay around.** You don't need to pin a minimum runner count to mask first-job latency — the listener is always warm, and worker pods are created on demand. Configure for the load you actually have, not the cold start you're trying to hide.
 
@@ -50,7 +50,7 @@
 
 - **Tenant security policies enforced by construction, not convention.** Per-tenant egress IP pools, namespace-scoped RBAC, and NetworkPolicies are part of what the controller provisions, all operating within the platform-owned namespace `ResourceQuota`. Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.
 
-- **Worker eviction is no longer a paging event.** Preempted, OOM-killed, and node-lost jobs are recovered automatically. The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.
+- **Worker eviction is no longer a paging event.** Evicted, preempted, and drained workers have their runs recovered automatically, under one shared per-run budget. The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.
 
 - **Per-tenant cost and capacity visibility out of the box.** Prometheus metrics scoped per tenant and per runner group make it straightforward to spot under-used GPU quota, hot tenants approaching their limits, and which runner shapes are driving the most cost — without per-tenant deployment-level instrumentation to assemble.
 

@@ -14,7 +14,7 @@ Actions Runner Controller (ARC) scale-set mode is the common starting point. Onc
 
 | Gap at multi-tenant scale | How GAG closes it |
 | --- | --- |
-| An evicted runner pod leaves its job stuck in GitHub's queue until a manual rerun (GitHub's own queue timeout: at least 24 h, up to 48 h) | Cancels the job within the remaining lock window (~10 min worst case) and reruns it, with a per-run retry budget, on both acquisition tiers ([detail](docs/design/04-operational-flows.md#worker-pod-eviction-and-auto-retry)) |
+| A worker the cluster takes away leaves its job needing a manual rerun (GitHub's own backstop is a 24 h queue timeout) | The run concludes and is re-run automatically, with a per-run retry budget, on both acquisition tiers: seconds for a preemption or drain (measured 15–26 s), ~10 min at worst for a hard eviction that waits out the job lock ([detail](docs/design/04-operational-flows.md#worker-pod-eviction-and-auto-retry)) |
 | Tenants can't be given isolated GitHub egress IPs | Dedicated per-tenant egress IP pool for allowlisting and contained blast radius |
 | Idle runner and listener compute stays provisioned between jobs | Workers scale to zero between jobs. Every listener is a goroutine in one shared pod, not an always-on pod per scale set |
 
@@ -28,7 +28,7 @@ Running many runner groups for one tenant in a shared Kubernetes namespace creat
 
 **Listener overhead at scale.** ARC runs one listener pod per scale set, held alive 24/7 to long-poll GitHub. Each one costs a pod slot, a cluster IP, a scheduling unit, an image to pull, and an upgrade surface. A tenant with 10 scale sets holds 10 always-on pods and 10 cluster IPs at rest, before any job runs. Teams that also pin `minRunners > 0` to mask runner-pod cold-start latency add idle runner pods on expensive hardware on top of that.
 
-**No automatic recovery from worker eviction.** When a runner pod is preempted, OOM-killed, or lost to a node failure, ARC has no built-in flow to cancel the GitHub job lock and rerun. The runner stays orphaned and the job stays stuck in GitHub's queue until someone clears the runner and reruns the workflow by hand. The only automatic backstop is GitHub's own queue timeout, documented as at least 24 hours with queue times reaching up to 48.
+**No automatic recovery when the cluster takes a worker away.** When a runner pod is preempted, drained, or evicted under node pressure, ARC has no re-run flow: `deleteEphemeralRunnerOrPod` deletes the `EphemeralRunner` and calls `RemoveRunner`, so the job is given up on (measured against ARC `master`, 2026-08-06). Re-running it is a manual step. GitHub's own backstop is the queue timeout: a job can sit queued for 24 hours before it is automatically cancelled.
 
 **Platform team as bottleneck.** Onboarding a tenant means provisioning namespace, quotas, controller scope, scale sets, NetworkPolicies, and egress — a platform-team checklist per team. Subsequent changes (new runner type, quota adjustment, scaling tweak) land as tickets.
 
