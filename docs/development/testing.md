@@ -513,6 +513,20 @@ Then confirm with `grep -n CHECK_EXIT check.log` alongside the `ok` / `FAIL` lin
 
 Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
 
+### Stopping a run: name the target, never the program
+
+Killing a run to reclaim compute is legitimate and often correct. The machine is shared across parallel worktree sessions, `make check` is long, and the heavy tiers (the kind e2e clusters, the dogfood validation gate) are effectively singletons that do not run concurrently on a small host. Abandoning a run whose premise died is the right call, not a failure of discipline.
+
+What is never right is naming the **program** rather than the **run**. `pkill -f "usr/bin/make check"` matches every parallel session's gate, not just the one you started. Across local session transcripts, of 38 shell-kill targets exactly two carried a worktree anchor; the rest were bare program names (`ginkgo run --tags e2e`, `e2e.test`, `.build/ginkgo`, `make scripts-test`). Q690's load harness cleaned up with `pkill -f 'make scripts-test'`, which matched the `make check` running for verification in the same worktree: the gate died mid-run, a sampled suite that had printed `all assertions passed` was recorded as a failure, and both contaminated results read as genuine red.
+
+In order of preference:
+
+- **Stop the background task by its handle.** The launching task is the only reference that cannot match somebody else's process.
+- **If the handle is gone** (a compaction drops the task id while the process keeps running), run `pgrep -fl <pattern>` first, read what it *would* hit, then kill by PID.
+- **If a pattern is unavoidable**, anchor it to the worktree path. Every process a session starts carries its worktree directory in the argv or cwd, so `pkill -f "<worktree>/.build/ginkgo"` is safe where `pkill -f ginkgo` is not.
+
+**Never kill another worktree's run to reclaim a singleton.** A process you did not start carries no ownership record you can read, so "it looks stale" is a guess, and a live run and an orphan are indistinguishable from the outside. [`scripts/dogfood/lib/lease.sh`](../../scripts/dogfood/lib/lease.sh) is the pattern that makes that legible for the billable cluster: a pid plus a command-line marker, host-wide so it survives across worktrees, and no-lease-no-reclaim. No local tier has an equivalent yet (Q707). Note that a lease directory has to be host-wide to be worth anything, which puts it outside the worktree: workspace-guard prompts on every access until its opt-in extra-roots ship (workspace-guard Q23).
+
 ### Ad-hoc shell varies: don't rely on word-splitting
 
 Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md), so their behaviour is pinned by the shebang. **Ad-hoc commands are not pinned** — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images. Check yours with `echo $0` rather than assuming.
