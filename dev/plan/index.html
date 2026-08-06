@@ -2613,6 +2613,11 @@ to track). A plan with only deferred residuals is ✅, not ⚠️ — see
 <td>❌ Open — one gate left from the pre-release API review, Q484 (three closed 2026-07-28: Q481, the <code>spec.sizing</code> shape, and Q486, the two managed-autoscaler opt-in shapes, both as ship-as-is; Q485, the <code>windowStartTime</code> rename, shipped). Then the release-candidate dogfood validation in <a href="../operations/release/">release.md</a>, which needs the actual RC image and so is deliberately not a Queue row</td>
 </tr>
 <tr>
+<td><a href="release-1.4/">release-1.4.md</a></td>
+<td>The 1.4 release gate: why the minor was forced by merged work before anyone chose it, the three admitted items (Q166, Q554, Q691), and why the proxy-hardening cluster stays whole for 1.5</td>
+<td></td>
+</tr>
+<tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the three coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
 <td>💤 Parked — every phase is event-gated, so no Queue row remains: the soak and the hop start after <code>v1.3.0</code> ships (<a href="../STATUS/#Q413">Q413</a>), Phase 3's removals ride <a href="../STATUS/#Q273">Q273</a>/<a href="../STATUS/#Q264">Q264</a>, and the Phase 2 alias decision is <a href="../STATUS/#Q452">Q452</a></td>
