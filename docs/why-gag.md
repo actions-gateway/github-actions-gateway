@@ -44,9 +44,9 @@ same gap seen from a different angle.
     A quota-blocked or evicted job can't recover on its own:
 
     - claimed before the quota is known, so the runner cannot start
-    - ARC retries every 30 s, recycling it after 10 min ([0.13.1](https://github.com/actions/actions-runner-controller/pull/4305))
-    - each retry spends a single-use runner registration
-    - GitHub cancels a job still queued after 24 h ([#4155](https://github.com/actions/actions-runner-controller/issues/4155), [#4203](https://github.com/actions/actions-runner-controller/issues/4203))
+    - its single-use registration is already spent when quota is found
+    - ARC retries every 30 s, recycling every 10 min ([0.13.1](https://github.com/actions/actions-runner-controller/pull/4305))
+    - the job reads *assigned*, so the 24 h queue timeout never fires
 
 -   :material-trending-down:{ .lg .middle } __Critical jobs starve__
 
@@ -117,7 +117,7 @@ footprint.
 | Ephemeral, single-use runner pods | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Custom runner pod template & image | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, by default | :material-check-circle:{ .gag-yes } yes, by default |
-| Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } the job is claimed before the cluster is consulted<br><span class="gag-cont">a quota-blocked job is assigned to a runner that cannot start. Since 0.13.1 ARC retries the pod create every 30 s and recycles the runner after 10 min, so it self-heals without a manual rerun, but a single-use JIT runner registration is spent on each attempt and the assignment is held meanwhile</span> | :material-check-circle:{ .gag-yes } [won't take on a job it can't place](design/04-operational-flows.md#42-job-execution-flow-agc)<br><span class="gag-cont">live quota headroom is read *before* the job is claimed. On the default tier it bounds the capacity advertised to GitHub, on classic it declines the claim, so the job stays queued at GitHub. If headroom is lost afterwards, the pod create is retried in place while the lock is held</span> |
+| Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } the job is claimed before the cluster is consulted<br><span class="gag-cont">a quota-blocked job is assigned to a runner that cannot start. ARC mints the single-use runner registration *before* it attempts the pod, so by the time the quota is discovered it is already spent. Since 0.13.1 it retries every 30 s and recycles the runner every 10 min, burning a fresh registration each cycle, indefinitely: the quota branch returns before the failure counter, so nothing ends the loop. GitHub shows the job assigned to a runner rather than queued, so the 24 h queue timeout never applies either</span> | :material-check-circle:{ .gag-yes } [won't take on a job it can't place](design/04-operational-flows.md#42-job-execution-flow-agc)<br><span class="gag-cont">live quota headroom is read *before* the job is claimed, so nothing is spent and nothing is held: no runner registration, no assignment, and the job stays **visibly queued** at GitHub until there is room. On the default tier the headroom bounds the capacity advertised to GitHub; on classic it declines the claim. If headroom is lost after a claim, the pod create is retried in place, and on the default tier the job is re-offered every 5 s behind a `JobProvisionStalled` condition</span> |
 | Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain) | :material-close-circle:{ .gag-no } no re-run mechanism exists<br><span class="gag-cont">`deleteEphemeralRunnerOrPod` deletes the `EphemeralRunner` and calls `RemoveRunner`, so the job is given up on and re-running it is manual. 0.13.1 added pod-layer recovery (restart the listener on eviction, reschedule on `OutOf*`); the job layer is untouched</span> | :material-check-circle:{ .gag-yes } [re-run automatically, with a per-run retry budget](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)<br><span class="gag-cont">kubelet evictions, scheduler preemptions under a `priorityTiers` floor, node drains, and hand-deleted workers all re-run through GitHub's own re-run API, retried until GitHub accepts it, with `maxEvictionRetries` capping the budget per run</span> |
 | Stop claiming jobs when the cluster can't place the worker | :material-close-circle:{ .gag-no } the listener acquires every available job unconditionally<br><span class="gag-cont">the seat exists, but no cluster state is consulted in it: the only capacity signal GitHub receives is the static `maxRunners` value sent as `X-ScaleSetMaxCapacity`</span> | :material-check-circle:{ .gag-yes } opt-in [`capacityGate` on the runner set](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)<br><span class="gag-cont">off by default. When on, an unplaceable worker shape (drained pool, changed taint, spot gone) stops the gateway taking on more work, so jobs stay queued at GitHub instead of being claimed and cancelled. It bounds the *rate* of wasted claims, roughly one per `pendingPodDeadline` window. It does not eliminate the first one. The tenant turns it on; the platform states once, on the gateway, whether the cluster has a node autoscaler, so a runner set can never gate on a signal that is wrong for the cluster it runs in. Where a node may still arrive, the gate waits for cluster-autoscaler or Karpenter to say it will not add one</span> |
 | Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner set](design/02-architecture.md) |
@@ -139,9 +139,9 @@ Every GAG capability above is available today.
     the chart values, and the release notes rather than the documentation.
 
     ARC moves, and an undated comparison rots into a false one. Two rows here
-    changed at datable releases: 0.13.1 (2025-12-23) made a quota-blocked pod
-    creation self-healing, and 0.14.0 (2026-03-19) added multi-label scale sets,
-    which GAG does not have. If you are evaluating on a later ARC than the one
+    changed at datable releases: 0.13.1 (2025-12-23) changed how a quota-blocked
+    pod creation is retried, and 0.14.0 (2026-03-19) added multi-label scale
+    sets, which GAG does not have. If you are evaluating on a later ARC than the one
     stamped above, re-check the column rather than trusting it, and
     [tell us what changed](https://github.com/actions-gateway/github-actions-gateway/issues).
 
