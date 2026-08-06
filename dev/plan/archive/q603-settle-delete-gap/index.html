@@ -2601,7 +2601,9 @@
 <p><strong>Status:</strong> done 2026-08-02. The graceful-stop half is closed and regression-tested;
 the hard-kill residual was closed by Q606: the concluded-job guards are persisted to a
 per-RunnerSet ConfigMap ahead of every delete
-(<a href="../../../design/02-architecture/">02-architecture.md</a>).</p>
+(<a href="../../../design/02-architecture/">02-architecture.md</a>). A third window this doc did not
+see, a conclusion the listener never read, was closed by Q689 on 2026-08-05; see
+<a href="#what-this-does-not-close">What this does not close</a>.</p>
 <p>Q583 made acking two halves: advance the cursor, then delete the message once every
 job it names has concluded. The two halves are not atomic, and nothing carries the
 second one across a process boundary. Q603 is that seam.</p>
@@ -2665,6 +2667,14 @@ property.</p>
 so a 10s flush budget mirroring <code>deleteSession</code>'s fits alongside it with room for the
 manager's own shutdown.</p>
 <h3 id="what-this-does-not-close">What this does not close<a class="headerlink" href="#what-this-does-not-close" title="Permanent link">&para;</a></h3>
+<p><strong>Update 2026-08-05 (Q689):</strong> the two residuals below are both on the far side of a
+conclusion the listener has already read. There is a third window before it: the job
+concludes at GitHub and the process stops before a poll delivers the <code>JobCompleted</code>,
+and it needs no hard kill, since a graceful stop lands in it. Measured over the 60 stops
+recorded for Q685, all 4 taken before the completion was read replayed and re-provisioned;
+none of the 56 taken after it did. Closed by draining the queue's outstanding conclusions
+on the way out, ahead of the exit flush
+(<a href="../../../design/02-architecture/">02-architecture.md</a>).</p>
 <p>A hard kill — SIGKILL at grace expiry, OOM, node loss — between <code>settle</code> and a
 successful DELETE still strands the message, and no ordering can prevent that: the
 conclusion lives in memory and the ack lives at GitHub, and the two cannot be made

@@ -2732,14 +2732,6 @@
 <td>Phase 1 (self-hosted lane drops <code>get.helm.sh</code> + the Actions-cache data plane; hosted lane keeps caches) awaits its validation run: green Kata e2e whose log names no non-GitHub non-registry host. Then Phase 2 mirror manifests.</td>
 </tr>
 <tr>
-<td><a id="Q689"></a>Q689</td>
-<td><a href="../plan/archive/q603-settle-delete-gap/#what-this-does-not-close">A restart before the listener reads a concluded job's <code>JobCompleted</code> re-provisions it</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Measured 2026-08-05: 4/60 graceful stops taken after the job concluded at GitHub but before the listener read its <code>JobCompleted</code> re-provisioned on restart. Q606 scopes this residual to a hard kill; this needs none.</td>
-</tr>
-<tr>
 <td><a id="Q595"></a>Q595</td>
 <td><a href="../operations/troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">The cancel runbook's manual pod delete may re-run the job GitHub cancelled</a></td>
 <td><code>bug</code> <code>docs</code></td>
@@ -3389,7 +3381,7 @@
 <td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_RestartDoesNotReprovisionAConcludedJob</code> re-provisioned a concluded job</a></td>
 <td><code>flake</code> <code>tests</code> <code>ci</code></td>
 <td>S</td>
-<td><strong>Event:</strong> it fails <code>Condition satisfied</code> on <code>main</code> after the Q685 fix (the test waits for <code>deleteAttempts &gt; 0</code>, so the completion has reached the listener; <code>AssignedJobCount == 0</code> drops inside the test's own <code>provision</code>). → top of Queue, escalated.</td>
+<td><strong>Event:</strong> it fails <code>Condition satisfied</code> on <code>main</code> after the Q685 fix. The production window it raced is closed by Q689 (<a href="../design/02-architecture/">architecture</a>), so its <code>deleteAttempts &gt; 0</code> wait no longer carries it. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q664"></a>Q664</td>
