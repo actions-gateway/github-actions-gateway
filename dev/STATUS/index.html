@@ -2708,14 +2708,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q690"></a>Q690</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel-test.sh"><code>release-sentinel-test</code>'s live-run case fails under <code>make check</code>, passes standalone</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-05: <code>a 25-minute silence on a live run does not wake it</code> reported <code>EVENT: timeout</code> inside its 3s window, on a 60s budget; 49/49 pass standalone. Same shape as Q642/Q596, different subject. Mechanism unverified.</td>
-</tr>
-<tr>
 <td><a id="Q697"></a>Q697</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/main.go"><code>piped-gate</code> asks instead of denying, so its reason has to be hand-relayed to the session</a></td>
 <td><code>debt</code> <code>retro</code></td>
@@ -2898,6 +2890,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-04 under Q660: 15 <code>*-test.sh</code> across agent/, ci/, docs/, fetch/, go/ appear nowhere in the README. The convention names a test in its subject's row, applied unevenly.</td>
+</tr>
+<tr>
+<td><a id="Q698"></a>Q698</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/deletion_inventory_test.go">The delete-path inventory misses a <code>Delete</code> whose context arg is named unconventionally</a></td>
+<td><code>tests</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>isContextArg</code> keys on a first arg named <code>ctx</code>-ish or a <code>context.*</code> call, so <code>Client.Delete(c, pod)</code> is skipped silently: fail-open inside a fail-closed gate. Widen to any 2+ arg <code>.Delete(</code>, letting the inventory classify the noise.</td>
 </tr>
 <tr>
 <td><a id="Q569"></a>Q569</td>
@@ -3361,6 +3361,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q690"></a>Q690</td>
+<td><a href="../development/testing/#two-clocks-in-one-assertion"><code>release-sentinel-test</code>'s live-run case fails under <code>make check</code>, passes standalone</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> the live-run cases fail on <code>main</code> after the Q690 fix (they count the watcher's own polls against a stubbed <code>sleep</code>/<code>date</code>; no real seconds bound them). Reproduced: a wall clock outrunning the timer, not load. → top of Queue, escalated.</td>
+</tr>
 <tr>
 <td><a id="Q685"></a>Q685</td>
 <td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_RestartDoesNotReprovisionAConcludedJob</code> re-provisioned a concluded job</a></td>
