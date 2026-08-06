@@ -181,7 +181,7 @@ diffstat_for() {
 api_stat="$(diffstat_for "${API_PATHS[@]}")"
 ops_stat="$(diffstat_for docs/operations)"
 
-# --- semver signal -----------------------------------------------------------
+# --- commit-type counts ------------------------------------------------------
 
 count_of() { printf '%s\n' "$type_counts" | awk -v t="$1" '$2 == t { print $1; found = 1 } END { if (!found) print 0 }'; }
 
@@ -189,34 +189,6 @@ feats="$(count_of feat)"
 fixes="$(count_of fix)"
 perfs="$(count_of perf)"
 breaking_count="$(printf '%s' "$breaking" | grep -c '' || true)"
-
-# The bump is read from feat/fix/perf only. A `!` commit does NOT auto-promote to
-# major: most breaking markers here land on surface FROM never published, where
-# the change broke nothing and cost an edit. Only a commit against already-
-# published surface moves the major, and telling those apart needs the field-level
-# question in api-review.md, so the subjects are printed and the caller decides.
-if ((feats > 0)); then
-	bump="minor"
-elif ((fixes > 0 || perfs > 0)); then
-	bump="patch"
-else
-	bump="none"
-fi
-
-# next_version FROM BUMP — the version the bump implies, when FROM is a vX.Y.Z
-# tag. Prints nothing for any other ref, rather than guessing.
-next_version() {
-	local tag="$1" kind="$2"
-	[[ "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 0
-	local major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}"
-	case "$kind" in
-	major) printf 'v%d.0.0\n' "$((major + 1))" ;;
-	minor) printf 'v%d.%d.0\n' "$major" "$((minor + 1))" ;;
-	patch) printf 'v%d.%d.%d\n' "$major" "$minor" "$((patch + 1))" ;;
-	esac
-}
-
-suggested="$(next_version "$from" "$bump")"
 
 # --- report ------------------------------------------------------------------
 
@@ -230,13 +202,20 @@ section "API surface (semver signal; review with scripts/release/api-surface-sin
 section "Operator-facing docs (curate notes with scripts/release/operator-caveats-since.sh $from)" "$ops_stat"
 
 echo
-case "$bump" in
-none) echo "Semver signal: no feat/fix/perf commits — nothing user-visible has accumulated." ;;
-*) echo "Semver signal: $bump${suggested:+ (${suggested})} — $feats feat, $fixes fix, $perfs perf." ;;
-esac
+if ((feats == 0 && fixes == 0 && perfs == 0)); then
+	echo "Commit-type counts: no feat/fix/perf commits in this window."
+else
+	echo "Commit-type counts: $feats feat, $fixes fix, $perfs perf."
+fi
+# Subject counts, and a subject does not say whether a commit reaches an image
+# or a chart: dev-tooling, CI, and docs commits carry the same types. The bump
+# the merged work actually forces is derived from the paths, so it lives in
+# semver-floor.sh rather than here.
+echo "  Subject counts, not what ships. For the bump the merged work forces:"
+echo "  scripts/release/semver-floor.sh $from"
 if ((breaking_count > 0)); then
-	echo "  $breaking_count breaking-marked commit(s) above. Of each, ask whether $from ever"
-	echo "  published the surface it changed — a field added since then broke nothing."
-	echo "  scripts/release/api-surface-since.sh $from lists exactly which those are."
+	echo "  $breaking_count breaking-marked commit(s) above. semver-floor.sh reports each as an"
+	echo "  unresolved major and narrows it against the CRD surface $from published;"
+	echo "  scripts/release/api-surface-since.sh $from is where the rest of that is settled."
 fi
 echo "Whether that is enough to cut: docs/operations/release.md § When to cut."

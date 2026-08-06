@@ -121,8 +121,51 @@ scripts/release/release-delta.sh
 
 It reports, for `<last stable tag>..origin/main`, the commits by Conventional
 Commit type (breaking ones called out), the Queue rows closed in that window, the
-API diffstat that is the semver signal, and the operator-facing pages touched.
-Pass an explicit `FROM` (and optionally `TO`) to look at a different window.
+API diffstat, and the operator-facing pages touched. Pass an explicit `FROM` (and
+optionally `TO`) to look at a different window.
+
+Its type counts answer "how much landed", not "what may this be called". For
+that:
+
+```bash
+scripts/release/semver-floor.sh
+```
+
+It reports the **minimum bump the merged work already requires**, the floor a
+release cannot be cut below, by reading the paths each commit touched rather
+than its subject. That distinction is the whole point: of the 17 `feat` commits
+in the `v1.3.0..v1.4.0` window, 11 are dev tooling, CI, and docs that ship in no
+image and no chart, so the `feat` count is not the answer and never was. The
+report names the commits that set the floor, with the shipped files that put
+each one there, and lists the ones it withheld so a dropped commit stays visible.
+
+**The surface it checks against is derived, not listed.** It reads publish.yml's
+image matrix, follows each image's Dockerfile stage back through its
+`COPY --from=` edges to the `go build` that produced the binary, and expands
+those with `go list -deps`; the chart trees come from the same workflow's
+`helm package` calls. Add an image or a chart and it is picked up with nothing to
+maintain. The one thing not derivable is a release asset built by a script, the
+`gag-migrate` CLI, which is declared instead; `make semver-floor-sources-check`
+(part of `make check`) fails if publish.yml stops matching that declaration.
+
+**It reports; it does not gate.** The floor is monotonic and saturates early.
+Across the four release windows to date it reached `minor` at commit 15 of 341,
+6 of 95, 40 of 463, and 16 of 121, so a gate on the transition would fire on 4
+pull requests out of 1,020 and say nothing for the rest of every cycle. The first
+shipping feature after a tag is the expected event, not an accident worth
+catching.
+
+**A breaking marker is reported as an unresolved major, never as one.** Whether a
+`!` broke anything depends on whether the last tag had published the surface it
+changed, which is a field-level question. All three markers in `v1.2.0..v1.3.0`
+changed surface `v1.2.0` never published (`capacityGate` and `windowStartTime`
+are both absent there), which is why `v1.3.0` shipped as a minor, and why a tool
+that promoted them to major would fail to reproduce the one release that tests
+it. The report narrows the question with the part that is measurable, diffing the
+CRD property names `FROM` published against `TO`; a clean result means no
+published property was removed, and nothing more. A published field whose type
+changed or whose enum narrowed, and the non-CRD contracts, stay with
+[`api-surface-since.sh`](#1-pre-flight) and the human reading it.
 
 **The triggers.** Any one of these is reason enough to scope a release; none of
 them is automatic, and the report is the input to the judgement rather than a
