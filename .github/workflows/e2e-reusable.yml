@@ -162,7 +162,14 @@ jobs:
       # The e2e suite deploys the GMC via `helm upgrade --install` of
       # charts/actions-gateway (Q142 — Helm is the sole install path), so helm
       # must be on PATH. Pinned via the same action manifest-validate.yml uses.
+      #
+      # Hosted-only: the self-hosted e2e runner image bakes helm
+      # (scripts/dogfood/e2e-runner/Dockerfile), and this action downloads from
+      # get.helm.sh — job-time egress the managed GitHub rule does not admit.
+      # The Kata untrusted-PR posture keeps the self-hosted lane's non-registry
+      # fetches GitHub-only (Q408).
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        if: runner.environment == 'github-hosted'
 
       - name: Install kind ${{ env.KIND_VERSION }}
         # Pinned release binary + checksum instead of `go install ...@latest`:
@@ -208,6 +215,14 @@ jobs:
         # The node image (~1 GB) is otherwise pulled from Docker Hub on every
         # run, which is both slow and a flake source under Hub rate limits.
         # Keyed on the digest-pinned image so a kind bump invalidates it.
+        #
+        # Every actions/cache step in this job is hosted-only: the Actions cache
+        # data plane is job-time egress the managed GitHub rule does not admit,
+        # and the Kata untrusted-PR posture keeps the self-hosted lane's
+        # non-registry fetches GitHub-only (Q408). The load/pull steps below
+        # already fall back to a retried upstream pull when no tar is present;
+        # the in-cluster registry mirror is what serves these warm on that lane.
+        if: runner.environment == 'github-hosted'
         id: kind-node-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -223,8 +238,10 @@ jobs:
             echo "==> loading kind node image from cache"
             docker load -i "$tar"
           else
+            # Retried: this is the cold path on every self-hosted run (the cache
+            # step above is hosted-only) and on a hosted cache miss.
             echo "==> pulling kind node image ${KIND_NODE_IMAGE}"
-            docker pull "${KIND_NODE_IMAGE}"
+            scripts/fetch/pull-image-with-retry.sh "${KIND_NODE_IMAGE}"
             # `docker pull name:tag@digest` stores the image under the digest ref
             # only, not the tag — re-tag so it can be saved by (and on a later run
             # loaded/used as) the tag-only ref kind is given.
@@ -241,6 +258,8 @@ jobs:
       - name: Cache curl test image
         # Avoids even the single runner-side Docker Hub pull on warm runs.
         # Keyed on the pinned upstream tag so a curl bump invalidates it.
+        # Hosted-only — see the kind node cache step (Q408).
+        if: runner.environment == 'github-hosted'
         id: curl-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -273,6 +292,8 @@ jobs:
       - name: Cache Vault test image
         # The workload-identity e2e's in-cluster test Vault. Keyed on the pinned
         # upstream tag so a Vault bump invalidates it.
+        # Hosted-only — see the kind node cache step (Q408).
+        if: runner.environment == 'github-hosted'
         id: vault-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -300,7 +321,8 @@ jobs:
 
       - name: Cache Calico images
         # Calico-only. Keyed on CALICO_VERSION so a Calico bump invalidates it.
-        if: inputs.kind_cni == 'calico'
+        # Hosted-only — see the kind node cache step (Q408).
+        if: inputs.kind_cni == 'calico' && runner.environment == 'github-hosted'
         id: calico-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -328,6 +350,8 @@ jobs:
         # Both CNIs: cert-manager is applied on every e2e run. Keyed on
         # CERTMANAGER_VERSION so a bump invalidates it. The cached dir holds the
         # image tar and the image list, so a hit needs no manifest fetch.
+        # Hosted-only — see the kind node cache step (Q408).
+        if: runner.environment == 'github-hosted'
         id: cert-manager-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -353,6 +377,8 @@ jobs:
         # the HPA specs. Keyed on METRICSSERVER_VERSION so a bump invalidates it.
         # The cached dir holds the image tar and the image list, so a hit needs
         # no manifest fetch.
+        # Hosted-only — see the kind node cache step (Q408).
+        if: runner.environment == 'github-hosted'
         id: metrics-server-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -415,7 +441,9 @@ jobs:
         # (not waited on) here so its pods pull and start during the build too.
         env:
           GIT_SHA: ${{ github.sha }}
-          GHA_CACHE: "true"
+          # Hosted-only (empty disables): buildx's type=gha cache rides the same
+          # Actions cache data plane as the actions/cache steps (Q408).
+          GHA_CACHE: ${{ runner.environment == 'github-hosted' && 'true' || '' }}
         run: |
           bake_log="$(mktemp)"
           # bake-with-retry.sh wraps `docker buildx bake` in a bounded retry so a
