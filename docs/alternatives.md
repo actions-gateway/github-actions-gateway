@@ -63,11 +63,12 @@ for a single-owner cluster and is why it has no primitive separating them.
 
 Each role and what it cannot do: [Personas](operations/personas.md).
 
-## Whether there is a road, not whether the field exists
+## A paved road is worth more than a trail map
 
 Most comparisons ask whether a thing can be configured. For shared
-infrastructure the question is whether anyone has proven it works. Measured
-2026-08-06 against ARC 0.14.2 and `master`.
+infrastructure the useful question is whether anyone has run it, written down
+the setup, and said which parts bite. Measured 2026-08-06 against ARC 0.14.2
+and `master`.
 
 | | GAG | ARC |
 |---|---|---|
