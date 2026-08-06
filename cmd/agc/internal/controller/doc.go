@@ -4,6 +4,11 @@
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;delete
+// configmaps: the per-RunnerSet guard ConfigMap persisting a scale-set listener's
+// concluded-job state across a hard kill (Q606). get/create/update only — reads are
+// uncached (no informer, so no list/watch), and the ConfigMap is owner-ref'd to its
+// RunnerSet, so deletion is the garbage collector's.
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;create;update
 // pods patch: metadata-only annotation stamps — the reaper's deletion-reason mark
 // (Q502), the scale-set eviction-recovery claim, and the job-completed-at reap
 // deadline. Never a spec or status write.

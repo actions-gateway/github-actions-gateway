@@ -60,6 +60,15 @@
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "list", "create", "update", "patch", "delete"]
+# configmaps (Q606): the per-RunnerSet guard ConfigMap persisting a scale-set
+# listener's concluded-job state across a hard kill, so a restarted AGC does not
+# provision a worker for a job that is over. get/create/update only: reads are
+# uncached (the AGC runs no ConfigMap informer, so no list/watch), and the
+# ConfigMap is owner-ref'd to its RunnerSet, so deletion is the garbage
+# collector's, not the AGC's.
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "create", "update"]
 - apiGroups: ["actions-gateway.github.com"]
   resources: ["runnergroups"]
   verbs: ["get", "list", "watch", "update", "patch"]

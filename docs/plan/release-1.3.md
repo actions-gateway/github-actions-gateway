@@ -252,8 +252,8 @@ So the flake was a faithful, non-deterministic reproduction of a real (narrow)
 restart window. The fix pins the test to the path Q583 actually repairs — wait for
 the stub's `delete-message` call, not the counter — and the residual window is filed
 as Q603 rather than absorbed into a green test — since
-[closed](q603-settle-delete-gap.md) for every stop the process can see coming, with
-the hard-kill remainder as [Q606](../STATUS.md#Q606). Deleting the
+[closed](archive/q603-settle-delete-gap.md) for every stop the process can see coming,
+with the hard-kill remainder closed in turn by Q606's persisted guards. Deleting the
 `settle` call still turns the test red, now naming the missing release directly.
 
 **Q604 is the third gate, and the one that says something about the suite.** The Q602

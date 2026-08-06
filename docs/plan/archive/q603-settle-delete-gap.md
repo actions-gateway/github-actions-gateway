@@ -1,7 +1,9 @@
 # Q603 — A stop between concluding a job and deleting its message replays the assignment
 
 **Status:** done 2026-08-02. The graceful-stop half is closed and regression-tested;
-the hard-kill residual is [Q606](../STATUS.md#Q606).
+the hard-kill residual was closed by Q606: the concluded-job guards are persisted to a
+per-RunnerSet ConfigMap ahead of every delete
+([02-architecture.md](../../design/02-architecture.md)).
 
 Q583 made acking two halves: advance the cursor, then delete the message once every
 job it names has concluded. The two halves are not atomic, and nothing carries the
@@ -9,7 +11,7 @@ second one across a process boundary. Q603 is that seam.
 
 ## The defect
 
-`settle` ([listener.go](../../cmd/agc/internal/scalesetlistener/listener.go)) marks a
+`settle` ([listener.go](../../../cmd/agc/internal/scalesetlistener/listener.go)) marks a
 job concluded **in memory** — it drops the job from every held message's waiting set.
 The message is not deleted there. `flushDeletes` issues the DELETE, and it is called
 from the poll loop, so the delete lands some time after the conclusion that authorised
@@ -58,7 +60,7 @@ property.
 
 1. **Flush on loop exit**, before the session is torn down, on a context detached from
    the cancelled one — rules 1 and 3 of
-   [kubernetes-conventions.md § Graceful shutdown](../development/kubernetes-conventions.md#graceful-shutdown-sigterm).
+   [kubernetes-conventions.md § Graceful shutdown](../../development/kubernetes-conventions.md#graceful-shutdown-sigterm).
    An undeleted message for a concluded job is work the listener owns: GitHub is still
    holding it, and the next process will act on it. The session delete must follow the
    flush, not precede it — `DeleteMessage` is issued against the session, and the
@@ -71,7 +73,7 @@ property.
    attempts per cycle instead of one.
 
 The AGC pod's grace period is 60s
-([shared_agc_deployment.go](../../cmd/gmc/internal/controller/shared_agc_deployment.go)),
+([shared_agc_deployment.go](../../../cmd/gmc/internal/controller/shared_agc_deployment.go)),
 so a 10s flush budget mirroring `deleteSession`'s fits alongside it with room for the
 manager's own shutdown.
 
@@ -165,4 +167,7 @@ candidate closures, neither built here:
   has measured; Investigation G recorded no statistics. Guessing wrong here builds a
   check that silently never fires, or one that refuses real work.
 
-Filed as [Q606](../STATUS.md#Q606), measurement first.
+Filed as Q606, closed by persisting the guards: the row's sharper candidate held up,
+with the write-ahead ordering and the drained-queue retirement rule recorded in
+[02-architecture.md](../../design/02-architecture.md). The intake-recognition
+alternative (and its unmeasured statistics premise) stays unbuilt.
