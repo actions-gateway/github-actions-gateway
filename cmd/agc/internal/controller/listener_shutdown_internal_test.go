@@ -80,6 +80,39 @@ func TestListenerShutdown_RunsOnEveryReplica(t *testing.T) {
 	assert.False(t, (&listenerShutdown{}).NeedLeaderElection())
 }
 
+// TestStopListeners_WaitsForTheScaleSetTierToo is the Q689 half of the Q222 barrier.
+// Scale-set listeners live in their own map and were never in the drain, so SIGTERM
+// cancelled them and the process exited without waiting — taking the exit read of
+// outstanding conclusions, the delete half of the ack, and the session DELETE with it.
+func TestStopListeners_WaitsForTheScaleSetTierToo(t *testing.T) {
+	exited := make(chan struct{})
+	var teardownRan atomic.Bool
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-ctx.Done()
+		// Stand in for the poll loop's exit defers, which is what the barrier exists
+		// to let finish.
+		time.Sleep(50 * time.Millisecond)
+		teardownRan.Store(true)
+		close(exited)
+	}()
+
+	key := types.NamespacedName{Namespace: "ns", Name: "linux"}
+	r := &RunnerSetReconciler{
+		scaleSetListeners: map[types.NamespacedName]*scaleSetListenerHandle{
+			key: {cancel: cancel, done: exited},
+		},
+	}
+
+	select {
+	case <-r.stopListeners():
+	case <-time.After(5 * time.Second):
+		t.Fatal("stopListeners did not drain the scale-set listener")
+	}
+	assert.True(t, teardownRan.Load(), "the drain must wait for the poll loop's exit teardown")
+	assert.Empty(t, r.scaleSetListeners, "the drained listener must be dropped from the map")
+}
+
 // TestSnapshotMultiplexers_ClearsMapSoAReconcileCannotResurrect verifies the
 // snapshot empties the map under the mutex: a reconcile racing the drain must not
 // find — and keep feeding — a multiplexer that is already being stopped.
