@@ -893,6 +893,15 @@ the first try. It costs one edit and one run.
   on the assertion that names the behaviour.
 - **Round-trip it.** Restore the mechanism and confirm green in the same sitting, so the
   check cannot end with a half-reverted tree.
+- **Assert that the deletion applied**, when a script drives it rather than your hands. A
+  mutation that matched nothing leaves the mechanism intact, so the test passes and reads
+  as "this assertion does not bite", which is the exact conclusion the check exists to
+  rule out, reached backwards. Diff the file against its backup and fail the check when they match.
+  Q690 mutated by `perl -i -pe 's{\Q…\E}{…}'` and three of four patterns silently matched
+  nothing: `\Q` quotes regex metacharacters but does **not** stop interpolation, so a
+  pattern containing `$json` or `$baseline` had those spliced out as undefined Perl
+  variables before matching. Anchor a scripted mutation on a line number, or escape every
+  `$`; either way the did-it-apply assertion is what tells you which happened.
 
 Q506 needed two rounds of this before a spec's green meant what it claimed. Q551's
 re-offer test is the routine case: disabling the one call the fix added turned it red on
@@ -1165,6 +1174,15 @@ The fix is to leave the suite with **one clock, and let the subject drive it**. 
 **A frozen clock needs a positive control, or the freeze hides the assertions it was meant to protect.** With time stopped, every "stays asleep" case passes whatever the subject does, including doing nothing. One case therefore has to spend the budget and reach the timeout; it is what proves the stub is wired to the thing the other cases depend on. The same reasoning applies to the stubs themselves: each new assertion here was checked by deleting the mechanism it names from `release-sentinel.sh` and requiring it to go red, and the mutations were first written as text patterns that `perl` silently emptied by interpolating `$json`, so the harness also asserts that the mutation changed the file at all.
 
 Removing the real seconds took the suite from 11.4 s to 3.6 s, which is the same secondary effect Q471 reported: a test that stubs `sleep` does not wait for anything.
+
+#### A throwaway load harness is a measuring instrument, so calibrate it
+
+Reproducing a load-sensitive flake means writing a scratch harness that generates load and samples the suite. It is throwaway code, which is exactly why it gets written without the checks the suite itself would get, and its two failure modes both produce **confident, wrong green**:
+
+- **The load never started.** Q690's first harness backgrounded its generators with `setsid`, which does not exist on macOS. All three generators died instantly, 40 samples passed against an idle machine, and the run looked like strong evidence of no flake. A load harness must **assert its own load is running** before it draws any conclusion from a green sample, and print the figure it measured, exactly as [an empty search result is only evidence once the command is known to have run](#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query).
+- **The harness killed the thing it was measuring.** That same harness cleaned up with `pkill -f 'make scripts-test'`, which matched the `make check` running for verification in the same worktree. The gate died mid-run and reported a non-zero exit, and a sampled suite that had printed `all assertions passed` was recorded as a failure because `wait` returned non-zero. Both read as genuine red. **Scope a harness's cleanup to its own processes**, with a stop file the loops poll or a marker in the command line that the pattern anchors on, and never `pkill` a pattern that a real gate's own command line matches.
+
+The general rule is the one this whole section is about, turned on the instrument: a measurement you cannot show ran is not a measurement. Reconcile the harness's status against its output before believing either.
 
 ### Testing a `main`-shaped script: the entry-point seam, and the errexit trap
 
