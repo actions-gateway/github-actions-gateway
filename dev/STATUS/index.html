@@ -2836,22 +2836,6 @@
 <td>Measured 2026-08-05: at WAIT=660, <code>int(rate*elapsed)</code> truncates to 0 for 5 rates under 0.002, so 6 series never move. "Quota retries (1h)" is empty in the shipped shot. Same class as Q651.</td>
 </tr>
 <tr>
-<td><a id="Q665"></a>Q665</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Nothing catches a force-push onto a base that went stale during the local gate</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Merge queue (2026-08-03) made a stale base benign; the residual waste is a push whose moved base affects its gate, caught only at queue kickback. Wants a PreToolUse warning when <code>git diff HEAD...origin/main</code> is non-empty at <code>git push</code>.</td>
-</tr>
-<tr>
-<td><a id="Q668"></a>Q668</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#re-check-concurrent-work-before-opening">Nothing catches an open PR that overlaps yours at <code>gh pr create</code></a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q543 wrote the rule; the slip happens at <code>gh pr create</code>, in flow, not while reading CONTRIBUTING — same shape as <a href="#Q665">Q665</a>, whose piped-gate sibling Q625 shipped. Wants a PreToolUse warning when an open PR's files overlap <code>origin/main...HEAD</code>.</td>
-</tr>
-<tr>
 <td><a id="Q624"></a>Q624</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook.sh"><code>go-throttle</code> denies a commit whose message text quotes a <code>-race</code> command</a></td>
 <td><code>debt</code> <code>retro</code></td>
