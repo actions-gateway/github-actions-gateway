@@ -2600,7 +2600,7 @@
 <h1 id="self-hosted-github-actions-with-zero-idle-compute"><span class="gag-hero__phrase">Self-hosted GitHub Actions</span> with <span class="gag-hero__phrase">zero idle compute</span><a class="headerlink" href="#self-hosted-github-actions-with-zero-idle-compute" title="Permanent link">&para;</a></h1>
 </div>
 </div>
-<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
+<p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
 <p><a class="md-button md-button--primary" href="getting-started/">Get started</a>
 <a class="md-button" href="demo/">Watch the demo</a>
 <a class="md-button" href="why-gag/">Why GAG?</a>
@@ -2637,7 +2637,7 @@
 <li>Platform-owned quota cap</li>
 <li>Blocked jobs auto-recover</li>
 <li>Zero manual reruns</li>
-<li>Self-serve <code>ActionsGateway</code> CRs, no platform ticket per change</li>
+<li>Self-serve <code>ActionsGateway</code>, no ticket per change</li>
 </ul>
 </li>
 <li>
@@ -2666,7 +2666,7 @@
 <hr />
 <p>Each tenant's own proxy pool:</p>
 <ul>
-<li>Allow-list runners on GitHub Enterprise Managed Users (EMU)</li>
+<li>Allow-list runners on Enterprise Managed Users</li>
 <li>No shared cluster allow-list</li>
 <li>Flagged tenants stay isolated</li>
 <li>v2: proxy optional</li>
@@ -2710,10 +2710,10 @@
 <hr />
 <p>Hardening reconciled by default:</p>
 <ul>
-<li><code>baseline</code> Pod Security Admission (PSA) per namespace</li>
+<li><code>baseline</code> Pod Security Admission per namespace</li>
 <li>Default-deny NetworkPolicies</li>
 <li>Credentials never in env vars</li>
-<li>Signed images + Software Bill of Materials (SBOM) + SLSA</li>
+<li>Signed images, SBOM, and SLSA provenance</li>
 <li><a href="operations/kata-dind-workloads/">Kata micro-VM workers</a>, proven in our own CI</li>
 </ul>
 </li>
@@ -2788,7 +2788,7 @@
     <span class="gag-flow__title">Gateway Manager Controller</span>
     <span class="gag-flow__sub">cluster-scoped · installed once</span>
   </div>
-  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the AGC + proxy per tenant</div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the Actions Gateway Controller (AGC) + proxy per tenant</div>
   <div class="gag-flow__row">
     <div class="gag-flow__node">
       <span class="gag-flow__tier">Tier 2</span>

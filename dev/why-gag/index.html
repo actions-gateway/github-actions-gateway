@@ -2642,7 +2642,7 @@
 <div class="gag-vs-hero__lead">
 <p class="gag-eyebrow">Comparison · ARC alternative</p>
 <h1 id="why-github-actions-gateway-over-arc">Why GitHub Actions Gateway over ARC?<a class="headerlink" href="#why-github-actions-gateway-over-arc" title="Permanent link">&para;</a></h1>
-<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner sets, for many tenants, in one shared cluster, cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GAG was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
+<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner sets, for many tenants, in one shared cluster, cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GitHub Actions Gateway (GAG) was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
 <p><a class="md-button md-button--primary" href="../getting-started/">Get started</a>
 <a class="md-button" href="../operations/migration-from-arc/">Migrating from ARC</a>
 <a class="md-button" href="../design/02-architecture/">See the architecture</a></p>
@@ -2666,7 +2666,7 @@ letting tenants run their own runners.</p>
 <p>A quota-blocked or evicted job can't recover on its own:</p>
 <ul>
 <li>ARC retries the same runner (<a href="https://github.com/actions/actions-runner-controller/pull/4305">30 s loop</a>), then marks it <code>Failed</code></li>
-<li>the job sits in GitHub's queue until GitHub's queue timeout cancels it (at least 24 h, up to 48 h)</li>
+<li>the job queues at GitHub until its 24–48 h timeout cancels it</li>
 <li>cleared and rerun by hand (<a href="https://github.com/actions/actions-runner-controller/issues/4155">#4155</a>, <a href="https://github.com/actions/actions-runner-controller/issues/4203">#4203</a>), so teams avoid enforcing quotas</li>
 </ul>
 </li>
@@ -2695,7 +2695,7 @@ letting tenants run their own runners.</p>
 <hr />
 <p>Every tenant is a manual checklist:</p>
 <ul>
-<li>namespace, quota, Role-Based Access Control (RBAC), scale sets, NetworkPolicies, egress</li>
+<li>namespace, quota, RBAC, scale sets, NetworkPolicies, egress</li>
 <li>per-team setup; every later change is a ticket</li>
 </ul>
 </li>
@@ -2718,7 +2718,7 @@ letting tenants run their own runners.</p>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Namespace a tenant self-serves in</strong>: declare your gateway and runner sets; the GMC provisions the controller, proxy pool, RBAC, and network policies to run within the platform-owned quota, no per-tenant cluster-admin</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Namespace a tenant self-serves in</strong>: declare your gateway and runner sets; the Gateway Manager Controller (GMC) provisions the controller, proxy pool, RBAC, and network policies to run within the platform-owned quota, no per-tenant cluster-admin</span>
   </div>
 </div>
 
@@ -2857,8 +2857,8 @@ touched. The full alternatives analysis is in
 <p>New tenants should onboard on the <strong>recommended v2 API</strong> at
 <code>actions-gateway.com/v2beta1</code>: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> +
 <code>RunnerTemplate</code>, with an optional standalone <code>EgressProxy</code>; the rows marked
-<span class="gag-v2-badge">v2</span> are v2-only. The single-CR <code>v1alpha1</code> shape
-shown below is still fully served but
+<span class="gag-v2-badge">v2</span> are v2-only. The single-custom-resource (CR)
+<code>v1alpha1</code> shape shown below is still fully served but
 <strong><a href="../operations/v1alpha1-deprecation/">deprecated, and removed at <code>v2.0.0</code></a></strong>. See the
 <a href="../operations/migration-v1-to-v2/">v1 → v2 migration guide</a> and the
 <a href="../getting-started/">getting-started walkthrough</a> for the v2 object set.</p>
@@ -2891,7 +2891,7 @@ ships as reconciled defaults, not a post-install project.</p>
 <hr />
 <p>Untrusted job code is boxed in by default:</p>
 <ul>
-<li><code>baseline</code> Pod Security Admission (PSA) per namespace</li>
+<li><code>baseline</code> Pod Security Admission per namespace</li>
 <li>Default-deny network: DNS + own proxy only</li>
 <li>App keys read-only; never in env, never cached</li>
 <li>Controller writes confined to tenant namespaces</li>
@@ -2914,7 +2914,7 @@ ships as reconciled defaults, not a post-install project.</p>
 <ul>
 <li>Default-deny ingress, cluster-only DNS</li>
 <li>Per-tenant egress IPs, mutual-TLS metrics</li>
-<li>Signed images + Software Bill of Materials (SBOM) + Supply-chain Levels for Software Artifacts (SLSA) provenance</li>
+<li>Signed images, SBOM, and SLSA provenance</li>
 </ul>
 </li>
 </ul>
@@ -2948,9 +2948,8 @@ the <a href="../roadmap/#in-progress--near-term">roadmap</a>.</p>
 playbooks, see <a href="../design/05-security/">Security</a> and
 <a href="../operations/security-operations/">Security operations</a>.</p>
 <h2 id="composable-building-blocks-not-one-giant-cr">Composable building blocks, not one giant CR<a class="headerlink" href="#composable-building-blocks-not-one-giant-cr" title="Permanent link">&para;</a></h2>
-<p>A tenant still declares only namespace-scoped resources, and the Gateway Manager
-Controller (GMC) provisions the controller, proxy pool, RBAC, and network policies
-to match, all within the <strong>platform-owned <code>ResourceQuota</code></strong> the GMC never creates
+<p>A tenant still declares only namespace-scoped resources, and the GMC provisions the
+controller, proxy pool, RBAC, and network policies to match, all within the <strong>platform-owned <code>ResourceQuota</code></strong> the GMC never creates
 or mutates, with no per-tenant cluster-admin after the initial install. What
 changed with the <strong>recommended v2 API</strong> is that the single-CR monolith is
 decomposed into small, reusable kinds, and that decomposition <em>is</em> a
@@ -3057,7 +3056,7 @@ proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:</
     <code>NetworkPolicy</code>-restricted egress, collapsing the minimum to three objects.</li>
 <li>A reusable pod shape referenced by both <code>RunnerSet</code>s below via <code>templateRef</code>.
     Define it once; a cluster-scoped <code>ClusterRunnerTemplate</code> shares one shape
-    across every namespace. The Pod Security Admission level is a <strong>namespace
+    across every namespace. The Pod Security Admission (PSA) level is a <strong>namespace
     label</strong> in v2, not a CR field. All gateways in a namespace share one level.</li>
 <li><code>credentials.githubApp.name</code> references a <code>Secret</code> in this namespace holding
     the GitHub App <code>appId</code>, <code>installationId</code>, and <code>privateKey</code>. The GMC watches the

@@ -2461,17 +2461,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Table of Contents
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#reading-paths-by-role" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2483,10 +2472,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#system-overview" class="md-nav__link">
+  <a href="#design-documents" class="md-nav__link">
     <span class="md-ellipsis">
       
-        System Overview
+        Design documents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-operations-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related operations docs
       
     </span>
   </a>
@@ -2514,9 +2514,52 @@
 
 
 <h1 id="high-scale-virtualized-github-actions-gateway-design-documentation">High-Scale Virtualized GitHub Actions Gateway: Design Documentation<a class="headerlink" href="#high-scale-virtualized-github-actions-gateway-design-documentation" title="Permanent link">&para;</a></h1>
-<p>This folder contains the full system design for the GitHub Actions Gateway, organized into focused documents with cross-references. All documents are intended to render correctly on GitHub.</p>
+<p>The gateway is a <strong>four-tier system</strong> for running GitHub Actions self-hosted runners at scale on Kubernetes:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Component</th>
+<th>Scope</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><a href="02-architecture/#21-tier-1--gateway-manager-controller-gmc">Gateway Manager Controller (GMC)</a></td>
+<td>Cluster</td>
+<td>Watches <code>ActionsGateway</code> custom resources, provisions per-tenant resources</td>
+</tr>
+<tr>
+<td>2</td>
+<td><a href="02-architecture/#22-tier-2--actions-gateway-controller-agc">Actions Gateway Controller (AGC)</a></td>
+<td>Namespace</td>
+<td>Multiplexes GitHub broker sessions, acquires jobs, spawns worker pods</td>
+</tr>
+<tr>
+<td>3</td>
+<td><a href="02-architecture/#23-tier-3--egress-proxy-pool">Egress Proxy Pool</a></td>
+<td>Namespace</td>
+<td>Stateless HTTPS CONNECT proxy pool; isolated egress IPs per tenant</td>
+</tr>
+<tr>
+<td>4</td>
+<td><a href="02-architecture/#24-tier-4--ephemeral-worker-pod">Ephemeral Worker Pod</a></td>
+<td>Namespace</td>
+<td>Single-use pod that executes exactly one workflow job</td>
+</tr>
+</tbody>
+</table>
+<p>This section is the full system design, split into focused, cross-referenced documents. For a quick orientation, start with <a href="01-executive-summary/">01-executive-summary.md</a>, then follow the reading path for your role.</p>
 <hr />
-<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<h2 id="reading-paths-by-role">Reading Paths by Role<a class="headerlink" href="#reading-paths-by-role" title="Permanent link">&para;</a></h2>
+<p><strong>Architect</strong>: reviewing the overall design: start with <a href="01-executive-summary/">01-executive-summary.md</a>, then <a href="02-architecture/">02-architecture.md</a>, then <a href="03-api-contracts/">03-api-contracts.md</a>. Read <a href="04-operational-flows/">04-operational-flows.md</a> and <a href="05-security/">05-security.md</a> for depth.</p>
+<p><strong>Platform engineer</strong>: deploying or operating the system: read <a href="../getting-started/">Getting Started</a> first, then <a href="02-architecture/#21-tier-1--gateway-manager-controller-gmc">02-architecture.md §2.1</a> (GMC), <a href="appendix-a-capacity-slos/">Appendix A</a> (SLOs), <a href="../operations/observability/">Observability</a>, <a href="../operations/runbook/">Runbook</a>, and <a href="../operations/upgrade/">Upgrade &amp; Rollback</a>.</p>
+<p><strong>Security engineer</strong>: reviewing trust boundaries and threats: read <a href="05-security/">05-security.md</a>, <a href="02-architecture/#24-tier-4--ephemeral-worker-pod">02-architecture.md §2.4</a> (worker isolation), <a href="03-api-contracts/#32-github-app-credentials-secret-schema">03-api-contracts.md §3.2</a> (credentials), and <a href="appendix-b-worker-isolation/">Appendix B</a> (runtime hardening).</p>
+<p><strong>Tenant team</strong>: authoring RunnerGroup configs: read <a href="../getting-started/">Getting Started</a>, <a href="03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md §3.1</a> (CustomResourceDefinition schemas), and <a href="appendix-e-capacity-planning/">Appendix E</a> (sizing guidance).</p>
+<hr />
+<h2 id="design-documents">Design documents<a class="headerlink" href="#design-documents" title="Permanent link">&para;</a></h2>
 <ol>
 <li><a href="01-executive-summary/">Executive Summary &amp; Problem Statement</a></li>
 <li><a href="01-executive-summary/#for-executive-leadership">For Executive Leadership: GPU Utilization &amp; Cost Justification</a></li>
@@ -2563,9 +2606,9 @@
 <li><a href="appendix-g-future-enhancements/">Appendix G — Optional Future Enhancements</a></li>
 <li><a href="appendix-h-v2-api-decomposition/">Appendix H — v2 API Decomposition (Proposal)</a></li>
 <li><a href="network-architecture/">Network Architecture</a></li>
-<li><a href="github-protocol-dependencies/">GitHub Protocol Dependency Register</a>: the GitHub-internal protocols GAG speaks, their stability tier, and drift-watch triggers</li>
+<li><a href="github-protocol-dependencies/">GitHub Protocol Dependency Register</a>: the GitHub-internal protocols GitHub Actions Gateway (GAG) speaks, their stability tier, and drift-watch triggers</li>
 </ol>
-<p><strong>Operations</strong></p>
+<h2 id="related-operations-docs">Related operations docs<a class="headerlink" href="#related-operations-docs" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../getting-started/">Getting Started</a>: initial setup, credential rotation</li>
 <li><a href="../operations/observability/">Observability</a>: metrics reference, alert rules</li>
@@ -2574,52 +2617,6 @@
 <li><a href="../operations/upgrade/">Upgrade &amp; Rollback</a>: per-component upgrade procedures</li>
 <li><a href="../operations/tenant-onboarding/">Tenant Onboarding</a>: checklist for onboarding a new tenant team</li>
 </ul>
-<hr />
-<h2 id="reading-paths-by-role">Reading Paths by Role<a class="headerlink" href="#reading-paths-by-role" title="Permanent link">&para;</a></h2>
-<p><strong>Architect</strong>: reviewing the overall design: start with <a href="01-executive-summary/">01-executive-summary.md</a>, then <a href="02-architecture/">02-architecture.md</a>, then <a href="03-api-contracts/">03-api-contracts.md</a>. Read <a href="04-operational-flows/">04-operational-flows.md</a> and <a href="05-security/">05-security.md</a> for depth.</p>
-<p><strong>Platform engineer</strong>: deploying or operating the system: read <a href="../getting-started/">Getting Started</a> first, then <a href="02-architecture/#21-tier-1--gateway-manager-controller-gmc">02-architecture.md §2.1</a> (GMC), <a href="appendix-a-capacity-slos/">Appendix A</a> (SLOs), <a href="../operations/observability/">Observability</a>, <a href="../operations/runbook/">Runbook</a>, and <a href="../operations/upgrade/">Upgrade &amp; Rollback</a>.</p>
-<p><strong>Security engineer</strong>: reviewing trust boundaries and threats: read <a href="05-security/">05-security.md</a>, <a href="02-architecture/#24-tier-4--ephemeral-worker-pod">02-architecture.md §2.4</a> (worker isolation), <a href="03-api-contracts/#32-github-app-credentials-secret-schema">03-api-contracts.md §3.2</a> (credentials), and <a href="appendix-b-worker-isolation/">Appendix B</a> (runtime hardening).</p>
-<p><strong>Tenant team</strong>: authoring RunnerGroup configs: read <a href="../getting-started/">Getting Started</a>, <a href="03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md §3.1</a> (CRD schemas), and <a href="appendix-e-capacity-planning/">Appendix E</a> (sizing guidance).</p>
-<hr />
-<h2 id="system-overview">System Overview<a class="headerlink" href="#system-overview" title="Permanent link">&para;</a></h2>
-<p>The gateway is a <strong>four-tier system</strong> for running GitHub Actions self-hosted runners at scale on Kubernetes:</p>
-<table>
-<thead>
-<tr>
-<th>Tier</th>
-<th>Component</th>
-<th>Scope</th>
-<th>Role</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1</td>
-<td><a href="02-architecture/#21-tier-1--gateway-manager-controller-gmc">Gateway Manager Controller (GMC)</a></td>
-<td>Cluster</td>
-<td>Watches <code>ActionsGateway</code> CRs, provisions per-tenant resources</td>
-</tr>
-<tr>
-<td>2</td>
-<td><a href="02-architecture/#22-tier-2--actions-gateway-controller-agc">Actions Gateway Controller (AGC)</a></td>
-<td>Namespace</td>
-<td>Multiplexes GitHub broker sessions, acquires jobs, spawns worker pods</td>
-</tr>
-<tr>
-<td>3</td>
-<td><a href="02-architecture/#23-tier-3--egress-proxy-pool">Egress Proxy Pool</a></td>
-<td>Namespace</td>
-<td>Stateless HTTPS CONNECT proxy pool; isolated egress IPs per tenant</td>
-</tr>
-<tr>
-<td>4</td>
-<td><a href="02-architecture/#24-tier-4--ephemeral-worker-pod">Ephemeral Worker Pod</a></td>
-<td>Namespace</td>
-<td>Single-use pod that executes exactly one workflow job</td>
-</tr>
-</tbody>
-</table>
-<p>For a quick orientation, start with <a href="01-executive-summary/">01-executive-summary.md</a>, then follow links from there.</p>
 
 
 

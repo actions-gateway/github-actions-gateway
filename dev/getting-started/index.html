@@ -2692,8 +2692,8 @@ exact commands to reproduce it.</p>
 stability contract, and where new capabilities land. <code>v2alpha1</code> stays served as
 the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp, carrying the
 <code>acquisitionProtocol</code> selector a migrating v1 tenant needs and a new tenant does
-not, and the apiserver converts between the two. The older single-CR
-<strong><code>v1alpha1</code></strong> API is still fully served but
+not, and the apiserver converts between the two. The older
+single-custom-resource (CR) <strong><code>v1alpha1</code></strong> API is still fully served but
 <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>: reach for it only if you
 have a specific reason to, and see the
 <a href="#legacy-the-v1alpha1-api-deprecated">legacy v1 path</a>. <code>v1alpha1</code>, <code>v2alpha1</code>,
@@ -2714,7 +2714,7 @@ changing how your jobs are acquired.</p>
 <li>Go 1.26+ only if you build the images yourself</li>
 </ul>
 <h2 id="1-deploy-the-gmc">1. Deploy the GMC<a class="headerlink" href="#1-deploy-the-gmc" title="Permanent link">&para;</a></h2>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/README.md">reference</a>). It installs the Gateway Manager Controller (GMC), its CRDs, RBAC, validating webhook, and admission policy. The GMC then provisions per-tenant AGC instances and proxy pools at runtime. They are not installed by the chart.</p>
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/README.md">reference</a>). It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy. The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime. They are not installed by the chart.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>charts/actions-gateway<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>

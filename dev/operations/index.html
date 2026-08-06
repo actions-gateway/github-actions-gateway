@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#docsoperations" class="md-skip">
+        <a href="#operations" class="md-skip">
           Skip to content
         </a>
       
@@ -2475,8 +2475,8 @@
   
 
 
-<h1 id="docsoperations">docs/operations/<a class="headerlink" href="#docsoperations" title="Permanent link">&para;</a></h1>
-<p>Operator-facing references. Audience: on-call SRE and platform engineers running the Gateway Manager Controller (GMC) and per-tenant Actions Gateway Controllers (AGCs).</p>
+<h1 id="operations">Operations<a class="headerlink" href="#operations" title="Permanent link">&para;</a></h1>
+<p>Operator-facing references. Audience: on-call SRE and platform engineers running the Gateway Manager Controller (GMC) and per-tenant Actions Gateway Controllers (AGCs) that make up GitHub Actions Gateway (GAG).</p>
 <table>
 <thead>
 <tr>
@@ -2494,7 +2494,7 @@
 <tr>
 <td><a href="backup-restore/">backup-restore.md</a></td>
 <td>SRE, Platform engineer</td>
-<td>Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted <code>ActionsGateway</code> CR.</td>
+<td>Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted <code>ActionsGateway</code> custom resource.</td>
 </tr>
 <tr>
 <td><a href="velero-backup-restore/">velero-backup-restore.md</a></td>
@@ -2584,7 +2584,7 @@
 <tr>
 <td><a href="gitops/">gitops.md</a></td>
 <td>Platform engineer</td>
-<td>Install the OCI chart declaratively via Argo CD or Flux: <code>Application</code> / <code>HelmRelease</code> examples with the CRD-pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed).</td>
+<td>Install the OCI chart declaratively via Argo CD or Flux: <code>Application</code> / <code>HelmRelease</code> examples with the CustomResourceDefinition pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed).</td>
 </tr>
 <tr>
 <td><a href="v1alpha1-deprecation/">v1alpha1-deprecation.md</a></td>

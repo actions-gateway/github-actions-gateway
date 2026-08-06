@@ -2595,11 +2595,11 @@
 
 
 <h1 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">&para;</a></h1>
-<p>This page is about what GAG does <strong>not</strong> do yet. For what it does today, see
+<p>This page is about what GitHub Actions Gateway (GAG) does <strong>not</strong> do yet. For what it does today, see
 <a href="../features/">Features</a> for every shipped capability, with a link to the doc that
 explains it, and <a href="../why-gag/">Why GAG?</a> for the capability-by-capability
 comparison against Actions Runner Controller (ARC).</p>
-<p>GitHub Actions Gateway (GAG) is <strong>1.0, generally available, and installable from
+<p>GAG is <strong>1.0, generally available, and installable from
 the GitHub Container Registry (GHCR)</strong>. It is Apache-2.0, vendor-neutral, and
 built for one outcome: real operators running multi-tenant self-hosted runners in
 real clusters. There is no paid tier and no commercial roadmap, so the plan below
@@ -2649,8 +2649,9 @@ separately.</p>
 <li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g2-proxy-enforced-per-tenant-rate-limiting">Per-tenant proxy rate limiting</a></strong> <!-- q:Q565 -->
   A token bucket at the proxy, so one looping tenant is slowed before it reaches
-  GitHub's ceiling; today the only feedback is a 429 and AGC backoff. Per-pod
-  state, since global limits would need a shared backend.</p>
+  GitHub's ceiling; today the only feedback is a 429 and Actions Gateway
+  Controller (AGC) backoff. Per-pod state, since global limits would need a
+  shared backend.</p>
 </li>
 <li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g4-tls-between-agcworkers-and-the-proxy">TLS on the in-cluster proxy hop</a></strong> <!-- q:Q566 -->
@@ -2694,7 +2695,8 @@ the exception: a firm commitment, waiting only on the release that carries it.</
 </li>
 <li><strong><a href="../plan/v2-api/#deferred-out-of-the-critical-path">Bring-your-own proxy TLS certificate</a></strong> <!-- q:Q174 -->
   Supply the proxy's certificate from your managed PKI or Vault instead of the
-  GMC's self-signed default. (The autoscaler half has shipped:
+  self-signed default the Gateway Manager Controller (GMC) issues.
+  (The autoscaler half has shipped:
   <code>managedAutoscaling: false</code> hands the pool to KEDA, VPA, or a custom
   HorizontalPodAutoscaler.)</li>
 <li><strong><a href="../design/appendix-e-capacity-planning/">First-class GPU runner support</a></strong> <!-- q:Q216 -->
