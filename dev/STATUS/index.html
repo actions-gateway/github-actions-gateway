@@ -2828,20 +2828,12 @@
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.</td>
 </tr>
 <tr>
-<td><a id="Q651"></a>Q651</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/exporter.py">The dashboard preview never populates the scale-set reap panel, so the shipped screenshot shows <code>No data</code></a></td>
+<td><a id="Q695"></a>Q695</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml">No alert covers a capacity gate throttling intake</a></td>
 <td><code>docs</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>The panel needs <code>worker_pods_reaped_total{runner_set!=""}</code> (Q514), but <code>exporter.py</code> emits that counter with <code>runner_group</code> only. Pre-dates Q319; measured on the 2026-08-03 render.</td>
-</tr>
-<tr>
-<td><a id="Q658"></a>Q658</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-tenant.json"><code>worker_capacity_declined</code> has no dashboard tile and no preview series</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q643 shipped the <code>{reason}</code>-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every <code>gridPos</code> below y=52 and needs a <code>render.sh</code> re-shoot. Should <code>AwaitingProbe</code> alert?</td>
+<td>Measured 2026-08-05: none of the 20 alerts reference <code>worker_capacity_declined</code>, <code>jobs_admission_rejected_total</code>, or <code>scaleset_capacity_withheld</code>, so a gated set throttling intake is invisible. Q658 settled that <code>AwaitingProbe</code> alone must not alert.</td>
 </tr>
 <tr>
 <td><a id="Q665"></a>Q665</td>

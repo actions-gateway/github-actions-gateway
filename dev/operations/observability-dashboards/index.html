@@ -2799,6 +2799,11 @@
 <td>Stat (1 = yellow)</td>
 </tr>
 <tr>
+<td>Worker capacity declined</td>
+<td><code>max by (reason) (actions_gateway_runnerset_worker_capacity_declined)</code></td>
+<td>Stat (1 = orange), reason shown beside the value</td>
+</tr>
+<tr>
 <td>Agent recycle errors</td>
 <td><code>rate(actions_gateway_agent_recycle_errors_total[5m])</code></td>
 <td>Time series</td>
@@ -2806,12 +2811,22 @@
 </tbody>
 </table>
 <blockquote>
-<p>The three capacity panels union the v1 <code>RunnerGroup</code> family with its
+<p>The first three capacity panels union the v1 <code>RunnerGroup</code> family with its
 <code>actions_gateway_runnerset_*</code> v2 twin (Q319). The two families key on different
 labels — <code>runner_group</code> and <code>runner_set</code> — so <code>or</code> unions rather than overlaps them,
 and a panel that named only the v1 family would read a flat <code>0</code> on a v2-only deploy.
 To break either out per owner, replace <code>max(...)</code> with
 <code>max by (namespace, runner_set) (actions_gateway_runnerset_...)</code>.</p>
+<p><strong>Worker capacity declined has no v1 twin, and <code>No data</code> is a normal reading</strong>
+(Q643, Q658). The <a href="../observability-metrics/">gauge</a> is emitted only for a
+<code>RunnerSet</code> that set <code>spec.capacityGate.mode</code>, so an empty panel means no set
+opted in, not that the query is broken. It groups by <code>reason</code> rather than
+reducing to a bare <code>0</code>/<code>1</code> because the value alone cannot separate a live decline
+from the latched <code>AwaitingProbe</code> state, and those call for different actions;
+exactly one series exists per gated set, so <code>max by (reason)</code> cannot double-count.
+The <code>1</code> is orange rather than red on purpose: a latched gate is
+<a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">throttling intake, not failing</a>,
+and it can sit <code>True</code> indefinitely on an idle set whose shape stays unplaceable.</p>
 </blockquote>
 <p><strong>Row 6 — Egress Proxy (per tenant)</strong></p>
 <table>
