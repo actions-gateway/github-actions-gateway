@@ -4,6 +4,7 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 
 | Doc | Personas | Purpose |
 |---|---|---|
+| [personas.md](personas.md) | All | Who owns what: each role defined by what it owns and what it cannot do, the external contributor as a threat-model actor rather than an audience, and how persona tags are recorded. |
 | [runbook.md](runbook.md) | SRE | Production runbook: high-level operational procedures. For initial setup see [Getting Started](../getting-started.md). |
 | [backup-restore.md](backup-restore.md) | SRE, Platform engineer | Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted `ActionsGateway` custom resource. |
 | [velero-backup-restore.md](velero-backup-restore.md) | SRE, Platform engineer | Velero-specific how-to: namespace-level backup/restore commands grounded in GAG's ownership model, with the selector that skips GMC-owned children so the controllers rebuild them. |
@@ -16,7 +17,7 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 | [admission-policies.md](admission-policies.md) | Platform engineer, Security | Kyverno/Gatekeeper compatibility matrix: whether GAG pods comply with common cluster admission policies, plus sample enforce/exception policies. |
 | [tenant-onboarding.md](tenant-onboarding.md) | Platform engineer | Step-by-step checklist for onboarding a new tenant team. |
 | [resourcequota-sizing.md](resourcequota-sizing.md) | Platform engineer | Turn runner shapes and concurrency ceilings into the namespace `ResourceQuota` numbers: what the quota actually counts (native sidecars, Kata overhead, PVCs), which keys are safe to constrain, and a worked DinD example. |
-| [in-runner-image-builds.md](in-runner-image-builds.md) | Platform engineer, Tenant owner | Map each in-runner image-build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) to the right `securityProfile`/PSA level, with a decision table. |
+| [in-runner-image-builds.md](in-runner-image-builds.md) | Platform engineer, Tenant operator | Map each in-runner image-build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) to the right `securityProfile`/PSA level, with a decision table. |
 | [kata-dind-workloads.md](kata-dind-workloads.md) | Platform engineer | Run DinD / image-build jobs under Kata Containers (KVM micro-VM) at `securityProfile: baseline`: nested-virt node prerequisites, the Kata DaemonSet + `RuntimeClass` setup, and the worker `podTemplate` `runtimeClassName`. |
 | [p2p-image-distribution.md](p2p-image-distribution.md) | Platform engineer, SRE | Recommended scale companion: adding a peer-to-peer image mirror (Spegel/Dragonfly) to survive ephemeral-worker pull storms, and the `imagePullPolicy`/digest-pin interplay. |
 | [service-mesh-coexistence.md](service-mesh-coexistence.md) | Platform engineer, SRE | Running GAG alongside Istio/Linkerd/ambient: injection opt-out, sidecar lifecycle, and egress exclusions so the per-tenant proxy is honored. |
