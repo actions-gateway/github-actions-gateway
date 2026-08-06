@@ -2981,6 +2981,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-credential-gated-spec-that-skips-is-not-defending-anything" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A credential-gated spec that skips is not defending anything
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#verify-a-causation-claim-by-deleting-the-mechanism" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4207,6 +4218,35 @@ server saw instead of inferring it from the client's logs.</p>
 <li><strong>When the harness cannot be made to work, verify the layer you actually changed.</strong> The hook applies each pattern as <code>re.search(pattern, command)</code>; asserting that step directly is honest and sufficient, as long as you say which layer the evidence covers — and then confirm end-to-end in the smallest possible way (re-running the exact command that had been denied).</li>
 </ul>
 <p><code>scripts/agent/foreground-guard-patterns-test.sh</code> is the durable form of that probe, controls included.</p>
+<h3 id="a-credential-gated-spec-that-skips-is-not-defending-anything">A credential-gated spec that skips is not defending anything<a class="headerlink" href="#a-credential-gated-spec-that-skips-is-not-defending-anything" title="Permanent link">&para;</a></h3>
+<p>A spec that <code>Skip</code>s for want of credentials reports the same colour as one that ran and
+passed. Nothing in CI tells the two apart, so the invariant it asserts stops being
+enforced the moment the credentials are absent, which for the live-GitHub tier is every
+PR.</p>
+<p>Q599 is the case. <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> asserted that a cancelled
+run's worker pod never publishes a <code>deletionTimestamp</code>. #1032 then gave the AGC a delete
+for exactly that pod (the Q501 reclaim of an abandoned job's worker). The spec's
+assertion was now false against a <em>working</em> gateway, and no gate said so; the
+contradiction shipped and was found later, by reading. The code obligation had been
+written down (<code>deletion.go</code> requires any new deletion path to apply the AGC-own
+exclusion) and #1032 honoured it. The specs obligation was written down nowhere, so
+nothing pointed at the assertion that had just gone stale.</p>
+<p><strong>Bind the specs to the code they depend on with something that fails.</strong> A comment
+naming them rots and is easy to read past. What works is a gate on the code path itself,
+so the change that could invalidate a spec is the change that trips it:</p>
+<ul>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/deletion_inventory_test.go"><code>deletion_inventory_test.go</code></a>
+  inventories every client <code>Delete</code> call in the <code>agc</code> module. Adding, moving, or renaming
+  one fails the test, and the failure prints every spec that pins the deletion boundary,
+  flagging with <code>[CRED]</code> the ones that skip without credentials and are therefore not
+  evidence of anything when CI is green.</li>
+<li>A second case asserts each named spec still exists at its recorded path, so the roster
+  cannot decay into names nothing answers to.</li>
+</ul>
+<p>It generalises. When a credential-gated spec is the only thing asserting an invariant,
+find the code change that could break it and make <em>that</em> the tripwire. The gate cannot
+run the spec; it can make sure nobody changes the code without being handed the spec to
+read.</p>
 <h3 id="verify-a-causation-claim-by-deleting-the-mechanism">Verify a causation claim by deleting the mechanism<a class="headerlink" href="#verify-a-causation-claim-by-deleting-the-mechanism" title="Permanent link">&para;</a></h3>
 <p>The rules above are read-and-reason checks — ask what else could produce this green.
 This one is mechanical, and it is the only way to <em>settle</em> the question: <strong>delete the

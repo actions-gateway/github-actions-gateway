@@ -2908,14 +2908,6 @@
 <td>Phase 2 of the page-boundary split: the Queue is read top-down to pick work; the parked rows under it are only grepped on a trigger. Needs <code>check-roadmap.sh</code> given a second path, rule 8 spanning two files, <code>#QNNN</code> links retargeted.</td>
 </tr>
 <tr>
-<td><a id="Q599"></a>Q599</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/deletion.go">A new AGC delete path can invalidate a credential-gated spec no gate runs</a></td>
-<td><code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>#1032 made a cancelled run's worker deletable; <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> asserted it never was, and skips without creds, so nothing failed. <code>deletion.go</code> binds the code obligation only — extend it to the specs.</td>
-</tr>
-<tr>
 <td><a id="Q554"></a>Q554</td>
 <td><a href="../plan/runner-template-library/">Ship a curated runner template library</a></td>
 <td><code>docs</code> <code>feature</code></td>
