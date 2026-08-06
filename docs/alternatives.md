@@ -9,7 +9,7 @@ One question decides most of this: **must the compute be yours, and do several
 teams have to share it?** If either half is no, something simpler than GitHub
 Actions Gateway (GAG) is probably right.
 
-## Where something else wins
+## When not to choose GAG
 
 | If | Use | Not GAG, because |
 |---|---|---|
