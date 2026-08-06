@@ -386,7 +386,18 @@ tiers:
   drain and re-runs the interrupted job. **Any new AGC code path that deletes a
   worker pod must stamp this annotation before the delete** (stamp-then-delete, in
   that order), or its deletions become re-run triggers; the reaper's
-  `reapWorkerPodsByLabel` is the pattern.
+  `reapWorkerPodsByLabel` is the pattern. The one exception is a delete of a pod that
+  has *already* reached its terminal phase (the `completedPodTTL: 0` cleanup), which
+  the detection's ordering rule excludes on its own.
+
+  **A new delete also owes the specs.** What a worker pod publishes at its terminal
+  phase is what the drain/cancel specs assert, so a new deleter can falsify one
+  without failing it, and the live-GitHub half skips without credentials, so its
+  green means nothing (Q599; see
+  [testing.md](testing.md#a-credential-gated-spec-that-skips-is-not-defending-anything)).
+  `cmd/agc/internal/provisioner/deletion_inventory_test.go` is the tripwire: it fails
+  on any added, moved, or renamed client `Delete` in the `agc` module and prints the
+  spec roster to read before updating it.
 
 Alongside them, the scale-set tier stamps one controller-set **label** at pod
 creation:

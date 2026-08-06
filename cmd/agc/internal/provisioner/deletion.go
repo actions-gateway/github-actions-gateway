@@ -22,9 +22,20 @@ import (
 // pods it gave up on (a stuck-Pending worker, an orphaned Running one), and the
 // provisioner reclaims the worker of a job the listener abandoned (job_abandoned,
 // Q501) — re-running either would turn cleanup into a re-run trigger. Every AGC-issued
-// worker-pod delete is therefore preceded by an AnnotationDeletionReason stamp, and
-// both tiers' detection treats a stamped pod's deletion as the AGC's own. Any deletion
-// path added later must apply the same exclusion.
+// delete of a worker that has not already reached its terminal phase is therefore
+// preceded by an AnnotationDeletionReason stamp, and both tiers' detection treats a
+// stamped pod's deletion as the AGC's own. The completedPodTTL=0 cleanup in
+// provisioner.go is the one unstamped delete and needs no stamp: it follows the
+// container's recorded exit, which the ordering below already excludes.
+//
+// A deletion path added later owes that exclusion, and owes the specs too. What a
+// worker pod publishes at its terminal phase is exactly what those specs assert, so a
+// new deleter can invalidate one without failing it: #1032 added the Q501 reclaim while
+// E2E_GitHub_CancelledRunLeavesNoDeletionMark still asserted a cancelled run's worker
+// was never deleted, and that spec skips without live-GitHub credentials, so no gate
+// went red (Q599). deletion_inventory_test.go is the tripwire — it fails on any added,
+// moved or renamed client delete in this module and prints the full spec roster,
+// marking the ones no gate can run.
 
 // AnnotationDeletionReason is stamped on a worker pod, with the deletion reason as its
 // value, immediately before the AGC deletes that pod itself. Its presence is how both

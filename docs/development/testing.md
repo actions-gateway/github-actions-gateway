@@ -830,6 +830,39 @@ Q616 registered two script paths in the foreground-guard slow-command registry a
 
 `scripts/agent/foreground-guard-patterns-test.sh` is the durable form of that probe, controls included.
 
+### A credential-gated spec that skips is not defending anything
+
+A spec that `Skip`s for want of credentials reports the same colour as one that ran and
+passed. Nothing in CI tells the two apart, so the invariant it asserts stops being
+enforced the moment the credentials are absent, which for the live-GitHub tier is every
+PR.
+
+Q599 is the case. `E2E_GitHub_CancelledRunLeavesNoDeletionMark` asserted that a cancelled
+run's worker pod never publishes a `deletionTimestamp`. #1032 then gave the AGC a delete
+for exactly that pod (the Q501 reclaim of an abandoned job's worker). The spec's
+assertion was now false against a *working* gateway, and no gate said so; the
+contradiction shipped and was found later, by reading. The code obligation had been
+written down (`deletion.go` requires any new deletion path to apply the AGC-own
+exclusion) and #1032 honoured it. The specs obligation was written down nowhere, so
+nothing pointed at the assertion that had just gone stale.
+
+**Bind the specs to the code they depend on with something that fails.** A comment
+naming them rots and is easy to read past. What works is a gate on the code path itself,
+so the change that could invalidate a spec is the change that trips it:
+
+- [`deletion_inventory_test.go`](../../cmd/agc/internal/provisioner/deletion_inventory_test.go)
+  inventories every client `Delete` call in the `agc` module. Adding, moving, or renaming
+  one fails the test, and the failure prints every spec that pins the deletion boundary,
+  flagging with `[CRED]` the ones that skip without credentials and are therefore not
+  evidence of anything when CI is green.
+- A second case asserts each named spec still exists at its recorded path, so the roster
+  cannot decay into names nothing answers to.
+
+It generalises. When a credential-gated spec is the only thing asserting an invariant,
+find the code change that could break it and make *that* the tripwire. The gate cannot
+run the spec; it can make sure nobody changes the code without being handed the spec to
+read.
+
 ### Verify a causation claim by deleting the mechanism
 
 The rules above are read-and-reason checks — ask what else could produce this green.
