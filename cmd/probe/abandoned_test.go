@@ -445,26 +445,47 @@ func TestAbandonedProbe_NoneSendsNoCompletion(t *testing.T) {
 	}
 }
 
-// TestAbandonedProbe_SiblingRedeliveryIsNotRedispatch: a fan-out sibling the
-// observer saw before T0 keeps redelivering unacked after T0 (measured
-// 2026-08-04); its request id must not produce a REDISPATCHED verdict.
-func TestAbandonedProbe_SiblingRedeliveryIsNotRedispatch(t *testing.T) {
+// TestObserve_SiblingRedeliveryFiltering: a fan-out sibling first seen before
+// T0 keeps redelivering unacked after T0 (measured 2026-08-04); its request id
+// must not produce a REDISPATCHED verdict, while a fresh post-T0 id must.
+// Driven at the observe level with a fabricated delivery record so the pre-T0
+// receipt is a fact of the test, not a race: the end-to-end form enqueued the
+// sibling and raced the observer's first poll against the probe's autonomous
+// acquire, and under CI load the receipt landed after T0 and read as fresh.
+func TestObserve_SiblingRedeliveryFiltering(t *testing.T) {
 	t.Parallel()
-	bs, _, verdictCh := startAbandonedRun(t, 3*time.Second, nil, nil)
+	mux := http.NewServeMux()
+	queued := func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "queued", "conclusion": ""})
+	}
+	mux.HandleFunc("GET /repos/o/r/actions/runs/7", queued)
+	mux.HandleFunc("GET /repos/o/r/actions/jobs/99", queued)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
 
-	// The pre-T0 sibling delivery on B's session.
-	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-sibling"})
-	waitForCompleteJob(t, bs)
-	// The same sibling redelivered after T0: fan-out noise, not a re-dispatch.
-	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-sibling"})
+	newProbe := func(window time.Duration) *abandonedProbe {
+		p := newAbandonedProbe(discardLogger(), abandonedConfig{Owner: "o", Repo: "r", Window: window},
+			staticTokenProvider{token: "tok"}, srv.URL, http.DefaultClient, http.DefaultClient)
+		p.restPollInterval = 50 * time.Millisecond
+		return p
+	}
+	t0 := time.Now()
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictNoSignal {
-			t.Fatalf("verdict = %q, want %q (sibling redelivery filtered)", verdict, verdictNoSignal)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	// The sibling's id was recorded before T0, so its post-T0 redelivery is
+	// fan-out noise and the window closes quietly.
+	obs := &sessionObserver{done: make(chan struct{})}
+	obs.record(observedDelivery{At: t0.Add(-time.Second), MessageID: 1, RequestID: "req-sibling"})
+	obs.record(observedDelivery{At: t0.Add(50 * time.Millisecond), MessageID: 2, RequestID: "req-sibling"})
+	if got := newProbe(400*time.Millisecond).observe(context.Background(), obs, "req-a", 7, 99, t0); got != verdictNoSignal {
+		t.Fatalf("verdict = %q, want %q (sibling redelivery filtered)", got, verdictNoSignal)
+	}
+
+	// A post-T0 delivery with an id never seen before T0 is a re-dispatch.
+	obs = &sessionObserver{done: make(chan struct{})}
+	obs.record(observedDelivery{At: t0.Add(-time.Second), MessageID: 1, RequestID: "req-sibling"})
+	obs.record(observedDelivery{At: t0.Add(50 * time.Millisecond), MessageID: 3, RequestID: "req-fresh"})
+	if got := newProbe(5*time.Second).observe(context.Background(), obs, "req-a", 7, 99, t0); got != verdictRedispatched {
+		t.Fatalf("verdict = %q, want %q (fresh post-T0 id)", got, verdictRedispatched)
 	}
 }
 
