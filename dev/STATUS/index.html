@@ -2732,6 +2732,14 @@
 <td>Read 2026-08-05: <code>alloc-queue-id-test.sh:166</code> waits ~1000×<code>sleep 0.01</code> for the fleet, then fails <code>fleet startup</code>; it bounds the scheduler, not the subject. Q642 measured p99 469ms and 0.45% still starting at 10s. The last such site.</td>
 </tr>
 <tr>
+<td><a id="Q708"></a>Q708</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook.sh"><code>go-throttle</code> hand-rolls a shell scanner that its sibling hook already solved in Go</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-06 under Q624: 178 of 423 lines hand-roll a shell scanner (quote state, heredocs, command position). Sibling pipedgate was ported for the same reason (Q625); its shim keeps fail-open.</td>
+</tr>
+<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code> <code>1.4-gate</code></td>
