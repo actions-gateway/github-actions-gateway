@@ -45,11 +45,12 @@ cannot be shifted between tenants.
 [Appendix D.9](design/appendix-d-alternatives-considered.md#d9-forgemt-and-account-per-tenant-runner-platforms)
 takes it seriously and states both trade-offs.
 
-## Multi-tenancy is a different product, not a bigger one
+## Multi-tenant platforms are an order of magnitude more complex
 
-Three roles are in the room, and what separates them is the product. ARC models
-the first two as one person, which is coherent for a single-owner cluster and is
-why it has no primitive separating them.
+Adding teams does not add a feature, it adds roles. Three end up in the room,
+each with different powers and a different blast radius, and holding them apart
+is most of the work. ARC models the first two as one person, which is coherent
+for a single-owner cluster and is why it has no primitive separating them.
 
 | The boundary | How GAG draws it |
 |---|---|
