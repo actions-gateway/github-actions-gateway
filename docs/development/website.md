@@ -324,13 +324,16 @@ paragraphs takes width from the columns that carry the row's identity, and the
 split moves as the container does. Pin the columns with `table-layout: fixed`
 rather than tuning the prose.
 
-The API reference block also restates the header background it overrides. The
-global rules tint the **last** column, an idiom from the comparison table where
-last means GAG, and they apply everywhere, because the reveal JS classes every
-plain table (see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs)).
-On the reference page the last column is Validation, so the tint reads as an
-emphasis the page does not mean; dropping it means putting the ordinary `th`
-background back, not just clearing the accent.
+The comparison table's scope also owns the **last-column accent** (the tinted
+`td:last-child` and accent-coloured header), and it has to. "Last column" means
+GAG on that one table; everywhere else it is whatever the author put rightmost.
+The accent was global once, which put it on all ~660 tables in the tree, tinting
+Validation on the API reference and Fix on the troubleshooting page. Nothing in
+the build catches that, because the reveal JS classes every plain table
+(see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs)),
+so the rule reaches far past the "marketing tables" its comment claimed. **A new
+table rule that means something about a specific column belongs in a page scope,
+not in the global block.**
 
 ### Changing the hero headline
 

@@ -955,10 +955,12 @@ body[data-md-color-scheme="slate"] {
   color: #ffca80;
 }
 
-/* Comparison / data tables: bigger text, rounded frame, emphasized header + GAG
-   column. NB: do not re-add a :not([class]) guard here — the scroll-reveal JS
-   stamps .gag-reveal onto marketing-page tables, which a :not([class]) selector
-   would then exclude, dropping all this styling (that was the why-gag bug). */
+/* Every table: bigger text, rounded frame, emphasized header. NB: do not re-add
+   a :not([class]) guard here — the scroll-reveal JS stamps .gag-reveal onto
+   every plain table in .md-content, which a :not([class]) selector would then
+   exclude, dropping all this styling (that was the why-gag bug). That same reach
+   is why the GAG-column accent lives with the comparison table below and not
+   here: "last column" means GAG on exactly one of the site's ~660 tables. */
 .md-typeset table {
   font-size: 0.8rem;
   border: 1px solid var(--md-default-fg-color--lightest);
@@ -975,17 +977,7 @@ body[data-md-color-scheme="slate"] {
   font-weight: 500;
 }
 
-/* Last column = GitHub Actions Gateway: tint it so the eye lands on "us". */
-.md-typeset table th:last-child {
-  color: var(--md-accent-fg-color);
-}
-
-.md-typeset table th:last-child,
-.md-typeset table td:last-child {
-  background: var(--gag-accent-soft);
-}
-
-.md-typeset table tbody tr:hover td:not(:last-child) {
+.md-typeset table tbody tr:hover td {
   background: color-mix(in srgb, var(--md-accent-fg-color) 4%, transparent);
 }
 
@@ -1040,6 +1032,23 @@ body[data-md-color-scheme="slate"] {
 .md-content__inner:has(.gag-vs-hero) table td {
   padding: 0.7rem 1.05rem;
   vertical-align: top;
+}
+
+/* Last column = GitHub Actions Gateway: tint it so the eye lands on "us". This
+   is the whole reason the accent is page-scoped — on every other table the last
+   column is whatever the author put rightmost, and the tint reads as an emphasis
+   the page never meant. */
+.md-content__inner:has(.gag-vs-hero) table th:last-child {
+  color: var(--md-accent-fg-color);
+}
+
+.md-content__inner:has(.gag-vs-hero) table th:last-child,
+.md-content__inner:has(.gag-vs-hero) table td:last-child {
+  background: var(--gag-accent-soft);
+}
+
+.md-content__inner:has(.gag-vs-hero) table tbody tr:hover td:last-child {
+  background: var(--gag-accent-soft);
 }
 
 /* On phones the 3-column table is unreadable (cells wrap to many lines, code
@@ -1138,22 +1147,6 @@ body[data-md-color-scheme="slate"] {
 .md-typeset:has(> h1#api-reference) table th,
 .md-typeset:has(> h1#api-reference) table td {
   vertical-align: top;
-}
-
-/* Undo the "last column = GAG" accent from the comparison-table rules above:
-   here the last column is Validation, and tinting it reads as an emphasis the
-   page does not mean. */
-.md-typeset:has(> h1#api-reference) table th:last-child {
-  color: inherit;
-  background: var(--md-default-fg-color--lightest);
-}
-
-.md-typeset:has(> h1#api-reference) table td:last-child {
-  background: none;
-}
-
-.md-typeset:has(> h1#api-reference) table tbody tr:hover td {
-  background: color-mix(in srgb, var(--md-accent-fg-color) 4%, transparent);
 }
 
 /* Verdict icons in the comparison table: green for a GAG win, warm red for an
