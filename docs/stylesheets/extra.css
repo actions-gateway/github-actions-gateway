@@ -821,6 +821,31 @@ body[data-md-color-scheme="slate"] {
   gap: 0.6rem;
 }
 
+/* Roll-up variant (why-gag "What changes with GAG"). Two differences from the
+   four-tier diagram: it may use the full content column, and its nodes carry a
+   sentence rather than a label, so they must share the row evenly instead of
+   sizing to their text. `flex: 1 1 0` splits each row N ways whatever N is,
+   while the inherited 12rem floor decides when to wrap: the four-outcome row is
+   4-across at full width and 2x2 in a narrow column. */
+.gag-flow--wide {
+  max-width: 52rem;
+}
+
+.gag-flow--wide .gag-flow__row {
+  align-self: stretch;
+}
+
+.gag-flow--wide .gag-flow__row .gag-flow__node {
+  flex: 1 1 0;
+}
+
+/* A capability that is only partly delivered. Dashed rather than solid so the
+   diagram cannot claim more than has shipped; the node still reads as an input
+   because the delivered half genuinely feeds the outcome. */
+.gag-flow__node--wip {
+  border-style: dashed;
+}
+
 /* Wider content column (less side gutter) so wide tables have room to breathe. */
 .md-grid {
   max-width: 72rem;

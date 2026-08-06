@@ -82,9 +82,11 @@ same gap seen from a different angle.
 
 ## What changes with GAG
 
-The first two rows below are one argument, and it is an operational one before
-it is a cost one. **Quota-aware intake and automatic re-run are what make shared
-capacity safe to actually use.**
+"Safe to share" means two different things, and GAG needs both. **Operationally
+safe** is quota-aware intake and automatic re-run. **Safe to run other people's
+code on** is the isolation stance: Pod Security Admission, default-deny egress,
+and Kata micro-VM workers. The first is finished; the second is finished for
+trusted CI and still in progress for untrusted pull requests.
 
 Enforcing a tight per-tenant quota is only reasonable if a blocked job waits
 instead of stalling. Bin-packing tenants onto the same expensive nodes is only
@@ -94,12 +96,57 @@ non-event. Take either away and the platform team's options collapse to
 over-provisioning, loose quotas, and a ticket queue, which is the path back to a
 cluster per team.
 
-So the outcomes compound in one direction: **fewer manual interventions, fewer
-pages, higher utilization of the hardware you already pay for, and more jobs
-finishing per node-hour.** The [cost model](design/appendix-f-cost-model.md)
-works the utilization argument through in numbers; a published benchmark at
-scale is [on the roadmap](roadmap.md) and not yet done, so treat the figures
-there as a model rather than a measurement.
+So the outcomes compound in one direction:
+
+<div class="gag-flow gag-flow--wide">
+  <div class="gag-flow__row">
+    <div class="gag-flow__node">
+      <span class="gag-flow__tier">Capability</span>
+      <span class="gag-flow__title">Quota-aware intake</span>
+      <span class="gag-flow__sub">a job the quota cannot place is never claimed</span>
+    </div>
+    <div class="gag-flow__node">
+      <span class="gag-flow__tier">Capability</span>
+      <span class="gag-flow__title">Automatic re-run</span>
+      <span class="gag-flow__sub">a worker the cluster takes away comes back</span>
+    </div>
+    <div class="gag-flow__node gag-flow__node--wip">
+      <span class="gag-flow__tier">Capability · partly shipped</span>
+      <span class="gag-flow__title">Isolation by default</span>
+      <span class="gag-flow__sub">PSA, default-deny egress, and Kata micro-VM workers ship today; <a href="../roadmap/">untrusted-PR network isolation</a> does not yet</span>
+    </div>
+  </div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; together they remove the reasons sharing is risky</div>
+  <div class="gag-flow__node gag-flow__node--lead">
+    <span class="gag-flow__tier">What that unlocks</span>
+    <span class="gag-flow__title">Shared capacity is safe to actually use</span>
+    <span class="gag-flow__sub">tight per-tenant quotas, bin-packing, and preemptible nodes stop being risks</span>
+  </div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; which is what the platform team feels</div>
+  <div class="gag-flow__row">
+    <div class="gag-flow__node">
+      <span class="gag-flow__title">Less ops toil</span>
+      <span class="gag-flow__sub">no manual reruns, no stuck-job tickets</span>
+    </div>
+    <div class="gag-flow__node">
+      <span class="gag-flow__title">Fewer pages</span>
+      <span class="gag-flow__sub">cluster churn stops being an incident</span>
+    </div>
+    <div class="gag-flow__node">
+      <span class="gag-flow__title">Higher utilization</span>
+      <span class="gag-flow__sub">hardware you already pay for gets shared</span>
+    </div>
+    <div class="gag-flow__node">
+      <span class="gag-flow__title">More throughput</span>
+      <span class="gag-flow__sub">jobs finish per node-hour instead of stalling</span>
+    </div>
+  </div>
+</div>
+
+The [cost model](design/appendix-f-cost-model.md) works the utilization argument
+through in numbers; a published benchmark at scale is
+[on the roadmap](roadmap.md) and not yet done, so treat those figures as a model
+rather than a measurement.
 
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
