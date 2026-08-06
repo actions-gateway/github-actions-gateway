@@ -4,8 +4,6 @@
 
 ---
 
-Canonical definitions for the project's terms. Other documents link here rather than redefining a term in place, so this table is where a definition changes.
-
 | Term | Definition |
 | --- | --- |
 | **GMC** | Gateway Manager Controller. Cluster-scoped operator that watches `ActionsGateway` CRs and provisions per-tenant gateway resources. See [§2.1](02-architecture.md#21-tier-1--gateway-manager-controller-gmc). |

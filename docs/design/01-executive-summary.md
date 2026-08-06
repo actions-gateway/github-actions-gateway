@@ -4,8 +4,6 @@
 
 ---
 
-A shared `ResourceQuota` lets cheap CPU runner pods exhaust capacity before expensive GPU runners can schedule, and the usual workaround (keeping runners warm so jobs start fast) holds those accelerators around the clock. This chapter makes the case for a four-tier gateway that addresses both: priority tiers guarantee GPU runners a scheduling slot under contention, and worker pods exist only while a job runs. The value argument is broken out by audience first; [Overview for Architects & Engineers](#overview-for-architects--engineers) gives the technical framing.
-
 ## The Case, by Audience
 
 ### For Executive Leadership

@@ -376,7 +376,7 @@ spec:
     `NetworkPolicy`-restricted egress, collapsing the minimum to three objects.
 2.  A reusable pod shape referenced by both `RunnerSet`s below via `templateRef`.
     Define it once; a cluster-scoped `ClusterRunnerTemplate` shares one shape
-    across every namespace. The Pod Security Admission level is a **namespace
+    across every namespace. The Pod Security Admission (PSA) level is a **namespace
     label** in v2, not a CR field. All gateways in a namespace share one level.
 3.  `credentials.githubApp.name` references a `Secret` in this namespace holding
     the GitHub App `appId`, `installationId`, and `privateKey`. The GMC watches the
