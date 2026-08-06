@@ -1,11 +1,11 @@
-# docs/operations/
+# Operations
 
-Operator-facing references. Audience: on-call SRE and platform engineers running the Gateway Manager Controller (GMC) and per-tenant Actions Gateway Controllers (AGCs).
+Operator-facing references. Audience: on-call SRE and platform engineers running the Gateway Manager Controller (GMC) and per-tenant Actions Gateway Controllers (AGCs) that make up GitHub Actions Gateway (GAG).
 
 | Doc | Personas | Purpose |
 |---|---|---|
 | [runbook.md](runbook.md) | SRE | Production runbook: high-level operational procedures. For initial setup see [Getting Started](../getting-started.md). |
-| [backup-restore.md](backup-restore.md) | SRE, Platform engineer | Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted `ActionsGateway` CR. |
+| [backup-restore.md](backup-restore.md) | SRE, Platform engineer | Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted `ActionsGateway` custom resource. |
 | [velero-backup-restore.md](velero-backup-restore.md) | SRE, Platform engineer | Velero-specific how-to: namespace-level backup/restore commands grounded in GAG's ownership model, with the selector that skips GMC-owned children so the controllers rebuild them. |
 | [troubleshooting.md](troubleshooting.md) | SRE, Platform engineer | Symptom → diagnosis → remediation, organised by observable failure mode. |
 | [observability.md](observability.md) | SRE, Platform engineer | Observability guide hub: links to the [metrics reference](observability-metrics.md), [scraping setup](observability-metrics-access.md), [alerting & SLOs](observability-alerting.md), [Grafana dashboards](observability-dashboards.md), and [logging & tracing](observability-logging.md). |
@@ -23,7 +23,7 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 | [migration-from-arc.md](migration-from-arc.md) | Platform engineer | Coming from Actions Runner Controller (ARC) scale-set mode: concept mapping, behavioral differences, and a worked one-runner-group migration. |
 | [install.md](install.md) | Platform engineer | Install the GMC with the `actions-gateway` Helm chart: prerequisites, digest pinning, healthy-install verification, uninstall. |
 | [air-gapped-install.md](air-gapped-install.md) | Platform engineer | Install on an air-gapped / egress-restricted cluster: relocate the images and OCI chart to a private registry (digests preserved), set per-image registry overrides + image-pull Secrets, wire pull Secrets for the runtime AGC/proxy/worker pods. |
-| [gitops.md](gitops.md) | Platform engineer | Install the OCI chart declaratively via Argo CD or Flux: `Application` / `HelmRelease` examples with the CRD-pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed). |
+| [gitops.md](gitops.md) | Platform engineer | Install the OCI chart declaratively via Argo CD or Flux: `Application` / `HelmRelease` examples with the CustomResourceDefinition pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed). |
 | [v1alpha1-deprecation.md](v1alpha1-deprecation.md) | Platform engineer, Tenant operator | Standing deprecation notice: what the `v2.0.0` release removes (`v1alpha1`, `v2alpha1`, Classic acquisition), what keeps working until then, and the pre-upgrade checklist. |
 | [migration-v1-to-v2.md](migration-v1-to-v2.md) | Platform engineer | Move a tenant off the deprecated `v1alpha1` API with the `gag-migrate` one-shot fan-out: dry-run → review → `--apply`, coexistence, rollback, teardown. |
 | [upgrade.md](upgrade.md) | Platform engineer | Upgrade and rollback procedures. Strategy intent lives in [§2.6 of the architecture doc](../design/02-architecture.md#26-upgrade-strategy). |

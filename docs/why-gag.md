@@ -11,7 +11,7 @@ hide:
 
 # Why GitHub Actions Gateway over ARC?
 
-<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner sets, for many tenants, in one shared cluster, cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GAG was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
+<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner sets, for many tenants, in one shared cluster, cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GitHub Actions Gateway (GAG) was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Migrating from ARC](operations/migration-from-arc.md){ .md-button }
@@ -93,7 +93,7 @@ letting tenants run their own runners.
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Namespace a tenant self-serves in</strong>: declare your gateway and runner sets; the GMC provisions the controller, proxy pool, RBAC, and network policies to run within the platform-owned quota, no per-tenant cluster-admin</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Namespace a tenant self-serves in</strong>: declare your gateway and runner sets; the Gateway Manager Controller (GMC) provisions the controller, proxy pool, RBAC, and network policies to run within the platform-owned quota, no per-tenant cluster-admin</span>
   </div>
 </div>
 
@@ -163,8 +163,8 @@ Every capability above is available today.
     New tenants should onboard on the **recommended v2 API** at
     `actions-gateway.com/v2beta1`: a decomposed `ActionsGateway` + `RunnerSet` +
     `RunnerTemplate`, with an optional standalone `EgressProxy`; the rows marked
-    <span class="gag-v2-badge">v2</span> are v2-only. The single-CR `v1alpha1` shape
-    shown below is still fully served but
+    <span class="gag-v2-badge">v2</span> are v2-only. The single-custom-resource (CR)
+    `v1alpha1` shape shown below is still fully served but
     **[deprecated, and removed at `v2.0.0`](operations/v1alpha1-deprecation.md)**. See the
     [v1 → v2 migration guide](operations/migration-v1-to-v2.md) and the
     [getting-started walkthrough](getting-started.md) for the v2 object set.
@@ -261,9 +261,8 @@ playbooks, see [Security](design/05-security.md) and
 
 ## Composable building blocks, not one giant CR
 
-A tenant still declares only namespace-scoped resources, and the Gateway Manager
-Controller (GMC) provisions the controller, proxy pool, RBAC, and network policies
-to match, all within the **platform-owned `ResourceQuota`** the GMC never creates
+A tenant still declares only namespace-scoped resources, and the GMC provisions the
+controller, proxy pool, RBAC, and network policies to match, all within the **platform-owned `ResourceQuota`** the GMC never creates
 or mutates, with no per-tenant cluster-admin after the initial install. What
 changed with the **recommended v2 API** is that the single-CR monolith is
 decomposed into small, reusable kinds, and that decomposition *is* a

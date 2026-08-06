@@ -1,10 +1,31 @@
 # High-Scale Virtualized GitHub Actions Gateway: Design Documentation
 
-This folder contains the full system design for the GitHub Actions Gateway, organized into focused documents with cross-references. All documents are intended to render correctly on GitHub.
+The gateway is a **four-tier system** for running GitHub Actions self-hosted runners at scale on Kubernetes:
+
+| Tier | Component | Scope | Role |
+| --- | --- | --- | --- |
+| 1 | [Gateway Manager Controller (GMC)](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) | Cluster | Watches `ActionsGateway` custom resources (CRs), provisions per-tenant resources |
+| 2 | [Actions Gateway Controller (AGC)](02-architecture.md#22-tier-2--actions-gateway-controller-agc) | Namespace | Multiplexes GitHub broker sessions, acquires jobs, spawns worker pods |
+| 3 | [Egress Proxy Pool](02-architecture.md#23-tier-3--egress-proxy-pool) | Namespace | Stateless HTTPS CONNECT proxy pool; isolated egress IPs per tenant |
+| 4 | [Ephemeral Worker Pod](02-architecture.md#24-tier-4--ephemeral-worker-pod) | Namespace | Single-use pod that executes exactly one workflow job |
+
+This section is the full system design, split into focused, cross-referenced documents. For a quick orientation, start with [01-executive-summary.md](01-executive-summary.md), then follow the reading path for your role.
 
 ---
 
-## Table of Contents
+## Reading Paths by Role
+
+**Architect**: reviewing the overall design: start with [01-executive-summary.md](01-executive-summary.md), then [02-architecture.md](02-architecture.md), then [03-api-contracts.md](03-api-contracts.md). Read [04-operational-flows.md](04-operational-flows.md) and [05-security.md](05-security.md) for depth.
+
+**Platform engineer**: deploying or operating the system: read [Getting Started](../getting-started.md) first, then [02-architecture.md §2.1](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) (GMC), [Appendix A](appendix-a-capacity-slos.md) (SLOs), [Observability](../operations/observability.md), [Runbook](../operations/runbook.md), and [Upgrade & Rollback](../operations/upgrade.md).
+
+**Security engineer**: reviewing trust boundaries and threats: read [05-security.md](05-security.md), [02-architecture.md §2.4](02-architecture.md#24-tier-4--ephemeral-worker-pod) (worker isolation), [03-api-contracts.md §3.2](03-api-contracts.md#32-github-app-credentials-secret-schema) (credentials), and [Appendix B](appendix-b-worker-isolation.md) (runtime hardening).
+
+**Tenant team**: authoring RunnerGroup configs: read [Getting Started](../getting-started.md), [03-api-contracts.md §3.1](03-api-contracts.md#31-kubernetes-crd-schemas) (CustomResourceDefinition schemas), and [Appendix E](appendix-e-capacity-planning.md) (sizing guidance).
+
+---
+
+## Design documents
 
 1. [Executive Summary & Problem Statement](01-executive-summary.md)
    - [For Executive Leadership: GPU Utilization & Cost Justification](01-executive-summary.md#for-executive-leadership)
@@ -51,9 +72,9 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Appendix G — Optional Future Enhancements](appendix-g-future-enhancements.md)
 - [Appendix H — v2 API Decomposition (Proposal)](appendix-h-v2-api-decomposition.md)
 - [Network Architecture](network-architecture.md)
-- [GitHub Protocol Dependency Register](github-protocol-dependencies.md): the GitHub-internal protocols GAG speaks, their stability tier, and drift-watch triggers
+- [GitHub Protocol Dependency Register](github-protocol-dependencies.md): the GitHub-internal protocols GitHub Actions Gateway (GAG) speaks, their stability tier, and drift-watch triggers
 
-**Operations**
+## Related operations docs
 
 - [Getting Started](../getting-started.md): initial setup, credential rotation
 - [Observability](../operations/observability.md): metrics reference, alert rules
@@ -61,30 +82,3 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Runbook](../operations/runbook.md): day-2 operations, incident response
 - [Upgrade & Rollback](../operations/upgrade.md): per-component upgrade procedures
 - [Tenant Onboarding](../operations/tenant-onboarding.md): checklist for onboarding a new tenant team
-
----
-
-## Reading Paths by Role
-
-**Architect**: reviewing the overall design: start with [01-executive-summary.md](01-executive-summary.md), then [02-architecture.md](02-architecture.md), then [03-api-contracts.md](03-api-contracts.md). Read [04-operational-flows.md](04-operational-flows.md) and [05-security.md](05-security.md) for depth.
-
-**Platform engineer**: deploying or operating the system: read [Getting Started](../getting-started.md) first, then [02-architecture.md §2.1](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) (GMC), [Appendix A](appendix-a-capacity-slos.md) (SLOs), [Observability](../operations/observability.md), [Runbook](../operations/runbook.md), and [Upgrade & Rollback](../operations/upgrade.md).
-
-**Security engineer**: reviewing trust boundaries and threats: read [05-security.md](05-security.md), [02-architecture.md §2.4](02-architecture.md#24-tier-4--ephemeral-worker-pod) (worker isolation), [03-api-contracts.md §3.2](03-api-contracts.md#32-github-app-credentials-secret-schema) (credentials), and [Appendix B](appendix-b-worker-isolation.md) (runtime hardening).
-
-**Tenant team**: authoring RunnerGroup configs: read [Getting Started](../getting-started.md), [03-api-contracts.md §3.1](03-api-contracts.md#31-kubernetes-crd-schemas) (CRD schemas), and [Appendix E](appendix-e-capacity-planning.md) (sizing guidance).
-
----
-
-## System Overview
-
-The gateway is a **four-tier system** for running GitHub Actions self-hosted runners at scale on Kubernetes:
-
-| Tier | Component | Scope | Role |
-| --- | --- | --- | --- |
-| 1 | [Gateway Manager Controller (GMC)](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) | Cluster | Watches `ActionsGateway` CRs, provisions per-tenant resources |
-| 2 | [Actions Gateway Controller (AGC)](02-architecture.md#22-tier-2--actions-gateway-controller-agc) | Namespace | Multiplexes GitHub broker sessions, acquires jobs, spawns worker pods |
-| 3 | [Egress Proxy Pool](02-architecture.md#23-tier-3--egress-proxy-pool) | Namespace | Stateless HTTPS CONNECT proxy pool; isolated egress IPs per tenant |
-| 4 | [Ephemeral Worker Pod](02-architecture.md#24-tier-4--ephemeral-worker-pod) | Namespace | Single-use pod that executes exactly one workflow job |
-
-For a quick orientation, start with [01-executive-summary.md](01-executive-summary.md), then follow links from there.

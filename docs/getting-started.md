@@ -13,8 +13,8 @@
     stability contract, and where new capabilities land. `v2alpha1` stays served as
     the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the
     `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does
-    not, and the apiserver converts between the two. The older single-CR
-    **`v1alpha1`** API is still fully served but
+    not, and the apiserver converts between the two. The older
+    single-custom-resource (CR) **`v1alpha1`** API is still fully served but
     **[deprecated](operations/v1alpha1-deprecation.md)**: reach for it only if you
     have a specific reason to, and see the
     [legacy v1 path](#legacy-the-v1alpha1-api-deprecated). `v1alpha1`, `v2alpha1`,
@@ -36,7 +36,7 @@
 
 ## 1. Deploy the GMC
 
-The shipped install artifact is the **`actions-gateway` Helm chart** ([reference](../charts/actions-gateway/README.md)). It installs the Gateway Manager Controller (GMC), its CRDs, RBAC, validating webhook, and admission policy. The GMC then provisions per-tenant AGC instances and proxy pools at runtime. They are not installed by the chart.
+The shipped install artifact is the **`actions-gateway` Helm chart** ([reference](../charts/actions-gateway/README.md)). It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy. The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime. They are not installed by the chart.
 
 ```sh
 helm install gag charts/actions-gateway \

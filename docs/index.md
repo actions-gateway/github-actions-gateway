@@ -20,7 +20,7 @@ hide:
 
 </div>
 
-<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
+<p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Watch the demo](demo.md){ .md-button }
@@ -70,7 +70,7 @@ Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-
     - Platform-owned quota cap
     - Blocked jobs auto-recover
     - Zero manual reruns
-    - Self-serve `ActionsGateway` CRs, no platform ticket per change
+    - Self-serve `ActionsGateway` custom resources, no platform ticket per change
 
 -   :material-layers-triple:{ .lg .middle } __No blocked critical jobs__
 
@@ -229,7 +229,7 @@ A four-tier system: a cluster-scoped manager gives each tenant an isolated gatew
     <span class="gag-flow__title">Gateway Manager Controller</span>
     <span class="gag-flow__sub">cluster-scoped · installed once</span>
   </div>
-  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the AGC + proxy per tenant</div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the Actions Gateway Controller (AGC) + proxy per tenant</div>
   <div class="gag-flow__row">
     <div class="gag-flow__node">
       <span class="gag-flow__tier">Tier 2</span>

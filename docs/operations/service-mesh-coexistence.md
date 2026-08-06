@@ -610,7 +610,7 @@ out.
 
 ---
 
-## Summary
+## Which fix applies to you
 
 | Situation | Do this |
 |---|---|
