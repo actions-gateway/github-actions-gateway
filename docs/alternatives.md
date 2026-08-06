@@ -18,8 +18,10 @@ Actions Gateway (GAG) is probably right.
 | One team owns the cluster and the runners | [ARC](https://github.com/actions/actions-runner-controller) | GAG speaks the same protocol through the same client library. This is not a protocol argument ([D.3](design/appendix-d-alternatives-considered.md#d3-actions-runner-controller-arc)) |
 | Your compute is elastic cloud capacity, no cluster wanted | [RunsOn](https://runs-on.com), [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner), [Actuated](https://actuated.com) | a VM per job isolates without any namespace argument ([D.11](design/appendix-d-alternatives-considered.md#d11-self-hosted-github-actions-without-kubernetes)) |
 
-GAG is for what is left: **the nodes are big and expensive, several teams share
-them, and that sharing has to be safe.**
+!!! tip "GAG is for what is left"
+
+    The nodes are big and expensive, several teams have to share them, and that
+    sharing has to be safe.
 
 ## Where each option can actually run
 
