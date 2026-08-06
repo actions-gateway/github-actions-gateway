@@ -38,11 +38,10 @@
 #     (branch-guard, workspace-guard) in the loop — an `allow` would ride the
 #     whole command (its other segments, an outside-workspace redirect) past
 #     them, which is why the bare form uses `allow` but this one must not.
-#   * The same compound/redirected `-race` case when the hook cannot identify a
-#     single `go build`/`go test` token to prefix (more than one invocation, or a
-#     form it cannot parse) -> `deny` with the specific reason. We deny rather
-#     than emit a command that throttles the wrong token — or none — because a
-#     silently mis-thrown prefix would leave the real `-race` run unthrottled.
+#   * The same compound/redirected `-race` case with more than one `go build`/
+#     `go test` invocation to throttle and one prefix to place -> `deny` with the
+#     specific reason. We deny rather than throttle one invocation and leave the
+#     other running at full tilt.
 #   * Any other such `go build`/`go test` (no `-race`)         -> allow unchanged.
 #
 # Why redirects/chaining disqualify the *auto-allow* path (but not throttling):
@@ -57,6 +56,17 @@
 # permission flow for the user and the guard hooks to act on however Claude Code
 # composes them — instead of blocking the caller outright.
 #
+# What counts as an invocation (Q624): only a `go` token in *command position* —
+# the start of the command, or after `;`/`&&`/`||`/`|`/`(`/a newline, past any
+# leading `VAR=val` assignments. Quoted strings and heredoc bodies are text to
+# the receiving command, not commands, so they are skipped. Without that a
+# `git commit -F -` heredoc whose message quotes `go test -race` read as a go
+# invocation: two mentions denied the commit outright, one silently rewrote the
+# prefix *into the message*. Known limit: a heredoc fed to a shell
+# (`bash <<EOF … go test -race … EOF`) is likewise skipped and runs unthrottled;
+# the body is opaque here, and telling a shell heredoc from a message one means
+# special-casing command names, which is the failure mode this replaced.
+#
 # Wired up by .claude/settings.json as a PreToolUse hook on the Bash matcher.
 # Requires jq; if jq is missing the hook is a no-op (fail-open).
 set -euo pipefail
@@ -67,17 +77,206 @@ emit_allow_unchanged() {
 	exit 0
 }
 
-# is_heavy_go_command returns success when the command contains a `go build` or
-# `go test` invocation. The leading boundary ((^|non-word)) keeps `cargo test`,
-# `mongo build`, `django test` and similar from matching the trailing `go`.
-is_heavy_go_command() {
+# scan_go_invocations prints one `START END` line per command-position
+# `go build`/`go test` invocation in the command: START is the offset of the `go`
+# token, END the offset just past its last argument (its terminating operator,
+# redirect, or end of string). It prints nothing when there is none.
+#
+# The scan tracks shell quoting, heredoc bodies and command position, so a `go`
+# that is merely *named* — in a `git commit` message, a heredoc body, a `grep`
+# pattern — is not an invocation. It also means a wrapper form reports nothing:
+# in `taskpolicy -d throttle go test`, `go` is an argument to `taskpolicy`, not
+# a command.
+scan_go_invocations() {
 	local cmd="$1"
-	[[ "$cmd" =~ (^|[^[:alnum:]_-])go[[:space:]]+(build|test)([[:space:]]|$) ]]
+	local n=${#cmd}
+	local i=0 next_i ch state=plain
+	local cmdpos=1 in_word=0 wstart=-1 word=""
+	local pending_go=-1 go_start=-1
+	local flush op endinv
+	local heredocs="" j q dash delim close
+	local consumed spec hdash hdelim line probe
+	# A lone backslash, as a variable so it can be a `case` pattern without
+	# reading as a botched quote escape (shellcheck SC1003).
+	local bslash=$'\\'
+
+	while ((i < n)); do
+		ch="${cmd:i:1}"
+
+		if [[ "$state" == sq ]]; then
+			if [[ "$ch" == "'" ]]; then state=plain; else word+="$ch"; fi
+			i=$((i + 1))
+			continue
+		fi
+		if [[ "$state" == dq ]]; then
+			if [[ "$ch" == '"' ]]; then
+				state=plain
+			elif [[ "$ch" == "$bslash" ]] && ((i + 1 < n)); then
+				i=$((i + 1))
+				word+="${cmd:i:1}"
+			else
+				word+="$ch"
+			fi
+			i=$((i + 1))
+			continue
+		fi
+
+		flush=0 op=0 endinv=0 next_i=-1
+
+		case "$ch" in
+		"'" | '"')
+			if ((in_word == 0)); then
+				in_word=1
+				wstart=$i
+			fi
+			if [[ "$ch" == "'" ]]; then state=sq; else state=dq; fi
+			;;
+		"$bslash")
+			if ((in_word == 0)); then
+				in_word=1
+				wstart=$i
+			fi
+			if ((i + 1 < n)); then
+				i=$((i + 1))
+				word+="${cmd:i:1}"
+			fi
+			;;
+		' ' | $'\t')
+			flush=1
+			;;
+		$'\n')
+			flush=1 op=1 endinv=1
+			# A newline ends the line that opened any pending heredocs, so their
+			# bodies start here. Consume each one through its delimiter line.
+			if [[ -n "$heredocs" ]]; then
+				consumed=$((i + 1))
+				while [[ -n "$heredocs" ]]; do
+					spec="${heredocs%%$'\n'*}"
+					heredocs="${heredocs#*$'\n'}"
+					hdash="${spec:0:1}"
+					hdelim="${spec:1}"
+					while ((consumed < n)); do
+						line="${cmd:consumed}"
+						line="${line%%$'\n'*}"
+						probe="$line"
+						# `<<-` strips leading tabs from the delimiter line.
+						if [[ "$hdash" == '-' ]]; then
+							probe="${probe#"${probe%%[!$'\t']*}"}"
+						fi
+						consumed=$((consumed + ${#line} + 1))
+						if [[ "$probe" == "$hdelim" ]]; then break; fi
+					done
+				done
+				next_i=$consumed
+			fi
+			;;
+		';' | '&' | '|' | '(' | ')' | '{' | '}' | '`')
+			flush=1 op=1 endinv=1
+			;;
+		'<' | '>')
+			# A redirect ends the invocation's argument list but does not start a
+			# new command, so cmdpos is left alone.
+			flush=1 endinv=1
+			if [[ "${cmd:i:2}" == '<<' && "${cmd:i:3}" != '<<<' ]]; then
+				# `<<` / `<<-` opens a heredoc: record its delimiter (the body is
+				# skipped when the current line ends) and resume after it.
+				j=$((i + 2))
+				dash='='
+				delim=''
+				if [[ "${cmd:j:1}" == '-' ]]; then
+					dash='-'
+					j=$((j + 1))
+				fi
+				while [[ "${cmd:j:1}" == ' ' || "${cmd:j:1}" == $'\t' ]]; do j=$((j + 1)); done
+				close="${cmd:j:1}"
+				if [[ "$close" == "'" || "$close" == '"' ]]; then
+					j=$((j + 1))
+					while ((j < n)) && [[ "${cmd:j:1}" != "$close" ]]; do
+						delim+="${cmd:j:1}"
+						j=$((j + 1))
+					done
+					j=$((j + 1))
+				else
+					while ((j < n)); do
+						q="${cmd:j:1}"
+						case "$q" in
+						' ' | $'\t' | $'\n' | ';' | '&' | '|' | '<' | '>' | '(' | ')') break ;;
+						"$bslash")
+							j=$((j + 1))
+							delim+="${cmd:j:1}"
+							j=$((j + 1))
+							;;
+						*)
+							delim+="$q"
+							j=$((j + 1))
+							;;
+						esac
+					done
+				fi
+				heredocs+="$dash$delim"$'\n'
+				next_i=$j
+			fi
+			;;
+		*)
+			if ((in_word == 0)); then
+				in_word=1
+				wstart=$i
+			fi
+			word+="$ch"
+			;;
+		esac
+
+		if ((flush)) && ((in_word)); then
+			if ((cmdpos)); then
+				if [[ "$word" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+					: # a `VAR=val` assignment keeps the next word in command position
+				elif [[ "$word" == go ]]; then
+					pending_go=$wstart
+					cmdpos=0
+				else
+					cmdpos=0
+				fi
+			elif ((pending_go >= 0)); then
+				if [[ "$word" == build || "$word" == test ]]; then
+					go_start=$pending_go
+				fi
+				pending_go=-1
+			fi
+			in_word=0 wstart=-1 word=""
+		fi
+		if ((endinv)) && ((go_start >= 0)); then
+			printf '%s %s\n' "$go_start" "$i"
+			go_start=-1
+		fi
+		if ((op)); then
+			cmdpos=1 pending_go=-1
+		fi
+
+		if ((next_i >= 0)); then i=$next_i; else i=$((i + 1)); fi
+	done
+
+	# End of string: flush the trailing word and close any open invocation.
+	if ((in_word)); then
+		if ((cmdpos == 0)) && ((pending_go >= 0)) && [[ "$word" == build || "$word" == test ]]; then
+			go_start=$pending_go
+		fi
+	fi
+	if ((go_start >= 0)); then
+		printf '%s %s\n' "$go_start" "$n"
+	fi
 }
 
-# already_throttled returns success when the command already carries a throttle
-# prefix (taskpolicy / nice) or computes one via local-throttle.sh — i.e. the
-# documented manual workaround, or a previous wrap, is already in place.
+# already_throttled returns success when the text preceding a go invocation
+# already carries a throttle prefix (taskpolicy / nice) or computes one via
+# local-throttle.sh — i.e. the documented manual workaround, or a previous wrap,
+# is already in place. It is passed only the pre-invocation text so a commit
+# message naming `taskpolicy` cannot suppress a real throttle.
+#
+# The literal `taskpolicy`/`nice` forms are the case where the wrapper's own
+# `go` argument is not in command position and so is invisible to
+# scan_go_invocations anyway; what this still has to catch is
+# `$(scripts/agent/local-throttle.sh prefix) go test …`, whose `go` follows the
+# substitution's `)` and *is* in command position.
 already_throttled() {
 	local cmd="$1"
 	case "$cmd" in
@@ -115,49 +314,12 @@ has_redirect() {
 	esac
 }
 
-# rewrite_simple prints the rewritten command for a simple `go build`/`go test`
-# invocation: it inserts the QoS prefix immediately before the `go` token,
-# preserving any leading `VAR=val` environment assignments so they still apply.
-# Prints nothing and returns non-zero if the head is not a bare `go build`/`test`
-# (e.g. an absolute path to go, or gofmt) — the caller then allows it unchanged.
-rewrite_simple() {
-	local cmd="$1" prefix="$2"
-	local env_prefix="" rest="$cmd"
-
-	# Peel off leading `NAME=value ` environment assignments.
-	while [[ "$rest" =~ ^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+) ]]; do
-		env_prefix+="${BASH_REMATCH[1]}"
-		rest="${rest#"${BASH_REMATCH[1]}"}"
-	done
-
-	# What remains must start with a bare `go build`/`go test`.
-	[[ "$rest" =~ ^go[[:space:]]+(build|test)([[:space:]]|$) ]] || return 1
-
-	printf '%s%s %s' "$env_prefix" "$prefix" "$rest"
-}
-
-# rewrite_compound prints a compound or redirected command with the QoS prefix
-# inserted immediately before its single `go build`/`go test` invocation,
-# preserving everything around it (a subshell wrapper, a leading `cd`, redirects,
-# `VAR=val` assignments). It rewrites ONLY a form it can pin down unambiguously:
-# exactly one `go build`/`go test` token. When the command holds more than one
-# such invocation — or a shape this simple parse cannot place the prefix in — it
-# prints nothing and returns non-zero, and the caller denies with a specific
-# reason rather than throttle the wrong token (or none) and leave `-race`
-# running at full tilt.
-rewrite_compound() {
-	local cmd="$1" prefix="$2"
-	# Group 1 (greedy) captures everything up to and including the boundary char
-	# before the LAST `go build`/`go test`; it is optional so a redirect-only
-	# command whose `go` sits at position 0 (`go test -race … > out`) still
-	# matches. Group 2 is that invocation through end of string.
-	local re='^(.*[^[:alnum:]_-])?(go[[:space:]]+(build|test)([[:space:]].*)?)$'
-	[[ "$cmd" =~ $re ]] || return 1
-	local before="${BASH_REMATCH[1]}" invocation="${BASH_REMATCH[2]}"
-	# A second `go build`/`go test` in the pre-match text means we cannot know
-	# which invocation to throttle — bail so the caller denies.
-	is_heavy_go_command "$before" && return 1
-	printf '%s%s %s' "$before" "$prefix" "$invocation"
+# rewrite_at prints the command with the QoS prefix inserted immediately before
+# the `go` token at OFFSET, preserving everything around it — a subshell
+# wrapper, a leading `cd`, redirects, `VAR=val` assignments.
+rewrite_at() {
+	local cmd="$1" offset="$2" prefix="$3"
+	printf '%s%s %s' "${cmd:0:offset}" "$prefix" "${cmd:offset}"
 }
 
 main() {
@@ -174,9 +336,23 @@ main() {
 	[[ "$tool_name" == "Bash" ]] || emit_allow_unchanged
 	[[ -n "$command" ]] || emit_allow_unchanged
 
-	# Not a heavy go command, or it is already throttled: leave it alone.
-	is_heavy_go_command "$command" || emit_allow_unchanged
-	if already_throttled "$command"; then
+	# Locate the command-position go invocations. None (including a command that
+	# only *names* one) means there is nothing to throttle.
+	local invocations
+	invocations="$(scan_go_invocations "$command")"
+	[[ -n "$invocations" ]] || emit_allow_unchanged
+
+	# Count them, note where the first one starts, and decide `-race` from the
+	# invocations' own argument text rather than the whole string — a `-race` in
+	# a commit message is not a race run.
+	local count=0 first_start=-1 has_race=0 start end
+	while read -r start end; do
+		count=$((count + 1))
+		if ((count == 1)); then first_start=$start; fi
+		if [[ "${command:start:end - start}" == *-race* ]]; then has_race=1; fi
+	done <<<"$invocations"
+
+	if already_throttled "${command:0:first_start}"; then
 		emit_allow_unchanged
 	fi
 
@@ -199,9 +375,10 @@ main() {
 		# we rewrite it and return `ask`: the throttle is applied and the prompt
 		# keeps the user and the guard hooks in the loop. A non-`-race` form stays
 		# on the normal permission flow (and the guards) unchanged.
-		if [[ "$command" == *-race* ]]; then
-			local racecmd
-			if racecmd="$(rewrite_compound "$command" "$prefix")"; then
+		if ((has_race)); then
+			if ((count == 1)); then
+				local racecmd
+				racecmd="$(rewrite_at "$command" "$first_start" "$prefix")"
 				jq -cn --arg cmd "$racecmd" '{
 					hookSpecificOutput: {
 						hookEventName: "PreToolUse",
@@ -212,15 +389,14 @@ main() {
 				}'
 				return 0
 			fi
-			# Could not pin down a single go build/test token to prefix (more than
-			# one invocation, or a shape the parse can't place the prefix in). Deny
-			# with the specific reason rather than emit a command that throttles the
-			# wrong token — or none — and leaves the real `-race` run unthrottled.
+			# More than one go build/test to throttle and only one prefix to place.
+			# Deny with the specific reason rather than emit a command that
+			# throttles one invocation and leaves the other running at full tilt.
 			jq -cn '{
 				hookSpecificOutput: {
 					hookEventName: "PreToolUse",
 					permissionDecision: "deny",
-					permissionDecisionReason: "Blocked: this `go ... -race` has more than one go build/test invocation (or a shape the throttle hook cannot parse), so the hook cannot insert the throttle prefix unambiguously. Give each `go ... -race` its own throttle prefix ($(scripts/agent/local-throttle.sh prefix)), run each go line on its own, or use the matching `make` target (it throttles itself). See CLAUDE.md."
+					permissionDecisionReason: "Blocked: this `go ... -race` has more than one go build/test invocation, so the hook cannot insert the throttle prefix unambiguously. Give each `go ... -race` its own throttle prefix ($(scripts/agent/local-throttle.sh prefix)), run each go line on its own, or use the matching `make` target (it throttles itself). See CLAUDE.md."
 				}
 			}'
 			return 0
@@ -228,9 +404,11 @@ main() {
 		emit_allow_unchanged
 	fi
 
-	# Simple command: prepend the prefix and auto-allow the throttled form.
+	# Simple command: prepend the prefix and auto-allow the throttled form. A
+	# non-compound command without a redirect holds exactly one invocation —
+	# a second would need an operator between them.
 	local newcmd
-	newcmd="$(rewrite_simple "$command" "$prefix")" || emit_allow_unchanged
+	newcmd="$(rewrite_at "$command" "$first_start" "$prefix")"
 
 	jq -cn --arg cmd "$newcmd" '{
 		hookSpecificOutput: {
