@@ -273,10 +273,12 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		// delivery concludes the whole run, as success for abandoned and canceled
 		// (a false green for a job that never ran), while failed is refused with a
 		// 401. No completejob value yields an honest outcome (measured, Q645/Q676;
-		// docs/design/04-operational-flows.md § Stuck-Pending Worker Pod), and told
-		// nothing GitHub concludes the run and job as cancelled at its ~15-minute
-		// unstarted-job timeout. Sibling completions (Q260) are different: the
-		// winner's own delivery stays open, so they conclude nothing.
+		// docs/design/04-operational-flows.md § Stuck-Pending Worker Pod). The
+		// provisioner instead force-cancels the run before reporting abandoned, so
+		// run and job conclude cancelled in about a second (Q683); GitHub's
+		// ~15-minute unstarted-job timeout is the backstop when that call cannot
+		// act. Sibling completions (Q260) are different: the winner's own delivery
+		// stays open, so they conclude nothing.
 		return acquired, jobErr
 	}
 	return acquired, nil

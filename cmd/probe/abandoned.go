@@ -50,6 +50,12 @@
 //	                                 acquire lock's lapse does with the job.
 //	PROBE_ABANDONED_RERUN_CHECK    - "true" adds the rerun-failed-jobs measurement
 //	                                 after a CONCLUDED-run verdict (default off).
+//	PROBE_ABANDONED_FORCECANCEL    - "true" issues a standalone REST force-cancel of
+//	                                 the fixture run right after T0, with no prior
+//	                                 plain cancel — the Q683 candidate remedy. The
+//	                                 wire answer and the conclusion it drives are
+//	                                 the measurement; canonical use is with
+//	                                 result=none (default off).
 //	PROBE_ABANDONED_WORKFLOW       - Fixture workflow file (default q645-abandoned-probe.yml).
 //	PROBE_ABANDONED_RUNNER_VERSION - Advertised runner version (default 2.335.1,
 //	                                 the version cmd/agc/names pins).
@@ -106,6 +112,7 @@ type abandonedConfig struct {
 	Result        broker.TaskResult
 	SkipComplete  bool
 	RerunCheck    bool
+	ForceCancel   bool
 	WorkflowFile  string
 	RunnerVersion string
 	Timeout       time.Duration
@@ -165,6 +172,7 @@ func parseAbandonedConfig(getenv func(string) string) (abandonedConfig, error) {
 		return abandonedConfig{}, fmt.Errorf("PROBE_ABANDONED_RESULT %q is not a broker.TaskResult value or \"none\"", cfg.Result)
 	}
 	cfg.RerunCheck = getenv("PROBE_ABANDONED_RERUN_CHECK") == "true"
+	cfg.ForceCancel = getenv("PROBE_ABANDONED_FORCECANCEL") == "true"
 	cfg.WorkflowFile = getenv("PROBE_ABANDONED_WORKFLOW")
 	if cfg.WorkflowFile == "" {
 		cfg.WorkflowFile = "q645-abandoned-probe.yml"
@@ -212,6 +220,9 @@ type abandonedProbe struct {
 	// rerunWait bounds the post-rerun watch for a redelivery (default 2m; tests
 	// shorten it).
 	rerunWait time.Duration
+	// jobTailWait bounds the post-conclusion job-record watch (default 3m; tests
+	// shorten it). See watchJobTail.
+	jobTailWait time.Duration
 }
 
 // jitRunner is one repo-level JIT registration: the runner record's identity
@@ -257,6 +268,7 @@ func newAbandonedProbe(logger *slog.Logger, cfg abandonedConfig, provider github
 		apiBase:          strings.TrimSuffix(apiBase, "/"),
 		restPollInterval: 15 * time.Second,
 		rerunWait:        2 * time.Minute,
+		jobTailWait:      3 * time.Minute,
 	}
 }
 
@@ -362,16 +374,90 @@ func (p *abandonedProbe) run(ctx context.Context) (string, error) {
 			"planId", acq.Plan.PlanID, "jobId", jobReq.RunnerRequestID)
 	}
 
+	// The Q683 candidate remedy, in the order the listener's release path would
+	// run it: the remedy call first, then the recycle below.
+	if p.cfg.ForceCancel {
+		p.forceCancelRun(ctx, runID, t0)
+	}
+
 	// The listener's post-job recycle: the consumed delivery's session goes away
-	// and its single-use runner record with it, leaving B the only listener.
+	// and its single-use runner record with it, leaving B the only listener. The
+	// DELETE's answer here is the Q418-mechanism datum: the acquire's in_progress
+	// job pins the record, so a 422 is expected until the run concludes, and a
+	// refused attempt is retried by the deferred cleanup after the window.
 	p.closeSession(ctx, sessA)
 	p.deregisterRunner(ctx, runnerA)
 
 	verdict := p.observe(ctx, obs, jobReq.RunnerRequestID, runID, jobID, t0)
-	if p.cfg.RerunCheck && strings.HasPrefix(verdict, verdictConcluded+"-run-") {
-		p.rerunCheck(ctx, obs, runID, jobID)
+	if strings.HasPrefix(verdict, verdictConcluded+"-run-") {
+		p.watchJobTail(ctx, jobID, t0)
+		if p.cfg.RerunCheck {
+			p.rerunCheck(ctx, obs, runID, jobID)
+		}
 	}
 	return verdict, nil
+}
+
+// forceCancelRun issues the Q683 candidate remedy: a standalone REST
+// force-cancel of the fixture run, with no prior plain cancel — the call shape
+// the listener's release path would use, since the prior force-cancel
+// measurements (2026-08-04) all followed a 202-accepted plain cancel and a
+// plain cancel alone was measured sluggish against an orphaned acquire. The
+// wire answer is logged here; the observation window times the conclusion.
+func (p *abandonedProbe) forceCancelRun(ctx context.Context, runID int64, t0 time.Time) {
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%d/force-cancel", p.apiBase, p.cfg.Owner, p.cfg.Repo, runID)
+	code, body, err := p.postJSON(ctx, u)
+	switch {
+	case err != nil:
+		p.log.Warn("INVESTIGATION-H: FORCECANCEL-ERROR — the force-cancel request failed",
+			"runId", runID, "error", err)
+	case code < 200 || code > 299:
+		p.log.Warn("INVESTIGATION-H: FORCECANCEL-REFUSED — force-cancel answered non-2xx with no "+
+			"prior plain cancel; the standalone call shape is not usable as a remedy",
+			"runId", runID, "status", code, "body", githubapp.SanitizeBody(body, 256))
+	default:
+		p.log.Info("INVESTIGATION-H: FORCECANCEL-ACCEPTED — standalone force-cancel accepted; the "+
+			"window now times the conclusion it drives",
+			"runId", runID, "status", code, "afterT0", time.Since(t0).Round(time.Millisecond).String())
+	}
+}
+
+// watchJobTail keeps polling the job record after a CONCLUDED-run verdict until
+// it concludes or the bounded tail closes. Whether a conclusion reaches the JOB
+// record is its own datum, not implied by the run's: every accepted completejob
+// value concluded the run while orphaning the job in_progress indefinitely (the
+// Q645/Q676 findings), and only the told-nothing 15-minute cancel concluded
+// both.
+func (p *abandonedProbe) watchJobTail(ctx context.Context, jobID int64, t0 time.Time) {
+	deadline := time.Now().Add(p.jobTailWait)
+	lastStatus := ""
+	for {
+		status, conclusion, err := p.fetchJobStatus(ctx, jobID)
+		switch {
+		case err != nil:
+			p.log.Warn("INVESTIGATION-H: job tail: REST job status fetch failed", "jobId", jobID, "error", err)
+		case status == "completed":
+			p.log.Info("INVESTIGATION-H: JOB-CONCLUDED — the job record went terminal too; no "+
+				"orphaned in_progress record",
+				"jobId", jobID, "conclusion", conclusion,
+				"afterT0", time.Since(t0).Round(time.Second).String())
+			return
+		default:
+			lastStatus = status
+		}
+		if time.Now().After(deadline) {
+			p.log.Warn("INVESTIGATION-H: JOB-ORPHANED — the run concluded but the job record was "+
+				"still not terminal when the tail closed; the in_progress orphan persists",
+				"jobId", jobID, "status", lastStatus, "tail", p.jobTailWait.String())
+			return
+		}
+		select {
+		case <-ctx.Done():
+			p.log.Warn("INVESTIGATION-H: job tail interrupted")
+			return
+		case <-time.After(p.restPollInterval):
+		}
+	}
 }
 
 // ── Observation ──────────────────────────────────────────────────────────────
@@ -851,14 +937,17 @@ func (p *abandonedProbe) tryRegisterRunner(ctx context.Context, name string) (*j
 	return r, resp.StatusCode, nil
 }
 
-// deregisterRunner deletes the runner record once; safe to call again from the
-// deferred cleanup after the explicit post-completion recycle. 404 is
-// tolerated: a consumed single-use JIT record is auto-removed by GitHub.
+// deregisterRunner deletes the runner record; the guard is set only once the
+// record is actually gone (deleted, or 404 for a consumed single-use JIT record
+// GitHub auto-removed), so a refused attempt — above all the 422 "currently
+// running a job" an orphaned in_progress acquire pins the record with — is
+// retried by the deferred cleanup after the window. That retry's answer is the
+// post-conclusion deletability datum (Q683/Q418), and it stops an interrupted
+// run leaking the record.
 func (p *abandonedProbe) deregisterRunner(ctx context.Context, r *jitRunner) {
 	if r.deregistered {
 		return
 	}
-	r.deregistered = true
 	token, err := p.tokens.Token(ctx)
 	if err != nil {
 		p.log.Warn("INVESTIGATION-H: installation token for deregister failed", "runner", r.Name, "error", err)
@@ -880,11 +969,14 @@ func (p *abandonedProbe) deregisterRunner(ctx context.Context, r *jitRunner) {
 	body, _ := io.ReadAll(resp.Body)
 	switch resp.StatusCode {
 	case http.StatusNoContent, http.StatusOK:
+		r.deregistered = true
 		p.log.Info("INVESTIGATION-H: runner deregistered", "runner", r.Name, "id", r.ID)
 	case http.StatusNotFound:
+		r.deregistered = true
 		p.log.Info("INVESTIGATION-H: runner already gone (single-use record consumed)", "runner", r.Name, "id", r.ID)
 	default:
-		p.log.Warn("INVESTIGATION-H: deregister runner unexpected status",
+		p.log.Warn("INVESTIGATION-H: deregister runner refused; the record stays and the deferred "+
+			"cleanup retries after the window",
 			"runner", r.Name, "status", resp.StatusCode, "body", githubapp.SanitizeBody(body, 256))
 	}
 }

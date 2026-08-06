@@ -16,6 +16,7 @@
 //	GET  /api/v3/.../actions/runners?name=<n>    — list runners (name filter)
 //	DELETE /api/v3/.../actions/runners/{id}      — deregister runner
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
+//	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/force-cancel — abandoned-run fast ending (Q683)
 //	POST /api/v3/.../actions/runners/registration-token — scale-set bootstrap, hop 1
 //	POST /api/v3/actions/runner-registration     — scale-set bootstrap, hop 2 (RemoteAuth)
 //	     /_apis/runtime/...                      — scale-set Actions Service
@@ -273,6 +274,10 @@ type server struct {
 	// once at startup; read without mu. See sweepStaleQueuesLocked.
 	sessionQueueGrace time.Duration
 
+	// forceCancelPaths records the request path of every force-cancel call — the
+	// provisioner's fast honest ending for a worker removed before it ran (Q683).
+	// Always accepted 202, the answer live GitHub gave the standalone call.
+	forceCancelPaths []string
 	// rerunPaths records the request path of every accepted (201) rerun-failed-jobs
 	// call the AGC has made, in order — the eviction auto-retry signal (Q421).
 	// Guarded by mu.
@@ -451,6 +456,10 @@ func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if strings.HasSuffix(path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
 		s.handleRerunFailedJobs(w, r)
+		return
+	}
+	if strings.HasSuffix(path, "/force-cancel") && r.Method == http.MethodPost {
+		s.handleForceCancel(w, r)
 		return
 	}
 	if path == "/api/v3/actions/runner-registration" ||
@@ -1318,11 +1327,15 @@ func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleReposAPI routes the /repos/{owner}/{repo}/... REST endpoints the AGC
-// addresses directly off GITHUB_API_BASE_URL. Only rerun-failed-jobs is served;
-// anything else 404s, as an unimplemented endpoint should.
+// addresses directly off GITHUB_API_BASE_URL. Only rerun-failed-jobs and
+// force-cancel are served; anything else 404s, as an unimplemented endpoint should.
 func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
 		s.handleRerunFailedJobs(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/force-cancel") && r.Method == http.MethodPost {
+		s.handleForceCancel(w, r)
 		return
 	}
 	http.NotFound(w, r)
@@ -1358,6 +1371,22 @@ func (s *server) handleRerunFailedJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]any{})
+}
+
+// handleForceCancel serves the abandoned-run fast ending (Q683):
+//
+//	POST /api/v3/repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel
+//
+// Always 202 Accepted — the answer live GitHub gave the standalone call in the
+// told-nothing state (measured 2026-08-05, the Q645 plan doc). Calls are recorded
+// for /control/reruns so a spec can assert the ending was requested.
+func (s *server) handleForceCancel(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.forceCancelPaths = append(s.forceCancelPaths, r.URL.Path)
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]any{})
 }
 
@@ -1429,11 +1458,13 @@ func (s *server) handleReruns(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	accepted := match(s.rerunPaths)
 	refused := match(s.refusedRerunPaths)
+	forceCancels := match(s.forceCancelPaths)
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"count": len(accepted), "paths": accepted,
 		"refusedCount": len(refused), "refusedPaths": refused,
+		"forceCancelCount": len(forceCancels), "forceCancelPaths": forceCancels,
 	})
 }
 
