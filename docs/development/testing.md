@@ -857,6 +857,15 @@ so the change that could invalidate a spec is the change that trips it:
   evidence of anything when CI is green.
 - A second case asserts each named spec still exists at its recorded path, so the roster
   cannot decay into names nothing answers to.
+- A third sweeps the heavy-tier test trees for files that read the deletion mark and
+  requires each to be accounted for: either it contributes a spec to the roster, or it is
+  written off with a reason. **A roster guarded only against rot is still only as
+  complete as whoever last read the design docs**, a gap found by retro after the first
+  two cases had shipped. It classifies per file, not per spec, so a brand-new
+  boundary test file is caught and a new spec inside a roster file is not; the roster's
+  own entry is what points a reader into that file. Unit tests stay out of scope on
+  purpose: they run on every `make check`, so they go red on their own and need no
+  pointer.
 
 It generalises. When a credential-gated spec is the only thing asserting an invariant,
 find the code change that could break it and make *that* the tripwire. The gate cannot
