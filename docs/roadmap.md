@@ -5,12 +5,12 @@ hide:
 
 # Roadmap
 
-This page is about what GAG does **not** do yet. For what it does today, see
+This page is about what GitHub Actions Gateway (GAG) does **not** do yet. For what it does today, see
 [Features](features.md) for every shipped capability, with a link to the doc that
 explains it, and [Why GAG?](why-gag.md) for the capability-by-capability
 comparison against Actions Runner Controller (ARC).
 
-GitHub Actions Gateway (GAG) is **1.0, generally available, and installable from
+GAG is **1.0, generally available, and installable from
 the GitHub Container Registry (GHCR)**. It is Apache-2.0, vendor-neutral, and
 built for one outcome: real operators running multi-tenant self-hosted runners in
 real clusters. There is no paid tier and no commercial roadmap, so the plan below
@@ -57,8 +57,9 @@ separately.
 
 - **[Per-tenant proxy rate limiting](design/appendix-g-future-enhancements.md#g2-proxy-enforced-per-tenant-rate-limiting)** <!-- q:Q565 -->
   A token bucket at the proxy, so one looping tenant is slowed before it reaches
-  GitHub's ceiling; today the only feedback is a 429 and AGC backoff. Per-pod
-  state, since global limits would need a shared backend.
+  GitHub's ceiling; today the only feedback is a 429 and Actions Gateway
+  Controller (AGC) backoff. Per-pod state, since global limits would need a
+  shared backend.
 
 - **[TLS on the in-cluster proxy hop](design/appendix-g-future-enhancements.md#g4-tls-between-agcworkers-and-the-proxy)** <!-- q:Q566 -->
   The CONNECT target is cleartext between the AGC or workers and the proxy,
@@ -96,7 +97,8 @@ the exception: a firm commitment, waiting only on the release that carries it.
   becomes a measured bottleneck.
 - **[Bring-your-own proxy TLS certificate](plan/v2-api.md#deferred-out-of-the-critical-path)** <!-- q:Q174 -->
   Supply the proxy's certificate from your managed PKI or Vault instead of the
-  GMC's self-signed default. (The autoscaler half has shipped:
+  self-signed default the Gateway Manager Controller (GMC) issues.
+  (The autoscaler half has shipped:
   `managedAutoscaling: false` hands the pool to KEDA, VPA, or a custom
   HorizontalPodAutoscaler.)
 - **[First-class GPU runner support](design/appendix-e-capacity-planning.md)** <!-- q:Q216 -->

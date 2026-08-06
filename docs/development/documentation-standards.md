@@ -291,7 +291,7 @@ Every claim in the table above shipped as a flat assertion instead.
 
 | Convention | Rule |
 |---|---|
-| **Acronyms** | Spell out on first use, then the acronym in parentheses — "Actions Gateway Controller (AGC)". Subsequent uses may use the acronym alone. |
+| **Acronyms** | Spell out on first use, then the acronym in parentheses — "Actions Gateway Controller (AGC)". Subsequent uses may use the acronym alone. Applies to **project-invented shorthand** (`GAG`, `GMC`, `AGC`, `CR`, `CRD`), which a reader cannot look up. It does **not** apply to vocabulary the stated audience already has: on a page whose audience line says "SRE, Platform engineer", `GKE`, `RBAC`, `CNI`, `PSA`, `KEDA`, and `VPA` are read, not decoded, and expanding a run of them ("GKE, EKS, AKS, RKE2") costs more than it explains. When an expansion would be clumsier than the plain term, use the plain term (`ActionsGateway` custom resource) instead of the acronym. |
 | **Terminology** | One term per concept across all docs. Canonical definitions live in the [glossary](../design/08-glossary.md); link there rather than redefining. |
 | **Diagrams** | Prefer ASCII box-art over Mermaid unless auto-layout is a quantifiable win. ASCII renders everywhere and diffs cleanly. |
 | **Canonical home + link** | State a fact once, in its natural home, and link to it. Don't restate — copies drift. (Same rule for reuse, since GitHub has no transclusion.) |

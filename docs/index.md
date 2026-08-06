@@ -20,7 +20,7 @@ hide:
 
 </div>
 
-<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
+<p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Watch the demo](demo.md){ .md-button }
@@ -70,7 +70,7 @@ Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-
     - Platform-owned quota cap
     - Blocked jobs auto-recover
     - Zero manual reruns
-    - Self-serve `ActionsGateway` CRs, no platform ticket per change
+    - Self-serve `ActionsGateway`, no ticket per change
 
 -   :material-layers-triple:{ .lg .middle } __No blocked critical jobs__
 
@@ -99,7 +99,7 @@ Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-
 
     Each tenant's own proxy pool:
 
-    - Allow-list runners on GitHub Enterprise Managed Users (EMU)
+    - Allow-list runners on Enterprise Managed Users
     - No shared cluster allow-list
     - Flagged tenants stay isolated
     - v2: proxy optional
@@ -143,10 +143,10 @@ Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-
 
     Hardening reconciled by default:
 
-    - `baseline` Pod Security Admission (PSA) per namespace
+    - `baseline` Pod Security Admission per namespace
     - Default-deny NetworkPolicies
     - Credentials never in env vars
-    - Signed images + Software Bill of Materials (SBOM) + SLSA
+    - Signed images, SBOM, and SLSA provenance
     - [Kata micro-VM workers](operations/kata-dind-workloads.md), proven in our own CI
 
 -   :material-tape-measure:{ .lg .middle } __Right-size from measured usage__ <span class="gag-v2-badge">v2</span>
@@ -229,7 +229,7 @@ A four-tier system: a cluster-scoped manager gives each tenant an isolated gatew
     <span class="gag-flow__title">Gateway Manager Controller</span>
     <span class="gag-flow__sub">cluster-scoped · installed once</span>
   </div>
-  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the AGC + proxy per tenant</div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the Actions Gateway Controller (AGC) + proxy per tenant</div>
   <div class="gag-flow__row">
     <div class="gag-flow__node">
       <span class="gag-flow__tier">Tier 2</span>

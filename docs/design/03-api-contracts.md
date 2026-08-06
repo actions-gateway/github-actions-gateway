@@ -4,6 +4,8 @@
 
 ---
 
+This chapter specifies the contracts the system is built against: the Kubernetes custom resources tenants and the GMC exchange, the Secret schema that carries GitHub App credentials, the GitHub broker endpoints the AGC re-implements, and the rate-limit budget those calls have to fit inside.
+
 ## Table of Contents
 
 - [3.1. Kubernetes CRD Schemas](#31-kubernetes-crd-schemas)
