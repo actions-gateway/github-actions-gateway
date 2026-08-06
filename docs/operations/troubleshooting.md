@@ -1348,6 +1348,8 @@ kubectl delete configmap -n <namespace> scaleset-guards-<name>
 
 The cost of the reset is bounded and one-time: if a hard kill had stranded undeleted messages, their assignments replay once and may each provision one short-lived worker for a job that is already over (the pre-Q606 restart behaviour). A transient apiserver error in the same event message needs no action at all; the reconciler retries and the listener starts once the read succeeds.
 
+**Not this event: a session still held by the outgoing AGC during a rollout.** One session per scale set is a protocol invariant, so while the previous AGC finishes its exit teardown the new one cannot open a session. That is a wait, not a fault, and since Q689 it records no Event at all — the reconciler logs `scale-set session still held by a predecessor; retrying shortly` at Info and re-attempts every couple of seconds until the predecessor's session delete lands. Nothing to do. If that line repeats for longer than the outgoing pod's termination grace period, the previous AGC is not completing its teardown: look at *its* logs for a stuck message delete or session delete rather than at the new pod.
+
 ---
 
 ## AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing

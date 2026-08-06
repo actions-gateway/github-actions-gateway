@@ -124,13 +124,16 @@ const sweepTimeout = 30 * time.Second
 const teardownBudget = 10 * time.Second
 
 // drainBudget bounds the exit read of conclusions the loop had not got to yet (Q689).
-// Smaller than teardownBudget because it is the one teardown call that can be asked to
-// wait on an empty queue: the backlog it exists to read is delivered without blocking,
-// and only the poll that finds nothing left is held server-side — so a stop taken while
-// any job is still running spends this whole budget on that hold. The three exit calls
-// are sequential, so their worst case is their sum, and it has to fit the manager's
-// GracefulShutdownTimeout (30s) rather than only the pod's 60s grace.
-const drainBudget = 5 * time.Second
+// Far smaller than teardownBudget, and not for symmetry: the session cannot be deleted
+// until this returns, a scale set allows one session at a time, and a successor's
+// CreateSession answers SessionConflictError until the predecessor's is gone. Every
+// millisecond spent here is a millisecond the next AGC cannot start acquiring.
+//
+// A second buys the read without paying for a wait: the messages it exists to collect
+// are already queued and come back immediately, while the poll that finds nothing left
+// is held server-side for the backend's whole long-poll window — pure cost, since a
+// queue with nothing to say has nothing this can use.
+const drainBudget = time.Second
 
 // defaultRateLimitConditionAfter is how long GetMessage must have been answered 429
 // before the Listener surfaces RateLimited=True on the owning RunnerSet — the same

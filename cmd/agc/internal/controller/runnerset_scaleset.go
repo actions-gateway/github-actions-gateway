@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -38,6 +39,21 @@ import (
 // advertised capacity is then the tier ceiling, so GitHub caps totalAssignedJobs there
 // and the provisioner backstops per pod (§3 Reworked).
 const defaultScaleSetMaxCapacity = 10
+
+// scaleSetSessionRetry is how long the reconciler waits before re-attempting a listener
+// start that found the scale set's single session still held by a predecessor. Sized
+// against what it is waiting for — the outgoing listener's bounded exit teardown — and
+// deliberately flat: the wait ends at a moment nothing here can observe, so a ladder
+// would keep growing past it and leave the set idle with the session already free.
+const scaleSetSessionRetry = 2 * time.Second
+
+// scaleSetSessionHeld reports whether err is the 409 CreateSession answers while another
+// session exists for the scale set. One session per scale set is a protocol invariant,
+// so an overlapping AGC — every rolling update — meets this on the way up.
+func scaleSetSessionHeld(err error) bool {
+	var conflict *scaleset.SessionConflictError
+	return errors.As(err, &conflict)
+}
 
 // scaleSetStatusSink adapts the reconciler's condition/event channels to the
 // scalesetlistener's owner-bound sinks (Q325): the RunnerSet identity is closed over
@@ -94,6 +110,21 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 
 	handle, err := r.ensureScaleSetListener(ctx, log, key, rs, refs)
+	if scaleSetSessionHeld(err) {
+		// A predecessor still holds the scale set's single session — the ordinary shape
+		// of a rollout, where the outgoing AGC is finishing the teardown Q222 bounds
+		// (reading outstanding conclusions, deleting their messages, then the session).
+		// It is a wait, not a fault: reported as an error it would take the work queue's
+		// exponential backoff, whose ceiling is far longer than the teardown it is
+		// waiting on, so one collision idles the set long after the session is free.
+		//
+		// Status is left alone deliberately: the set does have an active session, the
+		// predecessor's, so publishing NoActiveSessions here would flap Ready=False
+		// through every rollout for a condition that resolves itself.
+		r.stopScaleSetListener(key)
+		log.Info("scale-set session still held by a predecessor; retrying shortly", "err", err)
+		return ctrl.Result{RequeueAfter: scaleSetSessionRetry}, nil
+	}
 	if err != nil {
 		// The session could not be opened (auth/registration error). Stop acquiring,
 		// surface it, and requeue — the referent watches or the next resync retry it.
