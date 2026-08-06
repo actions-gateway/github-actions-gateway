@@ -68,14 +68,26 @@ The default acquisition protocol (Q264). These panels are the scale-set analog o
 | Worker quota exceeded | `max(actions_gateway_worker_quota_exceeded or actions_gateway_runnerset_worker_quota_exceeded)` | Stat (1 = red) |
 | Workers unschedulable | `max(actions_gateway_workers_unschedulable or actions_gateway_runnerset_workers_unschedulable)` | Stat (1 = red) |
 | Worker quota pressure | `max(actions_gateway_worker_quota_pressure or actions_gateway_runnerset_worker_quota_pressure)` | Stat (1 = yellow) |
+| Worker capacity declined | `max by (reason) (actions_gateway_runnerset_worker_capacity_declined)` | Stat (1 = orange), reason shown beside the value |
 | Agent recycle errors | `rate(actions_gateway_agent_recycle_errors_total[5m])` | Time series |
 
-> The three capacity panels union the v1 `RunnerGroup` family with its
+> The first three capacity panels union the v1 `RunnerGroup` family with its
 > `actions_gateway_runnerset_*` v2 twin (Q319). The two families key on different
 > labels — `runner_group` and `runner_set` — so `or` unions rather than overlaps them,
 > and a panel that named only the v1 family would read a flat `0` on a v2-only deploy.
 > To break either out per owner, replace `max(...)` with
 > `max by (namespace, runner_set) (actions_gateway_runnerset_...)`.
+
+> **Worker capacity declined has no v1 twin, and `No data` is a normal reading**
+> (Q643, Q658). The [gauge](observability-metrics.md) is emitted only for a
+> `RunnerSet` that set `spec.capacityGate.mode`, so an empty panel means no set
+> opted in, not that the query is broken. It groups by `reason` rather than
+> reducing to a bare `0`/`1` because the value alone cannot separate a live decline
+> from the latched `AwaitingProbe` state, and those call for different actions;
+> exactly one series exists per gated set, so `max by (reason)` cannot double-count.
+> The `1` is orange rather than red on purpose: a latched gate is
+> [throttling intake, not failing](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs),
+> and it can sit `True` indefinitely on an idle set whose shape stays unplaceable.
 
 **Row 6 — Egress Proxy (per tenant)**
 
