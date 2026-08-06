@@ -19,17 +19,20 @@ hide:
 
 </div>
 <div class="gag-vs-hero__proof">
-  <p class="gag-vs-hero__proof-cap">When a worker is evicted, preempted, or blocked by a full <code>ResourceQuota</code></p>
-  <div class="gag-vs-row gag-vs-row--arc"><span class="gag-vs-row__tag">ARC</span><span class="gag-vs-row__text">the runner is marked <code>Failed</code> and the job sits in GitHub's queue until someone reruns it by hand</span></div>
-  <div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job is concluded (~10 min lock-lapse bound at worst) and re-run automatically: no manual rerun, and it runs as soon as capacity frees up</span></div>
+  <p class="gag-vs-hero__proof-cap">When a worker is evicted, preempted, or drained mid-job</p>
+  <div class="gag-vs-row gag-vs-row--arc"><span class="gag-vs-row__tag">ARC</span><span class="gag-vs-row__text">the runner registration is removed and the job is given up on; re-running it is a manual step</span></div>
+  <div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the run is concluded and re-run automatically, no manual rerun: seconds for a preemption or drain (measured 15&ndash;26&nbsp;s), ~10 min at worst for a hard eviction that waits out the job lock</span></div>
 </div>
 </div>
 
 ## The problem ARC leaves you with
 
-The failures compound, but they all trace back to one root: ARC's poor fit with
-`ResourceQuota` makes per-tenant quotas unsafe, and unsafe quotas are what block
-letting tenants run their own runners.
+These trace back to one root, and it is not a missing feature. ARC models a
+cluster with **one owner**: the team that runs the cluster is the team that runs
+the runners. That is a coherent product, and on a single-tenant cluster it is a
+reasonable choice. It is also why ARC has no primitive separating what the
+platform owns from what a tenant owns, and why each item below is really the
+same gap seen from a different angle.
 
 <div class="gag-pillars gag-pillars--problem gag-cols-2" markdown>
 <div class="grid cards" markdown>
@@ -40,9 +43,10 @@ letting tenants run their own runners.
 
     A quota-blocked or evicted job can't recover on its own:
 
-    - ARC retries the same runner ([30 s loop](https://github.com/actions/actions-runner-controller/pull/4305)), then marks it `Failed`
-    - the job queues at GitHub until its 24–48 h timeout cancels it
-    - cleared and rerun by hand ([#4155](https://github.com/actions/actions-runner-controller/issues/4155), [#4203](https://github.com/actions/actions-runner-controller/issues/4203)), so teams avoid enforcing quotas
+    - claimed before the quota is known, so the runner cannot start
+    - ARC retries every 30 s, recycling it after 10 min ([0.13.1](https://github.com/actions/actions-runner-controller/pull/4305))
+    - each retry spends a single-use runner registration
+    - GitHub cancels a job still queued after 24 h ([#4155](https://github.com/actions/actions-runner-controller/issues/4155), [#4203](https://github.com/actions/actions-runner-controller/issues/4203))
 
 -   :material-trending-down:{ .lg .middle } __Critical jobs starve__
 
@@ -60,7 +64,7 @@ letting tenants run their own runners.
 
     One always-on listener pod per scale set, running 24/7:
 
-    - a pod slot + a cluster IP each
+    - a pod slot and a pod IP each
     - held alive just to long-poll GitHub
     - 10 scale sets ≈ 10 always-on pods before a job runs
 
@@ -81,7 +85,7 @@ letting tenants run their own runners.
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
     <span class="gag-stat__num">1&nbsp;pod</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint for 10 runner sets</strong>: every listener is a ~12&nbsp;KiB goroutine in one shared pod, versus 10 always-on listener pods (and 10 cluster IPs) on ARC</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint for 10 runner sets</strong>: every listener is a ~12&nbsp;KiB goroutine in one shared pod, versus 10 always-on listener pods on ARC</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">0</span>
@@ -112,21 +116,34 @@ footprint.
 | Runner-scale-set acquisition (single-acquirer, no fan-out) | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes, by default <span class="gag-v2-badge">v2</span> |
 | Ephemeral, single-use runner pods | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Custom runner pod template & image | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
-| Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, with `minRunners: 0` | :material-check-circle:{ .gag-yes } yes, by default |
-| Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } quota-blocked jobs stall; manual cleanup + rerun | :material-check-circle:{ .gag-yes } [won't take on a job it can't place](design/04-operational-flows.md#42-job-execution-flow-agc)<br><span class="gag-cont">live quota headroom is read *before* the job is claimed. On the default tier it bounds the capacity advertised to GitHub, on classic it declines the claim, so the job stays queued at GitHub. If headroom is lost afterwards, the pod create is retried in place while the lock is held</span> |
-| Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain) | :material-close-circle:{ .gag-no } runner marked `Failed`; the job waits in GitHub's queue for a manual rerun | :material-check-circle:{ .gag-yes } [re-run automatically, with a per-run retry budget](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)<br><span class="gag-cont">kubelet evictions, scheduler preemptions under a `priorityTiers` floor, node drains, and hand-deleted workers all re-run through GitHub's own re-run API, retried until GitHub accepts it, with `maxEvictionRetries` capping the budget per run</span> |
-| Stop claiming jobs when the cluster can't place the worker | :material-close-circle:{ .gag-no } the runner claims its own job, so there is no seat before the claim to decide at | :material-check-circle:{ .gag-yes } opt-in [`capacityGate` on the runner set](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)<br><span class="gag-cont">off by default. When on, an unplaceable worker shape (drained pool, changed taint, spot gone) stops the gateway taking on more work, so jobs stay queued at GitHub instead of being claimed and cancelled. It bounds the *rate* of wasted claims, roughly one per `pendingPodDeadline` window. It does not eliminate the first one. The tenant turns it on; the platform states once, on the gateway, whether the cluster has a node autoscaler, so a runner set can never gate on a signal that is wrong for the cluster it runs in. Where a node may still arrive, the gate waits for cluster-autoscaler or Karpenter to say it will not add one</span> |
+| Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, by default | :material-check-circle:{ .gag-yes } yes, by default |
+| Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } the job is claimed before the cluster is consulted<br><span class="gag-cont">a quota-blocked job is assigned to a runner that cannot start. Since 0.13.1 ARC retries the pod create every 30 s and recycles the runner after 10 min, so it self-heals without a manual rerun, but a single-use JIT runner registration is spent on each attempt and the assignment is held meanwhile</span> | :material-check-circle:{ .gag-yes } [won't take on a job it can't place](design/04-operational-flows.md#42-job-execution-flow-agc)<br><span class="gag-cont">live quota headroom is read *before* the job is claimed. On the default tier it bounds the capacity advertised to GitHub, on classic it declines the claim, so the job stays queued at GitHub. If headroom is lost afterwards, the pod create is retried in place while the lock is held</span> |
+| Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain) | :material-close-circle:{ .gag-no } no re-run mechanism exists<br><span class="gag-cont">`deleteEphemeralRunnerOrPod` deletes the `EphemeralRunner` and calls `RemoveRunner`, so the job is given up on and re-running it is manual. 0.13.1 added pod-layer recovery (restart the listener on eviction, reschedule on `OutOf*`); the job layer is untouched</span> | :material-check-circle:{ .gag-yes } [re-run automatically, with a per-run retry budget](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)<br><span class="gag-cont">kubelet evictions, scheduler preemptions under a `priorityTiers` floor, node drains, and hand-deleted workers all re-run through GitHub's own re-run API, retried until GitHub accepts it, with `maxEvictionRetries` capping the budget per run</span> |
+| Stop claiming jobs when the cluster can't place the worker | :material-close-circle:{ .gag-no } the listener acquires every available job unconditionally<br><span class="gag-cont">the seat exists, but no cluster state is consulted in it: the only capacity signal GitHub receives is the static `maxRunners` value sent as `X-ScaleSetMaxCapacity`</span> | :material-check-circle:{ .gag-yes } opt-in [`capacityGate` on the runner set](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)<br><span class="gag-cont">off by default. When on, an unplaceable worker shape (drained pool, changed taint, spot gone) stops the gateway taking on more work, so jobs stay queued at GitHub instead of being claimed and cancelled. It bounds the *rate* of wasted claims, roughly one per `pendingPodDeadline` window. It does not eliminate the first one. The tenant turns it on; the platform states once, on the gateway, whether the cluster has a node autoscaler, so a runner set can never gate on a signal that is wrong for the cluster it runs in. Where a node may still arrive, the gate waits for cluster-autoscaler or Karpenter to say it will not add one</span> |
 | Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner set](design/02-architecture.md) |
-| Throttle the *rate* new workers start (anti-stampede) | :material-close-circle:{ .gag-no } only `maxRunners` caps the count, and a burst starts all at once | :material-check-circle:{ .gag-yes } opt-in [`scaleUp` creation-rate limit per set](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)<br><span class="gag-cont">for shared-egress onset (NAT / firewall / VPN)</span> |
-| Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } shared cluster egress | :material-check-circle:{ .gag-yes } [per-tenant proxy pool](design/network-architecture.md)<br><span class="gag-cont"><span class="gag-v2-badge">v2</span> proxy optional</span> |
-| Listener footprint, 10 runner sets at rest | :material-close-circle:{ .gag-no } 10 always-on pods + 10 cluster IPs | :material-check-circle:{ .gag-yes } 1 shared pod, ~12 KiB per listener session |
-| Per-tenant utilization metrics | :material-close-circle:{ .gag-no } scale-set metrics, not tenant-scoped | :material-check-circle:{ .gag-yes } [Prometheus per tenant + group](operations/observability.md)<br><span class="gag-cont">job counts in `kubectl get`; ready-to-apply [tenant dashboard + alerts as code](operations/observability-dashboards.md#tenant-dashboard)</span> |
+| Throttle the *rate* new workers start (anti-stampede) | :material-close-circle:{ .gag-no } no per-set start-rate control<br><span class="gag-cont">the throttles ARC has (client QPS 20 / burst 30, a workqueue token bucket, 2 concurrent reconciles) are controller-wide and meter API calls, not worker onset per tenant</span> | :material-check-circle:{ .gag-yes } opt-in [`scaleUp` creation-rate limit per set](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)<br><span class="gag-cont">for shared-egress onset (NAT / firewall / VPN)</span> |
+| Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } per-scale-set proxy config only<br><span class="gag-cont">a `proxy` block points controller, listener, and runner pods at a proxy you already run. ARC provisions no pool, manages no lifecycle, and gives no dedicated per-tenant egress addresses</span> | :material-check-circle:{ .gag-yes } [per-tenant proxy pool](design/network-architecture.md)<br><span class="gag-cont"><span class="gag-v2-badge">v2</span> proxy optional</span> |
+| Listener footprint, 10 runner sets at rest | :material-close-circle:{ .gag-no } 10 always-on listener pods, each holding a pod IP<br><span class="gag-cont">they run in the controller's namespace, so the cost lands on platform pod density rather than the tenant's quota</span> | :material-check-circle:{ .gag-yes } 1 shared pod, ~12 KiB per listener session |
+| Per-tenant utilization metrics | :material-close-circle:{ .gag-no } opt-in, per scale set<br><span class="gag-cont">`listenerMetrics` ships commented out. The series do carry `namespace` and `name` labels, so a per-tenant rollup is a `sum by (namespace)` away, but nothing aggregates across sets and there are no quota-headroom series</span> | :material-check-circle:{ .gag-yes } [Prometheus per tenant + group](operations/observability.md)<br><span class="gag-cont">job counts in `kubectl get`; ready-to-apply [tenant dashboard + alerts as code](operations/observability-dashboards.md#tenant-dashboard)</span> |
 | Right-size runner resources from measured usage | :material-close-circle:{ .gag-no } no feedback loop, so runner `resources` stay a guess | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [measured recommendations in `RunnerSet` status](operations/worker-rightsizing.md)<br><span class="gag-cont">+ opt-in profiles that auto-apply them at pod build (`Binpack`/`Throughput`/`NodeShare`), a `SizingDrift` condition, and per-job peak metrics</span> |
-| Cross-tenant fleet health view (platform admin) | :material-close-circle:{ .gag-no } controller + per-scale-set metrics, aggregated by hand; no bundled dashboard | :material-check-circle:{ .gag-yes } [single-pane GMC fleet rollups](operations/observability-metrics.md#full-metrics-reference)<br><span class="gag-cont">degraded / egress-stale / quota per gateway, + a [platform dashboard](operations/observability-dashboards.md#platform-dashboard)</span> |
+| Cross-tenant fleet health view (platform admin) | :material-close-circle:{ .gag-no } a per-scale-set Grafana dashboard ships as a sample<br><span class="gag-cont">nothing aggregates across scale sets or per tenant, so a fleet view is assembled by hand, and no alert rules ship at all</span> | :material-check-circle:{ .gag-yes } [single-pane GMC fleet rollups](operations/observability-metrics.md#full-metrics-reference)<br><span class="gag-cont">degraded / egress-stale / quota per gateway, + a [platform dashboard](operations/observability-dashboards.md#platform-dashboard)</span> |
 | Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [multiple scoped gateways per namespace](operations/migration-v1-to-v2.md) |
 | Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet` | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> shared [`RunnerTemplate`](operations/migration-v1-to-v2.md)<br><span class="gag-cont">cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md)</span> |
 
-Every capability above is available today.
+Every GAG capability above is available today.
+
+!!! note "When the ARC column was measured, and why that matters"
+
+    **Measured against ARC `gha-runner-scale-set` 0.14.2 (released 2026-05-22)
+    and the `master` branch, on 2026-08-06**, by reading the controller source,
+    the chart values, and the release notes rather than the documentation.
+
+    ARC moves, and an undated comparison rots into a false one. Two rows here
+    changed at datable releases: 0.13.1 (2025-12-23) made a quota-blocked pod
+    creation self-healing, and 0.14.0 (2026-03-19) added multi-label scale sets,
+    which GAG does not have. If you are evaluating on a later ARC than the one
+    stamped above, re-check the column rather than trusting it, and
+    [tell us what changed](https://github.com/actions-gateway/github-actions-gateway/issues).
 
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
@@ -176,15 +193,36 @@ Every capability above is available today.
     the utilization-and-cost argument,
     [Appendix F — Cost model](design/appendix-f-cost-model.md).
 
-!!! warning "Where GAG is behind ARC"
+!!! warning "Where ARC is ahead"
 
-    It's **maturity, not capability.** ARC is GA and widely deployed; GAG's v2 API
-    has only just reached beta (`v2beta1`, its first stability contract) and rides a
-    Public-Preview runner-scale-set
-    protocol. That is precisely why the v1 → v2 migration is handled on a committed,
-    documented schedule with a working
-    [`gag-migrate`](operations/migration-v1-to-v2.md) tool. The discipline is the
-    "won't strand you" signal while the track record accumulates.
+    Some of it is capability, not only maturity. Measured 2026-08-06:
+
+    - **A GitHub Support entitlement**, covering ARC installed via the official
+      Helm charts, GitHub Enterprise Server 3.9 and later. GAG has none. Read the
+      scope exclusions before relying on it: Kubernetes orchestration, policy
+      application, and template customization are explicitly out of scope, which
+      is much of what a multi-tenant platform team actually pages about.
+    - **Multi-label scale sets** since 0.14.0. A workflow using
+      `runs-on: [linux, gpu]` needs one edit per target to move to GAG, which
+      admits exactly one label per runner set.
+    - **`containerMode: kubernetes`**, which runs `container:` and `services:`
+      steps as separate pods with a provisioned volume. GAG runs one worker pod
+      per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather
+      than a non-privileged pod-per-step model.
+    - **GitHub runner groups** (`runnerGroup`), the forge-side control over which
+      repositories may target a runner set.
+    - **GHES that is actually tested.** GAG serves GHES gateways and marks both
+      of its GHES features untested against a real appliance.
+
+    And the maturity gap is real: ARC is GA and widely deployed, while GAG's v2
+    API has only just reached beta (`v2beta1`, its first stability contract). That
+    is why the v1 → v2 migration runs on a committed, documented schedule with a
+    working [`gag-migrate`](operations/migration-v1-to-v2.md) tool. The discipline
+    is the "won't strand you" signal while the track record accumulates.
+
+    One thing that is **not** a differentiator either way: both ride the same
+    Public-Preview runner-scale-set protocol, through the same
+    [`actions/scaleset`](https://github.com/actions/scaleset) client library.
 
 ## Secure by default
 
@@ -390,12 +428,15 @@ spec:
     is contended.
 5.  Exactly one label per runner set: it is the set's scale-set name at GitHub and
     its single `runs-on` match target (`runs-on: gpu`), unique across the sets under
-    one gateway. This is the same single-name routing ARC scale sets use, so
-    `runs-on` lines carry across from ARC unedited.
+    one gateway. ARC scale sets have supported multiple labels since 0.14.0
+    (2026-03-19), so a workflow targeting `runs-on: [linux, gpu]` needs one edit
+    per target to move across: split it into a runner set with a single
+    descriptive label. A single-name `runs-on` carries over unchanged.
 6.  The first 5 GPU pods get the higher-priority `PriorityClass`; the next tier
     bursts opportunistically; the final threshold caps total concurrency. The
-    `priorityClassName` values must be on the platform's allowlist (the GMC
-    `--allowed-priority-classes` flag), and whether a tier preempts is set on the
+    `priorityClassName` values must be on the platform's allowlist (a watched
+    `PriorityClassAllowlist` CR, grown without a GMC restart; the
+    `--allowed-priority-classes` flag remains the fail-safe baseline), and whether a tier preempts is set on the
     platform-owned `PriorityClass` object, so a tenant cannot name a class that
     evicts other tenants' pods.
 
