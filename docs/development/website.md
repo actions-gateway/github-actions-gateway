@@ -359,6 +359,44 @@ the logomark hits its 132px size cap while the hero is already at its 44rem max.
 Editing the headline **text** is subject to the same arithmetic: a phrase longer
 than 26 characters needs the cap lowered again, or it will overrun the column.
 
+### Card bullets fit on one line
+
+Every bullet inside a `.gag-pillars` card renders on a single line. The grid is a
+scanning surface: one wrapped bullet reads as prose among labels, so the copy is
+written to the column rather than the column widened to the copy. Two column
+widths exist, both measured at 1440px with mixed-case prose:
+
+| Grid | Card | Bullet column | Budget |
+| --- | --- | --- | --- |
+| `.gag-pillars` (three across) | 417px | 347px | **50 characters** |
+| `.gag-pillars.gag-cols-2` (two across) | 630px | 559px | **77 characters** |
+
+Count the **rendered** text: link text without its URL, code spans without their
+backticks. The budget is a proxy rather than arithmetic, because the body face is
+proportional: the same column takes 90 narrow characters, 25 wide ones, and 42
+inside a code span. Treat a bullet within a few characters of its budget as
+unverified.
+
+An expansion that does not fit is the wrong fix, not the bullet's fault. Prefer
+the plain term over `Term (ACR)` in a card, and bind the acronym in prose
+elsewhere on the page, where the layout imposes no budget. Where no such prose
+exists, let the linked detail page carry the definition.
+
+Verify by rendering. Reading the Markdown cannot answer this question, and
+neither can counting characters:
+
+```js
+// make docs-serve, then on / or /why-gag/
+[...document.querySelectorAll('.gag-pillars li li')]
+  .filter(b => Math.round(b.getBoundingClientRect().height /
+                          parseFloat(getComputedStyle(b).lineHeight)) > 1)
+  .map(b => b.innerText.trim());   // must be []
+```
+
+Below roughly 1440px the cards narrow and bullets wrap whatever the copy says, so
+the invariant is defined at full width on a laptop, where the grid is three
+across. Only `docs/index.md` and `docs/why-gag.md` use these cards.
+
 ## Local preview
 
 ```sh
@@ -375,6 +413,13 @@ fails.
 
 The toolchain is pinned **exactly** — MkDocs 2.0 is incompatible with Material 9.x,
 so don't float the versions in `requirements-docs.txt`.
+
+**`make check` does not run `make docs-build`.** The fast gate covers `doc-links`,
+which resolves links and anchors against the Markdown; MkDocs' own strict
+validation runs in CI (`pages.yml`) and locally only when you invoke it. A change
+that alters rendering is therefore not verified by a green `make check` alone.
+Run `make docs-build` too, and for the card grids or a wide table, serve the site
+and look.
 
 ## The two link gates
 
