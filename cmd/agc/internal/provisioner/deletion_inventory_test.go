@@ -102,6 +102,51 @@ var boundarySpecs = []boundarySpec{
 		path:       "../controller/integration/drain_eviction_test.go",
 		whatItPins: "the unrecovered side of the boundary, scale-set tier",
 	},
+	{
+		name:       "E2E_AGC_PreemptedWorkerIsRecovered",
+		path:       "../../../gmc/test/e2e/worker_preemption_test.go",
+		whatItPins: "recovery of a delete-driven disruption that detection deliberately does NOT key on the mark (Q497), sampling the mark alongside",
+	},
+	{
+		name:       "E2E_AGC_CompletedPodReaped",
+		path:       "../../../gmc/test/e2e/worker_lifecycle_test.go",
+		whatItPins: "the reaper's stamp-then-delete path end to end, on a completed worker",
+	},
+	{
+		name:       "E2E_AGC_StuckPendingPodReaped",
+		path:       "../../../gmc/test/e2e/worker_lifecycle_test.go",
+		whatItPins: "the reaper's stamp-then-delete path on a worker that never started",
+	},
+}
+
+// deletionMarkTokens are the spellings a test uses when it reads the discriminator the
+// boundary turns on.
+var deletionMarkTokens = []string{
+	"DeletionTimestamp",
+	"deletionTimestamp",
+	"AnnotationDeletionReason",
+	"deletion-reason",
+}
+
+// heavyTierRoots are the test trees the roster is swept for completeness. Unit tests
+// are out of scope on purpose: they run on every `make check`, so a delete path that
+// breaks one goes red on its own and needs no pointer. These trees are the ones whose
+// green can simply be absent — skipped for want of credentials, or gated behind a
+// workflow path filter.
+var heavyTierRoots = []string{
+	"../../../gmc/test/e2e",
+	"../controller/integration",
+	"../../../gmc/internal/controller/integration",
+}
+
+// nonBoundaryFiles are heavy-tier test files that name the deletion mark without
+// asserting the deletion boundary. Each needs a reason, because "this one does not
+// count" is the judgement a sweep exists to make explicit.
+var nonBoundaryFiles = map[string]string{
+	"../../../gmc/test/e2e/e2e_test.go":                                      "a jsonpath readiness template filters out pods that are mid-delete; no assertion about the mark",
+	"../controller/integration/q260_late_redelivery_test.go":                 "filters live worker pods with DeletionTimestamp.IsZero(); the subject is delivery dedup",
+	"../../../gmc/internal/controller/integration/v2_teardown_test.go":       "asserts an ActionsGateway CR is mid-deletion; CR finalizers, not worker pods",
+	"../../../gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerGroup CR is held deleting by its finalizer; an admission-policy subject",
 }
 
 // TestDeletePathInventory_MatchesDeclaredSites fails when the AGC's set of client
@@ -130,7 +175,8 @@ func TestDeletePathInventory_MatchesDeclaredSites(t *testing.T) {
 	t.Fatalf("the AGC's delete paths moved:\n%s%s\n%s",
 		block("client Delete calls not in declaredDeleteSites", undeclared),
 		block("declaredDeleteSites entries with no matching call", missing),
-		specRoster())
+		"Update declaredDeleteSites to match, recording how each new delete stays outside\n"+
+			"Q502 recovery.\n"+specRoster())
 }
 
 // TestDeletePathInventory_BoundarySpecsExist keeps the roster honest: a spec renamed
@@ -149,6 +195,78 @@ func TestDeletePathInventory_BoundarySpecsExist(t *testing.T) {
 	}
 }
 
+// TestDeletePathInventory_BoundaryRosterIsComplete sweeps the heavy tiers for test
+// files that read the deletion mark and requires each to be accounted for: either it
+// contributes a spec to the roster, or it is written off in nonBoundaryFiles with a
+// reason. Without this the roster is only as complete as whoever last read the design
+// docs, which is the decay Q599 is about.
+//
+// It classifies at file granularity, not per spec. A brand-new test file that touches
+// the boundary is the case it catches; a new spec added to a file already in the
+// roster is not, and the roster's own entry is what points a reader into that file.
+func TestDeletePathInventory_BoundaryRosterIsComplete(t *testing.T) {
+	accounted := map[string]bool{}
+	for _, s := range boundarySpecs {
+		accounted[filepath.Clean(s.path)] = true
+	}
+	for path := range nonBoundaryFiles {
+		accounted[filepath.Clean(path)] = true
+	}
+
+	// Collect first, read after: reading inside the WalkDir callback is the
+	// symlink-TOCTOU shape gosec's G122 rejects.
+	var candidates []string
+	for _, root := range heavyTierRoots {
+		require.DirExists(t, root, "heavy-tier root moved; update heavyTierRoots")
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() && strings.HasSuffix(path, "_test.go") {
+				candidates = append(candidates, path)
+			}
+			return err
+		})
+		require.NoError(t, err)
+	}
+
+	var unclassified, scanned []string
+	for _, path := range candidates {
+		src, err := os.ReadFile(path)
+		require.NoError(t, err)
+		if !containsAny(string(src), deletionMarkTokens) {
+			continue
+		}
+		scanned = append(scanned, path)
+		if !accounted[filepath.Clean(path)] {
+			unclassified = append(unclassified, path)
+		}
+	}
+	require.NotEmpty(t, scanned, "the sweep matched no heavy-tier file at all; it is measuring nothing")
+
+	// A path that no longer holds a boundary file leaves the roster pointing at
+	// nothing, the same rot the existence check guards against from the other side.
+	for path := range nonBoundaryFiles {
+		require.FileExists(t, path, "nonBoundaryFiles names a file that is gone; drop the entry")
+	}
+
+	if len(unclassified) == 0 {
+		return
+	}
+	sort.Strings(unclassified)
+	t.Fatalf("a heavy-tier test file reads the deletion mark and is in neither list:\n%s\n%s",
+		block("unclassified", unclassified),
+		"Decide which it is. If it asserts the boundary, add its spec to boundarySpecs so a\n"+
+			"delete-path change hands it to the reviewer. If it only mentions the mark in\n"+
+			"passing, add it to nonBoundaryFiles with the reason.\n"+specRoster())
+}
+
+func containsAny(s string, tokens []string) bool {
+	for _, tok := range tokens {
+		if strings.Contains(s, tok) {
+			return true
+		}
+	}
+	return false
+}
+
 func block(title string, items []string) string {
 	if len(items) == 0 {
 		return ""
@@ -160,9 +278,9 @@ func block(title string, items []string) string {
 // accepting the inventory update the failure demands.
 func specRoster() string {
 	var b strings.Builder
-	b.WriteString("\nBefore updating declaredDeleteSites, read every spec that pins the deletion\n")
-	b.WriteString("boundary (docs/design/04-operational-flows.md §4.2). A delete path changes what a\n")
-	b.WriteString("worker pod publishes at its terminal phase, which is exactly what these assert:\n\n")
+	b.WriteString("\nRead every spec that pins the deletion boundary\n")
+	b.WriteString("(docs/design/04-operational-flows.md §4.2). A delete path changes what a worker\n")
+	b.WriteString("pod publishes at its terminal phase, which is exactly what these assert:\n\n")
 	for _, s := range boundarySpecs {
 		gate := "      "
 		if s.credGated {
