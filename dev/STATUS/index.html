@@ -2721,7 +2721,7 @@
 <td><code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured: <code>permissionDecision</code> is hardcoded <code>ask</code> (main.go:141), no <code>Getenv</code> in the package. A right catch costs a deny-and-paste; a wrong one has no break-glass. Wants deny + <code>PIPED_GATE_OVERRIDE=&lt;reason&gt;</code> per prod-guard, its text hinting a row.</td>
+<td>Measured: <code>permissionDecision</code> is hardcoded <code>ask</code> (main.go:141). 2026-08-06 it flagged 4 piped <code>git push</code>es correctly and 3 were auto-approved unseen, so a right catch is lost, not just hand-relayed. Wants deny + <code>PIPED_GATE_OVERRIDE=&lt;reason&gt;</code>.</td>
 </tr>
 <tr>
 <td><a id="Q706"></a>Q706</td>
