@@ -200,13 +200,13 @@ above has the dates and versions to reproduce it against.
 
 ## Still open
 
-- `go-to-market.md` §2 still states ARC is the only direct competitor and the
-  managed lane is out of scope. The research contradicts the first and the
-  [alternatives page](../alternatives.md) now visibly contradicts both.
-- The two-tier positioning was researched and not written: a forward-looking
-  internal strategy against down-to-earth site claims.
+- ~~`go-to-market.md` §2 and the two-tier positioning~~ ✅ reconciled 2026-08-06.
+  §2 is now three lanes with the location filter, §4 carries both tiers (site
+  claims versus the thesis the strategy plays for), and §11 records that Q60's
+  closure was a false record.
 - `README.md` has had its claims corrected but not the scannability pass the
-  site pages received.
+  site pages received. GitHub renders no CSS, so it needs tables and bold
+  lead-ins rather than the site's components.
 - Caching and GPU each have deliverables split across rows with no umbrella
   goal, the way [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) now
   has one.

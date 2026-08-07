@@ -193,7 +193,7 @@
 35 docs/plan/ecosystem-integration-landscape.md
 131 docs/plan/eviction-oversubscription-validation.md
 98 docs/plan/gke-dogfood.md
-40 docs/plan/go-to-market.md
+22 docs/plan/go-to-market.md
 20 docs/plan/make.md
 35 docs/plan/markdown-gates-parser.md
 4 docs/plan/milestone-1-tests.md
