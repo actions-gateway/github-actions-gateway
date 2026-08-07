@@ -3116,6 +3116,14 @@
 <td>Q592 added <code>RUN=</code> to <code>test-integration</code> only, and make never errors on an unused variable, so <code>make test RUN=X</code> runs everything and says nothing. Thin on its own (<code>go test -run</code> needs no setup); the silent no-op is the hazard.</td>
 </tr>
 <tr>
+<td><a id="Q344"></a>Q344</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go">First-class <code>scaleset</code> list/prune for orphan scale sets</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-06: 9 orphans across 2 repos, 5 unreferenced. Pruning needs a hand-rolled registration-token → RemoteAuth → DELETE chain; <code>Client</code> has no list-all. Q334 fixed runner-<em>record</em> orphans.</td>
+</tr>
+<tr>
 <td><a id="Q650"></a>Q650</td>
 <td><a href="../development/documentation-standards/">Em-dash density in the design and operations docs</a></td>
 <td><code>docs</code></td>
@@ -3395,13 +3403,6 @@
 <td><code>feature</code></td>
 <td>L</td>
 <td><strong>Demand:</strong> operators ask for gateway diagnostics beyond raw kubectl + the runbook. Add a <code>gag status &lt;gateway&gt;</code> / kubectl plugin aggregating session, pool, and runner state per gateway.</td>
-</tr>
-<tr>
-<td><a id="Q344"></a>Q344</td>
-<td>First-class <code>scaleset</code> list/prune for orphan scale sets</td>
-<td><code>feature</code></td>
-<td>S</td>
-<td><strong>Event:</strong> orphan scale sets recur or an operator wants a prune path. Q334 fixed runner-<em>record</em> orphans, not stale <em>scale sets</em>; a throwaway deleted <code>gag-scaleset3</code>. Add a <code>scaleset</code> prune command.</td>
 </tr>
 <tr>
 <td><a id="Q678"></a>Q678</td>
