@@ -65,10 +65,12 @@ Each role and what it cannot do: [Personas](operations/personas.md).
 
 ## A paved road is worth more than a trail map
 
-Most comparisons ask whether a thing can be configured. For shared
-infrastructure the useful question is whether anyone has run it, written down
-the setup, and said which parts bite. Measured 2026-08-06 against ARC 0.14.2
-and `master`.
+- **Feature comparisons** tell you what *can* be done.
+- **Reference architectures** prove it has been validated, and tell you how to
+  do it.
+- **Runbooks, dashboards, and alerts** tell you how to operate it.
+
+Measured 2026-08-06 against ARC 0.14.2 and `master`.
 
 | | GAG | ARC |
 |---|---|---|
