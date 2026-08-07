@@ -136,11 +136,11 @@ the exception: a firm commitment, waiting only on the release that carries it.
   Waits on a real multi-node workload, and would interact with a batch scheduler
   such as Kueue or Volcano.
 - **[A worker cache backend](plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane)** <!-- q:Q215 -->
-  Workers are storage-less by design, so
-  `actions/cache` and Docker layer caching have no home. Adding an optional
-  PVC or object-store cache needs a
-  [security review](design/05-security.md) of cross-job cache isolation first: a
-  shared cache between tenants' jobs is an obvious exfiltration path.
+  `actions/cache` already works. What is missing is a cache *inside* the
+  cluster, to cut egress cost and restore latency. Docker layer caching has no
+  home either way, because workers are storage-less by design. It waits on a
+  [security review](design/05-security.md) of cross-job cache isolation: a
+  shared cache between tenants is an obvious exfiltration path.
 - **[A warm worker pool](design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)** <!-- q:Q268 -->
   An opt-in pool of idle pods per runner set, for teams that still hit
   pod-schedule latency after image pre-pull and caching.

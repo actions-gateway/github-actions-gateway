@@ -211,6 +211,14 @@ above has the dates and versions to reproduce it against.
   [Q728](../STATUS.md#Q728), since `check-release-pins.sh` reads any bare
   `X.Y.Z` in a pin-bearing doc as a GAG release pin, so the README cannot name
   the ARC version its comparison was measured against.
-- Caching and GPU each have deliverables split across rows with no umbrella
-  goal, the way [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) now
-  has one.
+- ~~Caching and GPU umbrella goals~~ ✅ written 2026-08-07 as
+  [caching-and-worker-storage](caching-and-worker-storage.md) and
+  [gpu-and-accelerated-ci](gpu-and-accelerated-ci.md). Each surfaced a collision
+  the individual rows do not state: closing untrusted-PR egress removes the
+  `actions/cache` path that works today, and GPU plus Kata do not compose on
+  cloud accelerator families, which lack nested virtualization. Both corrected a
+  published claim in passing.
+
+**Nothing from the 2026-08-06 research is unactioned.** Findings that became
+work are on the Queue; findings that became positioning are in
+[go-to-market](go-to-market.md) §2 and §4.
