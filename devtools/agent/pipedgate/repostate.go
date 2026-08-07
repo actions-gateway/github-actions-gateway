@@ -85,7 +85,8 @@ func staleBaseWarning(reg *compiled, repo Repo) string {
 		" this branch also changes: " + joinPaths(overlap, 5) + ". A stale base on its own is benign, " +
 		"because the merge queue validates the candidate merge — but an overlap is where a kickback costs " +
 		"a full check cycle that a local re-run would have caught first. Rebase onto " + reg.baseRef +
-		" and re-run the gate, or continue if the overlap cannot affect it. Read from the local " +
+		" and re-run the gate; if the overlap cannot affect it, re-run this push prefixed with " +
+		overrideVar + "=<reason>. Read from the local " +
 		reg.baseRef + " ref, so it under-reports until you fetch. " +
 		"See CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open."
 }
@@ -117,9 +118,10 @@ func prOverlapWarning(reg *compiled, repo Repo) string {
 	}
 	return "`gh pr create` — an open PR already changes files this branch changes: " + strings.Join(hits, ", ") +
 		". Overlapping PRs duplicate or invalidate each other, and the title says nothing about it: read the " +
-		"diff and the body before opening, or scope this PR so they do not overlap. Continue if the overlap " +
-		"is intended. The merge-driver-owned files are excluded, so this is a real overlap and not a shared " +
-		"backlog edit. See CONTRIBUTING.md#re-check-concurrent-work-before-opening."
+		"diff and the body before opening, or scope this PR so they do not overlap. If the overlap is " +
+		"intended, re-run this create prefixed with " + overrideVar + "=<reason>. The merge-driver-owned " +
+		"files are excluded, so this is a real overlap and not a shared backlog edit. " +
+		"See CONTRIBUTING.md#re-check-concurrent-work-before-opening."
 }
 
 // hasCallHead reports whether any call in the tree has a head matching re.

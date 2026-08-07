@@ -102,6 +102,19 @@ func TestDecide(t *testing.T) {
 		{name: "single-quoted PIPESTATUS is text, not a read", cmd: `grep -rn '$PIPESTATUS' docs/`},
 		{name: "echo of the offending form", cmd: `echo "never run: make check | tail"`},
 
+		// --- The break-glass prefix (Q697) -------------------------------------
+		{name: "override on a piped gate", cmd: "PIPED_GATE_OVERRIDE=want-the-output-only make check | tail -30"},
+		{name: "override on a lost background status", cmd: `PIPED_GATE_OVERRIDE=log-only make check > tmp/c.log 2>&1; echo "EXIT=$?"`, bg: true},
+		{name: "override on a PIPESTATUS read", cmd: "PIPED_GATE_OVERRIDE=demonstrating-the-bug echo $PIPESTATUS"},
+		{name: "override as its own statement", cmd: "PIPED_GATE_OVERRIDE=scoped-to-this-call; make check | tail -5"},
+		{name: "quoted override value", cmd: `PIPED_GATE_OVERRIDE="reading output, not status" make check | tail -5`},
+		// An empty value is the switch-it-off form, so it buys nothing.
+		{name: "empty override still denies", cmd: "PIPED_GATE_OVERRIDE= make check | tail -30", warn: true},
+		// The Q624 shape: the name inside a string is a word, not an assignment.
+		{name: "override named in a commit message", cmd: `git commit -m "docs: PIPED_GATE_OVERRIDE=x make check | tail is the escape"`},
+		{name: "override quoted, gate really piped", cmd: `echo "PIPED_GATE_OVERRIDE=x" | make check | tail -5`, warn: true},
+		{name: "a different variable is not the override", cmd: "PIPED_GATE=x make check | tail -30", warn: true},
+
 		// --- Non-gate commands piped into filters ------------------------------
 		{name: "git log", cmd: "git log --oneline | head -5"},
 		{name: "git diff", cmd: "git diff origin/main | head -40"},

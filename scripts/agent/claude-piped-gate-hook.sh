@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 #
-# claude-piped-gate-hook.sh — Claude Code PreToolUse hook that warns when a
+# claude-piped-gate-hook.sh — Claude Code PreToolUse hook that denies when a
 # command whose exit status IS the answer is piped into a filter, so the Bash
-# call reports the filter's status instead of the gate's (Q625).
+# call reports the filter's status instead of the gate's (Q625). A deny's reason
+# is shown to the model rather than to the user, so the fix arrives where the
+# rewrite happens; `PIPED_GATE_OVERRIDE=<reason> <command>` is the break-glass
+# (Q697).
 #
 # `make check 2>&1 | tail -30; echo "EXIT=$?"` prints EXIT=0 for a failing gate:
 # a pipeline's status is its last stage's, and zsh — the shell the Bash tool
