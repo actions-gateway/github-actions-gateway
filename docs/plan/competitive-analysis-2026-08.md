@@ -204,9 +204,13 @@ above has the dates and versions to reproduce it against.
   §2 is now three lanes with the location filter, §4 carries both tiers (site
   claims versus the thesis the strategy plays for), and §11 records that Q60's
   closure was a false record.
-- `README.md` has had its claims corrected but not the scannability pass the
-  site pages received. GitHub renders no CSS, so it needs tables and bold
-  lead-ins rather than the site's components.
+- ~~`README.md` scannability pass~~ ✅ done 2026-08-06. It now leads with the
+  measured numbers and an "Is this for you?" router, and both its problem and
+  solution sections follow the validated messaging order rather than opening on
+  priority tiers. One finding fell out of it:
+  [Q728](../STATUS.md#Q728), since `check-release-pins.sh` reads any bare
+  `X.Y.Z` in a pin-bearing doc as a GAG release pin, so the README cannot name
+  the ARC version its comparison was measured against.
 - Caching and GPU each have deliverables split across rows with no umbrella
   goal, the way [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) now
   has one.
