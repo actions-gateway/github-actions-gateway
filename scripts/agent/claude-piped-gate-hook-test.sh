@@ -32,10 +32,24 @@ decision() { printf '%s' "$1" | jq -r '.hookSpecificOutput.permissionDecision //
 # --- Wiring: the installed script reaches the real binary and registry --------
 
 out="$(payload 'make check 2>&1 | tail -30; echo "EXIT=$?"' | "$HOOK")"
-if [[ "$(decision "$out")" == "ask" ]]; then
-	pass 'end-to-end: the canonical false green asks'
+if [[ "$(decision "$out")" == "deny" ]]; then
+	pass 'end-to-end: the canonical false green is denied'
 else
-	fail "end-to-end: want ask, got: ${out:-<silence>}"
+	fail "end-to-end: want deny, got: ${out:-<silence>}"
+fi
+
+# The deny reason is what the model reads, so it has to name the way out (Q697).
+if printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecisionReason | test("PIPED_GATE_OVERRIDE=<reason>")' >/dev/null; then
+	pass 'end-to-end: the deny reason names the override prefix'
+else
+	fail "end-to-end: deny reason does not name the override: $out"
+fi
+
+out="$(payload 'PIPED_GATE_OVERRIDE=want-the-output-only make check 2>&1 | tail -30' | "$HOOK")"
+if [[ -z "$out" ]]; then
+	pass 'end-to-end: the override prefix suppresses the deny'
+else
+	fail "end-to-end override: want silence, got: $out"
 fi
 
 out="$(payload 'make check > tmp/check.log 2>&1; echo "EXIT=$?"' | "$HOOK")"
@@ -49,10 +63,10 @@ fi
 # one field that separates the correct foreground form from the bug, and the
 # one this seam has to carry through from the payload.
 out="$(bg_payload 'make check > tmp/check.log 2>&1; echo "EXIT=$?"' | "$HOOK")"
-if [[ "$(decision "$out")" == "ask" ]]; then
-	pass 'end-to-end: a backgrounded gate ending in echo asks'
+if [[ "$(decision "$out")" == "deny" ]]; then
+	pass 'end-to-end: a backgrounded gate ending in echo is denied'
 else
-	fail "end-to-end background: want ask, got: ${out:-<silence>}"
+	fail "end-to-end background: want deny, got: ${out:-<silence>}"
 fi
 
 # shellcheck disable=SC2016 # the payload is literal shell text; expanding $rc here is the bug

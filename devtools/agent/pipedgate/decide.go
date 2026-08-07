@@ -113,25 +113,36 @@ var wrappers = map[string]bool{
 	"exec": true, "bash": true, "sh": true, "zsh": true,
 }
 
+// overrideVar is the break-glass, spelled as a command-position assignment
+// because that is the form a PreToolUse hook can see: it reads the command
+// string, and the session cannot set a variable in the hook's own environment.
+// Mirrors prod-guard's PROD_GUARD_OVERRIDE.
+const overrideVar = "PIPED_GATE_OVERRIDE"
+
 const (
+	// overrideHint closes every reason. The deny reaches the model rather than
+	// the user, so it must carry both ways out: the prefix for a case the rule
+	// reads wrong, and the Queue for a rule that is wrong often enough to fix.
+	overrideHint = " If the status genuinely does not matter here, re-run prefixed with " +
+		overrideVar + "=<reason>. If this call is not the mistake the rule describes, that is a " +
+		"defect in the rule: file a Queue row rather than overriding it every time. "
+
 	pipestatusReason = "This reads $PIPESTATUS, which does not exist in zsh — the shell the Bash tool runs. " +
 		"It expands to empty, so the test against it reads as success whatever the pipeline did. " +
 		"zsh spells it $pipestatus (lowercase, 1-indexed); better still, redirect and read the status " +
-		`directly: cmd > tmp/out.log 2>&1; echo "EXIT=$?". ` +
+		`directly: cmd > tmp/out.log 2>&1; echo "EXIT=$?".` + overrideHint +
 		"See docs/development/testing.md#the-status-you-report-is-a-claim-too."
 
 	pipedReasonSuffix = " is piped into a filter, so this call's exit status is the filter's, not the gate's — " +
 		"a failure reads exactly like a pass, and zsh (the shell the Bash tool runs) has no PIPESTATUS to " +
 		"recover it. Redirect instead, then reconcile status against output: " +
-		`cmd > tmp/out.log 2>&1; echo "EXIT=$?"; grep -E 'FAILED|Error [0-9]|^make:' tmp/out.log. ` +
-		"Continue only if you want the output and not the status. " +
+		`cmd > tmp/out.log 2>&1; echo "EXIT=$?"; grep -E 'FAILED|Error [0-9]|^make:' tmp/out.log.` + overrideHint +
 		"See docs/development/testing.md#the-status-you-report-is-a-claim-too."
 
 	lostStatusReasonSuffix = " runs in the background, but this call's exit status is its LAST statement's — " +
 		"an echo exits 0 whatever the gate did, so the task notification reports success for a failed gate. " +
 		"Capture the status and re-raise it: " +
-		`cmd > tmp/out.log 2>&1; rc=$?; echo "EXIT=$rc"; exit $rc. ` +
-		"Continue only if you do not need this call's status. " +
+		`cmd > tmp/out.log 2>&1; rc=$?; echo "EXIT=$rc"; exit $rc.` + overrideHint +
 		"See docs/development/testing.md#the-status-you-report-is-a-claim-too."
 )
 
@@ -148,6 +159,10 @@ func Decide(cmd string, background bool, reg *compiled, repo Repo) string {
 	if err != nil {
 		// A zsh-ism bash cannot parse, or a truncated string. Staying silent is
 		// the contract; the alternative is guessing from a half-parse.
+		return ""
+	}
+
+	if hasOverride(f) {
 		return ""
 	}
 
@@ -203,6 +218,32 @@ func Decide(cmd string, background bool, reg *compiled, repo Repo) string {
 	// Last, because it is the only check that costs a subprocess: the status
 	// verdicts are decided from the parse tree alone.
 	return repoStateWarning(f, reg, repo)
+}
+
+// hasOverride reports whether the command carries the break-glass assignment
+// with a reason attached. An empty value does not count: the point of the
+// prefix is that the caller has to say why, and a bare
+// `PIPED_GATE_OVERRIDE= make check | tail` would be the switch-it-off form.
+//
+// Read from the parse tree, so the same Q624 asymmetry as everything else here:
+// an assignment is a real assignment, while the name quoted in a commit message
+// or a grep pattern is a word and disables nothing.
+func hasOverride(f *syntax.File) bool {
+	var found bool
+	syntax.Walk(f, func(node syntax.Node) bool {
+		if found {
+			return false
+		}
+		a, ok := node.(*syntax.Assign)
+		if !ok {
+			return true
+		}
+		if a.Name != nil && a.Name.Value == overrideVar && a.Value != nil && literal(a.Value) != "" {
+			found = true
+		}
+		return true
+	})
+	return found
 }
 
 // lostBackgroundStatus returns the warning for a gate whose status never

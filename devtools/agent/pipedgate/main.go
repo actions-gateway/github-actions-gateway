@@ -1,6 +1,6 @@
 // Command pipedgate decides whether a Claude Code PreToolUse Bash payload is
-// about to make an unchecked claim, and prints the `ask` decision when it is.
-// It answers two families of question, both of them warnings.
+// about to make an unchecked claim, and prints the `deny` decision when it is.
+// It answers two families of question.
 //
 // # A gate whose exit status never reaches the caller
 //
@@ -26,11 +26,16 @@
 // Quoted text and heredoc bodies stop being a special case, because a command
 // named inside a string is a Lit, never a command.
 //
-// The decision is `ask`, never `deny`: piping a gate into a filter is sometimes
-// exactly right (you want the output and do not care about the status), and
-// nothing in the command string distinguishes that from the bug. A false
-// positive costs one keystroke; a deny would block real work and get switched
-// off.
+// The decision is `deny`, with `PIPED_GATE_OVERRIDE=<reason>` as the break-glass
+// (Q697). Claude Code shows a deny's reason to the model and an ask's to the
+// user (measured against the hooks reference, 2026-08-07), and the reason here
+// is addressed to whoever is about to rewrite the command. Under `ask` a right
+// catch cost a deny-and-paste — the user had to relay the fix by hand — while a
+// wrong one had no break-glass at all, because continuing was the only
+// alternative to the prompt. The prefix restores that escape, and asks for a
+// reason rather than a keystroke: piping a gate into a filter is sometimes
+// exactly right, and nothing in the command string distinguishes that from the
+// bug.
 //
 // What it detects — a registered gate (see Registry) on the LEFT of a pipe,
 // including through a subshell or brace group whose status the pipe consumes,
@@ -49,16 +54,17 @@
 //     string, not a program.
 //   - A gate behind a throttle wrapper (taskpolicy ... go test ... | tail): the
 //     wrapper's own flags are not peeled, so the head does not match.
-//   - A pipeline whose status genuinely does not matter, which is why the
-//     decision is `ask`.
+//   - A pipeline whose status genuinely does not matter, which is what the
+//     override prefix is for.
 //   - Any command carrying a heavy `go ... -race`, which
 //     claude-go-throttle-hook.sh rewrites; see defersToThrottleHook.
 //
-// Mitigations that suppress the pipe warning: `set -o pipefail` in the same
+// Mitigations that suppress the pipe verdict: `set -o pipefail` in the same
 // command, zsh's $pipestatus, and redirecting to a file instead of piping.
 // Neither pipefail nor $pipestatus mitigates a lost background status, so they
 // do not suppress that one; ending the command in `exit $rc` — or in the gate
-// itself — does.
+// itself — does. A `PIPED_GATE_OVERRIDE=<reason>` assignment suppresses every
+// verdict, including the repo-state ones, and is the only thing that does.
 //
 // # A command whose correctness depends on repository state
 //
@@ -181,7 +187,7 @@ func run(registryPath string, stdin io.Reader, stdout io.Writer) int {
 
 	var out hookOutput
 	out.HookSpecificOutput.HookEventName = "PreToolUse"
-	out.HookSpecificOutput.PermissionDecision = "ask"
+	out.HookSpecificOutput.PermissionDecision = "deny"
 	out.HookSpecificOutput.PermissionDecisionReason = reason
 	if err := json.NewEncoder(stdout).Encode(out); err != nil {
 		return 0
