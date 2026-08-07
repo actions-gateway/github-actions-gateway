@@ -20,7 +20,7 @@ hide:
 
 </div>
 
-<p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
+<p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for shared, multi-tenant clusters. <strong>Nothing idles between jobs. Jobs the cluster disrupts re-run themselves. Quotas are safe to enforce</strong>, so several teams can share expensive nodes without the platform team becoming a ticket queue.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Watch the demo](demo.md){ .md-button }
@@ -54,8 +54,27 @@ kubectl apply --server-side -f \
 
 ## What GAG gives you
 
-Most of these ladder up the same way. Enforceable quotas and self-healing disruption make shared capacity **safe to actually use**; that is what lets you bin-pack tenants onto expensive nodes and run on preemptible capacity, which is where the [**lower cost**](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) comes from. Fewer manual reruns and fewer pages are what you feel first. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) · [See every feature →](features.md)
+These ladder up one way: **safe quotas and self-healing disruption make shared capacity usable**, which is what lets you bin-pack expensive nodes and run on preemptible capacity. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) · [See every feature →](features.md)
 
+</div>
+
+<div class="gag-stats" markdown="0">
+  <div class="gag-stat">
+    <span class="gag-stat__num">1&nbsp;pod</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint for 10 runner sets</strong>: every listener is a goroutine in one shared pod, against 10 always-on pods on ARC</span>
+  </div>
+  <div class="gag-stat">
+    <span class="gag-stat__num">15&ndash;26&nbsp;s</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Measured recovery from a preemption or drain</strong>: the run concludes and re-runs itself, with no manual rerun and no ticket</span>
+  </div>
+  <div class="gag-stat">
+    <span class="gag-stat__num">0</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Idle GPU pods between jobs</strong>: workers exist only while a job runs, deleted on completion</span>
+  </div>
+  <div class="gag-stat">
+    <span class="gag-stat__num">20</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Alert rules shipped as code</strong>, with a tenant dashboard and a platform dashboard beside them</span>
+  </div>
 </div>
 
 <div class="gag-pillars" markdown>
