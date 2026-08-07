@@ -27,6 +27,10 @@ Treating these as one item is why the roadmap entry reads as though caching does
 not work at all. They have different data, different threat models, and
 different owners.
 
+**This is a split by problem, not by tool.** The content classes are genuinely
+distinct; the backends that serve them overlap heavily, and the section after
+next is about that overlap. Do not read this table as three deployments.
+
 | | What it holds | Where it lives today | Row |
 |---|---|---|---|
 | **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | [Q408](../STATUS.md#Q408), [Q539](../STATUS.md#Q539), [Q540](../STATUS.md#Q540) |
@@ -48,7 +52,54 @@ Azure-blob-backed Actions results / cache / artifact store), asserted by both
 reaches the Actions cache data plane through its own proxy pool like any other
 GitHub endpoint.
 
-So the accurate gap is **a cache inside the cluster**, not caching. What a local
+### One backend can serve several classes
+
+Distinct problems do not imply distinct deployments, and scoping them as three
+projects is how this becomes three times the work it needs to be.
+
+Dragonfly is the concrete case, and it is already the scheduled mirror candidate
+in [Q539](../STATUS.md#Q539). It is a **general file-distribution system** whose
+registry-mirror use is one application, not its definition. Measured from the
+upstream docs on 2026-08-07:
+
+- `dfget` downloads arbitrary files and directories, with native backends for
+  HTTP/HTTPS, **S3, GCS, Azure Blob Storage, OSS, OBS, COS, HDFS**, plus Hugging
+  Face and ModelScope.
+- `dfdaemon` exposes a configurable HTTP proxy whose rules are content-agnostic,
+  rather than an image-specific shim.
+- **Git LFS is a documented integration**, which is the existing proof that a
+  non-image artifact class rides the same P2P mesh.
+
+The Azure Blob Storage backend is the one to notice: `actions/cache` stores to
+`*.blob.core.windows.net`, which is exactly the host the hardened posture in the
+next section removes. Whether a Dragonfly deployment can front the Actions cache
+API specifically is **unverified** and not a small question, since that API is
+authenticated and signed-URL based rather than a plain blob `GET`. Treat this as
+the thing Q539 and Q540 should be scoped to answer, not as a capability GAG has.
+
+### The mirror contract is read-only, and a job cache is not
+
+The obstacle is not the backend. It is the contract.
+
+[q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) defines
+the mirror role as four properties, one of which is that **non-GET operations
+are refused, not forwarded**. That property is load-bearing: it is most of why
+an untrusted job can be allowed to talk to the mirror at all.
+
+A job cache is read-write by definition. `actions/cache` saves entries as well
+as restoring them, and a cache nothing writes to is empty. So the artifact cache
+**cannot simply reuse the mirror role**, however well the same software serves
+both. It needs either a second role with its own contract, or a writable variant
+whose isolation argument is made separately, and that argument is the hard part:
+a write path reachable by an untrusted fork pull request is a way to plant
+content that a later trusted job restores and executes.
+
+That is the sharpest version of the review [Q215](../STATUS.md#Q215) is blocked
+on, and it is a contract question rather than a storage question.
+
+### The accurate gap
+
+The gap is **a cache inside the cluster**, not caching. What a local
 cache would buy is egress cost and restore latency, not capability. Stating it
 the current way concedes a loss that has not happened, and it hides the loss
 that has: no local cache means every restore is a round trip out of the cluster
@@ -78,6 +129,9 @@ The consequences run one way:
    which is exactly the review Q215 is blocked on. A cache shared across
    tenants is an exfiltration path; a cache shared across *jobs of one tenant*
    is the useful thing and a narrower risk.
+4. And it must be **writable** by that job, which is the property the mirror
+   role deliberately refuses. The two roles cannot be the same endpoint even
+   when they are the same software.
 
 The sequencing that falls out: **the cross-tenant isolation review is not a
 prerequisite to be cleared, it is the design.** Q215 should not be scoped as
@@ -97,6 +151,10 @@ Each demonstrated rather than argued:
 4. Cache entries written by an untrusted fork pull request cannot be read by a
    trusted job of the same tenant, or that boundary is explicitly declared
    absent with a reason.
+5. The write path is contracted, not incidental: whatever endpoint accepts a
+   cache save states what it accepts, from whom, and what it refuses, in the
+   same form [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract)
+   states the read path. Four properties for the mirror, its own set for this.
 5. A `ReadWriteMany` volume is mounted into a worker in a validated reference
    architecture, and the storage classes it has been exercised against are
    named. Failing that, the stance that workers stay storage-less is written
@@ -108,9 +166,11 @@ Each demonstrated rather than argued:
 ## Explicitly out of scope
 
 - **Building a cache service.** The deliverable is integration and a validated
-  reference architecture, not a new storage system. If an existing backend
-  (an S3-compatible store, a `ReadWriteMany` class, Dragonfly for images) can
-  hold it, that is the answer.
+  reference architecture, not a new storage system. If an existing backend can
+  hold it, that is the answer, and preferring one backend across content classes
+  over a best-of-breed per class is deliberate: each additional deployment is
+  another NetworkPolicy scope, another upstream allowlist, and another thing an
+  untrusted job can reach.
 - **Cross-tenant cache sharing, at any scale.** Deduplicating identical entries
   across tenants is the obvious efficiency and the obvious exfiltration path.
   Not now, and not without a threat model that survives the untrusted
@@ -149,6 +209,14 @@ review this document reframes as the design),
 [Q719](../STATUS.md#Q719) (RWX validation and the reference-architecture
 stance), [Q268](../STATUS.md#Q268) (warm worker pool, the competing lever for
 the latency half of the same complaint).
+
+**Scope note for Q539 and Q540.** Both are currently written as image-only
+validations. Because the candidate backend is a general file distributor, both
+should also answer whether *one* deployment serves the artifact class as well,
+and at what cost to the §3.5 contract. Answering it there is nearly free while
+the deployment is already stood up, and expensive later. Grade the four contract
+properties **per content class**, not once: a backend that refuses non-GET for
+images has said nothing about what it does for a cache save.
 
 ## Gaps with no row yet
 
