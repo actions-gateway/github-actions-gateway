@@ -34,13 +34,23 @@ import (
 // no host to allow, and the gateway's own arrival requeues this proxy.
 // A cross-namespace referrer counts too (M4, §H.9): its GitHub host is just as
 // unreachable as a colocated one if the allowlist omits it, and a shared proxy exists
-// precisely to carry other namespaces' traffic. The lists are cluster-wide for that
-// reason, with each candidate's resolved proxy namespace compared to this proxy's.
+// precisely to carry other namespaces' traffic.
+//
+// The scan widens to cluster-wide only for a proxy that actually grants something.
+// A proxy sharing nothing can have no cross-namespace referrer, so scanning past its
+// own namespace could only cost — and it costs on every reconcile, for every proxy in
+// the cluster, against a resync that re-enqueues them all. Keeping the unshared case
+// namespace-scoped leaves it exactly as expensive as it was before M4.
 func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2alpha1.EgressProxy) ([]string, error) {
 	namespace, proxyName := ep.Namespace, ep.Name
 
+	scope := []client.ListOption{client.InNamespace(namespace)}
+	if ep.Spec.Sharing != nil && len(ep.Spec.Sharing.AllowedNamespaces) > 0 {
+		scope = nil
+	}
+
 	var gateways gmcv2alpha1.ActionsGatewayList
-	if err := c.List(ctx, &gateways); err != nil {
+	if err := c.List(ctx, &gateways, scope...); err != nil {
 		return nil, fmt.Errorf("list ActionsGateways: %w", err)
 	}
 	// Keyed namespace/name: a RunnerSet's gatewayRef is always same-namespace, so two
@@ -76,7 +86,7 @@ func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2a
 	}
 
 	var runnerSets gmcv2alpha1.RunnerSetList
-	if err := c.List(ctx, &runnerSets); err != nil {
+	if err := c.List(ctx, &runnerSets, scope...); err != nil {
 		return nil, fmt.Errorf("list RunnerSets: %w", err)
 	}
 	for i := range runnerSets.Items {
