@@ -16,6 +16,15 @@
 // controller-gen aggregates into the same manager-role. EgressProxy carries NO
 // finalizer: deletion degrades referrers rather than blocking, and owner-ref GC
 // reclaims the children (§H.8) — so no egressproxies/finalizers grant.
+//
+// Cross-namespace sharing (M4, §H.9) projects the proxy's public CA and connection
+// facts into granted consumer namespaces as ConfigMaps, and deletes them when a
+// grant is revoked — so the pre-existing `configmaps: get` grant widens to the full
+// write set. The projected object carries no owner reference (the GC ignores a
+// cross-namespace owner), which is why delete is needed rather than cascade GC.
+// No `watch`: these reads go through the uncached APIReader, so no ConfigMap
+// informer is started and the name-pinned egress-allowlist scoping stays intact.
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;delete
 
 package controller
 
@@ -53,10 +62,11 @@ import (
 // EgressProxyReconciler reconciles a v2alpha1 EgressProxy into a standalone proxy
 // pool, owning the proxy Deployment/Service/HPA/PDB/NetworkPolicy and the
 // self-signed proxy TLS Secret via controller owner references for clean cascade
-// GC (§H.8). It is same-namespace only at this milestone (M2): cross-namespace
-// sharing (spec.sharing.allowedNamespaces) is deferred to M4. The reconciler
-// mirrors v1's inline ActionsGateway proxy-provisioning runtime semantics — the v2
-// API re-shapes the surface without changing what the proxy pool does.
+// GC (§H.8). It also owns the cross-namespace sharing handshake (M4, §H.9): the CA
+// projections into namespaces spec.sharing.allowedNamespaces consents to, and the
+// ingress rules admitting them. The reconciler mirrors v1's inline ActionsGateway
+// proxy-provisioning runtime semantics — the v2 API re-shapes the surface without
+// changing what the proxy pool does.
 type EgressProxyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -67,6 +77,14 @@ type EgressProxyReconciler struct {
 	// first fetch lands (mirrors the ActionsGatewayReconciler contract).
 	IPCache    *IPRangeCache
 	ProxyImage string
+	// APIReader is the manager's uncached reader, used for every read of a projected
+	// cross-namespace share ConfigMap (§H.9). It must not be the cached client: the
+	// GMC pins its ConfigMap informer to one name in its own namespace
+	// (buildCacheOptions), so a cached label-selected List would quietly return
+	// nothing and the prune that revokes a withdrawn grant would find no projections
+	// to delete. Nil falls back to the cached client for unit tests, which run
+	// against a fake client with no such scoping.
+	APIReader client.Reader
 	// EnableServiceMonitor gates creation of the per-EgressProxy Prometheus-Operator
 	// ServiceMonitor that scrapes the proxy's mTLS metrics port (Q324). The
 	// monitoring.coreos.com CRD is an optional, operator-installed prerequisite, so
@@ -114,7 +132,7 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// The GitHub host a referrer binds to this proxy lives on the referrer, not here,
 	// so the hostname allowlists must be assembled from the referrer graph (Q506 #2).
 	// A read failure degrades rather than emitting a policy missing a tenant's host.
-	gitHubHosts, err := resolveReferrerGitHubHosts(ctx, r.Client, ep.Namespace, ep.Name)
+	gitHubHosts, err := resolveReferrerGitHubHosts(ctx, r.Client, &ep)
 	if err != nil {
 		return r.setDegraded(ctx, &ep, &provisioningError{step: "resolve referrer GitHub hosts", err: err})
 	}
@@ -157,6 +175,11 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	}
 	if err := r.applyOrPruneServiceMonitor(ctx, ep); err != nil {
 		return &provisioningError{step: "reconcile proxy ServiceMonitor", err: err}
+	}
+	// Last: the projection publishes trust material a consumer acts on, so it runs
+	// only once the cert, Service and NetworkPolicy it describes are in place.
+	if err := r.reconcileProxyShares(ctx, ep); err != nil {
+		return &provisioningError{step: "reconcile cross-namespace proxy shares", err: err}
 	}
 	return nil
 }

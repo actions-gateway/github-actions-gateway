@@ -128,7 +128,7 @@ func ghesAdmissionGateway(name, ns, gitHubURL, proxyRef string) *gmcv2alpha1.Act
 		},
 	}
 	if proxyRef != "" {
-		gw.Spec.DefaultProxyRef = &gmcv2alpha1.LocalObjectRef{Name: proxyRef}
+		gw.Spec.DefaultProxyRef = &gmcv2alpha1.ProxyObjectRef{Name: proxyRef}
 	}
 	return gw
 }
@@ -201,7 +201,7 @@ func TestV2_Referrer_Admission_GHESHostInExistingProxy(t *testing.T) {
 		Spec: gmcv2alpha1.RunnerSetSpec{
 			GatewayRef:   gmcv2alpha1.ObjectRef{Name: "ghes-gw"},
 			RunnerLabels: []string{"ghes-test"},
-			ProxyRef:     &gmcv2alpha1.ObjectRef{Name: "corp-proxy"},
+			ProxyRef:     &gmcv2alpha1.ProxyObjectRef{Name: "corp-proxy"},
 		},
 	}
 	err = k8sClient.Create(ctx, badRS)

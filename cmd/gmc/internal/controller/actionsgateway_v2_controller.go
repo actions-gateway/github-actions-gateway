@@ -215,16 +215,29 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// direct-egress NetworkPolicy to DNS + GitHub CIDRs + the kube API server. Set ⇒
 	// proxied: the named EgressProxy must exist; a defaultProxyRef pointing at a
 	// missing proxy is an operator error and still fails closed (ProxyNotFound).
+	// A defaultProxyRef naming another namespace additionally needs provider consent
+	// (M4, §H.9): the proxy must list this gateway's namespace in
+	// spec.sharing.allowedNamespaces. Absent or empty sharing denies, so an operator
+	// cannot reach a proxy by naming it.
 	var proxy *gmcv2alpha1.EgressProxy
 	if ag.Spec.DefaultProxyRef != nil {
+		proxyNS := ag.Spec.DefaultProxyRef.Namespace
+		if proxyNS == "" {
+			proxyNS = ag.Namespace
+		}
 		var p gmcv2alpha1.EgressProxy
-		proxyErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Spec.DefaultProxyRef.Name}, &p)
+		proxyErr := r.Get(ctx, types.NamespacedName{Namespace: proxyNS, Name: ag.Spec.DefaultProxyRef.Name}, &p)
 		if proxyErr != nil && !apierrors.IsNotFound(proxyErr) {
 			return ctrl.Result{}, proxyErr
 		}
 		if apierrors.IsNotFound(proxyErr) {
 			return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyNotFound,
-				fmt.Sprintf("EgressProxy %q (defaultProxyRef) not found in namespace %q", ag.Spec.DefaultProxyRef.Name, ag.Namespace))
+				fmt.Sprintf("EgressProxy %q (defaultProxyRef) not found in namespace %q", ag.Spec.DefaultProxyRef.Name, proxyNS))
+		}
+		if proxyNS != ag.Namespace && !proxyShareGranted(&p, ag.Namespace) {
+			return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyShareNotGranted,
+				fmt.Sprintf("EgressProxy %q in namespace %q does not list namespace %q in spec.sharing.allowedNamespaces",
+					ag.Spec.DefaultProxyRef.Name, proxyNS, ag.Namespace))
 		}
 		proxy = &p
 	}
@@ -321,8 +334,16 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 	step("NetworkPolicies")
 	direct := proxy == nil
 	githubCIDRs := r.githubCIDRs()
-	workloadNP := buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct)
-	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct)
+	// Cross-namespace proxies (M4, §H.9) add one egress peer per granted provider
+	// namespace. Computed here rather than in the builders so both policies see the
+	// same set, and so a read failure fails the step instead of silently emitting a
+	// policy missing a tenant's proxy.
+	remoteProxyNS, err := grantedRemoteProxyNamespaces(ctx, r.Client, ag)
+	if err != nil {
+		return fmt.Errorf("resolve cross-namespace proxy grants: %w", err)
+	}
+	workloadNP := buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct, remoteProxyNS)
+	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct, remoteProxyNS)
 	// Q246/Q61: in direct egress the GitHub-CIDR allowlist on these two policies is
 	// sourced from the IP-range cache. At GMC startup that cache is empty until
 	// IPRangeReconciler's first api.github.com/meta fetch lands, so rebuilding an
@@ -1134,11 +1155,39 @@ func (r *ActionsGatewayV2Reconciler) secretToActionsGateways(ctx context.Context
 }
 
 // proxyToActionsGateways enqueues any v2 ActionsGateway whose defaultProxyRef names
-// this EgressProxy.
+// this EgressProxy, in any namespace.
+//
+// The scan is cluster-wide rather than scoped to the proxy's namespace because a
+// grant (or its withdrawal) has to reach consumers that by definition live
+// elsewhere (M4, §H.9) — a namespace-scoped list would leave a revoked gateway
+// sitting Ready with wiring it is no longer entitled to. It also fixes a latent
+// mismatch in the same-namespace case: matching on name alone enqueued gateways for
+// a same-named proxy in an unrelated namespace, so the namespace is now compared
+// too.
 func (r *ActionsGatewayV2Reconciler) proxyToActionsGateways(ctx context.Context, obj client.Object) []ctrl.Request {
-	return r.gatewaysMatching(ctx, obj.GetNamespace(), func(ag *gmcv2alpha1.ActionsGateway) bool {
-		return ag.Spec.DefaultProxyRef != nil && ag.Spec.DefaultProxyRef.Name == obj.GetName()
-	})
+	var list gmcv2alpha1.ActionsGatewayList
+	if err := r.List(ctx, &list); err != nil {
+		return nil
+	}
+	var reqs []ctrl.Request
+	for i := range list.Items {
+		ag := &list.Items[i]
+		ref := ag.Spec.DefaultProxyRef
+		if ref == nil || ref.Name != obj.GetName() {
+			continue
+		}
+		refNS := ref.Namespace
+		if refNS == "" {
+			refNS = ag.Namespace
+		}
+		if refNS != obj.GetNamespace() {
+			continue
+		}
+		reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{
+			Namespace: ag.Namespace, Name: ag.Name,
+		}})
+	}
+	return reqs
 }
 
 func (r *ActionsGatewayV2Reconciler) gatewaysMatching(ctx context.Context, ns string, match func(*gmcv2alpha1.ActionsGateway) bool) []ctrl.Request {

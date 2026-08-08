@@ -141,7 +141,7 @@ func newGatewayForSet(name, ns, proxyRef string) *v2alpha1.ActionsGateway {
 		},
 	}
 	if proxyRef != "" {
-		ag.Spec.DefaultProxyRef = &v2alpha1.LocalObjectRef{Name: proxyRef}
+		ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: proxyRef}
 	}
 	return ag
 }

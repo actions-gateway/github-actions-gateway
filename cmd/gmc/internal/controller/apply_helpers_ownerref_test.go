@@ -135,7 +135,7 @@ func TestV2ApplyHelpers_OwnerReferenceContract(t *testing.T) {
 	saDesired := buildAGCServiceAccountV2(ag)
 	rbDesired := buildAGCRoleBindingV2(ag)
 	svcDesired := buildAGCServiceV2(ag)
-	npDesired := buildAGCNetworkPolicyV2(ag, nil, nil, false)
+	npDesired := buildAGCNetworkPolicyV2(ag, nil, nil, false, nil)
 	depDesired := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
 	crbName := clusterRunnerTemplateReaderBindingName(ag)
 
