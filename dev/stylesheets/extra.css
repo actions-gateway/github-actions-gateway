@@ -167,6 +167,16 @@ body[data-md-color-scheme="slate"] {
   opacity: 0.6;
 }
 
+/* Drop the horizontal bleed once the hero nearly fills the viewport. Above the
+   large breakpoint the hero is inset far enough that 2rem is absorbed (880px
+   hero inside a 1,408px column at 1440px); below it the hero keeps only a 16px
+   margin, so the same bleed put 24px of horizontal scroll on the page. */
+@media screen and (max-width: 76.25em) {
+  .gag-hero::before {
+    inset: -1.5rem 0 0;
+  }
+}
+
 /* Illuminated-initial logomark: the faceted ring sits like a manuscript drop
    cap at the start of the hero, with the eyebrow, headline, and description
    flowing around and beneath it. flow-root contains the float so the call-to-
@@ -294,6 +304,43 @@ body[data-md-color-scheme="slate"] {
   display: none;
 }
 
+/* The three load-bearing promises, read as one wide line rather than a
+   sentence. Each claim is its own span separated by real whitespace, so a
+   screen reader gets three phrases; the dots are generated content and stay
+   out of the accessibility tree entirely. */
+.gag-hero .gag-claims {
+  font-size: clamp(1.05rem, 0.85rem + 0.8vw, 1.22rem);
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--md-default-fg-color);
+  margin: 0 0 0.85rem;
+  text-align: center;
+}
+
+
+/* Each claim is an inline-block so a wrap falls *between* phrases; a phrase
+   breaks internally only when no line is wide enough to hold it, which is the
+   graceful case on a phone rather than the common one. */
+.gag-hero .gag-claims span {
+  display: inline-block;
+}
+
+.gag-hero .gag-claims span + span::before {
+  content: "·";
+  color: var(--md-accent-fg-color);
+  font-weight: 400;
+  /* Oversized against the claim text so the dot reads as a divider rather than
+     punctuation. `em` here resolves against the claim's own clamped size, so it
+     scales with the row; line-height 0 keeps the taller glyph from growing the
+     line box. */
+  font-size: 1.8em;
+  line-height: 0;
+  vertical-align: -0.08em;
+  /* Owned by the claim that follows it, so a wrap never strands the dot at the
+     end of a line. Padding is in the dot's own em, hence the smaller numbers. */
+  padding: 0 0.28em 0 0.08em;
+}
+
 .gag-hero .gag-tagline {
   font-size: clamp(1rem, 0.95rem + 0.4vw, 1.15rem);
   color: var(--md-default-fg-color--light);
@@ -356,9 +403,12 @@ body[data-md-color-scheme="slate"] {
    shadow, no hover lift) with an accent rule, so the "not for everyone" scope
    note reads as confident honesty — a trust signal — and closes the section. */
 .gag-fit-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
+  /* Block, not flex. This is a paragraph with a leading icon, and a flex
+     container promotes every inline child (`strong`, `a`) to its own flex item
+     that will not wrap. Measured 2026-08-07 at 375px: the flex version pushed
+     the layout viewport to 485px and rendered "Not your setup?" as a 52px
+     column three lines tall. Block keeps the icon inline and the prose prose. */
+  display: block;
   margin: 1.1rem 0 0;
   padding: 0.8rem 1rem;
   border: 1px solid var(--md-default-fg-color--lightest);
@@ -380,9 +430,27 @@ body[data-md-color-scheme="slate"] {
 }
 
 .gag-fit-note .twemoji {
-  flex: none;
   color: var(--md-accent-fg-color);
-  margin-top: 0.08rem;
+  margin-right: 0.4rem;
+  vertical-align: -0.16em;
+}
+
+/* Tighten the routing list: it is three scan lines, not body copy, so it gets
+   less leading than the surrounding prose and no extra block margins. */
+.gag-fit-note > :first-child {
+  margin-top: 0;
+}
+
+.gag-fit-note > :last-child {
+  margin-bottom: 0;
+}
+
+.gag-fit-note ul {
+  margin: 0.5rem 0;
+}
+
+.gag-fit-note li {
+  margin-bottom: 0.15rem;
 }
 
 .gag-fit-note .twemoji svg {
@@ -819,6 +887,31 @@ body[data-md-color-scheme="slate"] {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.6rem;
+}
+
+/* Roll-up variant (why-gag "What changes with GAG"). Two differences from the
+   four-tier diagram: it may use the full content column, and its nodes carry a
+   sentence rather than a label, so they must share the row evenly instead of
+   sizing to their text. `flex: 1 1 0` splits each row N ways whatever N is,
+   while the inherited 12rem floor decides when to wrap: the four-outcome row is
+   4-across at full width and 2x2 in a narrow column. */
+.gag-flow--wide {
+  max-width: 52rem;
+}
+
+.gag-flow--wide .gag-flow__row {
+  align-self: stretch;
+}
+
+.gag-flow--wide .gag-flow__row .gag-flow__node {
+  flex: 1 1 0;
+}
+
+/* A capability that is only partly delivered. Dashed rather than solid so the
+   diagram cannot claim more than has shipped; the node still reads as an input
+   because the delivered half genuinely feeds the outcome. */
+.gag-flow__node--wip {
+  border-style: dashed;
 }
 
 /* Wider content column (less side gutter) so wide tables have room to breathe. */
