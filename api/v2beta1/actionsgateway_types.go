@@ -68,7 +68,7 @@ type ActionsGatewaySpec struct {
 	// cross-namespace use (§H.4, §H.9).
 	//
 	// +optional
-	DefaultProxyRef *LocalObjectRef `json:"defaultProxyRef,omitempty"`
+	DefaultProxyRef *ProxyObjectRef `json:"defaultProxyRef,omitempty"`
 
 	// DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate
 	// (set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets

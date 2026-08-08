@@ -1,8 +1,8 @@
 # Release 1.4 Milestone Definition
 
-> **Status: scope decided 2026-08-05. Two gating Queue rows remain**, labelled
-> `1.4-gate`: [Q166](../STATUS.md#Q166), [Q554](../STATUS.md#Q554). Q691 shipped
-> 2026-08-08. Everything else the release contains is already merged.
+> **Status: scope decided 2026-08-05. One gating Queue row remains**, labelled
+> `1.4-gate`: [Q554](../STATUS.md#Q554). Q166 and Q691 both shipped 2026-08-08.
+> Everything else the release contains is already merged.
 
 ## The minor was forced before anyone chose it
 
@@ -33,13 +33,20 @@ the floor is a manual reading.
 
 ## What 1.4.0 adds beyond what is merged
 
-**[Q166](../STATUS.md#Q166): v2 API M4, cross-namespace EgressProxy sharing.**
-The one item here whose absence is a liability rather than a deferral.
-`sharing.allowedNamespaces` is **served in the v2beta1 API with no enforcement**,
-so an operator can set a field that nothing honours. That is a shipped defect
-wearing a feature label, and every release that ships it that way hardens a
-dormant contract further. Demand fired 2026-08-01. Remaining: the M4 consent
-check, CA distribution, dual-side NetworkPolicy.
+**Q166: v2 API M4, cross-namespace EgressProxy sharing. — shipped.**
+The one item here whose absence was a liability rather than a deferral.
+`sharing.allowedNamespaces` was **served in the v2beta1 API with no enforcement**,
+so an operator could set a field that nothing honoured. That is a shipped defect
+wearing a feature label, and every release that shipped it that way hardened a
+dormant contract further. Demand fired 2026-08-01.
+
+Delivered whole: the consent check, CA distribution, and dual-side NetworkPolicy.
+Two things the plan had not accounted for turned up in the code and are recorded in
+[§H.9](../design/appendix-h-v2-api-decomposition.md#h9-cross-namespace-proxy-sharing)
+— a cross-namespace reference was not expressible at all (so M4 had to build the
+path, not just guard it), and the AGC cannot read a remote `EgressProxy` without an
+RBAC widening nobody wanted, so the GMC mediates. Absent or empty `sharing` denies,
+which keeps the pre-M4 posture as the default and the unset case.
 
 **[Q554](../STATUS.md#Q554): a curated runner template library.** The cheapest
 real capability on the list: no new CRD, and it promotes templates CI already

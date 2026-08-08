@@ -418,10 +418,18 @@ func (r *IPRangeReconciler) patchDirectEgressNetworkPolicies(ctx context.Context
 		return nil
 	}
 
-	if err := patch(workloadNPNameV2(ag), buildWorkloadNetworkPolicyV2(ag, cidrs, true)); err != nil {
+	// This patch replaces Egress wholesale, so it must reproduce every rule the
+	// per-CR reconcile emits — including the cross-namespace proxy peers (§H.9). A
+	// direct-egress gateway can still hold RunnerSets that name a shared proxy, and
+	// omitting the peers here would strip their egress on the next IP refresh.
+	remoteProxies, err := grantedRemoteProxies(ctx, r.Client, ag)
+	if err != nil {
 		return err
 	}
-	if err := patch(agcNameV2(ag), buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, cidrs, true)); err != nil {
+	if err := patch(workloadNPNameV2(ag), buildWorkloadNetworkPolicyV2(ag, cidrs, true, remoteProxies)); err != nil {
+		return err
+	}
+	if err := patch(agcNameV2(ag), buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, cidrs, true, remoteProxies)); err != nil {
 		return err
 	}
 	if patched && r.Metrics != nil {

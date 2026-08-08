@@ -173,6 +173,13 @@ const (
 	proxyCAMountPath  = "/etc/actions-gateway/proxy-ca"
 	proxyCAFileName   = "tls.crt"
 
+	// proxyShareCACertKey is the key holding the certificate in the ConfigMap the GMC
+	// projects into a namespace granted cross-namespace use of a proxy (§H.9). It
+	// mirrors the GMC's shareCACertKey (cmd/gmc/internal/controller/egressproxy_sharing.go);
+	// kept local for the same reason as the proxy resource-name suffixes, being a
+	// naming convention the two modules agree on rather than API.
+	proxyShareCACertKey = "ca.crt"
+
 	// githubCAVolumeName / githubCAMountPath / githubCAFileName describe how the
 	// operator-supplied GitHub CA bundle is projected into the worker pod (Q536).
 	// Same shape and same reason as the proxy CA above, one hop further out: on a
@@ -326,6 +333,13 @@ type Provisioner struct {
 	// mount, which is the right behaviour for tests and any deployment that
 	// runs without the per-tenant egress proxy.
 	ProxyTLSSecretName string
+
+	// ProxyCAConfigMapName is the cross-namespace counterpart of ProxyTLSSecretName
+	// (§H.9): a proxy shared from another namespace keeps its TLS Secret there, so
+	// the GMC projects the public certificate into this namespace as a ConfigMap and
+	// the worker mounts it from there instead. At most one of the two is set — the
+	// mount path the worker sees is identical either way.
+	ProxyCAConfigMapName string
 
 	// GitHubCAConfigMapName names a ConfigMap in the tenant namespace whose ca.crt
 	// key is the CA bundle fronting this gateway's GHES appliance

@@ -394,14 +394,26 @@ invariant:** the referenced Secret must be a same-namespace TLS Secret — no
 cross-tenant reuse. Additive optional field, deferred until an operator with managed
 PKI asks. Instantiates [design goal 6](../design/01-executive-summary.md#design-goals).
 
-### M4 — Cross-namespace `EgressProxy` sharing
+### M4 — Cross-namespace `EgressProxy` sharing — **shipped** (Q166)
 
-Additive on M3, gated on a **concrete operator ask** for cross-namespace sharing
-(same-namespace sharing already works without it). Adds: inline
-`spec.sharing.allowedNamespaces` provider consent, ConfigMap CA distribution into
-granted namespaces (trust-manager pattern), dual-side NetworkPolicy, and the
-managed-IP refresh relocation for remote consumers ([§H.9](../design/appendix-h-v2-api-decomposition.md#h9-cross-namespace-proxy-sharing)).
-Tracked in [STATUS.md Deferred](../STATUS.md#deferred).
+Demand fired 2026-08-01 and it shipped into 1.4.0. `spec.sharing.allowedNamespaces`
+had been served by `v2beta1` since `v1.3.0` with **no enforcement**, so every release
+hardened a dormant field; implementing it while it was still effectively unused was
+what kept the fix from being a breaking change.
+
+Delivered: the proxy references carry an optional `namespace` on a dedicated
+`ProxyObjectRef` (not on the shared `ObjectRef`, which would have opened
+`gatewayRef`/`templateRef` too); provider-side consent failing closed with
+`ProxyShareNotGranted`; CA distribution as a ConfigMap into granted namespaces only;
+dual-side NetworkPolicy, with the granted peer carrying both selectors in one entry so
+they AND. Absent or empty `sharing` denies, so the same-namespace-only posture is both
+the default and the unset case.
+
+The GMC mediates every cross-namespace resolution, because the AGC's namespace-scoped
+cache and per-tenant `Role` cannot read a remote `EgressProxy` and widening them was a
+blast-radius regression. The projected ConfigMap's presence is the grant. Design
+detail and what the implementation settled:
+[§H.9](../design/appendix-h-v2-api-decomposition.md#h9-cross-namespace-proxy-sharing).
 
 ### Also deferred / opportunistic (per Appendix H)
 

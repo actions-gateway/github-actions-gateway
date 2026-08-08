@@ -460,7 +460,7 @@ func buildGateway(ns, name, proxyName string, spec gmcv1alpha1.ActionsGatewaySpe
 				GitHubApp: &v2alpha1.LocalSecretReference{Name: spec.GitHubAppRef.Name},
 			},
 			GitHubURL:       spec.GitHubURL,
-			DefaultProxyRef: &v2alpha1.LocalObjectRef{Name: proxyName},
+			DefaultProxyRef: &v2alpha1.ProxyObjectRef{Name: proxyName},
 			LogLevel:        spec.LogLevel,
 			Tracing:         translateTracing(spec.Tracing),
 		},

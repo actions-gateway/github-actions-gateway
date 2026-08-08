@@ -347,7 +347,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// RunnerSet sits Ready=False/<Ref>NotFound with no listeners running, so no
 	// worker pod is ever provisioned in the gap (§H.7). The referent watches
 	// re-enqueue when a missing object appears.
-	refs, res := resolveRunnerSetRefs(ctx, r.Client, &rs)
+	refs, res := resolveRunnerSetRefs(ctx, r.Client, r.APIReader, &rs)
 	if res.err != nil {
 		return ctrl.Result{}, res.err
 	}
@@ -914,6 +914,7 @@ func (r *RunnerSetReconciler) nowFunc() func() time.Time {
 func (r *RunnerSetReconciler) provisionerTarget(rs *v2alpha1.RunnerSet) *runnerSetTarget {
 	return &runnerSetTarget{
 		client: r.Client,
+		reader: r.APIReader,
 		prov:   r.Provisioner,
 		key:    types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name},
 		uid:    rs.UID,

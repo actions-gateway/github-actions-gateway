@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
+	"github.com/actions-gateway/github-actions-gateway/api/apinames"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,6 +34,16 @@ const (
 
 	// proxyPort is the EgressProxy CONNECT/data port (matches the GMC's proxyPort).
 	proxyPort = 8080
+
+	// Keys the GMC writes into a projected cross-namespace proxy share (§H.9), and
+	// the prefix its name is built from. Same convention-not-API reasoning as the
+	// suffixes above: the authority is
+	// cmd/gmc/internal/controller/egressproxy_sharing.go, and the two modules must
+	// agree because the ConfigMap is the entire interface between them.
+	proxyShareNamePrefix = "proxy-share"
+	proxyShareHostKey    = "proxy-host"
+	proxySharePortKey    = "proxy-port"
+	proxyShareNoProxyKey = "no-proxy"
 
 	// defaultNoProxy excludes cluster-internal traffic from the egress proxy so the
 	// proxy is only used for external (GitHub) traffic. The GMC sets the AGC's own
@@ -57,6 +69,14 @@ const (
 func egressProxyServiceName(name string) string   { return name + egressProxyResourceSuffix }
 func egressProxyTLSSecretName(name string) string { return name + egressProxyTLSSuffix }
 
+// proxyShareConfigMapName derives the name of the ConfigMap the GMC projects into
+// this namespace for a granted cross-namespace proxy. It keys on the provider's
+// namespace AND name so grants from same-named proxies in two provider namespaces
+// cannot collide. Must match the GMC's derivation exactly.
+func proxyShareConfigMapName(proxyNamespace, proxyName string) string {
+	return apinames.Join(apinames.MaxLabelValue, proxyShareNamePrefix, proxyNamespace, proxyName)
+}
+
 // runnerSetTarget adapts a v2alpha1.RunnerSet to the provisioner Target seam. It
 // owns worker pods via an OwnerReference to the real RunnerSet (a synthesized
 // in-memory RunnerGroup would have a dangling owner-ref the apiserver GCs), and
@@ -65,6 +85,9 @@ func egressProxyTLSSecretName(name string) string { return name + egressProxyTLS
 // (Q117) and a reference that stops resolving fails the job fail-closed (§H.7).
 type runnerSetTarget struct {
 	client client.Client
+	// reader is the manager's uncached reader, used only for the projected
+	// proxy-share ConfigMap (see resolveRunnerSetRefs). Nil falls back to client.
+	reader client.Reader
 	// prov supplies the AGC-wide provisioning defaults (eviction/quota tunables)
 	// and the namespace's effective PSA profile (set process-wide from the
 	// SECURITY_PROFILE env the GMC stamps from the namespace security-profile
@@ -315,7 +338,7 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
 		return nil, fmt.Errorf("read RunnerSet: %w", err)
 	}
-	refs, res := resolveRunnerSetRefs(ctx, t.client, rs)
+	refs, res := resolveRunnerSetRefs(ctx, t.client, t.reader, rs)
 	if res.err != nil {
 		return nil, res.err
 	}
@@ -350,16 +373,16 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 	// HTTP(S)_PROXY env and no proxy-CA mount and reaches GitHub directly — still
 	// restricted by the GMC's direct-egress workload NetworkPolicy to DNS + GitHub.
 	if refs.proxy != nil {
-		proxyName := refs.proxy.Name
 		noProxy := defaultNoProxy
-		if cidrs := refs.proxy.Spec.NoProxyCIDRs; len(cidrs) > 0 {
+		if cidrs := refs.proxy.noProxyCIDRs; len(cidrs) > 0 {
 			noProxy = strings.Join(cidrs, ",") + "," + defaultNoProxy
 		}
-		proxyAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", egressProxyServiceName(proxyName), t.key.Namespace, proxyPort)
+		proxyAddr := fmt.Sprintf("https://%s:%d", refs.proxy.host, refs.proxy.port)
 		spec.HTTPProxy = proxyAddr
 		spec.HTTPSProxy = proxyAddr
 		spec.NoProxy = noProxy
-		spec.ProxyTLSSecretName = egressProxyTLSSecretName(proxyName)
+		spec.ProxyTLSSecretName = refs.proxy.tlsSecretName
+		spec.ProxyCAConfigMapName = refs.proxy.caConfigMapName
 	}
 	if rs.Spec.MaxEvictionRetries != nil {
 		spec.MaxEvictionRetries = int(*rs.Spec.MaxEvictionRetries)
@@ -396,7 +419,7 @@ func scaleUpConfigFromV2(s *v2alpha1.ScaleUpRateLimit) *provisioner.ScaleUpConfi
 type resolvedRefs struct {
 	gateway  *v2alpha1.ActionsGateway
 	template *v2alpha1.RunnerTemplateSpec
-	proxy    *v2alpha1.EgressProxy
+	proxy    *resolvedProxy
 	// templateSource is which rung of the optional-templateRef chain supplied the
 	// template (Q172): one of v2alpha1.TemplateSource{Ref,GatewayDefault,ClusterDefault}.
 	// Set only on full resolution; surfaced in RunnerSet status.templateSource.
@@ -431,7 +454,14 @@ func (r refResolution) resolved() bool { return r.reason == "" && r.err == nil }
 // and gateway.defaultProxyRef are both unset resolves with refs.proxy == nil (direct
 // egress, still NetworkPolicy-restricted), not ProxyNotFound. A reference to a *named
 // but missing* proxy still fails closed with ProxyNotFound.
-func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.RunnerSet) (*resolvedRefs, refResolution) {
+// reader is the uncached reader used for the one read that must not establish an
+// informer: the projected proxy-share ConfigMap. The AGC Role grants get on
+// ConfigMaps but not list/watch, so a cached read would try to start an informer it
+// has no permission to run. Nil falls back to the cached client, as elsewhere.
+func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Reader, rs *v2alpha1.RunnerSet) (*resolvedRefs, refResolution) {
+	if reader == nil {
+		reader = c
+	}
 	ns := rs.Namespace
 	refs := &resolvedRefs{}
 
@@ -464,14 +494,22 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 	// no longer a fail-closed ProxyNotFound. A proxyRef/defaultProxyRef that names a
 	// *missing* proxy is still fail-closed ProxyNotFound: an explicit reference to a
 	// not-yet-applied proxy must not silently fall back to direct egress.
-	proxyName := ""
+	proxyName, proxyNS := "", ""
 	if rs.Spec.ProxyRef != nil {
-		proxyName = rs.Spec.ProxyRef.Name
+		proxyName, proxyNS = rs.Spec.ProxyRef.Name, rs.Spec.ProxyRef.Namespace
 	} else if gw.Spec.DefaultProxyRef != nil {
-		proxyName = gw.Spec.DefaultProxyRef.Name
+		proxyName, proxyNS = gw.Spec.DefaultProxyRef.Name, gw.Spec.DefaultProxyRef.Namespace
 	}
 	if proxyName == "" {
 		return refs, refResolution{} // direct egress: refs.proxy == nil
+	}
+	if proxyNS != "" && proxyNS != ns {
+		proxy, res := resolveSharedProxy(ctx, reader, ns, proxyNS, proxyName)
+		if !res.resolved() {
+			return nil, res
+		}
+		refs.proxy = proxy
+		return refs, refResolution{}
 	}
 	proxy := &v2alpha1.EgressProxy{}
 	if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyName}, proxy); err != nil {
@@ -481,9 +519,72 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 		}
 		return nil, refResolution{err: fmt.Errorf("read EgressProxy: %w", err)}
 	}
-	refs.proxy = proxy
+	refs.proxy = &resolvedProxy{
+		host:          fmt.Sprintf("%s.%s.svc.cluster.local", egressProxyServiceName(proxyName), ns),
+		port:          proxyPort,
+		noProxyCIDRs:  proxy.Spec.NoProxyCIDRs,
+		tlsSecretName: egressProxyTLSSecretName(proxyName),
+	}
 
 	return refs, refResolution{}
+}
+
+// resolvedProxy is the egress wiring a worker needs, flattened off whichever source
+// could supply it. A colocated proxy is read from the EgressProxy object directly; a
+// proxy shared from another namespace is unreadable from here (the AGC's cache and
+// Role are scoped to its own namespace), so its facts come from the ConfigMap the
+// GMC projects in on the grant's behalf.
+type resolvedProxy struct {
+	host         string
+	port         int
+	noProxyCIDRs []string
+	// Exactly one of these carries the proxy's public certificate: a same-namespace
+	// TLS Secret for a colocated proxy, the projected ConfigMap for a shared one.
+	tlsSecretName   string
+	caConfigMapName string
+}
+
+// resolveSharedProxy resolves a cross-namespace proxyRef through the projection the
+// GMC writes into the consumer's own namespace once the provider consents (§H.9).
+//
+// The projection's presence IS the grant. The AGC never evaluates
+// allowedNamespaces itself and never reads the remote EgressProxy — it cannot, and
+// that is the point: consent is decided by the GMC, which watches both sides, and
+// revoking a grant deletes this ConfigMap so the reference fails closed here.
+func resolveSharedProxy(ctx context.Context, reader client.Reader, consumerNS, proxyNS, proxyName string) (*resolvedProxy, refResolution) {
+	name := proxyShareConfigMapName(proxyNS, proxyName)
+	var cm corev1.ConfigMap
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: name}, &cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, refResolution{reason: v2alpha1.ReasonProxyShareNotGranted,
+				message: fmt.Sprintf("EgressProxy %q in namespace %q does not list namespace %q in spec.sharing.allowedNamespaces",
+					proxyName, proxyNS, consumerNS)}
+		}
+		return nil, refResolution{err: fmt.Errorf("read projected proxy share: %w", err)}
+	}
+
+	host := cm.Data[proxyShareHostKey]
+	if host == "" {
+		return nil, refResolution{err: fmt.Errorf("projected proxy share %q carries no %s", name, proxyShareHostKey)}
+	}
+	port := proxyPort
+	if raw := cm.Data[proxySharePortKey]; raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, refResolution{err: fmt.Errorf("projected proxy share %q carries an unparseable %s: %w", name, proxySharePortKey, err)}
+		}
+		port = parsed
+	}
+	var noProxy []string
+	if raw := cm.Data[proxyShareNoProxyKey]; raw != "" {
+		noProxy = strings.Split(raw, ",")
+	}
+	return &resolvedProxy{
+		host:            host,
+		port:            port,
+		noProxyCIDRs:    noProxy,
+		caConfigMapName: name,
+	}, refResolution{}
 }
 
 // vanishedReferentReason upgrades a *NotFound resolution outcome to the matching
@@ -529,7 +630,9 @@ func clearStaleResolutionMarkers(rs *v2alpha1.RunnerSet, reason string) {
 	switch reason {
 	case v2alpha1.ReasonTemplateNotFound:
 		rs.Status.TemplateSource = ""
-	case v2alpha1.ReasonProxyNotFound:
+	case v2alpha1.ReasonProxyNotFound, v2alpha1.ReasonProxyShareNotGranted:
+		// A withdrawn grant invalidates proxyMode exactly as a deleted proxy does:
+		// the set resolved no proxy, so it must not keep reporting Proxied.
 		rs.Status.ProxyMode = ""
 	}
 }

@@ -7,7 +7,12 @@
   resources:
   - configmaps
   verbs:
+  - create
+  - delete
   - get
+  - list
+  - patch
+  - update
 - apiGroups:
   - ""
   resources:

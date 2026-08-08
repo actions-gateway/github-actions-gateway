@@ -93,11 +93,6 @@ separately.
   co-tenant's. Give an opted-in group its own Deployment, Service, and
   autoscaler. Largest of the four; needs a plan doc before code.
 
-- **[Cross-namespace proxy sharing](plan/v2-api.md)** <!-- q:Q166 --> Share an
-  [egress proxy pool](design/network-architecture.md) across namespaces with
-  explicit consent: `sharing.allowedNamespaces` is served API today but not
-  yet enforced, so the consent check lands before the beta contract hardens.
-
 ## Exploring / longer-term
 
 Directions we expect to pursue as demand and validated evidence accumulate. These

@@ -66,7 +66,7 @@ func TestRunnerSetWebhook_ProxyGitHubBypass(t *testing.T) {
 	newRS := func(proxy string) *agcv2alpha1.RunnerSet {
 		rs := classicRS("rs", "team-a", "gw", "linux")
 		if proxy != "" {
-			rs.Spec.ProxyRef = &agcv2alpha1.ObjectRef{Name: proxy}
+			rs.Spec.ProxyRef = &agcv2alpha1.ProxyObjectRef{Name: proxy}
 		}
 		return rs
 	}

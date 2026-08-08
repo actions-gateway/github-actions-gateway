@@ -50,7 +50,7 @@ func v2Gateway(name, ns, secret, proxyRef string) *gmcv2alpha1.ActionsGateway {
 		},
 	}
 	if proxyRef != "" {
-		ag.Spec.DefaultProxyRef = &gmcv2alpha1.LocalObjectRef{Name: proxyRef}
+		ag.Spec.DefaultProxyRef = &gmcv2alpha1.ProxyObjectRef{Name: proxyRef}
 	}
 	return ag
 }
@@ -81,7 +81,7 @@ func v2WorkloadIdentityGateway(name, ns, proxyRef string) *gmcv2alpha1.ActionsGa
 		},
 	}
 	if proxyRef != "" {
-		ag.Spec.DefaultProxyRef = &gmcv2alpha1.LocalObjectRef{Name: proxyRef}
+		ag.Spec.DefaultProxyRef = &gmcv2alpha1.ProxyObjectRef{Name: proxyRef}
 	}
 	return ag
 }
@@ -427,14 +427,14 @@ func TestActionsGatewayV2_PerGatewayNaming(t *testing.T) {
 func TestBuildAGCNetworkPolicyV2_ApiserverEgressScoping(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
 	// Default: any-destination apiserver egress (proxied mode, no GitHub rule).
-	np := buildAGCNetworkPolicyV2(ag, nil, nil, false)
+	np := buildAGCNetworkPolicyV2(ag, nil, nil, false, nil)
 	assert.Equal(t, map[string]string{"app": agcNameV2(ag)}, np.Spec.PodSelector.MatchLabels)
 	apiRule := findApiserverEgressRule(np)
 	require.NotNil(t, apiRule)
 	assert.Empty(t, apiRule.To, "empty CIDR list keeps any-destination apiserver egress")
 
 	// Scoped: the rule gains ipBlock peers.
-	scoped := buildAGCNetworkPolicyV2(ag, []string{"10.0.0.0/24"}, nil, false)
+	scoped := buildAGCNetworkPolicyV2(ag, []string{"10.0.0.0/24"}, nil, false, nil)
 	apiRule = findApiserverEgressRule(scoped)
 	require.NotNil(t, apiRule)
 	require.Len(t, apiRule.To, 1)
@@ -451,16 +451,16 @@ func TestBuildAGCNetworkPolicyV2_DirectEgressGitHubRule(t *testing.T) {
 	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
 	require.NoError(t, err)
 
-	direct := buildAGCNetworkPolicyV2(ag, nil, []net.IPNet{*cidr}, true)
+	direct := buildAGCNetworkPolicyV2(ag, nil, []net.IPNet{*cidr}, true, nil)
 	require.NotNil(t, findApiserverEgressRule(direct), "apiserver egress stays mandatory in direct mode")
 	assert.True(t, hasGitHubCIDREgress(direct, "140.82.112.0/20"), "direct mode permits the GitHub CIDR on 443")
 
 	// Empty cache ⇒ no GitHub rule (fail-closed until the refresh patches it).
-	directEmpty := buildAGCNetworkPolicyV2(ag, nil, nil, true)
+	directEmpty := buildAGCNetworkPolicyV2(ag, nil, nil, true, nil)
 	assert.False(t, hasGitHubCIDREgress(directEmpty, "140.82.112.0/20"))
 
 	// Proxied mode never carries a GitHub rule even if CIDRs are supplied.
-	proxied := buildAGCNetworkPolicyV2(ag, nil, []net.IPNet{*cidr}, false)
+	proxied := buildAGCNetworkPolicyV2(ag, nil, []net.IPNet{*cidr}, false, nil)
 	assert.False(t, hasGitHubCIDREgress(proxied, "140.82.112.0/20"))
 }
 
@@ -475,7 +475,7 @@ func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 	wiCIDR.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.EgressPeer{
 		CIDR: "10.0.5.7/32",
 	}
-	np := buildAGCNetworkPolicyV2(wiCIDR, nil, nil, true)
+	np := buildAGCNetworkPolicyV2(wiCIDR, nil, nil, true, nil)
 	rule := findVaultEgressRule(np)
 	require.NotNil(t, rule, "CIDR-form WI gateway gains a Vault egress rule")
 	require.Len(t, rule.To, 1)
@@ -493,7 +493,7 @@ func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 		PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "vault"}},
 		NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "vault"}},
 	}
-	rule = findVaultEgressRule(buildAGCNetworkPolicyV2(wiSel, nil, nil, false))
+	rule = findVaultEgressRule(buildAGCNetworkPolicyV2(wiSel, nil, nil, false, nil))
 	require.NotNil(t, rule, "selector-form WI gateway gains a Vault egress rule")
 	require.Len(t, rule.To, 1)
 	assert.Nil(t, rule.To[0].IPBlock)
@@ -510,19 +510,19 @@ func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 		CIDR: "10.0.5.7/32",
 		Port: ptr(int32(8201)),
 	}
-	rule = findVaultEgressRule(buildAGCNetworkPolicyV2(wiPort, nil, nil, true))
+	rule = findVaultEgressRule(buildAGCNetworkPolicyV2(wiPort, nil, nil, true, nil))
 	require.NotNil(t, rule, "explicit-port WI gateway gains a Vault egress rule")
 	require.Len(t, rule.Ports, 1)
 	assert.Equal(t, int32(8201), rule.Ports[0].Port.IntVal, "explicit EgressPeer.Port wins over the derived port")
 
 	// WI gateway without a NetworkPolicy peer: default-deny preserved (no Vault rule).
 	wiNone := v2WorkloadIdentityGateway("gw", "team-a", "")
-	assert.Nil(t, findVaultEgressRule(buildAGCNetworkPolicyV2(wiNone, nil, nil, true)),
+	assert.Nil(t, findVaultEgressRule(buildAGCNetworkPolicyV2(wiNone, nil, nil, true, nil)),
 		"WI gateway without networkPolicy keeps default-deny")
 
 	// Possession-model (githubApp) gateway: never gains a Vault egress rule.
 	pem := v2Gateway("gw", "team-a", "github-app", "")
-	assert.Nil(t, findVaultEgressRule(buildAGCNetworkPolicyV2(pem, nil, nil, true)),
+	assert.Nil(t, findVaultEgressRule(buildAGCNetworkPolicyV2(pem, nil, nil, true, nil)),
 		"PEM gateway keeps default-deny — no Vault egress")
 }
 
@@ -567,11 +567,11 @@ func TestBuildWorkloadNetworkPolicyV2_DirectEgress(t *testing.T) {
 	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
 	require.NoError(t, err)
 
-	direct := buildWorkloadNetworkPolicyV2(ag, []net.IPNet{*cidr}, true)
+	direct := buildWorkloadNetworkPolicyV2(ag, []net.IPNet{*cidr}, true, nil)
 	assert.True(t, hasGitHubCIDREgress(direct, "140.82.112.0/20"), "direct mode permits the GitHub CIDR")
 	assert.True(t, hasDNSEgress(direct), "DNS egress is preserved in direct mode")
 
-	proxied := buildWorkloadNetworkPolicyV2(ag, []net.IPNet{*cidr}, false)
+	proxied := buildWorkloadNetworkPolicyV2(ag, []net.IPNet{*cidr}, false, nil)
 	assert.False(t, hasGitHubCIDREgress(proxied, "140.82.112.0/20"), "proxied mode carries no direct GitHub rule")
 	assert.True(t, hasDNSEgress(proxied))
 }

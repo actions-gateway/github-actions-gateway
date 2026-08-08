@@ -91,6 +91,37 @@ func (p *Provisioner) buildSecret(target Target, name, planID, version string, p
 	}
 }
 
+// proxyCAVolumeSource selects where the worker reads the egress proxy's public
+// certificate from: the proxy's own TLS Secret when the proxy is colocated, or the
+// ConfigMap the GMC projects into this namespace when the proxy is shared from
+// another one (§H.9). Nil when egress is direct and no proxy CA applies.
+//
+// Items pins the projection to the single certificate key in both cases, so a
+// Secret's private key can never reach the worker.
+func proxyCAVolumeSource(spec *ResolvedSpec) *corev1.VolumeSource {
+	caMode := int32(0o444)
+	switch {
+	case spec.ProxyTLSSecretName != "":
+		return &corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  spec.ProxyTLSSecretName,
+				Items:       []corev1.KeyToPath{{Key: corev1.TLSCertKey, Path: proxyCAFileName}},
+				DefaultMode: &caMode,
+			},
+		}
+	case spec.ProxyCAConfigMapName != "":
+		return &corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: spec.ProxyCAConfigMapName},
+				Items:                []corev1.KeyToPath{{Key: proxyShareCACertKey, Path: proxyCAFileName}},
+				DefaultMode:          &caMode,
+			},
+		}
+	default:
+		return nil
+	}
+}
+
 func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secretName, priorityClass string, meta jobMeta) *corev1.Pod {
 	// Start from the resolved PodTemplate.
 	template := spec.PodTemplate.DeepCopy()
@@ -160,20 +191,15 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	// never reaches the worker pod. Mount mode 0o444 + the PodSpec FSGroup keep
 	// the cert world-readable to the runner user (UID 1001 in the actions-runner
 	// base image) without requiring write capability.
-	if spec.ProxyTLSSecretName != "" {
-		caMode := int32(0o444)
+	//
+	// A cross-namespace proxy (§H.9) supplies the same cert from the ConfigMap the
+	// GMC projects into this namespace instead, since the provider's TLS Secret is
+	// not readable from here. Same mount path and file name either way, so the
+	// worker wrapper sees one contract.
+	if src := proxyCAVolumeSource(spec); src != nil {
 		template.Spec.Volumes = append(template.Spec.Volumes, corev1.Volume{
-			Name: proxyCAVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: spec.ProxyTLSSecretName,
-					Items: []corev1.KeyToPath{{
-						Key:  corev1.TLSCertKey,
-						Path: proxyCAFileName,
-					}},
-					DefaultMode: &caMode,
-				},
-			},
+			Name:         proxyCAVolumeName,
+			VolumeSource: *src,
 		})
 		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
 			Name:      proxyCAVolumeName,
@@ -213,7 +239,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	// with both empty the wrapper skips the trust-store install and traffic falls back
 	// to whatever the base image already trusts.
 	proxyCACertPath := ""
-	if spec.ProxyTLSSecretName != "" {
+	if proxyCAVolumeSource(spec) != nil {
 		proxyCACertPath = proxyCAMountPath + "/" + proxyCAFileName
 	}
 	githubCACertPath := ""

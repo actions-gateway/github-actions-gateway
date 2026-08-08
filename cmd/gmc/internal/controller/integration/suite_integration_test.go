@@ -510,6 +510,7 @@ func startEgressProxyReconcilerFull(t *testing.T, ipCache *controller.IPRangeCac
 
 	err = (&controller.EgressProxyReconciler{
 		Client:               mgr.GetClient(),
+		APIReader:            mgr.GetAPIReader(),
 		Scheme:               mgr.GetScheme(),
 		IPCache:              ipCache,
 		ProxyImage:           "proxy:test",

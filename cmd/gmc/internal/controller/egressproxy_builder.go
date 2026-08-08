@@ -552,6 +552,32 @@ func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []ne
 		},
 		metricsScrapeIngressRule(),
 	}
+	// Cross-namespace consumers (M4, §H.9). One peer struct per granted namespace,
+	// carrying BOTH selectors: within a single peer they AND, so only workload pods
+	// in that namespace match. Splitting them across two entries of From would OR
+	// instead, admitting every pod in the granted namespace AND every workload pod in
+	// every namespace — the whole grant, silently voided.
+	//
+	// Absent or empty allowedNamespaces adds nothing, leaving the same-namespace-only
+	// default above untouched.
+	if managed && ep.Spec.Sharing != nil {
+		for _, ns := range ep.Spec.Sharing.AllowedNamespaces {
+			if ns == ep.Namespace {
+				continue // already covered by the same-namespace rule
+			}
+			ingress = append(ingress, networkingv1.NetworkPolicyIngressRule{
+				From: []networkingv1.NetworkPolicyPeer{{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{corev1.LabelMetadataName: ns},
+					},
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{labelComponent: componentWorkload},
+					},
+				}},
+				Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
+			})
+		}
+	}
 
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyResourceName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},
