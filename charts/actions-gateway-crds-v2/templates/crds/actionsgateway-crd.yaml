@@ -537,7 +537,7 @@ spec:
                       A cross-namespace reference resolves only with provider consent: the named proxy
                       must list the referrer's namespace in its spec.sharing.allowedNamespaces.
                       Without that the reference fails closed with ProxyShareNotGranted, and no
-                      NetworkPolicy or CA trust is wired — naming a proxy never authorizes reaching it.
+                      NetworkPolicy or CA trust is wired. Naming a proxy never authorizes reaching it.
 
                       A shared proxy is a shared egress identity, so it suits cooperating tenants or a
                       platform-operated central pool rather than mutually-distrusting tenants.
@@ -2492,7 +2492,7 @@ spec:
                       A cross-namespace reference resolves only with provider consent: the named proxy
                       must list the referrer's namespace in its spec.sharing.allowedNamespaces.
                       Without that the reference fails closed with ProxyShareNotGranted, and no
-                      NetworkPolicy or CA trust is wired — naming a proxy never authorizes reaching it.
+                      NetworkPolicy or CA trust is wired. Naming a proxy never authorizes reaching it.
 
                       A shared proxy is a shared egress identity, so it suits cooperating tenants or a
                       platform-operated central pool rather than mutually-distrusting tenants.
