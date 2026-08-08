@@ -33,15 +33,41 @@ This applies hardest to throwaway harnesses under the gitignored `tmp/`. Being a
 | `repo="$(build)"` | 0 | 2 |
 | `repo=$(build)` | 0 | 2 |
 | `local repo; repo="$(build)"` | 0 | 2 |
+| `local repo="$(build)"` | 0 | 2 |
 | `repo="$(set -e; build)"` | 1 | 0 |
 | `shopt -s inherit_errexit` then `repo="$(build)"` | 1 | 0 |
+| `shopt -s inherit_errexit` then `local repo="$(build)"` | **0** | 0 |
 | `build` called directly, no substitution | 1 | 0 |
 
-`shopt -s inherit_errexit` is the remedy to reach for: one line at the top of the file covers every substitution in it, where the other two working forms have to be repeated per call site.
+`shopt -s inherit_errexit` is the remedy to reach for: one line at the top of the file covers every *plain* substitution in it, where the other two working forms have to be repeated per call site. It is required in every executable script under `scripts/`, and [`make errexit-prologue-check`](../../scripts/ci/check-errexit-prologue.sh) enforces that. Sourced `lib/` files are exempt and must not declare it: they run under the caller's shell options, a caller's shopt already covers the functions they define, and declaring it in a sourced file would switch the option on for every caller instead.
+
+**It does not cover a declaration builtin.** The last-but-one row above is the trap: `local`, `declare`, `export` and `readonly` return their *own* status, which replaces the substitution's, so `local repo="$(build)"` stays exit 0 even with the shopt set. The shopt still stops the builder at its first failure, which makes this the worst of the three states: a value truncated *and* a clean exit. Split the declaration from the assignment, which is the one form that reports:
+
+```bash
+local repo
+repo="$(build)"
+```
+
+shellcheck's SC2155 already rejects the combined form, and `make shellcheck` runs in the same `make check`, so this half of the class is closed by a gate that predates the rule. The prologue gate deliberately leaves it alone rather than half-duplicating it.
+
+### The Claude Code hooks swallow the shopt's own failure
+
+`inherit_errexit` arrived in bash 4.4, and stock macOS still ships 3.2 at `/bin/bash`. There the `shopt` itself fails, and `set -e` turns that into a non-zero exit before the script does anything. For the three `PreToolUse` hooks in [`scripts/agent/`](../../scripts/agent/) that breaks a contract that outranks this one: a hook must never block a tool call, on any bash it happens to run under. They alone carry the tolerant form, and the gate rejects it everywhere else:
+
+```bash
+set -euo pipefail
+shopt -s inherit_errexit 2>/dev/null || true
+```
+
+On bash 4.4+ this is identical to the strict line; on 3.2 it gives up the coverage rather than the hook. Only `claude-piped-gate-hook-test.sh` exercised this, because it is the one suite that strips `PATH` (to simulate a missing Go toolchain) and so is the only one that reaches the system bash at all.
 
 What this costs when it goes unnoticed is a misattributed failure, not just a late one. A fixture builder that keeps running after its setup broke turns one root failure into a cascade of downstream errors, and the last line in the log belongs to the *subject* rather than the fixture. In Q703, `release-delta-test`'s fixture repository lost a commit object partway through `build_repo`; the suite ran seven more failing `git commit` calls and ended on `release-delta: 'HEAD' is not a commit-ish in this repo`, which reads as a defect in the report under test. With `inherit_errexit` the same injected fault stops at the first `git` fatal and exits 128, git's own status, naming the fixture as the thing that broke.
 
 The hole was in 12 of 59 `scripts/**/*-test.sh` suites when it was found, including [`check-v2-api-sync-test.sh`](../../scripts/go/check-v2-api-sync-test.sh), whose own flake (Q596) was undiagnosable for the same reason: a failure that is not distinguished from a legitimate verdict. All 12 carry the shopt now.
+
+The gates were left behind by that pass, and Q733 closed them: 154 more scripts, of which 75 had at least one substitution running an in-script function, the shape that actually swallows a failure. The worst was [`go-lint.sh`](../../scripts/go/go-lint.sh), whose `scoped_module_dirs` feeds the lint scope. With a fault injected into it the gate announced a full sweep, linted 1 module instead of 11, swallowed four `command not found` 127s and exited 0; with the shopt the same fault exits 127 at the first one. Q670 is the same hole reached without an injected fault, and its fix addressed the scope computation rather than the swallowing.
+
+Adding the shopt is a behaviour change, which is the point: it turns a silent pass into a failure. It found one, in `windowserver_reports` in [`validate-throttle.sh`](../../scripts/agent/validate-throttle.sh), which counted with `[[ -e "$f" ]] && (( count++ ))`. Post-increment evaluates to the *old* value, so the first match returns 1, and as the last command in an `&&` list that aborts the function. The count was right only because errexit could not reach it.
 
 ## Shared helpers and Makefile wiring
 

@@ -346,6 +346,13 @@ jobs:
           shellcheck --version
       - name: shellcheck scripts
         run: make shellcheck
+      - name: errexit prologue (make errexit-prologue-check)
+        # shellcheck has no check for `set -e` not reaching into a command
+        # substitution, and its SC2155 covers only the `local x="$(f)"` half.
+        # Named separately from `make scripts-test` — which also runs the gate
+        # against the tracked tree — so the verdict for the bug class this
+        # repo cares most about is not buried in a suite's tail (Q733).
+        run: make errexit-prologue-check
       - name: scripts behavioural tests (make scripts-test)
         # Pure-bash assertions shellcheck can't express — currently the tags-only
         # release signing-identity regexp (Q124). Same job as shellcheck since
