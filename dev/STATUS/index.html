@@ -3248,20 +3248,12 @@
 <td>Q591 measured the <code>&lt;unknown&gt;</code> causes; the quota one needs its own repro. <code>FailedCreate ... exceeded quota</code>, <code>ReplicaFailure</code> with <code>exceeded quota</code>, and the "~30s" scrape cycle are unmeasured.</td>
 </tr>
 <tr>
-<td><a id="Q679"></a>Q679</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">No per-spec filter on the e2e make target</a></td>
+<td><a id="Q736"></a>Q736</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">No zero-match guard on the test-integration <code>RUN=</code> filter</a></td>
 <td><code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>SUITE=</code> picks one of four label subsets; no <code>--focus</code> passthrough, so <a href="../development/kind-iteration/#tightening-the-inner-loop">the inner loop</a> hand-assembles <code>ginkgo run</code>, re-typing the env vars <code>_GINKGO_RUN</code> already sets. Q592's shape.</td>
-</tr>
-<tr>
-<td><a id="Q680"></a>Q680</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>RUN=</code> is silently ignored by the unit-test targets</a></td>
-<td><code>ci</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q592 added <code>RUN=</code> to <code>test-integration</code> only, and make never errors on an unused variable, so <code>make test RUN=X</code> runs everything and says nothing. Thin on its own (<code>go test -run</code> needs no setup); the silent no-op is the hazard.</td>
+<td>Measured 2026-08-08: <code>go test -run &lt;nonsense&gt;</code> exits 0 printing <code>[no tests to run]</code>, so a mistyped <code>RUN=</code> reads as a pass. <code>make test</code>/<code>make e2e</code> now fail on zero match (Q680/Q679); the two module targets need a shared wrapper to do the same.</td>
 </tr>
 <tr>
 <td><a id="Q344"></a>Q344</td>

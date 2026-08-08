@@ -2897,7 +2897,7 @@
 <h2 id="tightening-the-inner-loop">Tightening the inner loop<a class="headerlink" href="#tightening-the-inner-loop" title="Permanent link">&para;</a></h2>
 <p>A full <code>make e2e-up</code> run is ~10 minutes per cycle. To iterate on a single component:</p>
 <ol>
-<li>Stand up the cluster + cert-manager + GMC once with <code>E2E_SKIP_TEARDOWN=true ginkgo run --focus '&lt;spec&gt;' ...</code>. The suite leaves the GMC, fakegithub, and cert-manager in place after it exits.</li>
+<li>Stand up the cluster + cert-manager + GMC once with <code>E2E_SKIP_TEARDOWN=true make e2e RUN='&lt;spec&gt;'</code>. The suite leaves the GMC, fakegithub, and cert-manager in place after it exits. <code>RUN</code> is a regex over the spec's full text, passed to ginkgo as <code>--focus</code>; it composes with <code>SUITE</code>, which picks a labelled subset. A <code>RUN</code> matching no spec <strong>fails</strong> the run rather than reporting a green e2e: the target passes <code>--fail-on-empty</code>.</li>
 <li>Rebuild the changed component only: <code>docker buildx bake --file docker-bake.hcl --set "&lt;target&gt;.tags=127.0.0.1:5000/&lt;name&gt;:&lt;unique-tag&gt;" &lt;target&gt;</code>.</li>
 <li>Update the deployment image: <code>kubectl set image</code> (or <code>kubectl set env</code> for <code>AGC_IMAGE</code>/<code>PROXY_IMAGE</code>/<code>WRAPPER_IMAGE</code> on the GMC).</li>
 <li>Force a fresh pod: <code>kubectl delete pod -l &lt;selector&gt;</code>.</li>
