@@ -380,6 +380,11 @@ visibly mixed-style. Running `--mode para` first to join paragraphs does not hel
 guard skips them there too. Converting now would pay the churn of a tree-wide rewrite, plus a
 second one after the fix, without buying the consistency that is the whole point.
 
+Filed upstream as [jbeda/mdreflow#14](https://github.com/jbeda/mdreflow/issues/14), with a
+tested narrowing that recovers 3,120 of those lines.
+[jbeda/mdreflow#15](https://github.com/jbeda/mdreflow/issues/15) is a second, lower-stakes
+find from the same run: a valid file is refused when a multi-byte rune straddles byte 8192.
+
 [Q746](../STATUS.md#Q746) adopts the convention once the skip is fixed upstream. Re-measure
 before acting on it: the residue figures above are what v0.1.3 produced, not a standing
 property of the tool.
