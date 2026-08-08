@@ -322,6 +322,15 @@ build_fixture "$F"
 printf '# fixture library\nEntries: plain, kata-dind.\n' >"$F/README.md"
 expect_red "an undocumented entry is caught" "$F" "does not name library entry"
 
+build_fixture "$F"
+# The substring trap: an entry named `dind` must not count as documented on the
+# strength of a sentence about `kata-dind`. Same defect class #1343 found in the
+# scripts/README.md gate (`start.sh` matched by `e2e-start.sh`).
+mkdir -p "$F/templates/dind"
+cp "$F/templates/plain/kustomization.yaml" "$F/templates/dind/kustomization.yaml"
+sed 's/^  name: plain$/  name: dind/' "$F/templates/plain/template.yaml" >"$F/templates/dind/template.yaml"
+expect_red "a name-boundary match, not a substring" "$F" "does not name library entry 'dind'"
+
 # --- rule 7: the render catches what rule 5 cannot ---------------------------
 
 if command -v kubectl >/dev/null 2>&1; then
