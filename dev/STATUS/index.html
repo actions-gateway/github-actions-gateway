@@ -3320,6 +3320,22 @@
 <td>Measured 2026-08-08: slate body is Lc 66.9 against a 75 floor, so Q731's <code>--gag-muted</code> could only reach 55.6 without out-contrasting body copy. Fixing it means overriding Material's palette, repainting every dark-mode page.</td>
 </tr>
 <tr>
+<td><a id="Q744"></a>Q744</td>
+<td><a href="../development/testing/#the-status-you-report-is-a-claim-too">A cumulative per-file ceiling admits a jointly-red merge from two green PRs</a></td>
+<td><code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-08 on <code>testing.md</code> (ceiling 594): #1340 added net +1 em-dash and #1342 +2, each green alone, together red on <code>main</code> for ~20 min. Q560/Q562's class on a new gate. First: does the merge queue run <code>em-dash</code> on the candidate at all?</td>
+</tr>
+<tr>
+<td><a id="Q745"></a>Q745</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate lets a backgrounded gate report a trailing command's exit status</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>make check &gt; log; echo "EXIT=$?"; grep …</code> backgrounded reports <code>grep</code>'s 0, so a red gate reads green. It already denies a backgrounded call ending in <code>echo</code>/<code>\|\|</code>/<code>&amp;</code>; this shape ends in a filter. Needs both-direction assertions.</td>
+</tr>
+<tr>
 <td><a id="Q687"></a>Q687</td>
 <td><a href="../development/">Document the predicate for a genuine human prompt in a transcript</a></td>
 <td><code>docs</code> <code>retro</code></td>
