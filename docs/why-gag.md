@@ -11,7 +11,7 @@ hide:
 
 # Why GitHub Actions Gateway over ARC?
 
-<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner sets, for many tenants, in one shared cluster, cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GitHub Actions Gateway (GAG) was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
+<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) struggles with one job: <strong>many runner sets, many tenants, one shared cluster, each tenant safely capped by its own <code>ResourceQuota</code></strong>. GitHub Actions Gateway (GAG) is built for that job.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Migrating from ARC](operations/migration-from-arc.md){ .md-button }
