@@ -360,8 +360,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  e2e/progress-watch-test e2e/validate-cluster-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
                  go/check-codegen-drift-test go/check-v2-api-sync-test \
-                 go/coverage-test go/go-lint-scope-test go/go-vet-tags-test \
-                 go/go-work-tidy-test \
+                 go/coverage-test go/go-lint-scope-test go/go-test-run-filter-test \
+                 go/go-vet-tags-test go/go-work-tidy-test \
                  release/download-cosign-test release/release-delta-test \
                  release/verify-release-test \
                  updatecli/latest-cluster-autoscaler-patch-test
@@ -524,8 +524,12 @@ docs-build: ## Build + strict-validate both docs site scopes (site/, site-dev/)
 # header). V=1 (or VERBOSE=1) streams `go test` output live (-v) for debugging
 # a slow or hanging test; make exports command-line variables to recipe
 # environments, so `make test V=1` (and `make check V=1`) reach the script.
+#
+# RUN='TestName' narrows to matching tests, the same spelling the integration
+# and e2e targets take. A value matching nothing fails the run rather than
+# reporting a green no-op — see the script's header (Q680).
 .PHONY: test
-test: ## Run unit tests for all modules (V=1 streams output live for debugging a hang)
+test: ## Run unit tests for all modules (RUN='TestName' narrows; V=1 streams output live for debugging a hang)
 	scripts/go/go-test.sh
 
 # The race-detector unit gate, run by the `unit-test` CI job. -race instruments
@@ -539,7 +543,7 @@ test: ## Run unit tests for all modules (V=1 streams output live for debugging a
 # the throttle is a no-op) it runs at full speed. -timeout is bumped to 5m to
 # absorb the instrumentation slowdown.
 .PHONY: test-race
-test-race: ## Run unit tests under the race detector (the CI unit gate; throttled locally, full speed on CI)
+test-race: ## Run unit tests under the race detector (the CI unit gate; RUN='TestName' narrows; throttled locally, full speed on CI)
 	scripts/go/go-test.sh --race
 
 # --- Test-coverage measurement + no-regression ratchet ---------------------
@@ -924,6 +928,13 @@ docker-build-fakegithub: ## Build and push only the fakegithub image (bake targe
 SUITE ?=
 _SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,$(if $(filter live-github,$(SUITE)),github-real,$(if $(filter live-github-scaleset,$(SUITE)),scaleset-live,))))
 
+# SUITE picks a labelled subset; RUN picks specs *within* whatever survives it,
+# by regex over the spec's full text (ginkgo --focus). The two compose, and RUN
+# is the same spelling `make test` and the integration targets take, so one
+# habit narrows every tier (Q679). Quote a value with spaces:
+# RUN='provisions a worker pod'.
+RUN ?=
+
 # The suite appends spec start/end events here and scripts/e2e/progress-watch.sh
 # renders them into the periodic heartbeat (Q608). The watcher runs BESIDE ginkgo
 # rather than inside it because Ginkgo intercepts spec stdout for the duration of
@@ -943,10 +954,16 @@ E2E_TIMEOUT ?= $(if $(filter live-github live-github-scaleset,$(SUITE)),90m,30m)
 # E2E_PROGRESS_FILE sits with the other env vars INSIDE the recipe, after the
 # `cd`: a `VAR=x cd dir && cmd` prefix scopes VAR to the `cd` alone, so the
 # suite would silently emit nothing.
+#
+# --fail-on-empty is unconditional rather than tied to RUN, because every filter
+# on this target has the same failure shape: ginkgo exits 0 when a --focus or a
+# --label-filter selects no spec, so a typo reports a green e2e run. ./test/e2e
+# holds one suite and a full run always has specs, so this can only fire on a
+# filter that missed.
 _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) WORKER_IMG=$(WORKER_IMG) WRAPPER_IMG=$(WRAPPER_IMG) \
 	E2E_PROGRESS_FILE=$(E2E_PROGRESS_FILE) \
-	$(GINKGO) run --tags e2e --timeout $(E2E_TIMEOUT) --github-output --poll-progress-after 30s
+	$(GINKGO) run --tags e2e --timeout $(E2E_TIMEOUT) --github-output --poll-progress-after 30s --fail-on-empty
 
 # The JUnit report lives under the repo-local tmp/ (gitignored), not /tmp:
 # host-wide temp is shared across worktrees/sessions (concurrent runs collide)
@@ -956,13 +973,14 @@ _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 # The watcher is killed on every exit path — the trap covers a failed suite and
 # a Ctrl-C alike — and the recipe still exits with ginkgo's status.
 .PHONY: e2e
-e2e: $(GINKGO) ## Run e2e tests; SUITE=single-node|multi-node|live-github selects a subset, unset runs all specs
+e2e: $(GINKGO) ## Run e2e tests; SUITE=single-node|multi-node|live-github selects a subset, RUN='regex' narrows to matching specs, both unset runs all
 	@mkdir -p $(REPO_ROOT)/tmp
 	@: >$(E2E_PROGRESS_FILE)
 	E2E_PROGRESS_FILE=$(E2E_PROGRESS_FILE) scripts/e2e/progress-watch.sh & \
 	watcher=$$!; \
 	trap 'kill -TERM $$watcher 2>/dev/null; wait $$watcher 2>/dev/null; true' EXIT INT TERM; \
 	$(_GINKGO_RUN) $(if $(_SUITE_FILTER),--label-filter '$(_SUITE_FILTER)',) \
+		$(if $(RUN),--focus '$(RUN)',) \
 		--procs 6 --junit-report $(REPO_ROOT)/tmp/e2e-report.xml ./test/e2e/...
 
 .PHONY: e2e-clean

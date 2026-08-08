@@ -16,6 +16,12 @@
 #            memory/I/O amplifier, so the timeout is bumped from 2m to 5m.
 #
 # Env:
+#   RUN          Non-empty narrows the run to tests whose name matches this
+#                regex (`go test -run`), the spelling cmd/agc and cmd/gmc
+#                already use on their integration targets (Q592). A value that
+#                matches nothing FAILS the run: `go test -run` exits 0 with
+#                "[no tests to run]", so a mistyped name otherwise reports a
+#                green suite — the knob's whole purpose inverted (Q680).
 #   V / VERBOSE  Non-empty streams test output live (-v), bypassing the
 #                heartbeat renderer below — the two want opposite things, one
 #                showing every line as it is produced and the other showing
@@ -72,6 +78,19 @@ esac
 verbose_flag=""
 [[ -n "${V:-}${VERBOSE:-}" ]] && verbose_flag="-v"
 
+# RUN narrows to matching test names. -v -count=1 ride along, as they do on the
+# integration targets: a targeted run wants its own output, and an uncached one
+# is what lets the zero-match check at the bottom see whether anything ran —
+# a cached package replays nothing. -v also takes the plain path below, so the
+# whole run is capturable through one tee.
+run_args=() run_log=""
+if [[ -n "${RUN:-}" ]]; then
+	run_args=(-run "$RUN" -count=1)
+	verbose_flag="-v"
+	run_log="$(mktemp)"
+	trap 'rm -f "$run_log"' EXIT
+fi
+
 init_throttle
 p_flag=""
 [[ -n "$THROTTLE_JOBS" ]] && p_flag="-p $THROTTLE_JOBS"
@@ -109,6 +128,12 @@ fi
 # what fails, or passes, the gate.
 run_tests() {
 	local total
+	if [[ -n "$run_log" ]]; then
+		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+		$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag \
+			"${run_args[@]}" "$@" | tee -a "$run_log"
+		return
+	fi
 	if ((${#progress_args[@]} == 0)); then
 		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
 		$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag "$@"
@@ -124,16 +149,25 @@ run_tests() {
 		| "$PROGRESS_BIN" "${progress_args[@]}" -packages "$total"
 }
 
-echo "==> go test ${race_flag:+$race_flag }${patterns[*]}"
+echo "==> go test ${race_flag:+$race_flag }${RUN:+-run $RUN }${patterns[*]}"
 run_tests "${patterns[@]}"
 
 # The single invocation above resolves against go.work, which cannot reach a
 # module the workspace does not list, so those run separately with GOWORK=off.
 for dir in $(firstparty_nonworkspace_modules); do
-	echo "==> go test ${race_flag:+$race_flag }./$dir/... (GOWORK=off)"
+	echo "==> go test ${race_flag:+$race_flag }${RUN:+-run $RUN }./$dir/... (GOWORK=off)"
 	(
 		cd "$dir"
 		export GOWORK=off
 		run_tests ./...
 	)
 done
+
+# The zero-match guard, over every module's output at once: a regex may match
+# nothing in the workspace and still be right about devtools/. `=== RUN` is the
+# per-test marker -v emits, so its total absence means the filter selected no
+# test anywhere — which `go test` alone reports as a pass.
+if [[ -n "$run_log" ]] && ! grep -q '^=== RUN ' "$run_log"; then
+	echo "==> RUN='$RUN' matched no tests in any module — nothing ran" >&2
+	exit 1
+fi
