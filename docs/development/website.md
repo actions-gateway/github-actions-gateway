@@ -397,6 +397,42 @@ Below roughly 1440px the cards narrow and bullets wrap whatever the copy says, s
 the invariant is defined at full width on a laptop, where the grid is three
 across. Only `docs/index.md` and `docs/why-gag.md` use these cards.
 
+### Stat-tile labels are budgeted by the longest one in the row
+
+`.gag-stats` is a four-across grid of height-equalised tiles, so **the longest
+label sets the height of every tile in the row** and the short ones pay for it in
+whitespace. This is the failure the tile author never sees: their own tile looks
+fine, and the damage lands on their neighbours.
+
+Measured at 1440px, where each tile is ~306px wide:
+
+| | Longest label | Row height | Worst dead space |
+| --- | --- | --- | --- |
+| Healthy (`index.md`) | 120 chars | 189px | 45px, one line |
+| Broken (removed from `why-gag.md`, 2026-08-07) | 302 chars | 298px | ~200px |
+
+Keep every label in the row within roughly **86 to 120 characters** and within
+about 35 characters of each other. A label that needs more than that is making an
+argument, and an argument belongs in prose or a table rather than in a tile whose
+whole job is to be glanced at.
+
+```js
+// make docs-serve, then on /
+const t = [...document.querySelectorAll('.gag-stat')];
+const h = Math.max(...t.map(x => x.getBoundingClientRect().height));
+t.map(x => [x.querySelector('.gag-stat__num').innerText,
+            x.querySelector('.gag-stat__label').innerText.trim().length,
+            Math.round(h - x.querySelector('.gag-stat__label').getBoundingClientRect().bottom
+                         + x.getBoundingClientRect().top)]);
+// third column is dead space in px; a large spread means the row is unbalanced
+```
+
+**Two pages must not carry near-identical bands.** `index.md` and `why-gag.md`
+both used one, and two of the four tiles matched verbatim, number and lead text
+alike, so the comparison page read as a repeat of the landing page. The band was
+removed from `why-gag.md` rather than reworded: the outcome flow diagram above it
+and the capability table below it already carried the same argument twice.
+
 ## Local preview
 
 ```sh

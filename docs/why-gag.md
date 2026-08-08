@@ -148,25 +148,6 @@ through in numbers; a published benchmark at scale is
 [on the roadmap](roadmap.md) and not yet done, so treat those figures as a model
 rather than a measurement.
 
-<div class="gag-stats" markdown="0">
-  <div class="gag-stat">
-    <span class="gag-stat__num">1&nbsp;pod</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint for 10 runner sets</strong>: every listener is a ~12&nbsp;KiB goroutine in one shared pod, versus 10 always-on listener pods on ARC</span>
-  </div>
-  <div class="gag-stat">
-    <span class="gag-stat__num">0</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Idle GPU pods between jobs</strong>: workers exist only while a job runs, deleted on completion</span>
-  </div>
-  <div class="gag-stat">
-    <span class="gag-stat__num">Auto</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and disrupted jobs</strong>: a job the quota has no room for is never taken on, so it stays queued at GitHub until there is capacity; a worker lost to eviction, scheduler preemption, or a node drain has its job re-run automatically, no manual rerun. Both run on both acquisition tiers</span>
-  </div>
-  <div class="gag-stat">
-    <span class="gag-stat__num">1</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Namespace a tenant self-serves in</strong>: declare your gateway and runner sets; the Gateway Manager Controller (GMC) provisions the controller, proxy pool, RBAC, and network policies to run within the platform-owned quota, no per-tenant cluster-admin</span>
-  </div>
-</div>
-
 ## GAG vs ARC (scale-set mode)
 
 GAG acquires jobs with the **same runner-scale-set protocol ARC uses**: a single
