@@ -147,6 +147,38 @@ func TestEgressProxyNetworkPolicy_NoSharingAddsNoIngress(t *testing.T) {
 	}
 }
 
+// The consumer's egress peer names the granted pool, not "any proxy in that
+// namespace": one provider namespace can hold two pools granting different consumers,
+// and a namespace-wide peer would reach the one that granted nothing.
+func TestRemoteProxyEgressRules_SelectTheGrantedPoolOnly(t *testing.T) {
+	rules := remoteProxyEgressRules([]remoteProxy{{Namespace: "platform", Name: "pool-a"}})
+	if len(rules) != 1 {
+		t.Fatalf("got %d rules, want 1", len(rules))
+	}
+	if len(rules[0].To) != 1 {
+		t.Fatalf("rule has %d peers; both selectors must sit in ONE peer or they OR", len(rules[0].To))
+	}
+	peer := rules[0].To[0]
+	if peer.NamespaceSelector == nil ||
+		peer.NamespaceSelector.MatchLabels[corev1.LabelMetadataName] != "platform" {
+		t.Errorf("peer does not pin the provider namespace: %+v", peer.NamespaceSelector)
+	}
+	if peer.PodSelector == nil {
+		t.Fatal("peer has no PodSelector, so it reaches every pod in the provider namespace")
+	}
+	if got := peer.PodSelector.MatchLabels[egressProxyComponentLabel]; got != "pool-a" {
+		t.Errorf("peer selects %q, want the granted pool %q", got, "pool-a")
+	}
+}
+
+// Nothing granted means no extra egress at all: an unshared gateway keeps exactly the
+// same-namespace policy it had before M4.
+func TestRemoteProxyEgressRules_NoneWhenNothingGranted(t *testing.T) {
+	if got := remoteProxyEgressRules(nil); len(got) != 0 {
+		t.Errorf("emitted %d egress rule(s) with no granted proxies", len(got))
+	}
+}
+
 // Revoking a grant must delete the projection, because the consumer treats its
 // presence as the grant. A prune keyed on the *current* spec would never reach a
 // namespace the spec no longer names.

@@ -338,12 +338,12 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 	// namespace. Computed here rather than in the builders so both policies see the
 	// same set, and so a read failure fails the step instead of silently emitting a
 	// policy missing a tenant's proxy.
-	remoteProxyNS, err := grantedRemoteProxyNamespaces(ctx, r.Client, ag)
+	remoteProxies, err := grantedRemoteProxies(ctx, r.Client, ag)
 	if err != nil {
 		return fmt.Errorf("resolve cross-namespace proxy grants: %w", err)
 	}
-	workloadNP := buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct, remoteProxyNS)
-	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct, remoteProxyNS)
+	workloadNP := buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct, remoteProxies)
+	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct, remoteProxies)
 	// Q246/Q61: in direct egress the GitHub-CIDR allowlist on these two policies is
 	// sourced from the IP-range cache. At GMC startup that cache is empty until
 	// IPRangeReconciler's first api.github.com/meta fetch lands, so rebuilding an
