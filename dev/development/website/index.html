@@ -2845,6 +2845,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Progressive enhancement (docs/javascripts/extra.js)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chip-selection-lives-in-the-query-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chip selection lives in the query string
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3956,6 +3973,33 @@ github.com, so they must degrade to readable content without JS:</p>
 </table>
 <p><strong>Keep those source markers intact</strong> when editing — deleting the table column, a
 blockquote, or a bold role lead silently breaks the matching site feature.</p>
+<h3 id="chip-selection-lives-in-the-query-string">Chip selection lives in the query string<a class="headerlink" href="#chip-selection-lives-in-the-query-string" title="Permanent link">&para;</a></h3>
+<p>Every chip bar owns a query key, so a filtered view is a link a reader can copy:
+<code>persona</code> on the operations index, <code>role</code> on the design index, and <code>label</code>,
+<code>status</code> and <code>size</code> on the backlog. Selecting the default (<code>All</code>) drops the key
+rather than writing it, keeping an unfiltered URL clean.</p>
+<p>Two properties are load-bearing, and both are easy to break by accident:</p>
+<ul>
+<li><strong><code>replaceState</code>, never <code>pushState</code>.</strong> Filtering is not navigation. Pushing
+  would make the back button walk every chip the reader tried.</li>
+<li><strong>A click and a reload must produce the same page.</strong> The backlog renders one
+  bar per dimension <em>per table</em>, and all four tables share the <code>label</code> key, so
+  restoring <code>?label=ci</code> filters all four. A click therefore applies to every bar
+  owning that key, not just the one clicked. A bar whose table has no such chip
+  falls back to <code>All</code> rather than emptying itself, which is also what makes an
+  unrecognised value in a hand-edited URL harmless.</li>
+</ul>
+<p>Verify both paths agree, rather than either one alone:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">// make docs-serve with the dev scope, then on /STATUS/</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">counts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">&#39;.backlog-count&#39;</span><span class="p">)].</span><span class="nx">map</span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">c</span><span class="p">.</span><span class="nx">textContent</span><span class="p">);</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1">// click path</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;.backlog-filter .persona-chip[data-persona=&quot;ci&quot;]&#39;</span><span class="p">).</span><span class="nx">click</span><span class="p">();</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">counts</span><span class="p">());</span><span class="w">        </span><span class="c1">// compare against a reload of the URL it just wrote</span>
+</code></pre></div>
+<p>The backlog page is <code>dev</code>-scope only, so the default <code>make docs-serve</code> serves a
+404 for it. Preview it with the dev exclusion list:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nv">MKDOCS_EXCLUDE_DOCS</span><span class="o">=</span><span class="s1">$&#39;/README.md\n/releases/\n&#39;</span><span class="w"> </span><span class="nv">PORT</span><span class="o">=</span><span class="m">8043</span><span class="w"> </span>make<span class="w"> </span>docs-serve
+</code></pre></div>
 <p>The backlog chips read the <strong>rendered cells</strong>, so they follow the backlog format
 rather than duplicating it: labels are the backticked values in the <code>Labels</code>
 column (each renders as its own <code>&lt;code&gt;</code>), status comes from the <code>St</code> emoji

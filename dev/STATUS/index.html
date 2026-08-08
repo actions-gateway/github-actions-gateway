@@ -2928,6 +2928,14 @@
 <td>Q685 and Q689 were one defect from two sides, and Q689's only measurement sat inside Q685's <code>testing.md</code> paragraph. Nothing connected them; a dispatcher had to ask. Rule: cross-link the pair, and say which row owns the measurement.</td>
 </tr>
 <tr>
+<td><a id="Q739"></a>Q739</td>
+<td><a href="../development/testing/#the-launch-record">Nothing makes <code>record-launch.sh</code> fire, so the handle it writes is optional</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a compaction. Candidate seam: foreground-guard <code>hint</code>, unverified.</td>
+</tr>
+<tr>
 <td><a id="Q694"></a>Q694</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible-test.sh"><code>pr-requeue-eligible</code>'s timeline and GraphQL reads are untested behind the <code>gh</code> stub</a></td>
 <td><code>tests</code> <code>retro</code></td>
@@ -3294,14 +3302,6 @@
 <td>🔲</td>
 <td>M</td>
 <td>Measured 2026-08-08: slate body is Lc 66.9 against a 75 floor, so Q731's <code>--gag-muted</code> could only reach 55.6 without out-contrasting body copy. Fixing it means overriding Material's palette, repainting every dark-mode page.</td>
-</tr>
-<tr>
-<td><a id="Q732"></a>Q732</td>
-<td><a href="../development/website/#progressive-enhancement-docsjavascriptsextrajs">Filter chips read the URL but never write it, so a filtered view cannot be shared</a></td>
-<td><code>feature</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-08: the persona chips honour <code>?persona=</code> on load but no chip writes it back, and the backlog's three bars carry no URL state at all, so a filtered view is reachable by a hand-typed link and never by copying the address bar.</td>
 </tr>
 <tr>
 <td><a id="Q687"></a>Q687</td>

@@ -49,12 +49,47 @@
 // "Reading Paths by Role". Progressive enhancement — without JS the underlying
 // table/paragraphs render normally (also how they appear on github.com).
 (function () {
+  // Selection lives in the query string, so a filtered view is a link the
+  // reader can copy. replaceState rather than pushState: filtering is not
+  // navigation, and a chip row would otherwise fill the back button with
+  // states nobody wants to walk back through.
+  function writeParam(name, value) {
+    if (!window.history || !history.replaceState) return;
+    var url = new URL(location.href);
+    if (value && value !== "All") url.searchParams.set(name, value);
+    else url.searchParams.delete(name);
+    history.replaceState(null, "", url);
+  }
+
+  // Bars sharing a query key move together. STATUS renders one bar per
+  // dimension per table, so a reload applies `?label=ci` to all of them; a
+  // click has to do the same or the shared link and the live page disagree.
+  var barsByParam = {};
+
+  function applySelection(bar, label) {
+    var chips = Array.prototype.slice.call(bar.querySelectorAll(".persona-chip"));
+    var chosen = null;
+    chips.forEach(function (c) {
+      if (c.dataset.persona === label) chosen = c;
+    });
+    // A bar with no chip for this value falls back to its default rather than
+    // filtering away every row for a label its own table never uses.
+    chosen = chosen || chips[0];
+    chips.forEach(function (c) {
+      c.setAttribute("aria-pressed", String(c === chosen));
+    });
+    bar.gagSelect(chosen.dataset.persona);
+  }
+
   // A row of single-select chips; the first label is the default ("All").
-  function chipBar(labels, ariaLabel, onSelect) {
+  // `param` names the query key this bar owns, and is what makes the selection
+  // both shareable and restorable.
+  function chipBar(labels, ariaLabel, onSelect, param) {
     var bar = document.createElement("div");
     bar.className = "persona-bar";
     bar.setAttribute("role", "group");
     bar.setAttribute("aria-label", ariaLabel);
+    bar.gagSelect = onSelect;
     labels.forEach(function (label, i) {
       var b = document.createElement("button");
       b.type = "button";
@@ -63,13 +98,22 @@
       b.textContent = label;
       b.setAttribute("aria-pressed", String(i === 0));
       b.addEventListener("click", function () {
-        bar.querySelectorAll(".persona-chip").forEach(function (c) {
-          c.setAttribute("aria-pressed", String(c === b));
+        if (!param) return applySelection(bar, label);
+        writeParam(param, label);
+        barsByParam[param].forEach(function (other) {
+          applySelection(other, label);
         });
-        onSelect(label);
       });
       bar.appendChild(b);
     });
+
+    // Restore an incoming selection, so a shared link opens already filtered.
+    if (param) {
+      barsByParam[param] = barsByParam[param] || [];
+      barsByParam[param].push(bar);
+      var want = new URLSearchParams(location.search).get(param);
+      if (want) applySelection(bar, want);
+    }
     return bar;
   }
 
@@ -103,7 +147,7 @@
         var show = label === "All" || tags.indexOf(label) >= 0 || tags.indexOf("All") >= 0;
         row.style.display = show ? "" : "none";
       });
-    });
+    }, "persona");
     var anchor = table.closest(".md-typeset__scrollwrap") || table;
     anchor.parentNode.insertBefore(bar, anchor);
 
@@ -115,14 +159,6 @@
         (window.CSS && CSS.escape ? CSS.escape(pill.dataset.persona) : pill.dataset.persona) + '"]');
       if (chip) chip.click();
     });
-
-    // Honor ?persona=... (e.g. arriving from a doc's audience pill).
-    var want = new URLSearchParams(location.search).get("persona");
-    if (want) {
-      bar.querySelectorAll(".persona-chip").forEach(function (c) {
-        if (c.dataset.persona === want) c.click();
-      });
-    }
   });
 
   // Design index: "Reading Paths by Role" -> chips that show one role's path.
@@ -144,7 +180,7 @@
         paths.forEach(function (p) {
           p.style.display = (label === "All" || p.getAttribute("data-role") === label) ? "" : "none";
         });
-      });
+      }, "role");
       h.parentNode.insertBefore(rbar, h.nextElementSibling);
     }
   }
@@ -267,10 +303,12 @@
       var legend = document.createElement("span");
       legend.className = "backlog-filter__legend";
       legend.textContent = pair[1];
+      // Each dimension owns its own query key, so the three intersect in the
+      // URL exactly as they do in the table.
       bars[key] = chipBar(["All"].concat(seen[key]), "Filter by " + pair[1].toLowerCase(), function (label) {
         picked[key] = label;
         apply();
-      });
+      }, key);
       row.appendChild(legend);
       row.appendChild(bars[key]);
       filters.appendChild(row);
