@@ -6,7 +6,7 @@ apiVersion: kind.x-k8s.io/v1alpha4
 # (the Q286 dogfood e2e runner) the guest has no /dev/kmsg until the dind
 # sidecar mknods it, and the inner kubelet hard-requires the device — without
 # this bind it dies with "open /dev/kmsg: no such file or directory". See
-# deploy/dogfood-e2e/overlays/kata/resources.yaml.
+# deploy/templates/kata-dind/template.yaml (step 2 of the dind entrypoint).
 nodes:
   - role: control-plane
     extraMounts:
