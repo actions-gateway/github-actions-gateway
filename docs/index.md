@@ -20,7 +20,9 @@ hide:
 
 </div>
 
-<p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for shared, multi-tenant clusters. <strong>Nothing idles between jobs. Jobs the cluster disrupts re-run themselves. Quotas are safe to enforce</strong>, so several teams can share expensive nodes without the platform team becoming a ticket queue.</p>
+<p class="gag-claims"><span>Nothing idles between jobs.</span> <span>Disrupted jobs auto-retry.</span> <span>Quotas are safe to enforce.</span></p>
+
+<p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for shared, multi-tenant clusters.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Watch the demo](demo.md){ .md-button }

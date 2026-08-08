@@ -167,6 +167,16 @@ body[data-md-color-scheme="slate"] {
   opacity: 0.6;
 }
 
+/* Drop the horizontal bleed once the hero nearly fills the viewport. Above the
+   large breakpoint the hero is inset far enough that 2rem is absorbed (880px
+   hero inside a 1,408px column at 1440px); below it the hero keeps only a 16px
+   margin, so the same bleed put 24px of horizontal scroll on the page. */
+@media screen and (max-width: 76.25em) {
+  .gag-hero::before {
+    inset: -1.5rem 0 0;
+  }
+}
+
 /* Illuminated-initial logomark: the faceted ring sits like a manuscript drop
    cap at the start of the hero, with the eyebrow, headline, and description
    flowing around and beneath it. flow-root contains the float so the call-to-
@@ -294,6 +304,50 @@ body[data-md-color-scheme="slate"] {
   display: none;
 }
 
+/* The three load-bearing promises, read as one wide line rather than a
+   sentence. Each claim is its own span separated by real whitespace, so a
+   screen reader gets three phrases; the dots are generated content and stay
+   out of the accessibility tree entirely. */
+.gag-hero .gag-claims {
+  font-size: clamp(1.05rem, 0.85rem + 0.8vw, 1.45rem);
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--md-default-fg-color);
+  margin: 0 0 0.85rem;
+}
+
+/* Break the claim row out of the hero's narrower column to span the full
+   content width, so the three claims read as one wide line on a laptop.
+   Gated above Material's large breakpoint for two reasons: below it the hero
+   already fills the content column, so there is nothing to gain, and the
+   `left: 50%` centres on the *parent* rather than the viewport, which pushed
+   24px of horizontal scroll onto the page at 768px when it was ungated. */
+@media screen and (min-width: 76.25em) {
+  .gag-hero .gag-claims {
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(100vw - 2rem, 92rem);
+    max-width: none;
+  }
+}
+
+/* Each claim is an inline-block so a wrap falls *between* phrases; a phrase
+   breaks internally only when no line is wide enough to hold it, which is the
+   graceful case on a phone rather than the common one. */
+.gag-hero .gag-claims span {
+  display: inline-block;
+}
+
+.gag-hero .gag-claims span + span::before {
+  content: "·";
+  color: var(--md-accent-fg-color);
+  font-weight: 400;
+  /* Owned by the claim that follows it, so a wrap never strands the dot at the
+     end of a line. */
+  padding: 0 0.5em 0 0.15em;
+}
+
 .gag-hero .gag-tagline {
   font-size: clamp(1rem, 0.95rem + 0.4vw, 1.15rem);
   color: var(--md-default-fg-color--light);
@@ -356,9 +410,12 @@ body[data-md-color-scheme="slate"] {
    shadow, no hover lift) with an accent rule, so the "not for everyone" scope
    note reads as confident honesty — a trust signal — and closes the section. */
 .gag-fit-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
+  /* Block, not flex. This is a paragraph with a leading icon, and a flex
+     container promotes every inline child (`strong`, `a`) to its own flex item
+     that will not wrap. Measured 2026-08-07 at 375px: the flex version pushed
+     the layout viewport to 485px and rendered "Not your setup?" as a 52px
+     column three lines tall. Block keeps the icon inline and the prose prose. */
+  display: block;
   margin: 1.1rem 0 0;
   padding: 0.8rem 1rem;
   border: 1px solid var(--md-default-fg-color--lightest);
@@ -380,9 +437,9 @@ body[data-md-color-scheme="slate"] {
 }
 
 .gag-fit-note .twemoji {
-  flex: none;
   color: var(--md-accent-fg-color);
-  margin-top: 0.08rem;
+  margin-right: 0.4rem;
+  vertical-align: -0.16em;
 }
 
 .gag-fit-note .twemoji svg {
