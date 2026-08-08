@@ -873,6 +873,9 @@ Shared objects must not be owner-referenced by their referrers:
 
 ## H.9. Cross-namespace proxy sharing
 
+**Shipped (Q166, M4).** The mechanisms below are implemented; two points this section
+originally left open are recorded at the end.
+
 Default is same-namespace. Cross-namespace sharing uses **provider consent**: the
 owner of the `EgressProxy` publishes that it is shareable (via
 `spec.sharing.allowedNamespaces` or a namespace selector). Naming a
@@ -905,6 +908,40 @@ not, and these are the bulk of the implementation cost:
    pattern (selector-scoped bundle sync); if trust-manager is installed, the CA
    may instead be published as a `Bundle`. No new secret-distribution mechanism is
    required — the earlier framing of this as a "secret" overstated the cost.
+
+### What implementing it settled
+
+**The reference needed a namespace, and it could not go on `ObjectRef`.** Nothing in
+the v2 API could express a cross-namespace reference at all: `ObjectRef` and
+`LocalObjectRef` were name-only, and both resolution sites resolved in the referrer's
+own namespace. `ObjectRef` also backs `gatewayRef`, `templateRef` and
+`defaultTemplateRef`, so adding `Namespace` there would have made four references
+cross-namespace at once, three of them with no consent handshake behind them. The
+proxy references therefore moved to their own `ProxyObjectRef` (`name` +
+optional `namespace`). Empty `namespace` means the referrer's own, so every existing
+manifest keeps its meaning. This dropped the optional `kind` property from
+`proxyRef`'s schema, whose enum admitted only the two template kinds and which
+nothing read; structural-schema pruning means a manifest that set it still applies.
+
+**The AGC cannot read a remote `EgressProxy`, so the GMC mediates.** The AGC's cache
+is pinned to its own tenant namespace precisely so it needs only the per-tenant `Role`
+the GMC creates rather than a `ClusterRole`, and `RunnerSet.spec.proxyRef` is resolved
+by the AGC. Widening that to a `ClusterRole` would let every tenant's AGC read every
+other tenant's `EgressProxy`, a blast-radius regression, and the secure-by-default
+rule keeps the narrower option. A per-grant `Role` plus an uncached read preserves
+least privilege but loses the watch, since controller-runtime fixes cache namespaces
+at manager construction.
+
+So the CA ConfigMap this section already mandates carries the decision as well as the
+trust material: **its presence is the grant**, and its data holds the proxy's Service
+DNS name and port. The AGC reads it from its own namespace, resolves nothing across a
+boundary, and fails closed when it is absent. Revoking a grant deletes it. That is one
+mechanism doing two jobs rather than a second mechanism invented for the purpose.
+
+One consequence worth stating: the GMC reads these projections through its **uncached**
+API reader. Its ConfigMap informer is pinned to a single name in its own namespace, so
+a cached label-selected list would return nothing and the prune that revokes a
+withdrawn grant would silently find nothing to delete.
 
 ## H.10. The egress proxy becomes optional
 
