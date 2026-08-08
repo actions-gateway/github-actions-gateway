@@ -197,7 +197,7 @@ func buildAGCServiceV2(ag *gmcv2alpha1.ActionsGateway) *corev1.Service {
 // default-deny except DNS + the proxy + (in direct mode) the GitHub allowlist —
 // never arbitrary internet. githubCIDRs comes from the shared IP-range cache; empty
 // (pre-first-fetch) omits the GitHub rule, fail-closed, until the refresh patches it.
-func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []net.IPNet, direct bool) *networkingv1.NetworkPolicy {
+func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []net.IPNet, direct bool, remoteProxyNamespaces []string) *networkingv1.NetworkPolicy {
 	egress := []networkingv1.NetworkPolicyEgressRule{
 		dnsEgressRule(),
 		{
@@ -207,6 +207,7 @@ func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []
 			}},
 		},
 	}
+	egress = append(egress, remoteProxyEgressRules(remoteProxyNamespaces)...)
 	if direct {
 		if rule, ok := githubCIDREgressRule(githubCIDRs); ok {
 			egress = append(egress, rule)
@@ -235,9 +236,10 @@ func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []
 // stays mandatory either way — the AGC must reach the apiserver regardless of egress
 // mode. Restriction is preserved: DNS + kube API + (direct) the GitHub allowlist,
 // never arbitrary internet.
-func buildAGCNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, apiServerCIDRs []string, githubCIDRs []net.IPNet, direct bool) *networkingv1.NetworkPolicy {
+func buildAGCNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, apiServerCIDRs []string, githubCIDRs []net.IPNet, direct bool, remoteProxyNamespaces []string) *networkingv1.NetworkPolicy {
 	name := agcNameV2(ag)
 	np := buildAGCNetworkPolicyFrom(ag.Namespace, name, name, v2GatewayLabels(ag), apiServerCIDRs)
+	np.Spec.Egress = append(np.Spec.Egress, remoteProxyEgressRules(remoteProxyNamespaces)...)
 	if direct {
 		if rule, ok := githubCIDREgressRule(githubCIDRs); ok {
 			np.Spec.Egress = append(np.Spec.Egress, rule)
@@ -247,6 +249,31 @@ func buildAGCNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, apiServerCIDRs []st
 		np.Spec.Egress = append(np.Spec.Egress, rule)
 	}
 	return np
+}
+
+// remoteProxyEgressRules permits egress to EgressProxy pool pods in namespaces that
+// share a proxy with this gateway (M4, §H.9) — one rule per namespace, each with a
+// single peer carrying both selectors so they AND. Two peers would OR and reach any
+// pod in the granted namespace.
+//
+// Emitted only for namespaces a resolved, consented reference actually named, so a
+// gateway with no cross-namespace proxyRef keeps exactly the same-namespace egress it
+// had before. Nothing here widens the proxy's own ingress: the provider's policy is
+// the other half of the handshake, and traffic needs both.
+func remoteProxyEgressRules(namespaces []string) []networkingv1.NetworkPolicyEgressRule {
+	rules := make([]networkingv1.NetworkPolicyEgressRule, 0, len(namespaces))
+	for _, ns := range namespaces {
+		rules = append(rules, networkingv1.NetworkPolicyEgressRule{
+			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
+			To: []networkingv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{corev1.LabelMetadataName: ns},
+				},
+				PodSelector: egressProxyPodPeerSelector(),
+			}},
+		})
+	}
+	return rules
 }
 
 // vaultEgressRule returns the scoped AGC→Vault egress rule for a workload-identity gateway

@@ -154,6 +154,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		// NetworkPolicy's GitHub-CIDR egress allowlist stays current.
 		if err := (&controller.EgressProxyReconciler{
 			Client:               mgr.GetClient(),
+			APIReader:            mgr.GetAPIReader(),
 			Scheme:               mgr.GetScheme(),
 			IPCache:              ipCache,
 			ProxyImage:           img.proxyImage,

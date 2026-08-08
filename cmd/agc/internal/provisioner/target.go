@@ -255,6 +255,10 @@ type ResolvedSpec struct {
 	HTTPSProxy         string
 	NoProxy            string
 	ProxyTLSSecretName string
+	// ProxyCAConfigMapName carries the proxy CA when the proxy lives in another
+	// namespace and its TLS Secret is therefore unreadable from here (§H.9). Set
+	// instead of ProxyTLSSecretName, never alongside it.
+	ProxyCAConfigMapName string
 
 	// GitHubCAConfigMapName names the ConfigMap holding the CA bundle fronting this
 	// gateway's GHES appliance, projected into the runner container so it trusts the

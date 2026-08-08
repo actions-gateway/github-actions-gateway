@@ -87,7 +87,7 @@ func TestCoexistence_PoolSelectorsDoNotCrossMatch(t *testing.T) {
 func TestCoexistence_WorkloadNetworkPolicyReachesTheV2Pool(t *testing.T) {
 	v1Pod, v2Pod := coexistingPoolPodLabels(t)
 
-	np := buildWorkloadNetworkPolicyV2(v2Gateway("gateway", "team-a", "github-app", "gateway-egress"), nil, false)
+	np := buildWorkloadNetworkPolicyV2(v2Gateway("gateway", "team-a", "github-app", "gateway-egress"), nil, false, nil)
 	peer := proxyPortEgressPeer(t, np.Spec.Egress)
 
 	assert.True(t, selects(t, peer.PodSelector, v2Pod), "v2 workload pods must still reach their own proxy pool")

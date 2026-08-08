@@ -27,7 +27,7 @@ func runnerSetBoundTo(name, ns, gateway, proxyRef string) *gmcv2alpha1.RunnerSet
 		},
 	}
 	if proxyRef != "" {
-		rs.Spec.ProxyRef = &gmcv2alpha1.ObjectRef{Name: proxyRef}
+		rs.Spec.ProxyRef = &gmcv2alpha1.ProxyObjectRef{Name: proxyRef}
 	}
 	return rs
 }
@@ -101,7 +101,7 @@ func TestResolveReferrerGitHubHosts(t *testing.T) {
 				WithScheme(actionsGatewayV2TestScheme(t)).
 				WithObjects(tc.objs...).
 				Build()
-			got, err := resolveReferrerGitHubHosts(context.Background(), c, ns, "shared")
+			got, err := resolveReferrerGitHubHosts(context.Background(), c, &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "shared"}})
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		})
