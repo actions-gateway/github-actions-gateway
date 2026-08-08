@@ -223,11 +223,27 @@ Whatever happens, verify what actually landed **by content, not SHA** — see be
 ### Re-check concurrent work before opening
 
 The check at the start of a task has a shelf life of minutes; run it again immediately
-before `gh pr create`:
+before `gh pr create`. Two halves, because concurrent work reaches you two ways: as an
+open PR, and as something that already merged.
 
 ```sh
+git fetch origin main && git log --oneline HEAD..origin/main
 gh pr list --json number,title --jq '.[] | "#\(.number)\t\(.title)"'
 ```
+
+**Fetch before you compare.** `origin/main` is a local remote-tracking ref, so
+`git diff HEAD...origin/main` and `git log HEAD..origin/main` are only as fresh as your
+last fetch — on a stale ref they report a clean base while `main` has moved, which is
+indistinguishable from being up to date. Nothing in a normal session refreshes that ref
+on its own.
+
+**Work that merged under you can change your own gate.** A moved base is usually just a
+rebase at merge time, but not when what merged is the machinery your branch is gated by.
+During #1342, #1334 merged mid-session carrying a change to `scripts/ci/run-parallel.sh`
+and to `SCRIPTS_TESTS`, the fan-out backing `make scripts-test`, which that branch was
+adding a suite to. It surfaced only incidentally, after both commits were written, and
+cost a rebase, a recommit, and a fourth full `make check`. Fetch before the final gate
+run, not after it: a rebase discovered afterwards voids the verdict you just paid for.
 
 **An open PR can overlap yours** — read its diff and its body, not its title. #1093 was
 opened mid-session on a topic that overlapped the Q577 change, and carried evidence
@@ -245,11 +261,21 @@ never blocks the create.
 used to merge into a red `main` because a PR gate only ever sees its own base — #1062
 raised MkDocs' link validation to strict-build warnings (Q560) while #1063 added a link
 that trips it (Q558); each passed without the other and the merged tree built dirty.
-The **merge queue** now closes this: every merge validates the candidate result (your
-branch plus whatever is ahead of it in the queue, on current `main`) before it lands,
-and a failing entry is kicked back to its PR with the failure attached — the signal
-pr-sentinel already reacts to. There is no manual union-gate or pre-merge freshness
-check to run; enqueue and let the queue arbitrate the race.
+The **merge queue** closes this for the workflows it actually runs: every merge validates
+the candidate result (your branch plus whatever is ahead of it in the queue, on current
+`main`) before it lands, and a failing entry is kicked back to its PR with the failure
+attached — the signal pr-sentinel already reacts to. There is no manual union-gate or
+pre-merge freshness check to run; enqueue and let the queue arbitrate the race.
+
+**It closes it only for a workflow that declares `merge_group`,** which is 9 of the 25.
+[`doc-links.yml`](.github/workflows/doc-links.yml) does not, so its five gates
+(`em-dash`, `doc-links`, `gate-lists`, `release-links`, `release-pins`) are validated
+against each PR's own base and never against the candidate merge result. Measured
+2026-08-08: #1340 and #1342 each added em-dashes to `docs/development/testing.md`, each
+was green alone, and the pair landed it at 595 against a ceiling of 594, turning `main`
+red on a gate the queue had no opportunity to run. Q743 carries the fix. Until it lands,
+the jointly-red case is still live for those five, and a ratcheted gate (em-dash density,
+the coverage floor) is where it bites: two branches can each sit at the ceiling.
 
 ### When new work blocks an open PR
 
