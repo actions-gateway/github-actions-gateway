@@ -496,6 +496,8 @@ The Bash tool's default timeout is short (two minutes) and it **kills** anything
 
 Never fire one of these as a default-timeout foreground run and hope it finishes — it will be killed partway and you learn nothing. Pick the timeout from the tier's real cost (see [Cost & cadence](#cost--cadence-rough-ephemeral-ci-2026-ballparks) below); when in doubt, background it.
 
+**Background it through [`record-launch.sh`](#the-launch-record)**, so the run keeps a stop handle after a compaction drops the task id.
+
 **Read a background run's output, not its reported exit status.** The status you get back is the *last thing the command did* — which is rarely the thing under test.
 
 - **Piped**: a run through `tail`, `head`, or `grep` reports the filter's code. `go test … | tail -30` reports exit 0 even when the suite failed. Drop the pipe (the output file is readable in full anyway) or add `set -o pipefail`.
@@ -522,10 +524,28 @@ What is never right is naming the **program** rather than the **run**. `pkill -f
 In order of preference:
 
 - **Stop the background task by its handle.** The launching task is the only reference that cannot match somebody else's process.
-- **If the handle is gone** (a compaction drops the task id while the process keeps running), run `pgrep -fl <pattern>` first, read what it *would* hit, then kill by PID.
+- **Then the launch record**, if the run was started through [`record-launch.sh`](#the-launch-record), which holds the same handle on disk where a compaction cannot reach it. `scripts/agent/record-launch.sh --list` prints what is running and the command that stops it.
+- **If neither exists**, run `pgrep -fl <pattern>` first, read what it *would* hit, then kill by PID.
 - **If a pattern is unavoidable**, anchor it to the worktree path. Every process a session starts carries its worktree directory in the argv or cwd, so `pkill -f "<worktree>/.build/ginkgo"` is safe where `pkill -f ginkgo` is not.
 
-**Never kill another worktree's run to reclaim a singleton.** A process you did not start carries no ownership record you can read, so "it looks stale" is a guess, and a live run and an orphan are indistinguishable from the outside. [`scripts/dogfood/lib/lease.sh`](../../scripts/dogfood/lib/lease.sh) is the pattern that makes that legible for the billable cluster: a pid plus a command-line marker, host-wide so it survives across worktrees, and no-lease-no-reclaim. No local tier has an equivalent yet (Q707). Note that a lease directory has to be host-wide to be worth anything, which puts it outside the worktree: workspace-guard prompts on every access until its opt-in extra-roots ship (workspace-guard Q23).
+**Never kill another worktree's run to reclaim a singleton.** A process you did not start carries no ownership record you can read, so "it looks stale" is a guess, and a live run and an orphan are indistinguishable from the outside. [`scripts/dogfood/lib/lease.sh`](../../scripts/dogfood/lib/lease.sh) is the pattern that makes that legible for the billable cluster: a pid plus a command-line marker, host-wide so it survives across worktrees, and no-lease-no-reclaim. The launch record below is worktree-local and records only your own runs, so it answers "what did I start" and not "may I reclaim this". No local tier has an ownership lease yet (Q707). Note that a lease directory has to be host-wide to be worth anything, which puts it outside the worktree: workspace-guard prompts on every access until its opt-in extra-roots ship (workspace-guard Q23).
+
+#### The launch record
+
+The launching task id is normally a run's only handle, and a compaction drops it while the process keeps running. That is how a session ends up killing by pattern with nothing to aim at. So put the handle on disk: launch long background work through the wrapper rather than directly.
+
+```bash
+scripts/agent/record-launch.sh make check > tmp/check.log 2>&1
+```
+
+[`scripts/agent/record-launch.sh`](../../scripts/agent/record-launch.sh) writes one `key=value` record per run under `tmp/launches/` (pid, worktree, the command, and a `stop=` line to run verbatim) and removes it when the run ends, so what is on disk is what is live. `--list` reads them back and `--prune` drops the ones whose process is gone. Reading a record is not recall, which is the whole point: the fields are there after the context that created them is not.
+
+Two properties make a record safe to act on, and both are asserted against real processes by [`record-launch-test.sh`](../../scripts/agent/record-launch-test.sh):
+
+- **The run is its own process group**, so the recorded `kill -TERM -- -<pgid>` takes its children too. A `make` killed alone leaves its whole fan-out behind, which is exactly what sends the next person back to a pattern kill. `set -m` is what buys this; delete that line and the suite goes red on a surviving grandchild. If job control does not deliver a new group, the wrapper measures that (`ps -o pgid=`) and records the plain `kill -TERM <pid>` instead, since a group kill aimed at the wrapper's own group would take the session with it.
+- **Liveness is pid plus command-line marker**, the `lease.sh` rule: a recycled pid is a live process that is not the run, so `--list` calls it `stale` rather than offering a stop command aimed at a stranger.
+
+Two constraints come with it. The run must not read stdin, because a background process group that reads the terminal takes SIGTTIN and stops, which is why the example redirects to a log, the shape a background run wants anyway. And the wrapper owns the run: killing the wrapper stops the run, because a live process whose record has just been deleted is the state the record exists to prevent.
 
 ### Ad-hoc shell varies: don't rely on word-splitting
 
