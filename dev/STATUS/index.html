@@ -2880,6 +2880,14 @@
 <td>Measured: of 38 local shell-kill targets only 2 carried a worktree anchor; the rest match every session (Q690 killed the <code>make check</code> verifying it). e2e/kind slots are singletons with no ownership record, so reclaim guesses. Copy <code>lib/lease.sh</code>.</td>
 </tr>
 <tr>
+<td><a id="Q730"></a>Q730</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate denies a <code>--version</code> probe piped to a filter</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-08: <code>shellcheck --version | grep</code> denied. <code>^shellcheck</code> is a gate; <code>exempt</code> holds only two <code>make</code> forms, though its own comment reserves <code>exempt</code> for targets whose output, not status, is the point. <code>--version</code>/<code>--help</code> are that.</td>
+</tr>
+<tr>
 <td><a id="Q401"></a>Q401</td>
 <td><a href="../operations/node-shutdown-budgets/">File upstream k8s issue: delete-path probe results never reach <code>Ready</code></a></td>
 <td><code>docs</code></td>
