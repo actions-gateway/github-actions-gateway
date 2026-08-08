@@ -35,8 +35,10 @@ omit it: "self-hosted" usually means "self-hosted on AWS".
 | Actuated | your hardware, vendor-hosted control plane |
 | ARC, GAG | any conformant Kubernetes cluster, including on-premises and air-gapped |
 
-On-premises or on reserved hardware, most of the field is gone before a single
-feature is compared, by the same constraint that made you self-host.
+!!! tip "On-premises, most of this list is already gone"
+
+    Only the last row is left, ruled out by the same constraint that made you
+    self-host in the first place, before a single feature is compared.
 
 That also breaks account-per-tenant isolation, which is ForgeMT's model and the
 serious argument against a shared cluster: an AWS account is a free API call,
