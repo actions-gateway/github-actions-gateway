@@ -45,8 +45,16 @@ done
 
 failed=()
 for i in "${!pids[@]}"; do
-    if ! wait "${pids[$i]}"; then
-        failed+=("${labels[$i]}")
+    rc=0
+    wait "${pids[$i]}" || rc=$?
+    (( rc == 0 )) && continue
+    # A bare label cannot separate an assertion failing (small rc) from a
+    # command the kernel killed (128+n; 137 is the OOM killer's) or one that was
+    # never found (127), so the status goes in the summary (Q703).
+    if (( rc > 128 )); then
+        failed+=("${labels[$i]} (signal $(( rc - 128 )), exit $rc)")
+    else
+        failed+=("${labels[$i]} (exit $rc)")
     fi
 done
 

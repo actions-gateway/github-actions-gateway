@@ -340,7 +340,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-conflict-markers-test ci/check-dep-advisory-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
                  ci/gate-list-test ci/shellcheck-scripts-test \
-                 ci/check-uses-pinned-test \
+                 ci/check-uses-pinned-test ci/run-parallel-test \
                  docs/backlog-metrics-test docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \
                  docs/check-release-links-test \
