@@ -936,6 +936,41 @@ github.com, so they must degrade to readable content without JS:
 **Keep those source markers intact** when editing — deleting the table column, a
 blockquote, or a bold role lead silently breaks the matching site feature.
 
+### Chip selection lives in the query string
+
+Every chip bar owns a query key, so a filtered view is a link a reader can copy:
+`persona` on the operations index, `role` on the design index, and `label`,
+`status` and `size` on the backlog. Selecting the default (`All`) drops the key
+rather than writing it, keeping an unfiltered URL clean.
+
+Two properties are load-bearing, and both are easy to break by accident:
+
+- **`replaceState`, never `pushState`.** Filtering is not navigation. Pushing
+  would make the back button walk every chip the reader tried.
+- **A click and a reload must produce the same page.** The backlog renders one
+  bar per dimension *per table*, and all four tables share the `label` key, so
+  restoring `?label=ci` filters all four. A click therefore applies to every bar
+  owning that key, not just the one clicked. A bar whose table has no such chip
+  falls back to `All` rather than emptying itself, which is also what makes an
+  unrecognised value in a hand-edited URL harmless.
+
+Verify both paths agree, rather than either one alone:
+
+```js
+// make docs-serve with the dev scope, then on /STATUS/
+const counts = () => [...document.querySelectorAll('.backlog-count')].map(c => c.textContent);
+// click path
+document.querySelector('.backlog-filter .persona-chip[data-persona="ci"]').click();
+JSON.stringify(counts());        // compare against a reload of the URL it just wrote
+```
+
+The backlog page is `dev`-scope only, so the default `make docs-serve` serves a
+404 for it. Preview it with the dev exclusion list:
+
+```bash
+MKDOCS_EXCLUDE_DOCS=$'/README.md\n/releases/\n' PORT=8043 make docs-serve
+```
+
 The backlog chips read the **rendered cells**, so they follow the backlog format
 rather than duplicating it: labels are the backticked values in the `Labels`
 column (each renders as its own `<code>`), status comes from the `St` emoji
