@@ -30,6 +30,10 @@ const abandonedForceCancelTimeout = 30 * time.Second
 //
 // Best-effort: on an unknown identity or a refused call the unstarted-job timeout
 // remains the honest backstop, so every outcome is logged and counted, none returned.
+//
+// A cancelled run is also registered for automatic re-run once the owner can place a
+// worker pod again (Q691) — not immediately, because the job was abandoned for want of
+// capacity and re-queueing it into the same starved pool is how a shortage compounds.
 func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger) {
 	outcome := "cancelled"
 	if owner == "" || repo == "" || runID == "" || runID == "0" {
@@ -46,6 +50,10 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 		} else {
 			log.Info("force-cancelled the abandoned job's run: the worker was removed before it ran and nothing will ever report the job",
 				"runID", runID)
+			// Only this outcome is re-runnable: the cancelled conclusion is the state
+			// rerun-failed-jobs was measured to accept, and it is the one outcome in
+			// which we know the run concluded at all (Q691, abandoned_rerun.go).
+			p.registerAbandonedRerun(target, owner, repo, runID)
 		}
 	}
 	if p.Metrics != nil {

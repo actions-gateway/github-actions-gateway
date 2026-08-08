@@ -259,10 +259,14 @@ type Provisioner struct {
 	// EvictionRerunRetryInterval paces the refused re-run attempts inside the
 	// window. Zero means the default (30 seconds).
 	EvictionRerunRetryInterval time.Duration
-	MaxQuotaRetries            int
-	QuotaRetryDelay            time.Duration
-	PollInterval               time.Duration
-	DefaultWorkerImage         string
+	// AbandonedRerunWaitWindow bounds how long a force-cancelled abandoned run waits
+	// for capacity to return before its automatic re-run is given up on (Q691). Zero
+	// means the default (30 minutes).
+	AbandonedRerunWaitWindow time.Duration
+	MaxQuotaRetries          int
+	QuotaRetryDelay          time.Duration
+	PollInterval             time.Duration
+	DefaultWorkerImage       string
 
 	// DisableQuotaAdmission turns OFF the admission gate's namespace-ResourceQuota
 	// rung (#784), reverting to the pre-#784 behaviour where quota exhaustion is
@@ -369,6 +373,15 @@ type Provisioner struct {
 	// construction (no per-key map to grow or reap), while still letting
 	// distinct runs evict concurrently. The zero value is ready to use.
 	evictionLocks [evictionLockShards]sync.Mutex
+
+	// abandonedReruns holds the force-cancelled abandoned runs waiting for capacity
+	// to return before they are re-run (Q691), keyed by owner and run_id so two
+	// abandoned jobs of one run cost one run-level re-run. Bounded by the wait
+	// window rather than by a cap: an entry that never sees a worker pod placed is
+	// dropped once it expires. abandonedRerunsMu guards it; the lock is never held
+	// across a pod list or a GitHub call.
+	abandonedReruns   map[abandonedRerunKey]pendingAbandonedRerun
+	abandonedRerunsMu sync.Mutex
 
 	// now returns the current time. nil means time.Now; tests override it to
 	// drive the eviction-counter TTL sweep deterministically.

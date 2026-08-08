@@ -87,7 +87,7 @@ func evalWorkersUnschedulableForPods(pods []corev1.Pod, now time.Time, grace tim
 	var next time.Duration
 	for i := range pods {
 		pod := &pods[i]
-		if at, ok := podScheduledAt(pod); ok && at.After(st.lastScheduledAt) {
+		if at, ok := provisioner.PodScheduledAt(pod); ok && at.After(st.lastScheduledAt) {
 			st.lastScheduledAt = at
 		}
 		if !pod.DeletionTimestamp.IsZero() || pod.Status.Phase != corev1.PodPending {
@@ -123,20 +123,6 @@ func evalWorkersUnschedulableForPods(pods []corev1.Pod, now time.Time, grace tim
 			len(stuck), grace, strings.Join(stuck, "; "))
 	}
 	return st
-}
-
-// podScheduledAt returns when the scheduler bound the pod — the PodScheduled=True
-// condition's transition time — and whether it has been bound at all. Binding is
-// what makes a pod evidence of placeable capacity, so this deliberately ignores
-// the pod's phase: a bound pod still pulling images proves as much as a running one.
-func podScheduledAt(pod *corev1.Pod) (time.Time, bool) {
-	for i := range pod.Status.Conditions {
-		c := &pod.Status.Conditions[i]
-		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionTrue {
-			return c.LastTransitionTime.Time, true
-		}
-	}
-	return time.Time{}, false
 }
 
 // podUnschedulable reports whether a pod's scheduler verdict is Unschedulable —

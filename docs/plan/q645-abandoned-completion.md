@@ -7,6 +7,9 @@ delivery, per [the remedy measurements](#q676--the-remedy-measurements-2026-08-0
 The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST
 force-cancel concludes run and job `cancelled` in ~1 s, per
 [the fast-ending measurement](#q683--the-fast-ending-measurement-2026-08-05).
+The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run
+is re-run automatically once capacity returns, bounded by the shared per-run
+retry budget, per [the recovery re-run arm](#q691--the-recovery-re-run-arm-2026-08-08).
 Remaining follow-up: Q682 (sibling `skipped` arm).
 
 Queue item: Q645 (completed; done rows are deleted). Origin:
@@ -288,6 +291,79 @@ Shipped the same day: the classic-tier provisioner force-cancels the run
 `repoInfo()` read the eviction re-run uses) before reporting `abandoned`,
 counted by `actions_gateway_abandoned_run_force_cancels_total`; the
 unstarted-job timeout stays the backstop for `identity_unknown`/`error`
-outcomes. A recovery re-run arm (auto-`rerun-failed-jobs` once capacity
-returns) remains unbuilt; the measurement above shows the cancelled conclusion
-arms it.
+outcomes. The recovery re-run arm this measurement arms is Q691, below.
+
+## Q691 — the recovery re-run arm (2026-08-08)
+
+The Q683 ending is honest and recoverable, but recovery was still a human
+opening the run and clicking re-run. This arm automates it, and the whole
+design question is *when*, not *whether*: the run was abandoned because a
+worker pod sat Pending past `pendingPodDeadline` and the reaper deleted it, so
+an immediate re-run re-queues the job into the pool that was starved in the
+first place. Fire it unconditionally and a capacity shortage becomes a re-run
+storm that deepens the shortage.
+
+### What "capacity returned" means
+
+The codebase already answers this, for the Q512 capacity-gate latch: a worker
+pod that **bound to a node** (`PodScheduled=True`) after the decline is the
+evidence capacity came back, and the binding rather than the phase is the
+signal, because a bound pod still pulling images proves as much as a running
+one. Q691 reuses that definition verbatim, with the abandonment time as the
+"after". `podScheduledAt` moves from the controller package to the provisioner
+as `PodScheduledAt`, so both readers share one answer instead of two.
+
+An entry is registered only on the `cancelled` force-cancel outcome. That is
+the state the 2026-08-05 measurement showed accepts `rerun-failed-jobs`;
+`identity_unknown` has no endpoint to address, and after an `error` the run has
+not been concluded by us at all.
+
+### The loop budget
+
+The re-run fires through the existing `handleEviction`, with a new
+`recoveryCauseAbandoned` cause. That is the load-bearing choice: the budget is
+`reserveEvictionRetry`, keyed by `run_id` alone and shared with the eviction,
+preemption, and deletion arms, so a run that is abandoned, re-run, and
+abandoned again spends one slot per re-run and stops at
+`spec.maxEvictionRetries`. A re-run loop is therefore bounded by the same
+Q106 hard cap that already bounds every other recovery, and a run cannot spend
+two budgets by being disrupted two ways.
+
+Exhaustion is not silent: it emits
+`actions_gateway_eviction_retries_exhausted_total{cause="abandoned"}` and the
+`EvictionRetriesExhausted` warning Event on the owner, the surfaces an operator
+already alerts on.
+
+The second bound is time. Capacity may never return (an idle group, or a
+scheduling constraint no amount of waiting fixes, since `pending_deadline`
+also covers an unpullable image), so an entry that waits longer than
+`defaultAbandonedRerunWaitWindow` (30 minutes) is dropped. Both endings are
+counted by a new
+`actions_gateway_abandoned_run_rerun_waits_total{outcome}`: `capacity_returned`
+when a worker bound and the re-run was handed to the budget, `expired` when it
+never did.
+
+### Shape
+
+An `AbandonedRerunSweeper` (`manager.Runnable`, per replica, like
+`EvictionSweeper`) polls the pending set every 30 s. The registry is in-memory
+and keyed by owner plus `run_id`, so two abandoned jobs of one run cost one
+re-run rather than two budget slots, and it is bounded by the 30-minute
+expiry rather than by a cap.
+
+Classic tier only, matching Q683: the scale-set tier does not force-cancel, so
+it has no cancelled conclusion to re-run.
+
+### What is tested, and how the bound is proven
+
+`abandoned_rerun_internal_test.go`, unit tier: the sweeper's pass is driven
+directly against a fake pod client and a counting `rerun-failed-jobs` stub.
+
+The bound is the part worth being careful about. An aggregate call count cannot
+show a per-run budget binding, because one run looping can produce every call
+on its own, so the loop test runs **two distinct runs** through repeated
+abandon-and-recover cycles and asserts the re-run count **per run id**, taken
+from the stub's own per-path tally. Run A exhausting its budget must leave run
+B's intact. Deleting the `reserveEvictionRetry` call turns the per-run counts
+from `maxRetries` into the full cycle count, which is the red the test exists
+to produce.
