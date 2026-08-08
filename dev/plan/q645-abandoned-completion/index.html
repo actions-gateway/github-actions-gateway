@@ -2664,6 +2664,67 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#q691--the-recovery-re-run-arm-2026-08-08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q691 — the recovery re-run arm (2026-08-08)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Q691 — the recovery re-run arm (2026-08-08)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-capacity-returned-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "capacity returned" means
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-loop-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The loop budget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-tested-and-how-the-bound-is-proven" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is tested, and how the bound is proven
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2692,6 +2753,9 @@ delivery, per <a href="#q676--the-remedy-measurements-2026-08-04">the remedy mea
 The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST
 force-cancel concludes run and job <code>cancelled</code> in ~1 s, per
 <a href="#q683--the-fast-ending-measurement-2026-08-05">the fast-ending measurement</a>.
+The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run
+is re-run automatically once capacity returns, bounded by the shared per-run
+retry budget, per <a href="#q691--the-recovery-re-run-arm-2026-08-08">the recovery re-run arm</a>.
 Remaining follow-up: Q682 (sibling <code>skipped</code> arm).</p>
 <p>Queue item: Q645 (completed; done rows are deleted). Origin:
 <a href="../release-1.3/#the-rc5-re-run-2026-08-02">release-1.3.md § The rc.5 re-run</a>.</p>
@@ -3042,9 +3106,67 @@ record is deletable only <em>after</em> a conclusion, so it cannot cause one.</p
 <code>repoInfo()</code> read the eviction re-run uses) before reporting <code>abandoned</code>,
 counted by <code>actions_gateway_abandoned_run_force_cancels_total</code>; the
 unstarted-job timeout stays the backstop for <code>identity_unknown</code>/<code>error</code>
-outcomes. A recovery re-run arm (auto-<code>rerun-failed-jobs</code> once capacity
-returns) remains unbuilt; the measurement above shows the cancelled conclusion
-arms it.</p>
+outcomes. The recovery re-run arm this measurement arms is Q691, below.</p>
+<h2 id="q691--the-recovery-re-run-arm-2026-08-08">Q691 — the recovery re-run arm (2026-08-08)<a class="headerlink" href="#q691--the-recovery-re-run-arm-2026-08-08" title="Permanent link">&para;</a></h2>
+<p>The Q683 ending is honest and recoverable, but recovery was still a human
+opening the run and clicking re-run. This arm automates it, and the whole
+design question is <em>when</em>, not <em>whether</em>: the run was abandoned because a
+worker pod sat Pending past <code>pendingPodDeadline</code> and the reaper deleted it, so
+an immediate re-run re-queues the job into the pool that was starved in the
+first place. Fire it unconditionally and a capacity shortage becomes a re-run
+storm that deepens the shortage.</p>
+<h3 id="what-capacity-returned-means">What "capacity returned" means<a class="headerlink" href="#what-capacity-returned-means" title="Permanent link">&para;</a></h3>
+<p>The codebase already answers this, for the Q512 capacity-gate latch: a worker
+pod that <strong>bound to a node</strong> (<code>PodScheduled=True</code>) after the decline is the
+evidence capacity came back, and the binding rather than the phase is the
+signal, because a bound pod still pulling images proves as much as a running
+one. Q691 reuses that definition verbatim, with the abandonment time as the
+"after". <code>podScheduledAt</code> moves from the controller package to the provisioner
+as <code>PodScheduledAt</code>, so both readers share one answer instead of two.</p>
+<p>An entry is registered only on the <code>cancelled</code> force-cancel outcome. That is
+the state the 2026-08-05 measurement showed accepts <code>rerun-failed-jobs</code>;
+<code>identity_unknown</code> has no endpoint to address, and after an <code>error</code> the run has
+not been concluded by us at all.</p>
+<h3 id="the-loop-budget">The loop budget<a class="headerlink" href="#the-loop-budget" title="Permanent link">&para;</a></h3>
+<p>The re-run fires through the existing <code>handleEviction</code>, with a new
+<code>recoveryCauseAbandoned</code> cause. That is the load-bearing choice: the budget is
+<code>reserveEvictionRetry</code>, keyed by <code>run_id</code> alone and shared with the eviction,
+preemption, and deletion arms, so a run that is abandoned, re-run, and
+abandoned again spends one slot per re-run and stops at
+<code>spec.maxEvictionRetries</code>. A re-run loop is therefore bounded by the same
+Q106 hard cap that already bounds every other recovery, and a run cannot spend
+two budgets by being disrupted two ways.</p>
+<p>Exhaustion is not silent: it emits
+<code>actions_gateway_eviction_retries_exhausted_total{cause="abandoned"}</code> and the
+<code>EvictionRetriesExhausted</code> warning Event on the owner, the surfaces an operator
+already alerts on.</p>
+<p>The second bound is time. Capacity may never return (an idle group, or a
+scheduling constraint no amount of waiting fixes, since <code>pending_deadline</code>
+also covers an unpullable image), so an entry that waits longer than
+<code>defaultAbandonedRerunWaitWindow</code> (30 minutes) is dropped. Both endings are
+counted by a new
+<code>actions_gateway_abandoned_run_rerun_waits_total{outcome}</code>: <code>capacity_returned</code>
+when a worker bound and the re-run was handed to the budget, <code>expired</code> when it
+never did.</p>
+<h3 id="shape">Shape<a class="headerlink" href="#shape" title="Permanent link">&para;</a></h3>
+<p>An <code>AbandonedRerunSweeper</code> (<code>manager.Runnable</code>, per replica, like
+<code>EvictionSweeper</code>) polls the pending set every 30 s. The registry is in-memory
+and keyed by owner plus <code>run_id</code>, so two abandoned jobs of one run cost one
+re-run rather than two budget slots, and it is bounded by the 30-minute
+expiry rather than by a cap.</p>
+<p>Classic tier only, matching Q683: the scale-set tier does not force-cancel, so
+it has no cancelled conclusion to re-run.</p>
+<h3 id="what-is-tested-and-how-the-bound-is-proven">What is tested, and how the bound is proven<a class="headerlink" href="#what-is-tested-and-how-the-bound-is-proven" title="Permanent link">&para;</a></h3>
+<p><code>abandoned_rerun_internal_test.go</code>, unit tier: the sweeper's pass is driven
+directly against a fake pod client and a counting <code>rerun-failed-jobs</code> stub.</p>
+<p>The bound is the part worth being careful about. An aggregate call count cannot
+show a per-run budget binding, because one run looping can produce every call
+on its own, so the loop test runs <strong>two distinct runs</strong> through repeated
+abandon-and-recover cycles and asserts the re-run count <strong>per run id</strong>, taken
+from the stub's own per-path tally. Run A exhausting its budget must leave run
+B's intact. Deleting the <code>reserveEvictionRetry</code> call turns the per-run counts
+from <code>maxRetries</code> into the full cycle count, which is the red the test exists
+to produce.</p>
 
 
 

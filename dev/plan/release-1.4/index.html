@@ -2613,10 +2613,9 @@
 
 <h1 id="release-14-milestone-definition">Release 1.4 Milestone Definition<a class="headerlink" href="#release-14-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scope decided 2026-08-05. Three gating Queue rows remain</strong>, labelled
-<code>1.4-gate</code>: <a href="../../STATUS/#Q166">Q166</a>, <a href="../../STATUS/#Q554">Q554</a>,
-<a href="../../STATUS/#Q691">Q691</a>. Everything else the release contains is already
-merged.</p>
+<p><strong>Status: scope decided 2026-08-05. Two gating Queue rows remain</strong>, labelled
+<code>1.4-gate</code>: <a href="../../STATUS/#Q166">Q166</a>, <a href="../../STATUS/#Q554">Q554</a>. Q691 shipped
+2026-08-08. Everything else the release contains is already merged.</p>
 </blockquote>
 <h2 id="the-minor-was-forced-before-anyone-chose-it">The minor was forced before anyone chose it<a class="headerlink" href="#the-minor-was-forced-before-anyone-chose-it" title="Permanent link">&para;</a></h2>
 <p><code>v1.3.0..main</code> carries 120 commits, 17 of them <code>feat</code>. Six change the shipped
@@ -2680,11 +2679,14 @@ validates (dogfood kata-dind and privileged-dind) into a shipped kustomize base
 the e2e overlays patch, plus a plain baseline entry. Packaging rather than new
 behaviour, and the constraint that only CI-exercised templates ship is what keeps
 it that way.</p>
-<p><strong><a href="../../STATUS/#Q691">Q691</a>: auto re-run a force-cancelled abandoned run.</strong>
+<p><strong>Q691: auto re-run a force-cancelled abandoned run.</strong>
 Closes a gap this cycle opened. Q683's cancelled ending accepts
-<code>rerun-failed-jobs</code>, measured, so operators re-run by hand today. Needs a
-capacity-returned trigger and a loop budget, because a re-run re-queues into the
-pool that was starved in the first place.</p>
+<code>rerun-failed-jobs</code>, measured, so operators re-ran by hand. <strong>Shipped
+2026-08-08:</strong> the run is re-run when a worker pod binds for the owner again, and
+the loop a re-run into a starved pool would otherwise cause is bounded by the
+existing per-run retry budget, with exhaustion on
+<code>eviction_retries_exhausted_total{cause="abandoned"}</code> and expiry on
+<code>abandoned_run_rerun_waits_total{outcome="expired"}</code>.</p>
 <h2 id="deferred-to-150-and-why">Deferred to 1.5.0, and why<a class="headerlink" href="#deferred-to-150-and-why" title="Permanent link">&para;</a></h2>
 <p><strong>The proxy hardening cluster stays together</strong>:
 <a href="../../STATUS/#Q564">Q564</a> audit logging, <a href="../../STATUS/#Q565">Q565</a> per-tenant rate

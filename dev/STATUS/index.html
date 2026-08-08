@@ -2800,14 +2800,6 @@
 <td>Measured 2026-08-08 under Q703: a builder called as <code>x="$(f)"</code> runs on past its own failure and yields rc 0. 12 test suites fixed; 9 gates still carry it, incl. <code>go-lint.sh</code> and three e2e <code>chart-*-check.sh</code>, where it can green a failed <code>kubectl</code>.</td>
 </tr>
 <tr>
-<td><a id="Q708"></a>Q708</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook.sh"><code>go-throttle</code> hand-rolls a shell scanner that its sibling hook already solved in Go</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-06 under Q624: 178 of 423 lines hand-roll a shell scanner (quote state, heredocs, command position). Sibling pipedgate was ported for the same reason (Q625); its shim keeps fail-open.</td>
-</tr>
-<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code> <code>1.4-gate</code></td>
@@ -2848,14 +2840,6 @@
 <td>Inv. H covered only the winner's own delivery. The default-on sibling fan-out sends <code>skipped</code> mid-run; whether it concludes anything is unmeasured (brokertest assumes not). Needs a two-delivery probe arm.</td>
 </tr>
 <tr>
-<td><a id="Q691"></a>Q691</td>
-<td><a href="../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">Auto re-run a force-cancelled abandoned run</a></td>
-<td><code>feature</code> <code>1.4-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>The Q683 cancelled ending accepts rerun-failed-jobs (measured; the false green 403'd). Operators re-run manually. Needs a capacity-returned trigger and a loop budget: a rerun re-queues into the starved pool.</td>
-</tr>
-<tr>
 <td><a id="Q637"></a>Q637</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate asserts nothing about the capacity gate or the namespace-quota rung</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
@@ -2870,14 +2854,6 @@
 <td>🔲</td>
 <td>M</td>
 <td>Measured: of 38 local shell-kill targets only 2 carried a worktree anchor; the rest match every session (Q690 killed the <code>make check</code> verifying it). e2e/kind slots are singletons with no ownership record, so reclaim guesses. Copy <code>lib/lease.sh</code>.</td>
-</tr>
-<tr>
-<td><a id="Q730"></a>Q730</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate denies a <code>--version</code> probe piped to a filter</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-08: <code>shellcheck --version | grep</code> denied. <code>^shellcheck</code> is a gate; <code>exempt</code> holds only two <code>make</code> forms, though its own comment reserves <code>exempt</code> for targets whose output, not status, is the point. <code>--version</code>/<code>--help</code> are that.</td>
 </tr>
 <tr>
 <td><a id="Q401"></a>Q401</td>
@@ -2990,14 +2966,6 @@
 <td>🔲</td>
 <td>S</td>
 <td><code>isContextArg</code> keys on a first arg named <code>ctx</code>-ish or a <code>context.*</code> call, so <code>Client.Delete(c, pod)</code> is skipped silently: fail-open inside a fail-closed gate. Widen to any 2+ arg <code>.Delete(</code>, letting the inventory classify the noise.</td>
-</tr>
-<tr>
-<td><a id="Q696"></a>Q696</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook.sh"><code>go-throttle</code> misses a <code>-race</code> run passed as an argument to a wrapper</a></td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-05 under Q624: <code>timeout 900 go test -race ./...</code> runs unthrottled — <code>go</code> is an argument, not command position, so the scanner skips it. Pre-Q624 behaviour too. Widening needs a wrapper allowlist.</td>
 </tr>
 <tr>
 <td><a id="Q569"></a>Q569</td>
@@ -3326,6 +3294,22 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-06 at 1440px: 50 chars (3-col, 347px bullet), 77 (2-col, 559px), per <a href="../development/website/#card-bullets-fit-on-one-line">website.md</a>. Parsing density puts it in Go over goldmark, not shell. Both pages comply on main; starts green.</td>
+</tr>
+<tr>
+<td><a id="Q734"></a>Q734</td>
+<td><a href="../development/website/#interface-rules-the-custom-layer-must-satisfy">Slate's body text sits below the APCA body floor, capping every muted token under it</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Measured 2026-08-08: slate body is Lc 66.9 against a 75 floor, so Q731's <code>--gag-muted</code> could only reach 55.6 without out-contrasting body copy. Fixing it means overriding Material's palette, repainting every dark-mode page.</td>
+</tr>
+<tr>
+<td><a id="Q732"></a>Q732</td>
+<td><a href="../development/website/#progressive-enhancement-docsjavascriptsextrajs">Filter chips read the URL but never write it, so a filtered view cannot be shared</a></td>
+<td><code>feature</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-08: the persona chips honour <code>?persona=</code> on load but no chip writes it back, and the backlog's three bars carry no URL state at all, so a filtered view is reachable by a hand-typed link and never by copying the address bar.</td>
 </tr>
 <tr>
 <td><a id="Q687"></a>Q687</td>

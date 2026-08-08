@@ -2709,6 +2709,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#interface-rules-the-custom-layer-must-satisfy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interface rules the custom layer must satisfy
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3409,9 +3420,175 @@ both used one, and two of the four tiles matched verbatim, number and lead text
 alike, so the comparison page read as a repeat of the landing page. The band was
 removed from <code>why-gag.md</code> rather than reworded: the outcome flow diagram above it
 and the capability table below it already carried the same argument twice.</p>
+<h3 id="interface-rules-the-custom-layer-must-satisfy">Interface rules the custom layer must satisfy<a class="headerlink" href="#interface-rules-the-custom-layer-must-satisfy" title="Permanent link">&para;</a></h3>
+<p>Material owns the page chrome and handles its own controls. The <code>gag-</code>,
+<code>persona-</code> and <code>backlog-</code> components are hand-built on top of it, so nothing
+checks their hit targets, contrast, or animation properties but this page. Each
+rule below was measured against the render on 2026-08-08, and each has a probe
+because none of them can be answered by reading the source.</p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Applies to</th>
+<th>How it is checked</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A control clears 24px on both axes</td>
+<td>every hand-built button, chip and pill</td>
+<td><code>getBoundingClientRect()</code>; a link inside running prose is exempt, since the paragraph is the target</td>
+</tr>
+<tr>
+<td>Text takes <code>--gag-muted</code> / <code>--gag-accent-ink</code>, never a raw Material token</td>
+<td>any custom rule setting <code>color</code></td>
+<td>the sweep below, <strong>run in both palettes</strong></td>
+</tr>
+<tr>
+<td>Figures carry tabular digits</td>
+<td>numbers a reader compares in a row, or watches change</td>
+<td><code>font-variant-numeric</code>, plus a width check across differing digits</td>
+</tr>
+<tr>
+<td>A transition names its properties, and only compositor ones</td>
+<td>every custom <code>transition</code></td>
+<td>the duration-gated audit below</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Check the dark palette separately, and expect it to be the worse one.</strong>
+Material's muted-text token is near-symmetric in alpha and not in perceived
+contrast: <code>--md-default-fg-color--light</code> is <code>rgba(0, 0, 0, 0.54)</code> over white,
+which composites to <code>#757575</code> for <code>Lc 72</code>, and <code>rgba(226, 228, 233, 0.56)</code> over
+slate's <code>#1e2129</code>, which composites to <code>#8c8e95</code> for <code>Lc 39.4</code>. A component
+inheriting it loses 32.6 points when the reader flips the palette, with nothing
+in the source to show it.</p>
+<p>That is why secondary text and accent labels take <code>--gag-muted</code> and
+<code>--gag-accent-ink</code> rather than the Material tokens, on the same ink/fill split
+as <code>--gag-win-ink</code>. <strong>Use them for any custom rule setting <code>color</code></strong>; a new rule
+reaching for <code>--md-default-fg-color--light</code> reintroduces the asymmetry silently.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Light</th>
+<th>Dark</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--gag-muted</code></td>
+<td><code>#6e6e6e</code>, Lc 75.2</td>
+<td><code>hsl(225 15% 70%)</code>, Lc 55.6</td>
+</tr>
+<tr>
+<td><code>--gag-accent-ink</code></td>
+<td><code>#2456c9</code>, Lc 81.4</td>
+<td><code>hsl(220 82% 78%)</code>, Lc 61.5</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The dark values are capped, not chosen.</strong> Slate's own body text is only
+<code>Lc 66.9</code>, so muted prose that reached 75 would out-contrast the body copy it is
+meant to sit beneath. 55.6 and 61.5 are the most those tokens can carry while
+the hierarchy holds; raising the ceiling means raising Material's palette, which
+is Q734. Dark therefore still reads below the body-text floor, by design and on
+the record.</p>
+<p>Two things the rule does <strong>not</strong> cover. A short badge label (<code>.gag-v2-badge</code>,
+<code>.gag-maturity-badge</code>, measured Lc 64 to 71 on their own chip backgrounds) is
+spot text a reader recognises rather than reads, so the body-text floor is the
+wrong bar for it. And an icon carries the non-text bar, not this one.</p>
+<p><strong>Known residue, so the sweep is not read as a pass/fail gate.</strong> APCA asks
+<code>Lc</code> 90 of 16px regular-weight prose, and muted text that reached 90 on white
+would be <code>#4a4a4a</code>: no longer muted, and no longer distinguishable from body
+copy. The tokens above deliberately stop short. What that leaves, measured on
+<code>/why-gag/</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Palette</th>
+<th>Below the strict floor</th>
+<th>Bounded by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Light</td>
+<td><code>.gag-flow__sub</code>, <code>.gag-flow__arrow</code> (Lc 75.2 against 90), <code>.gag-vs-row__text</code> (85.6 against 90)</td>
+<td>the size of the type, not the token: at 15.6px regular nothing short of near-body ink clears 90</td>
+</tr>
+<tr>
+<td>Dark</td>
+<td>ten selectors, Lc 55.6 to 69.3</td>
+<td>Q734: slate's body copy is itself Lc 66.9, so <code>.gag-flow__title</code> and <code>.gag-vs-row__text</code> sit at the palette ceiling rather than at a token we chose</td>
+</tr>
+</tbody>
+</table>
+<p>Treat the sweep as a <strong>comparison against these numbers</strong>, not as a list that
+must be empty. A new entry, or an existing one that drops, is the finding.</p>
+<p><code>getComputedStyle</code> returns the token unresolved, so the alpha has to be
+composited against the real ancestor background before it means anything:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// make docs-serve, then on any page. Returns [] when the page is clean.</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">apca</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">                       </span><span class="c1">// APCA 0.98G-4g</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">Y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">c</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">v</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">(</span><span class="nx">v</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">255</span><span class="p">)</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mf">2.4</span><span class="p">;</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mf">0.2126729</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">f</span><span class="p">(</span><span class="nx">c</span><span class="p">[</span><span class="mf">0</span><span class="p">])</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.7151522</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">f</span><span class="p">(</span><span class="nx">c</span><span class="p">[</span><span class="mf">1</span><span class="p">])</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.0721750</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">f</span><span class="p">(</span><span class="nx">c</span><span class="p">[</span><span class="mf">2</span><span class="p">]);</span><span class="w"> </span><span class="p">};</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nx">Yt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Y</span><span class="p">(</span><span class="nx">t</span><span class="p">),</span><span class="w"> </span><span class="nx">Yb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Y</span><span class="p">(</span><span class="nx">b</span><span class="p">);</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">Yt</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.022</span><span class="p">)</span><span class="w"> </span><span class="nx">Yt</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="p">(</span><span class="mf">0.022</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">Yt</span><span class="p">)</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mf">1.414</span><span class="p">;</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">Yb</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.022</span><span class="p">)</span><span class="w"> </span><span class="nx">Yb</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="p">(</span><span class="mf">0.022</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">Yb</span><span class="p">)</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mf">1.414</span><span class="p">;</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">Math</span><span class="p">.</span><span class="nx">abs</span><span class="p">(</span><span class="nx">Yb</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">Yt</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0005</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="mf">0</span><span class="p">;</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="p">[</span><span class="nx">S</span><span class="p">,</span><span class="w"> </span><span class="nx">off</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Yb</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="nx">Yt</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="o">?</span><span class="w"> </span><span class="p">[(</span><span class="nx">Yb</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mf">0.56</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">Yt</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mf">0.57</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">1.14</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mf">0.027</span><span class="p">]</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="p">[(</span><span class="nx">Yb</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mf">0.65</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">Yt</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mf">0.62</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">1.14</span><span class="p">,</span><span class="w"> </span><span class="mf">0.027</span><span class="p">];</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">abs</span><span class="p">(</span><span class="nx">S</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.1</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mf">0</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">round</span><span class="p">(</span><span class="nb">Math</span><span class="p">.</span><span class="nx">abs</span><span class="p">(</span><span class="nx">S</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">off</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">1000</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">10</span><span class="p">;</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">};</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="kd">const</span><span class="w"> </span><span class="nx">rgb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">s</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">s</span><span class="p">.</span><span class="nx">match</span><span class="p">(</span><span class="sr">/[\d.]+/g</span><span class="p">);</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">m</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">m</span><span class="p">.</span><span class="nx">slice</span><span class="p">(</span><span class="mf">0</span><span class="p">,</span><span class="w"> </span><span class="mf">3</span><span class="p">).</span><span class="nx">map</span><span class="p">(</span><span class="nb">Number</span><span class="p">).</span><span class="nx">concat</span><span class="p">(</span><span class="nx">m</span><span class="p">[</span><span class="mf">3</span><span class="p">]</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="kc">undefined</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mf">1</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="o">+</span><span class="nx">m</span><span class="p">[</span><span class="mf">3</span><span class="p">]);</span><span class="w"> </span><span class="p">};</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="kd">const</span><span class="w"> </span><span class="nx">over</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">f</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">f</span><span class="p">.</span><span class="nx">slice</span><span class="p">(</span><span class="mf">0</span><span class="p">,</span><span class="w"> </span><span class="mf">3</span><span class="p">).</span><span class="nx">map</span><span class="p">((</span><span class="nx">c</span><span class="p">,</span><span class="w"> </span><span class="nx">i</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">round</span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">f</span><span class="p">[</span><span class="mf">3</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">b</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="mf">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">f</span><span class="p">[</span><span class="mf">3</span><span class="p">])));</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="kd">const</span><span class="w"> </span><span class="nx">bgOf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">el</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">st</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[];</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nx">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">el</span><span class="p">;</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="nx">e</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">e</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="nb">document</span><span class="p">.</span><span class="nx">documentElement</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">rgb</span><span class="p">(</span><span class="nx">getComputedStyle</span><span class="p">(</span><span class="nx">e</span><span class="p">).</span><span class="nx">backgroundColor</span><span class="p">);</span>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">c</span><span class="p">[</span><span class="mf">3</span><span class="p">]</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">st</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">c</span><span class="p">);</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="p">[</span><span class="mf">3</span><span class="p">]</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="mf">1</span><span class="p">)</span><span class="w"> </span><span class="k">break</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span><span class="nx">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">e</span><span class="p">.</span><span class="nx">parentElement</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nx">base</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">rgb</span><span class="p">(</span><span class="nx">getComputedStyle</span><span class="p">(</span><span class="nb">document</span><span class="p">.</span><span class="nx">body</span><span class="p">).</span><span class="nx">backgroundColor</span><span class="p">).</span><span class="nx">slice</span><span class="p">(</span><span class="mf">0</span><span class="p">,</span><span class="w"> </span><span class="mf">3</span><span class="p">);</span>
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">let</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">st</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="o">--</span><span class="p">)</span><span class="w"> </span><span class="nx">base</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">over</span><span class="p">(</span><span class="nx">st</span><span class="p">[</span><span class="nx">i</span><span class="p">],</span><span class="w"> </span><span class="nx">base</span><span class="p">);</span>
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">base</span><span class="p">;</span><span class="w"> </span><span class="p">};</span>
+<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
+<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="p">[</span><span class="s2">&quot;default&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;slate&quot;</span><span class="p">].</span><span class="nx">flatMap</span><span class="p">(</span><span class="nx">scheme</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="w">  </span><span class="nb">document</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">setAttribute</span><span class="p">(</span><span class="s2">&quot;data-md-color-scheme&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">scheme</span><span class="p">);</span>
+<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">&#39;[class*=&quot;gag-&quot;], [class*=&quot;persona-&quot;]&#39;</span><span class="p">)]</span>
+<a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="w">    </span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">el</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">el</span><span class="p">.</span><span class="nx">getClientRects</span><span class="p">().</span><span class="nx">length</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">el</span><span class="p">.</span><span class="nx">textContent</span><span class="p">.</span><span class="nx">trim</span><span class="p">())</span>
+<a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="w">    </span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">el</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">cs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">getComputedStyle</span><span class="p">(</span><span class="nx">el</span><span class="p">),</span><span class="w"> </span><span class="nx">bg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">bgOf</span><span class="p">(</span><span class="nx">el</span><span class="p">),</span><span class="w"> </span><span class="nx">fg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">rgb</span><span class="p">(</span><span class="nx">cs</span><span class="p">.</span><span class="nx">color</span><span class="p">);</span>
+<a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="w">      </span><span class="kd">const</span><span class="w"> </span><span class="nx">px</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">parseFloat</span><span class="p">(</span><span class="nx">cs</span><span class="p">.</span><span class="nx">fontSize</span><span class="p">);</span>
+<a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">scheme</span><span class="p">,</span><span class="w"> </span><span class="nx">cls</span><span class="o">:</span><span class="w"> </span><span class="nx">el</span><span class="p">.</span><span class="nx">className</span><span class="p">,</span><span class="w"> </span><span class="nx">px</span><span class="p">,</span><span class="w"> </span><span class="nx">Lc</span><span class="o">:</span><span class="w"> </span><span class="nx">apca</span><span class="p">(</span><span class="nx">fg</span><span class="p">[</span><span class="mf">3</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">1</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">over</span><span class="p">(</span><span class="nx">fg</span><span class="p">,</span><span class="w"> </span><span class="nx">bg</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="nx">fg</span><span class="p">,</span><span class="w"> </span><span class="nx">bg</span><span class="p">),</span>
+<a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="w">               </span><span class="nx">need</span><span class="o">:</span><span class="w"> </span><span class="nx">px</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">24</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mf">60</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="nx">px</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">18</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="o">+</span><span class="nx">cs</span><span class="p">.</span><span class="nx">fontWeight</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">700</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mf">75</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mf">90</span><span class="w"> </span><span class="p">};</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a><span class="w">    </span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">Lc</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">need</span><span class="p">);</span>
+<a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a><span class="p">});</span>
+</code></pre></div>
+<p>Sanity-check any reimplementation against the published anchors before trusting
+a verdict: black on white is <code>Lc 106</code>, <code>#888</code> on white is <code>Lc 63.1</code>, and white on
+white is <code>0</code>.</p>
+<p>The animation rule needs its own gate, because <code>transitionProperty</code> computes to
+<code>all</code> on <strong>every</strong> element that has no transition at all. Reading it directly
+reports the entire DOM as a violation, which is indistinguishable from a real
+finding until you notice the count:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">&#39;[class*=&quot;gag-&quot;], [class*=&quot;persona-&quot;]&#39;</span><span class="p">)].</span><span class="nx">flatMap</span><span class="p">(</span><span class="nx">el</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">cs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">getComputedStyle</span><span class="p">(</span><span class="nx">el</span><span class="p">);</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">durs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">cs</span><span class="p">.</span><span class="nx">transitionDuration</span><span class="p">.</span><span class="nx">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">).</span><span class="nx">map</span><span class="p">(</span><span class="nb">parseFloat</span><span class="p">);</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">durs</span><span class="p">.</span><span class="nx">some</span><span class="p">(</span><span class="nx">d</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0</span><span class="p">))</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="p">[];</span><span class="w">                       </span><span class="c1">// no real transition</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">cs</span><span class="p">.</span><span class="nx">transitionProperty</span><span class="p">.</span><span class="nx">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">).</span><span class="nx">map</span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">s</span><span class="p">.</span><span class="nx">trim</span><span class="p">())</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="p">.</span><span class="nx">filter</span><span class="p">((</span><span class="nx">p</span><span class="p">,</span><span class="w"> </span><span class="nx">i</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">durs</span><span class="p">[</span><span class="nx">i</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="nx">durs</span><span class="p">.</span><span class="nx">length</span><span class="p">]</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">      </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">&quot;all&quot;</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="sr">/^(top|left|right|bottom|width|height|margin|padding|inset)/</span><span class="p">.</span><span class="nx">test</span><span class="p">(</span><span class="nx">p</span><span class="p">)))</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">el</span><span class="p">.</span><span class="nx">className</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot; → &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">p</span><span class="p">);</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="p">});</span><span class="w">                                                            </span><span class="c1">// must be []</span>
+</code></pre></div>
+<p><strong><code>rem</code> is 20px here, not 16px.</strong> Material sets the root to 125%, so a source
+read of <code>font-size: 0.95rem</code> on the calculator inputs suggests 15.2px and a
+mobile Safari zoom-on-focus, and the render is 19px with no zoom. Convert
+against 20px, or measure, before filing a size finding.</p>
 <h2 id="local-preview">Local preview<a class="headerlink" href="#local-preview" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
 </code></pre></div>
 <p>Both targets provision an <strong>isolated venv</strong> (<code>.venv-docs/</code>, gitignored) from the
 pinned <code>requirements-docs.txt</code> and reuse it across runs, so the docs toolchain
@@ -3573,9 +3750,9 @@ never fails a build, so <code>mkdocs.yml</code> raises <code>validation.nav.omit
 <code>warn</code> and <code>--strict</code> turns it into an error — the same INFO-to-warning move
 <a href="#the-two-link-gates">§ The two link gates</a> makes for links. Add a page and
 <code>make docs-build</code> fails until it is either in <code>nav</code> or declared in <code>not_in_nav</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>The following pages exist in the docs directory, but are not included in the &quot;nav&quot; configuration:
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>  - operations/your-new-page.md
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>Aborted with 1 warnings in strict mode!
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>The following pages exist in the docs directory, but are not included in the &quot;nav&quot; configuration:
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>  - operations/your-new-page.md
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>Aborted with 1 warnings in strict mode!
 </code></pre></div>
 <p>Both scopes are checked, because nav coverage is decided per build: a
 <code>development/</code> page is a page only on <code>dev</code>, so the release-scope build cannot
