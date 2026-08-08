@@ -12,6 +12,26 @@ deploy/dogfood-e2e/
     kata/               # Kata micro-VM    — strong isolation (untrusted PRs)          ← the default (live-validated, Q286)
 ```
 
+**The worker pod shape is not here.** Each overlay consumes a
+[shipped library entry](../templates/README.md) as a second base
+(`../../../templates/kata-dind`, `../../../templates/privileged-dind`) and
+patches in only this cluster's specifics: the build-capable runner image, the
+GKE node pool and taint, and (kata) the block StorageClass. That inversion is
+the point: an operator applying `deploy/templates/kata-dind` gets byte-for-byte
+what this suite runs jobs on, minus declared patches, so the shipped artifact
+cannot silently drift from its validation (Q554).
+
+Two consequences worth knowing before editing an overlay:
+
+- **Patch the template with JSON 6902, never a strategic merge.** kustomize has
+  no schema for a CRD, so a strategic merge degrades to an RFC 7386 JSON merge
+  patch and replaces lists wholesale: a patch naming `initContainers` drops the
+  dind container's image, restartPolicy, capabilities and probe, at exit 0.
+  `make template-library-check` fails on it, and also on an overlay that stops
+  consuming the library.
+- The template objects are named for the library entry (`kata-dind`,
+  `privileged-dind`), not for this tenant.
+
 ## The two variants
 
 | | **dind** (privileged) | **kata** |
@@ -30,8 +50,8 @@ deploy/dogfood-e2e/
 ¹ PSS **baseline** forbids the capability adds the unprivileged dockerd needs
 (`SYS_ADMIN`, `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`, `NET_RAW`) and PSA is not
 Kata-aware, so the namespace still needs the privileged PSA level (envtest-verified —
-see [overlays/kata/resources.yaml](overlays/kata/resources.yaml)). What pins the pod
-unprivileged is the platform-owned `ClusterRunnerTemplate`, not the PSA label.
+see [`templates/kata-dind/template.yaml`](../templates/kata-dind/template.yaml)). What pins
+the pod unprivileged is the platform-owned `ClusterRunnerTemplate`, not the PSA label.
 
 ² The shared RunnerSet in [base/resources.yaml](base/resources.yaml) selects the
 `NodeShare` sizing profile, so the runner container's CPU **request** is derived
@@ -137,7 +157,8 @@ registry — version-pinned this time — rather than working around it.
   deterministic — this run concluded cleanly; Q247's renewal + self-teardown
   fixes (resolved) hardened it.
 - **Pod sizing is measured, not guessed** ([Q248](../../docs/STATUS.md#Q248)): the
-  worker pod's `requests`/`limits` in [`overlays/dind/resources.yaml`](overlays/dind/resources.yaml)
+  worker pod's `requests`/`limits`, now shipped in
+  [`templates/privileged-dind/template.yaml`](../templates/privileged-dind/template.yaml),
   are derived from that run's peak — the `runner` is CPU-heavy (~4940m peak, the
   e2e specs + CLI), the `dind` sidecar is memory-heavy (~2343Mi peak, the in-DinD
   `kind`+Calico cluster). CPU is requests-only (no limit → bursts); `runner(3)+dind(1)=4`
@@ -156,9 +177,9 @@ registry — version-pinned this time — rather than working around it.
   Kata turns CPU limits into guest vCPUs and memory limits into the guest's whole
   RAM (page cache included), with none of the dind overlay's burst-to-node
   headroom — the first live run with the dind-derived split starved the in-dind
-  kind cluster (calico-node probe timeouts). The overlay splits the guest evenly
+  kind cluster (calico-node probe timeouts). The template splits the guest evenly
   (dind 4 cpu / 8Gi, runner 4 cpu / 4Gi); rationale inline in
-  [`overlays/kata/resources.yaml`](overlays/kata/resources.yaml).
+  [`templates/kata-dind/template.yaml`](../templates/kata-dind/template.yaml).
 
 The dogfood e2e path (this tree + `scripts/dogfood/e2e-{setup,start,stop}.sh`)
 is authored at `actions-gateway.com/v2beta1` (ScaleSet, single `runnerLabel`) and

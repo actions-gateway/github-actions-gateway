@@ -75,6 +75,9 @@ jobs:
               - 'cmd/agc/config/**'
               - 'cmd/gmc/config/**'
               - 'charts/**'
+              # The shipped runner template library, yamllint'd by this gate as
+              # hand-authored YAML an operator applies directly (Q554).
+              - 'deploy/templates/**'
               - '.yamllint.yaml'
               - 'Makefile'
               # scripts/manifest/ is exactly this gate's backends — the validator
