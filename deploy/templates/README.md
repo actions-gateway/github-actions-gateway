@@ -27,13 +27,18 @@ a template name: it is the DinD shape, delivered as `kata-dind` or
 |---|---|---|
 | Unit tests, lint, deploys, anything that does not build images | `plain` | No daemon, no capabilities. The only entry that composes with the AGC's security gap-fill instead of opting out of it. |
 | Build container images, run `docker compose`, run a nested cluster (kind) | `kata-dind` | A real Docker daemon whose blast radius is a throwaway guest kernel. Needs nested virtualisation and a Kata runtime on the nodes. |
-| The same, on nodes that cannot do nested virtualisation | `privileged-dind` | Same daemon, no isolation. Trusted jobs only. |
+| The same, where Kata is not available | `privileged-dind` | Same daemon, no isolation. Trusted jobs only. |
 | Build images without a daemon at all | none of these | Rootless BuildKit or Kaniko run under `plain`. See [in-runner-image-builds.md](../../docs/operations/in-runner-image-builds.md). |
 
-`privileged-dind` is the fallback, never the starting point. A privileged
-dockerd exposes the host kernel to every job that lands on it, so an escape
-reaches the node. Reach for `kata-dind` first, and for a rootless builder before
-either.
+Reach for `kata-dind` first, and for a rootless builder before either: a
+privileged dockerd exposes the host kernel to every job that lands on it, so an
+escape reaches the node.
+
+`privileged-dind` is not merely a fallback for the unlucky, though. Kata needs
+nested virtualisation or bare metal, which rules out GPU builds (a GPU cannot be
+passed through into a nested guest), every AMD- and Arm-powered GCE machine
+family, and any AWS instance that is not `.metal`. The operator doc
+[sets out where Kata is and is not an option](../../docs/operations/runner-template-library.md#choosing-an-entry).
 
 ## Before you apply
 
