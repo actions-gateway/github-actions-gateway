@@ -177,6 +177,8 @@ spec:
 
 Selects proxy pods by `app: actions-gateway-proxy`. Allows ingress only from "workload" pods on port 8080, and egress only to GitHub IP ranges (port 443) and DNS.
 
+A bare `podSelector` peer means *this policy's own namespace*, which is what keeps a v2 `EgressProxy` same-namespace-only unless its owner shares it. When `spec.sharing.allowedNamespaces` names a namespace, the reconciler adds one more ingress rule per granted namespace (Q166, M4): each is a **single** peer carrying both a `namespaceSelector` (on `kubernetes.io/metadata.name`) and the same workload `podSelector`. The two must sit in one peer so they AND; as two entries of `from` they would OR, admitting every pod in the granted namespace *and* every workload pod cluster-wide. The consumer side gets the mirror-image egress peer, and traffic needs both. See [§H.9](appendix-h-v2-api-decomposition.md#h9-cross-namespace-proxy-sharing) and the operator runbook [security-operations.md § Sharing an egress proxy across namespaces](../operations/security-operations.md#sharing-an-egress-proxy-across-namespaces).
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

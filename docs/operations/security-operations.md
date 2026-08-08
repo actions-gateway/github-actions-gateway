@@ -47,6 +47,7 @@ Two detection substrates are used:
   - [Managing egress at scale](#managing-egress-at-scale)
   - [Expressing GitHub egress by FQDN: the `egressPolicyMode` opt-in](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)
 - [Worker egress destinations: the egress allowlist](#worker-egress-destinations-the-egress-allowlist)
+- [Sharing an egress proxy across namespaces](#sharing-an-egress-proxy-across-namespaces)
 - [Tightening AGC apiserver egress: the `apiserver-cidrs` allowlist](#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist)
 - [GitHub API base URL must be HTTPS](#github-api-base-url-must-be-https)
 - [Priority classes: the `allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
@@ -1071,6 +1072,99 @@ get/list/watch on that one ConfigMap (no cluster-wide ConfigMap read). The effec
 allowlist is the union of the flags and the ConfigMap, enforced by the EgressProxy
 validating webhook on every create/update — a destination outside it is rejected with
 a message naming the effective allowlist.
+
+---
+
+## Sharing an egress proxy across namespaces
+
+By default an `EgressProxy` serves only its own namespace. One proxy pool can serve
+several namespaces (a platform-operated central pool, or a set of cooperating teams),
+but only if the **proxy's owner** says so.
+
+### Consent lives on the provider
+
+Naming a proxy from the consumer side authorizes nothing. The proxy owner lists the
+namespaces permitted to use it:
+
+```yaml
+apiVersion: actions-gateway.com/v2beta1
+kind: EgressProxy
+metadata:
+  name: shared-pool
+  namespace: platform-egress
+spec:
+  sharing:
+    allowedNamespaces:
+      - team-a
+      - team-b
+```
+
+A consumer then names the proxy and its namespace:
+
+```yaml
+apiVersion: actions-gateway.com/v2beta1
+kind: ActionsGateway
+metadata:
+  name: gateway
+  namespace: team-a
+spec:
+  defaultProxyRef:
+    name: shared-pool
+    namespace: platform-egress
+```
+
+The same `namespace` field is available on `RunnerSet.spec.proxyRef`. Omitting it
+means the referrer's own namespace, which is what every pre-existing manifest does,
+so nothing changes for them.
+
+### What you must not assume
+
+**A shared proxy is a shared egress identity.** Every namespace using the pool leaves
+GitHub from the same addresses, so per-tenant egress attribution no longer holds
+between them. Share a proxy between tenants you are willing to treat as one for
+attribution purposes; give mutually-distrusting tenants their own pools.
+
+**Only the public certificate crosses the boundary.** The GMC copies the proxy's
+certificate into each granted namespace as a ConfigMap named
+`proxy-share-<provider-namespace>-<proxy-name>`. The private key stays in the
+provider namespace. That ConfigMap is GMC-owned: do not edit or delete it, and do not
+create one by hand expecting it to grant access, since the GMC reconciles it back.
+
+### Verifying a grant took effect
+
+```bash
+kubectl get configmap -n team-a -l actions-gateway/proxy-share=true
+```
+
+One entry per proxy `team-a` is entitled to. If it is missing, the grant has not been
+accepted; check the consumer's condition:
+
+```bash
+kubectl get actionsgateway -n team-a gateway -o jsonpath='{.status.conditions}'
+```
+
+`Degraded` with reason `ProxyShareNotGranted` means the proxy exists but does not list
+this namespace. Reason `ProxyNotFound` means the name or namespace is wrong. Both fail
+closed: no worker pods run and no traffic is permitted while either is set.
+
+Confirm the provider side admits the consumer:
+
+```bash
+kubectl get networkpolicy -n platform-egress shared-pool-proxy -o yaml
+```
+
+The ingress rules should carry one peer per granted namespace, each with **both** a
+`namespaceSelector` and a `podSelector` inside the same list entry. Two separate
+entries would mean "any pod in that namespace, or any workload pod anywhere". If you
+ever see that shape, treat it as a defect and report it.
+
+### Revoking
+
+Remove the namespace from `allowedNamespaces`. The GMC deletes the projected
+ConfigMap and drops the ingress peer, and the consumer's references go
+`ProxyShareNotGranted`. Revocation is immediate in the control plane; in-flight
+connections through the proxy end when their pods do, so drain the consumer's
+RunnerSets first if you need a clean cut.
 
 ---
 
