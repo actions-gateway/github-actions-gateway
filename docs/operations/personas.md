@@ -19,32 +19,47 @@ side versus tenant side.** A tenant operator cannot raise their own quota or
 self-grant privilege no matter who they report to, and that is checked by RBAC,
 admission, and a quota the control plane cannot write.
 
-Everything else is a routing label for finding the right document. In
-particular, **platform engineer and SRE are the same side and often the same
-person.** The split between them is build-time against run-time, not permission:
-one installs and configures the control plane, the other responds when it pages
-at 03:00. That is why nine of the ten SRE-tagged pages in the
-[index](README.md) also carry Platform engineer, and why none of them carries
-Tenant operator.
+Everything else is a routing label for finding the right document.
 
-Read it as two questions rather than a job title. Which side of the tenancy
-boundary are you on, and are you setting this up or running it?
+**On-call is a mode, not a role.** Both sides get paged, for different things:
+the platform side when the control plane misbehaves, the tenant side when one
+namespace's CI does. Whoever is carrying the pager already appears below under
+the side they sit on, so there is no separate on-call persona on this page.
+
+**"SRE" is a job title, and it lands on either side.** In this doc tree it is
+tagged platform-side: of the eleven SRE-tagged pages in the [index](README.md),
+nine also carry Platform engineer and none carries Tenant operator. That
+describes how these pages are written, not how any particular organisation
+staffs the work. Plenty of teams call the person who owns one tenant's CI an
+SRE, and this page calls that role Tenant operator regardless of title.
+
+Read it as one question rather than a job title: which side of the tenancy
+boundary are you on?
 
 ## The roles
 
 ### Platform engineer
 
-Owns the cluster and everything shared in it.
+Owns the cluster and everything shared in it, and carries the pager when the
+control plane itself misbehaves.
 
 **Owns:** the GMC install and upgrades; the `actions-gateway.github.com/tenant`
 namespace marker; each tenant namespace's `ResourceQuota`; the
 [`PriorityClassAllowlist`](security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298);
 `ClusterRunnerTemplate` objects; the Pod Security Admission level and the
 `privileged-profile: allowed` grant; whether the cluster has a node autoscaler.
+At 03:00 the same person owns the [shipped alerts](observability-alerting.md),
+the [runbook](runbook.md), [backup and restore](backup-restore.md), and
+upgrades.
 
 **Cannot, by design:** be required in the loop for a tenant's day-to-day runner
 changes. If adding a runner shape or adjusting concurrency needs a platform
 ticket, the model has failed.
+
+**Needs, specifically:** failure modes that surface as a named condition, an
+Event, and a metric rather than as a log line to grep. The
+[troubleshooting guide](troubleshooting.md) is organised by observable symptom
+for this reason.
 
 **Notably does not own:** the `ResourceQuota` through GAG. The GMC holds no
 write verb on `resourcequotas`, so the quota is set on the namespace by the
@@ -53,14 +68,23 @@ quota a real cap rather than a suggestion.
 
 ### Tenant operator
 
-Owns one namespace's CI. Often an SRE by job title, which is exactly why the
-title is not the useful axis: what separates this role from the two above is
-that it sits on the **tenant** side of the boundary, with a smaller set of
-powers that the platform enforces rather than grants by convention.
+Owns one namespace's CI end to end: the runner configuration **and** the
+workflow files in the repositories being tested. Usually one person per tenant,
+sometimes one person across several similar tenants. When that team's CI breaks
+at 03:00, this is who looks at it, whatever their job title says.
+
+**That span is the point.** `runs-on:` in a workflow and the `RunnerSet` that
+answers it are two halves of one job on one desk. It is why a migration that
+needs no workflow edit is worth something concrete to this person, and why a
+gap that forces one edit per target
+([migrating from ARC](migration-from-arc.md)) is a real cost rather than a
+detail. It is also why this role, not the platform engineer, is the one that
+has to be able to self-diagnose.
 
 **Owns:** the `ActionsGateway`, its `RunnerSet`s and `RunnerTemplate`s, the
 GitHub App credential Secret for their own organization, worker pod shape,
-concurrency ceilings, and their own `EgressProxy` if they use one.
+concurrency ceilings, their own `EgressProxy` if they use one, and the
+`runs-on` labels their workflows target.
 
 **Cannot, by design:** raise their own `ResourceQuota`; name a `PriorityClass`
 outside the platform's allowlist; author a privileged worker template; or read
@@ -68,21 +92,8 @@ another tenant's metrics, logs, or Secrets.
 
 **Should be able to:** answer "why is my job queued?" without opening a ticket.
 That is the test the [tenant dashboard](observability-dashboards.md#tenant-dashboard)
-and the per-tenant metrics exist to pass.
-
-### SRE / on-call
-
-Owns keeping it running, often across tenants, often at an unsociable hour.
-**Platform side**, with the same privileges as the platform engineer above; the
-difference is the moment, not the permission set.
-
-**Owns:** responding to the [shipped alerts](observability-alerting.md), the
-[runbook](runbook.md), [backup and restore](backup-restore.md), and upgrades.
-
-**Needs, specifically:** a failure mode that surfaces as a named condition, an
-Event, and a metric rather than as a log line to grep. The
-[troubleshooting guide](troubleshooting.md) is organised by observable symptom
-for this reason.
+and the per-tenant metrics exist to pass, and the reason it matters is that the
+person asking is also the person who has to fix it.
 
 ### Security / compliance
 
@@ -140,7 +151,13 @@ A doc's audience is recorded in two places, deliberately:
    and deep-links back to the filtered index.
 
 They must agree. There is no CI check, so when you retag a doc, update both. Use
-the role names on this page verbatim: an unlisted spelling silently creates a
+the tag names already in use verbatim: an unlisted spelling silently creates a
 new chip that matches one document. "Tenant operator" is the correct name for
 the namespace-owning role; "Tenant owner" was a drifted variant and has been
 normalised.
+
+**The tag set and the role list are not the same list, on purpose.** `SRE` is a
+tag but not a role above, because it is a job title that both sides use; it
+stays as a chip because eleven pages carry it and readers search by it. Tag a
+page `SRE` when its reader is holding a pager, and pair it with the side that
+reader is on.
