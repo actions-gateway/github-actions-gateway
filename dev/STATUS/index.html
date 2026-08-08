@@ -2835,7 +2835,7 @@
 <td><code>ci</code> <code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-08: testing.md went 593 to 594 (#1340) to 595 (#1342); each PR sat within the 594 ceiling on its own base, so only the merge result is over and per-PR CI cannot see it. #1338 cut one. Ratchet on the diff, not the total.</td>
+<td>Measured 2026-08-08 twice: testing.md 593 to 595 (#1340, #1342), caught; then CONTRIBUTING.md 48 to 50 (#1348, #1349), which broke <code>main</code>. Each PR sits within its ceiling on its own base, so per-PR CI cannot see the merge result. Ratchet on the diff.</td>
 </tr>
 <tr>
 <td><a id="Q738"></a>Q738</td>
@@ -2852,6 +2852,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge. Q742 ratchets the em-dash ceiling; this covers the other 4 gates and any later ratchet. Needs Q574's paths-filter <code>changes</code> job.</td>
+</tr>
+<tr>
+<td><a id="Q750"></a>Q750</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#re-check-concurrent-work-before-opening">The broken-main exception duplicates one fix across every in-flight session</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Decided 2026-08-08: a main fix never rides in an unrelated PR. Search for a standalone fix; wait and rebase if one is open, own it if none is. The claim is a draft PR, which the Q668 hook reads. Measured: 4 sessions fixed one overrun; 2 collided.</td>
 </tr>
 <tr>
 <td><a id="Q166"></a>Q166</td>
