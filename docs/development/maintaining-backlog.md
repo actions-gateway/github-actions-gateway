@@ -206,6 +206,30 @@ Rows that name an unknown are honest and useful — several in the Queue say "un
 
 **The cost a row asserts is a claim too, and it shapes the approach before the work starts.** A row that names what a fix will *require* hands the next session a plan, and a plan is harder to question than a diagnosis, because it arrives sounding like scope rather than analysis. Q658 said adding a fifth tile to a full dashboard row "shifts every `gridPos` below y=52 and needs a `render.sh` re-shoot". That is true of the obvious approach, and taking it would have moved four rows and fourteen panels. The dashboard had already solved the problem one row below: five tiles fit 24 columns as 4×w5 plus one w4, so the shipped change touched only `y=46` and nothing under it moved. State the constraint that is load-bearing ("the condition row is full at 4×w6") and leave the consequence to the session that can measure it; where a cost estimate is what sets the row's `Sz`, say which half of it was measured.
 
+### A completion note is a claim too, and it is the one nobody re-checks
+
+The rules above guard what a row asserts at filing time, when the next session is
+still expected to verify it. A **closure** note is read the other way round: it
+says the question is settled, so nobody opens the row again to check. That makes
+a wrong one strictly worse than an open row, because an open row invites the work
+and a falsely-closed row forecloses it.
+
+`plan/README.md` recorded Q60 as "verified + folded into
+[appendix-d](../design/appendix-d-alternatives-considered.md)". The Q60-closing
+commit added 34 lines about Kueue and Exostellar and contained **zero per-claim
+verification of the competitor it named**. The eleven unverified cells that row
+was supposed to check shipped into the published comparison table and stayed
+there, precisely because the index said the checking was done. Two of them went
+false at datable upstream releases before anyone re-measured
+([competitive-analysis-2026-08](../plan/competitive-analysis-2026-08.md#why-the-marketing-drifted-and-the-fix)).
+
+**Write the completion note from what the change did, not from what the row
+asked for.** The two diverge silently, because the row's title is sitting right
+there and it is easier to restate than to summarise a diff. Where the closing
+change did part of the work, say which part and leave the rest open: "folded the
+Kueue and Exostellar comparison into appendix-d; the ARC per-claim verification
+is still open" is one clause longer and would have kept the row alive.
+
 ### A row proposing a gate names what must stay green
 
 A row whose deliverable is a new assertion is a spec, and the hard half of an assertion is its false-positive boundary rather than the defect it catches. Name both: the shape that must go red, and a shape already in the tree that must stay green.

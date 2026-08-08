@@ -160,7 +160,9 @@ have reproduced the failure.
 **A related process defect:** `plan/README.md` recorded Q60 as "verified +
 folded into appendix-d". The Q60-closing commit added 34 lines about Kueue and
 Exostellar and contained zero ARC per-claim verification. A row asserting
-verification that did not happen is worse than an open row.
+verification that did not happen is worse than an open row: an open row invites
+the work, a falsely-closed one forecloses it. The rule this produced is
+[maintaining-backlog.md § A completion note is a claim too](../development/maintaining-backlog.md#a-completion-note-is-a-claim-too-and-it-is-the-one-nobody-re-checks).
 
 ## Verification lessons
 
