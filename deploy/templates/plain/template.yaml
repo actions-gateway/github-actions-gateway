@@ -1,0 +1,38 @@
+# Baseline runner: no Docker daemon, no elevated capabilities, no RuntimeClass.
+#
+# The entry to start from. It suits unit tests, linting, deploys and any job
+# that does not build container images, and it is the only library entry that
+# COMPOSES with the AGC's applySecurityDefaults gap-fill rather than opting out
+# of it: under the baseline profile the AGC stamps runAsNonRoot + a numeric
+# runAsUser + seccomp RuntimeDefault, and under restricted it additionally
+# stamps allowPrivilegeEscalation:false + drop ALL on every container. Both are
+# gap-fills, so the ABSENCE of a securityContext here is load-bearing — setting
+# one would pin a weaker floor than the profile the operator chose.
+#
+# Namespaced RunnerTemplate vs this cluster-scoped kind: nothing here is
+# platform-privileged, so a tenant may equally author this shape themselves as a
+# namespaced RunnerTemplate. It ships cluster-scoped so all three library
+# entries are selected the same way (templateRef.kind: ClusterRunnerTemplate)
+# and an operator can move between them by changing one name.
+apiVersion: actions-gateway.com/v2beta1
+kind: ClusterRunnerTemplate
+metadata:
+  name: plain
+spec:
+  # workerImage is deliberately unset: the AGC resolves the runner image from
+  # its own WORKER_IMAGE (set by the GMC on the AGC Deployment) and falls back
+  # to ghcr.io/actions/actions-runner. An operator with a customised runner
+  # image sets it here, or once cluster-wide. Unlike the two DinD entries this
+  # template needs nothing the stock image lacks.
+  podTemplate:
+    spec:
+      containers:
+        - name: runner
+          # image omitted on purpose — the AGC gap-fills the resolved worker
+          # image onto a runner container that names itself but sets no image.
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              memory: 4Gi

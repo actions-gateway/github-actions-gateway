@@ -433,10 +433,10 @@ tenant-onboarding quota formula is unchanged and remains correct — it sums onl
 declared container `limits`, so dropping the worker CPU limit simply drops that
 term (documented there as "a term with no value drops out").
 
-The right-sized **e2e-worker** `requests`/`limits` are baked into the DinD overlay's
-`ClusterRunnerTemplate` in
-[`deploy/dogfood-e2e/overlays/dind/resources.yaml`](../../deploy/dogfood-e2e/overlays/dind/resources.yaml)
-and its rationale mirrored in the deploy
+The right-sized **e2e-worker** `requests`/`limits` are baked into the DinD
+`ClusterRunnerTemplate`, promoted under Q554 into the shipped library at
+[`deploy/templates/privileged-dind/template.yaml`](../../deploy/templates/privileged-dind/template.yaml)
+(the dind overlay now consumes it as a base), and its rationale mirrored in the deploy
 [`README`](../../deploy/dogfood-e2e/README.md). Applied live and re-validated by a
 second clean-green Calico run. **All Q248 work is complete**: node disk class,
 general-worker sizing, e2e-worker sizing, and the (declined) small tier. The only

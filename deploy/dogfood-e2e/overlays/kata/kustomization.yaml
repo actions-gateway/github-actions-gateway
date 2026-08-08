@@ -3,25 +3,35 @@ kind: Kustomization
 # Kata micro-VM isolation variant — kind-in-Docker inside a KVM guest, with NO
 # privileged container anywhere (Q226 spike / Q286 rollout).
 #
+# The worker pod shape is the SHIPPED library entry ../../../templates/kata-dind
+# (Q554), consumed as a base here rather than restated. This overlay adds only
+# what is specific to GAG's own e2e cluster: the build-capable runner image, the
+# GKE node pool and taint, and the GKE block StorageClass. Everything an
+# operator would recognise as the Kata DinD shape — the unprivileged dockerd,
+# its six-step entrypoint, the guest-scoped capability set, the startup probe,
+# the raw block volume — lives in the library and is validated by this suite
+# running real jobs on it.
+#
 # The worker's dockerd runs UNPRIVILEGED: `runtimeClassName: kata` gives the pod
 # its own guest kernel, so the capabilities it does hold (SYS_ADMIN, NET_ADMIN,
-# SYS_RESOURCE, SYS_PTRACE — see resources.yaml) are scoped to that guest, not
-# the node. Cluster prerequisites (nested-virt node pool, Kata DaemonSet, the
-# `kata` RuntimeClass, Workload Identity) are set up by
-# scripts/dogfood/e2e-setup.sh, not kustomize.
+# SYS_RESOURCE, SYS_PTRACE) are scoped to that guest, not the node. Cluster
+# prerequisites (nested-virt node pool, Kata DaemonSet, the `kata` RuntimeClass,
+# Workload Identity) are set up by scripts/dogfood/e2e-setup.sh, not kustomize.
 #
-# The delta vs ../dind is exactly: the worker-isolation mechanism in the
-# ClusterRunnerTemplate. The namespace gates are IDENTICAL — see resources.yaml
-# for why Kata still needs the privileged PSA level despite the unprivileged pod.
+# The delta vs ../dind is exactly: which library entry is the base, plus this
+# variant's block-volume StorageClass. The namespace gates are IDENTICAL — see
+# ../../../templates/kata-dind/template.yaml for why Kata still needs the
+# privileged PSA level despite the unprivileged pod.
 resources:
   - ../../base
+  - ../../../templates/kata-dind
   - resources.yaml
 patches:
   # Namespace -> privileged PSA, same four gates as ../dind. NOT because the pod
   # is privileged (it is not — that is the point of this variant) but because
   # PSS *baseline* forbids adding the guest-scoped capabilities the unprivileged
   # dockerd needs, and PSA has no Kata-aware level between baseline and
-  # privileged. Rationale + envtest verification: resources.yaml.
+  # privileged. Rationale + envtest verification: the library entry's header.
   - patch: |
       apiVersion: v1
       kind: Namespace
@@ -33,8 +43,10 @@ patches:
           actions-gateway.com/privileged-profile: allowed
         annotations:
           actions-gateway.com/allow-profile-downgrade: allowed
-  # Point the RunnerSet at the Kata ClusterRunnerTemplate. The apiVersion must
-  # match the base RunnerSet (v2beta1) for the strategic-merge patch to target it.
+  # Point the RunnerSet at the library entry. The apiVersion must match the base
+  # RunnerSet (v2beta1) for the strategic-merge patch to target it; this patch
+  # touches only maps and scalars, which is why a strategic merge is safe here
+  # and is not safe against the template below.
   - patch: |
       apiVersion: actions-gateway.com/v2beta1
       kind: RunnerSet
@@ -43,5 +55,44 @@ patches:
         namespace: gag-dogfood-e2e
       spec:
         templateRef:
-          name: dogfood-e2e-kata
+          name: kata-dind
           kind: ClusterRunnerTemplate
+  # Cluster specifics onto the library template. JSON 6902, NOT a strategic
+  # merge: kustomize has no schema for a CRD and degrades a strategic merge to
+  # an RFC 7386 JSON merge patch, which replaces a list wholesale rather than
+  # merging it by key. A strategic-merge patch naming initContainers here would
+  # silently drop the dind container's image, restartPolicy, capabilities and
+  # probe, and render at exit 0 (measured, kustomize v5.8.1).
+  - target:
+      group: actions-gateway.com
+      version: v2beta1
+      kind: ClusterRunnerTemplate
+      name: kata-dind
+    patch: |
+      # Build-capable runner image (docker CLI + buildx + helm + kubectl + jq on
+      # the dogfood base — scripts/dogfood/e2e-runner/Dockerfile). The library
+      # ships an .invalid placeholder precisely so this patch is mandatory: an
+      # overlay that stopped supplying an image would fail at pull, loudly,
+      # rather than run jobs that cannot reach a Docker client.
+      - op: replace
+        path: /spec/workerImage
+        value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
+      # The e2e pool: c2-standard-8 spot with nested virtualisation, tainted so
+      # nothing else lands on it (scripts/dogfood/e2e-setup.sh).
+      - op: add
+        path: /spec/podTemplate/spec/nodeSelector
+        value:
+          cloud.google.com/gke-nodepool: e2e
+      - op: add
+        path: /spec/podTemplate/spec/tolerations
+        value:
+          - key: dedicated
+            value: e2e
+            effect: NoSchedule
+      # GKE's block-capable CSI class. The library leaves this unset so the
+      # cluster default applies; GKE's default (standard-rwo) is block-capable,
+      # but pinning it keeps the e2e worker independent of a cluster-default
+      # change.
+      - op: add
+        path: /spec/podTemplate/spec/volumes/0/ephemeral/volumeClaimTemplate/spec/storageClassName
+        value: standard-rwo

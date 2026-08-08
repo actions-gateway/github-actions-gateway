@@ -236,6 +236,7 @@ nav:
       - "Deprecations & the v2.0.0 removal": operations/v1alpha1-deprecation.md
       - Tenant onboarding: operations/tenant-onboarding.md
       - "ResourceQuota sizing": operations/resourcequota-sizing.md
+      - Runner template library: operations/runner-template-library.md
       - In-runner image builds: operations/in-runner-image-builds.md
       - "Kata DinD / image-build workloads": operations/kata-dind-workloads.md
       - "P2P image distribution": operations/p2p-image-distribution.md

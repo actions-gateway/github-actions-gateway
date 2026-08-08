@@ -1,0 +1,251 @@
+# Kata micro-VM DinD: a real Docker daemon with NO privileged container.
+#
+# The worker runs dockerd (and anything it starts, including a nested kind
+# cluster) inside a KVM guest via `runtimeClassName: kata`. The hypervisor, not
+# host privilege, is the isolation boundary. Every non-obvious line below was
+# live-validated on GKE — the Q226 spike (deploy/kata-ci/runner-pod.yaml is the
+# single-pod reference) and the Q286 rollout
+# (docs/plan/archive/kata-on-gke.md).
+#
+# SECURITY INVARIANT — nothing here may be relaxed to `privileged: true`. If a
+# step proves too tight, add a single guest-scoped capability and record why.
+# Relaxing it turns this entry into ../privileged-dind with extra cost.
+#
+# CLUSTER PREREQUISITES this template cannot express, and that the controllers
+# deliberately never install (docs/operations/kata-dind-workloads.md § "What GAG
+# does and does not manage"):
+#   - nodes with nested virtualisation, and a Kata runtime installed on them
+#     (kata-deploy or the distro's equivalent);
+#   - a RuntimeClass named `kata`. kata-deploy registers handler-named classes
+#     (`kata-qemu`, `kata-clh`, …); register `kata` as an alias, or patch
+#     runtimeClassName below to the handler you have;
+#   - a default StorageClass that supports `volumeMode: Block` (see volumes);
+#   - a metadata control — Workload Identity, IMDSv2 hop-limit 1, or a
+#     NetworkPolicy denying 169.254.169.254/32. Kata bounds the kernel, not the
+#     pod network: Q226 measured GKE's SA-token endpoint answering HTTP 200 from
+#     inside the guest.
+#
+# WHY THE NAMESPACE STILL NEEDS PSA `privileged`: PSS baseline forbids
+# capabilities.add beyond its fixed allowlist, and the unprivileged dockerd
+# needs SYS_ADMIN / NET_ADMIN / SYS_RESOURCE / SYS_PTRACE / NET_RAW
+# (guest-scoped under Kata, but PSA is not Kata-aware). Verified against a real
+# apiserver (envtest, 2026-07-16): enforce=baseline rejects this pod shape as
+# Forbidden; enforce=privileged admits it. The property "no privileged
+# container" is therefore enforced by this template being platform-owned
+# (cluster-scoped; tenants cannot author it), not by the PSA level.
+apiVersion: actions-gateway.com/v2beta1
+kind: ClusterRunnerTemplate
+metadata:
+  name: kata-dind
+spec:
+  # REPLACE BEFORE USE. The runner container needs a Docker CLI on PATH, which
+  # neither ghcr.io/actions/actions-runner nor the AGC's default worker image
+  # ships — the sidecar below provides the daemon, not the client. Pointing at a
+  # reserved .invalid host (RFC 2606) makes an unreplaced value fail loudly at
+  # image pull instead of succeeding into a job that dies on "docker: not
+  # found". scripts/dogfood/e2e-runner/Dockerfile is a worked example of a
+  # build-capable runner image; docs/operations/in-runner-image-builds.md covers
+  # the alternatives.
+  workerImage: example.invalid/build-capable-runner:replace-me
+  podTemplate:
+    spec:
+      runtimeClassName: kata
+      # An untrusted-PR CI runner has no business holding a Kubernetes API
+      # token. (Kata bounds the kernel, not the pod network — see the metadata
+      # control in the prerequisites above.)
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      # dind as a NATIVE sidecar (restartPolicy: Always init container, K8s
+      # >=1.29). Load-bearing: a regular sidecar's dockerd never exits, so the
+      # pod never completes, the AGC keeps the session active, and maxWorkers
+      # strands (Q249). Unlike ../privileged-dind this daemon is UNPRIVILEGED —
+      # uid 0 and the added capabilities are root of the guest VM only.
+      initContainers:
+        - name: dind
+          # docker:28-dind is what the Q226 spike validated. The image's own
+          # entrypoint is replaced because Kata needs six setup steps before
+          # dockerd (each discovered by running it — see the numbered comments).
+          image: docker:28-dind
+          restartPolicy: Always
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+
+              # 1. Give Docker a real filesystem. Kata surfaces emptyDir as
+              #    virtiofs, on which dockerd silently falls back to vfs and the
+              #    inner kubelet never gets healthy; a raw BLOCK volume arrives
+              #    as a virtio-blk device we mkfs.ext4. NOTE: docker:dind
+              #    declares VOLUME /var/lib/docker and Kata pre-mounts virtiofs
+              #    there, so test for OUR device — not merely the mountpoint —
+              #    and mount ext4 over the virtiofs entry.
+              #    (Q286, root-caused live) Do NOT gate mkfs on blkid:
+              #    docker:dind's blkid is BUSYBOX blkid, which exits 0 on a
+              #    blank device, so `blkid || mkfs` skips the mkfs on every
+              #    fresh PVC and the mount fails EINVAL (no filesystem). The
+              #    Q226 spike never hit this because its static PVC had been
+              #    formatted once by hand. Mount-first, mkfs on failure: the
+              #    device is a per-pod disposable cache, so reformat-on-any-
+              #    mount-failure is always safe.
+              [ -b /dev/dockerblk ] || { echo "FATAL: /dev/dockerblk is not a block device"; ls -la /dev/dockerblk 2>&1 || true; exit 1; }
+              mkdir -p /var/lib/docker
+              grep -q "^/dev/dockerblk /var/lib/docker " /proc/mounts \
+                || mount -t ext4 /dev/dockerblk /var/lib/docker 2>/dev/null \
+                || { mkfs.ext4 -F /dev/dockerblk >/dev/null \
+                     && mount -t ext4 /dev/dockerblk /var/lib/docker; } \
+                || { echo "FATAL: ext4 mkfs+mount of /dev/dockerblk failed:"; dmesg 2>/dev/null | tail -5 || true; exit 1; }
+
+              # 2. The Kata guest's /dev has no kernel-log device, and a nested
+              #    kubelet hard-requires one (needs CAP_MKNOD; it is the GUEST's
+              #    kernel log).
+              [ -e /dev/kmsg ] || mknod /dev/kmsg c 1 11
+
+              # 3. /sys/fs/cgroup and /proc/sys are mounted read-only for a
+              #    non-privileged container. runc must mkdir cgroups for nested
+              #    containers, and Docker writes per-veth ipv6 sysctls. Under
+              #    Kata BOTH trees belong to the GUEST kernel, so remounting rw
+              #    (CAP_SYS_ADMIN) grants nothing on the host — under plain runc
+              #    the same tree is the host's, which is exactly why classic
+              #    DinD demands privileged: true.
+              mount -o remount,rw /sys/fs/cgroup
+              mount -o remount,rw /proc/sys
+
+              # 4. cgroup v2 forbids a cgroup holding processes AND delegating
+              #    controllers. Our shell + dockerd sit in the cgroupns root, so
+              #    systemd inside a nested node container cannot create
+              #    /init.scope ("Structure needs cleaning"). Evacuate the root,
+              #    then delegate. docker:dind's own entrypoint does this;
+              #    overriding `command` skips it.
+              mkdir -p /sys/fs/cgroup/init
+              xargs -rn1 < /sys/fs/cgroup/cgroup.procs > /sys/fs/cgroup/init/cgroup.procs 2>/dev/null || true
+              sed -e 's/ / +/g' -e 's/^/+/' < /sys/fs/cgroup/cgroup.controllers \
+                > /sys/fs/cgroup/cgroup.subtree_control
+
+              # 5. Standard dockerd — no --privileged, no DinD flags. tcp for
+              #    the runner container (DOCKER_HOST), unix for the checks here.
+              dockerd --host=tcp://0.0.0.0:2375 --host=unix:///var/run/docker.sock --tls=false \
+                >/var/log/dockerd.log 2>&1 &
+              pid=$!
+              i=0; while [ $i -lt 90 ]; do docker info >/dev/null 2>&1 && break; i=$((i+1)); sleep 1; done
+              # Fail loudly if storage silently fell back off overlay2 (the
+              #    step-1 failure signature) instead of wedging mid-job.
+              [ "$(docker info --format '{{.Driver}}')" = "overlay2" ] \
+                || { echo "FATAL: storage driver is not overlay2"; cat /var/log/dockerd.log; exit 1; }
+
+              # 6. kind (and anything else asking for an IPv6-enabled bridge)
+              #    writes ipv6 sysctls the guest does not have. Pre-create an
+              #    IPv4-only network named `kind`; kind reuses it. Harmless for
+              #    workloads that never touch kind.
+              docker network inspect kind >/dev/null 2>&1 || docker network create -d=bridge \
+                -o com.docker.network.bridge.enable_ip_masquerade=true \
+                -o com.docker.network.driver.mtu=1500 kind >/dev/null
+
+              echo "dockerd up on overlay2 (tcp://0.0.0.0:2375); kind network ready"
+              trap 'kill "$pid" 2>/dev/null' TERM INT
+              wait "$pid"
+          # Native-sidecar startup gate (Q286, found live): without it the
+          # kubelet starts the runner as soon as the sidecar process has
+          # STARTED once — if dockerd is still coming up (or crash-looping),
+          # the runner registers, takes a job, and fails it with "Cannot
+          # connect to the Docker daemon". Gate main-container start on
+          # dockerd actually listening.
+          startupProbe:
+            tcpSocket:
+              port: 2375
+            periodSeconds: 5
+            failureThreshold: 36
+          securityContext:
+            # THE headline property of this entry: no privileged container.
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add:
+                # --- Docker's own default container capability set ---
+                - CHOWN
+                - DAC_OVERRIDE
+                - FSETID
+                - FOWNER            # image layer unpack chmods files it does not own
+                - MKNOD             # create /dev/kmsg; device nodes containers expect
+                - NET_RAW
+                - SETGID
+                - SETUID
+                - SETFCAP           # layer unpack restores file capabilities
+                - SETPCAP
+                - NET_BIND_SERVICE
+                - SYS_CHROOT        # runc setns() into the container mount namespace
+                - KILL
+                - AUDIT_WRITE
+                # --- extras a rootful dockerd + runc need (guest-scoped) ---
+                - SYS_ADMIN         # mount/remount, cgroup + namespace setup
+                - NET_ADMIN         # docker bridge + iptables NAT
+                - SYS_RESOURCE      # raise file-descriptor / process rlimits
+                - SYS_PTRACE        # runc nsenter / process inspection
+                # NOTE (Q286): a nested workload can only gain caps present in
+                # THIS bounding set, so a pod inside a nested cluster that
+                # requests a cap absent here fails with "unable to apply caps:
+                # operation not permitted". The fix is to tighten the nested
+                # workload (drop the cap request), NOT to widen this set. Only
+                # add a cap here if a workload genuinely cannot drop it.
+          # Under Kata the limits are the GUEST's whole world — vCPUs come from
+          # CPU limits and guest RAM (page cache included) from memory limits,
+          # with none of the burst-to-node headroom ../privileged-dind's
+          # requests-only idiom enjoys. These numbers are measured on GAG's own
+          # e2e (Q248 baseline, corrected live under Q286): the first live run
+          # with a dind-derived 3/5 CPU split starved the nested cluster. A
+          # nested kind cluster lives inside this container, so it gets the even
+          # CPU split and the larger memory share. Add the RuntimeClass overhead
+          # (250m/160Mi) when sizing nodes; the guest total (4+4 cpu,
+          # 12Gi+overhead) fits one worker per 8-vCPU node. Re-measure for your
+          # own workload — docs/operations/worker-rightsizing.md.
+          resources:
+            requests:
+              cpu: "2"
+              memory: 6Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          volumeDevices:
+            - name: docker-blk
+              devicePath: /dev/dockerblk
+      containers:
+        - name: runner
+          # image omitted: spec.workerImage above supplies it. The AGC injects
+          # the Q235 wrapper and preserves the native-sidecar init container.
+          env:
+            - name: DOCKER_HOST
+              value: "tcp://localhost:2375"
+          # CPU limit 4 splits the guest evenly with the dind side (see above);
+          # memory carries guest page cache. Requests runner(2)+dind(2)+
+          # overhead(0.25) still pack one worker per 8-vCPU node.
+          resources:
+            requests:
+              cpu: "2"
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+      volumes:
+        # Per-worker raw block device for /var/lib/docker (step 1 above). A
+        # generic ephemeral volume so each ephemeral worker pod gets its own
+        # PVC, created and DELETED with the pod — no orphaned disks (the Q226
+        # spike's static PVC outlived its cluster).
+        #
+        # storageClassName is deliberately unset so the cluster's DEFAULT
+        # StorageClass applies. That class must support volumeMode: Block —
+        # most CSI block drivers do, most file/NFS drivers do not. Set it
+        # explicitly if the default is not block-capable.
+        - name: docker-blk
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                volumeMode: Block
+                resources:
+                  requests:
+                    storage: 100Gi

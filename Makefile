@@ -113,7 +113,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    semver-floor-sources-check
+                    semver-floor-sources-check template-library-check
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
 .PHONY: check
@@ -249,6 +249,17 @@ license-header-check: ## Fail if any first-party .go file carries a per-file Apa
 conflict-markers-check: ## Fail if any tracked, non-vendored file contains a leftover merge-conflict marker line (Q379)
 	scripts/ci/check-conflict-markers.sh
 
+# The shipped runner template library (deploy/templates/) may contain only what
+# CI exercises (Q554). A golden template is an implicit validation claim, so an
+# entry nothing runs is indistinguishable from a validated one and the library
+# rots one plausible addition at a time. Reconciles the shipped set against the
+# dogfood e2e overlays that consume it, both directions, and holds every patch
+# against a ClusterRunnerTemplate to JSON 6902 — kustomize has no CRD schema, so
+# a strategic merge there silently replaces lists wholesale at exit 0.
+.PHONY: template-library-check
+template-library-check: ## Fail if deploy/templates/ ships an entry no dogfood e2e overlay exercises, or an overlay patches one unsafely (Q554)
+	scripts/ci/check-template-library.sh
+
 # Assert every file api/v2alpha1 and api/v2beta1 share stays byte-identical except
 # the differences an API version is entitled to — its package clause and the
 # storageversion marker (Q345, widened in Q374). Most of what sits beside the
@@ -341,6 +352,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
                  ci/gate-list-test ci/shellcheck-scripts-test \
                  ci/check-uses-pinned-test ci/run-parallel-test \
+                 ci/check-template-library-test \
                  docs/backlog-metrics-test docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \
                  docs/check-release-links-test \

@@ -148,6 +148,14 @@ jobs:
               # the shipped file rather than a copy, so a registry edit that
               # broke a pattern would otherwise land with its test never run.
               - '.claude/piped-gate-guard.json'
+              # The shipped runner template library and the dogfood e2e overlays
+              # that consume it (Q554). Neither is shell, so shellcheck skips
+              # both — but this job's `make template-library-check` reconciles
+              # the two trees against each other, and check-template-library-test.sh
+              # runs that gate against the tracked tree. Without these patterns a
+              # library-only change skips the gate whose whole job is to notice it.
+              - 'deploy/templates/**'
+              - 'deploy/dogfood-e2e/**'
               # The MkDocs hooks are Python, not shell, so shellcheck skips them —
               # but `make scripts-test` asserts their behaviour (Q393), and that
               # runs in this job. Without this the announce-bar hook could change
@@ -343,6 +351,13 @@ jobs:
         # release signing-identity regexp (Q124). Same job as shellcheck since
         # both gate the scripts/ tree on a scripts-only change.
         run: make scripts-test
+      - name: shipped template library matches what CI exercises (make template-library-check)
+        # Named separately from `make scripts-test` even though that suite also
+        # runs the gate against the tracked tree, so a library-only change gets a
+        # CI verdict under its own name rather than buried in a suite's tail.
+        # Seconds; the render half needs kubectl and degrades to a printed skip
+        # without it.
+        run: make template-library-check
   # Supply-chain integrity gate for the committed vendor trees (Q126). `go build
   # -mod=vendor` only checks vendor/modules.txt consistency, never that the
   # vendored source matches the go.sum hashes — so a tampered vendor/ edit would

@@ -16,6 +16,13 @@ container escape lands in a throwaway guest kernel, not on the node. This
 page is the cluster-side how-to: the node prerequisites, the runtime
 install, and the worker `podTemplate` field that selects it.
 
+**You do not have to transcribe the pod shape from this page.** GAG ships it
+as `kata-dind` in the
+[runner template library](runner-template-library.md), applied with a single
+`kubectl apply -k deploy/templates/kata-dind`. Read this page for the node and
+runtime prerequisites the template cannot express, and for why each line of it
+is the way it is; apply the shipped base rather than retyping it.
+
 It is operator-focused. For *why* GAG chose Kata over Sysbox/rootless and
 the provider-agnostic design, see
 [Kata Containers on GKE](../plan/archive/kata-on-gke.md); for the executable
@@ -200,11 +207,28 @@ kubectl get nodes -l katacontainers.io/kata-runtime=true   # kata-deploy labelle
 
 ## Configure the worker podTemplate
 
-Point the worker pods at the runtime by setting `runtimeClassName` on the
-worker `podTemplate`. Author it as a platform-owned, cluster-scoped
-`ClusterRunnerTemplate`: the capability set below exceeds what a tenant
-should be able to self-author, and platform ownership is what enforces the
-"no privileged container" property (the namespace PSA level cannot — see
+The shipped `kata-dind` library entry is this section, complete and
+CI-exercised:
+
+```bash
+kubectl apply -k deploy/templates/kata-dind
+```
+
+Then set `spec.workerImage` on it to a build-capable runner image (it ships an
+`example.invalid` placeholder so an unreplaced value fails at pull rather than
+mid-job), and point a `RunnerSet` at it with `templateRef.kind:
+ClusterRunnerTemplate`. The
+[runner template library](runner-template-library.md) covers both, and the
+supported way to patch the base.
+
+The rest of this section is what that template contains and why, for reading
+rather than retyping.
+
+Kata is selected by `runtimeClassName` on the worker `podTemplate`. It is a
+platform-owned, cluster-scoped `ClusterRunnerTemplate`: the capability set
+below exceeds what a tenant should be able to self-author, and platform
+ownership is what enforces the "no privileged container" property (the
+namespace PSA level cannot; see
 [Why this matters for GAG](#why-this-matters-for-gag)).
 
 ```yaml
@@ -238,11 +262,14 @@ spec:
               value: "tcp://localhost:2375"
 ```
 
-The complete, production-shaped example — including the raw block volume
-for `/var/lib/docker`, the six-step entrypoint, and measured resource
-sizing — is GAG's own e2e worker template:
-[`deploy/dogfood-e2e/overlays/kata/resources.yaml`](../../deploy/dogfood-e2e/overlays/kata/resources.yaml).
-The single-pod (non-GAG) reference the spike validated is
+The complete form (the raw block volume for `/var/lib/docker`, the
+six-step entrypoint, the validated capability set, the dockerd startup
+probe, and measured resource sizing) is the shipped library entry
+[`deploy/templates/kata-dind/template.yaml`](../../deploy/templates/kata-dind/template.yaml).
+GAG's own e2e tenant consumes that same base and patches only its cluster
+specifics ([`deploy/dogfood-e2e/overlays/kata/`](../../deploy/dogfood-e2e/README.md)),
+so what you apply is what CI runs jobs on. The single-pod (non-GAG)
+reference the spike validated is
 [`deploy/kata-ci/runner-pod.yaml`](../../deploy/kata-ci/runner-pod.yaml).
 
 The AGC honours a template-set `runtimeClassName` and applies no override
@@ -484,6 +511,9 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
 
 ## Related
 
+- [Runner template library](runner-template-library.md): the shipped
+  `kata-dind` entry this page describes, plus its two siblings and how to
+  fork one.
 - [In-runner image builds](in-runner-image-builds.md) — pick a build
   approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and
   the `securityProfile` each needs.
