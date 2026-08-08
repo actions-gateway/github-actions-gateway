@@ -2864,14 +2864,6 @@
 <td><code>validate-release.sh</code> has zero references to <code>capacityGate</code>, <code>nodeAutoscaling</code> or quota; its legs are deploy, e2e, sizing, CRD smoke. It builds an autoscaling cluster with headroom, so the constrained path is never driven on real infra.</td>
 </tr>
 <tr>
-<td><a id="Q709"></a>Q709</td>
-<td><a href="../development/testing/#stopping-a-run-name-the-target-never-the-program">Record background launches in <code>tmp/</code> so handles survive compaction</a></td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>After a compaction the task ids are gone: <code>TaskStop</code> needs one, <code>TaskList</code> is the todo list, <code>/tasks</code> is user-only. So the kill goes blind by pattern. Record pid + cmdline marker at launch (<code>lib/lease.sh</code> liveness), written by a hook, not by recall.</td>
-</tr>
-<tr>
 <td><a id="Q707"></a>Q707</td>
 <td><a href="../development/testing/#stopping-a-run-name-the-target-never-the-program">Ownership lease for local singleton tiers (e2e/kind slots)</a></td>
 <td><code>debt</code> <code>tests</code></td>
@@ -2942,14 +2934,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-05: at WAIT=660, <code>int(rate*elapsed)</code> truncates to 0 for 5 rates under 0.002, so 6 series never move. "Quota retries (1h)" is empty in the shipped shot. Same class as Q651.</td>
-</tr>
-<tr>
-<td><a id="Q700"></a>Q700</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.gitignore"><code>.gitignore</code> covers only the root <code>tmp/</code>, so a scratch dir one level down is unignored</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>/tmp/*</code> is root-anchored, so a <code>cd</code>-drifted command writing <code>cmd/agc/tmp/</code> leaves it untracked-but-not-ignored, one directory <code>git add</code> from shipping (the #847 shape). Only <code>tmp/.gitkeep</code> is tracked, so widening to <code>**/tmp/</code> is safe.</td>
 </tr>
 <tr>
 <td><a id="Q701"></a>Q701</td>
@@ -3251,9 +3235,9 @@
 <td><a id="Q573"></a>Q573</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/api">Detect served API fields nothing reads</a></td>
 <td><code>ci</code> <code>tests</code> <code>retro</code></td>
-<td>🔲</td>
+<td>🚫</td>
 <td>S</td>
-<td><code>sharing.allowedNamespaces</code> shipped served-but-unenforced in v2beta1; only a manual sweep caught it (Q166 fixes it). Gate fields unreferenced outside generated/conversion code; Q526 found an unwritten <em>status</em> field, which spec-only scope misses.</td>
+<td>Blocked by <a href="#Q166">Q166</a>: 2026-08-08, only 2 of 106 served v2beta1 fields are unread (<code>Sharing</code>, <code>allowedNamespaces</code>), both Q166's, so the gate baselines empty once Q166 lands. Q526's unwritten <em>status</em> field: spec-only scope misses it.</td>
 </tr>
 <tr>
 <td><a id="Q541"></a>Q541</td>
@@ -3352,12 +3336,12 @@
 <td>A real prompt is <code>origin.kind == "human"</code> minus four classes that also carry it: hook denial text, <code>&lt;bash-input&gt;</code>, <code>&lt;create-pr-command&gt;</code>, <code>&lt;system-reminder&gt;</code> prefixes. One use so far.</td>
 </tr>
 <tr>
-<td><a id="Q705"></a>Q705</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/release/semverfloor/floor.go">Narrow the semver floor past comment-only diffs to shipped files</a></td>
+<td><a id="Q735"></a>Q735</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/release/semverfloor/narrow.go">Narrow the semver floor past test files in released package dirs</a></td>
 <td><code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-05: #1266 <code>feat(probe)</code> reads as floor-raising because its only shipped-file edits (broker/types.go, listener/job.go) are comment-only. Errs toward the higher floor, so it costs a wrong name in the report, not a wrong verdict.</td>
+<td>Distinct from Q705 (comment-only): <code>go list -deps</code> reports directories, so a <code>_test.go</code> beside compiled source reads as shipped. Measured 2026-08-08: 2 of 68 raising commits in v1.2.0..v1.3.0 ship only <code>_test.go</code>, both <code>fix</code>, so no verdict flips.</td>
 </tr>
 </tbody>
 </table>
