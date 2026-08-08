@@ -2793,11 +2793,27 @@
 </tr>
 <tr>
 <td><a id="Q733"></a>Q733</td>
-<td><a href="../development/bash-style/#set--e-stops-at-a-command-substitution"><code>set -e</code> does not reach into a command substitution in 9 gate scripts</a></td>
+<td><a href="../development/bash-style/#set--e-stops-at-a-command-substitution"><code>set -e</code> does not reach into a command substitution: 9 gate scripts, and nothing stops a 10th</a></td>
 <td><code>debt</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-08 under Q703: a builder called as <code>x="$(f)"</code> runs on past its own failure and yields rc 0. 12 test suites fixed; 9 gates still carry it, incl. <code>go-lint.sh</code> and three e2e <code>chart-*-check.sh</code>, where it can green a failed <code>kubectl</code>.</td>
+<td>Measured 2026-08-08 under Q703: <code>x="$(f)"</code> runs past its own failure, rc 0. 12 suites fixed; 9 gates still carry it, incl. <code>go-lint.sh</code> and three e2e <code>chart-*-check.sh</code> where it can green a failed <code>kubectl</code>. Wants a check so a 10th cannot appear.</td>
+</tr>
+<tr>
+<td><a id="Q742"></a>Q742</td>
+<td><a href="../development/documentation-standards/#enforcing-the-em-dash-rule">A whole-file em-dash ceiling lets two green PRs merge to a red <code>main</code></a></td>
+<td><code>ci</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-08: testing.md went 593 to 594 (#1340) to 595 (#1342); each PR sat within the 594 ceiling on its own base, so only the merge result is over and per-PR CI cannot see it. #1338 cut one. Ratchet on the diff, not the total.</td>
+</tr>
+<tr>
+<td><a id="Q738"></a>Q738</td>
+<td><a href="../development/testing/#a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it">Local load harnesses cannot reach a 2-core runner's contention</a></td>
+<td><code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured across this family: Q596 spent 2418 runs and Q703 240, neither reproducing a trigger seen only on CI. An 18-core Mac is the wrong shape. A <code>--cpus=2</code> container around <code>make scripts-test</code> would make the negative mean something.</td>
 </tr>
 <tr>
 <td><a id="Q166"></a>Q166</td>
