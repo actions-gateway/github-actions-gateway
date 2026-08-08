@@ -41,6 +41,8 @@
 # lockstep with those when the runner version moves.
 FROM ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29
 # apt runs as root, then the image drops back to the non-root runner user.
+# DL3066 wants a numeric user-id; `USER 0` names the same user less clearly.
+# hadolint ignore=DL3066
 USER root
 # Unpinned apt versions are deliberate here: this is a dev/reference image that
 # tracks the base distro's current toolchain, not a reproducible release artifact
@@ -58,5 +60,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 # The upstream actions-runner base ends as USER runner (UID 1001); pin it
 # explicitly so the non-root guarantee is local to this Dockerfile and survives
-# a base-image change.
+# a base-image change. Kept by name for the reason the worker stage of the root
+# Dockerfile gives, so DL3066 is ignored here too.
+# hadolint ignore=DL3066
 USER runner
