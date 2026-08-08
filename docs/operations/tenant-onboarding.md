@@ -697,6 +697,17 @@ spec:
   (`kubectl edit runnersets.v2alpha1.actions-gateway.com …`). Ratcheting is on by
   default from Kubernetes 1.30; the v2 floor is 1.31, so every supported cluster has it.
 
+### Starting from a shipped template
+
+Before hand-authoring a `RunnerTemplate`, check whether one of the three shipped
+entries already fits. `kubectl apply -k deploy/templates/plain` gives a baseline
+worker; `kata-dind` and `privileged-dind` cover jobs that build container
+images. A `RunnerSet` then names one with `templateRef: { name: plain, kind:
+ClusterRunnerTemplate }`. They are cluster-scoped and platform-applied, none is
+marked as the cluster default, and each carries prerequisites the template
+cannot express: see the
+[runner template library](runner-template-library.md).
+
 ### Optional `templateRef` (a default worker pod shape)
 
 `RunnerSet.spec.templateRef` is **optional**. A `RunnerSet` that omits it resolves a worker pod shape through a fallback chain, so a tenant does not have to name a template in every runner set. The chain (resolved at runtime, fail-closed):

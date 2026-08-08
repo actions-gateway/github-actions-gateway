@@ -5,10 +5,16 @@ kind: Kustomization
 # TRUSTED CI ONLY. The worker runs a privileged dockerd (host-kernel exposure)
 # and broad egress. For untrusted PRs use the Kata variant (../kata). See ../../README.md.
 #
+# The worker pod shape is the SHIPPED library entry
+# ../../../templates/privileged-dind (Q554), consumed as a base here rather than
+# restated. This overlay adds only what is specific to GAG's own e2e cluster:
+# the build-capable runner image, and the GKE node pool and taint.
+#
 # The delta vs any other overlay is exactly: the namespace security profile
-# (below), the ClusterRunnerTemplate worker shape, and the egress policy.
+# (below), which library entry is the base, and the egress policy.
 resources:
   - ../../base
+  - ../../../templates/privileged-dind
   - resources.yaml
 patches:
   # Namespace -> privileged. All four gates in one object so the GMC's
@@ -25,8 +31,10 @@ patches:
           actions-gateway.com/privileged-profile: allowed
         annotations:
           actions-gateway.com/allow-profile-downgrade: allowed
-  # Point the RunnerSet at the privileged ClusterRunnerTemplate. The apiVersion
-  # must match the base RunnerSet (v2beta1) for the strategic-merge patch to target it.
+  # Point the RunnerSet at the library entry. The apiVersion must match the base
+  # RunnerSet (v2beta1) for the strategic-merge patch to target it; this patch
+  # touches only maps and scalars, which is why a strategic merge is safe here
+  # and is not safe against the template below.
   - patch: |
       apiVersion: actions-gateway.com/v2beta1
       kind: RunnerSet
@@ -35,5 +43,32 @@ patches:
         namespace: gag-dogfood-e2e
       spec:
         templateRef:
-          name: dogfood-e2e-privileged
+          name: privileged-dind
           kind: ClusterRunnerTemplate
+  # Cluster specifics onto the library template. JSON 6902, NOT a strategic
+  # merge — see ../kata/kustomization.yaml for the mechanism and the
+  # measurement.
+  - target:
+      group: actions-gateway.com
+      version: v2beta1
+      kind: ClusterRunnerTemplate
+      name: privileged-dind
+    patch: |
+      # Build-capable runner image (scripts/dogfood/e2e-runner/Dockerfile). The
+      # library ships an .invalid placeholder so this patch is mandatory.
+      - op: replace
+        path: /spec/workerImage
+        value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
+      # The e2e pool, shared with ../kata: tainted so nothing else lands on it
+      # (scripts/dogfood/e2e-setup.sh). The nested-virt and Workload Identity
+      # settings that pool carries are inert for this variant.
+      - op: add
+        path: /spec/podTemplate/spec/nodeSelector
+        value:
+          cloud.google.com/gke-nodepool: e2e
+      - op: add
+        path: /spec/podTemplate/spec/tolerations
+        value:
+          - key: dedicated
+            value: e2e
+            effect: NoSchedule
