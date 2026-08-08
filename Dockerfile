@@ -241,6 +241,11 @@ COPY --from=build-wrapper /wrapper /usr/local/bin/wrapper
 # The actions-runner base already ends as USER runner (UID 1001); pin it
 # explicitly so the non-root guarantee is local to this Dockerfile and survives
 # a base-image change rather than depending on the upstream's final USER.
+# The name, not a numeric UID, is deliberate: the AGC gap-fills runAsUser 1001
+# whenever it enforces runAsNonRoot, which is what lets kubelet verify non-root
+# here and on any tenant image built from the same base (docs/design/05-security.md
+# §5.3, Q115). DL3066 (new in hadolint 2.15.0) wants the number instead.
+# hadolint ignore=DL3066
 USER runner
 ENTRYPOINT ["/usr/local/bin/wrapper"]
 
