@@ -214,8 +214,10 @@ spec:
   # Exactly one label: it is this set's scale-set name at GitHub and its single
   # runs-on match target (workflows say `runs-on: gpu`). Must be unique per gateway.
   runnerLabels: ["gpu"]
-  # priorityClassName values must be on the GMC --allowed-priority-classes
-  # allowlist (platform-owned); preemption is set on the PriorityClass object.
+  # priorityClassName values must be on the platform-owned allowlist: a watched
+  # PriorityClassAllowlist CR, grown without a GMC restart (the
+  # --allowed-priority-classes flag remains the fail-safe baseline).
+  # Preemption is set on the PriorityClass object, not here.
   priorityTiers:
     - priorityClassName: runner-critical
       threshold: 5

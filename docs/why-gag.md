@@ -96,6 +96,12 @@ non-event. Take either away and the platform team's options collapse to
 over-provisioning, loose quotas, and a ticket queue, which is the path back to a
 cluster per team.
 
+A tenant declares only namespaced resources, and the GMC provisions the
+controller, proxy pool, RBAC, and network policies to match, all inside the
+platform-owned `ResourceQuota` it never creates or mutates. After the initial
+install, no step needs a cluster admin.
+[See the whole object set](getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
+
 So the outcomes compound in one direction:
 
 <div class="gag-flow gag-flow--wide">
@@ -298,187 +304,25 @@ ships as reconciled defaults, not a post-install project.
 </div>
 </div>
 
-!!! info "Sandboxed runtimes compose with these defaults, and GAG's own CI runs that way"
+### Sandboxing is not the `runtimeClassName` field
 
-    A sandboxed runtime is just a `runtimeClassName` on the worker pod template,
-    so GAG and ARC can both set one. The differentiator is not that field. It is
-    the layer underneath it, and the evidence that the combination holds.
+Both GAG and ARC can set one. The differentiator is the layer underneath, and
+the evidence that the combination holds.
 
-    **Kata bounds the kernel, not the pod network.** A micro-VM does not change
-    the pod's network identity: the cloud metadata service still answers from
-    *inside* the guest, so a compromised job can mint node credentials over the
-    pod network even though the kernel it escaped into is disposable. GAG's
-    default-deny NetworkPolicies are what close that path, reconciled per tenant
-    rather than hand-built alongside. Kata is one layer, not a posture.
+**Kata bounds the kernel, not the pod network.** A micro-VM does not change the
+pod's network identity, so cloud metadata still answers from *inside* the guest
+and a compromised job can mint node credentials even though the kernel it
+escaped into is disposable. GAG's default-deny NetworkPolicies close that path,
+reconciled per tenant rather than hand-built alongside.
 
-    **GAG's own end-to-end CI runs under it.** The suite creates a `kind` cluster
-    inside a worker pod with `runtimeClassName: kata` and **zero**
-    `privileged: true`, validated on a nested-virtualization GKE node pool (node
-    kernel `6.8.0-1054-gke`, guest kernel `6.18.35`), and the default for that
-    suite ever since. The cluster-side how-to is written down, including
-    the capability set an unprivileged `dockerd` needs and
-    [what Kata does not buy you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you).
+**GAG's own end-to-end CI runs under it**, building a `kind` cluster inside a
+worker pod with `runtimeClassName: kata` and **zero** `privileged: true`, on a
+nested-virtualization GKE pool with both kernels named. The how-to, and
+[what Kata does not buy you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you),
+are written down. **It is not yet a claim about untrusted pull requests**: that
+variant still runs permissive egress, because its jobs pull from CDN-fronted
+registries no CIDR allowlist can pin ([roadmap](roadmap.md#in-progress--near-term)).
 
-    **This is not yet a claim about untrusted pull requests.** That CI variant
-    still runs a permissive egress policy, because its jobs pull from CDN-fronted
-    public registries no CIDR allowlist can pin. Closing it takes an in-cluster
-    pull-through mirror plus egress scoped to the mirror, GitHub, and DNS: see
-    the [roadmap](roadmap.md#in-progress--near-term).
-
-For the full threat model, per-profile controls, and the abuse-response
-playbooks, see [Security](design/05-security.md) and
+Full threat model, per-profile controls, and abuse-response playbooks:
+[Security](design/05-security.md) and
 [Security operations](operations/security-operations.md).
-
-## Composable building blocks, not one giant CR
-
-A tenant still declares only namespace-scoped resources, and the GMC provisions the
-controller, proxy pool, RBAC, and network policies to match, all within the **platform-owned `ResourceQuota`** the GMC never creates
-or mutates, with no per-tenant cluster-admin after the initial install. What
-changed with the **recommended v2 API** is that the single-CR monolith is
-decomposed into small, reusable kinds, and that decomposition *is* a
-differentiator ARC's inlined, per-scale-set model structurally can't express:
-
-<div class="gag-pillars gag-cols-2" markdown>
-<div class="grid cards" markdown>
-
--   :material-content-copy:{ .lg .middle } __Reuse the pod shape__
-
-    ---
-
-    One `RunnerTemplate`, or cluster-wide `ClusterRunnerTemplate`, is referenced
-    by every `RunnerSet`. ARC inlines the pod template into each
-    `AutoscalingRunnerSet`, so N runner types means N copies to keep in sync.
-
--   :material-account-key:{ .lg .middle } __Clean ownership boundary__
-
-    ---
-
-    Platform owns the quota, the `PriorityClass` allowlist, and cluster templates;
-    the tenant composes `RunnerSet`s within them. ARC has no primitive to separate
-    platform-owned from tenant-owned concerns.
-
--   :material-transit-connection-variant:{ .lg .middle } __Egress on purpose__
-
-    ---
-
-    A standalone `EgressProxy` is referenced by the gateway (or per `RunnerSet`),
-    or dropped entirely for direct egress, which stays `NetworkPolicy`-restricted.
-    ARC has no per-tenant egress primitive at all.
-
--   :material-view-grid-plus:{ .lg .middle } __Many gateways, one namespace__
-
-    ---
-
-    Multiple scoped `ActionsGateway`s coexist in a namespace, each with its own
-    GitHub binding and runner sets, not one CR that must own everything.
-
-</div>
-</div>
-
-The v2 object set below is feature-equivalent to the legacy single-CR example, a
-proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:
-
-```yaml
-apiVersion: actions-gateway.com/v2beta1
-kind: EgressProxy               # (1)!
-metadata:
-  name: team-a-egress
-  namespace: team-a
-spec:
-  minReplicas: 2
-  maxReplicas: 10
----
-apiVersion: actions-gateway.com/v2beta1
-kind: RunnerTemplate            # (2)!
-metadata:
-  name: default
-  namespace: team-a
-spec:
-  podTemplate:
-    spec:
-      containers:
-        - name: runner
----
-apiVersion: actions-gateway.com/v2beta1
-kind: ActionsGateway            # (3)!
-metadata:
-  name: team-a-gateway
-  namespace: team-a
-spec:
-  credentials:
-    type: GitHubApp
-    githubApp:
-      name: my-github-app       # name-only Secret ref in this namespace
-  githubURL: https://github.com/team-a-org
-  defaultProxyRef:
-    name: team-a-egress         # every RunnerSet inherits this unless it sets proxyRef
----
-apiVersion: actions-gateway.com/v2beta1
-kind: RunnerSet
-metadata:
-  name: gpu
-  namespace: team-a
-spec:
-  gatewayRef:  { name: team-a-gateway }
-  templateRef: { name: default }   # (4)!
-  runnerLabels: ["gpu"]         # (5)!
-  priorityTiers:                # (6)!
-    - priorityClassName: runner-critical
-      threshold: 5
-    - priorityClassName: runner-standard
-      threshold: 20
----
-apiVersion: actions-gateway.com/v2beta1
-kind: RunnerSet
-metadata:
-  name: linux
-  namespace: team-a
-spec:
-  gatewayRef:  { name: team-a-gateway }
-  templateRef: { name: default }
-  runnerLabels: ["linux"]
-  maxWorkers: 30
-```
-
-1.  Optional. A standalone per-tenant egress proxy pool, Horizontal Pod Autoscaler
-    (HPA)-managed between these bounds; all GitHub traffic exits through it on
-    dedicated IPs. Drop it (and `defaultProxyRef`) for direct, still
-    `NetworkPolicy`-restricted egress, collapsing the minimum to three objects.
-2.  A reusable pod shape referenced by both `RunnerSet`s below via `templateRef`.
-    Define it once; a cluster-scoped `ClusterRunnerTemplate` shares one shape
-    across every namespace. The Pod Security Admission (PSA) level is a **namespace
-    label** in v2, not a CR field. All gateways in a namespace share one level.
-3.  `credentials.githubApp.name` references a `Secret` in this namespace holding
-    the GitHub App `appId`, `installationId`, and `privateKey`. The GMC watches the
-    reference name, not the Secret contents. See
-    [credential rotation](getting-started.md#rotating-github-app-credentials).
-    `WorkloadIdentity` is the opt-in no-PEM credential member.
-4.  Both runner sets reference the **same** `RunnerTemplate`. There is no
-    `ResourceQuota` field on any of these CRs. The single quota every runner set
-    shares is **platform-owned**, set on the namespace by the platform admin, so it
-    is a real cap the tenant cannot raise. Priority tiers decide who wins when it
-    is contended.
-5.  Exactly one label per runner set: it is the set's scale-set name at GitHub and
-    its single `runs-on` match target (`runs-on: gpu`), unique across the sets under
-    one gateway. ARC scale sets have supported multiple labels since 0.14.0
-    (2026-03-19), so a workflow targeting `runs-on: [linux, gpu]` needs one edit
-    per target to move across: split it into a runner set with a single
-    descriptive label. A single-name `runs-on` carries over unchanged.
-6.  The first 5 GPU pods get the higher-priority `PriorityClass`; the next tier
-    bursts opportunistically; the final threshold caps total concurrency. The
-    `priorityClassName` values must be on the platform's allowlist (a watched
-    `PriorityClassAllowlist` CR, grown without a GMC restart; the
-    `--allowed-priority-classes` flag remains the fail-safe baseline), and whether a tier preempts is set on the
-    platform-owned `PriorityClass` object, so a tenant cannot name a class that
-    evicts other tenants' pods.
-
-The legacy single-CR `v1alpha1` shape, which expresses this whole gateway in one
-`ActionsGateway` CR, is still fully served but
-**[deprecated, and removed at `v2.0.0`](operations/v1alpha1-deprecation.md)**; see the
-[getting-started walkthrough](getting-started.md#legacy-the-v1alpha1-api-deprecated)
-for it and the [v1 → v2 migration guide](operations/migration-v1-to-v2.md) to move
-across without changing how your jobs are acquired.
-
-Ready to try it? Follow the [getting-started guide](getting-started.md). Already
-running ARC? The [Migrating from ARC guide](operations/migration-from-arc.md) maps
-every concept above onto GAG and walks one runner group across with zero downtime.
