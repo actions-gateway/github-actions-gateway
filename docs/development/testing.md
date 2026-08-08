@@ -46,6 +46,32 @@ Add a heavier tier only when the change warrants it — `make test-race` for the
 
 One caveat on the inner loop: the `make` targets throttle themselves, but a bare `go test` run directly does not. That is harmless for a plain module-scoped run and **not** harmless with `-race` — use `make test-race`, or prefix a manual run with `$(scripts/agent/local-throttle.sh prefix)`. See [Resource auto-throttle on GUI dev machines](#resource-auto-throttle-on-gui-dev-machines).
 
+### Narrowing a run with `RUN=`
+
+Every test target takes `RUN=` to narrow the run to matching tests. One spelling across the tiers, but two filters underneath:
+
+| Target | Reaches | Matches against | Zero matches |
+|---|---|---|---|
+| `make test`, `make test-race` | `go test -run` | the Go test-function name | **fails** |
+| `make e2e` | `ginkgo --focus` | the spec's full text | **fails** |
+| `make test-integration`, `make -C cmd/agc\|cmd/gmc test-integration` | `go test -run` | the Go test-function name | passes (Q736) |
+
+Both filters are regexes, so `RUN='TestMerge_'` selects a family and `RUN='provisions a worker pod'` selects one spec by its description. On `make e2e`, `RUN` composes with [`SUITE`](#end-to-end-tests): `SUITE` picks a labelled subset, `RUN` picks specs inside it.
+
+```bash
+make test RUN=TestSessionMux
+make e2e SUITE=single-node RUN='E2E_GMC_ProxyServiceCreated'
+```
+
+**A filter that matches nothing is a failure, not a pass.** Left alone, both tools report success on a miss: `go test -run` prints `[no tests to run]` and exits 0, and ginkgo exits 0 having run 0 specs. A mistyped name then reads exactly like the test passing, which is the knob's whole purpose inverted (Q680). `make test` therefore fails when no test ran in **any** module, and `make e2e` passes `--fail-on-empty`, which also catches a `SUITE` that selects nothing:
+
+```
+==> RUN='TestNoSuchThingAnywhere' matched no tests in any module — nothing ran
+FAIL! - Detected no specs ran and --fail-on-empty is set
+```
+
+`RUN=` also forces `-v -count=1` on the Go tiers: a targeted run wants the test's own output, and a cached `PASS` prints none.
+
 ### The `make check` pre-review gate
 
 For the one-command gate before requesting review, run `make check` from the repo root. To see exactly what it runs, run `make list-gates`: it prints every gate in execution order with what each one covers, rendered from the `CHECK_FAST_GATES` and `CHECK_HEAVY_GATES` variables the `check` target itself expands. That is the list — this page names the target rather than transcribing it, because the transcription drifted: it went the whole life of `license-header-check` and `conflict-markers-check` without mentioning either, while `make check` ran both (Q649). `make list-script-tests` does the same for the `scripts/` suites the `scripts-test` gate fans out over, for the same reason: that list was transcribed into a 1,399-character help line naming 50 of its 55 suites (Q671).
@@ -1306,7 +1332,7 @@ make -C cmd/gmc test-integration   # GMC only
 make -C cmd/gmc test-integration RUN='TestCRD_ActionsGateway_LogLevel_DefaultsToInfo'
 ```
 
-The target adds `-v -count=1` alongside `-run`: a targeted run wants the test's output, and a cached `PASS` prints none. A name that matches nothing reports `no tests to run` and passes; it does **not** fall back to running the module.
+The target adds `-v -count=1` alongside `-run`: a targeted run wants the test's output, and a cached `PASS` prints none. A name that matches nothing reports `no tests to run` and **passes**. Unlike `make test` and `make e2e`, these two targets have no zero-match guard yet (Q736), and neither falls back to running the module. See [Narrowing a run with `RUN=`](#narrowing-a-run-with-run) for the cross-tier picture.
 
 Prefer `RUN=` over exporting `KUBEBUILDER_ASSETS` yourself. Hand-assembling it has two traps, both of which surface as a confusing envtest failure rather than an obvious mistake (Q582 spent three attempts on them):
 
@@ -1559,7 +1585,7 @@ After the run, [`scripts/e2e/e2e-report-summary.sh`](../../scripts/e2e/e2e-repor
 - `scaleset-live` — the one scale-set spec inside that container (`E2E_GitHub_ScaleSetEvictedWorkerLatencyAndRerun`), additive to `github-real` rather than a replacement. It is declared last, and Ginkgo skips the remainder of an `Ordered` container after a failure, so any of the six specs ahead of it failing costs it the whole run — twice on 2026-08-03, at ~55 minutes each. Run it alone with `SUITE=live-github-scaleset` once the container is known green. It still must not run beside the rest of the suite, for the `AGC_EXTRA_*` reason above.
 - `real-github-egress` — the specs whose traffic terminates at the live `api.github.com`: the v1/v2 `ProxyConnectWorks` CONNECT specs, the two `E2E_V2_DirectEgress` specs (their NP ipBlock-peer waits also depend on the GMC's live `/meta` fetch), and the live-GitHub container. Not a filter label: a suite-level `AfterEach` (`cmd/gmc/test/e2e/github_egress_preflight_test.go`) uses it for failure-time attribution — see [Runner→GitHub egress attribution](#runnergithub-egress-attribution-q352).
 
-For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node` maps to `--label-filter '!multi-node'` and skips the multi-node specs; unset `SUITE` runs everything (matching CI). The HPA scale-up spec (`E2E_GMC_HPADrivesScaleUp`) is unlabelled and CI-safe: it patches `HPA.spec.minReplicas` to drive the HPA→Deployment control path deterministically rather than burning CPU to trigger autoscaling, so it runs everywhere.
+For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node` maps to `--label-filter '!multi-node'` and skips the multi-node specs; unset `SUITE` runs everything (matching CI). To narrow further, `RUN='<regex>'` adds a `--focus` over the spec text within whatever `SUITE` selected — see [Narrowing a run with `RUN=`](#narrowing-a-run-with-run). Both filters are covered by `--fail-on-empty`, so a `SUITE` or `RUN` that selects no spec fails the run instead of reporting a green e2e. The HPA scale-up spec (`E2E_GMC_HPADrivesScaleUp`) is unlabelled and CI-safe: it patches `HPA.spec.minReplicas` to drive the HPA→Deployment control path deterministically rather than burning CPU to trigger autoscaling, so it runs everywhere.
 
 **A proxy replica costs a whole worker node, so a pool sized past the cluster strands replicas.** Every proxy pod — v1's inline `actions-gateway-proxy` pool and v2's `<proxy>-proxy` pool alike — carries a `requiredDuringScheduling` `podAntiAffinity` on `kubernetes.io/hostname`, so a pool's N replicas need N worker nodes and the default cluster has two. The pods request `10m` CPU, so 60 % utilization is 6 millicores and any startup burst trips the HPA; a pool whose `maxReplicas` exceeds the worker count will therefore park the surplus in `Pending`. That is harmless where a spec only needs the pool *reachable* (`utils.WaitForDeploymentReady` is satisfied by one ready replica), and fatal where it waits on the full count — pin such a pool with `utils.TenantFixture.WithProxyReplicas(1, 1)`. Raising the wait does nothing: the pod is deadlocked, not slow, and `kubectl describe pod` says so in one line (`FailedScheduling … didn't satisfy existing pods anti-affinity rules`).
 
