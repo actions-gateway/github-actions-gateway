@@ -11,6 +11,7 @@
 # required one, so this skips rather than fails when it is absent. CI runners
 # always have it.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT

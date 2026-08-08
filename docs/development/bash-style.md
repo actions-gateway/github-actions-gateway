@@ -4,7 +4,7 @@ Conventions for every shell script in this repo — `scripts/`, `.githooks/`, an
 
 ## Rules
 
-- Every script must start with `set -euo pipefail`.
+- Every script must start with `set -euo pipefail`, plus `shopt -s inherit_errexit` in any script that assigns from a command substitution: `set -e` does not reach inside one (see [§ `set -e` stops at a command substitution](#set--e-stops-at-a-command-substitution)).
 - Use `local` for all variables inside functions.
 - Use `[[ ]]` for conditionals and `(( ))` for arithmetic — never `[ ]`.
 - Quote all variable expansions (`"$var"`, `"${arr[@]}"`) unless word-splitting is explicitly intended — annotate that intent with a comment.
@@ -23,6 +23,25 @@ An unbounded loop can only be ended from outside, and that external kill is the 
 **Do not reach for `timeout`.** It ships with GNU coreutils and is absent from a stock macOS, where neither `timeout` nor `gtimeout` is on `PATH`. A script that depends on it runs unbounded on a dev Mac while looking correct. That is the same silent-absence trap that broke Q690's load harness, which backgrounded its generators with `setsid`: also absent on macOS, so all three died instantly and 40 samples passed against an idle machine, reading as strong evidence of no flake. `timeout` is also still a kill, just one on a timer, so the signal can skip the cleanup `trap` that a self-terminating loop unwinds through.
 
 This applies hardest to throwaway harnesses under the gitignored `tmp/`. Being a throwaway is exactly why such a script gets none of the review a tracked one does, and it is where every unbounded loop in this repo's history has actually come from.
+
+## `set -e` stops at a command substitution
+
+`set -euo pipefail` does not cover `x="$(build_fixture)"`. Inside the substitution a failing command neither aborts nor propagates, and the assignment takes the status of the builder's *last* command, so a fixture that broke on its third step reports success. Measured on bash 5.3, with a builder whose first two steps fail:
+
+| Form | Exit status | Steps run after the first failure |
+|---|---|---|
+| `repo="$(build)"` | 0 | 2 |
+| `repo=$(build)` | 0 | 2 |
+| `local repo; repo="$(build)"` | 0 | 2 |
+| `repo="$(set -e; build)"` | 1 | 0 |
+| `shopt -s inherit_errexit` then `repo="$(build)"` | 1 | 0 |
+| `build` called directly, no substitution | 1 | 0 |
+
+`shopt -s inherit_errexit` is the remedy to reach for: one line at the top of the file covers every substitution in it, where the other two working forms have to be repeated per call site.
+
+What this costs when it goes unnoticed is a misattributed failure, not just a late one. A fixture builder that keeps running after its setup broke turns one root failure into a cascade of downstream errors, and the last line in the log belongs to the *subject* rather than the fixture. In Q703, `release-delta-test`'s fixture repository lost a commit object partway through `build_repo`; the suite ran seven more failing `git commit` calls and ended on `release-delta: 'HEAD' is not a commit-ish in this repo`, which reads as a defect in the report under test. With `inherit_errexit` the same injected fault stops at the first `git` fatal and exits 128, git's own status, naming the fixture as the thing that broke.
+
+The hole was in 12 of 59 `scripts/**/*-test.sh` suites when it was found, including [`check-v2-api-sync-test.sh`](../../scripts/go/check-v2-api-sync-test.sh), whose own flake (Q596) was undiagnosable for the same reason: a failure that is not distinguished from a legitimate verdict. All 12 carry the shopt now.
 
 ## Shared helpers and Makefile wiring
 
