@@ -11,6 +11,8 @@ kind: Kustomization
 # naming only `initContainers[0].resources` silently drops that container's
 # image, restartPolicy, capabilities and probe, and renders at exit 0. Measured
 # on kustomize v5.8.1 (kubectl 1.36). ../../dogfood-e2e/overlays/kata is the
-# worked example.
+# worked example, and the operator doc sets out both ways round it
+# (JSON 6902, or an OpenAPI schema declaring the merge key):
+# docs/operations/runner-template-library.md#a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries
 resources:
   - template.yaml

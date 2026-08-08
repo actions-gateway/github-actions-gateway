@@ -1,13 +1,18 @@
 # Privileged DinD: a real Docker daemon with NO isolation. The fallback.
 #
-# This is almost never the entry you actually need. `privileged: true` on the
-# dockerd sidecar exposes the HOST kernel: a container escape from a job lands
-# on the node, and every job that runs on this template can reach it. Reach for
-# ../kata-dind first — it gives the same Docker daemon behind a micro-VM
-# boundary — and use this one only where nested virtualisation is unavailable
-# AND every job that will run on it is trusted (your own CI, never a fork PR).
-# docs/operations/in-runner-image-builds.md compares the rootless alternatives
-# (BuildKit, Kaniko) that avoid a daemon entirely.
+# `privileged: true` on the dockerd sidecar exposes the HOST kernel: a container
+# escape from a job lands on the node, and every job that runs on this template
+# can reach it. Reach for ../kata-dind first — same Docker daemon, micro-VM
+# boundary — and for a rootless builder before either
+# (docs/operations/in-runner-image-builds.md).
+#
+# But Kata is not always available, and this entry is the answer when it is not:
+# it needs nested virtualisation or bare metal, which excludes GPU builds (no
+# GPU passthrough into a nested guest), every AMD- and Arm-powered GCE machine
+# family, and any AWS instance that is not `.metal`. Where that is your
+# situation, run this on a dedicated node pool with trusted jobs only, never a
+# fork's pull request. Detail:
+# docs/operations/runner-template-library.md#choosing-an-entry
 #
 # ClusterRunnerTemplate rather than a namespaced RunnerTemplate is not a
 # stylistic choice: v2 refuses a privileged container in a tenant-authored

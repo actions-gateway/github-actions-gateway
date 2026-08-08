@@ -6,6 +6,6 @@ kind: Kustomization
 #
 # PATCH THIS BASE WITH JSON 6902, NOT A STRATEGIC MERGE, wherever the patch
 # reaches into a list — see the same note in ../kata-dind/kustomization.yaml for
-# the mechanism and the measurement.
+# the mechanism, the measurement, and the two ways round it.
 resources:
   - template.yaml

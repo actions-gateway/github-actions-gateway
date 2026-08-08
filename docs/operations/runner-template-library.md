@@ -36,13 +36,34 @@ names: "kind end-to-end tests" is the Docker-in-Docker shape, delivered as
 |---|---|---|
 | Unit tests, lint, deploys, anything that does not build container images | `plain` | No Docker daemon, no elevated capabilities. The only entry that composes with GAG's security gap-fill rather than opting out of it. |
 | Build container images, run `docker compose`, run a nested cluster | `kata-dind` | A real Docker daemon inside a KVM micro-VM. An escape reaches a throwaway guest kernel, not your node. |
-| The same, where nested virtualisation is unavailable | `privileged-dind` | The same daemon with no isolation. Trusted jobs only. |
+| The same, where Kata is not an option (see below) | `privileged-dind` | The same daemon with no isolation. Trusted jobs only. |
 | Build images with no daemon at all | none of these | Rootless BuildKit or Kaniko run fine under `plain`. See [In-runner image builds](in-runner-image-builds.md). |
 
-`privileged-dind` is the fallback, not the starting point. A privileged dockerd
-exposes the host kernel to every job that lands on that template, so a container
-escape from any one job reaches the node. Try `kata-dind` first, and a rootless
-builder before either.
+Prefer `kata-dind` when you can have it, and a rootless builder before either. A
+privileged dockerd exposes the host kernel to every job that lands on that
+template, so a container escape from any one job reaches the node.
+
+**But "when you can have it" excludes more than it sounds like.** Kata needs a
+KVM-capable host, which on a cloud provider means nested virtualisation or bare
+metal, and that is not universally available:
+
+- **GPU builds are the clearest case.** Getting a GPU into a Kata guest needs
+  VFIO/IOMMU passthrough, which a cloud instance does not expose to a nested
+  guest; NVIDIA's GPU Operator supports Kata in single-GPU-passthrough mode only,
+  and does not support configuring only some GPUs on a node for it. If your jobs
+  build on GPU instances, `privileged-dind` is the realistic path, not a
+  concession.
+- **CPU architecture and machine family.** Google Compute Engine excludes E2,
+  memory-optimized, H4D, and every AMD- and Arm-powered VM from nested
+  virtualisation. On AWS, nested virtualisation means a `.metal` instance.
+- Where nested virtualisation does work, expect a measured performance cost:
+  GCE documents 10% or more for CPU-bound work, potentially more for I/O-bound.
+
+So treat this as a real choice rather than a fallback with a bad reputation. If
+Kata is unavailable to you, the meaningful comparison is `privileged-dind`
+against a rootless builder, and the question is whether your jobs genuinely need
+a Docker daemon. Where you land on `privileged-dind`, confine it: a dedicated
+node pool, trusted jobs only, and never a fork's pull request.
 
 ## Prerequisites you supply
 
@@ -134,14 +155,50 @@ lands upstream.
 **Patch it with kustomize.** Keeps you on the shipped base, so an upstream fix
 reaches you on the next pull.
 
-Use **JSON 6902**, not a strategic merge, for anything that reaches into a list.
-kustomize has no OpenAPI schema for a custom resource, so a strategic-merge
-patch against one degrades to an RFC 7386 JSON merge patch, and that replaces a
-list wholesale instead of merging it by key. A patch naming only
-`initContainers[0].resources` silently drops that container's `image`,
-`restartPolicy`, capability set and startup probe, and renders at exit 0.
-Measured on kustomize v5.8.1, as embedded in kubectl 1.36. Scalars and maps are
-safe either way; lists are not.
+Read the next section before you write the patch. It is the single most
+expensive thing to get wrong here, and it fails silently.
+
+### A strategic-merge patch against a custom resource deletes list entries
+
+kustomize decides how to merge a list from the OpenAPI schema of the type being
+patched. It ships schemas for built-in Kubernetes types only, so for a
+`ClusterRunnerTemplate` it has none, and a strategic-merge patch degrades to an
+RFC 7386 JSON merge patch. Under RFC 7386 a list is **replaced wholesale**
+rather than merged by key.
+
+Concretely: this patch, which reads like it adjusts one field,
+
+```yaml
+patches:
+  - patch: |
+      apiVersion: actions-gateway.com/v2beta1
+      kind: ClusterRunnerTemplate
+      metadata:
+        name: kata-dind
+      spec:
+        podTemplate:
+          spec:
+            initContainers:
+              - name: dind
+                resources:
+                  requests:
+                    cpu: "3"
+```
+
+produces a `dind` container with *only* `name` and `resources`. Its `image`,
+`restartPolicy: Always`, the entire capability set, the startup probe and the
+`volumeDevices` binding the block volume are gone. `kubectl kustomize` prints
+this and exits **0**. The pod then fails at admission or, worse, starts without
+the daemon the runner is configured to reach. Measured on kustomize v5.8.1, as
+embedded in kubectl 1.36.
+
+Scalars and maps are safe either way. Lists are not, and `containers`,
+`initContainers`, `volumes` and `tolerations` are all lists.
+
+There are two ways out.
+
+**Option 1, JSON 6902. What this repo uses, and the one to reach for.** A
+targeted op list needs no schema, so it cannot degrade:
 
 ```yaml
 # my-overlay/kustomization.yaml
@@ -163,11 +220,79 @@ patches:
         path: /spec/podTemplate/spec/nodeSelector
         value:
           node-role: builders
+      - op: replace
+        path: /spec/podTemplate/spec/initContainers/0/resources/requests/cpu
+        value: "3"
 ```
 
-GAG's own end-to-end suite is the worked example: the overlays under
-`deploy/dogfood-e2e/overlays/` consume these bases and patch in their cluster
-specifics and nothing else.
+The cost is that a JSON pointer carries a list index, so a patch survives on the
+base's ordering. Pin what you depend on with a comment, or prefer the whole-map
+`op: replace` over a deep path when the base might reorder.
+
+**Option 2, teach kustomize the schema.** Supply an OpenAPI document that
+declares the merge key, and strategic merge starts behaving the way it does for
+a `Deployment`:
+
+```json
+{
+  "definitions": {
+    "com.actions-gateway.v2beta1.ClusterRunnerTemplate": {
+      "type": "object",
+      "properties": {
+        "spec": { "type": "object", "properties": {
+          "podTemplate": { "type": "object", "properties": {
+            "spec": { "type": "object", "properties": {
+              "initContainers": {
+                "type": "array",
+                "items": { "type": "object" },
+                "x-kubernetes-patch-merge-key": "name",
+                "x-kubernetes-patch-strategy": "merge"
+              }
+            }}
+          }}
+        }}
+      },
+      "x-kubernetes-group-version-kind": [
+        { "group": "actions-gateway.com", "kind": "ClusterRunnerTemplate", "version": "v2beta1" }
+      ]
+    }
+  }
+}
+```
+
+```yaml
+openapi:
+  path: crt-schema.json
+```
+
+Verified working under kubectl's embedded kustomize, with no standalone
+`kustomize` binary: the patch above then changes only `requests.cpu` and leaves
+the image, `restartPolicy`, capabilities, probe and `volumeDevices` intact, and
+strategic merges against built-in types in the same kustomization keep working.
+
+**The trap in option 2, which has the same signature as the bug.** A custom
+schema *replaces* kustomize's built-in one rather than extending it, so a
+`$ref` into a built-in definition does not resolve. Writing the obvious thing,
+
+```json
+"podTemplate": { "$ref": "#/definitions/io.k8s.api.core.v1.PodTemplateSpec" }
+```
+
+leaves the ref dangling, kustomize finds no merge key, and it falls straight
+back to wholesale replacement, silently, at exit 0. That is indistinguishable
+from having written no schema at all. Declare the merge keys inline on the paths
+you patch, as above, and confirm by rendering and diffing rather than by the
+exit code.
+
+This repo stays on option 1 because option 2 means hand-maintaining a schema
+against a CRD that changes, and a schema that drifts fails open.
+
+GAG's own end-to-end suite is the worked example for option 1: the overlays
+under `deploy/dogfood-e2e/overlays/` consume these bases and patch in their
+cluster specifics and nothing else. `make template-library-check` rejects a
+strategic-merge patch against a `ClusterRunnerTemplate` in this repo, and
+compares each overlay's render against its base to catch a list that lost
+entries by any route.
 
 ## Sizing
 
