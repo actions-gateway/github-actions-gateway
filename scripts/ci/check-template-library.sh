@@ -185,8 +185,10 @@ for entry in "${entries[@]}"; do
 	((docs == 1)) ||
 		fail "$tmpl contains $docs top-level documents, want exactly 1 (the ClusterRunnerTemplate)"
 
-	# Rule 6.
-	grep -q -- "$entry" "$README" ||
+	# Rule 6. On a name boundary, not a substring: `dind` is not `kata-dind`,
+	# and a plain match would report a new entry as documented on the strength
+	# of a sentence about a different one.
+	grep -qE "(^|[^[:alnum:]_-])$entry([^[:alnum:]_-]|$)" "$README" ||
 		fail "$README does not name library entry '$entry'; a shipped entry no doc mentions is one nobody can adopt"
 done
 
