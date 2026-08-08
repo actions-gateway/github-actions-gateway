@@ -1,9 +1,8 @@
 # Release 1.4 Milestone Definition
 
-> **Status: scope decided 2026-08-05. Three gating Queue rows remain**, labelled
-> `1.4-gate`: [Q166](../STATUS.md#Q166), [Q554](../STATUS.md#Q554),
-> [Q691](../STATUS.md#Q691). Everything else the release contains is already
-> merged.
+> **Status: scope decided 2026-08-05. Two gating Queue rows remain**, labelled
+> `1.4-gate`: [Q166](../STATUS.md#Q166), [Q554](../STATUS.md#Q554). Q691 shipped
+> 2026-08-08. Everything else the release contains is already merged.
 
 ## The minor was forced before anyone chose it
 
@@ -49,11 +48,14 @@ the e2e overlays patch, plus a plain baseline entry. Packaging rather than new
 behaviour, and the constraint that only CI-exercised templates ship is what keeps
 it that way.
 
-**[Q691](../STATUS.md#Q691): auto re-run a force-cancelled abandoned run.**
+**Q691: auto re-run a force-cancelled abandoned run.**
 Closes a gap this cycle opened. Q683's cancelled ending accepts
-`rerun-failed-jobs`, measured, so operators re-run by hand today. Needs a
-capacity-returned trigger and a loop budget, because a re-run re-queues into the
-pool that was starved in the first place.
+`rerun-failed-jobs`, measured, so operators re-ran by hand. **Shipped
+2026-08-08:** the run is re-run when a worker pod binds for the owner again, and
+the loop a re-run into a starved pool would otherwise cause is bounded by the
+existing per-run retry budget, with exhaustion on
+`eviction_retries_exhausted_total{cause="abandoned"}` and expiry on
+`abandoned_run_rerun_waits_total{outcome="expired"}`.
 
 ## Deferred to 1.5.0, and why
 

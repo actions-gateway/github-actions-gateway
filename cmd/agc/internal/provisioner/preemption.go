@@ -62,8 +62,13 @@ func PreemptedByScheduler(pod *corev1.Pod) bool {
 // is displacing more opportunistic work than the tenant expected, a climbing deletion
 // count means something (a drain, an operator, an autoscaler) is removing live workers
 // — and troubleshooting sends an operator looking for different things in each case.
+//
+// recoveryCauseAbandoned is the one whose re-run is not immediate: the worker never
+// started, so the run was force-cancelled (Q683) and the re-run waits for capacity to
+// return before spending its slot (Q691, abandoned_rerun.go).
 const (
 	recoveryCauseEviction   = "eviction"
 	recoveryCausePreemption = "preemption"
 	recoveryCauseDeletion   = "deletion"
+	recoveryCauseAbandoned  = "abandoned"
 )

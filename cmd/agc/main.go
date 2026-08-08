@@ -737,6 +737,14 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 	if err := mgr.Add(provisioner.NewEvictionSweeper(prov)); err != nil {
 		return nil, fmt.Errorf("add eviction-counter sweeper: %w", err)
 	}
+
+	// Re-run the runs force-cancelled behind a worker that never started, once the
+	// owner can place a worker pod again (Q691). Deferred rather than immediate
+	// because such a job was abandoned for want of capacity, and bounded by the same
+	// per-run retry budget as every other disruption recovery.
+	if err := mgr.Add(provisioner.NewAbandonedRerunSweeper(prov)); err != nil {
+		return nil, fmt.Errorf("add abandoned-run re-run sweeper: %w", err)
+	}
 	return prov, nil
 }
 
