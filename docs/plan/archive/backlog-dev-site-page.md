@@ -98,7 +98,8 @@ a column `Labels`, and would otherwise have sprouted chips.
 The vocabulary covers most work types (`bug` ≈ fix, `docs`, `tests`,
 `speed` ≈ perf, `infra` ≈ chore) but has no way to mark a feature — under a
 filterable view that's the first chip someone reaches for. Add `feature` to
-the legend and retag the rows that warrant it (e.g. [Q554](../../STATUS.md#Q554)).
+the legend and retag the rows that warrant it (e.g. Q554, the runner template
+library, which carried `docs` for want of anything better).
 Stop there: importing the Conventional Commit taxonomy wholesale would
 create synonym pairs (`bug`/`fix`) with no query behind them.
 

@@ -162,7 +162,14 @@ small, composable kinds: an `ActionsGateway` (identity + GitHub binding), a
 `RunnerTemplate` (a reusable pod shape), a `RunnerSet` per runner type, and an
 optional `EgressProxy`. The set below is feature-equivalent to the legacy v1
 example, a proxied gateway with a GPU runner set (priority tiers) and a Linux
-runner set:
+runner set.
+
+**You can skip authoring the template.** GAG ships three validated worker pod
+shapes; `kubectl apply -k deploy/templates/plain` gives you the baseline one,
+and a `RunnerSet` then points at it with `templateRef: { name: plain, kind:
+ClusterRunnerTemplate }` in place of the inline `RunnerTemplate` below. If your
+jobs build container images, start from `kata-dind` instead. See the
+[runner template library](operations/runner-template-library.md).
 
 ```yaml
 apiVersion: actions-gateway.com/v2beta1

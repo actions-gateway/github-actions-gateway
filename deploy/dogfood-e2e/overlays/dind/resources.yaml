@@ -1,70 +1,9 @@
-# Privileged-DinD isolation delta: the worker pod shape + the egress policy.
+# Privileged-DinD isolation delta, e2e-tenant half. The worker pod shape itself
+# is NOT here any more: it is the shipped library entry
+# deploy/templates/privileged-dind, which this overlay consumes as a base and
+# patches with the cluster specifics (kustomization.yaml). See ../kata/resources.yaml
+# for why the relationship runs that way (Q554).
 #
-# ClusterRunnerTemplate is cluster-scoped (platform-owned) — v2 refuses a
-# privileged container in a namespaced (tenant) RunnerTemplate, so the privileged
-# DinD shape MUST live here.
-apiVersion: actions-gateway.com/v2beta1
-kind: ClusterRunnerTemplate
-metadata:
-  name: dogfood-e2e-privileged
-spec:
-  podTemplate:
-    spec:
-      nodeSelector:
-        cloud.google.com/gke-nodepool: e2e
-      tolerations:
-        - key: dedicated
-          value: e2e
-          effect: NoSchedule
-      # dind as a NATIVE sidecar (restartPolicy: Always init container, K8s >=1.29).
-      # This is load-bearing: a regular sidecar's dockerd never exits, so the pod
-      # never completes, the AGC keeps the session active, and maxWorkers strands
-      # (Q249). As a native sidecar, K8s tears dind down when the runner exits.
-      initContainers:
-        - name: dind
-          image: docker:27-dind
-          restartPolicy: Always
-          args: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
-          env:
-            - name: DOCKER_TLS_CERTDIR
-              value: ""
-          securityContext:
-            privileged: true
-          # Right-sized from a measured clean-green Calico e2e run on GAG (Q248,
-          # 2026-07-07): the dind daemon peaked 1308m CPU / 2343Mi memory — the
-          # kind+Calico cluster (node containers + CNI images/pods) lives inside
-          # this sidecar, so dind is the MEMORY-heavy half. CPU is compressible →
-          # requests-only, no limit (throttling dind would slow the whole in-DinD
-          # cluster). Memory is non-compressible and kind-bringup OOM-sensitive →
-          # request≈peak (was 2Gi, UNDER the 2343Mi peak), limit=peak×~1.7 (was a
-          # 3.4×-over 8Gi guess). Rationale + measured table: ../../README.md (Q248).
-          resources:
-            requests: { cpu: "1", memory: "3Gi" }
-            limits: { memory: "4Gi" }
-      containers:
-        - name: runner
-          # docker CLI + buildx + helm + kubectl + jq on the build-capable base
-          # (scripts/dogfood/e2e-runner/Dockerfile). The AGC still injects the
-          # Q235 wrapper and preserves the native-sidecar init container.
-          image: ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
-          env:
-            - name: DOCKER_HOST
-              value: "tcp://localhost:2375"
-          # Right-sized from the same measured run (Q248, 2026-07-07): the runner
-          # peaked 4940m CPU / 1034Mi memory — it drives the e2e specs + kubectl/
-          # helm/kind CLI, so it is the CPU-heavy half. CPU is compressible →
-          # requests-only, no limit (bursts to its ~5-vCPU peak). request=3 (up
-          # from an under-reserved 2) is deliberate: runner(3)+dind(1)=4 vCPU of
-          # requests forces exactly ONE worker pod per e2-standard-8 node
-          # (~7.5 vCPU allocatable), so the two maxWorkers pods land on two nodes
-          # and concurrent e2e runs (e.g. kindnet + calico) never CPU-throttle each
-          # other. Memory is the runner's slack half: request≈peak (1Gi, was a
-          # 4×-over 4Gi), limit=3Gi headroom for occasional Go-build spikes (was a
-          # 12×-over 12Gi). Rationale + measured table: ../../README.md (Q248).
-          resources:
-            requests: { cpu: "3", memory: "1Gi" }
-            limits: { memory: "3Gi" }
----
 # Open egress (additive; unions with GAG's managed default-deny). TRUSTED-ONLY:
 # e2e pulls from Docker Hub / quay / registry.k8s.io / get.helm.sh, all CDN-fronted
 # (a CIDR allowlist would rot; an FQDN allowlist isn't enforceable on GKE DPv2 —

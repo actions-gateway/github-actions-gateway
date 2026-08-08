@@ -1,8 +1,9 @@
 # Release 1.4 Milestone Definition
 
-> **Status: scope decided 2026-08-05. Two gating Queue rows remain**, labelled
-> `1.4-gate`: [Q166](../STATUS.md#Q166), [Q554](../STATUS.md#Q554). Q691 shipped
-> 2026-08-08. Everything else the release contains is already merged.
+> **Status: scope decided 2026-08-05. One gating Queue row remains**, labelled
+> `1.4-gate`: [Q166](../STATUS.md#Q166). Q691 and Q554 both shipped 2026-08-08
+> (the latter's [plan](archive/runner-template-library.md) is archived).
+> Everything else the release contains is already merged.
 
 ## The minor was forced before anyone chose it
 
@@ -41,12 +42,16 @@ wearing a feature label, and every release that ships it that way hardens a
 dormant contract further. Demand fired 2026-08-01. Remaining: the M4 consent
 check, CA distribution, dual-side NetworkPolicy.
 
-**[Q554](../STATUS.md#Q554): a curated runner template library.** The cheapest
+**Q554: a curated runner template library. Shipped 2026-08-08.** The cheapest
 real capability on the list: no new CRD, and it promotes templates CI already
 validates (dogfood kata-dind and privileged-dind) into a shipped kustomize base
 the e2e overlays patch, plus a plain baseline entry. Packaging rather than new
 behaviour, and the constraint that only CI-exercised templates ship is what keeps
-it that way.
+it that way. That constraint is now a gate rather than a convention:
+`make template-library-check` reconciles the shipped and exercised sets both
+ways, and every entry is admitted by a real apiserver on each integration run.
+The operator surface is [runner-template-library.md](../operations/runner-template-library.md);
+the implementation findings are in the [archived plan](archive/runner-template-library.md).
 
 **Q691: auto re-run a force-cancelled abandoned run.**
 Closes a gap this cycle opened. Q683's cancelled ending accepts

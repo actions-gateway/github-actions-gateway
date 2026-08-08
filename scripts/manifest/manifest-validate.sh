@@ -53,7 +53,14 @@ crds_v2_chart="$REPO_ROOT/charts/actions-gateway-crds-v2"
 kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -ignore-missing-schemas"
 [[ -n "$KUBECONFORM_CACHE" ]] && kubeconform_flags+=" -cache $KUBECONFORM_CACHE"
 
-yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/kata-ci"
+# deploy/templates is the SHIPPED runner template library (Q554): hand-authored
+# YAML an operator applies directly, so tabs, a duplicate key or a missing final
+# newline would reach them. kubeconform cannot add to that — ClusterRunnerTemplate
+# is one of our own CRDs, which -ignore-missing-schemas skips. The schema and CEL
+# half is covered where a real apiserver is available instead
+# (TestTemplateLibrary_Admitted in the AGC integration suite), and the
+# shipped-vs-exercised half by `make template-library-check`.
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/kata-ci deploy/templates"
 
 # The plain-YAML files retained under cmd/*/config/: the controller-gen outputs
 # (CRDs, manager RBAC role, webhook config) that are the codegen substrate and

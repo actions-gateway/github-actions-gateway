@@ -49,12 +49,6 @@ last gaps an outside operator hits.
   egress scoped to it, GitHub, and DNS. Scheduled on an operator's ask;
   measurement first.
 
-- **[A curated runner template library](plan/runner-template-library.md)** <!-- q:Q554 -->
-  Every tenant writes its own worker pod template today, including the fiddly
-  parts: the Docker-in-Docker sidecar, the Kata `runtimeClassName`, the volume
-  and security-context wiring. The templates our own end-to-end CI exercises
-  become a shipped kustomize base you patch. No new API surface.
-
 - **[Opt-in auto-retry for flaky jobs](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555 -->
   A job the cluster disrupts already
   [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do);

@@ -241,8 +241,9 @@ static values are.
 ## Worked example — a DinD tenant at 12 concurrent jobs
 
 **Inputs.** A tenant running Docker-in-Docker CI on the measured reference shape
-(`deploy/dogfood-e2e/overlays/dind/resources.yaml`), with the default egress
-proxy pool, on the v2 API, `sizing.profile: Static`.
+(the shipped `privileged-dind` entry, `deploy/templates/privileged-dind/template.yaml`;
+see [runner template library](runner-template-library.md)), with the default
+egress proxy pool, on the v2 API, `sizing.profile: Static`.
 
 | Input | Value |
 |---|---|

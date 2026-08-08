@@ -52,6 +52,7 @@ under its first stability contract.
 ## Security posture
 
 - **[Secure-by-default hardening](design/05-security.md)**: Pod Security Admission per namespace, default-deny NetworkPolicies, and credentials kept out of environment variables, all reconciled rather than opt-in.
+- **[Runner template library](operations/runner-template-library.md)**: three shipped worker pod shapes (`plain`, `kata-dind`, `privileged-dind`), each applied with one `kubectl apply -k`, so a tenant starts from a validated template instead of transcribing a capability set by hand. Only templates CI exercises may ship, and a gate enforces it.
 - **[Kata micro-VM workers](operations/kata-dind-workloads.md)**: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker pod.
 - **[In-runner image builds](operations/in-runner-image-builds.md)**: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right `securityProfile` and PSA level.
 - **[Signed images, SBOM, and SLSA provenance](operations/release.md)**: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.

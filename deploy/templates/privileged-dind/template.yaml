@@ -1,0 +1,85 @@
+# Privileged DinD: a real Docker daemon with NO isolation. The fallback.
+#
+# `privileged: true` on the dockerd sidecar exposes the HOST kernel: a container
+# escape from a job lands on the node, and every job that runs on this template
+# can reach it. Reach for ../kata-dind first — same Docker daemon, micro-VM
+# boundary — and for a rootless builder before either
+# (docs/operations/in-runner-image-builds.md).
+#
+# But Kata is not always available, and this entry is the answer when it is not:
+# it needs nested virtualisation or bare metal, which excludes GPU builds (no
+# GPU passthrough into a nested guest), every AMD- and Arm-powered GCE machine
+# family, and any AWS instance that is not `.metal`. Where that is your
+# situation, run this on a dedicated node pool with trusted jobs only, never a
+# fork's pull request. Detail:
+# docs/operations/runner-template-library.md#choosing-an-entry
+#
+# ClusterRunnerTemplate rather than a namespaced RunnerTemplate is not a
+# stylistic choice: v2 refuses a privileged container in a tenant-authored
+# RunnerTemplate, so this shape can only exist platform-owned. Applying it is a
+# cluster-admin act.
+#
+# CLUSTER PREREQUISITES this template cannot express:
+#   - the tenant namespace at PSA `privileged`, plus GAG's own three gates —
+#     the `actions-gateway.com/privileged-profile: allowed` platform label and
+#     the `actions-gateway.com/allow-profile-downgrade: allowed` annotation
+#     alongside `actions-gateway.com/security-profile: privileged`. Tenants
+#     cannot self-elevate; see docs/operations/runner-template-library.md.
+#   - PSA `privileged` makes the AGC's applySecurityDefaults a no-op by design,
+#     so this template carries the entire security posture of its workers.
+apiVersion: actions-gateway.com/v2beta1
+kind: ClusterRunnerTemplate
+metadata:
+  name: privileged-dind
+spec:
+  # REPLACE BEFORE USE — same requirement and same reasoning as ../kata-dind:
+  # the runner container needs a Docker CLI on PATH, the sidecar supplies only
+  # the daemon, and a reserved .invalid host fails at pull rather than mid-job.
+  workerImage: example.invalid/build-capable-runner:replace-me
+  podTemplate:
+    spec:
+      # dind as a NATIVE sidecar (restartPolicy: Always init container, K8s
+      # >=1.29). Load-bearing: a regular sidecar's dockerd never exits, so the
+      # pod never completes, the AGC keeps the session active, and maxWorkers
+      # strands (Q249). As a native sidecar, K8s tears dind down when the runner
+      # exits.
+      initContainers:
+        - name: dind
+          image: docker:27-dind
+          restartPolicy: Always
+          args: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          securityContext:
+            privileged: true
+          # Measured on GAG's own e2e (Q248): the dind daemon peaked 1308m CPU /
+          # 2343Mi memory — a nested cluster's containers and images live inside
+          # this sidecar, so dind is the MEMORY-heavy half. CPU is compressible
+          # → requests-only, no limit (throttling dind slows everything nested
+          # inside it). Memory is non-compressible and bringup OOM-sensitive →
+          # request≈peak, limit≈peak×1.7. Re-measure for your own workload:
+          # docs/operations/worker-rightsizing.md.
+          resources:
+            requests:
+              cpu: "1"
+              memory: 3Gi
+            limits:
+              memory: 4Gi
+      containers:
+        - name: runner
+          # image omitted: spec.workerImage above supplies it. The AGC injects
+          # the Q235 wrapper and preserves the native-sidecar init container.
+          env:
+            - name: DOCKER_HOST
+              value: "tcp://localhost:2375"
+          # Measured on the same run (Q248): the runner peaked 4940m CPU /
+          # 1034Mi memory — it drives the job's own steps and CLIs, so it is the
+          # CPU-heavy half. CPU requests-only so it bursts to peak; memory
+          # request≈peak with headroom for compile spikes.
+          resources:
+            requests:
+              cpu: "3"
+              memory: 1Gi
+            limits:
+              memory: 3Gi

@@ -546,10 +546,24 @@ capabilities a DinD workload still needs inside the guest approach
 `privileged`, so the whole guarantee rests on the VM boundary. See
 [Running DinD workloads under Kata § What Kata does not buy you](../operations/kata-dind-workloads.md#what-kata-does-not-buy-you).
 
-This pairing is a tenant-level decision: the platform team can
-recommend it via policy and documentation, but cannot enforce it
-from the GMC alone (the `runtimeClassName` field lives in the
-`PodTemplate`, owned by the tenant).
+**The platform can enforce this pairing, and no longer only recommend
+it.** `runtimeClassName` lives in the `PodTemplate`, but in v2 the
+`PodTemplate` need not be tenant-owned: a cluster-scoped
+`ClusterRunnerTemplate` is platform-authored, and the Q172 resolution
+ladder (`templateRef` → `ActionsGateway.spec.defaultTemplateRef` →
+the annotated cluster-default `ClusterRunnerTemplate`, then fail closed)
+means a `RunnerSet` that names no template of its own resolves to one the
+platform wrote. Marking a sandbox-runtime template as the cluster default
+makes the pairing the outcome a tenant gets by default rather than one
+they have to choose. GAG ships the pod shape for this as `kata-dind` in the
+[runner template library](../operations/runner-template-library.md), which
+deliberately does **not** ship marked as a default: which template a cluster
+defaults to is the platform team's decision to make, not the project's.
+
+What remains tenant-owned is a `RunnerSet` that authors its own namespaced
+`RunnerTemplate` and names it explicitly. That template cannot declare a
+privileged container at all (rejected at admission), so the escape hatch it
+offers is a weaker pod shape, not a more privileged one.
 
 ### Privileged worker containers are admitted only under the privileged profile
 

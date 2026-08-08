@@ -73,6 +73,12 @@ jobs:
               - 'githubapp/**'
               - 'scaleset/**'
               - 'test/**'
+              # The shipped runner template library is INPUT to this tier:
+              # TestTemplateLibrary_Admitted applies every entry to a real
+              # apiserver, which is the only thing that validates an entry no
+              # dogfood overlay exercises (Q554). Without this pattern a
+              # library-only change skips its own gate and reports green.
+              - 'deploy/templates/**'
               - 'vendor/**'
               - 'go.work'
               - 'go.work.sum'
