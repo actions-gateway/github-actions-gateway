@@ -46,7 +46,7 @@ Understanding who reads what determines scope and priority.
 | --- | --- | --- |
 | Platform engineer (initial setup) | `getting-started.md` | Deployment steps, validation, GitHub App wiring |
 | Tenant team | `getting-started.md` | CR authoring, RunnerGroup sizing, sharding guidance |
-| On-call SRE | *(missing)* | Troubleshooting, metric → symptom mapping, runbooks |
+| Platform engineer (on call) | `operations/runbook.md` | Troubleshooting, metric → symptom mapping, runbooks |
 | Architect / reviewer | `docs/design/README.md` | Architecture rationale, alternatives, API contracts |
 | Security engineer | `docs/design/05-security.md` | Threat model, RBAC boundaries, incident response |
 | Executive / budget owner | `docs/design/01-executive-summary.md` | Cost justification, risk, delivery timeline |
@@ -59,7 +59,7 @@ These are blocking for production readiness. None of this content exists anywher
 
 ### 1.1 Troubleshooting guide — `docs/operations/troubleshooting.md`
 
-Audience: on-call SRE, platform engineer.
+Audience: platform engineer (on call).
 
 Cover the following failure modes as named sections, each with: symptoms, likely cause, diagnostic steps (commands), resolution:
 
@@ -78,7 +78,7 @@ Also include a section: "How to validate a fresh deployment is healthy" — a ch
 
 ### 1.2 Production runbook — `docs/operations/runbook.md`
 
-Audience: on-call SRE.
+Audience: platform engineer (on call).
 
 Sections:
 

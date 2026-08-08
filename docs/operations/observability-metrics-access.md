@@ -1,6 +1,6 @@
 # Accessing Metrics (scraping setup)
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer
 
 Part of the [Observability](observability.md) guide. See also: [Metrics reference](observability-metrics.md) · [Alerting & SLOs](observability-alerting.md) · [Grafana dashboards](observability-dashboards.md) · [Logging & tracing](observability-logging.md).
 

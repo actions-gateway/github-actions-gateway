@@ -1,6 +1,6 @@
 # Observability
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer, Tenant operator
 
 Every component exposes Prometheus metrics from the standard `controller-runtime` metrics server, so built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics documented in this guide. The serving posture differs by component:
 

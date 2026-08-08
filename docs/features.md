@@ -81,7 +81,7 @@ under its first stability contract.
 - **[Upgrade and rollback](operations/upgrade.md)**: versioned upgrade procedures and the rollback path for each release.
 - **[Backup and restore](operations/backup-restore.md)**: backup posture and a recovery runbook, with a [Velero-specific how-to](operations/velero-backup-restore.md).
 - **[Troubleshooting](operations/troubleshooting.md)**: symptom to diagnosis to remediation, organised by observable failure mode.
-- **[Production runbook](operations/runbook.md)**: the operational procedures an on-call SRE needs.
+- **[Production runbook](operations/runbook.md)**: the operational procedures the platform team needs on call.
 - **[P2P image distribution](operations/p2p-image-distribution.md)**: add a Spegel or Dragonfly mirror to survive ephemeral-worker pull storms.
 
 ## API surface and migration

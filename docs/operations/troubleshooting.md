@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer, Tenant operator
 
 Each section below covers a specific failure mode: symptoms, likely cause, diagnostic commands, and resolution steps.
 

@@ -1,6 +1,6 @@
 # Alerting & SLOs
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer
 
 Part of the [Observability](observability.md) guide. The metrics referenced below are catalogued in the [Metrics reference](observability-metrics.md); to scrape them, see [Accessing metrics](observability-metrics-access.md). For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
 

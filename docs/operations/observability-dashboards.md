@@ -1,6 +1,6 @@
 # Grafana Dashboards
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer, Tenant operator
 
 Part of the [Observability](observability.md) guide. The panels below query the [Metrics reference](observability-metrics.md) and the [SLO recording rules](observability-alerting.md#slo-recording-rules); the scrape wiring they depend on is in [Accessing metrics](observability-metrics-access.md).
 
@@ -9,7 +9,7 @@ Part of the [Observability](observability.md) guide. The panels below query the 
 | Dashboard | Source scrape | Audience |
 | --- | --- | --- |
 | [`grafana-dashboard-tenant.json`](../../deploy/monitoring/grafana-dashboard-tenant.json) | a tenant's AGC + egress proxy (per-tenant mTLS) | operator of one tenant's runners |
-| [`grafana-dashboard-platform.json`](../../deploy/monitoring/grafana-dashboard-platform.json) | the GMC manager (one cluster-wide TLS scrape) | SRE running the GMC / the fleet |
+| [`grafana-dashboard-platform.json`](../../deploy/monitoring/grafana-dashboard-platform.json) | the GMC manager (one cluster-wide TLS scrape) | Platform engineer running the GMC / the fleet |
 
 The split mirrors how the metrics are exposed (see [Accessing metrics](observability-metrics-access.md#how-to-access-metrics)): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (`managed_gateways`, `runnergroups_degraded`, `egress_rules_stale`, the proxy-quota gauges) get their own dashboard.
 

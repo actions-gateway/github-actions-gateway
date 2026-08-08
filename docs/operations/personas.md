@@ -26,15 +26,17 @@ the platform side when the control plane misbehaves, the tenant side when one
 namespace's CI does. Whoever is carrying the pager already appears below under
 the side they sit on, so there is no separate on-call persona on this page.
 
-**"SRE" is a job title, and it lands on either side.** In this doc tree it is
-tagged platform-side: of the eleven SRE-tagged pages in the [index](README.md),
-nine also carry Platform engineer and none carries Tenant operator. That
-describes how these pages are written, not how any particular organisation
-staffs the work. Plenty of teams call the person who owns one tenant's CI an
-SRE, and this page calls that role Tenant operator regardless of title.
+**Job titles are not roles, which is why none of them appear here.** "SRE" was
+a tag in this tree until 2026-08-07 and was retired for being ambiguous in the
+one way a routing tag cannot afford: both the platform and its tenants need
+SREs, so the tag never told a reader which side of the boundary a page was
+written for. Retiring it forced every page it covered to declare a side, and
+three turned out to be tenant-facing pages that had been filed as platform ones.
+"DevOps" was never a tag and should not become one; it is even less specific,
+and CI is not an application being operated in production.
 
-Read it as one question rather than a job title: which side of the tenancy
-boundary are you on?
+A role name here states a scope, a domain, and a responsibility. Read it as one
+question: which side of the tenancy boundary are you on?
 
 ## The roles
 
@@ -156,14 +158,14 @@ new chip that matches one document. "Tenant operator" is the correct name for
 the namespace-owning role; "Tenant owner" was a drifted variant and has been
 normalised.
 
-**The tag set and the role list are not the same list, on purpose.** Two tags
-have no matching role above:
+**Every tag is a role on this page, with one exception.** `All` means every
+persona, and a page carrying it stays visible under any chip. This page and the
+[glossary](../design/08-glossary.md) use it, which is why the audience line
+above names no roles: a page about who the roles are is not addressed to one of
+them.
 
-- **`All`** means every persona, and a page carrying it stays visible under any
-  chip. This page and the [glossary](../design/08-glossary.md) use it, which is
-  why the audience line above names no roles: a page about who the roles are is
-  not addressed to one of them.
-- **`SRE`** is a job title rather than a role, because both sides of the
-  boundary use it. It stays a chip because eleven pages carry it and readers
-  search by it. Tag a page `SRE` when its reader is holding a pager, and pair it
-  with the side that reader is on.
+Otherwise, tag with a role name. **Do not reintroduce a job title as a tag.** A
+tag exists to route a reader to the right page, so it has to answer "is this
+for me?", and a title that both sides of the boundary use cannot. If a new tag
+seems necessary, the question to answer first is what scope, domain, and
+responsibility it names.

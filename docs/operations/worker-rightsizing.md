@@ -1,6 +1,6 @@
 # Right-sizing worker resources from measured usage
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Tenant operator, Platform engineer
 
 Every worker pod's CPU/memory `requests`/`limits` start as a guess in the
 tenant's `RunnerTemplate`. This guide turns the gateway's built-in usage

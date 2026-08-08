@@ -1,6 +1,6 @@
 # Security Operations: Abuse Detection & Response
 
-> **Audience:** SRE, Security
+> **Audience:** Platform engineer, Security
 
 This runbook turns the abuse
 heuristics in the [threat model](../design/05-security.md) into concrete,
