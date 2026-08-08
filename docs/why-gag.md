@@ -192,84 +192,69 @@ Every GAG capability above is available today.
     stamped above, re-check the column rather than trusting it, and
     [tell us what changed](https://github.com/actions-gateway/github-actions-gateway/issues).
 
+### Two rows with fine print
+
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
-     When a case is added or removed there, update this box too. -->
-!!! info "Disruptions re-run themselves, but failures and cancels never do"
+     When a case is added or removed there, update this paragraph too. -->
+**Auto-re-run covers disruption, never failure.** What re-runs itself is a job
+whose worker the *cluster* took away: a kubelet eviction, a scheduler preemption
+under a `priorityTiers` floor, a node drain, even a stray `kubectl delete pod`,
+each retried within a per-run budget. What never re-runs, by design: a job that
+ran and **failed**, a run you **cancelled**, and workers the gateway's own
+cleanup reaped as stuck.
+[The full boundary, with detection marks and metrics](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
-    The auto-re-run claim is scoped on purpose. What re-runs itself: a job whose
-    worker the *cluster* took away: a kubelet eviction, a scheduler preemption
-    under a `priorityTiers` floor, a node drain, even a stray
-    `kubectl delete pod`. Each is retried until GitHub accepts it, within a
-    per-run budget (`maxEvictionRetries`). What never does, by design: a job
-    that ran and **failed** (re-running it would mask real breakage), a run you
-    **cancelled** (a cancel is the intended stop), and workers the gateway's own
-    cleanup reaped as stuck (a re-run would loop them). The full boundary, with
-    the detection marks and metrics:
-    [which disruptions auto-re-run a job](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
+**Right-sizing is structural, not a feature race.** An ephemeral runner pod runs
+one job, lives minutes, and has no `/scale`-style controller to group it, so
+stock Vertical Pod Autoscaler cannot size it: grouping, evict-and-resize
+actuation, and long-running-service statistics all miss that shape. The loop can
+only close inside the controller that builds the pods.
+[Appendix D.7](design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on).
 
-!!! info "Why measured right-sizing can't be bolted onto ARC"
+### Before you start
 
-    The right-sizing row is structural, not a feature race. Ephemeral runner
-    pods, ARC's and GAG's alike, run one job, live minutes, and have no
-    `/scale`-style controller to group them, so stock Vertical Pod Autoscaler
-    (and the dashboards built on it) cannot size them: its grouping, its
-    evict-and-resize actuation, and its long-running-service statistics all
-    miss this workload shape. The only place the loop can close is *inside the
-    controller that creates the pods*, at pod-build time, which is where GAG
-    runs it: sample per-job peaks, publish the recommendation on the
-    `RunnerSet`, and (opt-in) apply it to the next job's pod, with GPUs never
-    touched. The full alternatives analysis is in
-    [Appendix D §D.7](design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on).
+New tenants onboard on **`actions-gateway.com/v2beta1`**, the decomposed
+`ActionsGateway` + `RunnerSet` + `RunnerTemplate` API with an optional standalone
+`EgressProxy`. Rows marked <span class="gag-v2-badge">v2</span> are v2-only, and
+the single-resource `v1alpha1` shape is
+**[deprecated and removed at `v2.0.0`](operations/v1alpha1-deprecation.md)**.
+Start at the [getting-started walkthrough](getting-started.md), or the
+[v1 to v2 migration guide](operations/migration-v1-to-v2.md) if you already run
+v1. For limits and Service Level Objectives see
+[Appendix A](design/appendix-a-capacity-slos.md); for the utilization and cost
+argument, [Appendix F](design/appendix-f-cost-model.md).
 
-!!! note "Onboarding: start on v2"
+## Where ARC is ahead
 
-    New tenants should onboard on the **recommended v2 API** at
-    `actions-gateway.com/v2beta1`: a decomposed `ActionsGateway` + `RunnerSet` +
-    `RunnerTemplate`, with an optional standalone `EgressProxy`; the rows marked
-    <span class="gag-v2-badge">v2</span> are v2-only. The single-custom-resource (CR)
-    `v1alpha1` shape shown below is still fully served but
-    **[deprecated, and removed at `v2.0.0`](operations/v1alpha1-deprecation.md)**. See the
-    [v1 → v2 migration guide](operations/migration-v1-to-v2.md) and the
-    [getting-started walkthrough](getting-started.md) for the v2 object set.
+Some of it is capability, not only maturity. Measured 2026-08-06.
 
-!!! info "The numbers behind these claims"
+- **A GitHub Support entitlement**, covering ARC installed via the official
+  Helm charts, GitHub Enterprise Server 3.9 and later. GAG has none. Read the
+  scope exclusions before relying on it: Kubernetes orchestration, policy
+  application, and template customization are explicitly out of scope, which
+  is much of what a multi-tenant platform team actually pages about.
+- **Multi-label scale sets** since 0.14.0. A workflow using
+  `runs-on: [linux, gpu]` needs one edit per target to move to GAG, which
+  admits exactly one label per runner set.
+- **`containerMode: kubernetes`**, which runs `container:` and `services:`
+  steps as separate pods with a provisioned volume. GAG runs one worker pod
+  per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather
+  than a non-privileged pod-per-step model.
+- **GitHub runner groups** (`runnerGroup`), the forge-side control over which
+  repositories may target a runner set.
+- **GHES that is actually tested.** GAG serves GHES gateways and marks both
+  of its GHES features untested against a real appliance.
 
-    For limits and Service Level Objectives, see
-    [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md); for
-    the utilization-and-cost argument,
-    [Appendix F — Cost model](design/appendix-f-cost-model.md).
+The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API
+has only just reached beta (`v2beta1`, its first stability contract). That is why
+the v1 to v2 migration runs on a committed, documented schedule with a working
+[`gag-migrate`](operations/migration-v1-to-v2.md) tool. The discipline is the
+"won't strand you" signal while the track record accumulates.
 
-!!! warning "Where ARC is ahead"
-
-    Some of it is capability, not only maturity. Measured 2026-08-06:
-
-    - **A GitHub Support entitlement**, covering ARC installed via the official
-      Helm charts, GitHub Enterprise Server 3.9 and later. GAG has none. Read the
-      scope exclusions before relying on it: Kubernetes orchestration, policy
-      application, and template customization are explicitly out of scope, which
-      is much of what a multi-tenant platform team actually pages about.
-    - **Multi-label scale sets** since 0.14.0. A workflow using
-      `runs-on: [linux, gpu]` needs one edit per target to move to GAG, which
-      admits exactly one label per runner set.
-    - **`containerMode: kubernetes`**, which runs `container:` and `services:`
-      steps as separate pods with a provisioned volume. GAG runs one worker pod
-      per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather
-      than a non-privileged pod-per-step model.
-    - **GitHub runner groups** (`runnerGroup`), the forge-side control over which
-      repositories may target a runner set.
-    - **GHES that is actually tested.** GAG serves GHES gateways and marks both
-      of its GHES features untested against a real appliance.
-
-    And the maturity gap is real: ARC is GA and widely deployed, while GAG's v2
-    API has only just reached beta (`v2beta1`, its first stability contract). That
-    is why the v1 → v2 migration runs on a committed, documented schedule with a
-    working [`gag-migrate`](operations/migration-v1-to-v2.md) tool. The discipline
-    is the "won't strand you" signal while the track record accumulates.
-
-    One thing that is **not** a differentiator either way: both ride the same
-    Public-Preview runner-scale-set protocol, through the same
-    [`actions/scaleset`](https://github.com/actions/scaleset) client library.
+One thing is **not** a differentiator either way: both ride the same
+Public-Preview runner-scale-set protocol, through the same
+[`actions/scaleset`](https://github.com/actions/scaleset) client library.
 
 ## Secure by default
 
