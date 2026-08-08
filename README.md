@@ -25,7 +25,7 @@ Each team self-serves a fully isolated gateway from a single `ActionsGateway` cu
 | | |
 | --- | --- |
 | **15–26 s** | Recovery from a preemption or drain. The run concludes at GitHub and re-runs itself, with no ticket and no manual rerun |
-| **1 pod** | Listener footprint for 10 runner sets, against 10 always-on listener pods on ARC |
+| **1 pod** | Listener footprint at rest, whatever the runner-set count. ARC runs one always-on listener pod per set |
 | **0** | Idle GPU pods between jobs. Workers exist only while a job runs |
 | **20** | Alert rules shipped as code, with a tenant dashboard and a platform dashboard beside them |
 

@@ -20,7 +20,7 @@ hide:
 
 </div>
 
-<p class="gag-claims"><span>Nothing idles between jobs.</span> <span>Disrupted jobs auto-retry.</span> <span>Quotas are safe to enforce.</span></p>
+<p class="gag-claims"><span>No idle workers.</span> <span>Disrupted jobs auto-retry.</span> <span>Enforceable quotas.</span></p>
 
 <p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for shared, multi-tenant clusters.</p>
 
@@ -63,7 +63,7 @@ These ladder up one way: **safe quotas and self-healing disruption make shared c
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
     <span class="gag-stat__num">1&nbsp;pod</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint for 10 runner sets</strong>: every listener is a goroutine in one shared pod, against 10 always-on pods on ARC</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint at rest</strong>: all listeners are goroutines in one shared pod; ARC runs one always-on pod per set</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">15&ndash;26&nbsp;s</span>
@@ -229,7 +229,17 @@ GAG targets a specific audience: teams that **must** self-host runners and run t
 </div>
 </div>
 
-<p class="gag-fit-note" markdown="span">:material-information-outline: **Not your setup?** Three cases where something else is the better answer, and we would rather say so. If you are happy running on a vendor's infrastructure, a managed runner service wins on speed and setup. If managed Kubernetes is cheap where you are and your CI fits in one cloud, a **cluster per tenant** in its own project isolates harder than any shared cluster can. And if you run one team on one cluster, [ARC](https://github.com/actions/actions-runner-controller) is a reasonable choice and is what GAG is built on the same protocol as. GAG is for the case where the nodes are big and expensive, several teams have to share them, and that sharing has to be safe.</p>
+<div class="gag-fit-note" markdown>
+
+:material-information-outline: **Not your setup?** Three cases where something else wins, and we would rather say so.
+
+- **A vendor may run your jobs** → a managed runner service, on speed and setup
+- **Managed Kubernetes is cheap, CI fits one cloud** → a cluster per team isolates harder
+- **One team owns the cluster and the runners** → [ARC](https://github.com/actions/actions-runner-controller), whose protocol GAG is built on
+
+GAG is for big, expensive nodes that several teams must share, safely. [Compare the options →](alternatives.md)
+
+</div>
 
 <div class="gag-section-intro" markdown>
 

@@ -309,28 +309,14 @@ body[data-md-color-scheme="slate"] {
    screen reader gets three phrases; the dots are generated content and stay
    out of the accessibility tree entirely. */
 .gag-hero .gag-claims {
-  font-size: clamp(1.05rem, 0.85rem + 0.8vw, 1.45rem);
+  font-size: clamp(1.05rem, 0.85rem + 0.8vw, 1.22rem);
   font-weight: 700;
   line-height: 1.45;
   color: var(--md-default-fg-color);
   margin: 0 0 0.85rem;
+  text-align: center;
 }
 
-/* Break the claim row out of the hero's narrower column to span the full
-   content width, so the three claims read as one wide line on a laptop.
-   Gated above Material's large breakpoint for two reasons: below it the hero
-   already fills the content column, so there is nothing to gain, and the
-   `left: 50%` centres on the *parent* rather than the viewport, which pushed
-   24px of horizontal scroll onto the page at 768px when it was ungated. */
-@media screen and (min-width: 76.25em) {
-  .gag-hero .gag-claims {
-    position: relative;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(100vw - 2rem, 92rem);
-    max-width: none;
-  }
-}
 
 /* Each claim is an inline-block so a wrap falls *between* phrases; a phrase
    breaks internally only when no line is wide enough to hold it, which is the
@@ -343,9 +329,16 @@ body[data-md-color-scheme="slate"] {
   content: "·";
   color: var(--md-accent-fg-color);
   font-weight: 400;
+  /* Oversized against the claim text so the dot reads as a divider rather than
+     punctuation. `em` here resolves against the claim's own clamped size, so it
+     scales with the row; line-height 0 keeps the taller glyph from growing the
+     line box. */
+  font-size: 1.8em;
+  line-height: 0;
+  vertical-align: -0.08em;
   /* Owned by the claim that follows it, so a wrap never strands the dot at the
-     end of a line. */
-  padding: 0 0.5em 0 0.15em;
+     end of a line. Padding is in the dot's own em, hence the smaller numbers. */
+  padding: 0 0.28em 0 0.08em;
 }
 
 .gag-hero .gag-tagline {
@@ -440,6 +433,24 @@ body[data-md-color-scheme="slate"] {
   color: var(--md-accent-fg-color);
   margin-right: 0.4rem;
   vertical-align: -0.16em;
+}
+
+/* Tighten the routing list: it is three scan lines, not body copy, so it gets
+   less leading than the surrounding prose and no extra block margins. */
+.gag-fit-note > :first-child {
+  margin-top: 0;
+}
+
+.gag-fit-note > :last-child {
+  margin-bottom: 0;
+}
+
+.gag-fit-note ul {
+  margin: 0.5rem 0;
+}
+
+.gag-fit-note li {
+  margin-bottom: 0.15rem;
 }
 
 .gag-fit-note .twemoji svg {
