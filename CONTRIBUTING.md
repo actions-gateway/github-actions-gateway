@@ -275,6 +275,13 @@ Two mechanics make the follow-through safe once the base lands:
 - **Verify the base landed by content, never by SHA.** A squash orphans the original
   SHAs, so `git log` cannot tell you the work is in. Check the code:
   `git show origin/main:<path> | grep <the symbol you added>`.
+- **Retargeting the PR does not re-point CI — the push does.** `gh pr edit --base main`
+  changes where the PR merges, but the checks already queued still resolve their range
+  against the base SHA recorded at the last push, which the squash has orphaned. The
+  merge-base then falls back to a commit predating the base PR, and range-scanning gates
+  report on `main`'s own history: `lint-status` will name other people's commits as
+  mixing `docs/STATUS.md` with code. Nothing is wrong with your branch. Do the `--onto`
+  rebase and push, and the next run computes a real merge-base.
 
 ### A conflict inside a section your change deletes
 
