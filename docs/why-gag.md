@@ -27,12 +27,10 @@ hide:
 
 ## The problem ARC leaves you with
 
-These trace back to one root, and it is not a missing feature. ARC models a
-cluster with **one owner**: the team that runs the cluster is the team that runs
-the runners. That is a coherent product, and on a single-tenant cluster it is a
-reasonable choice. It is also why ARC has no primitive separating what the
-platform owns from what a tenant owns, and why each item below is really the
-same gap seen from a different angle.
+All four trace to one root, and it is not a missing feature. **ARC models a
+cluster with one owner**, so it has no primitive separating what the platform
+owns from what a tenant owns. That is a reasonable product for a single-tenant
+cluster, and the same gap from four angles once teams share one.
 
 <div class="gag-pillars gag-pillars--problem gag-cols-2" markdown>
 <div class="grid cards" markdown>
@@ -82,27 +80,7 @@ same gap seen from a different angle.
 
 ## What changes with GAG
 
-"Safe to share" means two different things, and GAG needs both. **Operationally
-safe** is quota-aware intake and automatic re-run. **Safe to run other people's
-code on** is the isolation stance: Pod Security Admission, default-deny egress,
-and Kata micro-VM workers. The first is finished; the second is finished for
-trusted CI and still in progress for untrusted pull requests.
-
-Enforcing a tight per-tenant quota is only reasonable if a blocked job waits
-instead of stalling. Bin-packing tenants onto the same expensive nodes is only
-reasonable if a preempted job comes back on its own. Running on preemptible or
-spot capacity is only reasonable if the cluster taking a worker away is a
-non-event. Take either away and the platform team's options collapse to
-over-provisioning, loose quotas, and a ticket queue, which is the path back to a
-cluster per team.
-
-A tenant declares only namespaced resources, and the GMC provisions the
-controller, proxy pool, RBAC, and network policies to match, all inside the
-platform-owned `ResourceQuota` it never creates or mutates. After the initial
-install, no step needs a cluster admin.
-[See the whole object set](getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
-
-So the outcomes compound in one direction:
+Three capabilities that only pay off together, and what they unlock:
 
 <div class="gag-flow gag-flow--wide">
   <div class="gag-flow__row">
@@ -149,20 +127,19 @@ So the outcomes compound in one direction:
   </div>
 </div>
 
-The [cost model](design/appendix-f-cost-model.md) works the utilization argument
-through in numbers; a published benchmark at scale is
-[on the roadmap](roadmap.md) and not yet done, so treat those figures as a model
-rather than a measurement.
+A tenant declares only namespaced resources; the GMC provisions the rest inside
+a platform-owned quota it cannot write, with no cluster admin after the install
+([the object set](getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)).
+The [cost model](design/appendix-f-cost-model.md) runs the utilization argument
+in numbers, but a benchmark at scale is [on the roadmap](roadmap.md) and not yet
+done: treat those figures as a model, not a measurement.
 
 ## GAG vs ARC (scale-set mode)
 
-GAG acquires jobs with the **same runner-scale-set protocol ARC uses**: a single
-acquirer per runner set, capacity-gated assignment, no many-acquirers fan-out. It
-is the **shipped default** in the v2 API. So the comparison below is
-capability-for-capability against ARC's *own* model: every GAG row is **additive**,
-not a different-architecture trade-off. The difference is what surrounds the shared
-acquisition core: quota safety, priority tiers, per-tenant egress, and control-plane
-footprint.
+**This is not a protocol argument.** GAG acquires jobs with the same
+runner-scale-set protocol ARC uses, shipped as the v2 default, so every row
+below is additive rather than a different-architecture trade-off. What differs
+is what surrounds that shared core.
 
 | Capability | ARC (scale-set mode) | GitHub Actions Gateway |
 | --- | --- | --- |
@@ -205,19 +182,14 @@ which is where new tenants start.
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too. -->
-**Auto-re-run covers disruption, never failure.** What re-runs itself is a job
-whose worker the *cluster* took away: a kubelet eviction, a scheduler preemption
-under a `priorityTiers` floor, a node drain, even a stray `kubectl delete pod`,
-each retried within a per-run budget. What never re-runs, by design: a job that
-ran and **failed**, a run you **cancelled**, and workers the gateway's own
-cleanup reaped as stuck.
-[The full boundary, with detection marks and metrics](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
+**Auto-re-run covers disruption, never failure.** Eviction, preemption, a drain
+and a stray `kubectl delete pod` all come back. A job that *failed*, a run you
+*cancelled*, and workers the reaper took never do.
+[The full boundary](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
-**Right-sizing is structural, not a feature race.** An ephemeral runner pod runs
-one job, lives minutes, and has no `/scale`-style controller to group it, so
-stock Vertical Pod Autoscaler cannot size it: grouping, evict-and-resize
-actuation, and long-running-service statistics all miss that shape. The loop can
-only close inside the controller that builds the pods.
+**Right-sizing is structural, not a feature race.** An ephemeral pod runs one
+job and lives minutes, so stock Vertical Pod Autoscaler cannot size it. The loop
+only closes inside the controller that builds the pods.
 [Appendix D.7](design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on).
 
 ## Where ARC is ahead
@@ -295,23 +267,17 @@ ships as reconciled defaults, not a post-install project.
 
 ### Sandboxing is not the `runtimeClassName` field
 
-Both GAG and ARC can set one. The differentiator is the layer underneath, and
-the evidence that the combination holds.
+Both GAG and ARC can set one. The differentiator is the layer underneath.
 
-**Kata bounds the kernel, not the pod network.** A micro-VM does not change the
-pod's network identity, so cloud metadata still answers from *inside* the guest
-and a compromised job can mint node credentials even though the kernel it
-escaped into is disposable. GAG's default-deny NetworkPolicies close that path,
-reconciled per tenant rather than hand-built alongside.
+**Kata bounds the kernel, not the pod network**, so cloud metadata still answers
+from inside the guest. GAG's default-deny NetworkPolicies close that path.
 
-**GAG's own end-to-end CI runs under it**, building a `kind` cluster inside a
-worker pod with `runtimeClassName: kata` and **zero** `privileged: true`, on a
-nested-virtualization GKE pool with both kernels named. The how-to, and
-[what Kata does not buy you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you),
-are written down. **It is not yet a claim about untrusted pull requests**: that
-variant still runs permissive egress, because its jobs pull from CDN-fronted
-registries no CIDR allowlist can pin ([roadmap](roadmap.md#in-progress--near-term)).
+**GAG's own CI runs this way**, building a `kind` cluster inside a worker pod
+with **zero** `privileged: true` ([how, and what Kata does not buy
+you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you)).
 
-Full threat model, per-profile controls, and abuse-response playbooks:
-[Security](design/05-security.md) and
+**Not yet a claim about untrusted pull requests**, which need the egress work
+on the [roadmap](roadmap.md#in-progress--near-term).
+
+Threat model and abuse-response playbooks: [Security](design/05-security.md),
 [Security operations](operations/security-operations.md).
