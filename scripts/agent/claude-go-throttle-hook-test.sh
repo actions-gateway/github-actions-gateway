@@ -1,21 +1,28 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/agent/claude-go-throttle-hook.sh — the PreToolUse hook that
-# auto-throttles raw `go build`/`go test` commands (Q92, Q347).
+# Contract tests for scripts/agent/claude-go-throttle-hook.sh — the PreToolUse
+# hook that auto-throttles raw `go build`/`go test` commands (Q92, Q347).
 #
 # The load-bearing property is that a heavy `-race` run never escapes the
-# throttle: a bare form is rewritten and auto-allowed, a compound/redirected
-# `-race` form is rewritten and returned as an `ask` (Q347 — no longer blocked),
-# and a `-race` form the hook cannot pin a single go token in is denied with a
-# specific reason. These are asserted against synthetic hook payloads. Runs under
-# `make check` (via `make scripts-test`) and the CI shellcheck job.
+# throttle: a bare form is rewritten and auto-allowed, a compound/redirected/
+# wrapped `-race` form is rewritten and returned as an `ask` (Q347 — no longer
+# blocked), and a `-race` form the hook cannot pin a single go token in is denied
+# with a specific reason. These are asserted against synthetic hook payloads.
+# Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 #
-# Both directions are asserted, because both fail silently (Q624). The hook now
-# counts only a `go` in *command position*, so a command that merely NAMES one —
-# a `git commit` message, a heredoc body — must pass through untouched; but a
-# matcher that stopped matching would let a real unthrottled `-race` run freeze
-# the GUI, which is the more expensive error. Every must-not-match case below is
-# paired with a must-match one built from the same text.
+# The decision itself is devtools/agent/gothrottle (Q708) and its table test
+# carries the case matrix. What this suite covers is everything around it: that
+# the entry point builds and execs the binary, that the prefix resolved from the
+# real local-throttle.sh lands in the right place, and that the emitted JSON is
+# the shape Claude Code reads.
+#
+# Both directions are asserted, because both fail silently (Q624). The hook
+# counts a `go` in *command position*, or behind an allowlisted wrapper (Q696),
+# so a command that merely NAMES one — a `git commit` message, a heredoc body —
+# must pass through untouched; but a matcher that stopped matching would let a
+# real unthrottled `-race` run freeze the GUI, which is the more expensive
+# error. Every must-not-match case below is paired with a must-match one built
+# from the same text.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -211,15 +218,24 @@ else
 	fail "two real invocations + a mention: want deny, got $deny2_out"
 fi
 
-# Command position is the mechanism, so isolate it: a `go` that is an *argument*
-# to another command is not an invocation. `timeout` stands in for any wrapper
-# `already_throttled` does not recognise, so this case fails if the command-
-# position gate is dropped — the wrapper cases below cannot show that, because
-# `already_throttled` short-circuits them first. Unchanged is parity with the
-# pre-Q624 hook (its head check rejected a non-`go` head the same way); the
-# resulting unthrottled wrapper run is tracked as its own item, not widened here.
-expect_unchanged 'wrapper: timeout … go -race   -> unchanged (go is an argument)' \
-	'timeout 900 go test -race ./...'
+# --- Q696: a -race behind a wrapper is throttled, not skipped -----------------
+#
+# `go` is an argument to `timeout` rather than a command, so the scanner this
+# replaced reported no invocation and the run escaped the throttle entirely. The
+# peel is an allowlist over words, so both directions matter: an unrecognised
+# wrapper must stay silent rather than have the prefix guessed into the wrong
+# place, and a wrapped run must never take the auto-allow path — `timeout … go
+# test` is not the bare shape the `Bash(go test *)` allowlist trusts.
+expect_decision 'wrapper: timeout … -race  -> ask + prefix before go' \
+	'timeout 900 go test -race ./...' ask "timeout 900 $PREFIX go test -race ./..."
+expect_decision 'wrapper: nested           -> ask + prefix before go' \
+	'nohup timeout 900 go test -race ./...' ask "nohup timeout 900 $PREFIX go test -race ./..."
+expect_unchanged 'wrapper: unknown name     -> unchanged (peel stops)' \
+	'xargs -n1 go test -race ./...'
+expect_unchanged 'wrapper: unknown option   -> unchanged (peel stops)' \
+	'timeout --frobnicate 900 go test -race ./...'
+expect_unchanged 'wrapper: no -race         -> unchanged (adds no new prompt)' \
+	'timeout 900 go test ./...'
 
 # Command position is what counts, not a subshell: a newline-separated and a
 # bare `cd … && …` form must both still be caught.
