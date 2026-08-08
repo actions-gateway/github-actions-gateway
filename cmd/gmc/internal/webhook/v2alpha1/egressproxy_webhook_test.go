@@ -258,7 +258,7 @@ func TestEgressProxyCustomValidator_RejectsReferrerGHESHostInNoProxyCIDRs(t *tes
 	t.Run("RunnerSet proxyRef referrer", func(t *testing.T) {
 		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "")
 		rs := classicRS("rs", "team-a", "gw", "linux")
-		rs.Spec.ProxyRef = &agcv2alpha1.ObjectRef{Name: "ep"}
+		rs.Spec.ProxyRef = &agcv2alpha1.ProxyObjectRef{Name: "ep"}
 		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw, rs)}
 		_, err := v.ValidateCreate(ctx, epWithNoProxy("ghes.corp.example"))
 		require.Error(t, err)

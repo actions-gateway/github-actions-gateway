@@ -69,6 +69,7 @@ const (
 	ReasonTemplateDeleted         = apiconditions.ReasonTemplateDeleted
 	ReasonProxyNotFound           = apiconditions.ReasonProxyNotFound
 	ReasonProxyDeleted            = apiconditions.ReasonProxyDeleted
+	ReasonProxyShareNotGranted    = apiconditions.ReasonProxyShareNotGranted
 	ReasonCABundleNotFound        = apiconditions.ReasonCABundleNotFound
 	ReasonCABundleInvalid         = apiconditions.ReasonCABundleInvalid
 	ReasonNoActiveSessions        = apiconditions.ReasonNoActiveSessions

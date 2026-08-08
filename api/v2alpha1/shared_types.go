@@ -148,14 +148,13 @@ type LocalConfigMapReference struct {
 
 // ObjectRef is a name-only reference to another v2 object in the same namespace.
 //
-// All v2 references share this one shape (gatewayRef, templateRef, proxyRef) so
-// the API surface is uniform (docs/design/appendix-h-v2-api-decomposition.md §H.6).
-// Cross-namespace references are deliberately not expressible here: a referent is
-// always resolved in the referrer's own namespace, except where the referent kind
-// itself grants cross-namespace use (the EgressProxy sharing handshake, a later
-// milestone). Referential integrity is a runtime condition, not an admission gate
-// (§H.7), so a ref naming a not-yet-applied object is well-formed — the controller
-// surfaces a NotFound condition until it resolves.
+// It backs gatewayRef, templateRef and defaultTemplateRef, whose referents are
+// always resolved in the referrer's own namespace. Cross-namespace use of those
+// three is deliberately not expressible, since no consent handshake stands behind
+// them; the one referent kind that does grant cross-namespace use, EgressProxy,
+// has its own ProxyObjectRef (§H.9). Referential integrity is a runtime condition,
+// not an admission gate (§H.7), so a ref naming a not-yet-applied object is
+// well-formed, and the controller surfaces a NotFound condition until it resolves.
 type ObjectRef struct {
 	// Name of the referenced object. Bounded by the same 52-char budget every v2
 	// object name carries (§H.6), so a well-formed ref can always name a valid object.
@@ -175,23 +174,32 @@ type ObjectRef struct {
 	Kind string `json:"kind,omitempty"`
 }
 
-// LocalObjectRef is a name-only reference to another v2 object in the same namespace,
-// without ObjectRef's Kind discriminator. It backs ActionsGatewaySpec.DefaultProxyRef,
-// whose only valid referent is a single kind (EgressProxy), so a Kind field would be
-// dead schema there.
-//
-// It is a distinct type from ObjectRef only because the two currently produce
-// different CRD schemas: ObjectRef carries the optional Kind enum, LocalObjectRef does
-// not. The design intends one uniform ObjectRef (§H.6); converging DefaultProxyRef
-// onto ObjectRef is a deliberate, CRD-changing follow-up (it would add an optional
-// kind property to the ActionsGateway CRD) and is intentionally out of scope for the
-// neutral-module extraction, which is a pure relocation with byte-identical manifests.
-type LocalObjectRef struct {
-	// Name of the referenced object. Bounded by the v2 52-char name budget (§H.6).
+// ProxyObjectRef references an EgressProxy, optionally in another namespace. It is
+// deliberately not ObjectRef: that type also backs gatewayRef, templateRef and
+// defaultTemplateRef, and a Namespace field on it would make all four
+// cross-namespace at once, three of them with no consent handshake behind them
+// (§H.9).
+type ProxyObjectRef struct {
+	// Name of the referenced EgressProxy. Bounded by the v2 52-char name budget (§H.6).
 	//
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=52
 	Name string `json:"name"`
+
+	// Namespace optionally selects an EgressProxy outside the referrer's own namespace.
+	// Empty means the referrer's namespace.
+	//
+	// A cross-namespace reference resolves only with provider consent: the named proxy
+	// must list the referrer's namespace in its spec.sharing.allowedNamespaces.
+	// Without that the reference fails closed with ProxyShareNotGranted, and no
+	// NetworkPolicy or CA trust is wired. Naming a proxy never authorizes reaching it.
+	//
+	// A shared proxy is a shared egress identity, so it suits cooperating tenants or a
+	// platform-operated central pool rather than mutually-distrusting tenants.
+	//
+	// +optional
+	// +kubebuilder:validation:MaxLength=63
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count

@@ -56,9 +56,12 @@ func fullRunnerSet(protocol string, labels ...string) *v2alpha1.RunnerSet {
 			Annotations: map[string]string{"user.example.com/note": "keep me"},
 		},
 		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:          v2alpha1.ObjectRef{Name: "gw"},
-			TemplateRef:         &v2alpha1.ObjectRef{Name: "tmpl", Kind: "RunnerTemplate"},
-			ProxyRef:            &v2alpha1.ObjectRef{Name: "proxy"},
+			GatewayRef:  v2alpha1.ObjectRef{Name: "gw"},
+			TemplateRef: &v2alpha1.ObjectRef{Name: "tmpl", Kind: "RunnerTemplate"},
+			// Namespace set so the round-trip covers the cross-namespace half of the
+			// reference (§H.9); a conversion that dropped it would silently downgrade a
+			// shared proxy to a same-namespace one.
+			ProxyRef:            &v2alpha1.ProxyObjectRef{Name: "proxy", Namespace: "platform"},
 			MaxListeners:        25,
 			MaxWorkers:          ptrTo[int32](8),
 			RunnerLabels:        labels,
@@ -236,7 +239,7 @@ func TestActionsGatewayConversion_RoundTrip(t *testing.T) {
 				GitHubApp: &v2alpha1.LocalSecretReference{Name: "app-secret"},
 			},
 			GitHubURL:          "https://github.com/my-org",
-			DefaultProxyRef:    &v2alpha1.LocalObjectRef{Name: "proxy"},
+			DefaultProxyRef:    &v2alpha1.ProxyObjectRef{Name: "proxy"},
 			DefaultTemplateRef: &v2alpha1.ObjectRef{Name: "tmpl"},
 			AGCResources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{corev1.ResourceCPU: mustQuantity("500m")},

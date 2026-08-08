@@ -155,7 +155,7 @@ _Appears in:_
 | `credentials` _[GitHubCredentials](#githubcredentials)_ | Credentials configures how this gateway authenticates to GitHub. It is a discriminated union keyed by credentials.type: exactly the member the discriminator names is set (GitHubApp today; workload identity joins as an additive second member, Q197). v2 nests the credential under this explicit-discriminator parent before the v2beta1 freeze so adding an auth method never reshapes the spec again (§H.15). |  |  |
 | `githubURL` _string_ | GitHubURL is the GitHub organization, enterprise, or repository URL this gateway's runners register against (e.g. "https://github.com/my-org"). It is immutable: rebinding a running gateway's GitHub org is a footgun, so v2 freezes it via a CEL transition rule (§H.15). Casing follows the v2 convention — "github" is one lowercased word, the trailing initialism stays uppercase. |  | MaxLength: 2048<br />MinLength: 1<br />Pattern: `^https://` |
 | `githubCABundleRef` _[LocalConfigMapReference](#localconfigmapreference)_ | GitHubCABundleRef names a ConfigMap in this namespace holding, under the key "ca.crt", a PEM certificate bundle to trust when reaching githubURL. Set it when a GitHub Enterprise Server appliance is fronted by a private or internal certificate authority: the AGC and its worker pods otherwise trust the system roots (plus the egress proxy's own CA) and the TLS handshake fails.<br />The bundle is additive — the system roots stay trusted — so a gateway that also reaches public hosts is unaffected. Certificates are public material, which is why the carrier is a ConfigMap rather than a Secret.<br />Resolved at runtime, not at admission (§H.7): a ref naming a ConfigMap that is missing, or whose ca.crt holds no parseable certificate, fails the gateway closed (Degraded, reason CABundleNotFound / CABundleInvalid) until it resolves.<br />Unset (the default) trusts the system roots only. It does not affect egress reachability — a GHES appliance's address space must still be allowed by the egress policy (see the GitHubEgressIncomplete condition). |  | Optional: \{\} |
-| `defaultProxyRef` _[LocalObjectRef](#localobjectref)_ | DefaultProxyRef names an EgressProxy used for AGC control-plane egress and inherited by RunnerSets under this gateway that do not set their own proxyRef. Optional: unset means the control plane egresses directly (subject to NetworkPolicy). Same-namespace unless the target EgressProxy grants cross-namespace use (§H.4, §H.9). |  | Optional: \{\} |
+| `defaultProxyRef` _[ProxyObjectRef](#proxyobjectref)_ | DefaultProxyRef names an EgressProxy used for AGC control-plane egress and inherited by RunnerSets under this gateway that do not set their own proxyRef. Optional: unset means the control plane egresses directly (subject to NetworkPolicy). Same-namespace unless the target EgressProxy grants cross-namespace use (§H.4, §H.9). |  | Optional: \{\} |
 | `defaultTemplateRef` _[ObjectRef](#objectref)_ | DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate (set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets under this gateway that set no spec.templateRef of their own (Q172). Optional: it is the second rung of the template-resolution chain — an unset RunnerSet templateRef resolves rs.templateRef → this defaultTemplateRef → the single cluster-default ClusterRunnerTemplate → fail-closed TemplateNotFound (§H.4). Resolved at runtime in the gateway's own namespace (for a RunnerTemplate); a ClusterRunnerTemplate referent is cluster-scoped. A defaultTemplateRef that names a *missing* template fails the inheriting set closed (TemplateNotFound), exactly like an explicit templateRef. |  | Optional: \{\} |
 | `agcResources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcerequirements-v1-core)_ | AGCResources tunes the CPU/memory requests and limits stamped on this gateway's AGC control-plane container (Q171). It is an additive, per-key override of the platform default — the documented Appendix A sizing of requests \{cpu: 500m, memory: 2Gi\}, limits \{cpu: 2, memory: 4Gi\}. The GMC starts from that default and overlays only the request/limit keys set here, so a value that sets just one knob keeps the sensible default for the others. Unset ⇒ the platform default unchanged. Changing it is a rolling restart of the AGC, not a hot reload.<br />Tune cautiously: the AGC is a single pod holding all listener-goroutine state in memory. A memory limit below the AGC's working set OOMKills the control plane, and a request larger than any node (or the namespace ResourceQuota) leaves the AGC pod unschedulable (Pending). See docs/operations/tenant-onboarding.md and docs/design/appendix-e-capacity-planning.md for sizing guidance and the recommended floor. |  | Optional: \{\} |
 | `agcAutoscaling` _[AGCVerticalAutoscaling](#agcverticalautoscaling)_ | AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC Deployment so the autoscaler observes actual usage and sizes the container's resource *requests* for it. Unset (the default) ⇒ no VerticalPodAutoscaler is created and any one the GMC previously stamped is deleted, so the opt-in is off by default and fully reversible.<br />It composes with — it does not replace — agcResources. See AGCVerticalAutoscaling for the precedence rules and the behavior when the VerticalPodAutoscaler CRD is not installed in the cluster. |  | Optional: \{\} |
@@ -532,32 +532,6 @@ _Appears in:_
 | `name` _string_ | Name of the referenced ConfigMap in the same namespace. |  | MaxLength: 253<br />MinLength: 1 |
 
 
-#### LocalObjectRef
-
-
-
-LocalObjectRef is a name-only reference to another v2 object in the same namespace,
-without ObjectRef's Kind discriminator. It backs ActionsGatewaySpec.DefaultProxyRef,
-whose only valid referent is a single kind (EgressProxy), so a Kind field would be
-dead schema there.
-
-It is a distinct type from ObjectRef only because the two currently produce
-different CRD schemas: ObjectRef carries the optional Kind enum, LocalObjectRef does
-not. The design intends one uniform ObjectRef (§H.6); converging DefaultProxyRef
-onto ObjectRef is a deliberate, CRD-changing follow-up (it would add an optional
-kind property to the ActionsGateway CRD) and is intentionally out of scope for the
-neutral-module extraction, which is a pure relocation with byte-identical manifests.
-
-
-
-_Appears in:_
-- [ActionsGatewaySpec](#actionsgatewayspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name of the referenced object. Bounded by the v2 52-char name budget (§H.6). |  | MaxLength: 52<br />MinLength: 1 |
-
-
 #### LocalSecretReference
 
 
@@ -605,14 +579,13 @@ _Appears in:_
 
 ObjectRef is a name-only reference to another v2 object in the same namespace.
 
-All v2 references share this one shape (gatewayRef, templateRef, proxyRef) so
-the API surface is uniform (docs/design/appendix-h-v2-api-decomposition.md §H.6).
-Cross-namespace references are deliberately not expressible here: a referent is
-always resolved in the referrer's own namespace, except where the referent kind
-itself grants cross-namespace use (the EgressProxy sharing handshake, a later
-milestone). Referential integrity is a runtime condition, not an admission gate
-(§H.7), so a ref naming a not-yet-applied object is well-formed — the controller
-surfaces a NotFound condition until it resolves.
+It backs gatewayRef, templateRef and defaultTemplateRef, whose referents are
+always resolved in the referrer's own namespace. Cross-namespace use of those
+three is deliberately not expressible, since no consent handshake stands behind
+them; the one referent kind that does grant cross-namespace use, EgressProxy,
+has its own ProxyObjectRef (§H.9). Referential integrity is a runtime condition,
+not an admission gate (§H.7), so a ref naming a not-yet-applied object is
+well-formed, and the controller surfaces a NotFound condition until it resolves.
 
 
 
@@ -789,6 +762,28 @@ _Appears in:_
 | `threshold` _integer_ | Threshold is the cumulative active-pod count at which this tier is exhausted. |  | Minimum: 1 |
 
 
+#### ProxyObjectRef
+
+
+
+ProxyObjectRef references an EgressProxy, optionally in another namespace. It is
+deliberately not ObjectRef: that type also backs gatewayRef, templateRef and
+defaultTemplateRef, and a Namespace field on it would make all four
+cross-namespace at once, three of them with no consent handshake behind them
+(§H.9).
+
+
+
+_Appears in:_
+- [ActionsGatewaySpec](#actionsgatewayspec)
+- [RunnerSetSpec](#runnersetspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name of the referenced EgressProxy. Bounded by the v2 52-char name budget (§H.6). |  | MaxLength: 52<br />MinLength: 1 |
+| `namespace` _string_ | Namespace optionally selects an EgressProxy outside the referrer's own namespace. Empty means the referrer's namespace.<br />A cross-namespace reference resolves only with provider consent: the named proxy must list the referrer's namespace in its spec.sharing.allowedNamespaces. Without that the reference fails closed with ProxyShareNotGranted, and no NetworkPolicy or CA trust is wired. Naming a proxy never authorizes reaching it.<br />A shared proxy is a shared egress identity, so it suits cooperating tenants or a platform-operated central pool rather than mutually-distrusting tenants. |  | MaxLength: 63<br />Optional: \{\} |
+
+
 #### ProxySharing
 
 
@@ -863,7 +858,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `gatewayRef` _[ObjectRef](#objectref)_ | GatewayRef names the ActionsGateway that supplies this runner set's GitHub binding and control plane. Under multi-gateway-per-namespace each AGC reconciles only the RunnerSets whose gatewayRef targets it — which is why spec.gatewayRef.name is a CRD selectable field (KEP-4358), so that scoping runs server-side (§H.7). Required: a runner set with no gateway has no GitHub connection to register against. Resolved at runtime, not admission. |  |  |
 | `templateRef` _[ObjectRef](#objectref)_ | TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate (set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Unset means inherit the gateway's defaultTemplateRef; both unset means the single cluster-default ClusterRunnerTemplate (the one marked IsDefaultTemplateAnnotation). If none of the three resolves the set fails closed Ready=False/TemplateNotFound — the AGC never synthesizes a phantom worker pod without a pod shape (Q172, §H.4). This relaxes the GA-era required templateRef to optional-with-a-default (a backward-compatible required→optional change): a set that sets templateRef behaves exactly as before. The referent is resolved at runtime; a set pointing at a not-yet-applied template sits Ready=False/TemplateNotFound until it syncs (§H.7). status.templateSource reports which rung resolved. |  | Optional: \{\} |
-| `proxyRef` _[ObjectRef](#objectref)_ | ProxyRef optionally names the EgressProxy this runner set's traffic egresses through. Unset means inherit the gateway's defaultProxyRef; both unset means direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined behavior, so the dependency is simply droppable, which is why proxyRef is optional where templateRef is required (§H.4, §H.10). Direct egress is reflected in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a proxyRef/defaultProxyRef that names a *missing* proxy still fails closed (ProxyNotFound), not direct egress (Q168). |  | Optional: \{\} |
+| `proxyRef` _[ProxyObjectRef](#proxyobjectref)_ | ProxyRef optionally names the EgressProxy this runner set's traffic egresses through. Unset means inherit the gateway's defaultProxyRef; both unset means direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined behavior, so the dependency is simply droppable, which is why proxyRef is optional where templateRef is required (§H.4, §H.10). Direct egress is reflected in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a proxyRef/defaultProxyRef that names a *missing* proxy still fails closed (ProxyNotFound), not direct egress (Q168). |  | Optional: \{\} |
 | `maxWorkers` _integer_ | MaxWorkers caps the number of worker pods this RunnerSet may run concurrently. A soft, in-process ceiling; pair it with a namespace ResourceQuota for a hard, cluster-enforced limit. |  | Minimum: 1<br />Optional: \{\} |
 | `runnerLabels` _string array_ | RunnerLabels is the label set matched against workflow runs-on values. v2beta1 is ScaleSet-only, so exactly one label is required (enforced by the CEL rule on this field): the scale set's single runnerLabel is its runs-on match target, and the label doubles as the scale-set name registered at GitHub. Each label must be non-empty and contain no whitespace or commas (comma is the runs-on list separator). A workload needing multi-label matching must stay on a v2alpha1 Classic RunnerSet during the deprecation window (Q264 §5a-U7).<br />The single-label rule lives on THIS FIELD rather than on the spec, so CRD validation ratcheting (KEP-4008; on by default since Kubernetes 1.30, and the v2 floor is 1.31) suppresses it on an update that leaves runnerLabels untouched. A Classic multi-label set authored through v2alpha1 is STORED as a hub object that violates this rule, so a spec-level rule made every unqualified `kubectl edit/patch` of such a set fail on a field unrelated to labels (Q398). Ratcheting only forgives an unchanged value: creating a multi-label set through v2beta1, or editing a stored set's labels through v2beta1, is still rejected. |  | MinItems: 1<br />items:MaxLength: 256<br />items:Pattern: `^[^,\s]+$` |
 | `priorityTiers` _[PriorityTier](#prioritytier) array_ | PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds. Tiers must be in strictly ascending threshold order. |  | MaxItems: 10<br />Optional: \{\} |

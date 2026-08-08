@@ -500,10 +500,24 @@ spec:
                   cross-namespace use (§H.4, §H.9).
                 properties:
                   name:
-                    description: Name of the referenced object. Bounded by the v2
-                      52-char name budget (§H.6).
+                    description: Name of the referenced EgressProxy. Bounded by the
+                      v2 52-char name budget (§H.6).
                     maxLength: 52
                     minLength: 1
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace optionally selects an EgressProxy outside the referrer's own namespace.
+                      Empty means the referrer's namespace.
+
+                      A cross-namespace reference resolves only with provider consent: the named proxy
+                      must list the referrer's namespace in its spec.sharing.allowedNamespaces.
+                      Without that the reference fails closed with ProxyShareNotGranted, and no
+                      NetworkPolicy or CA trust is wired — naming a proxy never authorizes reaching it.
+
+                      A shared proxy is a shared egress identity, so it suits cooperating tenants or a
+                      platform-operated central pool rather than mutually-distrusting tenants.
+                    maxLength: 63
                     type: string
                 required:
                 - name
@@ -2441,10 +2455,24 @@ spec:
                   cross-namespace use (§H.4, §H.9).
                 properties:
                   name:
-                    description: Name of the referenced object. Bounded by the v2
-                      52-char name budget (§H.6).
+                    description: Name of the referenced EgressProxy. Bounded by the
+                      v2 52-char name budget (§H.6).
                     maxLength: 52
                     minLength: 1
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace optionally selects an EgressProxy outside the referrer's own namespace.
+                      Empty means the referrer's namespace.
+
+                      A cross-namespace reference resolves only with provider consent: the named proxy
+                      must list the referrer's namespace in its spec.sharing.allowedNamespaces.
+                      Without that the reference fails closed with ProxyShareNotGranted, and no
+                      NetworkPolicy or CA trust is wired — naming a proxy never authorizes reaching it.
+
+                      A shared proxy is a shared egress identity, so it suits cooperating tenants or a
+                      platform-operated central pool rather than mutually-distrusting tenants.
+                    maxLength: 63
                     type: string
                 required:
                 - name

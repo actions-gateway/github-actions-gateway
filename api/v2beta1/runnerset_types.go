@@ -52,7 +52,7 @@ type RunnerSetSpec struct {
 	// (ProxyNotFound), not direct egress (Q168).
 	//
 	// +optional
-	ProxyRef *ObjectRef `json:"proxyRef,omitempty"`
+	ProxyRef *ProxyObjectRef `json:"proxyRef,omitempty"`
 
 	// MaxWorkers caps the number of worker pods this RunnerSet may run concurrently.
 	// A soft, in-process ceiling; pair it with a namespace ResourceQuota for a hard,
