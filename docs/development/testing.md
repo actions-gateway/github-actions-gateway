@@ -97,7 +97,9 @@ The general form: when a command's output is filtered, tested, or counted, the *
 
 Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per passing package and the full output of any package that fails (compress success, expand failure). When debugging a **slow or hanging** test, add `V=1` (`make check V=1` or `make test V=1`) to stream output live — without `-v`, `go test` buffers each package's output until the package completes, so a hung test shows nothing (not even its `t.Log` lines) until it finishes or hits `-timeout`.
 
-A sub-second subset (gofmt on staged Go files + the STATUS.md lint) also runs automatically at commit time via the tracked pre-commit hook in `.githooks/`. Install it once with `make hooks` (or `scripts/dev/setup.sh`); bypass a single commit with `git commit --no-verify`.
+A sub-second subset also runs automatically at commit time via the tracked pre-commit hook in `.githooks/`: gofmt on staged Go files, the STATUS.md lint, and [`em-dash-check`](documentation-standards.md#enforcing-the-em-dash-rule) when any Markdown is staged. Each part is skipped unless its file type is staged, so most commits pay nothing. Install it once with `make hooks` (or `scripts/dev/setup.sh`); bypass a single commit with `git commit --no-verify`.
+
+The em-dash part is there for *when* it fires rather than for coverage, since `make check` already runs it. It is the gate a docs change most often trips at the very end of a full run, after the heavy phases are paid for, and commit time is the first moment the answer is both cheap (410 ms warm) and unavoidable. It holds one branch to its own ceiling; two branches each sitting *at* a ceiling and merging over it is a property of the merge result, not of either commit (Q742, Q743).
 
 #### Measuring the local gate: start from what is already recorded
 

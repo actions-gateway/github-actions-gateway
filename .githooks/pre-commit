@@ -39,3 +39,23 @@ fi
 #    staged file (isolated commits keep rebase conflicts on one file). No-op
 #    when STATUS.md is not staged.
 "$REPO_ROOT/scripts/docs/lint-backlog.sh" --staged
+
+# 3. em-dash density — when Markdown is staged, hold each file to its baseline
+#    ceiling. Same checker `make em-dash-check` and the CI `em-dash` job run,
+#    so the verdict here is the verdict there. 410 ms warm on this tree, and
+#    skipped outright when no .md is staged, which is most commits.
+#
+#    Here rather than only in `make check` because of *when* it fires. This is
+#    the gate a docs change trips at the very end of a full run, after the
+#    heavy phases have been paid for, and it had gone unheeded three sessions
+#    running with the rule written down each time (Q699, and the two sessions
+#    after it). Commit time is the first moment the answer is both cheap and
+#    unavoidable.
+#
+#    It catches a single branch drifting over its own ceiling. It does NOT
+#    catch two branches each sitting *at* one and merging over it, which is a
+#    property of the merge result and reachable only from the queue (Q742 for
+#    the ratchet, Q743 for the trigger that never runs).
+if [[ -n "$(git diff --cached --name-only --diff-filter=ACM -- '*.md')" ]]; then
+    "$REPO_ROOT/scripts/docs/check-em-dash.sh"
+fi
