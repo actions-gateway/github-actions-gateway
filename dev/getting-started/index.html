@@ -1522,6 +1522,8 @@
       
         
       
+        
+      
     
     
     
@@ -1863,6 +1865,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2002,10 +2032,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -2023,8 +2053,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2893,7 +2923,13 @@ small, composable kinds: an <code>ActionsGateway</code> (identity + GitHub bindi
 <code>RunnerTemplate</code> (a reusable pod shape), a <code>RunnerSet</code> per runner type, and an
 optional <code>EgressProxy</code>. The set below is feature-equivalent to the legacy v1
 example, a proxied gateway with a GPU runner set (priority tiers) and a Linux
-runner set:</p>
+runner set.</p>
+<p><strong>You can skip authoring the template.</strong> GAG ships three validated worker pod
+shapes; <code>kubectl apply -k deploy/templates/plain</code> gives you the baseline one,
+and a <code>RunnerSet</code> then points at it with <code>templateRef: { name: plain, kind:
+ClusterRunnerTemplate }</code> in place of the inline <code>RunnerTemplate</code> below. If your
+jobs build container images, start from <code>kata-dind</code> instead. See the
+<a href="../operations/runner-template-library/">runner template library</a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>

@@ -1392,6 +1392,8 @@
       
         
       
+        
+      
     
     
     
@@ -1733,6 +1735,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1872,10 +1902,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1893,8 +1923,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3346,10 +3376,10 @@ node sizes and <code>maxWorkers=8</code> were already persisted with the disk-cl
 tenant-onboarding quota formula is unchanged and remains correct — it sums only
 declared container <code>limits</code>, so dropping the worker CPU limit simply drops that
 term (documented there as "a term with no value drops out").</p>
-<p>The right-sized <strong>e2e-worker</strong> <code>requests</code>/<code>limits</code> are baked into the DinD overlay's
-<code>ClusterRunnerTemplate</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/dind/resources.yaml"><code>deploy/dogfood-e2e/overlays/dind/resources.yaml</code></a>
-and its rationale mirrored in the deploy
+<p>The right-sized <strong>e2e-worker</strong> <code>requests</code>/<code>limits</code> are baked into the DinD
+<code>ClusterRunnerTemplate</code>, promoted under Q554 into the shipped library at
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/privileged-dind/template.yaml"><code>deploy/templates/privileged-dind/template.yaml</code></a>
+(the dind overlay now consumes it as a base), and its rationale mirrored in the deploy
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>README</code></a>. Applied live and re-validated by a
 second clean-green Calico run. <strong>All Q248 work is complete</strong>: node disk class,
 general-worker sizing, e2e-worker sizing, and the (declined) small tier. The only

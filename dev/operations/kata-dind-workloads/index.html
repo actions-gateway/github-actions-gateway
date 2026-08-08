@@ -1400,6 +1400,8 @@
       
         
       
+        
+      
     
     
     
@@ -1724,6 +1726,34 @@
     
   
     ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
   
 
     
@@ -2071,10 +2101,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -2092,8 +2122,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2897,6 +2927,12 @@ runs the whole pod — daemon included — inside a per-pod micro-VM, so a
 container escape lands in a throwaway guest kernel, not on the node. This
 page is the cluster-side how-to: the node prerequisites, the runtime
 install, and the worker <code>podTemplate</code> field that selects it.</p>
+<p><strong>You do not have to transcribe the pod shape from this page.</strong> GAG ships it
+as <code>kata-dind</code> in the
+<a href="../runner-template-library/">runner template library</a>, applied with a single
+<code>kubectl apply -k deploy/templates/kata-dind</code>. Read this page for the node and
+runtime prerequisites the template cannot express, and for why each line of it
+is the way it is; apply the shipped base rather than retyping it.</p>
 <p>It is operator-focused. For <em>why</em> GAG chose Kata over Sysbox/rootless and
 the provider-agnostic design, see
 <a href="../../plan/archive/kata-on-gke/">Kata Containers on GKE</a>; for the executable
@@ -3088,46 +3124,61 @@ Kata — a non-empty listing does not mean Kata is installed:</p>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>nodes<span class="w"> </span>-l<span class="w"> </span>katacontainers.io/kata-runtime<span class="o">=</span><span class="nb">true</span><span class="w">   </span><span class="c1"># kata-deploy labelled them</span>
 </code></pre></div>
 <h2 id="configure-the-worker-podtemplate">Configure the worker podTemplate<a class="headerlink" href="#configure-the-worker-podtemplate" title="Permanent link">&para;</a></h2>
-<p>Point the worker pods at the runtime by setting <code>runtimeClassName</code> on the
-worker <code>podTemplate</code>. Author it as a platform-owned, cluster-scoped
-<code>ClusterRunnerTemplate</code>: the capability set below exceeds what a tenant
-should be able to self-author, and platform ownership is what enforces the
-"no privileged container" property (the namespace PSA level cannot — see
-<a href="#why-this-matters-for-gag">Why this matters for GAG</a>).</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterRunnerTemplate</span><span class="w">            </span><span class="c1"># platform-owned golden template</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata-dind</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="nt">podTemplate</span><span class="p">:</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">      </span><span class="nt">runtimeClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata</span><span class="w">           </span><span class="c1"># the alias RuntimeClass above</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">      </span><span class="nt">automountServiceAccountToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">      </span><span class="c1"># dockerd as a NATIVE sidecar (restartPolicy: Always init container);</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">      </span><span class="c1"># the runner container reaches it via DOCKER_HOST=tcp://localhost:2375.</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dind</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docker:28-dind</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">          </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
-<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">          </span><span class="c1"># Replace the image entrypoint with the six Kata setup steps —</span>
-<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">          </span><span class="c1"># see the next section and the reference implementation below.</span>
-<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">          </span><span class="nt">securityContext</span><span class="p">:</span>
-<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">            </span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">          </span><span class="c1"># THE point of this architecture</span>
-<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">            </span><span class="nt">allowPrivilegeEscalation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">            </span><span class="nt">capabilities</span><span class="p">:</span>
-<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">              </span><span class="nt">drop</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ALL</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">              </span><span class="nt">add</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="w"> </span><span class="nv">...</span><span class="w"> </span><span class="p p-Indicator">]</span><span class="w">             </span><span class="c1"># the validated set — next section</span>
-<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
-<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
-<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">          </span><span class="nt">env</span><span class="p">:</span>
-<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOCKER_HOST</span>
-<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;tcp://localhost:2375&quot;</span>
+<p>The shipped <code>kata-dind</code> library entry is this section, complete and
+CI-exercised:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>deploy/templates/kata-dind
 </code></pre></div>
-<p>The complete, production-shaped example — including the raw block volume
-for <code>/var/lib/docker</code>, the six-step entrypoint, and measured resource
-sizing — is GAG's own e2e worker template:
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/resources.yaml"><code>deploy/dogfood-e2e/overlays/kata/resources.yaml</code></a>.
-The single-pod (non-GAG) reference the spike validated is
+<p>Then set <code>spec.workerImage</code> on it to a build-capable runner image (it ships an
+<code>example.invalid</code> placeholder so an unreplaced value fails at pull rather than
+mid-job), and point a <code>RunnerSet</code> at it with <code>templateRef.kind:
+ClusterRunnerTemplate</code>. The
+<a href="../runner-template-library/">runner template library</a> covers both, and the
+supported way to patch the base.</p>
+<p>The rest of this section is what that template contains and why, for reading
+rather than retyping.</p>
+<p>Kata is selected by <code>runtimeClassName</code> on the worker <code>podTemplate</code>. It is a
+platform-owned, cluster-scoped <code>ClusterRunnerTemplate</code>: the capability set
+below exceeds what a tenant should be able to self-author, and platform
+ownership is what enforces the "no privileged container" property (the
+namespace PSA level cannot; see
+<a href="#why-this-matters-for-gag">Why this matters for GAG</a>).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterRunnerTemplate</span><span class="w">            </span><span class="c1"># platform-owned golden template</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata-dind</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">      </span><span class="nt">runtimeClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata</span><span class="w">           </span><span class="c1"># the alias RuntimeClass above</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">      </span><span class="nt">automountServiceAccountToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">      </span><span class="c1"># dockerd as a NATIVE sidecar (restartPolicy: Always init container);</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">      </span><span class="c1"># the runner container reaches it via DOCKER_HOST=tcp://localhost:2375.</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dind</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docker:28-dind</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">          </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">          </span><span class="c1"># Replace the image entrypoint with the six Kata setup steps —</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">          </span><span class="c1"># see the next section and the reference implementation below.</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">          </span><span class="nt">securityContext</span><span class="p">:</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">            </span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">          </span><span class="c1"># THE point of this architecture</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">            </span><span class="nt">allowPrivilegeEscalation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">            </span><span class="nt">capabilities</span><span class="p">:</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">              </span><span class="nt">drop</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ALL</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">              </span><span class="nt">add</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="w"> </span><span class="nv">...</span><span class="w"> </span><span class="p p-Indicator">]</span><span class="w">             </span><span class="c1"># the validated set — next section</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">          </span><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOCKER_HOST</span>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;tcp://localhost:2375&quot;</span>
+</code></pre></div>
+<p>The complete form (the raw block volume for <code>/var/lib/docker</code>, the
+six-step entrypoint, the validated capability set, the dockerd startup
+probe, and measured resource sizing) is the shipped library entry
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/kata-dind/template.yaml"><code>deploy/templates/kata-dind/template.yaml</code></a>.
+GAG's own e2e tenant consumes that same base and patches only its cluster
+specifics (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>deploy/dogfood-e2e/overlays/kata/</code></a>),
+so what you apply is what CI runs jobs on. The single-pod (non-GAG)
+reference the spike validated is
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
 <p>The AGC honours a template-set <code>runtimeClassName</code> and applies no override
 that strips it. If <code>dockerd</code> still fails inside the guest, add one Linux
@@ -3175,9 +3226,9 @@ reference implementation is the <code>args:</code> block of
    with <code>--ipv6</code>. Pre-create an IPv4-only bridge network named <code>kind</code>.</li>
 </ol>
 <p>The validated capability set — <code>drop: [ALL]</code> plus:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>CHOWN DAC_OVERRIDE FSETID FOWNER MKNOD NET_RAW SETGID SETUID
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>SETFCAP SETPCAP NET_BIND_SERVICE SYS_CHROOT KILL AUDIT_WRITE   # Docker&#39;s defaults
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>SYS_ADMIN NET_ADMIN SYS_RESOURCE SYS_PTRACE                    # rootful dockerd + runc
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>CHOWN DAC_OVERRIDE FSETID FOWNER MKNOD NET_RAW SETGID SETUID
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>SETFCAP SETPCAP NET_BIND_SERVICE SYS_CHROOT KILL AUDIT_WRITE   # Docker&#39;s defaults
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>SYS_ADMIN NET_ADMIN SYS_RESOURCE SYS_PTRACE                    # rootful dockerd + runc
 </code></pre></div>
 <p>One more rule, found live under Q286: a container <strong>inside</strong> the nested kind
 cluster can only gain capabilities present in this bounding set — nested <code>runc</code>
@@ -3236,9 +3287,9 @@ Kata micro-VM on GKE: <code>169.254.169.254</code> stayed reachable and
 <strong>HTTP 200</strong> — the node's GCE service-account token. A micro-VM around an
 untrusted CI runner that can still mint node credentials is not a boundary.</p>
 <p><strong>Enable Workload Identity. It is a prerequisite, not an enhancement.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>update<span class="w"> </span>&lt;cluster&gt;<span class="w"> </span>--workload-pool<span class="o">=</span>&lt;project&gt;.svc.id.goog
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>update<span class="w"> </span>&lt;pool&gt;<span class="w"> </span>--cluster<span class="o">=</span>&lt;cluster&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--workload-metadata<span class="o">=</span>GKE_METADATA<span class="w">        </span><span class="c1"># recreates the nodes</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>update<span class="w"> </span>&lt;cluster&gt;<span class="w"> </span>--workload-pool<span class="o">=</span>&lt;project&gt;.svc.id.goog
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>update<span class="w"> </span>&lt;pool&gt;<span class="w"> </span>--cluster<span class="o">=</span>&lt;cluster&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--workload-metadata<span class="o">=</span>GKE_METADATA<span class="w">        </span><span class="c1"># recreates the nodes</span>
 </code></pre></div>
 <p>Re-probed with it on, the metadata server serves the workload-pool identity
 (<code>&lt;project&gt;.svc.id.goog</code>) instead of the node's service account. Also set
@@ -3379,6 +3430,9 @@ egress to <code>169.254.169.254/32</code>. Kata alone is not the control.</p>
   <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a>.</p>
 <h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
+<li><a href="../runner-template-library/">Runner template library</a>: the shipped
+  <code>kata-dind</code> entry this page describes, plus its two siblings and how to
+  fork one.</li>
 <li><a href="../in-runner-image-builds/">In-runner image builds</a> — pick a build
   approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and
   the <code>securityProfile</code> each needs.</li>

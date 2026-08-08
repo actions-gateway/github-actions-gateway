@@ -1392,6 +1392,8 @@
       
         
       
+        
+      
     
     
     
@@ -1733,6 +1735,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1872,10 +1902,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1893,8 +1923,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2874,11 +2904,6 @@ markers per item.</p>
 <td>✅ Complete (2026-07-07) — turn-up + per-job-green + concurrent-matrix-green on the ScaleSet default (Q224 closed via Q264 P4, #545); v2beta1 dogfood path live (Q231). Turn-up findings Q246/Q247/Q254/Q259/Q260 all resolved. Stays as the living operational runbook; chronological turn-up history split to <a href="archive/gke-dogfood-turnup-findings/">archive/gke-dogfood-turnup-findings.md</a> (Q336)</td>
 </tr>
 <tr>
-<td><a href="runner-template-library/">runner-template-library.md</a></td>
-<td>Curated library of golden <code>ClusterRunnerTemplate</code> instances (<code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code>): promote the two CI-validated dogfood templates into a shipped kustomize base the e2e overlays patch, add a plain baseline entry and a workload → template mapping README; no new CRD, only CI-exercised templates ship</td>
-<td>❌ Open — filed 2026-07-31 (<a href="../STATUS/#Q554">Q554</a>)</td>
-</tr>
-<tr>
 <td><a href="dogfood-runner-rightsizing/">dogfood-runner-rightsizing.md</a></td>
 <td>Measure peak CPU/mem per CI job class on GAG and right-size worker pod requests/limits + node pool; decide pod tiers (general + e2e)</td>
 <td>✅ Complete (2026-07-07) — disk-class ceiling resolved; general-worker (2Gi/3Gi) + e2e-worker (runner req 3vCPU/1Gi/3Gi, dind 3Gi/4Gi) pods right-sized from measured peak; "small" tier measured and declined. Kata end-state landed with Q286 (see <a href="archive/kata-on-gke/">archive/kata-on-gke.md</a> — Kata guest sizing is NOT a straight port of these measurements)</td>
@@ -3018,6 +3043,11 @@ markers per item.</p>
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a href="archive/runner-template-library/">archive/runner-template-library.md</a></td>
+<td>A curated library of golden <code>ClusterRunnerTemplate</code> instances (<code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code>): promote the two CI-validated dogfood templates into a shipped kustomize base the e2e overlays patch, add a plain baseline entry and a workload to template mapping README; no new CRD, only CI-exercised templates ship</td>
+<td>2026-08-08 — Q554, one of the three <code>1.4-gate</code> rows. Both dogfood overlays now consume the shipped bases and the inversion was reconciled rather than assumed: each overlay renders byte-identically to its pre-change form apart from the object rename, the runner image moving to <code>spec.workerImage</code>, and the <code>templateRef</code> following. Two findings reshaped the build. kustomize has no schema for a CRD, so a strategic-merge patch against one degrades to an RFC 7386 merge and replaces lists wholesale (measured on v5.8.1: a patch naming <code>initContainers[0].resources</code> left an init container with only that field, at exit 0), so every overlay patch is JSON 6902, and the gate rejects the other form. And neither the stock runner image nor GAG's own <code>worker</code> ships a Docker CLI, so both DinD entries ship a reserved <code>.invalid</code> <code>workerImage</code> that fails at pull rather than mid-job, which also makes the overlays' image patch mandatory. The admission rule stopped being a convention: <code>make template-library-check</code> reconciles shipped against exercised in both directions, and <code>TestTemplateLibrary_Admitted</code> applies every entry to a real apiserver each integration run, which is what covers <code>plain</code></td>
+</tr>
 <tr>
 <td><a href="archive/q459-drained-worker-recovery/">archive/q459-drained-worker-recovery.md</a></td>
 <td>Whether the drained-worker recovery gap Q421 measured should be closed or accepted: does the SIGTERM relay's report leave the run re-runnable, and is a deliberate cancellation distinguishable from a disruption at the pod</td>

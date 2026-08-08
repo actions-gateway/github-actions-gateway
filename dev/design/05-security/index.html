@@ -1821,6 +1821,8 @@
       
         
       
+        
+      
     
     
     
@@ -2162,6 +2164,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2301,10 +2331,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -2322,8 +2352,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3938,10 +3968,23 @@ unconditionally on worker pods. Kata is one layer, not a posture; the
 capabilities a DinD workload still needs inside the guest approach
 <code>privileged</code>, so the whole guarantee rests on the VM boundary. See
 <a href="../../operations/kata-dind-workloads/#what-kata-does-not-buy-you">Running DinD workloads under Kata § What Kata does not buy you</a>.</p>
-<p>This pairing is a tenant-level decision: the platform team can
-recommend it via policy and documentation, but cannot enforce it
-from the GMC alone (the <code>runtimeClassName</code> field lives in the
-<code>PodTemplate</code>, owned by the tenant).</p>
+<p><strong>The platform can enforce this pairing, and no longer only recommend
+it.</strong> <code>runtimeClassName</code> lives in the <code>PodTemplate</code>, but in v2 the
+<code>PodTemplate</code> need not be tenant-owned: a cluster-scoped
+<code>ClusterRunnerTemplate</code> is platform-authored, and the Q172 resolution
+ladder (<code>templateRef</code> → <code>ActionsGateway.spec.defaultTemplateRef</code> →
+the annotated cluster-default <code>ClusterRunnerTemplate</code>, then fail closed)
+means a <code>RunnerSet</code> that names no template of its own resolves to one the
+platform wrote. Marking a sandbox-runtime template as the cluster default
+makes the pairing the outcome a tenant gets by default rather than one
+they have to choose. GAG ships the pod shape for this as <code>kata-dind</code> in the
+<a href="../../operations/runner-template-library/">runner template library</a>, which
+deliberately does <strong>not</strong> ship marked as a default: which template a cluster
+defaults to is the platform team's decision to make, not the project's.</p>
+<p>What remains tenant-owned is a <code>RunnerSet</code> that authors its own namespaced
+<code>RunnerTemplate</code> and names it explicitly. That template cannot declare a
+privileged container at all (rejected at admission), so the escape hatch it
+offers is a weaker pod shape, not a more privileged one.</p>
 <h3 id="privileged-worker-containers-are-admitted-only-under-the-privileged-profile">Privileged worker containers are admitted only under the privileged profile<a class="headerlink" href="#privileged-worker-containers-are-admitted-only-under-the-privileged-profile" title="Permanent link">&para;</a></h3>
 <p>The GMC validating webhook (<code>validateRunnerGroups</code>) rejects a
 <code>securityContext.privileged: true</code> container or init-container in any

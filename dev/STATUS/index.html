@@ -1392,6 +1392,8 @@
       
         
       
+        
+      
     
     
     
@@ -1733,6 +1735,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1872,10 +1902,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1893,8 +1923,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2816,6 +2846,14 @@
 <td>Measured across this family: Q596 spent 2418 runs and Q703 240, neither reproducing a trigger seen only on CI. An 18-core Mac is the wrong shape. A <code>--cpus=2</code> container around <code>make scripts-test</code> would make the negative mean something.</td>
 </tr>
 <tr>
+<td><a id="Q743"></a>Q743</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links.yml</code> has no <code>merge_group</code>, so five docs gates skip queue validation</a></td>
+<td><code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge. Q742 ratchets the em-dash ceiling; this covers the other 4 gates and any later ratchet. Needs Q574's paths-filter <code>changes</code> job.</td>
+</tr>
+<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code> <code>1.4-gate</code></td>
@@ -2976,6 +3014,22 @@
 <td><code>[file.md](file.md) § Heading</code> renders like the anchored form but nothing checks the section name: verbatim when written, silently wrong after a rename. 11 in the tree vs 1,051 anchored.</td>
 </tr>
 <tr>
+<td><a id="Q740"></a>Q740</td>
+<td><a href="../operations/runner-template-library/">Ship a signed build-capable runner image for the DinD templates</a></td>
+<td><code>feature</code> <code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q554 ships <code>kata-dind</code>/<code>privileged-dind</code> with an <code>example.invalid</code> <code>workerImage</code>: the runner needs a docker CLI and no image we publish has one. Ship actions-runner + CLI + buildx, signed, SBOM, digest-pinned, and drop the placeholder.</td>
+</tr>
+<tr>
+<td><a id="Q737"></a>Q737</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/README.md">Align the shipped DinD templates on one docker:NN-dind version</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q554 shipped <code>privileged-dind</code> on <code>docker:27-dind</code>, <code>kata-dind</code> on <code>docker:28-dind</code>: what CI exercises. As operator-facing artifacts the split reads as an accident. Bumping 27 changes what the dogfood e2e runs, so it needs a green e2e leg.</td>
+</tr>
+<tr>
 <td><a id="Q688"></a>Q688</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">15 test scripts have no <code>scripts/README.md</code> mention, blocking a coverage gate</a></td>
 <td><code>docs</code> <code>debt</code></td>
@@ -2998,14 +3052,6 @@
 <td>🔲</td>
 <td>M</td>
 <td>Phase 2 of the page-boundary split: the Queue is read top-down to pick work; the parked rows under it are only grepped on a trigger. Needs <code>check-roadmap.sh</code> given a second path, rule 8 spanning two files, <code>#QNNN</code> links retargeted.</td>
-</tr>
-<tr>
-<td><a id="Q554"></a>Q554</td>
-<td><a href="../plan/runner-template-library/">Ship a curated runner template library</a></td>
-<td><code>docs</code> <code>feature</code> <code>1.4-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>No new CRD — promote the CI-validated dogfood kata-dind and privileged-dind templates into a shipped kustomize base the e2e overlays patch, plus a plain baseline entry. Only CI-exercised templates ship.</td>
 </tr>
 <tr>
 <td><a id="Q712"></a>Q712</td>

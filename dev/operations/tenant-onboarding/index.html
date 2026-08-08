@@ -1400,6 +1400,8 @@
       
         
       
+        
+      
     
     
     
@@ -1976,6 +1978,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#starting-from-a-shipped-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starting from a shipped template
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#optional-templateref-a-default-worker-pod-shape" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2059,6 +2072,34 @@
     
   
     ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
   
 
     
@@ -2221,10 +2262,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -2242,8 +2283,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3103,6 +3144,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#starting-from-a-shipped-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starting from a shipped template
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#optional-templateref-a-default-worker-pod-shape" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3878,6 +3930,15 @@ the scale-set model cannot express, until it is ready to split those groups up.<
   (<code>kubectl edit runnersets.v2alpha1.actions-gateway.com …</code>). Ratcheting is on by
   default from Kubernetes 1.30; the v2 floor is 1.31, so every supported cluster has it.</li>
 </ul>
+<h3 id="starting-from-a-shipped-template">Starting from a shipped template<a class="headerlink" href="#starting-from-a-shipped-template" title="Permanent link">&para;</a></h3>
+<p>Before hand-authoring a <code>RunnerTemplate</code>, check whether one of the three shipped
+entries already fits. <code>kubectl apply -k deploy/templates/plain</code> gives a baseline
+worker; <code>kata-dind</code> and <code>privileged-dind</code> cover jobs that build container
+images. A <code>RunnerSet</code> then names one with <code>templateRef: { name: plain, kind:
+ClusterRunnerTemplate }</code>. They are cluster-scoped and platform-applied, none is
+marked as the cluster default, and each carries prerequisites the template
+cannot express: see the
+<a href="../runner-template-library/">runner template library</a>.</p>
 <h3 id="optional-templateref-a-default-worker-pod-shape">Optional <code>templateRef</code> (a default worker pod shape)<a class="headerlink" href="#optional-templateref-a-default-worker-pod-shape" title="Permanent link">&para;</a></h3>
 <p><code>RunnerSet.spec.templateRef</code> is <strong>optional</strong>. A <code>RunnerSet</code> that omits it resolves a worker pod shape through a fallback chain, so a tenant does not have to name a template in every runner set. The chain (resolved at runtime, fail-closed):</p>
 <ol>

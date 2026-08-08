@@ -1392,6 +1392,8 @@
       
         
       
+        
+      
     
     
     
@@ -1733,6 +1735,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1872,10 +1902,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1893,8 +1923,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2613,9 +2643,10 @@
 
 <h1 id="release-14-milestone-definition">Release 1.4 Milestone Definition<a class="headerlink" href="#release-14-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scope decided 2026-08-05. Two gating Queue rows remain</strong>, labelled
-<code>1.4-gate</code>: <a href="../../STATUS/#Q166">Q166</a>, <a href="../../STATUS/#Q554">Q554</a>. Q691 shipped
-2026-08-08. Everything else the release contains is already merged.</p>
+<p><strong>Status: scope decided 2026-08-05. One gating Queue row remains</strong>, labelled
+<code>1.4-gate</code>: <a href="../../STATUS/#Q166">Q166</a>. Q691 and Q554 both shipped 2026-08-08
+(the latter's <a href="../archive/runner-template-library/">plan</a> is archived).
+Everything else the release contains is already merged.</p>
 </blockquote>
 <h2 id="the-minor-was-forced-before-anyone-chose-it">The minor was forced before anyone chose it<a class="headerlink" href="#the-minor-was-forced-before-anyone-chose-it" title="Permanent link">&para;</a></h2>
 <p><code>v1.3.0..main</code> carries 120 commits, 17 of them <code>feat</code>. Six change the shipped
@@ -2673,12 +2704,16 @@ so an operator can set a field that nothing honours. That is a shipped defect
 wearing a feature label, and every release that ships it that way hardens a
 dormant contract further. Demand fired 2026-08-01. Remaining: the M4 consent
 check, CA distribution, dual-side NetworkPolicy.</p>
-<p><strong><a href="../../STATUS/#Q554">Q554</a>: a curated runner template library.</strong> The cheapest
+<p><strong>Q554: a curated runner template library. Shipped 2026-08-08.</strong> The cheapest
 real capability on the list: no new CRD, and it promotes templates CI already
 validates (dogfood kata-dind and privileged-dind) into a shipped kustomize base
 the e2e overlays patch, plus a plain baseline entry. Packaging rather than new
 behaviour, and the constraint that only CI-exercised templates ship is what keeps
-it that way.</p>
+it that way. That constraint is now a gate rather than a convention:
+<code>make template-library-check</code> reconciles the shipped and exercised sets both
+ways, and every entry is admitted by a real apiserver on each integration run.
+The operator surface is <a href="../../operations/runner-template-library/">runner-template-library.md</a>;
+the implementation findings are in the <a href="../archive/runner-template-library/">archived plan</a>.</p>
 <p><strong>Q691: auto re-run a force-cancelled abandoned run.</strong>
 Closes a gap this cycle opened. Q683's cancelled ending accepts
 <code>rerun-failed-jobs</code>, measured, so operators re-ran by hand. <strong>Shipped

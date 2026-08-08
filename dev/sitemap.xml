@@ -305,6 +305,10 @@
          <lastmod>2026-08-08</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/operations/runner-template-library/</loc>
+         <lastmod>2026-08-08</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/operations/security-operations/</loc>
          <lastmod>2026-08-08</lastmod>
     </url>
@@ -514,10 +518,6 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/runner-sizing-profiles/</loc>
-         <lastmod>2026-08-08</lastmod>
-    </url>
-    <url>
-         <loc>https://actions-gateway.com/dev/plan/runner-template-library/</loc>
          <lastmod>2026-08-08</lastmod>
     </url>
     <url>
@@ -902,6 +902,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/required-status-checks/</loc>
+         <lastmod>2026-08-08</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/runner-template-library/</loc>
          <lastmod>2026-08-08</lastmod>
     </url>
     <url>
