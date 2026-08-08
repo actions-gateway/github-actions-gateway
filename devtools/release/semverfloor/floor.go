@@ -106,6 +106,12 @@ type Result struct {
 	// subjects and reading what a release contains, so it is reported rather
 	// than silently dropped.
 	Withheld []Verdict
+	// CommentOnly holds commits whose type would have raised the floor and whose
+	// paths do ship, but whose change inside those paths is comments and
+	// whitespace, so the artifact it lands in is byte-identical. Reported for the
+	// same reason as Withheld: a narrowing nobody can see is a narrowing nobody
+	// can check.
+	CommentOnly []Verdict
 	// Unresolved holds shipping commits carrying a breaking marker. Each is a
 	// major the tool cannot confirm or dismiss; a commit here may also appear
 	// in Raising, since its type still carries a floor of its own.
@@ -115,8 +121,9 @@ type Result struct {
 	NonConventional []Commit
 }
 
-// Classify computes the floor over a window.
-func Classify(commits []Commit, surface Surface) Result {
+// Classify computes the floor over a window. A nil Narrower classifies on paths
+// alone; see Narrower for what reading the diff adds.
+func Classify(commits []Commit, surface Surface, n Narrower) Result {
 	var r Result
 	for _, c := range commits {
 		if c.Type == "" {
@@ -128,7 +135,9 @@ func Classify(commits []Commit, surface Surface) Result {
 		v := Verdict{Commit: c, Level: lvl, Shipped: shipped}
 
 		// A breaking marker is assessed on shipping alone: a `refactor!` carries
-		// no floor by type, and would otherwise never be looked at.
+		// no floor by type, and would otherwise never be looked at. Narrowing is
+		// deliberately not applied here — a major is the costliest thing to miss,
+		// and the question is asked of a human either way.
 		if c.Breaking && len(shipped) > 0 {
 			r.Unresolved = append(r.Unresolved, v)
 		}
@@ -138,6 +147,14 @@ func Classify(commits []Commit, surface Surface) Result {
 		if len(shipped) == 0 {
 			r.Withheld = append(r.Withheld, v)
 			continue
+		}
+		if n != nil {
+			sub := n.Substantive(c, shipped)
+			if len(sub) == 0 {
+				r.CommentOnly = append(r.CommentOnly, v)
+				continue
+			}
+			v.Shipped = sub
 		}
 		r.Raising = append(r.Raising, v)
 		if lvl > r.Floor {
@@ -171,15 +188,23 @@ func DivergentScopes(r Result, shippingScopes map[string]bool) []Verdict {
 	return out
 }
 
-// ShippingScopes is the set of scopes carried by commits that do ship. It is
+// ShippingScopes is the set of scopes carried by commits whose paths ship. It is
 // derived from the window rather than declared, so it cannot rot; it exists
 // only to name divergences, never to classify.
+//
+// Comment-only commits count here even though they carry no floor: the question
+// this answers is whether a scope string lands on the released surface at all,
+// and theirs did.
 func ShippingScopes(r Result) map[string]bool {
 	m := map[string]bool{}
-	for _, v := range r.Raising {
-		for _, s := range v.Commit.Scopes {
-			m[s] = true
+	add := func(vs []Verdict) {
+		for _, v := range vs {
+			for _, s := range v.Commit.Scopes {
+				m[s] = true
+			}
 		}
 	}
+	add(r.Raising)
+	add(r.CommentOnly)
 	return m
 }

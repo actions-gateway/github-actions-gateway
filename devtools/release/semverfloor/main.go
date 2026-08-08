@@ -8,6 +8,11 @@
 // surface the publish pipeline actually packages (see sources.go), and its
 // Conventional Commit type only says how much that weighs.
 //
+// The path is where attribution starts. A commit that edits a godoc line inside
+// a released package directory touches the surface and ships a byte-identical
+// binary, so the shipped files are read again as source and kept only when the
+// change reaches the compiler — see narrow.go, which errs toward keeping them.
+//
 // It is a report, not a gate. The floor is monotonic and saturates early —
 // measured across the four release windows to date, it reached `minor` at
 // commit 15 of 341, 6 of 95, 40 of 463, and 16 of 121 — so a gate that fired on
@@ -90,7 +95,8 @@ func run(from, to string, checkSources bool) error {
 	if err != nil {
 		return err
 	}
-	report(os.Stdout, from, to, commits, surface, sources, Classify(commits, surface))
+	r := Classify(commits, surface, gitNarrower{root: root})
+	report(os.Stdout, from, to, commits, surface, sources, r)
 	return nil
 }
 
@@ -225,6 +231,17 @@ func report(w *os.File, from, to string, commits []Commit, surface Surface, s So
 		_, _ = fmt.Fprintln(w, "   This is the gap between counting subjects and reading what a release contains.")
 		for _, v := range r.Withheld {
 			_, _ = fmt.Fprintf(w, "  %-5s %s %s\n", v.Level, v.Commit.SHA[:8], v.Commit.Subject)
+		}
+	}
+
+	if len(r.CommentOnly) > 0 {
+		_, _ = fmt.Fprintf(w, "\n== Comment-only (%d commit(s) on shipped paths whose diff cannot change a build)\n", len(r.CommentOnly))
+		_, _ = fmt.Fprintln(w, "   Every edit these made inside a released package is a comment or whitespace, so")
+		_, _ = fmt.Fprintln(w, "   the binary is byte-identical. Only Go source is read this way; a chart file, a")
+		_, _ = fmt.Fprintln(w, "   file that does not scan, and an added or deleted one all count as shipping.")
+		for _, v := range r.CommentOnly {
+			_, _ = fmt.Fprintf(w, "  %-5s %s %s\n", v.Level, v.Commit.SHA[:8], v.Commit.Subject)
+			_, _ = fmt.Fprintf(w, "        comments in %s\n", strings.Join(trim(v.Shipped, 3), ", "))
 		}
 	}
 

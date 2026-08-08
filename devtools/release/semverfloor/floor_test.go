@@ -59,7 +59,7 @@ func TestClassifyInjectedDefects(t *testing.T) {
 	t.Run("shipping feat raises the floor", func(t *testing.T) {
 		r := Classify([]Commit{
 			commit("aaaaaaaa", "feat(agc): add a gauge", "cmd/agc/internal/listener/job.go"),
-		}, s)
+		}, s, nil)
 		if r.Floor != LevelMinor {
 			t.Fatalf("floor = %v, want minor", r.Floor)
 		}
@@ -74,7 +74,7 @@ func TestClassifyInjectedDefects(t *testing.T) {
 	t.Run("tooling feat does not", func(t *testing.T) {
 		r := Classify([]Commit{
 			commit("bbbbbbbb", "feat(agent): add a hook", "scripts/agent/hook.sh"),
-		}, s)
+		}, s, nil)
 		if r.Floor != LevelNone {
 			t.Fatalf("floor = %v, want none", r.Floor)
 		}
@@ -86,7 +86,7 @@ func TestClassifyInjectedDefects(t *testing.T) {
 	t.Run("shipping breaking marker is unresolved, not major", func(t *testing.T) {
 		r := Classify([]Commit{
 			commit("cccccccc", "feat(agc)!: drop a field", "cmd/agc/internal/listener/job.go"),
-		}, s)
+		}, s, nil)
 		if len(r.Unresolved) != 1 {
 			t.Fatalf("unresolved = %d, want 1", len(r.Unresolved))
 		}
@@ -100,7 +100,7 @@ func TestClassifyInjectedDefects(t *testing.T) {
 	t.Run("a breaking refactor carries no floor but is still asked about", func(t *testing.T) {
 		r := Classify([]Commit{
 			commit("dddddddd", "refactor(api)!: split the axes", "api/v2beta1/runnerset_types.go"),
-		}, s)
+		}, s, nil)
 		if r.Floor != LevelNone {
 			t.Errorf("floor = %v, want none — a refactor is defined as unobservable", r.Floor)
 		}
@@ -112,7 +112,7 @@ func TestClassifyInjectedDefects(t *testing.T) {
 	t.Run("a breaking marker that ships nothing raises nothing", func(t *testing.T) {
 		r := Classify([]Commit{
 			commit("eeeeeeee", "feat(agent)!: change a hook contract", "scripts/agent/hook.sh"),
-		}, s)
+		}, s, nil)
 		if len(r.Unresolved) != 0 {
 			t.Errorf("unresolved = %d, want 0", len(r.Unresolved))
 		}
@@ -126,7 +126,7 @@ func TestClassifyFloorIsTheMaximum(t *testing.T) {
 		commit("22222222", "feat(agc): add a gauge", "api/v2beta1/runnerset_types.go"),
 		commit("33333333", "docs: tidy", "docs/STATUS.md"),
 		commit("44444444", "chore(agc): bump", "cmd/agc/internal/listener/job.go"),
-	}, s)
+	}, s, nil)
 	if r.Floor != LevelMinor {
 		t.Errorf("floor = %v, want minor", r.Floor)
 	}
@@ -142,7 +142,7 @@ func TestClassifyPatchOnly(t *testing.T) {
 	r := Classify([]Commit{
 		commit("11111111", "fix(agc): bound the retry", "cmd/agc/internal/listener/job.go"),
 		commit("22222222", "perf(agc): fewer allocations", "cmd/agc/internal/listener/job.go"),
-	}, testSurface())
+	}, testSurface(), nil)
 	if r.Floor != LevelPatch {
 		t.Errorf("floor = %v, want patch", r.Floor)
 	}
@@ -151,7 +151,7 @@ func TestClassifyPatchOnly(t *testing.T) {
 func TestClassifyRecordsUnreadableSubjects(t *testing.T) {
 	r := Classify([]Commit{
 		commit("11111111", "Re-measure the eviction split", "cmd/agc/internal/listener/job.go"),
-	}, testSurface())
+	}, testSurface(), nil)
 	if len(r.NonConventional) != 1 {
 		t.Fatalf("nonConventional = %d, want 1", len(r.NonConventional))
 	}
@@ -169,7 +169,7 @@ func TestDivergentScopes(t *testing.T) {
 		commit("11111111", "feat(metrics): add a product gauge", "cmd/agc/internal/listener/job.go"),
 		commit("22222222", "feat(metrics): refresh the usage snapshot", "claude-usage/main.go"),
 		commit("33333333", "feat(agent): a hook", "scripts/agent/hook.sh"),
-	}, s)
+	}, s, nil)
 	div := DivergentScopes(r, ShippingScopes(r))
 	if len(div) != 1 {
 		t.Fatalf("divergent = %d, want 1", len(div))
