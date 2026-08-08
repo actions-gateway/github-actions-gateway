@@ -124,9 +124,14 @@ func prOverlapWarning(reg *compiled, repo Repo) string {
 		"See CONTRIBUTING.md#re-check-concurrent-work-before-opening."
 }
 
-// hasCallHead reports whether any call in the tree has a head matching re.
+// hasCallHead reports whether any call in the tree has a head matching re. A
+// capability probe is not a trigger: `git push --help` prints usage and pushes
+// nothing, so neither check has a moment to attach to — and skipping it skips
+// their subprocesses too.
 func hasCallHead(f *syntax.File, re *regexp.Regexp) bool {
-	return findCall(f, func(head string) bool { return re.MatchString(head) }) != ""
+	return findCall(f, func(c *syntax.CallExpr, head string) bool {
+		return re.MatchString(head) && !isProbe(c)
+	}) != ""
 }
 
 // intersect returns the paths in both lists, minus the ignored ones, sorted so

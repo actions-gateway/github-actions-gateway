@@ -186,6 +186,28 @@ func TestRepoStateWarnings(t *testing.T) {
 			repo: fakeRepo{branchFiles: []string{"Makefile"}, openPRs: []PR{{Number: 1, Files: []string{"Makefile"}}}},
 		},
 
+		// --- Capability probes are not the trigger either (Q730) -------------
+		// `--help` prints usage and touches neither the remote nor a PR, so
+		// there is no moment for these checks to attach to.
+		{
+			name: "git push --help",
+			cmd:  "git push --help | head",
+			repo: fakeRepo{branchFiles: []string{"Makefile"}, baseGained: []string{"Makefile"}},
+		},
+		{
+			name: "gh pr create --help",
+			cmd:  "gh pr create --help",
+			repo: fakeRepo{branchFiles: []string{"Makefile"}, openPRs: []PR{{Number: 1, Files: []string{"Makefile"}}}},
+		},
+		// A flag spelled inside a quoted argument is a word, so the real push
+		// underneath it still warns.
+		{
+			name: "push after a commit whose message names --help",
+			cmd:  `git commit -m "docs: document --help" && git push -u origin HEAD`,
+			repo: fakeRepo{branchFiles: []string{"Makefile"}, baseGained: []string{"Makefile"}},
+			warn: true,
+		},
+
 		// --- Neighbouring commands that are not the trigger ------------------
 		{
 			name: "gh pr list is not gh pr create",

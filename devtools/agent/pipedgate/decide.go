@@ -82,6 +82,46 @@ func matchAny(res []*regexp.Regexp, s string) bool {
 	return false
 }
 
+// isGate reports whether c is a registered gate whose exit status is the
+// answer: registered, not exempted, and not a capability probe. head is the
+// call's head text, which every caller already has.
+func (reg *compiled) isGate(c *syntax.CallExpr, head string) bool {
+	return head != "" && !matchAny(reg.exempt, head) && matchAny(reg.gates, head) && !isProbe(c)
+}
+
+// probeFlags make an invocation a capability probe rather than a run: the tool
+// prints and exits without producing a result, so there is no exit status to
+// lose and nothing for the pipe to swallow (Q730). Structural rather than a
+// registry entry, because the shape holds for every gate — a per-tool exempt
+// pattern would fix the tool it was reported against and leave the class.
+//
+// `-v` is deliberately absent: it is --version to make but verbose to
+// `go test`, so exempting it would exempt `go test -v ./... | tail`, the bug
+// this tool exists to catch. `make -v | head` stays denied, and `--version` is
+// the way out of it.
+var probeFlags = map[string]bool{
+	"--version": true,
+	"--help":    true,
+	"-V":        true,
+	"-h":        true,
+}
+
+// isProbe reports whether any argument is a probe flag. Read from the parsed
+// words rather than the joined head, so a flag spelled inside a quoted
+// argument stays one word: `git commit -m "bump --version output"` is a commit
+// and still a gate.
+func isProbe(c *syntax.CallExpr) bool {
+	if c == nil || len(c.Args) == 0 {
+		return false
+	}
+	for _, a := range c.Args[1:] {
+		if probeFlags[literal(a)] {
+			return true
+		}
+	}
+	return false
+}
+
 // heavyGo matches a `go build`/`go test` invocation anywhere in a command. The
 // leading boundary keeps `cargo test` and `django test` from matching.
 var heavyGo = regexp.MustCompile(`(^|[^[:alnum:]_-])go[[:space:]]+(build|test)([[:space:]]|$)`)
@@ -203,11 +243,9 @@ func Decide(cmd string, background bool, reg *compiled, repo Repo) string {
 	// suppression is scoped to the pipe verdict.
 	if !pipefail && !readsLower {
 		for _, st := range lhs {
-			head := peelWrappers(headText(statusSource(st)))
-			if head == "" || matchAny(reg.exempt, head) {
-				continue
-			}
-			if matchAny(reg.gates, head) {
+			src := statusSource(st)
+			head := peelWrappers(headText(src))
+			if reg.isGate(src, head) {
 				return "`" + truncate(head, 70) + "`" + pipedReasonSuffix
 			}
 		}
@@ -292,8 +330,7 @@ func carriesStatus(st *syntax.Stmt, reg *compiled) bool {
 		if literal(c.Args[0]) == "exit" {
 			return true
 		}
-		head := peelWrappers(headText(c))
-		return matchAny(reg.gates, head) && !matchAny(reg.exempt, head)
+		return reg.isGate(c, peelWrappers(headText(c)))
 	case *syntax.BinaryCmd:
 		switch c.Op {
 		case syntax.AndStmt:
@@ -323,16 +360,14 @@ func lastCarries(stmts []*syntax.Stmt, reg *compiled) bool {
 // firstGate returns the head of the first registered gate at command position
 // anywhere in the tree, or "".
 func firstGate(f *syntax.File, reg *compiled) string {
-	return findCall(f, func(head string) bool {
-		return !matchAny(reg.exempt, head) && matchAny(reg.gates, head)
-	})
+	return findCall(f, reg.isGate)
 }
 
 // findCall returns the head of the first call at command position anywhere in
-// the tree whose head satisfies match, or "". Walking the tree rather than the
-// raw string is what keeps a command merely NAMED in a commit message or a grep
+// the tree that satisfies match, or "". Walking the tree rather than the raw
+// string is what keeps a command merely NAMED in a commit message or a grep
 // pattern from counting: quoted text parses as a word, never a call.
-func findCall(f *syntax.File, match func(head string) bool) string {
+func findCall(f *syntax.File, match func(c *syntax.CallExpr, head string) bool) string {
 	var found string
 	syntax.Walk(f, func(node syntax.Node) bool {
 		if found != "" {
@@ -343,7 +378,7 @@ func findCall(f *syntax.File, match func(head string) bool) string {
 			return true
 		}
 		head := peelWrappers(headText(c))
-		if head != "" && match(head) {
+		if head != "" && match(c, head) {
 			found = head
 		}
 		return true
