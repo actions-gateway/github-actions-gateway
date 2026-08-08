@@ -1,6 +1,6 @@
 # Personas: who owns what
 
-> **Audience:** Platform engineer, SRE, Security, Budget owner, Tenant operator
+> **Audience:** All
 
 Running GitHub Actions Gateway (GAG) for many teams means more than one role is
 involved, and the split between them is not a documentation convention. It is
@@ -156,8 +156,14 @@ new chip that matches one document. "Tenant operator" is the correct name for
 the namespace-owning role; "Tenant owner" was a drifted variant and has been
 normalised.
 
-**The tag set and the role list are not the same list, on purpose.** `SRE` is a
-tag but not a role above, because it is a job title that both sides use; it
-stays as a chip because eleven pages carry it and readers search by it. Tag a
-page `SRE` when its reader is holding a pager, and pair it with the side that
-reader is on.
+**The tag set and the role list are not the same list, on purpose.** Two tags
+have no matching role above:
+
+- **`All`** means every persona, and a page carrying it stays visible under any
+  chip. This page and the [glossary](../design/08-glossary.md) use it, which is
+  why the audience line above names no roles: a page about who the roles are is
+  not addressed to one of them.
+- **`SRE`** is a job title rather than a role, because both sides of the
+  boundary use it. It stays a chip because eleven pages carry it and readers
+  search by it. Tag a page `SRE` when its reader is holding a pager, and pair it
+  with the side that reader is on.
