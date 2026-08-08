@@ -1,0 +1,20 @@
+# Sentence-per-line (semantic line breaks) for every tracked Markdown file.
+# One changed sentence is one changed line, so prose diffs stay reviewable and
+# concurrent branches stop colliding on rewrapped paragraphs.
+#
+# max-width: 0 keeps sentence mode unbounded. A width here would enable the
+# clause-level splitting that mdreflow's own render-preservation bug lives in
+# (jbeda/mdreflow#5), so leave it at 0.
+mode: sentence
+max-width: 0
+
+exclude:
+  # Generated — a reflow here is reverted by the next `make api-reference` /
+  # `make compat-report`.
+  - "docs/reference/api.md"
+  - "docs/development/broker-compatibility.md"
+  # Table-shaped and high-contention, with its own git merge driver
+  # (scripts/docs/git-merge-status.sh). Reflow buys nothing and risks the driver.
+  - "docs/STATUS.md"
+  # Symlink to CLAUDE.md; formatting it walks the same bytes twice.
+  - "AGENTS.md"
