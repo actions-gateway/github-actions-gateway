@@ -19,9 +19,9 @@ hide:
 
 </div>
 <div class="gag-vs-hero__proof">
-  <p class="gag-vs-hero__proof-cap">When a worker is evicted, preempted, or drained mid-job</p>
-  <div class="gag-vs-row gag-vs-row--arc"><span class="gag-vs-row__tag">ARC</span><span class="gag-vs-row__text">the runner registration is removed and the job is given up on; re-running it is a manual step</span></div>
-  <div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the run is concluded and re-run automatically, no manual rerun: seconds for a preemption or drain (measured 15&ndash;26&nbsp;s), ~10 min at worst for a hard eviction that waits out the job lock</span></div>
+  <p class="gag-vs-hero__proof-cap">When the job is disrupted</p>
+  <div class="gag-vs-row gag-vs-row--arc"><span class="gag-vs-row__tag">ARC</span><span class="gag-vs-row__text">gives up on it. You re-run it by hand.</span></div>
+  <div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">re-runs it. Measured 15&ndash;26&nbsp;s, preemption or drain.</span></div>
 </div>
 </div>
 
