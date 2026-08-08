@@ -55,7 +55,7 @@ make hooks         # installs the tracked pre-commit hook (core.hooksPath -> .gi
 make merge-driver  # installs the Markdown merge drivers (optional, recommended)
 ```
 
-`scripts/dev/setup.sh` runs both of the last two for you. The pre-commit hook is a sub-second gate (gofmt on staged Go files, plus the `docs/STATUS.md` format lint when that file is staged); bypass a single commit with `git commit --no-verify`.
+`scripts/dev/setup.sh` runs both of the last two for you. The pre-commit hook is a sub-second gate, each part firing only when the file type it covers is staged: gofmt on staged Go files, the `docs/STATUS.md` format lint, and the em-dash ceiling when any Markdown is staged. Bypass a single commit with `git commit --no-verify`.
 
 **Using linked worktrees? Check that `core.hooksPath` is still relative.** `make hooks` sets it to `.githooks`, which each worktree resolves against its own checkout — that is the point. But a worktree can arrive with it already pinned to an absolute path: worktree-creation tooling writes `.git/worktrees/<name>/config.worktree`, and that file has been seen carrying `hooksPath = /abs/path/to/main/.githooks` next to `core.longpaths`, both stamped in the same second as the worktree itself. Nobody opts into it, so check rather than assume:
 
