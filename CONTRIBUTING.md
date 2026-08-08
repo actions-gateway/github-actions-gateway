@@ -233,7 +233,7 @@ gh pr list --json number,title --jq '.[] | "#\(.number)\t\(.title)"'
 
 **Fetch before you compare.** `origin/main` is a local remote-tracking ref, so
 `git diff HEAD...origin/main` and `git log HEAD..origin/main` are only as fresh as your
-last fetch — on a stale ref they report a clean base while `main` has moved, which is
+last fetch. On a stale ref they report a clean base while `main` has moved, which is
 indistinguishable from being up to date. Nothing in a normal session refreshes that ref
 on its own.
 
@@ -264,7 +264,7 @@ that trips it (Q558); each passed without the other and the merged tree built di
 The **merge queue** closes this for the workflows it actually runs: every merge validates
 the candidate result (your branch plus whatever is ahead of it in the queue, on current
 `main`) before it lands, and a failing entry is kicked back to its PR with the failure
-attached — the signal pr-sentinel already reacts to. There is no manual union-gate or
+attached, the signal pr-sentinel already reacts to. There is no manual union-gate or
 pre-merge freshness check to run; enqueue and let the queue arbitrate the race.
 
 **It closes it only for a workflow that declares `merge_group`,** which is 9 of the 25.
