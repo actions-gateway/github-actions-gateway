@@ -14,6 +14,7 @@
 # startedAt, updatedAt, elapsed, phaseElapsed, idle, heartbeat, heartbeatAge,
 # failure. Nulls mean "not yet known", not "zero".
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/dogfood/lib/progress.sh

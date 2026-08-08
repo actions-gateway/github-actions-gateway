@@ -28,6 +28,7 @@
 #   https://kind.sigs.k8s.io/docs/user/local-registry/
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 : "${KIND_CLUSTER:?KIND_CLUSTER is required}"
 : "${KIND_CONFIG:?KIND_CONFIG is required}"

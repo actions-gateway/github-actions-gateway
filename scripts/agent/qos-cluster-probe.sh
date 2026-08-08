@@ -24,6 +24,7 @@
 #
 # powermetrics requires root, so this prompts for sudo once.
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Raw powermetrics captures are scratch: they belong in the gitignored tmp/ at
 # the repo root, never beside the script.

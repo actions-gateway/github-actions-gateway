@@ -22,6 +22,7 @@
 
 # Strict Mode Setup
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Initialize Debug State
 DEBUG=false

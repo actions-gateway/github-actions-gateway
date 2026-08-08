@@ -22,6 +22,7 @@
 #   scripts/go/check-no-license-headers.sh
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo_root"

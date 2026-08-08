@@ -12,6 +12,7 @@
 #   POLARIS_RENDER_DIGEST  Placeholder digest used to render the chart — see
 #                          scripts/lib/common.sh for why a digest is required.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

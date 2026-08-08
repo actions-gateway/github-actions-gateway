@@ -15,6 +15,7 @@
 # The script is sourced with START_LIB_ONLY=1 so main() does not run; `kubectl`
 # is stubbed, so no cluster.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 START_LIB_ONLY=1

@@ -35,6 +35,7 @@
 # Backs `make uses-pinned-check` (part of `make check`) and the `uses-pinned` job
 # in .github/workflows/unit-test.yml. Assertions: scripts/ci/check-uses-pinned-test.sh.
 set -euo pipefail
+shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh

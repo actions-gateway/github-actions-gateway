@@ -57,6 +57,7 @@
 # runtime.Caller(0), which a trimmed path breaks. The unit tier does not do
 # that, and the release images already build with -trimpath.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

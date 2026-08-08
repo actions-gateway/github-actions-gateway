@@ -44,6 +44,7 @@
 # Idempotent: a resize to the current node count is a no-op and a cluster that is
 # already at rest drains instantly, so this is safe to re-run.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

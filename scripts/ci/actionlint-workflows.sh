@@ -17,6 +17,7 @@
 #
 # Backs `make actionlint` and the `actionlint` job in unit-test.yml.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

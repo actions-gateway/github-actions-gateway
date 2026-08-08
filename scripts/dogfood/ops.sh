@@ -28,6 +28,7 @@
 #   CLUSTER   GKE cluster name (e.g. gag-dogfood)
 #   ZONE      GCP zone (e.g. us-east1-b)
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

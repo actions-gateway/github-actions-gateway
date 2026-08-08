@@ -62,6 +62,7 @@
 # See the q243 egress-IP reference-arch plan (indexed in docs/plan/README.md)
 # § "Re-runnable live validation".
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

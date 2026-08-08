@@ -35,6 +35,7 @@
 # itself, so a manual run on a GUI dev machine stays desktop-safe; on CI/headless
 # the prefix is empty and it runs at full speed (same convention as `make test`).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

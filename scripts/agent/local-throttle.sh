@@ -111,6 +111,7 @@
 # policy call (GAG_DISPATCH_WORKERS), not a hardware one. The terms still earn
 # their place downward: a 16 GB laptop correctly gets 1.
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Physical cores left for the GUI/foreground apps when throttling.
 readonly GUI_CORE_HEADROOM=2

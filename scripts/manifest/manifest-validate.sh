@@ -25,6 +25,7 @@
 #   POLARIS_RENDER_DIGEST  Placeholder digest used for the digest-pinned chart
 #                          renders — see scripts/lib/common.sh.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

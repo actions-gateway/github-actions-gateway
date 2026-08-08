@@ -39,6 +39,7 @@
 # Exits non-zero on any finding. Findings print as `file:line: message`.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh

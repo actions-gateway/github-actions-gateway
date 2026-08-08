@@ -34,6 +34,7 @@
 # caller can only make the check stricter, never weaker.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Files that legitimately differ between the two versions, each with the reason it
 # cannot be held identical. Keep this list SHORT and justified: every entry is a

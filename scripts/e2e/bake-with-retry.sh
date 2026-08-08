@@ -19,6 +19,7 @@
 #   BAKE_RETRY_DELAY     — seconds between attempts  (default: 10)
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 attempts="${BAKE_RETRY_ATTEMPTS:-3}"
 delay="${BAKE_RETRY_DELAY:-10}"

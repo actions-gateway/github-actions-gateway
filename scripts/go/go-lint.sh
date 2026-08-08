@@ -35,6 +35,7 @@
 # scripts/agent/local-throttle.sh. golangci-lint ignores GOMAXPROCS, so the `-j`
 # flag is the lever that actually caps its fan-out.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

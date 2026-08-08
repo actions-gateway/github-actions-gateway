@@ -8,6 +8,7 @@
 # a naive scanner fails them.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GATE="$SCRIPT_DIR/check-page-density.sh"

@@ -64,6 +64,7 @@
 #   RELEASED_CHART_OCI  OCI chart ref base (default oci://ghcr.io/<owner>/charts,
 #                       owner parsed from the origin remote URL)
 set -euo pipefail
+shopt -s inherit_errexit
 
 KIND_CLUSTER="${KIND_CLUSTER:-actions-gateway-e2e}"
 KUBE_CONTEXT="${KUBE_CONTEXT:-kind-${KIND_CLUSTER}}"

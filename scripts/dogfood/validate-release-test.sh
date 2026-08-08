@@ -35,6 +35,7 @@
 # The gate script is sourced with VALIDATE_RELEASE_LIB_ONLY=1 so main() does not
 # run; `gh` and `run_status` are stubbed, so no network and no cluster.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 VALIDATE_RELEASE_LIB_ONLY=1

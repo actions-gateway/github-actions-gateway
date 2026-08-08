@@ -15,6 +15,7 @@
 # The build is reproducible-friendly: CGO is disabled, symbol tables are stripped
 # (-s -w), and the module build metadata is trimmed (-trimpath).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

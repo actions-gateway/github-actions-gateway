@@ -22,6 +22,7 @@
 #      it into README; this direction catches the ones that never did.
 #
 set -euo pipefail
+shopt -s inherit_errexit
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 readme="$repo_root/docs/plan/README.md"

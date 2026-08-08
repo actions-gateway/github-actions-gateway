@@ -28,6 +28,7 @@
 #   PROBE_RAW_OUTPUT           — path for raw payload (default: /tmp/probe-raw-payload.json)
 #
 set -euo pipefail
+shopt -s inherit_errexit
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

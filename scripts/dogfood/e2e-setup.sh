@@ -31,6 +31,7 @@
 # Optional:
 #   KATA_VERSION     Kata Containers chart/appVersion (default below)
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

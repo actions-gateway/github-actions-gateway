@@ -14,6 +14,7 @@
 #     "bake:docker buildx bake --file docker-bake.hcl"
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 if (( $# == 0 )); then
     printf 'usage: %s "label1:cmd1" "label2:cmd2" ...\n' "${0##*/}" >&2

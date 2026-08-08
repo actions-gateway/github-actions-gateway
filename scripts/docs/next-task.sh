@@ -13,6 +13,7 @@
 # next one (rename with /rename if that happens).
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 MODE=prompt
 if [[ "${1:-}" == "--title" ]]; then

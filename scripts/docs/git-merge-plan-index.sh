@@ -53,6 +53,7 @@
 #     %L conflict-marker size   %P the real pathname
 #     %S %X %Y conflict labels (git >= 2.44; older git is handled)
 set -euo pipefail
+shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROWS_AWK="$SCRIPT_DIR/../lib/merge-table-rows.awk"

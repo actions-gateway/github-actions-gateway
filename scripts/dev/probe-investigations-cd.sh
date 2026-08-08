@@ -30,6 +30,7 @@
 #                                (default: ~/.cache/github-actions-runner)
 #
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # step, die, and gh_curl live in the shared helper library (Q370 / F10).

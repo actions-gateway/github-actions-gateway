@@ -17,6 +17,7 @@
 #                      carries upstream CVEs we cannot fix. Matches the worker
 #                      leg's exit-code 0 in security-scan.yml.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

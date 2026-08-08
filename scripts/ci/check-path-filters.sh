@@ -46,6 +46,7 @@
 # `path-filters` job in .github/workflows/unit-test.yml. Its behavioural tests
 # are scripts/ci/check-path-filters-test.sh.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

@@ -26,6 +26,7 @@
 # Sourcing this file defines its helpers without rendering anything, which is how
 # e2e-report-summary-test.sh asserts them.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPORT_DEFAULT="tmp/e2e-report.xml"
 

@@ -39,6 +39,7 @@
 #   --repo OWNER/NAME  the repo to query
 # Exit: 0 eligible, 1 not eligible (reason on stdout), 2 usage error.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

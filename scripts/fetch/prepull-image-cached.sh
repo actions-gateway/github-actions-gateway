@@ -38,6 +38,7 @@
 #     — forwarded to pull-image-with-retry.sh, which owns the retry schedule.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 image="${1:-}"
 dir="${2:-}"

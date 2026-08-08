@@ -16,6 +16,7 @@
 #   Explicit file args override the file set (used by
 #   check-conflict-markers-test.sh).
 set -euo pipefail
+shopt -s inherit_errexit
 
 # The library is resolved from this script's own location, not from the git root
 # below: the root is whatever tree the gate is pointed at, which the test suite

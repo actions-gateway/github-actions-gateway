@@ -12,6 +12,7 @@
 # module graph — a scoping input that names the wrong module set looks correct
 # to every fixture (Q670).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

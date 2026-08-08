@@ -40,6 +40,7 @@
 #   HELM_RELEASE    release name (default actions-gateway)
 #   RELEASE_NS      release namespace (default gmc-system)
 set -euo pipefail
+shopt -s inherit_errexit
 
 KIND_CLUSTER="${KIND_CLUSTER:-actions-gateway-e2e}"
 KUBE_CONTEXT="${KUBE_CONTEXT:-kind-${KIND_CLUSTER}}"

@@ -48,6 +48,7 @@
 #   scripts/go/check-codegen-drift.sh              # run the three assertions
 #   CONTROLLER_GEN=/path/to/controller-gen ...  # override the binary (make passes it)
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

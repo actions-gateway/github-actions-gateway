@@ -36,6 +36,7 @@
 #   DOWNLOAD_RETRY_DELAY  — seconds between attempts               (default: 2)
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 url="${1:-}"
 want="${2:-}"

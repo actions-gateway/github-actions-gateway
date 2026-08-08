@@ -45,6 +45,7 @@
 # Idempotent: a missing cluster is reported and exits 0, so it is safe to re-run
 # after a partial failure or against an already-deleted environment.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

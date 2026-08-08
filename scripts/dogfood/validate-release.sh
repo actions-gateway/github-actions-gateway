@@ -84,6 +84,7 @@
 # One-time prerequisite (NOT run here): scripts/dogfood/e2e-setup.sh must have
 # provisioned the e2e node pool + GitHub App Secret once. See release.md.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

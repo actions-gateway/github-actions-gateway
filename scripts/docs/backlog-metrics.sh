@@ -20,6 +20,7 @@
 # reason, size, title) for further analysis.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 # The library is resolved from this script's own location, not from the git root
 # of the file under analysis, which a test suite scopes to a throwaway repo.

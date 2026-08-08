@@ -16,6 +16,7 @@
 # CI pins shellcheck v0.11.0; install that version locally so verdicts match
 # (shellcheck's heuristics drift between releases).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

@@ -46,6 +46,7 @@
 #                    See the GKE dogfood plan § "Tracking post-Q74 pre-release
 #                    builds".
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

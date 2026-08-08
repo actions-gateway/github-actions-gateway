@@ -43,6 +43,7 @@
 # Sourcing this file defines its helpers without watching anything, which is how
 # release-sentinel-test.sh asserts them.
 set -euo pipefail
+shopt -s inherit_errexit
 
 SENTINEL_REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/dogfood/lib/progress.sh

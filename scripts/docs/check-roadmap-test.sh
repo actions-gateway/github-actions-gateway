@@ -8,6 +8,7 @@
 # future change to either file's format fails here rather than silently
 # passing everything. Runs under `make check` (via `make scripts-test`).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 CHECK="$REPO_ROOT/scripts/docs/check-roadmap.sh"

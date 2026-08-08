@@ -33,6 +33,7 @@
 #   PULL_RETRY_DELAY    — forwarded to pull-image-with-retry.sh (default: 15)
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 name=${1:-}
 url=${2:-}

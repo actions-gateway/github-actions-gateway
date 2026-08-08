@@ -43,6 +43,7 @@
 # Backs `make status-isolation-check`; runs in `make check`, `make
 # status-gates`, and status-lint.yml.
 set -euo pipefail
+shopt -s inherit_errexit
 
 BASE_REF="origin/main"
 HEAD_REF="HEAD"
