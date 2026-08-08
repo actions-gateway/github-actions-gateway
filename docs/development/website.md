@@ -491,6 +491,132 @@ alike, so the comparison page read as a repeat of the landing page. The band was
 removed from `why-gag.md` rather than reworded: the outcome flow diagram above it
 and the capability table below it already carried the same argument twice.
 
+### Interface rules the custom layer must satisfy
+
+Material owns the page chrome and handles its own controls. The `gag-`,
+`persona-` and `backlog-` components are hand-built on top of it, so nothing
+checks their hit targets, contrast, or animation properties but this page. Each
+rule below was measured against the render on 2026-08-08, and each has a probe
+because none of them can be answered by reading the source.
+
+| Rule | Applies to | How it is checked |
+| --- | --- | --- |
+| A control clears 24px on both axes | every hand-built button, chip and pill | `getBoundingClientRect()`; a link inside running prose is exempt, since the paragraph is the target |
+| Text takes `--gag-muted` / `--gag-accent-ink`, never a raw Material token | any custom rule setting `color` | the sweep below, **run in both palettes** |
+| Figures carry tabular digits | numbers a reader compares in a row, or watches change | `font-variant-numeric`, plus a width check across differing digits |
+| A transition names its properties, and only compositor ones | every custom `transition` | the duration-gated audit below |
+
+**Check the dark palette separately, and expect it to be the worse one.**
+Material's muted-text token is near-symmetric in alpha and not in perceived
+contrast: `--md-default-fg-color--light` is `rgba(0, 0, 0, 0.54)` over white,
+which composites to `#757575` for `Lc 72`, and `rgba(226, 228, 233, 0.56)` over
+slate's `#1e2129`, which composites to `#8c8e95` for `Lc 39.4`. A component
+inheriting it loses 32.6 points when the reader flips the palette, with nothing
+in the source to show it.
+
+That is why secondary text and accent labels take `--gag-muted` and
+`--gag-accent-ink` rather than the Material tokens, on the same ink/fill split
+as `--gag-win-ink`. **Use them for any custom rule setting `color`**; a new rule
+reaching for `--md-default-fg-color--light` reintroduces the asymmetry silently.
+
+| | Light | Dark |
+| --- | --- | --- |
+| `--gag-muted` | `#6e6e6e`, Lc 75.2 | `hsl(225 15% 70%)`, Lc 55.6 |
+| `--gag-accent-ink` | `#2456c9`, Lc 81.4 | `hsl(220 82% 78%)`, Lc 61.5 |
+
+**The dark values are capped, not chosen.** Slate's own body text is only
+`Lc 66.9`, so muted prose that reached 75 would out-contrast the body copy it is
+meant to sit beneath. 55.6 and 61.5 are the most those tokens can carry while
+the hierarchy holds; raising the ceiling means raising Material's palette, which
+is Q734. Dark therefore still reads below the body-text floor, by design and on
+the record.
+
+Two things the rule does **not** cover. A short badge label (`.gag-v2-badge`,
+`.gag-maturity-badge`, measured Lc 64 to 71 on their own chip backgrounds) is
+spot text a reader recognises rather than reads, so the body-text floor is the
+wrong bar for it. And an icon carries the non-text bar, not this one.
+
+**Known residue, so the sweep is not read as a pass/fail gate.** APCA asks
+`Lc` 90 of 16px regular-weight prose, and muted text that reached 90 on white
+would be `#4a4a4a`: no longer muted, and no longer distinguishable from body
+copy. The tokens above deliberately stop short. What that leaves, measured on
+`/why-gag/`:
+
+| Palette | Below the strict floor | Bounded by |
+| --- | --- | --- |
+| Light | `.gag-flow__sub`, `.gag-flow__arrow` (Lc 75.2 against 90), `.gag-vs-row__text` (85.6 against 90) | the size of the type, not the token: at 15.6px regular nothing short of near-body ink clears 90 |
+| Dark | ten selectors, Lc 55.6 to 69.3 | Q734: slate's body copy is itself Lc 66.9, so `.gag-flow__title` and `.gag-vs-row__text` sit at the palette ceiling rather than at a token we chose |
+
+Treat the sweep as a **comparison against these numbers**, not as a list that
+must be empty. A new entry, or an existing one that drops, is the finding.
+
+`getComputedStyle` returns the token unresolved, so the alpha has to be
+composited against the real ancestor background before it means anything:
+
+```js
+// make docs-serve, then on any page. Returns [] when the page is clean.
+const apca = (t, b) => {                       // APCA 0.98G-4g
+  const Y = c => { const f = v => (v / 255) ** 2.4;
+    return 0.2126729 * f(c[0]) + 0.7151522 * f(c[1]) + 0.0721750 * f(c[2]); };
+  let Yt = Y(t), Yb = Y(b);
+  if (Yt < 0.022) Yt += (0.022 - Yt) ** 1.414;
+  if (Yb < 0.022) Yb += (0.022 - Yb) ** 1.414;
+  if (Math.abs(Yb - Yt) < 0.0005) return 0;
+  const [S, off] = Yb > Yt
+    ? [(Yb ** 0.56 - Yt ** 0.57) * 1.14, -0.027]
+    : [(Yb ** 0.65 - Yt ** 0.62) * 1.14, 0.027];
+  return Math.abs(S) < 0.1 ? 0 : Math.round(Math.abs(S + off) * 1000) / 10;
+};
+const rgb = s => { const m = s.match(/[\d.]+/g);
+  return m && m.slice(0, 3).map(Number).concat(m[3] === undefined ? 1 : +m[3]); };
+const over = (f, b) => f.slice(0, 3).map((c, i) => Math.round(c * f[3] + b[i] * (1 - f[3])));
+const bgOf = el => { const st = []; let e = el;
+  while (e && e !== document.documentElement) {
+    const c = rgb(getComputedStyle(e).backgroundColor);
+    if (c && c[3] > 0) { st.push(c); if (c[3] === 1) break; }
+    e = e.parentElement; }
+  let base = rgb(getComputedStyle(document.body).backgroundColor).slice(0, 3);
+  for (let i = st.length - 1; i >= 0; i--) base = over(st[i], base);
+  return base; };
+
+["default", "slate"].flatMap(scheme => {
+  document.body.setAttribute("data-md-color-scheme", scheme);
+  return [...document.querySelectorAll('[class*="gag-"], [class*="persona-"]')]
+    .filter(el => el.getClientRects().length && el.textContent.trim())
+    .map(el => { const cs = getComputedStyle(el), bg = bgOf(el), fg = rgb(cs.color);
+      const px = parseFloat(cs.fontSize);
+      return { scheme, cls: el.className, px, Lc: apca(fg[3] < 1 ? over(fg, bg) : fg, bg),
+               need: px >= 24 ? 60 : px >= 18 || +cs.fontWeight >= 700 ? 75 : 90 }; })
+    .filter(r => r.Lc < r.need);
+});
+```
+
+Sanity-check any reimplementation against the published anchors before trusting
+a verdict: black on white is `Lc 106`, `#888` on white is `Lc 63.1`, and white on
+white is `0`.
+
+The animation rule needs its own gate, because `transitionProperty` computes to
+`all` on **every** element that has no transition at all. Reading it directly
+reports the entire DOM as a violation, which is indistinguishable from a real
+finding until you notice the count:
+
+```js
+[...document.querySelectorAll('[class*="gag-"], [class*="persona-"]')].flatMap(el => {
+  const cs = getComputedStyle(el);
+  const durs = cs.transitionDuration.split(",").map(parseFloat);
+  if (!durs.some(d => d > 0)) return [];                       // no real transition
+  return cs.transitionProperty.split(",").map(s => s.trim())
+    .filter((p, i) => durs[i % durs.length] > 0 &&
+      (p === "all" || /^(top|left|right|bottom|width|height|margin|padding|inset)/.test(p)))
+    .map(p => el.className + " → " + p);
+});                                                            // must be []
+```
+
+**`rem` is 20px here, not 16px.** Material sets the root to 125%, so a source
+read of `font-size: 0.95rem` on the calculator inputs suggests 15.2px and a
+mobile Safari zoom-on-focus, and the render is 19px with no zoom. Convert
+against 20px, or measure, before filing a size finding.
+
 ## Local preview
 
 ```sh
