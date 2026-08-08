@@ -17,7 +17,13 @@ CLAUDE.local.md
 # Scratch space for agent/dev temp files — keeps cp/mv/tee/rm and `>` redirects
 # inside the workspace so claude-workspace-guard doesn't prompt. The .gitkeep is
 # tracked so the dir exists on clone; everything else here is never tracked.
-/tmp/*
+#
+# Unanchored, so a scratch dir a `cd`-drifted command writes one level down
+# (cmd/agc/tmp/, devtools/tmp/) is covered too — root-anchored, those were
+# untracked-but-not-ignored, one directory `git add` from shipping (Q700).
+# `**/tmp/*` not `**/tmp/` — git won't descend into a fully ignored dir, so the
+# .gitkeep negation would be dead (same reason as .claude/* above).
+**/tmp/*
 !/tmp/.gitkeep
 # binary build output
 /.build/
