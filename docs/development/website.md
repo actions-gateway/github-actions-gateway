@@ -502,7 +502,7 @@ because none of them can be answered by reading the source.
 | Rule | Applies to | How it is checked |
 | --- | --- | --- |
 | A control clears 24px on both axes | every hand-built button, chip and pill | `getBoundingClientRect()`; a link inside running prose is exempt, since the paragraph is the target |
-| Text reaches APCA `Lc` 75, or 90 below 16px at weight 400 | any custom rule setting `color` | the sweep below, **run in both palettes** |
+| Text takes `--gag-muted` / `--gag-accent-ink`, never a raw Material token | any custom rule setting `color` | the sweep below, **run in both palettes** |
 | Figures carry tabular digits | numbers a reader compares in a row, or watches change | `font-variant-numeric`, plus a width check across differing digits |
 | A transition names its properties, and only compositor ones | every custom `transition` | the duration-gated audit below |
 
@@ -510,10 +510,45 @@ because none of them can be answered by reading the source.
 Material's muted-text token is near-symmetric in alpha and not in perceived
 contrast: `--md-default-fg-color--light` is `rgba(0, 0, 0, 0.54)` over white,
 which composites to `#757575` for `Lc 72`, and `rgba(226, 228, 233, 0.56)` over
-slate's `#1e2129`, which composites to `#8c8e95` for `Lc 39.4`. Every custom
-component inheriting it loses the same 32.6 points when the reader flips the
-palette, so a component tuned in light mode can sit at half its contrast in dark
-mode with nothing in the source to show it.
+slate's `#1e2129`, which composites to `#8c8e95` for `Lc 39.4`. A component
+inheriting it loses 32.6 points when the reader flips the palette, with nothing
+in the source to show it.
+
+That is why secondary text and accent labels take `--gag-muted` and
+`--gag-accent-ink` rather than the Material tokens, on the same ink/fill split
+as `--gag-win-ink`. **Use them for any custom rule setting `color`**; a new rule
+reaching for `--md-default-fg-color--light` reintroduces the asymmetry silently.
+
+| | Light | Dark |
+| --- | --- | --- |
+| `--gag-muted` | `#6e6e6e`, Lc 75.2 | `hsl(225 15% 70%)`, Lc 55.6 |
+| `--gag-accent-ink` | `#2456c9`, Lc 81.4 | `hsl(220 82% 78%)`, Lc 61.5 |
+
+**The dark values are capped, not chosen.** Slate's own body text is only
+`Lc 66.9`, so muted prose that reached 75 would out-contrast the body copy it is
+meant to sit beneath. 55.6 and 61.5 are the most those tokens can carry while
+the hierarchy holds; raising the ceiling means raising Material's palette, which
+is Q734. Dark therefore still reads below the body-text floor, by design and on
+the record.
+
+Two things the rule does **not** cover. A short badge label (`.gag-v2-badge`,
+`.gag-maturity-badge`, measured Lc 64 to 71 on their own chip backgrounds) is
+spot text a reader recognises rather than reads, so the body-text floor is the
+wrong bar for it. And an icon carries the non-text bar, not this one.
+
+**Known residue, so the sweep is not read as a pass/fail gate.** APCA asks
+`Lc` 90 of 16px regular-weight prose, and muted text that reached 90 on white
+would be `#4a4a4a`: no longer muted, and no longer distinguishable from body
+copy. The tokens above deliberately stop short. What that leaves, measured on
+`/why-gag/`:
+
+| Palette | Below the strict floor | Bounded by |
+| --- | --- | --- |
+| Light | `.gag-flow__sub`, `.gag-flow__arrow` (Lc 75.2 against 90), `.gag-vs-row__text` (85.6 against 90) | the size of the type, not the token: at 15.6px regular nothing short of near-body ink clears 90 |
+| Dark | ten selectors, Lc 55.6 to 69.3 | Q734: slate's body copy is itself Lc 66.9, so `.gag-flow__title` and `.gag-vs-row__text` sit at the palette ceiling rather than at a token we chose |
+
+Treat the sweep as a **comparison against these numbers**, not as a list that
+must be empty. A new entry, or an existing one that drops, is the finding.
 
 `getComputedStyle` returns the token unresolved, so the alpha has to be
 composited against the real ancestor background before it means anything:

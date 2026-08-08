@@ -107,6 +107,13 @@ body[data-md-color-scheme="default"] {
   --gag-win-fill: #0f8a5f;
   --gag-bad-ink: #c23a22;
   --gag-bad-fill: #c23a22;
+
+  /* Secondary prose and accent-coloured labels. Same ink/fill split as above:
+     these are text colours, and the Material tokens they replace are tuned for
+     the light palette only. See website.md § Interface rules the custom layer
+     must satisfy for the per-palette APCA readings. */
+  --gag-muted: #6e6e6e;
+  --gag-accent-ink: #2456c9;
 }
 
 body[data-md-color-scheme="slate"] {
@@ -122,6 +129,13 @@ body[data-md-color-scheme="slate"] {
   --gag-win-fill: #0f8a5f;
   --gag-bad-ink: #f4744f;
   --gag-bad-fill: #e5533c;
+
+  /* Both are capped by slate's own body text, which sits at Lc 66.9: muted
+     prose that out-contrasts body copy inverts the hierarchy. Hence Lc 55.6 and
+     61.5 rather than the 75 an unconstrained reading of the rule would ask for.
+     Raising the ceiling means raising Material's palette, which is Q734. */
+  --gag-muted: hsl(225deg 15% 70%);
+  --gag-accent-ink: hsl(220deg 82% 78%);
 }
 
 /* Header: Material gives the site title a 1rem left margin, which leaves a big
@@ -260,7 +274,7 @@ body[data-md-color-scheme="slate"] {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   margin: 0 0 0.75rem;
 }
 
@@ -327,7 +341,7 @@ body[data-md-color-scheme="slate"] {
 
 .gag-hero .gag-claims span + span::before {
   content: "·";
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   font-weight: 400;
   /* Oversized against the claim text so the dot reads as a divider rather than
      punctuation. `em` here resolves against the claim's own clamped size, so it
@@ -343,7 +357,7 @@ body[data-md-color-scheme="slate"] {
 
 .gag-hero .gag-tagline {
   font-size: clamp(1rem, 0.95rem + 0.4vw, 1.15rem);
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   margin: 0 0 1.5rem;
   text-wrap: pretty;
 }
@@ -371,14 +385,14 @@ body[data-md-color-scheme="slate"] {
 
 .gag-reassure {
   font-size: 0.82rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   max-width: 48rem;
   margin: 1.1rem 0 0;
   text-wrap: pretty;
 }
 
 .gag-reassure .twemoji {
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
 }
 
 /* Benefit cards: 3 across (two balanced rows of three), degrading when narrow. */
@@ -421,7 +435,7 @@ body[data-md-color-scheme="slate"] {
   );
   font-size: 0.82rem;
   line-height: 1.5;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   text-wrap: pretty;
 }
 
@@ -430,7 +444,7 @@ body[data-md-color-scheme="slate"] {
 }
 
 .gag-fit-note .twemoji {
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   margin-right: 0.4rem;
   vertical-align: -0.16em;
 }
@@ -503,7 +517,7 @@ body[data-md-color-scheme="slate"] {
 
 .gag-vs-hero__lede {
   font-size: clamp(1rem, 0.95rem + 0.35vw, 1.12rem);
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   max-width: 34rem;
   margin: 0 0 1.5rem;
   text-wrap: pretty;
@@ -542,7 +556,7 @@ body[data-md-color-scheme="slate"] {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   margin: 0 0 0.1rem;
 }
 
@@ -651,7 +665,7 @@ body[data-md-color-scheme="slate"] {
   margin-top: 0.45rem;
   font-size: 0.78rem;
   line-height: 1.4;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   text-wrap: pretty;
 }
 
@@ -700,7 +714,7 @@ body[data-md-color-scheme="slate"] {
 .gag-calc__field-label {
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-calc__field input {
@@ -749,7 +763,7 @@ body[data-md-color-scheme="slate"] {
 
 .gag-calc__preset small {
   font-size: 0.7rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-calc__grid {
@@ -799,14 +813,14 @@ body[data-md-color-scheme="slate"] {
   display: block;
   margin-top: 0.15rem;
   font-size: 0.68rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-calc__note {
   margin: 0.9rem 0 0;
   font-size: 0.76rem;
   line-height: 1.5;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   text-wrap: pretty;
 }
 
@@ -861,12 +875,12 @@ body[data-md-color-scheme="slate"] {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   margin-bottom: 0.15rem;
 }
 
 .gag-flow__tier--input {
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-flow__title {
@@ -877,11 +891,11 @@ body[data-md-color-scheme="slate"] {
 .gag-flow__sub {
   display: block;
   font-size: 0.78rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-flow__arrow {
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   font-size: 0.8rem;
 }
 
@@ -1135,7 +1149,7 @@ body[data-md-color-scheme="slate"] {
    column is whatever the author put rightmost, and the tint reads as an emphasis
    the page never meant. */
 .md-content__inner:has(.gag-vs-hero) table th:last-child {
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
 }
 
 .md-content__inner:has(.gag-vs-hero) table th:last-child,
@@ -1306,7 +1320,7 @@ html.gag-reveal-ready .gag-reveal.is-visible {
   border-radius: 1rem;
   border: 1px solid var(--md-default-fg-color--lightest);
   background: transparent;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   cursor: pointer;
   transition: background-color 0.15s var(--gag-ease), color 0.15s var(--gag-ease),
     border-color 0.15s var(--gag-ease);
@@ -1332,7 +1346,7 @@ html.gag-reveal-ready .gag-reveal.is-visible {
   padding: 0.1rem 0.5rem;
   border-radius: 0.8rem;
   background: var(--gag-accent-soft);
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   white-space: nowrap;
 }
 
@@ -1364,7 +1378,7 @@ button.persona-pill:focus-visible {
 /* Audience pills are links to the filtered ops index — keep the pill look. */
 .md-typeset a.persona-pill {
   text-decoration: none;
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   transition: background-color 0.15s var(--gag-ease);
 }
 
@@ -1391,7 +1405,7 @@ button.persona-pill:focus-visible {
   font-size: 0.68rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 /* The bars sit inside a labelled row, so drop the standalone bottom margin. */
@@ -1402,7 +1416,7 @@ button.persona-pill:focus-visible {
 .md-typeset .backlog-count {
   margin: 0.2rem 0 0;
   font-size: 0.7rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 /* Row labels select their chip, like the persona pills. */
