@@ -340,6 +340,49 @@ Every claim in the table above shipped as a flat assertion instead.
 | **Table of contents** | Long docs (~400+ lines) carry a `## Table of Contents` after the intro listing h2s (plus h3 for operator docs). Anchors follow GitHub slug rules (duplicate headings get `-1`/`-2`); verify against the rendered page. |
 | **Cut filler** | Delete "in order to", "it should be noted that", "please note", and hedging preambles. A pure win for brevity and scannability. |
 | **Versioning** | Docs describe `main`: mark unshipped behavior `(planned)`, never as if it ships. API versions (`v1alpha1`→v2…) are documented together on `main` with reference + migration guides — one running gateway serves them at once. Separately, the published *site* is a versioned *tree* (a built copy per release): it defaults to the latest stable release, with `main` behind an opt-in `dev` version — see [website.md § Versioned deploy](website.md#versioned-deploy-mike). |
+| **Line breaks** | Hard-wrap prose at roughly 90 to 100 columns, the tree's current style. Sentence-per-line is the intended destination but is not adopted yet; see the section below. |
+
+## Line breaks in prose: hard wrap today, sentence-per-line later
+
+Prose is hard-wrapped. [Semantic line breaks](https://sembr.org/), one sentence per source
+line, are what we want instead: a one-sentence edit becomes a one-line diff, so prose review
+stops being a re-wrap hunt and concurrent branches stop colliding on paragraphs neither of
+them meaningfully changed. That payoff is largest here because 263 non-vendored Markdown
+files carry roughly 82,000 lines, and almost every session edits some of them.
+
+[mdreflow](https://github.com/jbeda/mdreflow) is vendored in `tools/` at a pinned version and
+drives the conversion when we take it:
+
+```bash
+make md-reflow
+```
+
+`make md-reflow-check` reports what is unformatted without writing, and `make md-reflow-diff`
+prints the change. `.mdreflow.yaml` at the repo root holds the configuration: `sentence` mode
+at `max-width: 0`, excluding the two generated docs, `docs/STATUS.md`, and the `AGENTS.md`
+symlink. mdreflow always excludes `vendor/`, so the 471 tracked vendored Markdown files are
+never walked.
+
+**The conversion is deferred, and `md-reflow-check` is deliberately not in
+`CHECK_FAST_GATES`.** Measured on mdreflow v0.1.3, 2026-08-08: any paragraph containing a
+`(...)` or `[...]` pair that spans a source line break is skipped in full, and `--check` then
+reports the file as clean. Minimal reproducer, unchanged by any mode:
+
+```
+A torus (
+portal) here. Second sentence.
+```
+
+Because the tree is hard-wrapped and its prose is dense with parentheticals, those brackets
+straddle line breaks constantly. A full run converted 256 files but left 5,926 top-level
+continuation lines across 189 files at the old wrap, and 186 of the converted files ended up
+visibly mixed-style. Running `--mode para` first to join paragraphs does not help; the same
+guard skips them there too. Converting now would pay the churn of a tree-wide rewrite, plus a
+second one after the fix, without buying the consistency that is the whole point.
+
+[Q746](../STATUS.md#Q746) adopts the convention once the skip is fixed upstream. Re-measure
+before acting on it: the residue figures above are what v0.1.3 produced, not a standing
+property of the tool.
 
 ## Maintenance
 
