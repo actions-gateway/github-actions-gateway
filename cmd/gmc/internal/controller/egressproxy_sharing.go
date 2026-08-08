@@ -173,11 +173,14 @@ func consumerNamespacesFor(ctx context.Context, c client.Client, ep *gmcv2alpha1
 //
 // A read failure is returned rather than swallowed: silently returning no namespaces
 // would strip working egress rules from a live policy.
-func grantedRemoteProxyNamespaces(ctx context.Context, c client.Client, ag *gmcv2alpha1.ActionsGateway) ([]string, error) {
-	refs := map[string]string{} // proxy namespace → proxy name
-	if ref := ag.Spec.DefaultProxyRef; ref != nil && ref.Namespace != "" && ref.Namespace != ag.Namespace {
-		refs[ref.Namespace] = ref.Name
+func grantedRemoteProxies(ctx context.Context, c client.Client, ag *gmcv2alpha1.ActionsGateway) ([]remoteProxy, error) {
+	refs := map[remoteProxy]struct{}{}
+	remote := func(ref *gmcv2alpha1.ProxyObjectRef) {
+		if ref != nil && ref.Namespace != "" && ref.Namespace != ag.Namespace {
+			refs[remoteProxy{Namespace: ref.Namespace, Name: ref.Name}] = struct{}{}
+		}
 	}
+	remote(ag.Spec.DefaultProxyRef)
 
 	var runnerSets gmcv2alpha1.RunnerSetList
 	if err := c.List(ctx, &runnerSets, client.InNamespace(ag.Namespace)); err != nil {
@@ -185,29 +188,40 @@ func grantedRemoteProxyNamespaces(ctx context.Context, c client.Client, ag *gmcv
 	}
 	for i := range runnerSets.Items {
 		rs := &runnerSets.Items[i]
-		if rs.Spec.GatewayRef.Name != ag.Name {
-			continue
-		}
-		if ref := rs.Spec.ProxyRef; ref != nil && ref.Namespace != "" && ref.Namespace != ag.Namespace {
-			refs[ref.Namespace] = ref.Name
+		if rs.Spec.GatewayRef.Name == ag.Name {
+			remote(rs.Spec.ProxyRef)
 		}
 	}
 
-	var granted []string
-	for proxyNS, proxyName := range refs {
+	var granted []remoteProxy
+	for ref := range refs {
 		var ep gmcv2alpha1.EgressProxy
-		if err := c.Get(ctx, types.NamespacedName{Namespace: proxyNS, Name: proxyName}, &ep); err != nil {
+		if err := c.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, &ep); err != nil {
 			if apierrors.IsNotFound(err) {
 				continue // the reference's own NotFound condition reports this
 			}
-			return nil, fmt.Errorf("read EgressProxy %s/%s: %w", proxyNS, proxyName, err)
+			return nil, fmt.Errorf("read EgressProxy %s/%s: %w", ref.Namespace, ref.Name, err)
 		}
 		if proxyShareGranted(&ep, ag.Namespace) {
-			granted = append(granted, proxyNS)
+			granted = append(granted, ref)
 		}
 	}
-	slices.Sort(granted)
+	slices.SortFunc(granted, func(a, b remoteProxy) int {
+		if a.Namespace != b.Namespace {
+			return strings.Compare(a.Namespace, b.Namespace)
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
 	return granted, nil
+}
+
+// remoteProxy identifies one EgressProxy pool in another namespace. Both halves are
+// carried so the egress peer can select that pool by its identity label rather than
+// every proxy pod in the namespace: two pools can sit in one provider namespace and
+// grant different consumers.
+type remoteProxy struct {
+	Namespace string
+	Name      string
 }
 
 // reconcileProxyShares projects the proxy's CA and connection facts into every
