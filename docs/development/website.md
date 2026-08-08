@@ -359,6 +359,64 @@ the logomark hits its 132px size cap while the hero is already at its 44rem max.
 Editing the headline **text** is subject to the same arithmetic: a phrase longer
 than 26 characters needs the cap lowered again, or it will overrun the column.
 
+### Measure the render; the source cannot answer these questions
+
+Every layout defect found in the 2026-08 marketing review was invisible in the
+Markdown and the CSS, and obvious in one measurement: tile heights, bullet
+wrapping, separator size, an alignment axis, a `display: flex` that turned prose
+into non-wrapping flex items, and 24px of horizontal scroll. **`make check` does
+not build the site**, so nothing gates any of it. Run `make docs-serve` and
+measure.
+
+**Sweep the defect class, not the reported instance.** This is the expensive
+lesson. One tile was reported as too tall; measuring only that tile missed a
+duplicated component on a second page, a wall of six admonitions, and two
+overflow bugs, which then arrived as separate rounds of feedback. When a visual
+problem is reported, probe every instance of its class on every page that uses
+the component.
+
+Four probes cover most of it. Each returns `[]` or `0` when the page is clean:
+
+```js
+// make docs-serve, then at 1440px on the page under review
+// 1. bullets that wrap (see the budgets below)
+[...document.querySelectorAll('.gag-pillars li li')]
+  .filter(b => b.getBoundingClientRect().height /
+               parseFloat(getComputedStyle(b).lineHeight) > 1.5)
+  .map(b => b.innerText.trim());
+
+// 2. horizontal overflow, and what causes it
+document.documentElement.scrollWidth - document.documentElement.clientWidth;
+
+// 3. which element owns the overflow: hide each, watch scrollWidth drop
+[...document.querySelector('article').children].map(el => {
+  const w0 = document.documentElement.scrollWidth, d = el.style.display;
+  el.style.display = 'none';
+  const drop = w0 - document.documentElement.scrollWidth;
+  el.style.display = d;
+  return drop > 0 ? [el.className, drop] : null;
+}).filter(Boolean);
+
+// 4. wrap points inside a phrase-wrapped row (each span must report 1)
+[...document.querySelectorAll('.gag-claims span')]
+  .map(s => { const r = document.createRange(); r.selectNodeContents(s);
+              return r.getClientRects().length; });
+```
+
+Two cautions learned the hard way. Measuring a string's width by building a
+probe span from `getComputedStyle(...).font` under-reported by 40% against the
+real render; use a `Range` over the actual node instead. And resizing the
+*parent* proves nothing about an element sized in `vw` units, which only a real
+viewport resize will change.
+
+**A shared component must not carry near-identical content on two pages.** The
+landing page and `why-gag.md` both ran a `.gag-stats` band whose first and third
+tiles matched verbatim, number and lead text alike, so the comparison page read
+as a repeat of the landing page. The band was removed from `why-gag.md` rather
+than reworded, because the diagram above it and the table below it already
+carried that argument. Only `docs/index.md` and `docs/why-gag.md` use these
+components, so the check is a diff of two files.
+
 ### Card bullets fit on one line
 
 Every bullet inside a `.gag-pillars` card renders on a single line. The grid is a

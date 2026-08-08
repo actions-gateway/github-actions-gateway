@@ -73,6 +73,44 @@ A reader skims headings, then the first line of each block. Optimise for that.
 - **Bold sparingly.** Bold the one keyword a scanner hunts for. If everything is bold,
   nothing is.
 
+## Cut before you polish
+
+Length is the most common defect in this tree and the hardest to see from inside
+a draft. Run these four passes before touching wording. Every example below is
+from one review of the marketing pages, where 24 rounds of feedback collapsed
+into these four causes.
+
+**Ask whether the block belongs on this page at all.** Three questions: does
+*this* page's reader need it, does it belong on another page, and what audience
+wants it and where would they look for it. `why-gag.md` carried a 424-word
+section on the v2 API decomposition, 22% of the page's height, whose four
+comparison points were already rows in the table directly above it, and whose
+subject was a GAG v1-to-v2 contrast rather than the ARC comparison the page
+exists for. Deleting it lost nothing: `features.md` and
+[appendix H](../design/appendix-h-v2-api-decomposition.md) already served the
+reader who wanted it.
+
+**Never restate in prose what a diagram or table already carries.** Prose beside
+a visual is the visual admitting it did not work. That same page opened a
+section with two paragraphs, 139 words, naming three capabilities, their
+combined effect and four outcomes, directly above a flow diagram whose nodes
+said exactly that. A one-line lead-in replaced both.
+
+**State the invariant, not an instance.** "Listener footprint for 10 runner
+sets" invites the question the number cannot answer, because nothing justifies
+ten. The claim is a ratio: one always-on pod per set against one shared pod
+whatever the count. Saying it that way is shorter *and* stronger. A number earns
+its place when it is a measurement (15 to 26 s) or a declared scenario parameter
+(the [cost model](../design/appendix-f-cost-model.md)'s ten-set fleet); it is
+noise when it is an illustration.
+
+**Scarcity is what makes an emphasis device work, and that is not only true of
+bold.** Six consecutive admonitions ran 94 lines on one page, and because all
+six were styled identically the most important of them, the honest
+where-ARC-is-ahead list, looked exactly like the four routing notes above it.
+Budget roughly one callout per screen; promote anything that needs more to a
+heading of its own.
+
 ## Commands and code blocks
 
 A reader copies a block and runs it. Make that safe.
