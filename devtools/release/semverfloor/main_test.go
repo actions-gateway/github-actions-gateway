@@ -104,7 +104,7 @@ func TestFloorEndToEnd(t *testing.T) {
 			"api/v2beta1":               true,
 		},
 	}
-	r := Classify(commits, surface)
+	r := Classify(commits, surface, nil)
 
 	if r.Floor != LevelMinor {
 		t.Errorf("floor = %v, want minor", r.Floor)

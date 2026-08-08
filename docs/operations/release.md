@@ -139,6 +139,18 @@ image and no chart, so the `feat` count is not the answer and never was. The
 report names the commits that set the floor, with the shipped files that put
 each one there, and lists the ones it withheld so a dropped commit stays visible.
 
+**A shipped path is where attribution starts, not where it ends.** A commit that
+edits only a godoc line inside a released package directory touches the surface
+and ships a byte-identical binary. So each shipped Go file is read again on both
+sides of the commit and kept only when its token stream moved: comments and
+whitespace are not in that stream, while `//go:build` and `//go:embed` are, since
+those decide whether a file compiles and what goes into the binary. Everything
+less certain is kept as shipping, including a chart file, a file that does not
+scan, and one that was added or deleted. The floor is a floor, and the only
+costly error is dropping a commit that did change behaviour, so what the
+narrowing removed is printed under **Comment-only** rather than dropped quietly.
+It still reproduces all four release windows to date as `minor`.
+
 **The surface it checks against is derived, not listed.** It reads publish.yml's
 image matrix, follows each image's Dockerfile stage back through its
 `COPY --from=` edges to the `go build` that produced the binary, and expands
