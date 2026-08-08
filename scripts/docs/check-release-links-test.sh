@@ -13,6 +13,7 @@
 # fixtures need no mkdocs, so the logic stays covered by the fast gate.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT

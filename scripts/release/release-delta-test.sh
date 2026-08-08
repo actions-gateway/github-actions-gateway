@@ -10,6 +10,7 @@
 # widening the diff to the whole repo. Runs under `make check` (via
 # `make scripts-test`).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 SCRIPT="$REPO_ROOT/scripts/release/release-delta.sh"

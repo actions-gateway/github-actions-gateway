@@ -28,6 +28,7 @@
 # unexpanded — single quotes are the point, not an oversight.
 # shellcheck disable=SC2016
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

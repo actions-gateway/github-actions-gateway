@@ -17,6 +17,7 @@
 # exercised by running the script against a live PR.
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 CHECKER="$REPO_ROOT/scripts/agent/pr-requeue-eligible.sh"
