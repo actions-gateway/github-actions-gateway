@@ -124,6 +124,33 @@ func TestDecide(t *testing.T) {
 		{name: "make help is informational", cmd: "make help | grep check"},
 		{name: "make -n prints, not runs", cmd: "make -n check | head"},
 
+		// --- Capability probes, not gate runs (Q730) ---------------------------
+		// A --version/--help invocation prints and exits, so there is no gate
+		// result for the pipe to swallow. Every registered gate is covered, not
+		// just the shellcheck instance that was reported.
+		{name: "shellcheck --version piped", cmd: "shellcheck --version | grep 0.11"},
+		{name: "shellcheck -V piped", cmd: "shellcheck -V | head -1"},
+		{name: "make --version piped", cmd: "make --version | head -1"},
+		{name: "golangci-lint --version piped", cmd: "golangci-lint --version | cat"},
+		{name: "go test --help piped", cmd: "go test --help | head"},
+		{name: "go vet -h piped", cmd: "go vet -h | head"},
+		{name: "git pull --help piped", cmd: "git pull --help | head"},
+		{name: "scripts gate --help piped", cmd: "scripts/ci/check-tools.sh --help | head"},
+		{name: "./scripts gate -h piped", cmd: "./scripts/ci/check-tools.sh -h | head"},
+		{name: "backgrounded probe ending in echo", cmd: `shellcheck --version > tmp/v.log 2>&1; echo "EXIT=$?"`, bg: true},
+
+		// The catch the guard exists for, kept beside the exemption: the same
+		// tools doing real work still deny.
+		{name: "shellcheck on a script still denies", cmd: "shellcheck scripts/agent/local-throttle.sh | tail", warn: true},
+		{name: "go test -v is verbose, not a version probe", cmd: "go test -v ./... | tail -20", warn: true},
+		// `-v` is --version to make and verbose to `go test`. Exempting it would
+		// exempt the case above, so the short form stays denied.
+		{name: "make -v stays denied", cmd: "make -v | head -1", warn: true},
+		// A probe flag inside a quoted argument is one word, not a flag: matching
+		// parsed words rather than the joined head is what keeps these gates.
+		{name: "commit message naming --version still denies", cmd: `git commit -m "chore: bump --version output" | tee tmp/c.log`, warn: true},
+		{name: "backgrounded commit naming --help still denies", cmd: `git commit -m "docs: --help text" > tmp/c.log 2>&1; echo "EXIT=$?"`, bg: true, warn: true},
+
 		// --- Owned by the sibling throttle hook --------------------------------
 		{name: "go test -race defers", cmd: "go test -race ./... | tee tmp/race.log"},
 		{name: "already-throttled -race does not defer", cmd: "nice -n 10 taskpolicy -d throttle go test -race ./... | tail"},

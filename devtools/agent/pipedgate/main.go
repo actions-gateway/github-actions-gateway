@@ -54,6 +54,10 @@
 //     string, not a program.
 //   - A gate behind a throttle wrapper (taskpolicy ... go test ... | tail): the
 //     wrapper's own flags are not peeled, so the head does not match.
+//   - A capability probe — an invocation carrying --version, --help, -V or -h
+//     (Q730). The tool prints and exits, so no gate result exists to lose.
+//     `-v` is not one of them: it is --version to make but verbose to
+//     `go test`, and `go test -v ./... | tail` is the bug.
 //   - A pipeline whose status genuinely does not matter, which is what the
 //     override prefix is for.
 //   - Any command carrying a heavy `go ... -race`, which
