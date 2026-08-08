@@ -185,7 +185,7 @@ jobs:
         with:
           driver-opts: image=${{ env.BUILDKIT_IMAGE }}
       - name: Log in to GHCR
-        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -427,7 +427,7 @@ jobs:
         # own login to read the manifest and push the signature. Without this,
         # `cosign sign` fails with "UNAUTHORIZED: authentication required" even
         # though `helm push` (which uses the helm login below) succeeds.
-        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
