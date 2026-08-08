@@ -64,7 +64,7 @@ cluster, and the same gap from four angles once teams share one.
 
     - a pod slot and a pod IP each
     - held alive just to long-poll GitHub
-    - 10 scale sets ≈ 10 always-on pods before a job runs
+    - the count tracks runner sets, not job volume
 
 -   :material-ticket-confirmation:{ .lg .middle } __Platform team is the bottleneck__
 

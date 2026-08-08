@@ -13,7 +13,7 @@ Actions Gateway (GAG) is probably right.
 
 | If | Use | Not GAG, because |
 |---|---|---|
-| A vendor may run your jobs | a managed runner service (Blacksmith, Namespace, Depot, WarpBuild, Ubicloud) | they compete on build speed and price per minute; GAG does not ([D.14](design/appendix-d-alternatives-considered.md#d14-managed-runner-services-an-explicit-non-competitor)) |
+| A vendor can run your jobs | a managed runner service (Blacksmith, Namespace, Depot, WarpBuild, Ubicloud) | they compete on build speed and price per minute; GAG does not ([D.14](design/appendix-d-alternatives-considered.md#d14-managed-runner-services-an-explicit-non-competitor)) |
 | Managed Kubernetes is cheap and your CI fits one cloud | a cluster per team, in its own project | a project boundary isolates harder than any shared cluster, and costs an API call |
 | One team owns the cluster and the runners | [ARC](https://github.com/actions/actions-runner-controller) | GAG speaks the same protocol through the same client library. This is not a protocol argument ([D.3](design/appendix-d-alternatives-considered.md#d3-actions-runner-controller-arc)) |
 | Your compute is elastic cloud capacity, no cluster wanted | [RunsOn](https://runs-on.com), [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner), [Actuated](https://actuated.com) | a VM per job isolates without any namespace argument ([D.11](design/appendix-d-alternatives-considered.md#d11-self-hosted-github-actions-without-kubernetes)) |

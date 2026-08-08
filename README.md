@@ -37,7 +37,7 @@ ARC-side claims were measured on 2026-08-06 against the then-current ARC `gha-ru
 
 | If | Use instead |
 | --- | --- |
-| A vendor may run your jobs | a managed runner service (Blacksmith, Namespace, Depot, WarpBuild, Ubicloud) |
+| A vendor can run your jobs | a managed runner service (Blacksmith, Namespace, Depot, WarpBuild, Ubicloud) |
 | Managed Kubernetes is cheap and your CI fits one cloud | a cluster per team, in its own project. A project boundary isolates harder than any shared cluster can |
 | One team owns the cluster and the runners | [ARC](https://github.com/actions/actions-runner-controller). GAG speaks the same protocol through the same client library, so this is not a protocol argument |
 | Your compute is elastic cloud capacity and you want no cluster | [RunsOn](https://runs-on.com), [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner), [Actuated](https://actuated.com) |

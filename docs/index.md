@@ -133,7 +133,7 @@ These ladder up one way: **safe quotas and self-healing disruption make shared c
 
     - ~12 KiB per listener session
     - One shared pod per tenant
-    - 1 pod vs 10 always-on pods for ten groups
+    - ARC: one always-on pod per set
 
 -   :material-chart-line:{ .lg .middle } __Per-tenant observability__
 
@@ -233,7 +233,7 @@ GAG targets a specific audience: teams that **must** self-host runners and run t
 
 :material-information-outline: **Not your setup?** Three cases where something else wins, and we would rather say so.
 
-- **A vendor may run your jobs** → a managed runner service, on speed and setup
+- **A vendor can run your jobs** → a managed runner service, on speed and setup
 - **Managed Kubernetes is cheap, CI fits one cloud** → a cluster per team isolates harder
 - **One team owns the cluster and the runners** → [ARC](https://github.com/actions/actions-runner-controller), whose protocol GAG is built on
 
