@@ -8,6 +8,9 @@
 # how e2e-test.yml is its own workflow. The `paths` below scope it to Markdown
 # plus the checkers, the docs-site build inputs the release-links oracle is
 # built from, and this workflow file, so a code-only change doesn't trigger it.
+# `scripts/**` is deliberately the whole tree rather than the individual
+# checkers: script-docs-check (Q688) takes the tree itself as an input, so a
+# script added anywhere under it must re-run this workflow.
 #
 # The two lists are the same list written twice — GitHub has no anchor syntax
 # across `pull_request` and `push` — so every edit belongs in both.
@@ -17,15 +20,8 @@ on:
   pull_request:
     paths:
       - '**.md'
-      - 'scripts/docs/check-doc-links.sh'
-      - 'scripts/docs/check-em-dash.sh'
-      - 'scripts/docs/em-dash-baseline.txt'
+      - 'scripts/**'
       - 'devtools/docs/**'
-      - 'scripts/docs/check-release-pins.sh'
-      - 'scripts/docs/check-release-links.sh'
-      - 'scripts/docs/docs-preview.sh'
-      - 'scripts/ci/gate-list.sh'
-      - 'scripts/**/*-test.sh'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - 'Makefile'
@@ -34,15 +30,8 @@ on:
     branches: [main]
     paths:
       - '**.md'
-      - 'scripts/docs/check-doc-links.sh'
-      - 'scripts/docs/check-em-dash.sh'
-      - 'scripts/docs/em-dash-baseline.txt'
+      - 'scripts/**'
       - 'devtools/docs/**'
-      - 'scripts/docs/check-release-pins.sh'
-      - 'scripts/docs/check-release-links.sh'
-      - 'scripts/docs/docs-preview.sh'
-      - 'scripts/ci/gate-list.sh'
-      - 'scripts/**/*-test.sh'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - 'Makefile'
@@ -82,13 +71,26 @@ jobs:
       - name: em-dash density (make em-dash-check)
         run: make em-dash-check
 
+  # Hold scripts/README.md to the scripts/ tree (Q688). It belongs here for the
+  # same reason gate-lists does: its two inputs are a doc and the scripts/ tree,
+  # and this is the only workflow whose triggers cover both — unit-test.yml
+  # path-ignores docs, so a README edit that dropped an entry would reach no
+  # gate there.
+  script-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: every script is documented (make script-docs-check)
+        run: make script-docs-check
+
   # Reconcile `make check`'s gate and suite lists with everything derived from
   # them (Q649, Q671). It lives here rather than in unit-test.yml's lint job
   # because it spans the Makefile, a doc and the scripts/ tree, and this is the
   # only workflow whose triggers cover all three: unit-test.yml path-ignores
   # docs, so a docs-only change that dropped the `make list-gates` pointer would
-  # skip the gate that exists to catch it. The `scripts/**/*-test.sh` trigger is
-  # the suite half: a suite added without touching the Makefile is exactly the
+  # skip the gate that exists to catch it. The `scripts/**` trigger is the suite
+  # half: a suite added without touching the Makefile is exactly the
   # unlisted-suite case, and it reaches no other trigger here.
   gate-lists:
     runs-on: ubuntu-latest

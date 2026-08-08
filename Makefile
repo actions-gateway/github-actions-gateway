@@ -113,7 +113,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    semver-floor-sources-check
+                    script-docs-check semver-floor-sources-check
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
 .PHONY: check
@@ -190,6 +190,15 @@ em-dash-check: ## Fail when a doc gains em-dashes above its baseline, or a new d
 .PHONY: page-density-check
 page-density-check: ## Fail on an admonition wall, or a stat tile saying the same thing on two pages
 	scripts/docs/check-page-density.sh
+
+# scripts/README.md coverage gate (Q688). That page is the only map from a
+# script to the gate that runs it, and listing the sixteen *-test.sh files that
+# had drifted off it fixes the day rather than the week — so the gate is the
+# deliverable. Mention detection reads the parsed document, so a filename in a
+# fenced example is an illustration rather than an entry.
+.PHONY: script-docs-check
+script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md entry
+	scripts/docs/check-script-docs.sh
 
 .PHONY: em-dash-baseline
 em-dash-baseline: ## Re-record the per-file em-dash ceilings; the diff is what the cleanup cleared
@@ -346,6 +355,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
+                 docs/check-script-docs-test \
                  docs/alloc-queue-id-test docs/check-status-isolation-test \
                  docs/find-duplicate-rows-test \
                  docs/git-merge-plan-index-test docs/git-merge-status-test \

@@ -244,18 +244,18 @@ Unlike `make test-race` and `make vulncheck`, `cover-check` **is** the unit-test
 
 ### Gates scan present files, not just tracked ones
 
-Five gates walk the tree ([shellcheck](#the-shellcheck-gate), [doc-links](#the-doc-link-gate), [conflict-markers](#the-conflict-marker-gate), `no-plan-refs-check`, and `em-dash-check`), and all five draw their file list from one helper pair in [`scripts/lib/common.sh`](../../scripts/lib/common.sh):
+Six gates walk the tree ([shellcheck](#the-shellcheck-gate), [doc-links](#the-doc-link-gate), [conflict-markers](#the-conflict-marker-gate), `no-plan-refs-check`, `em-dash-check`, and `script-docs-check`), and all six draw their file list from one helper pair in [`scripts/lib/common.sh`](../../scripts/lib/common.sh):
 
 - `git_candidates PATHSPEC…` — `git ls-files --cached --others --exclude-standard`, i.e. **tracked** files plus **untracked ones that are not gitignored**.
 - `select_present_files` — drops what no reader can open: a **deleted-but-tracked** path (`--cached` still lists it) and merge-stage **duplicates** (`--cached` lists an unmerged path once per stage, which would multiply its findings).
 
 **Listing `--cached` alone is a false green**, and it is the reason this is one shared helper rather than four pathspecs. A brand-new file is untracked, so a tracked-only gate cannot see it: the gate passes, and the finding appears on the *next* run — after `make check` has already been reported green and the work called done. Q432 hit this in the shellcheck gate (a new script, unlinted, cost a session on 2026-07-26); Q619 found the other three still selecting `--cached` only, so a brand-new doc's own links, a new file's conflict markers, and a new script's plan-doc citation all read green locally.
 
-**Consequence for scratch files: gitignore them.** Leaving a file untracked no longer opts it out of anything — write it under the gitignored `tmp/` at the repo root, per the repo temp-file convention. That is the documented opt-out and every one of the four honours it.
+**Consequence for scratch files: gitignore them.** Leaving a file untracked no longer opts it out of anything — write it under the gitignored `tmp/` at the repo root, per the repo temp-file convention. That is the documented opt-out and every one of them honours it.
 
 **A gate that calls `git_candidates` twice has to filter both calls.** The pair is one selection in two steps, and the second step is the one that reads the disk, so an unfiltered second consumer silently answers "present" for a deleted-but-tracked path even when the gate's own scan list already dropped it. The doc-link gate had exactly that shape: its scan list was filtered, its existence oracle was not, and a doc deleted from the worktree kept resolving every link pointing at it. Q663 measured that red on `bash-style.md`, which six live links target. Route every consumer through `select_present_files`, not just the one that opens the files.
 
-The selection rules are asserted by `scripts/ci/shellcheck-scripts-test.sh` (the helpers directly, plus end-to-end against a throwaway repo covering every state: tracked, untracked, gitignored, deleted-but-tracked), and the untracked/gitignored behaviour is planted and measured per-gate in `scripts/ci/check-conflict-markers-test.sh`, `scripts/docs/check-no-plan-refs-in-code-test.sh`, and `scripts/docs/check-em-dash-test.sh`. All run under `make scripts-test`.
+The selection rules are asserted by `scripts/ci/shellcheck-scripts-test.sh` (the helpers directly, plus end-to-end against a throwaway repo covering every state: tracked, untracked, gitignored, deleted-but-tracked), and the untracked/gitignored behaviour is planted and measured per-gate in `scripts/ci/check-conflict-markers-test.sh`, `scripts/docs/check-no-plan-refs-in-code-test.sh`, `scripts/docs/check-em-dash-test.sh`, and `scripts/docs/check-script-docs-test.sh`. All run under `make scripts-test`.
 
 ### The shellcheck gate
 
@@ -426,6 +426,8 @@ That makes every filter a prefix glob (`scripts/e2e/**`) instead of an enumerati
 
 - A `*-test.sh` goes beside its subject, so it inherits its subject's gate for free.
 - When a script is shared across gates, it belongs in `fetch/` (the download/retry/pre-pull family) or `lib/`, and **every** consuming filter lists that group. Putting a shared helper under one gate's group is the Q400 narrowing hazard in a new shape.
+
+**The map is gated, not a convention.** `make script-docs-check` ([`scripts/docs/check-script-docs.sh`](../../scripts/docs/check-script-docs.sh)) fails when a script under `scripts/` appears nowhere in `scripts/README.md`, either in its own row or named in the row of the script it belongs to, which is how a `*-test.sh` is usually documented. It was a convention until Q688 measured the drift: sixteen `*-test.sh` files and `check-page-density.sh` had accumulated with no mention, and nothing would have reported the next one. Mentions are read off the parsed Markdown by [`devtools/docs/scriptdocs`](../../devtools/docs/scriptdocs/), so a filename inside a fenced example counts as an illustration rather than an entry, and `start.sh` is not found inside `e2e-start.sh`. It runs in `make check` and in the CI `doc-links` workflow, whose triggers are the only ones covering both of its inputs: the `scripts/` tree and a Markdown page.
 
 Wired into `make check` and CI's `lint` job.
 
