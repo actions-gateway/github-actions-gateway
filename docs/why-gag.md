@@ -183,7 +183,9 @@ footprint.
 | Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [multiple scoped gateways per namespace](operations/migration-v1-to-v2.md) |
 | Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet` | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> shared [`RunnerTemplate`](operations/migration-v1-to-v2.md)<br><span class="gag-cont">cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md)</span> |
 
-Every GAG capability above is available today.
+Every GAG capability above is available today. Rows marked
+<span class="gag-v2-badge">v2</span> need the `actions-gateway.com/v2beta1` API,
+which is where new tenants start.
 
 !!! note "When the ARC column was measured, and why that matters"
 
@@ -217,19 +219,6 @@ stock Vertical Pod Autoscaler cannot size it: grouping, evict-and-resize
 actuation, and long-running-service statistics all miss that shape. The loop can
 only close inside the controller that builds the pods.
 [Appendix D.7](design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on).
-
-### Before you start
-
-New tenants onboard on **`actions-gateway.com/v2beta1`**, the decomposed
-`ActionsGateway` + `RunnerSet` + `RunnerTemplate` API with an optional standalone
-`EgressProxy`. Rows marked <span class="gag-v2-badge">v2</span> are v2-only, and
-the single-resource `v1alpha1` shape is
-**[deprecated and removed at `v2.0.0`](operations/v1alpha1-deprecation.md)**.
-Start at the [getting-started walkthrough](getting-started.md), or the
-[v1 to v2 migration guide](operations/migration-v1-to-v2.md) if you already run
-v1. For limits and Service Level Objectives see
-[Appendix A](design/appendix-a-capacity-slos.md); for the utilization and cost
-argument, [Appendix F](design/appendix-f-cost-model.md).
 
 ## Where ARC is ahead
 
