@@ -1,6 +1,6 @@
 # Metrics Reference
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer, Tenant operator
 
 Part of the [Observability](observability.md) guide. To scrape these metrics, see [Accessing metrics (scraping setup)](observability-metrics-access.md); to alert on them, see [Alerting & SLOs](observability-alerting.md). For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
 

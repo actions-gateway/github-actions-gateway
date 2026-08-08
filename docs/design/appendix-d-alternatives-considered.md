@@ -290,4 +290,216 @@ only in cost. The sequencing of those rungs is planned in
 
 ---
 
+Sections D.1–D.8 cover the alternatives that were weighed while designing this
+system. The sections below cover *other runner control planes and CI systems* an
+adopter may already be running or actively evaluating. They were added after a
+competitive review on 2026-08-06; each records what the alternative does, where
+it overlaps, the differentiator, and a verdict, on the same terms as the sections
+above. **Every claim about a third-party system is dated, because they move.**
+
+## D.9. ForgeMT and Account-per-Tenant Runner Platforms
+
+[ForgeMT](https://github.com/cisco-open/forge) (Cisco, Apache-2.0; measured
+2026-08-06: 211 stars, created 2025-05-12, actively pushed) is the closest
+*positional* competitor found: an explicitly multi-tenant, self-hosted GitHub
+Actions runner platform aimed at platform teams serving many internal tenants.
+
+**What it does.** Terraform and Terragrunt deliver a runner control plane and an
+operating model across an AWS organization. It runs two execution backends in
+parallel: ephemeral EC2 runners, and ARC runner scale sets on EKS. Tenant
+onboarding is a reviewed infrastructure-as-code change. Per its README it
+enforces tenant boundaries for labels, IAM and OIDC role access, networks,
+images, runner specs, and GitHub App scope.
+
+**Where it overlaps.** The problem statement is nearly identical to this
+design's: many tenants, one platform team, self-hosted runners, governance and
+onboarding automation as first-class concerns. It also ships cost-attribution
+and observability integrations, which this design addresses through
+[cost attribution](../operations/cost-attribution.md).
+
+**The differentiator, and it is a genuine architectural disagreement.** ForgeMT
+isolates tenants with **separate AWS accounts**, on the explicit reasoning that
+Kubernetes namespaces are not a strong enough security boundary. That reasoning
+is sound as far as it goes, and an account boundary *is* stronger than a
+namespace. Two things follow, and both are trade-offs rather than refutations:
+
+* **Partitioned capacity cannot be shifted.** An account per tenant means each
+  tenant is provisioned for its own peak and every trough is stranded. That is
+  the cost of the stronger boundary, and it is the opposite trade from this
+  design, which shares one pool and arbitrates it with a platform-owned
+  `ResourceQuota` plus `priorityTiers`. Where nodes are large and expensive
+  (GPU, large-memory, reserved capacity), that difference dominates.
+* **The boundary has no cheap on-premises analogue.** In AWS an account is a
+  free API call inheriting a pre-built control plane. On bare metal the
+  equivalent is a hardware purchase, or building the hypervisor,
+  software-defined-networking, and self-service storage layer that would make
+  accounts possible. Compliance, data residency, and reserved GPU capacity are
+  precisely the constraints that put an adopter on-premises, so for that adopter
+  the model does not apply at all.
+
+This design's answer to the namespace objection is not that namespaces are
+sufficient alone. It is that the isolation floor is
+[reconciled rather than assembled](05-security.md) (Pod Security Admission,
+default-deny NetworkPolicy, per-tenant egress), and that kernel isolation is
+available and [validated](../operations/kata-dind-workloads.md) for the workloads
+that need it. See [appendix B](appendix-b-worker-isolation.md) for the full
+worker-isolation analysis.
+
+**Verdict:** ForgeMT is a strong fit for an AWS-native organization willing to
+trade shared-capacity utilization for account-level isolation. This design is
+the right choice when the compute is expensive enough that sharing it is the
+point, when the cluster is not on AWS, or when it is not in a cloud at all.
+
+## D.10. Prow, and the Prior Art for Automatic Re-Run
+
+[Prow](https://github.com/kubernetes-sigs/prow) is Kubernetes' own CI system and
+the most relevant prior art for this design's disruption-recovery behaviour.
+
+**What it does.** Prow owns its own job queue and reconciles `ProwJob` objects
+into pods. Verified in source 2026-08-06: when a job pod is evicted, its node
+becomes unreachable, it is OOM-killed, or it stops unexpectedly, `plank`
+increments `PodRevivalCount`, deletes the pod, and recreates it on the next sync,
+up to `Plank.MaxRevivals` (**default 3**). The per-job opt-*out* is
+`error_on_eviction: true`. The field's own documentation is unambiguous: if it is
+unspecified or false, a new pod replaces the evicted one.
+
+**Where it overlaps.** This is the same outcome this design provides for
+disrupted jobs, shipped by default, in a system running CI for thousands of
+repositories. Any claim that automatic re-run after disruption is *novel* is
+wrong, and should not be made.
+
+**The differentiator.** Prow has no forge-side claim to protect. It reads its own
+queue, so "do not claim it" is not a problem it has, and its recovery is a
+pod-level restart of work it scheduled itself. A GitHub Actions runner control
+plane acquires a job *from GitHub*, which makes both halves harder: the job must
+be concluded at GitHub before it can be re-run, and the re-run itself is a call
+to a public REST endpoint outside the runner-scale-set protocol, requiring a
+credential scope a runner controller does not otherwise need.
+
+The honest scoping is therefore architectural rather than competitive: automatic
+disruption re-run is rare **among control planes that claim work from an external
+forge**, not rare in general. GitLab Runner, which faces exactly that problem,
+[detects the condition precisely and classifies it terminal](#d12-gitlab-runners-kubernetes-executor).
+
+**Verdict:** Prow is not an alternative for GitHub Actions workloads, and is
+included because it is the strongest counter-example to an over-broad claim. The
+capability is real; the scoping matters.
+
+## D.11. Self-Hosted GitHub Actions Without Kubernetes
+
+A large part of the self-hosted runner market runs on virtual machines rather
+than Kubernetes. The three most prominent (measured 2026-08-06):
+
+* **[RunsOn](https://runs-on.com)** installs into the adopter's own AWS
+  account and runs ephemeral EC2 instances. Code and secrets stay in the
+  customer's account.
+* **[github-aws-runners/terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner)**
+  (formerly philips-labs) is the established open-source Terraform and Lambda
+  pattern for ephemeral EC2 runners.
+* **[Actuated](https://actuated.com)** is a hybrid: a vendor-hosted scheduler
+  drives Firecracker micro-VMs on hardware the customer owns, which is a genuine
+  answer for bare metal but places a vendor in the control path.
+
+**Where they overlap.** All three satisfy "we must self-host", often with less
+operational surface than a Kubernetes control plane. For an adopter whose only
+requirement is that jobs not run on a vendor's shared infrastructure, they are
+strong and this design is heavier than necessary.
+
+**The differentiator.** A VM per job gives isolation without a namespace
+argument, but the unit of allocation is an instance rather than a pod, so
+bin-packing several tenants onto one large machine is not the model. There is no
+`ResourceQuota` to arbitrate, no per-tenant capacity floor, and no shared-cluster
+utilization argument to make. The two AWS-based options are also cloud-locked,
+which rules them out for on-premises and reserved-hardware adopters.
+
+**Verdict:** the right choice when the constraint is "not on a vendor's
+infrastructure" and the compute is elastic cloud capacity. This design targets
+the case where the compute is a fixed, expensive pool that several teams must
+share.
+
+## D.12. GitLab Runner's Kubernetes Executor
+
+The most mature multi-tenant CI-on-Kubernetes system in wide production use, and
+the closest architectural sibling to this design outside the GitHub ecosystem.
+Included because it faces the *same* structural problem: it claims a job from a
+hosted forge, then has to place a pod for it.
+
+**Where it overlaps.** A job becomes a pod; `[runners.kubernetes]` configures the
+pod shape; namespaces separate projects. Verified 2026-08-06: it ships
+`pod_disruption_budget` for voluntary drains, `priority_class_name` for
+scheduling priority, and `retry_limits` for retrying request errors.
+
+**The differentiator.** Two decisions differ, and both are the decisions this
+design exists to make differently:
+
+* **Capacity is discovered after the claim.** Its intake gates (`concurrent`,
+  `limit`, `request_concurrency`) are counters, not cluster state. The
+  documentation's answer to over-subscription is `poll_timeout`, described in
+  GitLab's own reference as being for "queueing more builds than the cluster can
+  handle at a time". That is an already-claimed job waiting out a timeout, the
+  failure mode the [pre-acquisition gate](#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on)
+  exists to prevent.
+* **Disruption is detected precisely, then treated as terminal.** Its pod watcher
+  reads the `DisruptionTarget` condition, which is exactly the signal Kubernetes
+  sets on eviction, preemption, and graceful node shutdown. The function
+  consuming it is documented as handling errors the system cannot recover from,
+  and the build fails. Recovery is the workflow author's `retry:` keyword, which
+  defaults to none.
+
+`priority_class_name` is also a single class for a runner configuration, not a
+reserved floor per runner class, so it cannot express "GPU always keeps N slots".
+
+**Verdict:** not an alternative for GitHub Actions workloads, but the most
+instructive comparison in this appendix. It demonstrates that detecting a
+disruption is the easy half, and that the placement of the admission decision
+relative to the claim is a deliberate architectural choice rather than an
+oversight.
+
+## D.13. Buildkite Agent Stack for Kubernetes
+
+[agent-stack-k8s](https://github.com/buildkite/agent-stack-k8s) runs Buildkite
+jobs as Kubernetes pods, with the control plane hosted by Buildkite and the
+agents self-hosted.
+
+**Where it overlaps.** The split resembles this design's: a long-lived component
+watching a hosted queue, and one pod per unit of work. Its scheduler chain
+reserves work before a max-in-flight limiter and long before a pod exists, so
+like GitLab Runner it takes the claim before knowing the pod is placeable.
+Verified 2026-08-06: it sets `BackoffLimit: 0` and `RestartPolicy: Never`, so a
+disrupted pod is a failed job, and its limiter *orders* a pending queue by
+priority without reserving capacity for any class.
+
+**The differentiator.** The control plane is a hosted service, so the
+compliance-driven adopter this design targets is out of scope by construction,
+and the comparison is only architectural. No per-tenant egress identity or
+`ResourceQuota`-aware intake appears in its configuration surface.
+
+**Verdict:** a different ecosystem, and relevant mainly as evidence that the
+claim-then-place ordering is the industry norm rather than an ARC peculiarity.
+
+## D.14. Managed Runner Services: An Explicit Non-Competitor
+
+Blacksmith, Namespace, Depot, WarpBuild, Cirrus Runners, Ubicloud and others sell
+faster GitHub Actions runners on infrastructure they operate. Several offer a
+bring-your-own-cloud mode in which compute runs in the customer's account while
+the control plane stays with the vendor.
+
+**Why they are not compared feature-by-feature.** They compete on build speed and
+price per minute. This design competes on governance and isolation for compute
+the adopter already owns. An adopter who can run jobs on a vendor's
+infrastructure should evaluate that lane on its own terms, and will usually find
+it faster to adopt and quicker per build.
+
+**The routing question is a single one:** must the compute be yours? If no, a
+managed service is very likely the better answer and this design is
+unnecessary overhead. If yes, because of compliance, data residency, an IP
+allow-list, an air-gapped network, or hardware already paid for, then the managed
+lane is unavailable regardless of its merits, and the real question becomes how
+many teams share that hardware and how safely.
+
+**Verdict:** a different market. Comparisons that place them on one axis mislead
+in both directions.
+
+---
+
 ← [Appendix C](appendix-c-ai-implementation.md) | [Back to index](README.md)

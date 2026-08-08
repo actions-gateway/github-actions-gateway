@@ -199,6 +199,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Why GAG: why-gag.md
+  - Alternatives: alternatives.md
   - Features: features.md
   - Demo: demo.md
   - Get started: getting-started.md
@@ -225,6 +226,7 @@ nav:
       - "GitHub protocol dependencies": design/github-protocol-dependencies.md
   - Operations:
       - Overview: operations/README.md
+      - "Personas: who owns what": operations/personas.md
       - Install: operations/install.md
       - "Air-gapped install": operations/air-gapped-install.md
       - "GitOps install (Argo CD / Flux)": operations/gitops.md

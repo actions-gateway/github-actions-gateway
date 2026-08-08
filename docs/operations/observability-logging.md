@@ -1,6 +1,6 @@
 # Logging & Tracing
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer, Tenant operator
 
 Part of the [Observability](observability.md) guide. See also: [Metrics reference](observability-metrics.md) · [Accessing metrics](observability-metrics-access.md) · [Alerting & SLOs](observability-alerting.md) · [Grafana dashboards](observability-dashboards.md).
 

@@ -1,6 +1,6 @@
 # Production Runbook
 
-> **Audience:** SRE
+> **Audience:** Platform engineer
 
 For initial setup steps see [Getting Started](../getting-started.md). For detailed symptom → diagnosis steps see [Troubleshooting](troubleshooting.md).
 

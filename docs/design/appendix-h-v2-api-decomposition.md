@@ -1302,8 +1302,8 @@ tiers — so it buys only the rung-2 wins, not tiering. Promote when **any** of:
 - **GitOps** — policy must be managed declaratively / changed without a
   controller redeploy.
 - **RBAC separation** — the people who set policy must be distinct from the
-  people who own the controller Deployment (a platform-policy team vs. the SRE
-  who deploys the GMC).
+  people who own the controller Deployment (a platform-policy team vs. the
+  platform engineer who deploys the GMC).
 - **Audit/compliance** — "show me, as a cluster object, exactly what tenants are
   allowed" is an actual requirement.
 

@@ -73,6 +73,44 @@ A reader skims headings, then the first line of each block. Optimise for that.
 - **Bold sparingly.** Bold the one keyword a scanner hunts for. If everything is bold,
   nothing is.
 
+## Cut before you polish
+
+Length is the most common defect in this tree and the hardest to see from inside
+a draft. Run these four passes before touching wording. Every example below is
+from one review of the marketing pages, where 24 rounds of feedback collapsed
+into these four causes.
+
+**Ask whether the block belongs on this page at all.** Three questions: does
+*this* page's reader need it, does it belong on another page, and what audience
+wants it and where would they look for it. `why-gag.md` carried a 424-word
+section on the v2 API decomposition, 22% of the page's height, whose four
+comparison points were already rows in the table directly above it, and whose
+subject was a GAG v1-to-v2 contrast rather than the ARC comparison the page
+exists for. Deleting it lost nothing: `features.md` and
+[appendix H](../design/appendix-h-v2-api-decomposition.md) already served the
+reader who wanted it.
+
+**Never restate in prose what a diagram or table already carries.** Prose beside
+a visual is the visual admitting it did not work. That same page opened a
+section with two paragraphs, 139 words, naming three capabilities, their
+combined effect and four outcomes, directly above a flow diagram whose nodes
+said exactly that. A one-line lead-in replaced both.
+
+**State the invariant, not an instance.** "Listener footprint for 10 runner
+sets" invites the question the number cannot answer, because nothing justifies
+ten. The claim is a ratio: one always-on pod per set against one shared pod
+whatever the count. Saying it that way is shorter *and* stronger. A number earns
+its place when it is a measurement (15 to 26 s) or a declared scenario parameter
+(the [cost model](../design/appendix-f-cost-model.md)'s ten-set fleet); it is
+noise when it is an illustration.
+
+**Scarcity is what makes an emphasis device work, and that is not only true of
+bold.** Six consecutive admonitions ran 94 lines on one page, and because all
+six were styled identically the most important of them, the honest
+where-ARC-is-ahead list, looked exactly like the four routing notes above it.
+Budget roughly one callout per screen; promote anything that needs more to a
+heading of its own.
+
 ## Commands and code blocks
 
 A reader copies a block and runs it. Make that safe.
@@ -291,7 +329,7 @@ Every claim in the table above shipped as a flat assertion instead.
 
 | Convention | Rule |
 |---|---|
-| **Acronyms** | Spell out on first use, then the acronym in parentheses — "Actions Gateway Controller (AGC)". Subsequent uses may use the acronym alone. Applies to **project-invented shorthand** (`GAG`, `GMC`, `AGC`, `CR`, `CRD`), which a reader cannot look up. It does **not** apply to vocabulary the stated audience already has: on a page whose audience line says "SRE, Platform engineer", `GKE`, `RBAC`, `CNI`, `PSA`, `KEDA`, and `VPA` are read, not decoded, and expanding a run of them ("GKE, EKS, AKS, RKE2") costs more than it explains. When an expansion would be clumsier than the plain term, use the plain term (`ActionsGateway` custom resource) instead of the acronym. |
+| **Acronyms** | Spell out on first use, then the acronym in parentheses — "Actions Gateway Controller (AGC)". Subsequent uses may use the acronym alone. Applies to **project-invented shorthand** (`GAG`, `GMC`, `AGC`, `CR`, `CRD`), which a reader cannot look up. It does **not** apply to vocabulary the stated audience already has: on a page whose audience line says "Platform engineer", `GKE`, `RBAC`, `CNI`, `PSA`, `KEDA`, and `VPA` are read, not decoded, and expanding a run of them ("GKE, EKS, AKS, RKE2") costs more than it explains. When an expansion would be clumsier than the plain term, use the plain term (`ActionsGateway` custom resource) instead of the acronym. |
 | **Terminology** | One term per concept across all docs. Canonical definitions live in the [glossary](../design/08-glossary.md); link there rather than redefining. |
 | **Diagrams** | Prefer ASCII box-art over Mermaid unless auto-layout is a quantifiable win. ASCII renders everywhere and diffs cleanly. |
 | **Canonical home + link** | State a fact once, in its natural home, and link to it. Don't restate — copies drift. (Same rule for reuse, since GitHub has no transclusion.) |

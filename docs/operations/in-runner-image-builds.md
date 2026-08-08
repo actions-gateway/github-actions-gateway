@@ -1,6 +1,6 @@
 # In-runner image builds: choosing a build approach and security profile
 
-**Audience:** Platform engineers and tenant owners. **Goal:** pick an
+**Audience:** Platform engineer, Tenant operator. **Goal:** pick an
 image-build approach (`docker build` and friends) that builds container
 images *inside* a GitHub Actions Gateway (GAG) worker pod while staying
 inside the strictest Pod Security Admission (PSA) profile that still works.

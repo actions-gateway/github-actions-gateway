@@ -1,6 +1,6 @@
 # Live per-tenant cost attribution (OpenCost / Kubecost)
 
-> **Audience:** SRE, Platform engineer, budget owner
+> **Audience:** Platform engineer, Budget owner
 
 [Appendix F — Cost model](../design/appendix-f-cost-model.md) gives you a *model*: list-price rates, the per-job formula, and the [savings calculator](../design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) that estimates what you save over Actions Runner Controller (ARC). This page is the *measurement* counterpart — how to turn that model into **real dollars per tenant** from your live cluster using [OpenCost](https://www.opencost.io/) or [Kubecost](https://www.kubecost.com/) (Kubecost is built on OpenCost and shares its allocation engine and query surface).
 

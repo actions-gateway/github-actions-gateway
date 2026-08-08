@@ -1,6 +1,6 @@
 # Velero Backup and Restore for GAG
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer
 
 This is a tool-specific how-to for backing up and restoring GitHub Actions Gateway (GAG) state with [Velero](https://velero.io/). It assumes you have already read the conceptual [Backup, Restore, and Disaster Recovery (DR)](backup-restore.md) guide — that document explains the **ownership model** this how-to depends on (what the `ActionsGateway` custom resource (CR) owns, what it does not, and why re-applying the CR reconciles the owned children back). This page does not repeat that reasoning; it maps it onto concrete Velero commands.
 

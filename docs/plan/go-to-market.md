@@ -11,21 +11,24 @@ if it is ever revisited it is a separate decision with its own sign-off.
 
 This plan is internal strategy and stays GitHub-only (it lives under
 `docs/plan/`, which `mkdocs.yml` excludes from the published site). The
-*outward-facing* positioning it drives lives in [`why-gag.md`](../why-gag.md) and
-[`index.md`](../index.md); the per-claim verification work feeds
-[`competitive-analysis.md`](archive/competitive-analysis.md) (Q60); the public site
-itself is tracked in [`website.md`](website.md) (Q129).
+*outward-facing* positioning it drives lives in [`index.md`](../index.md),
+[`alternatives.md`](../alternatives.md), and [`why-gag.md`](../why-gag.md); the
+evidence under all three is
+[`competitive-analysis-2026-08.md`](competitive-analysis-2026-08.md); the public
+site itself is tracked in [`website.md`](website.md) (Q129).
 
 ## Status at a glance
 
 | Workstream | State |
 |---|---|
 | ICP + messaging priority defined | ✅ this doc |
-| Demand evidence gathered (real ARC issues) | ✅ this doc + [competitive-analysis](archive/competitive-analysis.md) |
-| Public site launched | ⏳ gated — see [website.md](website.md) (Q129) |
+| Demand evidence gathered (real ARC issues) | ✅ this doc, §3 |
+| Competitive claims verified against a named version | ✅ [competitive-analysis-2026-08](competitive-analysis-2026-08.md), measured 2026-08-06 vs ARC 0.14.2 |
+| Public site launched | ⏳ gated, see [website.md](website.md) (Q129) |
 | ARC → GAG migration guide | ✅ [migration-from-arc](../operations/migration-from-arc.md) (Q199) |
+| Comparison page tuned for search (§5.2) | ✅ [alternatives.md](../alternatives.md) |
 | README problem-first rewrite | ❌ open |
-| Seed channels (HN / forums / ARC issues) | ❌ not started — gated on site + 1.0 install path |
+| Seed channels (HN / forums / ARC issues) | ❌ not started, gated on site + 1.0 install path |
 | Content pieces (blogs, comparison SEO) | ❌ not started |
 
 ---
@@ -46,8 +49,11 @@ Targeting precisely is the whole game.
 - serve **multiple internal tenant teams** out of one cluster and are tired of
   being the ticket queue for every runner change.
 
-These are the people for whom "just use a cheaper SaaS runner" is a non-answer,
-and for whom ARC is the only real option today — and a painful one.
+These are the people for whom "just use a cheaper SaaS runner" is a non-answer.
+Their realistic field today is ARC, or ARC plus a hand-built tenancy layer
+(quotas, NetworkPolicies, per-team egress) that is nobody's product and appears
+in no comparison. That DIY composition, not ARC alone, is what GAG usually
+replaces.
 
 **Secondary ICP.** GPU/ML platform teams paying for idle accelerators between
 jobs; regulated orgs combining EMU with per-team egress allow-lists.
@@ -61,30 +67,61 @@ credibility with the people who *are* the ICP.
 
 ## 2. Competitive landscape
 
-There are two distinct markets; conflating them is the most common positioning
-mistake.
+> Measured 2026-08-06 against ARC 0.14.2 and its `master` branch. The 83-entry
+> sweep, the deep dives, and the criteria are in
+> [competitive-analysis-2026-08](competitive-analysis-2026-08.md); the
+> outward-facing router built from it is [alternatives.md](../alternatives.md).
 
-- **The managed-SaaS lane (speed + cost):** WarpBuild, Blacksmith, Namespace,
-  Depot, Ubicloud, Tenki, RunsOn. They compete on faster builds at lower cost;
-  with the exception of RunsOn (BYO-AWS), **your code and secrets run on their
-  infrastructure.** GAG is out of scope here — different axis entirely.
-- **The self-hosted control-plane lane (governance + isolation):** ARC (free,
-  official, Kubernetes-native) and GAG. **ARC is GAG's only direct competitor.**
-  It is widely deployed and genuinely painful for the multi-tenant ICP — which is
-  the opening.
+There are **three** lanes, not two. The earlier two-lane version of this section
+placed RunsOn in the managed lane, which was wrong and mattered: the axis that
+sorts this market is first **whose compute the job runs on**, and only then
+**what runs the control plane**.
 
-Implication: market GAG **as the better ARC for multi-tenant self-hosting**, never
-as "another fast-CI option." The recent
+| Lane | Who | Your compute? | Kubernetes? |
+|---|---|---|---|
+| Managed runner services | Blacksmith, Namespace, Depot, WarpBuild, Ubicloud, Tenki | no, the vendor's | n/a |
+| Self-hosted without Kubernetes | [RunsOn](https://runs-on.com), [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner), [Actuated](https://actuated.com) | yes: AWS, or your hardware with a vendor control plane (Actuated) | no |
+| Self-hosted Kubernetes control plane | ARC, GAG, [ForgeMT](https://github.com/cisco-open/forge) | yes, any conformant cluster | yes |
+
+**GAG competes in the third lane only, and ARC is not alone there.** ForgeMT
+(Cisco, 211 stars) attacks the same multi-tenant problem with account-per-tenant
+on AWS, which is a genuinely stronger isolation boundary and unavailable
+on-premises. Call ARC the **closest** competitor, never the only one; the
+research contradicts the stronger claim and the shipped alternatives page names
+the rest.
+
+**Location is the filter that removes most of the field**, and no published
+comparison in this space applies it: "self-hosted" almost always means
+"self-hosted on AWS". On-premises, air-gapped, or on reserved hardware, only ARC
+and GAG remain, by the same constraint that made the ICP self-host. This is also
+why account-per-tenant is not a universal answer: an AWS account is a free API
+call, its bare-metal equivalent is a hardware purchase, and partitioned capacity
+cannot be shifted between tenants.
+
+Implication: market GAG **as the multi-tenant answer in the self-hosted
+Kubernetes lane**, never as "another fast-CI option". Naming the other two lanes
+honestly is not a concession, it is the router that makes the third lane's
+claims believable. The
 [GitHub Actions self-hosted pricing backlash](https://github.com/orgs/community/discussions/182089)
 (the now-postponed control-plane fee) is a tailwind for self-hosting in general,
-but it pushes price-sensitive teams toward the SaaS lane — do **not** over-index
-the messaging on it.
+but it pushes price-sensitive teams toward the SaaS lane, so do **not**
+over-index the messaging on it.
 
 ## 3. Demand evidence (the receipts)
 
 Every load-bearing claim maps to currently-open, engaged ARC issues. Use these in
-content, in issue comments, and in the comparison page — they turn assertions into
+content, in issue comments, and in the comparison page: they turn assertions into
 proof and they are exactly what operators (and AI assistants) search for.
+
+!!! warning "An open issue is a perishable receipt"
+
+    Re-check state and date before citing. Two claims in the public comparison
+    table went false at datable ARC releases with nobody noticing: 0.13.1 changed
+    quota-blocked pod retry, and 0.14.0 added multi-label scale sets. The
+    standing fix is the pre-flight step in
+    [release.md](../operations/release.md#1-pre-flight); the failure mode is
+    diagnosed in
+    [competitive-analysis-2026-08](competitive-analysis-2026-08.md#why-the-marketing-drifted-and-the-fix).
 
 | Claim | Evidence |
 |---|---|
@@ -96,24 +133,116 @@ proof and they are exactly what operators (and AI assistants) search for.
 
 **Weakest demand signal:** priority-tiered GPU scheduling and listener-memory
 overhead are GAG's most *differentiated* features but have the least *public*
-complaint volume. Treat them as supporting proof, not the headline. (Cross-ref the
-open VERIFY items in [competitive-analysis](archive/competitive-analysis.md).)
+complaint volume. Treat them as supporting proof, not the headline. Corroborated
+independently: of the 25 most-reacted open ARC issues, **zero** concern quota
+safety, capacity gating, or intake backpressure. That cuts both ways. The demand
+is quiet, and so is the pressure on ARC to close the gap.
 
 ## 4. Messaging priority
 
+**Two tiers, deliberately.** The public site states only what ships today, dated
+and measurable. This plan carries the argument the site is not yet entitled to
+make. Keeping them apart is what lets the strategy aim at future dominance
+without the site over-claiming.
+
+### Tier 1: what the site claims today
+
 Lead with validated demand, in this order:
 
-1. **Auto-recovery of evicted / quota-blocked jobs** — strongest and best-evidenced.
-   "Jobs recover themselves; no manual rerun." This is the wedge.
-2. **Safe per-tenant quotas → real tenant self-service** — the platform-team pain.
+1. **Auto-recovery of evicted / quota-blocked jobs.** Strongest and
+   best-evidenced. "Jobs recover themselves; no manual rerun." This is the wedge.
+2. **Safe per-tenant quotas → real tenant self-service.** The platform-team pain.
    "Enforce a quota per team without stranding their jobs."
-3. **Per-tenant isolated egress IPs** — the compliance/EMU unlock. "Allow-list
+3. **Per-tenant isolated egress IPs.** The compliance/EMU unlock. "Allow-list
    just your runners, not the whole cluster."
 4. **Supporting:** priority tiers (no starved critical jobs), zero idle GPU,
-   lower listener memory. Real, but they ladder up to cost — keep them as backup,
-   not the lead.
+   lower listener memory. Real, but they ladder up to cost, so keep them as
+   backup rather than the lead.
 
-Frame every benefit against ARC, the only competitor the ICP is weighing.
+Frame every benefit against ARC, the **closest** competitor the ICP is weighing,
+and carry a measurement date on every competitor-side claim. The absence of that
+date is exactly how 11 unverified cells shipped as red X's in the comparison
+table.
+
+### Tier 2: the argument the strategy plays for
+
+Internal until the deliverables land. One thesis in three legs, and it outranks
+any feature list because answering it requires a tenancy model rather than a
+field.
+
+**Leg 1: shared CI has stayed unsafe because CI is the hard case on both axes at
+once.** It needs root (image builds, Docker-in-Docker, `services:`, package
+installs), and it needs network isolation, which is hard on Kubernetes: policy
+enforcement is CNI-dependent, FQDN egress is CNI-specific, and CDN-fronted
+registries cannot be pinned by CIDR at all. The honest statement is not "ARC
+lacks feature X". It is "nobody has pushed this far enough yet, and here is how
+far we have got".
+
+**Leg 2: GAG is making it safe.** Kata micro-VM workers give a job root without a
+shared kernel, already the default in GAG's own end-to-end suite. Per-tenant
+egress plus default-deny NetworkPolicy, reconciled rather than hand-built, close
+the network half, including the path Kata does not close (a micro-VM does not
+change the pod's network identity, so cloud metadata still answers from inside
+the guest). Still open and load-bearing: [Q408](../STATUS.md#Q408),
+[Q539](../STATUS.md#Q539), [Q540](../STATUS.md#Q540), [Q716](../STATUS.md#Q716),
+under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella.
+
+**Leg 3: GAG keeps it operable.** Quota-aware intake and automatic re-run are
+consequences of leg 2, not standalone features, and should be presented that way.
+Bin-packing tenants onto shared expensive nodes *requires* enforceable per-tenant
+quotas, and enforcing a quota is what strands jobs unless intake respects it
+before the claim. Sharing capacity *requires* eviction and preemption to be safe,
+and they are safe only if a disrupted job re-runs itself. Without both, secured
+multi-tenancy is an operations nightmare and the team retreats to a cluster per
+tenant, which is where §2's router started.
+
+**Prioritization consequence:** Q408 and Q540 are not roadmap polish. They
+complete the leg the entire argument rests on, so they outrank the proxy-polish
+set (Q564 to Q567) and most of the feature backlog.
+
+### The persona frame, and how to say it without attacking
+
+Multi-tenancy adds roles, not features. ARC models the platform owner and the
+tenant as the same person, which is coherent for a single-owner cluster and is
+why it has no primitive separating them. Every GAG differentiator is an artifact
+of a boundary between roles: a platform-owned quota the tenant cannot raise, a
+`ClusterRunnerTemplate` for privileged shapes the tenant cannot author, **two**
+dashboards because there are two operating personas. Roles and their limits are
+documented in [personas.md](../operations/personas.md).
+
+Do **not** ship "consumer grade versus enterprise grade". It reads as an attack
+and is unfair to a product that is genuinely good at its job. The shippable form:
+
+> ARC is built for a cluster with one owner, and it is a reasonable choice there.
+> GAG is built for a cluster with a platform team, tenant teams, and untrusted
+> contributors: three roles with different powers, different blast radii, and
+> different things they are allowed to see.
+
+That is checkable, fair, and much harder to answer than any feature row.
+
+### Which differentiators will still be differentiators
+
+Messaging built on a contested differentiator has a shelf life. Ratings and
+reasoning in
+[competitive-analysis-2026-08](competitive-analysis-2026-08.md#which-differentiators-are-durable).
+The messaging consequence:
+
+| Safe to build a campaign on | Supporting proof only |
+|---|---|
+| Automatic re-run after disruption | Quota-aware pre-claim intake |
+| Tenant self-service via namespace CRs | Priority tiers with reserved floors |
+| Secure defaults, reconciled not documented | Measured worker right-sizing |
+| Sandboxed workers as a paved road | Goroutine-multiplexed listeners |
+| Per-tenant provisioned egress | |
+
+**The pre-claim seat is the trap.** ARC's listener already holds a Kubernetes
+clientset and `actions/scaleset` already exposes `SetMaxRunners`, so the seat is
+a permissions change away for anyone who wants it. Claim the **signal** (live
+quota headroom computed and put in the capacity header), never the seat. The one
+place it is structurally defensible is gang scheduling
+([Q718](../STATUS.md#Q718)): a multi-node job needs N co-scheduled pods in one
+topology domain, and the protocol advertises capacity as a single integer, so no
+`SetMaxRunners` workaround exists for a placement predicate.
 
 ## 5. Channels — where to reach the ICP (ranked by fit)
 
@@ -123,11 +252,14 @@ Frame every benefit against ARC, the only competitor the ICP is weighing.
    in pain*. A genuine, non-spammy "we hit this; here's how GAG handles eviction
    recovery / multi-tenant isolation" is the single highest-intent placement that
    exists. One honest comment per relevant thread; never astroturf.
-2. **A "GAG vs ARC for multi-tenant" comparison page tuned for search** —
-   ranking for `actions-runner-controller multi-tenant`, `ARC jobs stuck queued`,
+2. **The comparison pages, tuned for search.** ✅ Shipped as
+   [alternatives.md](../alternatives.md) (the router: which lane are you in) and
+   [why-gag.md](../why-gag.md) (capability by capability against ARC). Target
+   terms: `actions-runner-controller multi-tenant`, `ARC jobs stuck queued`,
    `ARC GPU quota`, `self-hosted runner egress IP per team`. The "N best ARC
    alternatives" roundup format (BetterStack, Tenki, WarpBuild) drives this whole
-   category and **ignores the self-hosted multi-tenant angle** — an open gap.
+   category and **ignores the self-hosted multi-tenant angle**, which stays an
+   open gap. Remaining work is search tuning and inbound links, not the pages.
 3. **`awesome-actions` / `awesome-runners` lists and the ARC docs' alternatives
    discussions** — low effort, durable, and frequently crawled by AI assistants.
 
@@ -164,9 +296,10 @@ set:
 
 | Artifact | Status / note |
 |---|---|
-| `why-gag.md` "vs ARC" page | Exists and accurate; keep claims and receipts current as Q60 verifies. |
-| **ARC → GAG migration guide** | ✅ [migration-from-arc](../operations/migration-from-arc.md) (Q199) — concept mapping, egress differences, gotchas, and a worked one-runner-group path. |
-| README problem-first rewrite | Open. Lead with the ARC pain, not the architecture. |
+| [`alternatives.md`](../alternatives.md) router page | ✅ Shipped 2026-08-06. Four cases where something else wins, the location filter, the persona boundaries, and where GAG loses with attribution. |
+| [`why-gag.md`](../why-gag.md) "vs ARC" page | ✅ Exists. **Was not accurate**: 11 ARC-side cells were unverified and two had gone false at ARC 0.13.1 and 0.14.0. Corrected 2026-08-06 and now carries a dated measurement stamp. Re-measure per the [release pre-flight](../operations/release.md#1-pre-flight), not opportunistically. |
+| **ARC → GAG migration guide** | ✅ [migration-from-arc](../operations/migration-from-arc.md) (Q199): concept mapping, egress differences, gotchas, and a worked one-runner-group path. Q726 (multi-label `runs-on`) is a live migration blocker. |
+| README problem-first rewrite | Open. Claims were corrected 2026-08-06; the structure was not. Lead with the ARC pain, not the architecture, and note GitHub renders no CSS so it needs tables and bold lead-ins rather than the site's components. |
 | Blog: "Recovering stuck Actions jobs after pod eviction" | New. Maps to the strongest demand signal (§3). |
 | Blog: "Multi-tenant self-hosted runners with isolated egress" | New. Maps to ICP + EMU allow-list. |
 | Show HN post + r/devops post | New. Sequenced after site + 1.0 install path are solid. |
@@ -194,7 +327,10 @@ set:
   least one "ARC alternatives" roundup; tune the comparison page for the §5.2
   search terms; pursue a CNCF/KubeCon lightning talk.
 - **Phase 3 — sustain.** Keep the comparison and receipts current as ARC evolves;
-  keep answering in ARC issues; fold new validated claims in from Q60.
+  keep answering in ARC issues. Re-measurement is a **release gate**, not a
+  background task: the pre-flight step in
+  [release.md](../operations/release.md#1-pre-flight) exists because the
+  opportunistic version of this failed for two ARC releases running.
 
 ## 9. Adoption metrics (lightweight)
 
@@ -223,9 +359,18 @@ This shapes everything above and is the reason monetization stays out:
 
 ## 11. Open follow-ups (feed the Queue when scheduled)
 
-- ~~**ARC → GAG migration guide** (§7)~~ — ✅ shipped as [migration-from-arc](../operations/migration-from-arc.md) (Q199).
-- **README problem-first rewrite** (§6) — cheap, improves both humans and GEO.
-- **Q60 competitive verification** — several claims still marked VERIFY in
-  [competitive-analysis](archive/competitive-analysis.md); confirmed ones harden the
-  comparison page and content.
-- **Public site launch** ([website.md](website.md)/Q129) — Phase 0 prerequisite for any seeding.
+- ~~**ARC → GAG migration guide** (§7)~~ ✅ shipped as [migration-from-arc](../operations/migration-from-arc.md) (Q199).
+- ~~**Competitive verification** (Q60)~~ ✅ done properly on 2026-08-06 and
+  recorded in [competitive-analysis-2026-08](competitive-analysis-2026-08.md).
+  Q60's own closure was a **false record**: the plan index called it "verified +
+  folded into appendix-d", and the closing commit added 34 lines about Kueue and
+  Exostellar with zero ARC per-claim verification. A row asserting verification
+  that did not happen is worse than an open row.
+- **README problem-first rewrite** (§6, §7). Cheap, improves both humans and GEO.
+- **Public site launch** ([website.md](website.md)/Q129). Phase 0 prerequisite for any seeding.
+- **Under-claims not yet fixed**: five capabilities reach `features.md` and no
+  other surface, including the ten-PR durability programme whose motivating
+  incident was five worker pods burning 82 spot node-hours. That is a maturity
+  claim backed by artifacts, in exactly the register where §2 concedes maturity.
+  Listed in
+  [competitive-analysis-2026-08](competitive-analysis-2026-08.md#under-claims-not-yet-fixed).

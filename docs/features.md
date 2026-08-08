@@ -23,6 +23,7 @@ under its first stability contract.
 - **[Quota-aware intake](design/04-operational-flows.md#42-job-execution-flow-agc)**: a job the namespace `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub until there is capacity.
 - **[Auto re-run for disrupted jobs](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)**: a worker lost to eviction, preemption, a node drain, or a bare `kubectl delete pod` has its run re-run automatically, under a per-run budget.
 - **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in. Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them. Off by default.
+- **[Fast, honest ending for an abandoned run](design/04-operational-flows.md)**: a run whose worker is removed before it ever started is force-cancelled in about a second, measured live, rather than waiting out GitHub's unstarted-job timeout, and it accepts a re-run afterwards.
 - **[Priority tiers per runner set](design/02-architecture.md)**: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.
 - **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
 - **[Scale-to-zero workers](design/02-architecture.md)**: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.
@@ -80,7 +81,7 @@ under its first stability contract.
 - **[Upgrade and rollback](operations/upgrade.md)**: versioned upgrade procedures and the rollback path for each release.
 - **[Backup and restore](operations/backup-restore.md)**: backup posture and a recovery runbook, with a [Velero-specific how-to](operations/velero-backup-restore.md).
 - **[Troubleshooting](operations/troubleshooting.md)**: symptom to diagnosis to remediation, organised by observable failure mode.
-- **[Production runbook](operations/runbook.md)**: the operational procedures an on-call SRE needs.
+- **[Production runbook](operations/runbook.md)**: the operational procedures the platform team needs on call.
 - **[P2P image distribution](operations/p2p-image-distribution.md)**: add a Spegel or Dragonfly mirror to survive ephemeral-worker pull storms.
 
 ## API surface and migration

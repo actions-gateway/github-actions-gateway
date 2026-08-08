@@ -9,7 +9,6 @@
 96 CLAUDE.md
 49 CONTRIBUTING.md
 5 DESIGN.md
-25 README.md
 6 charts/actions-gateway-crds-v2/README.md
 21 charts/actions-gateway/README.md
 42 claude-usage/README.md
@@ -193,7 +192,7 @@
 35 docs/plan/ecosystem-integration-landscape.md
 131 docs/plan/eviction-oversubscription-validation.md
 98 docs/plan/gke-dogfood.md
-40 docs/plan/go-to-market.md
+22 docs/plan/go-to-market.md
 20 docs/plan/make.md
 35 docs/plan/markdown-gates-parser.md
 4 docs/plan/milestone-1-tests.md

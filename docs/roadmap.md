@@ -10,8 +10,10 @@ This page is about what GitHub Actions Gateway (GAG) does **not** do yet. For wh
 explains it, and [Why GAG?](why-gag.md) for the capability-by-capability
 comparison against Actions Runner Controller (ARC).
 
-GAG is **1.0, generally available, and installable from
-the GitHub Container Registry (GHCR)**. It is Apache-2.0, vendor-neutral, and
+GAG is **generally available and installable from the GitHub Container Registry
+(GHCR)**; the
+[releases page](https://github.com/actions-gateway/github-actions-gateway/releases)
+names the current version. It is Apache-2.0, vendor-neutral, and
 built for one outcome: real operators running multi-tenant self-hosted runners in
 real clusters. There is no paid tier and no commercial roadmap, so the plan below
 is about capability and adoption, not revenue.
@@ -26,6 +28,19 @@ describing your setup. Every open item, in priority order, is in the
 
 Work that is scoped and actively being built: adoption-enabling polish and the
 last gaps an outside operator hits.
+
+- **[Bind each runner set to a GitHub runner group](plan/release-1.5.md#q712--the-runner-group-binding-is-declared-and-never-wired)** <!-- q:Q712 -->
+  The runner group is GitHub's own control over which repositories may target a
+  runner set, and GAG does not set it today, so every scale set registers into
+  the installation's default group. Kubernetes-side isolation is unaffected;
+  what is unbounded is which repositories can send work to a tenant. Gating the
+  1.5 release.
+
+- **[Job duration and pod-creation latency on the default tier](plan/release-1.5.md#q713--the-shipped-tier-emits-no-duration-or-latency-series)** <!-- q:Q713 -->
+  Both series are emitted on the classic tier only, so on the scale-set tier that
+  every new tenant runs, two Service Level Objectives, an alert, four recording
+  rules, and panels in both shipped dashboards have no data. Gating the 1.5
+  release; until it lands, expect those panels to read empty.
 
 - **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 -->
   [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted*
@@ -45,6 +60,13 @@ last gaps an outside operator hits.
   [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do);
   a flaky failure does not. Same machinery, opted in per runner set with its own
   budget so a broken test cannot loop. Detection comes first.
+
+- **[Persistent and shared worker storage](operations/README.md)** <!-- q:Q719 -->
+  Workers are storage-less by design and nothing validates a `ReadWriteMany`
+  volume mounted into one, so the stance is undocumented rather than decided.
+  `ReadWriteMany` is how jobs share files, and it is what ARC's
+  `containerMode: kubernetes` depends on, so it also matters to anyone migrating
+  off that mode. Validation and a reference architecture come before any API.
 
 The next four are all opt-in additions to the
 [per-tenant proxy](design/network-architecture.md), tracked and shipping
@@ -107,12 +129,18 @@ the exception: a firm commitment, waiting only on the release that carries it.
   GPU cases, but GPU Operator / Node Feature Discovery awareness, and
   `nodeSelector` / toleration / `RuntimeClass` conventions that make a GPU runner
   set feel native, wait on a concrete GPU workload to design against.
+- **[Multi-node GPU jobs](design/appendix-e-capacity-planning.md)** <!-- q:Q718 --> One job needing several
+  co-scheduled workers in one NVLink or InfiniBand domain is a different problem
+  from one job needing one GPU: capacity is advertised to GitHub as a single
+  integer, and a gang requirement is a placement predicate rather than a count.
+  Waits on a real multi-node workload, and would interact with a batch scheduler
+  such as Kueue or Volcano.
 - **[A worker cache backend](plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane)** <!-- q:Q215 -->
-  Workers are storage-less by design, so
-  `actions/cache` and Docker layer caching have no home. Adding an optional
-  PVC or object-store cache needs a
-  [security review](design/05-security.md) of cross-job cache isolation first: a
-  shared cache between tenants' jobs is an obvious exfiltration path.
+  `actions/cache` already works. What is missing is a cache *inside* the
+  cluster, to cut egress cost and restore latency. Docker layer caching has no
+  home either way, because workers are storage-less by design. It waits on a
+  [security review](design/05-security.md) of cross-job cache isolation: a
+  shared cache between tenants is an obvious exfiltration path.
 - **[A warm worker pool](design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)** <!-- q:Q268 -->
   An opt-in pool of idle pods per runner set, for teams that still hit
   pod-schedule latency after image pre-pull and caching.

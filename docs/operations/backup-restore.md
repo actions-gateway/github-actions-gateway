@@ -1,6 +1,6 @@
 # Backup, Restore, and Disaster Recovery
 
-> **Audience:** SRE, Platform engineer
+> **Audience:** Platform engineer
 
 The `ActionsGateway` custom resource (CR) is the **source of truth** for a tenant gateway. The Gateway Manager Controller (GMC) provisions every per-gateway child resource — the Actions Gateway Controller (AGC) Deployment, ServiceAccounts, RoleBinding, Service, NetworkPolicies, and metrics TLS Secrets — from that single CR, and owner-references each child to it. Deleting the CR therefore **cascades**: the apiserver garbage-collects all owner-referenced children. This makes the gateway cheap to recreate, but it also means an accidental `kubectl delete actionsgateway` (or a deleted namespace) tears down the running control plane.
 

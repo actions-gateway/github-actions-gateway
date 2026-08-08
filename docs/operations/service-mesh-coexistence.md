@@ -1,6 +1,6 @@
 # Running GAG Alongside a Service Mesh
 
-> **Audience:** Platform engineer, SRE
+> **Audience:** Platform engineer
 
 A service mesh (Istio, Linkerd, Cilium Service Mesh, Kuma) is the single most
 common source of *silent* breakage for GitHub Actions Gateway (GAG). The mesh

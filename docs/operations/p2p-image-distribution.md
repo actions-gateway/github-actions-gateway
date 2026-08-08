@@ -1,10 +1,12 @@
 # Peer-to-peer image distribution: surviving worker image-pull storms at scale
 
-**Audience:** Platform engineers and SREs running GitHub Actions Gateway
-(GAG) at scale. **Goal:** decide whether to add a peer-to-peer (P2P)
-container-image mirror — [Spegel](https://github.com/spegel-org/spegel) or
-[Dragonfly](https://d7y.io/) — to keep the runner image-pull path fast and
-resilient when many ephemeral worker pods start at once.
+> **Audience:** Platform engineer
+
+**Goal:** for a platform team running GitHub Actions Gateway (GAG) at scale,
+decide whether to add a peer-to-peer (P2P) container-image mirror —
+[Spegel](https://github.com/spegel-org/spegel) or [Dragonfly](https://d7y.io/) —
+to keep the runner image-pull path fast and resilient when many ephemeral worker
+pods start at once.
 
 > **This is a recommended companion, not a GAG component.** GAG does not
 > bundle, install, require, or configure either tool. A P2P mirror is a
