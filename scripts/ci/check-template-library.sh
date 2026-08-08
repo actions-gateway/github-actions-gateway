@@ -54,6 +54,7 @@
 #   --readme PATH          the library README that must name every entry
 #   --no-render            skip rule 7 even when kubectl is present
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
@@ -356,7 +357,9 @@ done
 # ------------------------------------------------------------ rule 3, both ----
 
 want_exercised="$(printf '%s\n' "${entries[@]}" | grep -vxF -f <(printf '%s\n' "${INERT_ENTRIES[@]}") || true)"
-have_exercised="$(printf '%s\n' "${exercised[@]+"${exercised[@]}"}" | grep -v '^$' | LC_ALL=C sort -u)"
+# `|| true`: grep -v exits 1 when nothing survives the filter, which is the
+# ordinary "no entry is exercised yet" case rather than an error.
+have_exercised="$(printf '%s\n' "${exercised[@]+"${exercised[@]}"}" | grep -v '^$' | LC_ALL=C sort -u || true)"
 
 unexercised="$(comm -23 <(printf '%s\n' "$want_exercised" | grep -v '^$' | LC_ALL=C sort) <(printf '%s\n' "$have_exercised"))"
 if [[ -n "$unexercised" ]]; then
