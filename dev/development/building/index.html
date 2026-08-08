@@ -2810,7 +2810,10 @@ by the <a href="../testing/#the-dockerfile-lint-gate"><code>dockerfile-lint</cod
   worker keeps the user <strong>by name</strong> (not a numeric UID) on purpose; see
   <a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">security §5.3</a>
   for why the GMC supplies the numeric <code>runAsUser: 1001</code> that lets kubelet verify
-  it.</li>
+  it. hadolint 2.15.0 added <code>DL3066</code>, which wants the numeric form, so each
+  by-name <code>USER</code> carries a <code># hadolint ignore=DL3066</code> pragma stating that
+  reason. The pragma is scoped to the instruction directly below it, so a new
+  by-name <code>USER</code> elsewhere still fails the gate.</li>
 <li><strong>Digest-pinned BuildKit frontend.</strong> The <code># syntax=docker/dockerfile:1.7</code>
   directive carries an <code>@sha256:…</code> digest. Dependabot's docker ecosystem does
   <strong>not</strong> bump syntax directives, so re-pin it manually when bumping the tag:
