@@ -2548,6 +2548,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#set--e-stops-at-a-command-substitution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set -e stops at a command substitution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#shared-helpers-and-makefile-wiring" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2621,7 +2632,7 @@
 <p>Conventions for every shell script in this repo — <code>scripts/</code>, <code>.githooks/</code>, and (where practical) inline <code>run:</code> blocks in <code>.github/workflows/</code>. Every tracked script under <code>scripts/</code> is linted against these by <code>make shellcheck</code>, which is part of <code>make check</code> (see <a href="../testing/#the-shellcheck-gate">testing.md § The shellcheck gate</a>).</p>
 <h2 id="rules">Rules<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Every script must start with <code>set -euo pipefail</code>.</li>
+<li>Every script must start with <code>set -euo pipefail</code>, plus <code>shopt -s inherit_errexit</code> in any script that assigns from a command substitution: <code>set -e</code> does not reach inside one (see <a href="#set--e-stops-at-a-command-substitution">§ <code>set -e</code> stops at a command substitution</a>).</li>
 <li>Use <code>local</code> for all variables inside functions.</li>
 <li>Use <code>[[ ]]</code> for conditionals and <code>(( ))</code> for arithmetic — never <code>[ ]</code>.</li>
 <li>Quote all variable expansions (<code>"$var"</code>, <code>"${arr[@]}"</code>) unless word-splitting is explicitly intended — annotate that intent with a comment.</li>
@@ -2638,6 +2649,52 @@
 </ul>
 <p><strong>Do not reach for <code>timeout</code>.</strong> It ships with GNU coreutils and is absent from a stock macOS, where neither <code>timeout</code> nor <code>gtimeout</code> is on <code>PATH</code>. A script that depends on it runs unbounded on a dev Mac while looking correct. That is the same silent-absence trap that broke Q690's load harness, which backgrounded its generators with <code>setsid</code>: also absent on macOS, so all three died instantly and 40 samples passed against an idle machine, reading as strong evidence of no flake. <code>timeout</code> is also still a kill, just one on a timer, so the signal can skip the cleanup <code>trap</code> that a self-terminating loop unwinds through.</p>
 <p>This applies hardest to throwaway harnesses under the gitignored <code>tmp/</code>. Being a throwaway is exactly why such a script gets none of the review a tracked one does, and it is where every unbounded loop in this repo's history has actually come from.</p>
+<h2 id="set--e-stops-at-a-command-substitution"><code>set -e</code> stops at a command substitution<a class="headerlink" href="#set--e-stops-at-a-command-substitution" title="Permanent link">&para;</a></h2>
+<p><code>set -euo pipefail</code> does not cover <code>x="$(build_fixture)"</code>. Inside the substitution a failing command neither aborts nor propagates, and the assignment takes the status of the builder's <em>last</em> command, so a fixture that broke on its third step reports success. Measured on bash 5.3, with a builder whose first two steps fail:</p>
+<table>
+<thead>
+<tr>
+<th>Form</th>
+<th>Exit status</th>
+<th>Steps run after the first failure</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>repo="$(build)"</code></td>
+<td>0</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>repo=$(build)</code></td>
+<td>0</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>local repo; repo="$(build)"</code></td>
+<td>0</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>repo="$(set -e; build)"</code></td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>shopt -s inherit_errexit</code> then <code>repo="$(build)"</code></td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>build</code> called directly, no substitution</td>
+<td>1</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p><code>shopt -s inherit_errexit</code> is the remedy to reach for: one line at the top of the file covers every substitution in it, where the other two working forms have to be repeated per call site.</p>
+<p>What this costs when it goes unnoticed is a misattributed failure, not just a late one. A fixture builder that keeps running after its setup broke turns one root failure into a cascade of downstream errors, and the last line in the log belongs to the <em>subject</em> rather than the fixture. In Q703, <code>release-delta-test</code>'s fixture repository lost a commit object partway through <code>build_repo</code>; the suite ran seven more failing <code>git commit</code> calls and ended on <code>release-delta: 'HEAD' is not a commit-ish in this repo</code>, which reads as a defect in the report under test. With <code>inherit_errexit</code> the same injected fault stops at the first <code>git</code> fatal and exits 128, git's own status, naming the fixture as the thing that broke.</p>
+<p>The hole was in 12 of 59 <code>scripts/**/*-test.sh</code> suites when it was found, including <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-v2-api-sync-test.sh"><code>check-v2-api-sync-test.sh</code></a>, whose own flake (Q596) was undiagnosable for the same reason: a failure that is not distinguished from a legitimate verdict. All 12 carry the shopt now.</p>
 <h2 id="shared-helpers-and-makefile-wiring">Shared helpers and Makefile wiring<a class="headerlink" href="#shared-helpers-and-makefile-wiring" title="Permanent link">&para;</a></h2>
 <p>Before writing a new helper function, check <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a> — <code>require_cmd</code>, <code>workspace_modules</code>, and the throttle setup already live there. The root <code>Makefile</code> keeps recipes as thin target→script wiring so the logic stays shellcheck-covered; see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> for the script inventory and parameter conventions.</p>
 <p><strong>A new script goes in a <code>scripts/&lt;group&gt;/</code> directory, never at the top level.</strong> The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> and the rule is explained in <a href="../testing/#scripts-is-grouped-by-blast-radius">testing.md § <code>scripts/</code> is grouped by blast radius</a>. Put a <code>*-test.sh</code> beside its subject.</p>

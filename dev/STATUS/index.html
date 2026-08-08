@@ -2784,20 +2784,20 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q703"></a>Q703</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">Gates die mid-run under <code>run-parallel</code>, pass standalone</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>doc-links</code> 2026-08-05: non-zero with no <code>ok</code> line, passes standalone. <code>release-delta-test</code> 2026-08-08: <code>could not parse HEAD</code> in its own fixture, green on rerun. Not a sibling-kill; every pid is waited. Family Q690/Q642/Q596.</td>
-</tr>
-<tr>
 <td><a id="Q706"></a>Q706</td>
 <td><a href="../development/testing/#two-clocks-in-one-assertion"><code>alloc-queue-id-test</code> bounds fleet startup on the wall clock</a></td>
 <td><code>tests</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Read 2026-08-05: <code>alloc-queue-id-test.sh:166</code> waits ~1000×<code>sleep 0.01</code> for the fleet, then fails <code>fleet startup</code>; it bounds the scheduler, not the subject. Q642 measured p99 469ms and 0.45% still starting at 10s. The last such site.</td>
+</tr>
+<tr>
+<td><a id="Q733"></a>Q733</td>
+<td><a href="../development/bash-style/#set--e-stops-at-a-command-substitution"><code>set -e</code> does not reach into a command substitution in 9 gate scripts</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-08 under Q703: a builder called as <code>x="$(f)"</code> runs on past its own failure and yields rc 0. 12 test suites fixed; 9 gates still carry it, incl. <code>go-lint.sh</code> and three e2e <code>chart-*-check.sh</code>, where it can green a failed <code>kubectl</code>.</td>
 </tr>
 <tr>
 <td><a id="Q708"></a>Q708</td>
@@ -3629,6 +3629,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q703"></a>Q703</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">Gates die mid-run under <code>run-parallel</code>, pass standalone</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Event:</strong> a gate fails under run-parallel and passes standalone again. Trigger unreproduced (240 runs under load); what shipped is evidence: every failure now names its exit status. → top of Queue, escalated.</td>
+</tr>
 <tr>
 <td><a id="Q690"></a>Q690</td>
 <td><a href="../development/testing/#two-clocks-in-one-assertion"><code>release-sentinel-test</code>'s live-run case fails under <code>make check</code>, passes standalone</a></td>
