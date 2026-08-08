@@ -778,6 +778,9 @@ body[data-md-color-scheme="slate"] {
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.02em;
+  /* These four re-render on every keystroke, so proportional figures make the
+     digits shuffle width as the reader types. Tabular pins them. */
+  font-variant-numeric: tabular-nums;
 }
 
 .gag-calc__cell--win .gag-calc__cell-num {
@@ -1323,7 +1326,10 @@ html.gag-reveal-ready .gag-reveal.is-visible {
   display: inline-block;
   font-size: 0.7rem;
   line-height: 1.5;
-  padding: 0.05rem 0.5rem;
+  /* 0.1rem, not 0.05rem: the row pills are buttons, and 14px of text at 1.5
+     leaves a 23px control at the smaller value — a pixel under the 24px hit
+     target floor. See website.md § Interface rules the custom layer must satisfy. */
+  padding: 0.1rem 0.5rem;
   border-radius: 0.8rem;
   background: var(--gag-accent-soft);
   color: var(--md-accent-fg-color);
