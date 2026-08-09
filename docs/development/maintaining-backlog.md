@@ -380,6 +380,8 @@ It is the one row that does not flip to ✅ and vanish: rewrite it as each RC re
 
 Both are reversible and both are cheap, which is the point: the expensive failure is a release whose scope quietly drifts because nothing recorded what it was.
 
+**A `-gate` label is also a public promise.** [`docs/roadmap.md`](../roadmap.md) is where an adopter reads it, so adding or removing one is an edit to both files and a punt that skips the second leaves the promise standing. `make roadmap-check` reconciles them in both directions: every `X.Y-gate` row must be named by a roadmap bullet's `<!-- q:QN -->` annotation, and a bullet that writes a version into its prose must name a row carrying that gate. Only the second reads the prose, and only it goes quiet once the version is a derived chip rather than a sentence; the coverage half reads the annotation and the label alone, so it holds whatever the bullet looks like. Naming a version without claiming to gate it stays free, which is how Q273's bullet names `v2.0.0` while carrying no label.
+
 ## Archiving completed plan docs
 
 When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue/Deferred row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
