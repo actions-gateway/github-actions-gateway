@@ -3184,7 +3184,7 @@
 <td><code>bug</code> <code>feature</code></td>
 <td>🔲</td>
 <td>M</td>
-<td><code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds to a node, never starts, and each claim spends a JIT record and holds a lock to <code>pendingPodDeadline</code>.</td>
+<td><code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds, never starts, and each claim spends a JIT record and holds a lock to <code>pendingPodDeadline</code>. Measured; the 1.4 DinD placeholder hits it.</td>
 </tr>
 <tr>
 <td><a id="Q726"></a>Q726</td>

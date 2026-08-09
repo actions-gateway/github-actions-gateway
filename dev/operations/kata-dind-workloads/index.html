@@ -3130,10 +3130,12 @@ CI-exercised:</p>
 </code></pre></div>
 <p>Then set <code>spec.workerImage</code> on it to a build-capable runner image (it ships an
 <code>example.invalid</code> placeholder so an unreplaced value fails at pull rather than
-mid-job), and point a <code>RunnerSet</code> at it with <code>templateRef.kind:
-ClusterRunnerTemplate</code>. The
-<a href="../runner-template-library/">runner template library</a> covers both, and the
-supported way to patch the base.</p>
+mid-job, visible on the worker pod as <code>ImagePullBackOff</code> within seconds but not
+on the <code>RunnerSet</code> until <code>spec.pendingPodDeadline</code> elapses), and point a
+<code>RunnerSet</code> at it with <code>templateRef.kind: ClusterRunnerTemplate</code>. The
+<a href="../runner-template-library/">runner template library</a> covers both, the
+supported way to patch the base, and
+<a href="../runner-template-library/#kata-dind-and-privileged-dind">what to watch when the placeholder is left in place</a>.</p>
 <p>The rest of this section is what that template contains and why, for reading
 rather than retyping.</p>
 <p>Kata is selected by <code>runtimeClassName</code> on the worker <code>podTemplate</code>. It is a

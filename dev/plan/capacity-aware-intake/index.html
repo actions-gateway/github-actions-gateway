@@ -2854,6 +2854,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#9j-the-gap-is-operator-visible-in-shipped-docs-q714" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9j. The gap is operator-visible in shipped docs (Q714)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#10-non-goals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4196,6 +4207,58 @@ renders <code>featureGates.staticCapacity</code> and <code>.capacityBuffer</code
 string panics the controller at startup (<code>invalid value of StaticCapacity</code>).
 The harness sets both to their defaults explicitly (<a href="../../STATUS/#Q531">Q531</a>
 tracks reporting it upstream).</p>
+<h2 id="9j-the-gap-is-operator-visible-in-shipped-docs-q714">9j. The gap is operator-visible in shipped docs (Q714)<a class="headerlink" href="#9j-the-gap-is-operator-visible-in-shipped-docs-q714" title="Permanent link">&para;</a></h2>
+<p>Q714's mechanism was a source read. It is now measured. A pod running the exact
+placeholder the 1.4 DinD templates ship,
+<code>example.invalid/build-capable-runner:replace-me</code>, was applied to a kind cluster
+and its conditions read directly:</p>
+<table>
+<thead>
+<tr>
+<th>t</th>
+<th>What the pod reports</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>+0s</td>
+<td><code>Scheduled</code>, bound to a node, <code>PodScheduled=True</code> with an empty reason</td>
+</tr>
+<tr>
+<td>+1s</td>
+<td><code>Pulling</code></td>
+</tr>
+<tr>
+<td>+2s</td>
+<td><code>ErrImagePull</code>, then <code>BackOff</code> and <code>ImagePullBackOff</code>; the <code>Failed</code> event names the unresolvable host</td>
+</tr>
+<tr>
+<td>onward</td>
+<td>phase stays <code>Pending</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>PodScheduled=True</code> is the confirmation: <code>podUnschedulable()</code> requires
+<code>PodScheduled=False</code> with reason <code>Unschedulable</code>, so it returns false for the
+whole window. <code>WorkersUnschedulable</code> never trips, and neither
+<code>actions_gateway_workers_unschedulable</code> (v1) nor
+<code>actions_gateway_runnerset_workers_unschedulable</code> (v2) leaves 0. Both API
+versions share this,
+since <code>RunnerSetReconciler</code> reuses <code>evalWorkersUnschedulableForPods</code> and
+<code>PendingPodDeadlineOrDefault</code>.</p>
+<p>The pod is then reaped at <code>pendingPodDeadline</code> (default 10m) with a
+<code>WorkerPodStuckPending</code> Warning, which <code>E2E_AGC_StuckPendingPodReaped</code> already
+exercises on the same <code>.invalid</code> shape. Recovery does not loop tightly: the
+abandoned-run sweeper waits for capacity that an unpullable image never returns
+and expires after 30m.</p>
+<p><strong>Why this matters beyond intake.</strong> Both 1.4 DinD templates ship that
+placeholder and require the operator to replace it, so this is the failure a
+first-time user of the library hits, not a corner case.
+<a href="../../operations/runner-template-library/"><code>runner-template-library.md</code></a> and
+<a href="../../operations/kata-dind-workloads/"><code>kata-dind-workloads.md</code></a> now describe
+the real split: the pod says <code>ImagePullBackOff</code> within seconds, while the
+<code>RunnerSet</code> stays quiet until the deadline. Closing Q714 changes what an
+operator watches, so it must update both.</p>
 <h2 id="10-non-goals">10. Non-goals<a class="headerlink" href="#10-non-goals" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Predicting schedulability in-process from node allocatable. Rejected: it
