@@ -3540,6 +3540,16 @@ being the view: write the release plan doc, open it with a
 and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.</p>
 <h2 id="release-sequence">Release sequence<a class="headerlink" href="#release-sequence" title="Permanent link">&para;</a></h2>
 <h3 id="1-pre-flight">1. Pre-flight<a class="headerlink" href="#1-pre-flight" title="Permanent link">&para;</a></h3>
+<p><strong>Which of these bind when the tag is a release candidate.</strong> The first two bind
+at every tag: an RC cut from a red <code>main</code> validates nothing, and the version you
+pick fixes the stable tag's. The last four are stable-tag obligations, because a
+prerelease deploys no docs and its GitHub Release body is generated rather than
+curated, so there is no published surface for them to be wrong on yet.</p>
+<p>The <strong>API surface review is the exception worth pulling forward to the first
+RC</strong>. Its deadline really is the stable tag, but the RC is the artifact that
+gets validated, and a rename decided after the candidate is published costs a
+new RC and another hour-long dogfood run. Reviewing it at the first RC and
+recording the verdict then is what keeps that cheap.</p>
 <ul>
 <li><code>main</code> is green: unit/integration/e2e and <code>security-scan.yml</code> all passing on
   the commit you are about to tag. Run <code>make check</code> locally as a final gate.</li>
