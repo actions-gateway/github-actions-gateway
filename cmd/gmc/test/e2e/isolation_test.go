@@ -6,6 +6,7 @@ package e2e
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -32,10 +33,13 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 
 	// Dump both tenants before AfterAll deletes them: a cross-tenant block that
 	// never lands is a claim about nsB's policy observed from nsA, so neither
-	// side alone explains it (Q666).
+	// side alone explains it (Q666). The enforcer state goes with them: on the
+	// kindnet lane a spurious allow is as much a claim about kindnetd being alive
+	// as about the policy (Q747).
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
 			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, nsA, nsB)
+			utils.DumpCNIEnforcerState()
 		}
 	})
 
@@ -73,14 +77,6 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 	})
 
 	It("E2E_GMC_CrossTenantNetworkBlocked: pod in nsA cannot reach proxy in nsB", func() {
-		// Earlier revisions of this spec did `kubectl exec <proxy-pod-in-nsA> -- sh -c ...`,
-		// but the proxy image is distroless (no `sh`), so the exec always failed with an
-		// OCI error like `failed to start exec "<random-hex>": ... "sh": executable file
-		// not found`. The only assertion was `NotTo(ContainSubstring("200"))` on that
-		// error string, so the spec passed iff the random exec-session hex didn't happen
-		// to contain "200" (~1.4% per run flake rate). It never actually probed the
-		// NetworkPolicy. Drive a one-shot curl pod instead so the exit code reflects the
-		// real network outcome.
 		By("getting proxy service ClusterIP in nsB")
 		cmd := exec.Command("kubectl", "get", "service", proxyName,
 			"-n", nsB, "-o", "jsonpath={.spec.clusterIP}")
@@ -88,27 +84,88 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(clusterIP).NotTo(BeEmpty())
 
-		targetURL := fmt.Sprintf("http://%s:8080/healthz", clusterIP)
-
-		// Gate on dataplane enforcement before the single asserting curl below.
-		// nsB's proxy-ingress NetworkPolicy is programmed asynchronously by the CNI.
-		// calico programs it synchronously enough that the first connection is already
-		// blocked, but kindnet (the default lane) has programming latency — a lone
-		// connection can race ahead of enforcement and succeed, which used to flake the
-		// asserting curl. So first drive a probe pod that loops curl against the nsB
-		// proxy and exits 0 only after it observes the connection blocked on several
-		// consecutive attempts: a deterministic "policy is enforced now" signal. If
-		// enforcement never appears within the loop budget the probe exits non-zero and
-		// the pod ends Failed, surfacing a real isolation regression rather than a flake.
+		// The gate-then-assert pass runs up to crossTenantAttempts times, and a
+		// retry is spent only when the CNI's NetworkPolicy enforcer restarted
+		// during the attempt that saw the connection allowed.
 		//
-		// Loop budget (150 iters × ~2s connected ≈ 5 min) is sized to span the outer
-		// Eventually window below — kindnet's NP programming latency under a loaded CI
-		// runner has exceeded the old ~2-min (60-iter) budget, ending the probe Failed
-		// before enforcement landed even though calico (synchronous) passed (Q179).
-		const probePodName = "cross-tenant-gate"
+		// On the kindnet lane that enforcer is kindnetd, which runs
+		// kube-network-policies with FailOpen: its nftables rules carry
+		// `queue flags bypass`, so while no process is bound to the nfqueue every
+		// packet is accepted and no NetworkPolicy is enforced anywhere on that
+		// node. An allow observed across such a window says kindnetd was dead, not
+		// that the policy is wrong, so it is discarded and re-measured. An allow
+		// observed with the enforcer fingerprint unchanged is a real isolation
+		// regression and fails immediately. Q747: kindnetd crash-looped on the node
+		// hosting all three pods and was down for ~25 s, which is when the
+		// asserting curl ran.
+		const crossTenantAttempts = 2
 
-		By("deploying a probe pod in nsA that polls until the nsB proxy is blocked in the dataplane")
-		probeManifest := fmt.Sprintf(`apiVersion: v1
+		for attempt := 1; attempt <= crossTenantAttempts; attempt++ {
+			enforcerBefore := utils.CNIEnforcerGeneration()
+			logs := crossTenantProbe(nsA, clusterIP, attempt)
+			if logs == "" {
+				return
+			}
+			enforcerAfter := utils.CNIEnforcerGeneration()
+
+			if enforcerBefore != enforcerAfter && attempt < crossTenantAttempts {
+				AddReportEntry("cross-tenant allow discarded: the CNI enforcer restarted mid-probe",
+					fmt.Sprintf("before: %s\nafter:  %s", enforcerBefore, enforcerAfter))
+				continue
+			}
+			Fail(fmt.Sprintf(
+				"cross-tenant connection should be blocked by NetworkPolicy, but the curl pod reached "+
+					"the nsB proxy on attempt %d of %d.\ncurl logs:\n%s\n"+
+					"CNI enforcer before: %s\nCNI enforcer after:  %s\n"+
+					"Equal fingerprints mean no enforcer restart explains this, so read it as a real "+
+					"isolation regression rather than a lane artifact (Q747).",
+				attempt, crossTenantAttempts, logs, enforcerBefore, enforcerAfter))
+		}
+	})
+})
+
+// crossTenantProbe drives one gate-then-assert pass from ns against the other
+// tenant's proxy ClusterIP. It returns the asserting curl pod's logs when the
+// connection was NOT blocked, and "" when it was blocked as required; it fails
+// the spec directly when the gate never observes enforcement at all.
+//
+// An earlier revision did `kubectl exec <proxy-pod> -- sh -c ...`, but the proxy
+// image is distroless (no `sh`), so the exec always failed with an OCI error
+// like `failed to start exec "<random-hex>": ... "sh": executable file not
+// found`. The only assertion was `NotTo(ContainSubstring("200"))` on that error
+// string, so the spec passed iff the random exec-session hex did not happen to
+// contain "200" (~1.4% per run flake rate). It never probed the NetworkPolicy at
+// all. Driving pods instead makes the exit code reflect the real network
+// outcome.
+//
+// attempt suffixes the pod names from the second pass on, so a retry does not
+// collide with the previous pass's pods (deleted with --wait=false).
+func crossTenantProbe(ns, clusterIP string, attempt int) string {
+	targetURL := fmt.Sprintf("http://%s:8080/healthz", clusterIP)
+	suffix := ""
+	if attempt > 1 {
+		suffix = fmt.Sprintf("-retry%d", attempt)
+	}
+
+	// Gate on dataplane enforcement before the single asserting curl below.
+	// nsB's proxy-ingress NetworkPolicy is programmed asynchronously by the CNI.
+	// calico programs it synchronously enough that the first connection is already
+	// blocked, but kindnet (the default lane) has programming latency — a lone
+	// connection can race ahead of enforcement and succeed, which used to flake the
+	// asserting curl. So first drive a probe pod that loops curl against the nsB
+	// proxy and exits 0 only after it observes the connection blocked on several
+	// consecutive attempts: a deterministic "policy is enforced now" signal. If
+	// enforcement never appears within the loop budget the probe exits non-zero and
+	// the pod ends Failed, surfacing a real isolation regression rather than a flake.
+	//
+	// Loop budget (150 iters × ~2s connected ≈ 5 min) is sized to span the outer
+	// Eventually window below — kindnet's NP programming latency under a loaded CI
+	// runner has exceeded the old ~2-min (60-iter) budget, ending the probe Failed
+	// before enforcement landed even though calico (synchronous) passed (Q179).
+	gatePodName := "cross-tenant-gate" + suffix
+
+	By("deploying a probe pod in nsA that polls until the nsB proxy is blocked in the dataplane")
+	probeManifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:
   name: %s
@@ -140,39 +197,29 @@ spec:
       done
       echo "TIMEOUT: never observed a sustained cross-tenant block"
       exit 1
-`, probePodName, nsA, curlImage, targetURL)
+`, gatePodName, ns, curlImage, targetURL)
 
-		Expect(utils.ApplyManifest(probeManifest)).To(Succeed())
-		DeferCleanup(func() {
-			cmd := exec.Command("kubectl", "delete", "pod", probePodName,
-				"-n", nsA, "--ignore-not-found", "--wait=false")
-			_, _ = utils.Run(cmd)
-		})
+	Expect(utils.ApplyManifest(probeManifest)).To(Succeed())
+	DeferCleanup(func() {
+		cmd := exec.Command("kubectl", "delete", "pod", gatePodName,
+			"-n", ns, "--ignore-not-found", "--wait=false")
+		_, _ = utils.Run(cmd)
+	})
 
-		By("waiting for the probe to confirm enforcement is live (probe pod Succeeded)")
-		var probePhase string
-		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "pod", probePodName,
-				"-n", nsA, "-o", "jsonpath={.status.phase}")
-			out, err := utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
-				"probe pod still in phase %q", out)
-			probePhase = out
-		}, 6*time.Minute, 2*time.Second).Should(Succeed())
+	By("waiting for the probe to confirm enforcement is live (probe pod Succeeded)")
+	gatePhase := waitForPodToTerminate(ns, gatePodName, 6*time.Minute)
+	probeLogs, _ := utils.Run(exec.Command("kubectl", "logs", gatePodName, "-n", ns))
+	Expect(gatePhase).To(Equal("Succeeded"),
+		"probe never observed the cross-tenant connection blocked, so the NetworkPolicy is not "+
+			"enforced in the dataplane; got phase=%s logs:\n%s", gatePhase, probeLogs)
 
-		probeLogs, _ := utils.Run(exec.Command("kubectl", "logs", probePodName, "-n", nsA))
-		Expect(probePhase).To(Equal("Succeeded"),
-			"probe never observed the cross-tenant connection blocked, so the NetworkPolicy is not "+
-				"enforced in the dataplane; got phase=%s logs:\n%s", probePhase, probeLogs)
+	curlPodName := "cross-tenant-probe" + suffix
 
-		const curlPodName = "cross-tenant-probe"
-
-		By("deploying a one-shot curl pod in nsA that targets the nsB proxy service")
-		// Unlabeled (no actions-gateway/* label) so it is not selected by any source-side
-		// NetworkPolicy in nsA — the only thing that can block the connection is nsB's
-		// proxy-ingress NP, which is what this spec is meant to verify.
-		manifest := fmt.Sprintf(`apiVersion: v1
+	By("deploying a one-shot curl pod in nsA that targets the nsB proxy service")
+	// Unlabeled (no actions-gateway/* label) so it is not selected by any source-side
+	// NetworkPolicy in nsA — the only thing that can block the connection is nsB's
+	// proxy-ingress NP, which is what this spec is meant to verify.
+	manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:
   name: %s
@@ -196,40 +243,49 @@ spec:
     - "--write-out"
     - "HTTP_CODE=%%{http_code}\n"
     - "http://%s:8080/healthz"
-`, curlPodName, nsA, curlImage, clusterIP)
+`, curlPodName, ns, curlImage, clusterIP)
 
-		Expect(utils.ApplyManifest(manifest)).To(Succeed())
-		DeferCleanup(func() {
-			cmd := exec.Command("kubectl", "delete", "pod", curlPodName,
-				"-n", nsA, "--ignore-not-found", "--wait=false")
-			_, _ = utils.Run(cmd)
-		})
-
-		By("waiting for the curl pod to terminate")
-		var finalPhase string
-		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "pod", curlPodName,
-				"-n", nsA, "-o", "jsonpath={.status.phase}")
-			out, err := utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
-				"curl pod still in phase %q", out)
-			finalPhase = out
-		}, 90*time.Second, 2*time.Second).Should(Succeed())
-
-		// Always dump logs so the CI artifact shows the real outcome.
-		logsCmd := exec.Command("kubectl", "logs", curlPodName, "-n", nsA)
-		logs, _ := utils.Run(logsCmd)
-
-		// NetworkPolicy drops produce a connect timeout (curl exits 28); a missing
-		// route or DNS failure produces a different non-zero code. Either way, the
-		// curl process must NOT exit 0 (Succeeded) and must NOT print HTTP_CODE=200.
-		Expect(finalPhase).To(Equal("Failed"),
-			"cross-tenant connection should be blocked by NetworkPolicy; got phase=%s logs:\n%s", finalPhase, logs)
-		Expect(logs).NotTo(ContainSubstring("HTTP_CODE=200"),
-			"cross-tenant connection should be blocked; logs:\n%s", logs)
+	Expect(utils.ApplyManifest(manifest)).To(Succeed())
+	DeferCleanup(func() {
+		cmd := exec.Command("kubectl", "delete", "pod", curlPodName,
+			"-n", ns, "--ignore-not-found", "--wait=false")
+		_, _ = utils.Run(cmd)
 	})
-})
+
+	By("waiting for the curl pod to terminate")
+	finalPhase := waitForPodToTerminate(ns, curlPodName, 90*time.Second)
+
+	// Always dump logs so the CI artifact shows the real outcome.
+	logs, _ := utils.Run(exec.Command("kubectl", "logs", curlPodName, "-n", ns))
+	AddReportEntry("cross-tenant curl outcome (attempt "+fmt.Sprint(attempt)+")",
+		fmt.Sprintf("phase=%s logs:\n%s", finalPhase, logs))
+
+	// NetworkPolicy drops produce a connect timeout (curl exits 28); a missing
+	// route or DNS failure produces a different non-zero code. Either way the curl
+	// process must not exit 0 (Succeeded). HTTP_CODE=200 is checked separately: a
+	// response body that arrives after curl's own deadline still proves the
+	// connection was allowed even though the process exited non-zero.
+	if finalPhase == "Succeeded" || strings.Contains(logs, "HTTP_CODE=200") {
+		return fmt.Sprintf("phase=%s\n%s", finalPhase, logs)
+	}
+	return ""
+}
+
+// waitForPodToTerminate blocks until the pod reaches a terminal phase and
+// returns it.
+func waitForPodToTerminate(ns, name string, timeout time.Duration) string {
+	var phase string
+	Eventually(func(g Gomega) {
+		cmd := exec.Command("kubectl", "get", "pod", name,
+			"-n", ns, "-o", "jsonpath={.status.phase}")
+		out, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
+			"pod %s still in phase %q", name, out)
+		phase = out
+	}, timeout, 2*time.Second).Should(Succeed())
+	return phase
+}
 
 // getPodName returns the name of the first running pod matching the label selector.
 // Used by hpa_pdb_test.go and resilience_test.go.

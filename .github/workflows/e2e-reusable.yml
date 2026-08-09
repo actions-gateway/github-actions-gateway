@@ -711,15 +711,28 @@ jobs:
           echo "=== CNI dataplane health (Q300: a starved kube-network-policies enforcer"
           echo "    times out allowed traffic and leaves fresh NetworkPolicies unenforced) ==="
           kubectl get pods -n kube-system -l app=kindnet -o wide
+          echo "--- restart attribution (Q747: kindnetd runs kube-network-policies with FailOpen, so"
+          echo "    its nftables rules carry 'queue flags bypass' — while no process is bound to the"
+          echo "    nfqueue EVERY packet is accepted and NetworkPolicy is not enforced on that node."
+          echo "    A nonzero RESTARTS on the node hosting a spec's pods is the first thing to read"
+          echo "    when a connection that should have been blocked succeeded; LAST_REASON says why"
+          echo "    the enforcer died, which the Q747 dump could not answer) ---"
+          cs='.status.containerStatuses[0]'
+          kubectl get pods -n kube-system -l app=kindnet -o "custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,RESTARTS:${cs}.restartCount,STARTED:${cs}.state.running.startedAt,LAST_REASON:${cs}.lastState.terminated.reason,LAST_EXIT:${cs}.lastState.terminated.exitCode,LAST_FINISHED:${cs}.lastState.terminated.finishedAt"
+          echo "--- kindnet previous-container logs (only source for a crash-looped enforcer's fatal) ---"
+          kubectl logs -n kube-system -l app=kindnet --tail=60 --prefix --previous
           for pod in $(kubectl get pods -n kube-system -l app=kindnet -o name); do
             echo "--- ${pod} cpu.stat (nr_throttled/nr_periods = CFS throttle ratio) ---"
             kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/cpu.stat
-            echo "--- ${pod} memory.current / memory.max (kindnetd keeps a 50Mi memory limit) ---"
+            echo "--- ${pod} memory.current / memory.max (bring-up raises kind's 50Mi ceiling; Q747) ---"
             kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.max
             echo "--- ${pod} memory.events (nonzero 'high'/'max' = enforcer stalled on memory pressure) ---"
             kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/memory.events
             echo "--- ${pod} nfnetlink_queue (queue_dropped/user_dropped > 0 = verdicts overflowed; with"
-            echo "    the bypass flag an overflowed packet is ACCEPTED, i.e. NetworkPolicy fails open) ---"
+            echo "    the bypass flag an overflowed packet is ACCEPTED, i.e. NetworkPolicy fails open."
+            echo "    These belong to the queue INSTANCE, not the boot: an enforcer restart destroys and"
+            echo "    recreates it, so zeros here only describe the window since the last RESTARTS bump"
+            echo "    above — check that column before reading a zero as 'no overflow this run', Q747) ---"
             kubectl exec -n kube-system "${pod#pod/}" -- cat /proc/net/netfilter/nfnetlink_queue
           done
           echo "--- kindnet logs (NetworkPolicy programming/verdict lag shows here; --since spans the"

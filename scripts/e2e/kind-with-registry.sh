@@ -160,23 +160,39 @@ install_calico() {
   fi
 }
 
-# tune_kindnet_limits removes the CPU limit kind ships on the kindnetd
-# DaemonSet (100m, CFS-throttled even at bring-up idle). kindnetd is not just
-# the CNI: its embedded kube-network-policies enforcer verdicts the first
-# packet(s) of every new connection involving a policied pod in userspace
-# (nfqueue), and its NRI plugin sits in the RunPodSandbox path. At 100m, e2e
-# load starves it — allowed traffic times out (webhook calls, broker
-# long-polls, curl connects) while freshly created NetworkPolicies go
-# unenforced for minutes (Q300). Dropping the CPU limit removes the throttle;
-# the 100m CPU request is kept so scheduling is unchanged, and the memory
-# limit is kept (no OOM ever observed). Idempotent: a strategic-merge patch to
-# the same value is a no-op and triggers no rollout.
+# tune_kindnet_limits widens the resource limits kind ships on the kindnetd
+# DaemonSet (cpu=100m, memory=50Mi). kindnetd is not just the CNI: its embedded
+# kube-network-policies enforcer verdicts the first packet(s) of every new
+# connection involving a policied pod in userspace (nfqueue), and its NRI plugin
+# sits in the RunPodSandbox path.
+#
+# CPU: at 100m the container is CFS-throttled even at bring-up idle, and e2e
+# load starves it — allowed traffic times out (webhook calls, broker long-polls,
+# curl connects) while freshly created NetworkPolicies go unenforced for minutes
+# (Q300). The limit is removed; the 100m request is kept so scheduling is
+# unchanged.
+#
+# Memory: 50Mi is not enough for the informer caches this suite's namespace and
+# NetworkPolicy churn builds. Measured on the Q747 failure run, both worker
+# kindnetd containers sat at 47-49Mi of the 50Mi ceiling with memory.events
+# max=3733 and max=609, and crash-looped (3 and 4 restarts, `BackOff restarting
+# failed container kindnet-cni`). That is not a slow enforcer but an absent one,
+# and kindnetd runs kube-network-policies with FailOpen — its nftables rules
+# carry `queue flags bypass`, so with no process bound to the nfqueue every
+# packet is accepted and NetworkPolicy is not enforced at all on that node. The
+# earlier "no OOM ever observed" reading of this limit is what that run refuted.
+#
+# Idempotent: a strategic-merge patch to the same values is a no-op and triggers
+# no rollout.
+KINDNET_MEMORY_LIMIT=${KINDNET_MEMORY_LIMIT:-256Mi}
+
 tune_kindnet_limits() {
   local ctx="kind-${KIND_CLUSTER}"
-  echo "==> removing kindnetd CPU limit (kube-network-policies runs in-band; Q300)"
+  echo "==> widening kindnetd limits: no CPU limit, memory ${KINDNET_MEMORY_LIMIT}" \
+    "(kube-network-policies runs in-band and fails open when it dies; Q300, Q747)"
   kubectl --context "${ctx}" -n kube-system patch daemonset kindnet \
     --type=strategic \
-    -p '{"spec":{"template":{"spec":{"containers":[{"name":"kindnet-cni","resources":{"limits":{"cpu":null}}}]}}}}'
+    -p '{"spec":{"template":{"spec":{"containers":[{"name":"kindnet-cni","resources":{"limits":{"cpu":null,"memory":"'"${KINDNET_MEMORY_LIMIT}"'"}}}]}}}}'
   kubectl --context "${ctx}" rollout status daemonset/kindnet -n kube-system --timeout=120s
 }
 
