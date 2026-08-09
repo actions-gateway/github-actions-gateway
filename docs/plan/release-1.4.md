@@ -113,10 +113,10 @@ day they stay up is a day a prospect can check one and stop trusting the page:
   has since been rewritten. **Corrected 2026-08-06.**
 - Two ARC-side comparison rows went false at datable upstream releases: 0.13.1
   made quota-blocked pod creation self-healing, and 0.14.0 added multi-label
-  scale sets, which GAG does not have. **Open.**
+  scale sets, which GAG does not have. **Corrected 2026-08-08.**
 - `why-gag.md` states ARC ships no bundled dashboard; it ships a per-scale-set
   Grafana sample. The defensible claim is that nothing aggregates across scale
-  sets or per tenant. **Open.**
+  sets or per tenant. **Corrected 2026-08-08.**
 
 **`docs/features.md` is the inventory and needs a sweep.** It was created
 2026-08-01 and is close to complete, but 1.4 adds six user-facing features ahead
@@ -128,6 +128,21 @@ pass: no-PEM workload identity gets a single line in `features.md` and a
 nine-word aside inside a YAML footnote, while the weaker claim ("App keys never
 in env") occupies a security pillar. ARC reads the App private key from a
 Secret, so "the key never enters the cluster" is a row that writes itself.
+**Shipped 2026-08-09:** `why-gag.md` gains a credential row in the ARC table,
+and the security pillar carries the stronger claim under the weaker one.
+
+The row is narrower than the paragraph above assumed, and the difference is the
+whole point of measuring before writing a comparative claim. ARC's *default*
+does read the key from a Secret, and copies it into the listener config Secret
+the controller generates, so the PEM is at rest twice. But 0.14.2 also ships an
+opt-in Azure Key Vault path in the released chart, and there nothing holds the
+key in etcd: the listener fetches the value itself at runtime, against an Azure
+client certificate read from a path in its pod. So the defensible line is that
+under `workloadIdentity` no App key exists in the cluster in any form, not that
+ARC cannot keep one out of etcd. Measured 2026-08-09 against the 0.14.2 chart
+(`values.yaml`, `templates/autoscalingrunnerset.yaml`, the `AutoscalingRunnerSet`
+types) and `master` (`vault/vault.go`, `vault/azurekeyvault/`,
+`appconfig.FromSecret`, `ResourceBuilder.newScaleSetListenerConfig`).
 
 The rest of the reconciliation, including whether the comparison table keeps its
 verdict-table shape, is [1.5 scope](release-1.5.md#in-scope-reconcile-the-marketing-surfaces).
