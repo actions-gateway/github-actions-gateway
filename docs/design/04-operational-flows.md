@@ -64,9 +64,11 @@ This flow runs per-job inside the tenant namespace, entirely managed by the AGC.
 > (`X-ScaleSetMaxCapacity`) instead of deciding per delivered job. Two consequences
 > are called out where they arise. Eviction auto-retry is ported to this tier
 > (Q417, [below](#on-the-scale-set-tier-q417)), as is the admission ladder of step 2a
-> (Q443, [below](#the-ladder-as-an-integer-scale-set-tier-q443)) — both were
-> classic-only, which the `v2.0.0` removal of classic acquisition would have turned
-> into a silent capability deletion.
+> (Q443, [below](#the-ladder-as-an-integer-scale-set-tier-q443)) and the abandoned-run
+> force-cancel with its capacity-gated re-run (Q766,
+> [below](#on-the-scale-set-tier-q766)). All three were classic-only, which the
+> `v2.0.0` removal of classic acquisition would have turned into a silent capability
+> deletion.
 
 ```mermaid
 sequenceDiagram
@@ -319,7 +321,7 @@ Four causes reach the recovery above, and the boundary between them and everythi
 | kube-scheduler preemption (`priorityTiers`) | Deleted, with `DisruptionTarget=True` / `PreemptionByScheduler` | ✅ (Q497) | The scheduler is the condition's only writer, so the signal is unambiguous |
 | `kubectl drain` / eviction API, `kubectl delete pod` | `PodFailed` + empty reason, publishing **with** `deletionTimestamp` set | ✅ (Q502) | Measured discriminator: a cancel and a genuine failure publish the same shape with **no** mark. Gated on the mark, not on the `EvictionByEvictionAPI` condition, so a bare delete is covered too |
 | The AGC's own deletions — reaper, and the job-abandoned reclaim | As above, plus the `actions-gateway.com/deletion-reason` stamp | ❌ | The AGC deletes pods it gave up on: the reaper's stuck-Pending and orphaned-Running workers, and (Q501) the worker of a job whose lock the renew loop lost, which GitHub has already redelivered to a sibling. Recovering either would turn cleanup into a re-run trigger. The stamp, written before every AGC-issued delete, is the exclusion |
-| Deleted before its container ever ran | Vanishes, or publishes a transient `Failed` + mark with **no container exit record** (a drained *Pending* worker) | ✅ (Q691) | The job never ran to a reportable end, so nothing is reported for the assignment; the run is force-cancelled instead, concluding run and job `cancelled` in ~1s (GitHub's ~15-minute unstarted-job timeout is the backstop). The cancelled run then **does** accept `rerun-failed-jobs`, so it is re-run automatically once the owner places a worker pod again, on the shared retry budget. See [Stuck-Pending Worker Pod](#stuck-pending-worker-pod) (Q628/Q676/Q683/Q691) |
+| Deleted before its container ever ran | Vanishes, or publishes a transient `Failed` + mark with **no container exit record** (a drained *Pending* worker) | ✅ (Q691, both tiers since Q766) | The job never ran to a reportable end, so nothing is reported for the assignment; the run is force-cancelled instead, concluding run and job `cancelled` in ~1s (GitHub's ~15-minute unstarted-job timeout is the backstop). The cancelled run then **does** accept `rerun-failed-jobs`, so it is re-run automatically once the owner places a worker pod again, on the shared retry budget. This row is the one cause that does **not** enter `disruptionAwaitingRecovery`, on either tier: a job that never ran has no failed job for `rerun-failed-jobs` to act on, so the run has to be concluded first. See [Stuck-Pending Worker Pod](#stuck-pending-worker-pod) (Q628/Q676/Q683/Q691/Q766) |
 | Job failed on its own | `PodFailed`, empty reason, no deletion mark | ❌ | Re-running genuinely failing work is a retry loop, not a recovery |
 
 The drain row closed later than preemption, and the reason is worth being precise about. Preemption could close first because `PreemptionByScheduler` has exactly one writer — never a human, never a failing job — so it needs no further measurement to be safe. The drain row keys on `deletionTimestamp` instead, which a human cancelling a run might plausibly also have produced; that had to be measured before it could be trusted. It was (2026-07-29): a cancelled run's worker publishes the same phase and empty reason with **no** deletion mark — nothing in the gateway deletes a cancelled run's pod — so the mark does separate a disruption from a cancel. The residual ambiguity is deliberate: an operator's bare `kubectl delete pod` of a running worker re-runs the job it interrupted, which is the drain behaviour, not a defect (see [q459-drained-worker-recovery.md](../plan/archive/q459-drained-worker-recovery.md)).
@@ -331,7 +333,7 @@ The raw mark sits a whole grace period after the request, so comparing it direct
 That ordering carries two exclusions at once:
 
 * A delete issued *after* the container exited is cleanup of an already-failed pod, not a disruption.
-* A deleted worker with *no* exit record never ran its job. A real kubelet publishes a transient `Failed`-with-mark even for a drained still-`Pending` pod (CI's fake-GitHub drain spec caught a mark-only rule firing on exactly that), so the absence of a terminal phase cannot be relied on to exclude it.
+* A deleted worker with *no* exit record never ran its job. A real kubelet publishes a transient `Failed`-with-mark even for a drained still-`Pending` pod (CI's fake-GitHub drain spec caught a mark-only rule firing on exactly that), so the absence of a terminal phase cannot be relied on to exclude it. That exclusion keeps such a worker off *this* path, where a re-run would be issued against a job that never failed; since Q766 it is recovered by a different one, which force-cancels the run first.
 
 #### Why preemption *deletes* rather than *evicts*, and what that costs us
 
@@ -439,7 +441,32 @@ A worker pod that never leaves `Pending` — unpullable `workerImage`, unschedul
 
 **The job assignment is deliberately NOT completed (Q628 → Q676), and the run is force-cancelled instead (Q683).** "Deletion is treated as completion" is a statement about the *pod*, and for a worker that never ran it used to be reported to the session as a **succeeded job**, indistinguishable from a clean run. A pod removed before any container started now resolves with `DeletedBeforeStart` and the session reports the job as `abandoned` internally, but the listener sends **no** `completejob` for its own delivery. Measured live (the Q645/Q676 probe runs, 2026-08-04, [q645-abandoned-completion.md](../plan/q645-abandoned-completion.md)): completing the winner's own sole delivery concludes the whole run immediately as **`success`**, a false green, for `abandoned` and `canceled` alike, while `failed` is refused with a 401. Told nothing, GitHub concludes the run *and* job as **`cancelled`** at its ~15-minute unstarted-job timeout — honest but slow. The provisioner therefore issues a standalone REST `force-cancel` of the run (identity from the acquire payload's `github` context) before reporting `abandoned`: measured live (2026-08-05, [the Q683 measurement](../plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05)), the call is accepted in the told-nothing state with no prior plain cancel, run *and* job conclude **`cancelled`** about one second later with no orphaned `in_progress` record, the cancelled conclusion unpins the consumed runner record for the recycle, and — unlike the false green, which `rerun-failed-jobs` refuses with a 403 — the cancelled run accepts a re-run. The unstarted-job timeout remains the backstop when the call cannot act (`actions_gateway_abandoned_run_force_cancels_total` counts outcomes). This is unlike the Q260 fan-out's sibling completions, which conclude nothing because the winner's own delivery stays open.
 
-**The cancelled run is then re-run automatically, but only once capacity returns (Q691).** A cancelled conclusion accepts `rerun-failed-jobs`, so the recovery the false green made impossible is available; what makes it safe is *when* it fires. The job was abandoned because its worker could not be placed, so an immediate re-run re-queues it into the pool that was starved and a shortage compounds into a re-run storm. The provisioner registers the run instead and re-runs it when a worker pod of the same owner binds to a node (`PodScheduled=True`) after the abandonment, which is the same evidence-of-capacity test the Q512 capacity-gate latch uses, and for the same reason: binding rather than phase, because a bound pod still pulling images proves the pool has room just as well as a running one. Two bounds keep the loop finite. The re-run goes through the shared per-run retry budget as `cause="abandoned"`, so a run abandoned again after its re-run is capped at `maxEvictionRetries` re-runs across all disruption causes together, with exhaustion surfaced as `eviction_retries_exhausted_total{cause="abandoned"}` and an `EvictionRetriesExhausted` Event; and a wait that never sees a placement is dropped after 30 minutes, counted as `actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}`. Classic tier only, matching the force-cancel it recovers.
+**The cancelled run is then re-run automatically, but only once capacity returns (Q691).** A cancelled conclusion accepts `rerun-failed-jobs`, so the recovery the false green made impossible is available; what makes it safe is *when* it fires. The job was abandoned because its worker could not be placed, so an immediate re-run re-queues it into the pool that was starved and a shortage compounds into a re-run storm. The provisioner registers the run instead and re-runs it when a worker pod of the same owner binds to a node (`PodScheduled=True`) after the abandonment, which is the same evidence-of-capacity test the Q512 capacity-gate latch uses, and for the same reason: binding rather than phase, because a bound pod still pulling images proves the pool has room just as well as a running one. Two bounds keep the loop finite. The re-run goes through the shared per-run retry budget as `cause="abandoned"`, so a run abandoned again after its re-run is capped at `maxEvictionRetries` re-runs across all disruption causes together, with exhaustion surfaced as `eviction_retries_exhausted_total{cause="abandoned"}` and an `EvictionRetriesExhausted` Event; and a wait that never sees a placement is dropped after 30 minutes, counted as `actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}`.
+
+#### On the scale-set tier (Q766)
+
+Both recoveries above are the **classic** flow, where one goroutine holds the acquired payload's run identity and is woken by the informer's delete event for the pod it created. A scale-set worker has neither, and the reap *removes* the evidence rather than leaving a `PodFailed` pod behind the way an eviction does. So the scan that recovers a disrupted scale-set worker cannot recover this one, and the detection moves to the moment of the delete itself:
+
+```mermaid
+sequenceDiagram
+    participant R as RunnerSet reconciler
+    participant W as Worker Pod
+    participant GH as GitHub
+    Note over W: Pod stuck Pending past pendingPodDeadline
+    R->>W: stamp deletion-reason, delete
+    Note over R: WorkerPodStuckPending, worker_pods_reaped_total (reason=pending_deadline)++
+    Note over R: run identity read off the pod the reaper still holds
+    R->>GH: REST force-cancel of the run
+    Note over GH: run and job conclude cancelled in ~1s
+    Note over R: run queued for automatic re-run, waiting on capacity
+    R->>GH: rerun-failed-jobs, one slot of the run's shared retry budget
+```
+
+Three things make this the same capability rather than a lookalike. The **identity** is the `actions-gateway.com/run-id` / `actions-gateway.com/repository` pair `ProvisionScaleSetWorker` stamps, the same pair Q417's eviction recovery reads. The **budget** is the same shared per-`run_id` one, so `maxEvictionRetries` still bounds re-runs per run across both tiers together; only the `tier` label splits the reporting. And the **wait** is the identical capacity test: a worker pod of the same owner binding after the abandonment.
+
+A second, narrower seam covers an *external* delete of a still-`Pending` worker, a drain catching one before it starts. That shape does publish the transient `Failed` + mark with no exit record, so the recovery scan can see it; it takes the same claim as a disrupted pod (`eviction-handled-at`, under an optimistic lock) but the force-cancel path rather than `rerun-failed-jobs`. The two seams cannot both fire for one pod: the reaper stamps `deletion-reason` before it deletes, and the scan's arm requires that stamp to be absent.
+
+Two reaps are deliberately **not** recovered. A `completed_pending` reap (Q575) has no open run — its job already went terminal at GitHub, which is what reclaimed the Secret the pod never mounted, so there is nothing to cancel and a re-run would re-run finished work. A gateway-teardown reap is dropped because the owner is being deleted: no later worker pod will ever bind to satisfy the wait. And one residual is inherent, the same one preemption and drain recovery carry on this tier: a never-started worker that vanishes without publishing that transient `Failed` leaves no evidence, so its run needs a manual re-run.
 
 ---
 
