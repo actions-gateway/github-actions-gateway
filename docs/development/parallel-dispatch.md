@@ -582,6 +582,17 @@ build](#what-we-deliberately-dont-build-and-why)):
   autonomous loop must not depend on it (see [the worker
   contract](#the-worker-contract-self-healing)).
 
+**A message describing repo state carries its own expiry, or it arrives wrong.**
+`send_message` queues rather than delivers: the target processes it after its
+in-flight turn, which can be many minutes later. Whatever the message asserts
+about a PR, a branch, or `main` may have changed by then, and the sender is the
+one who knows the state is volatile. So state the condition that invalidates the
+instruction, not just the instruction. Measured 2026-08-09: a message asked a
+session to rebase onto an open PR's branch, that PR merged before the session
+acted, and the instruction had to be chased with a correction. "Rebase onto X,
+or onto `main` if X has already merged when you read this" costs one clause and
+needs no chasing.
+
 ### What we deliberately don't build (and why)
 
 This was investigated end to end; recording the conclusions so they are not
