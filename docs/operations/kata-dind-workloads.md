@@ -216,10 +216,12 @@ kubectl apply -k deploy/templates/kata-dind
 
 Then set `spec.workerImage` on it to a build-capable runner image (it ships an
 `example.invalid` placeholder so an unreplaced value fails at pull rather than
-mid-job), and point a `RunnerSet` at it with `templateRef.kind:
-ClusterRunnerTemplate`. The
-[runner template library](runner-template-library.md) covers both, and the
-supported way to patch the base.
+mid-job, visible on the worker pod as `ImagePullBackOff` within seconds but not
+on the `RunnerSet` until `spec.pendingPodDeadline` elapses), and point a
+`RunnerSet` at it with `templateRef.kind: ClusterRunnerTemplate`. The
+[runner template library](runner-template-library.md) covers both, the
+supported way to patch the base, and
+[what to watch when the placeholder is left in place](runner-template-library.md#kata-dind-and-privileged-dind).
 
 The rest of this section is what that template contains and why, for reading
 rather than retyping.
