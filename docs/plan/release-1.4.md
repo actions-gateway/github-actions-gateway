@@ -149,6 +149,48 @@ The rest of the reconciliation, including whether the comparison table keeps its
 verdict-table shape, is [1.5 scope](release-1.5.md#in-scope-reconcile-the-marketing-surfaces).
 The recurring form is [release.md § Pre-flight](../operations/release.md#1-pre-flight).
 
+## Sweep verdict: the docs and marketing surfaces, 2026-08-09
+
+The pre-flight sweep ran against `v1.3.0..main` (181 commits). Every mechanical
+gate was already green, including `doc-links`, `roadmap-check`, the nav-coverage
+gate and `release-pins-check`, and pre-flight question 3 is satisfied: after
+#1329 and #1362 every ARC claim on `why-gag.md` and `alternatives.md` carries a
+version and a measurement date. Three content gaps remained, all created this
+cycle, and all are now closed.
+
+**The auto-re-run docs did not agree with each other about Q683 and Q691, and
+none of them carried the tier scope.** `04-operational-flows.md` records the
+scope correctly ("Classic tier only, matching the force-cancel it recovers");
+no operator-facing or marketing surface repeated it. Measured from source:
+`forceCancelAbandonedRun` has one caller, inside the classic `provision()`
+handler, and the ScaleSet tier's `disruptionAwaitingRecovery` has three arms
+(eviction, preemption, deletion) with no abandoned case, deliberately. So on the
+ScaleSet tier, which is the v2 default every new tenant runs, a worker reaped
+while Pending still concludes at GitHub's ~15-minute unstarted-job timeout and
+needs a manual re-run. `features.md` had been advertising the capability to those
+tenants unscoped, and it also said the run "accepts a re-run afterwards", which
+describes the pre-Q691 manual state. The consolidated matrix in
+`troubleshooting.md` said the opposite, excluding a never-started worker "by
+design" with no note that the classic tier now recovers it. All three are
+corrected, and the matrix preamble names `abandoned` as the fifth, out-of-table
+cause. This was a propagation failure rather than a code gap: the design doc had
+the answer the whole time.
+
+**Q166 and Q554 had reached `features.md` and stopped there.** Neither appeared
+on `index.md`, `README.md` or `why-gag.md`, which is exactly the rot pre-flight
+question 1 exists to catch. Both are now on all three. They were deliberately
+*not* added to the ARC comparison table: a new row there needs a measured ARC
+column, and this sweep measured no new ARC behaviour, so adding one would have
+created precisely the undated claim the 2026-08-06 review was called to remove.
+
+**The announce bar still carried 1.3's highlight.** `highlight_for` named
+`v1.3.0`, so a `v1.4.0` build degraded to the plain release-notes link (verified
+by building at `GAG_DOCS_RELEASE=v1.4.0`). It now names `v1.4.0` and leads with
+cross-namespace proxy sharing, the runner template library, and the v2
+worker-capacity gauges. The abandoned-run re-run was considered and rejected for
+the bar: it is classic-tier only, and a banner is the wrong place for a scope
+qualifier.
+
 ## Pre-flight: the API surface this tag publishes
 
 Recorded 2026-08-09 from `scripts/release/api-surface-since.sh` over

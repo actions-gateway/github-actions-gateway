@@ -102,6 +102,10 @@ All GitHub traffic from the AGC and worker pods routes through a per-tenant prox
 
 **Per-tenant utilization metrics.** Both the GMC and AGC expose Prometheus metrics scoped per tenant and runner group. Teams can see their own GPU utilization and argue for quota adjustments without cluster-wide visibility.
 
+**A curated runner template library.** Three worker pod shapes ship as a kustomize base (`plain`, `kata-dind`, `privileged-dind`), each applied with one `kubectl apply -k`, so a tenant starts from a validated template instead of transcribing a capability set by hand. Only templates CI exercises are allowed to ship, and `make template-library-check` reconciles the shipped and exercised sets both ways rather than leaving that a convention ([guide](docs/operations/runner-template-library.md)).
+
+**Consent-gated cross-namespace egress proxy sharing.** One proxy pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`. Consent is provider-side, so naming a proxy from the consumer side grants nothing, an absent or empty `sharing` denies, and only the proxy's public certificate crosses the namespace boundary ([guide](docs/operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)).
+
 ## Architecture
 
 A four-tier system:
