@@ -115,7 +115,8 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    script-docs-check semver-floor-sources-check template-library-check
+                    script-docs-check semver-floor-sources-check template-library-check \
+                    md-reflow-check
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
 .PHONY: check
@@ -1111,11 +1112,11 @@ ginkgo: $(GINKGO) ## Build ginkgo into .build/
 
 # Sentence-per-line prose formatting. Configured by .mdreflow.yaml at the repo
 # root; mdreflow always excludes vendor/, so the tracked vendored Markdown is
-# untouched. md-reflow-check is deliberately NOT in CHECK_FAST_GATES, and the
-# tree is NOT reflowed yet: mdreflow v0.1.3 silently skips any paragraph whose
-# `(...)` or `[...]` spans a source line break, which leaves ~5,900 lines across
-# 189 files at the old wrap and reports them clean. Q746 adopts the convention
-# once that is fixed; measurement and repro in documentation-standards.md.
+# untouched. md-reflow-check runs in CHECK_FAST_GATES (~1s for the tree) because
+# an unenforced wrap convention decays on the next hand-wrapped paragraph.
+# It converts ~82% of prose: a paragraph carrying both a bracket and a paren
+# spanning a line break is skipped by design, since a link reference definition
+# can span one. See documentation-standards.md for what that leaves.
 .PHONY: md-reflow
 md-reflow: $(MDREFLOW) ## Reflow tracked Markdown prose to one sentence per line
 	$(MDREFLOW) .
