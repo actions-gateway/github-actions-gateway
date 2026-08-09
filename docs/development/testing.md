@@ -1467,6 +1467,20 @@ make e2e-clean          # tear down when done
 
 For iterating against a single spec without re-creating the cluster, see [kind-iteration.md](kind-iteration.md). It also covers pointing AGC at fakegithub vs. real GitHub via the `AGC_EXTRA_*` env vars and using `E2E_SKIP_TEARDOWN=true` to keep state between runs.
 
+### Questions about spec selection are answerable without a cluster
+
+`ginkgo run --dry-run` walks the spec tree and reports what *would* run, executing no node: no `BeforeSuite`, no cluster, no images. It still compiles the suite under the `e2e` tag and still applies `--focus`, `--label-filter`, `--fail-on-empty` and the rest, so anything whose answer is "which specs does this select, and what does the suite do about it" is a seconds-long question rather than a tier:
+
+```bash
+make ginkgo
+(cd cmd/gmc && ../../.build/ginkgo run --tags e2e --dry-run --fail-on-empty \
+    --focus 'E2E_GMC_ProxyServiceCreated' ./test/e2e/...)
+```
+
+Measured 2026-08-08 while wiring `RUN=` onto `make e2e` (Q679): a real spec name gave `Ran 1 of 74 Specs` / `SUCCESS!` and exit 0, a nonsense one gave `Ran 0 of 74 Specs` / `FAIL! - Detected no specs ran and --fail-on-empty is set` and exit 1, in 13 seconds total. That settled both directions of a filter's behaviour against the actual suite, ahead of CI, with no cluster standing.
+
+Reach for it whenever the claim under test is about **selection** rather than behaviour: a filter that should match nothing, a label expression, a new `SUITE` mapping, whether an `Ordered` container's specs are reachable at all. It proves nothing about whether a spec *passes*, since no node runs, so it is a complement to the tier and never a substitute.
+
 ### `Ordered` containers run whole, in one process — which is why a suite can hold package state
 
 Every e2e suite is an `Ordered` container, and several assign the package-level
