@@ -47,7 +47,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `feature` | ✅ |
 | [Capacity-aware job intake](plan/capacity-aware-intake.md) | `feature` | ✅ |
 | [Markdown gates on a real parser](plan/markdown-gates-parser.md) | `milestone` `ci` `debt` | ✅ |
-| [Release 1.4](plan/release-1.4.md) | `milestone` | ✅ |
+| [Release 1.4](plan/release-1.4.md) | `milestone` | ⚠️ |
 
 ---
 
