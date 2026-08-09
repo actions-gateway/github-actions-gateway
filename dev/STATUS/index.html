@@ -2827,14 +2827,6 @@
 <td>Seen 3/6 <code>make check</code> runs 2026-08-08 under Q733, 0/4 under <code>make scripts-test</code> alone, 0/5 standalone: it needs full-check contention. The tree case waits 100×<code>sleep 0.1</code> for a <code>.launch</code> record. Q642/Q690's shape: bounds startup, not the subject.</td>
 </tr>
 <tr>
-<td><a id="Q747"></a>Q747</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/isolation_test.go">e2e cross-tenant NetworkPolicy probe intermittently connects instead of being blocked</a></td>
-<td><code>flake</code> <code>tests</code> <code>security</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Failed on 9480f29b, passed unchanged on 7a531dff (#1344). The curl pod ended Succeeded with HTTP_CODE=400, so it reached the nsB proxy rather than timing out, and the spec's own gate pod had already observed enforcement live. Mechanism unverified.</td>
-</tr>
-<tr>
 <td><a id="Q703"></a>Q703</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">Gates die mid-run under <code>run-parallel</code>, pass standalone</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -3768,6 +3760,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q747"></a>Q747</td>
+<td><a href="../plan/q300-gmc-kindnet-e2e-flake/#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">e2e cross-tenant NetworkPolicy probe intermittently connects instead of being blocked</a></td>
+<td><code>flake</code> <code>tests</code> <code>security</code></td>
+<td>S</td>
+<td><strong>Event:</strong> it fails on <code>main</code> with the CNI enforcer fingerprint <em>unchanged</em> across the probe, which the failure message states outright: a real isolation regression, not Q747's dead-enforcer lane artifact. → top of Queue, escalated.</td>
+</tr>
 <tr>
 <td><a id="Q690"></a>Q690</td>
 <td><a href="../development/testing/#two-clocks-in-one-assertion"><code>release-sentinel-test</code>'s live-run case fails under <code>make check</code>, passes standalone</a></td>

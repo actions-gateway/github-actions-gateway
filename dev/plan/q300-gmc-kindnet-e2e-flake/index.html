@@ -2600,6 +2600,12 @@ points at the same spec from the opposite direction — enforcement flapping
 rather than leaking open — and turned up a test-harness defect that hides the
 probe's own diagnostic. See
 <a href="#2026-08-03-a-second-crosstenant-occurrence-and-what-its-phase-implies">2026-08-03</a>.</p>
+<p>The third occurrence (2026-08-08, Q747) <strong>is</strong> attributed, from the upgraded
+dump plus a local reproduction, and it is a fourth mechanism rather than any of
+the three hypotheses below: kindnetd crash-looped on the node hosting every pod
+in the spec, and kindnet's <code>queue flags bypass</code> rules accept every packet while
+nothing is bound to the nfqueue. See
+<a href="#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">2026-08-08</a>.</p>
 <h2 id="post-612-soak-triage-corrected-2026-07-19">Post-#612 soak triage (corrected 2026-07-19)<a class="headerlink" href="#post-612-soak-triage-corrected-2026-07-19" title="Permanent link">&para;</a></h2>
 <h1 id="612-merged-2026-07-13-of-26-main-kindnet-runs-through-2026-07-19-three">612 merged 2026-07-13. Of ~26 <code>main</code> kindnet runs through 2026-07-19, three<a class="headerlink" href="#612-merged-2026-07-13-of-26-main-kindnet-runs-through-2026-07-19-three" title="Permanent link">&para;</a></h1>
 <p>were red (down from 3 of 5 pre-fix). All three dumps show kindnetd
@@ -2956,6 +2962,147 @@ of on the probe's own verdict. The failure then reports a bare phase rather than
 the probe's log, which is why this run needed arithmetic to attribute at all.
 The window and the loop budget should be derived from one another, against the
 blocked-iteration cost rather than the connected one.</p>
+<h2 id="2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">2026-08-08 (Q747): the enforcer was not starved, it was absent<a class="headerlink" href="#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31272058691">Run 31272058691</a>
+on <code>main</code> at <code>9480f29b</code>. Third <code>CrossTenantNetworkBlocked</code> occurrence, same
+shape as 2026-07-15: the gate pod observed enforcement on attempts 1, 2 and 3
+(never once allowed), then the asserting curl pod completed with
+<code>HTTP_CODE=400</code>. It passed unchanged on <code>7a531dff</code>.</p>
+<p>This one is attributable, and the answer is <strong>none of the three hypotheses
+above</strong>. It is a fourth mechanism, and the failure dump already carried it.</p>
+<h3 id="evidence-all-from-the-runs-own-artifact">Evidence, all from the run's own artifact<a class="headerlink" href="#evidence-all-from-the-runs-own-artifact" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kindnet-jmxsm</code> (node <code>actions-gateway-e2e-worker2</code>)</td>
+<td><code>RESTARTS 3 (5m28s ago)</code>; dump ran ≈18:45:01, so the last restart was ≈18:39:33</td>
+</tr>
+<tr>
+<td>kube-system events</td>
+<td><code>BackOff restarting failed container kindnet-cni in pod kindnet-jmxsm</code> at T-5m27s (≈18:39:33); <code>Created</code> T-5m3s (≈18:39:57); <code>Started</code> T-5m2s (≈18:39:58)</td>
+</tr>
+<tr>
+<td><code>cross-tenant-probe</code> (the asserting curl)</td>
+<td>Start Time <strong>18:39:40</strong>, node <code>actions-gateway-e2e-worker2</code></td>
+</tr>
+<tr>
+<td><code>cross-tenant-gate</code></td>
+<td>Start Time 18:38:54, same node, so it ran <em>before</em> the crash</td>
+</tr>
+<tr>
+<td>nsB <code>actions-gateway-proxy-d756c4f8f-h7mhm</code></td>
+<td>18:38:47, same node. All three pods co-located</td>
+</tr>
+<tr>
+<td>kindnetd's current-container log on worker2</td>
+<td>first line <strong>18:39:59</strong></td>
+</tr>
+<tr>
+<td><code>nfnetlink_queue</code> (all three nodes)</td>
+<td><code>queue_dropped 0</code>, <code>user_dropped 0</code></td>
+</tr>
+<tr>
+<td><code>cpu.stat</code> (all three nodes)</td>
+<td><code>nr_periods 0</code>, so the #612 unthrottle is in effect; this is not CPU starvation</td>
+</tr>
+<tr>
+<td><code>memory.events</code></td>
+<td><code>max 3733</code> (worker2), <code>max 609</code> (worker), with <code>memory.current</code> 47.4 MiB and 49.0 MiB against the <code>50Mi</code> limit</td>
+</tr>
+</tbody>
+</table>
+<p>The asserting curl ran <strong>inside a ~25 s window in which no kindnetd process was
+running on that node at all</strong>. kindnetd hardcodes <code>FailOpen: true</code>, which puts
+<code>queue flags bypass</code> on its nftables rules: with nothing bound to nfqueue 101
+the kernel skips the queue rule and the chain's <code>policy accept</code> takes every
+packet. NetworkPolicy was not being enforced on worker2, for any namespace, for
+that window.</p>
+<p>So the spec's observation was <em>correct</em>: the connection really was not blocked.
+The cause is the lane's enforcer being dead, not the GMC's policy. The
+policy objects were present and unchanged, and the same source namespace was
+demonstrably blocked from reaching the same destination pod 40 s earlier.</p>
+<p><code>HTTP_CODE=400</code> also identifies the responder rather than merely implying it:
+the proxy serves its CONNECT listener with <code>ServeTLS</code>
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go"><code>cmd/proxy/proxy.go</code></a>), and Go's TLS server answers
+a plaintext request with <code>400 Bad Request: Client sent an HTTP request to an
+HTTPS server</code>. A plaintext listener would have returned <strong>405</strong> (the
+non-CONNECT branch of the same file). The connection reached nsB's proxy.</p>
+<h3 id="hypotheses-1-and-2-are-ruled-out-for-this-occurrence">Hypotheses 1 and 2 are ruled out for this occurrence<a class="headerlink" href="#hypotheses-1-and-2-are-ruled-out-for-this-occurrence" title="Permanent link">&para;</a></h3>
+<p>Hypothesis 1 (nfqueue overflow) needs a <em>running</em> agent whose queue overflows;
+hypothesis 2 (stale IP→pod mapping) needs a running agent to emit a verdict at
+all. No agent was running.</p>
+<p><strong>Correction to hypothesis 1's supporting claim.</strong> It says the
+<code>queue_dropped</code>/<code>user_dropped</code> counters are "cumulative since boot, so overflow
+evidence survives even a late dump". They are not: they belong to the nfqueue
+<em>instance</em>, which is destroyed when the agent unbinds and recreated when it
+rebinds. Measured locally: after killing kindnetd, the same queue reappeared
+with a new <code>peer_portid</code> and <code>id_sequence</code> reset to 7. With 3-4 restarts on
+these nodes, the zeros in this dump describe only the window since 18:39:58.</p>
+<h3 id="reproduced-deterministically">Reproduced deterministically<a class="headerlink" href="#reproduced-deterministically" title="Permanent link">&para;</a></h3>
+<p>kind v0.32.0, <code>kindest/node:v1.35.5</code>, kindnetd <code>v20260528-9350166c</code>, two
+workers, with a mirror of <code>buildProxyNetworkPolicy</code>'s ingress half (default-deny
+ingress to <code>app=actions-gateway-proxy</code>, admitting only same-namespace
+<code>actions-gateway/component: workload</code> on the proxy port):</p>
+<table>
+<thead>
+<tr>
+<th>Enforcer</th>
+<th>Cross-tenant connections</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>kindnetd running</td>
+<td><strong>0 allowed of 38</strong> consecutive attempts (each paying the full 3 s connect timeout)</td>
+</tr>
+<tr>
+<td><code>pkill -KILL kindnetd</code> on the node hosting both pods</td>
+<td><strong>664 allowed in ~1.0 s</strong> (07:13:13.76 → 07:13:14.76), ending when the container restarted</td>
+</tr>
+<tr>
+<td>after the restart</td>
+<td>blocked again</td>
+</tr>
+</tbody>
+</table>
+<p>Window forced open → red; closed → green. Forty rounds of NetworkPolicy churn
+in unrelated namespaces against a live enforcer produced <strong>zero</strong> leaks, which
+is the negative control: policy-set churn alone does not open the window.</p>
+<h3 id="fix_1">Fix<a class="headerlink" href="#fix_1" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong><code>tune_kindnet_limits</code> now raises the memory limit too</strong>
+   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>kind-with-registry.sh</code></a>),
+   default <code>256Mi</code> via <code>KINDNET_MEMORY_LIMIT</code>. #612 deliberately left the
+   <code>50Mi</code> limit alone on the grounds that "no OOM was ever observed"; this run
+   refutes that reading. Note the honest limit of this step: the crash-loop is
+   <em>measured</em>, and memory pressure at the ceiling is the leading cause of it,
+   but the terminating reason itself was never captured, which is why (2)
+   exists.</li>
+<li><strong>The dump now captures why the enforcer died</strong>, not just that it did:
+   <code>lastState.terminated.{reason,exitCode,finishedAt}</code> per enforcer pod, plus
+   previous-container logs, in
+   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a> and in
+   <code>DumpCNIEnforcerState</code>
+   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/cni_enforcer.go"><code>cmd/gmc/test/utils/cni_enforcer.go</code></a>).
+   The next occurrence names its own cause.</li>
+<li><strong>The spec discriminates instead of guessing.</strong>
+   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/isolation_test.go"><code>isolation_test.go</code></a> fingerprints
+   the enforcer pods (name/restartCount/startedAt) around its probe. An allow
+   observed across a changed fingerprint is discarded and re-measured; an allow
+   observed with the fingerprint <em>unchanged</em> fails immediately and says in the
+   message that no restart explains it. That is the distinction the row could
+   not make: lane artifact versus isolation regression.</li>
+</ol>
+<p>Deliberately not done: merging the gate and asserting pods into one pod to
+shrink the 40 s scheduling gap between them. The fingerprint check already
+makes that gap harmless, and folding two pods into one conflates their exit
+codes.</p>
 <h2 id="recurrence-guard">Recurrence guard<a class="headerlink" href="#recurrence-guard" title="Permanent link">&para;</a></h2>
 <p>Same rule as Q291: this reproduces only under CI load, so <strong>one green run
 proves nothing</strong>. The row sits in Flake watch; on the next red kindnet run on
