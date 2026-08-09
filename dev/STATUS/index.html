@@ -2902,6 +2902,62 @@
 <td>Decided 2026-08-08: a main fix never rides in an unrelated PR. Search for a standalone fix; wait and rebase if one is open, own it if none is. The claim is a draft PR, which the Q668 hook reads. Measured: 4 sessions fixed one overrun; 2 collided.</td>
 </tr>
 <tr>
+<td><a id="Q754"></a>Q754</td>
+<td><a href="../design/appendix-d-alternatives-considered/#d9-forgemt-and-account-per-tenant-runner-platforms">D.9 and alternatives.md call account-per-tenant ForgeMT's model, which its own docs do not</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Its boundary is IAM/OIDC role scope, labels, and GitHub App scope, with the account layout left to the operator and an EC2 lane for VM isolation. The disagreement is real; re-derive both trade-off bullets from it, and re-date the star count.</td>
+</tr>
+<tr>
+<td><a id="Q760"></a>Q760</td>
+<td><a href="../plan/gpu-and-accelerated-ci/">The GPU plan calls AMD the same shape of problem as TPUs and Gaudi; the cost model disagrees</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>AMD has no gVisor support and no Kata path (Kata's kernel build rejects the vendor), so isolated AMD CI means VM-per-job via VFIO: a different product shape, not a bigger one. Appendix F sells its memory-per-dollar without that caveat.</td>
+</tr>
+<tr>
+<td><a id="Q755"></a>Q755</td>
+<td><a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">D.3 reads as though ARC cannot express scheduling priority at all, and its template can</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>AutoscalingRunnerSetSpec.Template</code> is a full PodTemplateSpec, so <code>priorityClassName</code> is settable per scale set. The real gaps are sharper: ordering yes, reserved floor no (needs per-index variation), shared ceiling no.</td>
+</tr>
+<tr>
+<td><a id="Q756"></a>Q756</td>
+<td><a href="../design/appendix-b-worker-isolation/#b2-operational-cost">Appendix B's overhead figures are unscoped, and the CI-relevant cost is a configuration question</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Kata's <code>+1-3s</code> is a QEMU number (Firecracker boots in ~125ms); the gVisor memory and startup figures are uncited. Add prose, not a table row: no rigorous current head-to-head exists, and devmapper vs virtio-fs swings more than the runtime does.</td>
+</tr>
+<tr>
+<td><a id="Q758"></a>Q758</td>
+<td><a href="../design/appendix-b-worker-isolation/#b2-operational-cost">The AWS nested-virt framing predates EC2 shipping it on virtual instances</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>AWS launched it on virtual instances 2026-02-16 (C7i/C8i, M7i/M8i, R7i/R8i, X8i, I7i and flex variants), so "requires bare metal" is stale in B.2 and in kata-dind-workloads.md. No P or G family is on the list, so the GPU argument is unaffected.</td>
+</tr>
+<tr>
+<td><a id="Q757"></a>Q757</td>
+<td><a href="../design/appendix-d-alternatives-considered/#d5-kueue-and-kubernetes-job-queue--quota-managers">D.5 attributes a cluster-admin install requirement to Kueue that Kueue does not document</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The conclusion holds; the sourcing does not. Claim the checkable thing: the chart ships CRDs, ClusterRoles and bindings, admission webhook configurations, and APIServices, so installing it needs cluster-scoped permissions.</td>
+</tr>
+<tr>
+<td><a id="Q759"></a>Q759</td>
+<td><a href="../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8's capacity-signal gating principle reaches no surface outside Appendix D</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Safe to gate on only if no other actor waits on that signal to make capacity appear: it generalises to any admission controller above an autoscaler. Evaluate promoting to why-gag.md or the under-claims list; keep the table.</td>
+</tr>
+<tr>
 <td><a id="Q408"></a>Q408</td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code></td>
