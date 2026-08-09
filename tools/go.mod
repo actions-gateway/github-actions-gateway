@@ -5,7 +5,7 @@ go 1.26.5
 require (
 	github.com/elastic/crd-ref-docs v0.3.0
 	github.com/golangci/golangci-lint/v2 v2.12.2
-	github.com/jbeda/mdreflow v0.1.4
+	github.com/jbeda/mdreflow v0.1.5-0.20260809044140-466988ba6630
 	github.com/rhysd/actionlint v1.7.12
 	golang.org/x/vuln v1.3.0
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.24.1
