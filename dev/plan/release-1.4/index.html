@@ -2765,10 +2765,10 @@ day they stay up is a day a prospect can check one and stop trusting the page:</
   has since been rewritten. <strong>Corrected 2026-08-06.</strong></li>
 <li>Two ARC-side comparison rows went false at datable upstream releases: 0.13.1
   made quota-blocked pod creation self-healing, and 0.14.0 added multi-label
-  scale sets, which GAG does not have. <strong>Open.</strong></li>
+  scale sets, which GAG does not have. <strong>Corrected 2026-08-08.</strong></li>
 <li><code>why-gag.md</code> states ARC ships no bundled dashboard; it ships a per-scale-set
   Grafana sample. The defensible claim is that nothing aggregates across scale
-  sets or per tenant. <strong>Open.</strong></li>
+  sets or per tenant. <strong>Corrected 2026-08-08.</strong></li>
 </ul>
 <p><strong><code>docs/features.md</code> is the inventory and needs a sweep.</strong> It was created
 2026-08-01 and is close to complete, but 1.4 adds six user-facing features ahead
@@ -2778,7 +2778,21 @@ reaches the curated surfaces either.</p>
 pass: no-PEM workload identity gets a single line in <code>features.md</code> and a
 nine-word aside inside a YAML footnote, while the weaker claim ("App keys never
 in env") occupies a security pillar. ARC reads the App private key from a
-Secret, so "the key never enters the cluster" is a row that writes itself.</p>
+Secret, so "the key never enters the cluster" is a row that writes itself.
+<strong>Shipped 2026-08-09:</strong> <code>why-gag.md</code> gains a credential row in the ARC table,
+and the security pillar carries the stronger claim under the weaker one.</p>
+<p>The row is narrower than the paragraph above assumed, and the difference is the
+whole point of measuring before writing a comparative claim. ARC's <em>default</em>
+does read the key from a Secret, and copies it into the listener config Secret
+the controller generates, so the PEM is at rest twice. But 0.14.2 also ships an
+opt-in Azure Key Vault path in the released chart, and there nothing holds the
+key in etcd: the listener fetches the value itself at runtime, against an Azure
+client certificate read from a path in its pod. So the defensible line is that
+under <code>workloadIdentity</code> no App key exists in the cluster in any form, not that
+ARC cannot keep one out of etcd. Measured 2026-08-09 against the 0.14.2 chart
+(<code>values.yaml</code>, <code>templates/autoscalingrunnerset.yaml</code>, the <code>AutoscalingRunnerSet</code>
+types) and <code>master</code> (<code>vault/vault.go</code>, <code>vault/azurekeyvault/</code>,
+<code>appconfig.FromSecret</code>, <code>ResourceBuilder.newScaleSetListenerConfig</code>).</p>
 <p>The rest of the reconciliation, including whether the comparison table keeps its
 verdict-table shape, is <a href="../release-1.5/#in-scope-reconcile-the-marketing-surfaces">1.5 scope</a>.
 The recurring form is <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>.</p>

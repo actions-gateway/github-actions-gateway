@@ -2996,6 +2996,11 @@ is what surrounds that shared core.</p>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>provisioned per-tenant pool, <a href="../design/network-architecture/#per-tenant-egress-ip-the-source-ip-mechanism">live-validated on GKE</a></strong><br><span class="gag-cont">2026-07-13: one distinct, stable per-tenant NAT IP. A stable source IP needs Cilium Egress Gateway or cloud NAT beneath the pool, both specified <span class="gag-v2-badge">v2</span></span></td>
 </tr>
 <tr>
+<td>GitHub App private key kept out of the cluster</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>the listener reads the key either way</strong><br><span class="gag-cont">the PEM sits in <code>githubConfigSecret</code> and is copied into the generated listener config Secret too; opt-in Azure Key Vault keeps it out of etcd, but the listener still fetches the key itself</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <strong>opt-in <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model"><code>workloadIdentity</code></a></strong><br><span class="gag-cont">an external signer signs the App JWT, so no App key exists in the cluster in any form. Its default <code>githubApp</code> member is the same in-cluster PEM as ARC's</span></td>
+</tr>
+<tr>
 <td>Listener footprint at rest</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> one always-on listener pod per scale set, each holding a pod IP<br><span class="gag-cont">they run in the controller's namespace, so the cost lands on platform pod density rather than the tenant's quota</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> 1 shared pod, ~12 KiB per listener session</td>
@@ -3033,8 +3038,9 @@ which is where new tenants start.</p>
 <div class="admonition note">
 <p class="admonition-title">When the ARC column was measured, and why that matters</p>
 <p><strong>Measured against ARC <code>gha-runner-scale-set</code> 0.14.2 (released 2026-05-22)
-and the <code>master</code> branch, on 2026-08-06</strong>, by reading the controller source,
-the chart values, and the release notes rather than the documentation.</p>
+and the <code>master</code> branch, on 2026-08-06, and the credential row on
+2026-08-09</strong>, by reading the controller source, the chart values, and the
+release notes rather than the documentation.</p>
 <p>ARC moves, and an undated comparison rots into a false one. Two rows here
 changed at datable releases: 0.13.1 (2025-12-23) changed how a quota-blocked
 pod creation is retried, and 0.14.0 (2026-03-19) added multi-label scale
@@ -3096,6 +3102,7 @@ ships as reconciled defaults, not a post-install project.</p>
 <li><code>baseline</code> Pod Security Admission per namespace</li>
 <li>Default-deny network: DNS + own proxy only</li>
 <li>App keys read-only; never in env, never cached</li>
+<li>Or opt in to <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">no App key in the cluster at all</a></li>
 <li>Controller writes confined to tenant namespaces</li>
 </ul>
 </li>
