@@ -191,6 +191,25 @@ worker-capacity gauges. The abandoned-run re-run was considered and rejected for
 the bar: it is classic-tier only, and a banner is the wrong place for a scope
 qualifier.
 
+### The caveat the curated notes must carry
+
+**Q683 and Q691 are classic-tier only, and 1.4 is where that first matters.**
+The tier scope was recorded in
+[04-operational-flows.md](../design/04-operational-flows.md) when the work
+landed and reached no operator surface, so a `v2beta1` tenant reading this
+release would reasonably expect a one-second cancel and an automatic re-run that
+their tier does not perform. `upgrade.md` now carries it as a non-breaking
+migration note, which is also what makes
+`scripts/release/operator-caveats-since.sh` surface it: that script reads the
+`docs/operations/` diff, so a scope that is merely *documented elsewhere* never
+reaches the notes.
+
+Carry it into the curated body per
+[release.md § 5](../operations/release.md#5-cut-the-github-release). The port is
+[Q766](../STATUS.md#Q766), labelled `2.0-gate` because
+[Q264](../STATUS.md#Q264)'s removal of classic acquisition would otherwise
+delete the capability outright rather than migrate it.
+
 ## Pre-flight: the API surface this tag publishes
 
 Recorded 2026-08-09 from `scripts/release/api-surface-since.sh` over

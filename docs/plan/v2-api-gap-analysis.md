@@ -2,9 +2,22 @@
 
 **Type:** ⓘ Review / evidence record. **Date:** 2026-07-14.
 **Status (2026-08-09):** every gap recorded below has since shipped, and the last
-v2 API milestone (M4 cross-namespace sharing, Q166) landed 2026-08-08. v1 to v2
-functional parity is closed; the one v1 capability v2 does not have is
-multi-label runner sets ([Q726](../STATUS.md#Q726)), which `v2beta1` CEL-rejects.
+v2 API milestone (M4 cross-namespace sharing, Q166) landed 2026-08-08. The audit's
+own scope is therefore closed. Two capability drops survive it, both tracked, and
+both become permanent at `v2.0.0` when [Q264](../STATUS.md#Q264) removes classic
+acquisition and `v2alpha1`:
+
+- **Multi-label runner sets** ([Q726](../STATUS.md#Q726)). `v1alpha1` sets
+  `MinItems=1` with no ceiling; `v2beta1` CEL-enforces `size(self) == 1` because
+  the single label doubles as the scale-set name. Deliberate, and the field's
+  godoc offers a migration path (stay on a `v2alpha1` Classic RunnerSet), but
+  that path expires with `v2alpha1`.
+- **The abandoned-run force-cancel and auto re-run** ([Q766](../STATUS.md#Q766)).
+  Postdates this audit: Q683 and Q691 shipped in August wired only into the
+  classic `provision()` path, and `v2beta1` is ScaleSet-only.
+
+Both are the shape [04-operational-flows.md](../design/04-operational-flows.md)
+calls a silent capability deletion, the one Q417 and Q443 were ported to avoid.
 The doc is kept as the evidence record and, above all, as the list of
 [intentional differences](#intentional-differences--verified-no-action) so future
 audits do not re-litigate them.

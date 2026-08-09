@@ -32,7 +32,7 @@ Measured against ARC `gha-runner-scale-set` 0.14.2 (released 2026-05-22) and the
 
 | Gap | Why it blocks a migration | Row | Release |
 |---|---|---|---|
-| **Multi-label scale sets**, ARC 0.14.0 (2026-03-19) | A workflow using `runs-on: [linux, gpu]` needs one edit per target. GAG admits exactly one label per runner set, CEL-rejected above one in `v2beta1`. This is the only gap that breaks the zero-edit migration claim | [Q726](../STATUS.md#Q726) | 1.5 |
+| **Multi-label scale sets**, ARC 0.14.0 (2026-03-19) | A workflow using `runs-on: [linux, gpu]` needs one edit per target. GAG admits exactly one label per runner set, CEL-rejected above one in `v2beta1`. This is the only gap that breaks the zero-edit migration claim, and it is also a v1 to v2 drop: `v1alpha1` set no ceiling, and the godoc's workaround of staying on a `v2alpha1` Classic set expires when `v2.0.0` removes it | [Q726](../STATUS.md#Q726) | 1.5 |
 | **Bound GitHub runner group** (`runnerGroup`) | The forge-side control over which repositories may target a runner set. GAG declares the binding and never wires it, so every scale set registers into the installation's default group | [Q712](../STATUS.md#Q712) | 1.5, gating |
 | **`containerMode: kubernetes`** | Runs `container:` and `services:` steps as separate pods on a provisioned volume. GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model | [Q727](../STATUS.md#Q727) | after 1.5 |
 | **GHES validated on a real appliance** | GAG serves GitHub Enterprise Server (GHES) gateways and marks both of its GHES capabilities untested against real hardware, so an enterprise evaluator has no evidence either way | [Q765](../STATUS.md#Q765) | unscheduled, needs an appliance |
