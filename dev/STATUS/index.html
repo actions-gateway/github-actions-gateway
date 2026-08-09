@@ -2796,6 +2796,11 @@
 <td><code>milestone</code> <code>ci</code> <code>debt</code></td>
 <td>✅</td>
 </tr>
+<tr>
+<td><a href="../plan/release-1.4/">Release 1.4</a></td>
+<td><code>milestone</code></td>
+<td>⚠️</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -2835,7 +2840,7 @@
 <td><code>flake</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Trigger fired 2026-08-08: <code>claude-go-throttle-hook-test</code> failed under <code>run-parallel</code> (exit 1, empty hook output: <code>got decision= reason=</code>), passed standalone. First occurrence carrying the exit status Q703's own fix added.</td>
+<td>Trigger fired 2026-08-08 twice: <code>claude-go-throttle-hook-test</code> (exit 1, empty hook output) and <code>record-launch-test</code> (died after 6 assertions), both passing standalone. The second carries Q733's errexit prologue, so that fix does not close it.</td>
 </tr>
 <tr>
 <td><a id="Q741"></a>Q741</td>
