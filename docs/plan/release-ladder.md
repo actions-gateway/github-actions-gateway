@@ -23,29 +23,34 @@ waiting on demand, a prerequisite, or hardware nobody has.
 |---|---|---|
 | **1.4** | Shipped scope: cross-namespace proxy sharing, the runner template library, v2 capacity gauges, the v1alpha1 apiserver warning, and the abandoned-run recovery | [release-1.4.md](release-1.4.md) |
 | **1.5** | [Q712](../STATUS.md#Q712) runner-group binding, [Q713](../STATUS.md#Q713) default-tier latency series, [Q726](../STATUS.md#Q726) multi-label runner sets, plus the marketing reconciliation | [release-1.5.md](release-1.5.md) |
-| **1.6** | The pre-GA parity work: [Q766](../STATUS.md#Q766) ScaleSet abandoned-run recovery, [Q719](../STATUS.md#Q719) RWX storage validation, [Q727](../STATUS.md#Q727) the non-privileged `container:` path | release-1.6.md, written when 1.5 tags |
+| **1.6** | The ARC-parity ports: [Q719](../STATUS.md#Q719) RWX storage validation, then [Q727](../STATUS.md#Q727) the non-privileged `container:` path | release-1.6.md, written when 1.5 tags |
 | **2.0** | v2 GA graduation and the three coupled removals: `v1alpha1`, `v2alpha1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
 
 ## Why 1.6 exists rather than folding into 1.5
 
-Two capability drops become **permanent** at `v2.0.0`, because the release that
-removes classic acquisition and `v2alpha1` also removes the escape hatches:
+**Revised 2026-08-09.** This section originally rested on two capability drops
+that go permanent at `v2.0.0`, and one of them closed while the page was being
+written: [Q766](arc-parity.md) ported the abandoned-run recovery to the ScaleSet
+tier inside 1.4, so it is shipped rather than scheduled. The surviving one is
+[Q726](../STATUS.md#Q726), where `v1alpha1` puts no ceiling on `runnerLabels`
+while `v2beta1` enforces exactly one and the godoc's workaround is to stay on a
+`v2alpha1` Classic set, which `v2.0.0` removes. Q726 is `M` and is admitted to
+1.5, so it needs no release of its own.
 
-- [Q766](../STATUS.md#Q766): the abandoned-run force-cancel and auto re-run are
-  wired only into the classic path, so no `v2beta1` tenant has them, and
-  [Q264](../STATUS.md#Q264) deletes that path.
-- [Q726](../STATUS.md#Q726): `v1alpha1` puts no ceiling on `runnerLabels` while
-  `v2beta1` enforces exactly one, and the field godoc's workaround is to stay on
-  a `v2alpha1` Classic set, which `v2.0.0` removes.
+So 1.6 is not the pre-2.0 repair slot any more. What justifies it is
+[Q719](../STATUS.md#Q719) and [Q727](../STATUS.md#Q727), which are the last two
+[ARC parity](arc-parity.md) gaps and cannot compress into 1.5: Q727 is `L` and
+strictly depends on Q719's `ReadWriteMany` validation, and 1.5 already carries
+three `M` items plus a marketing body of work.
 
-Both must therefore land before 2.0. Q726 is `M` and is admitted to 1.5. Q766 is
-`L`, and 1.5 already carries three `M` items plus a marketing body of work, so
-adding it is how a release slips rather than how it ships.
+The soak argument is unchanged and still favours a separate minor. `v2-ga.md`
+Phase 1 requires no incompatible `v2beta1` shape change across at least two
+minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without
+restarting the clock.
 
-Splitting them is also the safer order for the soak. `v2-ga.md` Phase 1 requires
-no incompatible `v2beta1` shape change across at least two minors of real use;
-1.4 and 1.5 are those two, so 1.6 is a free minor in which to land the parity
-ports without restarting the clock.
+If Q719 and Q727 both slip on demand, 1.6 has no contents and should not be cut.
+That is the honest reading of a ladder whose middle rung exists to carry two
+specific items.
 
 ## What is punted past `v2.0.0`
 
@@ -83,8 +88,13 @@ a trigger list, and every row in it names the event that revives it.
 
 ## What this does not decide
 
-The 1.6 contents above are a target, not a gate. [Q766](../STATUS.md#Q766)
-deliberately keeps its `2.0-gate` label rather than a `1.6-gate` one: 2.0 is the
-hard floor where its absence becomes permanent, so if 1.6 slips the constraint
-still holds. `release-1.6.md` gets written when 1.5 tags, on the same evidence
-the other release plans use.
+The 1.6 contents above are a target, not a gate: neither
+[Q719](../STATUS.md#Q719) nor [Q727](../STATUS.md#Q727) carries a `1.6-gate`
+label yet, and [Q772](../STATUS.md#Q772) is the row that applies them along with
+the rest of the reshape. `release-1.6.md` gets written when 1.5 tags, on the same
+evidence the other release plans use.
+
+The one hard constraint the ladder does encode is [Q726](../STATUS.md#Q726)
+landing before `v2.0.0`, since 2.0 removes the `v2alpha1` escape hatch its godoc
+points at. Its `1.5-gate` label is what enforces that, a release earlier than
+strictly required.

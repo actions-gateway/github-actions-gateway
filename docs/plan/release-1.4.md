@@ -4,8 +4,10 @@
 > `1.4-gate` items shipped 2026-08-08: Q691, Q554 (its
 > [plan](archive/runner-template-library.md) archived), and Q166. Everything else
 > the release contains is already merged. `v1.4.0-rc.1` was cut from `162d97a7`
-> on 2026-08-09 and its dogfood validation **PASSED on the first attempt**, so
-> the line is clear to promote once the curated notes are written.
+> on 2026-08-09 and its dogfood validation **PASSED on the first attempt**.
+> Work landed after that commit (the Q766 ScaleSet port and the docs sweep), so
+> rc.1 is no longer the candidate: **an rc.2 follows once those merge**, and it
+> is the one that has to validate before the stable tag.
 
 ## The minor was forced before anyone chose it
 
@@ -198,24 +200,24 @@ worker-capacity gauges. The abandoned-run re-run was considered and rejected for
 the bar: it is classic-tier only, and a banner is the wrong place for a scope
 qualifier.
 
-### The caveat the curated notes must carry
+### The tier caveat that no longer applies, and why it is recorded anyway
 
-**Q683 and Q691 are classic-tier only, and 1.4 is where that first matters.**
-The tier scope was recorded in
-[04-operational-flows.md](../design/04-operational-flows.md) when the work
-landed and reached no operator surface, so a `v2beta1` tenant reading this
-release would reasonably expect a one-second cancel and an automatic re-run that
-their tier does not perform. `upgrade.md` now carries it as a non-breaking
-migration note, which is also what makes
-`scripts/release/operator-caveats-since.sh` surface it: that script reads the
-`docs/operations/` diff, so a scope that is merely *documented elsewhere* never
-reaches the notes.
+The sweep found Q683 and Q691 wired into the classic path only, with the scope
+recorded in [04-operational-flows.md](../design/04-operational-flows.md) and on
+no operator surface, so a `v2beta1` tenant reading this release would have
+expected a one-second cancel and an automatic re-run their tier did not perform.
+That was drafted as a caveat for the curated notes.
 
-Carry it into the curated body per
-[release.md § 5](../operations/release.md#5-cut-the-github-release). The port is
-[Q766](../STATUS.md#Q766), labelled `2.0-gate` because
-[Q264](../STATUS.md#Q264)'s removal of classic acquisition would otherwise
-delete the capability outright rather than migrate it.
+**It is moot: Q766 ported both to the ScaleSet tier inside this release**, so 1.4
+ships them on both tiers and there is no caveat to carry. The `upgrade.md`
+migration note says so directly.
+
+Worth keeping the trail. The gap existed for a few days and no operator surface
+named it, which is the failure the pre-flight sweep exists to catch, and it was
+caught by reading the code rather than the plan doc. The `upgrade.md` placement
+also turned out to be the load-bearing part: `operator-caveats-since.sh` builds
+the curated notes from the `docs/operations/` diff, so a tier scope documented
+only in a design doc never reaches them either way.
 
 ## Pre-flight: the API surface this tag publishes
 

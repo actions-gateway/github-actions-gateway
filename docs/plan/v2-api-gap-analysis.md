@@ -3,21 +3,23 @@
 **Type:** ⓘ Review / evidence record. **Date:** 2026-07-14.
 **Status (2026-08-09):** every gap recorded below has since shipped, and the last
 v2 API milestone (M4 cross-namespace sharing, Q166) landed 2026-08-08. The audit's
-own scope is therefore closed. Two capability drops survive it, both tracked, and
-both become permanent at `v2.0.0` when [Q264](../STATUS.md#Q264) removes classic
-acquisition and `v2alpha1`:
+own scope is therefore closed. One capability drop survives it:
 
 - **Multi-label runner sets** ([Q726](../STATUS.md#Q726)). `v1alpha1` sets
   `MinItems=1` with no ceiling; `v2beta1` CEL-enforces `size(self) == 1` because
   the single label doubles as the scale-set name. Deliberate, and the field's
   godoc offers a migration path (stay on a `v2alpha1` Classic RunnerSet), but
-  that path expires with `v2alpha1`.
-- **The abandoned-run force-cancel and auto re-run** ([Q766](../STATUS.md#Q766)).
-  Postdates this audit: Q683 and Q691 shipped in August wired only into the
-  classic `provision()` path, and `v2beta1` is ScaleSet-only.
+  that path expires with `v2alpha1` at `v2.0.0`
+  ([Q264](../STATUS.md#Q264)), which is what makes it permanent.
 
-Both are the shape [04-operational-flows.md](../design/04-operational-flows.md)
-calls a silent capability deletion, the one Q417 and Q443 were ported to avoid.
+A second one opened and closed inside the same release. Q683 and Q691 shipped in
+August wired only into the classic `provision()` path, and `v2beta1` is
+ScaleSet-only, so for a few days `v2` tenants had neither; Q766 ported both and
+1.4 ships them on both tiers. It is worth recording because it is the shape
+[04-operational-flows.md](../design/04-operational-flows.md) calls a silent
+capability deletion, the one Q417 and Q443 were ported to avoid, and it reappeared
+without anyone deciding to reopen it.
+
 The doc is kept as the evidence record and, above all, as the list of
 [intentional differences](#intentional-differences--verified-no-action) so future
 audits do not re-litigate them.
