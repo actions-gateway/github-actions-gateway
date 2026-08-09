@@ -71,7 +71,14 @@ existing per-run retry budget, with exhaustion on
 `eviction_retries_exhausted_total{cause="abandoned"}` and expiry on
 `abandoned_run_rerun_waits_total{outcome="expired"}`.
 
-## Deferred to 1.5.0, and why
+## Deferred out of 1.4, and why
+
+> **Corrected 2026-08-09.** This section was headed "Deferred to 1.5.0", which
+> promised a release none of these rows was ever labelled for. The proxy cluster
+> in particular is demand-gated, as the paragraph below says in its own words, so
+> it is parked rather than scheduled. The ladder is
+> [release-ladder.md](release-ladder.md); the reshape is
+> [Q772](../STATUS.md#Q772).
 
 **The proxy hardening cluster stays together**:
 [Q564](../STATUS.md#Q564) audit logging, [Q565](../STATUS.md#Q565) per-tenant rate
