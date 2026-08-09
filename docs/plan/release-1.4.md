@@ -3,8 +3,9 @@
 > **Status: scope decided 2026-08-05. No gating Queue rows remain.** All three
 > `1.4-gate` items shipped 2026-08-08: Q691, Q554 (its
 > [plan](archive/runner-template-library.md) archived), and Q166. Everything else
-> the release contains is already merged, so the cut now needs its release
-> candidate and dogfood validation.
+> the release contains is already merged. `v1.4.0-rc.1` was cut from `162d97a7`
+> on 2026-08-09 and its dogfood validation **PASSED on the first attempt**, so
+> the line is clear to promote once the curated notes are written.
 
 ## The minor was forced before anyone chose it
 
@@ -147,6 +148,96 @@ types) and `master` (`vault/vault.go`, `vault/azurekeyvault/`,
 The rest of the reconciliation, including whether the comparison table keeps its
 verdict-table shape, is [1.5 scope](release-1.5.md#in-scope-reconcile-the-marketing-surfaces).
 The recurring form is [release.md § Pre-flight](../operations/release.md#1-pre-flight).
+
+## Pre-flight: the API surface this tag publishes
+
+Recorded 2026-08-09 from `scripts/release/api-surface-since.sh` over
+`v1.3.0..162d97a7`, the commit `v1.4.0-rc.1` was cut from, per
+[release.md § Pre-flight](../operations/release.md#1-pre-flight). **Verdict:
+ship as-is.** Four wire fields and one condition reason are published for the
+first time; no enum constraint and no default changed.
+
+| Addition | Carried on | Why the shape is right |
+|---|---|---|
+| `allowedInfraPriorityClasses` (Q298) | `PriorityClassAllowlist` | Unset or empty forbids every named class, so the secure posture is the unset case. Name and validation mirror the sibling `allowedPriorityClasses`. |
+| `proxyRef` (Q166) | `RunnerSet` | Optional because direct egress is a defined behaviour rather than a failure, which is what separates it from the required `templateRef` (§H.4, §H.10). |
+| `defaultProxyRef` (Q166) | `ActionsGateway` | Inherited only by RunnerSets that set no `proxyRef`, so the narrower field always wins. |
+| `namespace` (Q166) | `ProxyObjectRef` | Empty means the referrer's own namespace, so the pre-M4 same-namespace posture is the default and the unset case. |
+| `ProxyShareNotGranted` | condition reason | Names the fail-closed outcome when a cross-namespace reference lacks provider consent. |
+
+**The one thing that looked like a gap is house style, checked rather than
+assumed.** `ProxyObjectRef` bounds both its fields by length and neither by
+pattern, while the allowlist fields next to it pattern every item. No object ref
+in `v2beta1` patterns a name: `ProxyObjectRef.Name` carries the same
+`MinLength=1`/`MaxLength=52` pair as `ObjectRef.Name`, and `LocalSecretReference`
+and `LocalConfigMapReference` are length-only too. Adding a pattern narrows a
+published field, so the cheap window for it closes at the stable tag and this is
+the pass that had to settle it. An unresolvable namespace string is rejected at
+resolution rather than at admission, and fails closed.
+
+## The rc.1 validation verdict, 2026-08-09
+
+`validate-release.sh v1.4.0-rc.1` **PASSED**, exit 0, in 25m05s end to end, and
+the cluster was confirmed back at 0 nodes by polling `gcloud` rather than by
+reading the gate's own teardown line. These are the receipts the notes'
+Validation section draws on.
+
+| Leg | Result |
+|---|---|
+| deploy | RC deployed and CI routed to GAG in 2m43s |
+| e2e matrix | **74/74 specs, 62 ok, 0 failed, 12 skipped** ([run 31330763470](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31330763470)) |
+| sizing, `NodeShare` | `sizingProfileState=Active`; worker CPU request derived to **1500m** where the templates ask 2 and 3 |
+| sizing, `Throughput` | `Active`, `sampleCounts=[166]` |
+| CRD smoke | blob signature `Verified OK`; all five v2 CRDs server-side applied and registered |
+
+Artifact verification cleared separately and before the gate: 7/7 OCI signatures
+(five images, both charts), the `verify-blob` signature on the v2 CRD manifest,
+and a build-provenance attestation whose `buildSignerURI` ends
+`publish.yml@refs/tags/v1.4.0-rc.1` with a `sourceRepositoryDigest` equal to the
+tagged commit. Each green check was re-run against a deliberately wrong identity
+(a `refs/heads/` regexp, and `unit-test.yml` as signer) and each failed, so the
+passes discriminate rather than merely exiting 0.
+
+### No candidate had cleared this gate on the first attempt before
+
+Worth stating in the notes because it is checkable and because it is the return
+on this cycle's release-tooling work, not a lucky run. The 1.3 line needed four
+candidates to produce any verdict at all: rc.1 aborted when the gate's then
+repo-wide e2e routing caught concurrent sessions' CI, rc.2 returned Q550 and
+Q551 instead of a result, rc.3 aborted at `start.sh`'s AGC wait, and rc.4 was
+"the first verdict any RC in this line has produced"
+([release-1.3.md](release-1.3.md)).
+
+**Scope the claim to what the record supports.** `validate-release.sh` landed
+2026-07-12 (Q294, #619), the day `v1.1.0` was tagged, so `v1.0.0` and `v1.1.0`
+predate it entirely. `v1.2.0` had a single RC and the gate did exist by then,
+but no plan doc records a validation run for it, and no record is not the same
+as no run. So the defensible sentence is that 1.3 is the only prior line with a
+recorded validation history and rc.1 here is the first candidate to pass first
+time, not that this has never happened.
+
+The three failure modes that cost the 1.3 line its early candidates were each
+fixed since: run-scoped dispatch replaced repo-wide routing (repo-wide is now an
+explicit `E2E_ROUTE_VAR=1` opt-in), the gate settles the e2e lane before it
+scales a node, and Q629, Q640 and Q630 bounded the run watch, reclaimed orphaned
+leases, and reconciled sentinel silence against run status. Q630 earned itself
+on this run: the one stall event it raised came only after the run was no longer
+live, which is the reconciliation behaving as designed rather than a false
+positive on a quiet leg.
+
+### `Throughput` actuated, which the runbook does not expect
+
+[release.md](../operations/release.md#validate-the-release-candidate-on-dogfood)
+records `Throughput` as reported-but-never-fatal because it needs at least 20
+samples per template container and the gate's own ~7-job matrix cannot supply
+them, making `NOT VALIDATED THIS RUN` the documented normal outcome. It came back
+`Active` with 166 samples. Nothing anomalous happened: the sampler tracks every
+worker pod regardless of `spec.sizing` and the aggregate re-seeds from the
+persisted `status.sizingRecommendation`, so the dogfood cluster's ordinary CI
+traffic since 1.3.0 had already earned the history. The consequence for the notes
+is a stronger claim than a passing gate alone, that this RC ran its own CI on
+derived sizing. The runbook's expectation is now stale for this cluster and is
+worth correcting separately.
 
 ## The discipline this cycle could not apply
 
