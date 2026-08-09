@@ -10,31 +10,27 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/operations/observability-dashboards/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/archive/q766-scaleset-abandoned-recovery/">
       
       
-        <link rel="prev" href="../observability-alerting/">
-      
-      
-        <link rel="next" href="../observability-logging/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/favicon.svg">
+      <link rel="icon" href="../../../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Grafana dashboards - GitHub Actions Gateway</title>
+        <title>Q766: abandoned-run recovery on the ScaleSet tier - GitHub Actions Gateway</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,9 +43,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -59,9 +55,9 @@
     
   
   
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
   <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
   <meta property="og:image:width" content="1280">
@@ -122,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#grafana-dashboards" class="md-skip">
+        <a href="#q766-abandoned-run-recovery-on-the-scaleset-tier" class="md-skip">
           Skip to content
         </a>
       
@@ -146,10 +142,10 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../../STATUS/">See the working backlog.</a>
 
             </div>
-            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
           </aside>
         
       </div>
@@ -159,9 +155,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -178,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Grafana dashboards
+              Q766: abandoned-run recovery on the ScaleSet tier
             
           </span>
         </div>
@@ -291,7 +287,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href="../../.." class="md-tabs__link">
         
   
   
@@ -310,7 +306,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../why-gag/" class="md-tabs__link">
+      <a href="../../../why-gag/" class="md-tabs__link">
         
   
   
@@ -329,7 +325,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../alternatives/" class="md-tabs__link">
+      <a href="../../../alternatives/" class="md-tabs__link">
         
   
   
@@ -348,7 +344,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../features/" class="md-tabs__link">
+      <a href="../../../features/" class="md-tabs__link">
         
   
   
@@ -367,7 +363,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../demo/" class="md-tabs__link">
+      <a href="../../../demo/" class="md-tabs__link">
         
   
   
@@ -386,7 +382,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
+      <a href="../../../getting-started/" class="md-tabs__link">
         
   
   
@@ -405,7 +401,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../roadmap/" class="md-tabs__link">
+      <a href="../../../roadmap/" class="md-tabs__link">
         
   
   
@@ -426,7 +422,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../design/" class="md-tabs__link">
+        <a href="../../../design/" class="md-tabs__link">
           
   
   
@@ -444,13 +440,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../../operations/" class="md-tabs__link">
           
   
   
@@ -472,7 +466,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../reference/" class="md-tabs__link">
+        <a href="../../../reference/" class="md-tabs__link">
           
   
   
@@ -508,9 +502,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     GitHub Actions Gateway
@@ -537,7 +531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -564,7 +558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../why-gag/" class="md-nav__link">
+      <a href="../../../why-gag/" class="md-nav__link">
         
   
   
@@ -591,7 +585,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../alternatives/" class="md-nav__link">
+      <a href="../../../alternatives/" class="md-nav__link">
         
   
   
@@ -618,7 +612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/" class="md-nav__link">
+      <a href="../../../features/" class="md-nav__link">
         
   
   
@@ -645,7 +639,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../demo/" class="md-nav__link">
+      <a href="../../../demo/" class="md-nav__link">
         
   
   
@@ -672,7 +666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../../../getting-started/" class="md-nav__link">
         
   
   
@@ -699,7 +693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../roadmap/" class="md-nav__link">
+      <a href="../../../roadmap/" class="md-nav__link">
         
   
   
@@ -785,7 +779,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../design/" class="md-nav__link ">
+            <a href="../../../design/" class="md-nav__link ">
               
   
   
@@ -829,7 +823,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/01-executive-summary/" class="md-nav__link">
+      <a href="../../../design/01-executive-summary/" class="md-nav__link">
         
   
   
@@ -857,7 +851,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/02-architecture/" class="md-nav__link">
+      <a href="../../../design/02-architecture/" class="md-nav__link">
         
   
   
@@ -885,7 +879,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/network-architecture/" class="md-nav__link">
+      <a href="../../../design/network-architecture/" class="md-nav__link">
         
   
   
@@ -913,7 +907,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/03-api-contracts/" class="md-nav__link">
+      <a href="../../../design/03-api-contracts/" class="md-nav__link">
         
   
   
@@ -941,7 +935,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/04-operational-flows/" class="md-nav__link">
+      <a href="../../../design/04-operational-flows/" class="md-nav__link">
         
   
   
@@ -969,7 +963,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/05-security/" class="md-nav__link">
+      <a href="../../../design/05-security/" class="md-nav__link">
         
   
   
@@ -997,7 +991,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+      <a href="../../../design/06-implementation-phases/" class="md-nav__link">
         
   
   
@@ -1025,7 +1019,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/07-test-plan/" class="md-nav__link">
+      <a href="../../../design/07-test-plan/" class="md-nav__link">
         
   
   
@@ -1053,7 +1047,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/08-glossary/" class="md-nav__link">
+      <a href="../../../design/08-glossary/" class="md-nav__link">
         
   
   
@@ -1081,7 +1075,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+      <a href="../../../design/appendix-a-capacity-slos/" class="md-nav__link">
         
   
   
@@ -1109,7 +1103,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+      <a href="../../../design/appendix-b-worker-isolation/" class="md-nav__link">
         
   
   
@@ -1137,7 +1131,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+      <a href="../../../design/appendix-c-ai-implementation/" class="md-nav__link">
         
   
   
@@ -1165,7 +1159,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+      <a href="../../../design/appendix-d-alternatives-considered/" class="md-nav__link">
         
   
   
@@ -1193,7 +1187,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+      <a href="../../../design/appendix-e-capacity-planning/" class="md-nav__link">
         
   
   
@@ -1221,7 +1215,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+      <a href="../../../design/appendix-f-cost-model/" class="md-nav__link">
         
   
   
@@ -1249,7 +1243,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+      <a href="../../../design/appendix-g-future-enhancements/" class="md-nav__link">
         
   
   
@@ -1277,7 +1271,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+      <a href="../../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
         
   
   
@@ -1305,7 +1299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+      <a href="../../../design/github-protocol-dependencies/" class="md-nav__link">
         
   
   
@@ -1337,8 +1331,6 @@
       
   
   
-    
-  
   
   
     
@@ -1406,23 +1398,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../../operations/" class="md-nav__link ">
               
   
   
@@ -1440,13 +1429,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1466,7 +1455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../personas/" class="md-nav__link">
+      <a href="../../../operations/personas/" class="md-nav__link">
         
   
   
@@ -1494,7 +1483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../install/" class="md-nav__link">
+      <a href="../../../operations/install/" class="md-nav__link">
         
   
   
@@ -1522,7 +1511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../air-gapped-install/" class="md-nav__link">
+      <a href="../../../operations/air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1550,7 +1539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../gitops/" class="md-nav__link">
+      <a href="../../../operations/gitops/" class="md-nav__link">
         
   
   
@@ -1578,7 +1567,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../upgrade/" class="md-nav__link">
+      <a href="../../../operations/upgrade/" class="md-nav__link">
         
   
   
@@ -1606,7 +1595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../migration-from-arc/" class="md-nav__link">
+      <a href="../../../operations/migration-from-arc/" class="md-nav__link">
         
   
   
@@ -1634,7 +1623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../migration-v1-to-v2/" class="md-nav__link">
+      <a href="../../../operations/migration-v1-to-v2/" class="md-nav__link">
         
   
   
@@ -1662,7 +1651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../v1alpha1-deprecation/" class="md-nav__link">
+      <a href="../../../operations/v1alpha1-deprecation/" class="md-nav__link">
         
   
   
@@ -1690,7 +1679,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tenant-onboarding/" class="md-nav__link">
+      <a href="../../../operations/tenant-onboarding/" class="md-nav__link">
         
   
   
@@ -1718,7 +1707,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../resourcequota-sizing/" class="md-nav__link">
+      <a href="../../../operations/resourcequota-sizing/" class="md-nav__link">
         
   
   
@@ -1746,7 +1735,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../runner-template-library/" class="md-nav__link">
+      <a href="../../../operations/runner-template-library/" class="md-nav__link">
         
   
   
@@ -1774,7 +1763,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../in-runner-image-builds/" class="md-nav__link">
+      <a href="../../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
   
@@ -1802,7 +1791,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../kata-dind-workloads/" class="md-nav__link">
+      <a href="../../../operations/kata-dind-workloads/" class="md-nav__link">
         
   
   
@@ -1830,7 +1819,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../p2p-image-distribution/" class="md-nav__link">
+      <a href="../../../operations/p2p-image-distribution/" class="md-nav__link">
         
   
   
@@ -1858,7 +1847,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../service-mesh-coexistence/" class="md-nav__link">
+      <a href="../../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
   
@@ -1883,10 +1872,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1907,21 +1894,18 @@
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1939,7 +1923,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1957,7 +1941,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability/" class="md-nav__link">
+      <a href="../../../operations/observability/" class="md-nav__link">
         
   
   
@@ -1985,7 +1969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-metrics/" class="md-nav__link">
+      <a href="../../../operations/observability-metrics/" class="md-nav__link">
         
   
   
@@ -2013,7 +1997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-metrics-access/" class="md-nav__link">
+      <a href="../../../operations/observability-metrics-access/" class="md-nav__link">
         
   
   
@@ -2041,7 +2025,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-alerting/" class="md-nav__link">
+      <a href="../../../operations/observability-alerting/" class="md-nav__link">
         
   
   
@@ -2066,37 +2050,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Grafana dashboards
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../operations/observability-dashboards/" class="md-nav__link">
         
   
   
@@ -2112,59 +2069,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#tenant-dashboard" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tenant dashboard
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#platform-dashboard" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Platform dashboard
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dashboard-variables" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dashboard Variables
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2177,7 +2081,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-logging/" class="md-nav__link">
+      <a href="../../../operations/observability-logging/" class="md-nav__link">
         
   
   
@@ -2213,7 +2117,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cost-attribution/" class="md-nav__link">
+      <a href="../../../operations/cost-attribution/" class="md-nav__link">
         
   
   
@@ -2241,7 +2145,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../worker-rightsizing/" class="md-nav__link">
+      <a href="../../../operations/worker-rightsizing/" class="md-nav__link">
         
   
   
@@ -2269,7 +2173,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../node-shutdown-budgets/" class="md-nav__link">
+      <a href="../../../operations/node-shutdown-budgets/" class="md-nav__link">
         
   
   
@@ -2297,7 +2201,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../runbook/" class="md-nav__link">
+      <a href="../../../operations/runbook/" class="md-nav__link">
         
   
   
@@ -2325,7 +2229,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backup-restore/" class="md-nav__link">
+      <a href="../../../operations/backup-restore/" class="md-nav__link">
         
   
   
@@ -2353,7 +2257,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../velero-backup-restore/" class="md-nav__link">
+      <a href="../../../operations/velero-backup-restore/" class="md-nav__link">
         
   
   
@@ -2381,7 +2285,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../../../operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -2409,7 +2313,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../security-operations/" class="md-nav__link">
+      <a href="../../../operations/security-operations/" class="md-nav__link">
         
   
   
@@ -2437,7 +2341,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../admission-policies/" class="md-nav__link">
+      <a href="../../../operations/admission-policies/" class="md-nav__link">
         
   
   
@@ -2465,7 +2369,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../release/" class="md-nav__link">
+      <a href="../../../operations/release/" class="md-nav__link">
         
   
   
@@ -2493,7 +2397,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../kata-ci-spike-runbook/" class="md-nav__link">
+      <a href="../../../operations/kata-ci-spike-runbook/" class="md-nav__link">
         
   
   
@@ -2553,7 +2457,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../reference/" class="md-nav__link ">
+            <a href="../../../reference/" class="md-nav__link ">
               
   
   
@@ -2597,7 +2501,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/api/" class="md-nav__link">
+      <a href="../../../reference/api/" class="md-nav__link">
         
   
   
@@ -2652,10 +2556,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tenant-dashboard" class="md-nav__link">
+  <a href="#why-it-matters-now" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Tenant dashboard
+        Why it matters now
       
     </span>
   </a>
@@ -2663,10 +2567,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#platform-dashboard" class="md-nav__link">
+  <a href="#what-the-classic-tier-actually-does" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Platform dashboard
+        What the classic tier actually does
       
     </span>
   </a>
@@ -2674,13 +2578,80 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dashboard-variables" class="md-nav__link">
+  <a href="#why-a-fourth-arm-on-disruptionawaitingrecovery-is-the-wrong-shape" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dashboard Variables
+        Why a fourth arm on disruptionAwaitingRecovery is the wrong shape
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-two-seams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two seams
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The two seams">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-deliberately-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is deliberately out
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-this-does-not-touch-featuresmd-release-14md-or-the-v2-gap-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this does not touch features.md, release-1.4.md, or the v2 gap docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2704,489 +2675,128 @@
   
 
 
-<h1 id="grafana-dashboards">Grafana Dashboards<a class="headerlink" href="#grafana-dashboards" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
-</blockquote>
-<p>Part of the <a href="../observability/">Observability</a> guide. The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
-<blockquote>
-<p><strong>Import as code.</strong> Two reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a> — import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand. They split along the scrape boundary each reads from; the layouts below document what each contains.</p>
-</blockquote>
-<table>
-<thead>
-<tr>
-<th>Dashboard</th>
-<th>Source scrape</th>
-<th>Audience</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
-<td>a tenant's AGC + egress proxy (per-tenant mTLS)</td>
-<td>operator of one tenant's runners</td>
-</tr>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
-<td>the GMC manager (one cluster-wide TLS scrape)</td>
-<td>Platform engineer running the GMC / the fleet</td>
-</tr>
-</tbody>
-</table>
-<p>The split mirrors how the metrics are exposed (see <a href="../observability-metrics-access/#how-to-access-metrics">Accessing metrics</a>): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (<code>managed_gateways</code>, <code>runnergroups_degraded</code>, <code>egress_rules_stale</code>, the proxy-quota gauges) get their own dashboard.</p>
-<blockquote>
-<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
-</blockquote>
-<h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
-<p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>
-<p>Filtered by the <code>$namespace</code>, <code>$runner_group</code>, and <code>$runner_set</code> template variables. Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a> as data sources where applicable.</p>
-<p><strong>Row 1 — Gateway Health (per namespace)</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Active sessions</td>
-<td><code>actions_gateway_active_sessions</code></td>
-<td>Stat / Time series</td>
-</tr>
-<tr>
-<td>Jobs acquired/min</td>
-<td><code>rate(actions_gateway_jobs_acquired_total[5m]) * 60</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Token refresh errors</td>
-<td><code>rate(actions_gateway_token_refresh_errors_total[5m])</code></td>
-<td>Stat (threshold: &gt;0 = red)</td>
-</tr>
-<tr>
-<td>RenewJob errors</td>
-<td><code>rate(actions_gateway_renew_job_errors_total[5m])</code></td>
-<td>Stat (threshold: &gt;0 = yellow)</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 2 — Pod Creation Latency SLO</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>p95 latency</td>
-<td><code>actions_gateway:pod_creation_latency_seconds:p95</code></td>
-<td>Gauge (green &lt;15s, yellow &lt;60s, red &gt;60s)</td>
-</tr>
-<tr>
-<td>p99 latency</td>
-<td><code>actions_gateway:pod_creation_latency_seconds:p99</code></td>
-<td>Gauge</td>
-</tr>
-<tr>
-<td>Latency heatmap</td>
-<td><code>rate(actions_gateway_pod_creation_latency_seconds_bucket[5m])</code></td>
-<td>Heatmap</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 3 — Job Throughput (per runner_group)</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Jobs acquired total</td>
-<td><code>increase(actions_gateway_jobs_acquired_total[1h])</code></td>
-<td>Bar chart by runner_group</td>
-</tr>
-<tr>
-<td>Job duration p50/p95</td>
-<td><code>actions_gateway:job_duration_seconds:p50/p95</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Disruption retries</td>
-<td><code>sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
-<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>deletion</code>, <code>abandoned</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them — different investigations entirely</td>
-</tr>
-<tr>
-<td>Abandoned runs awaiting capacity</td>
-<td><code>sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))</code></td>
-<td>Stat or bar chart, split by acquisition tier since Q766 ported the recovery to <code>scaleset</code>. <code>expired</code> is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand</td>
-</tr>
-<tr>
-<td>Disruption budget exhausted</td>
-<td><code>increase(actions_gateway_eviction_retries_exhausted_total[1h])</code></td>
-<td>Stat (threshold: &gt;0 = red)</td>
-</tr>
-<tr>
-<td>Quota retries</td>
-<td><code>increase(actions_gateway_quota_retries_total[1h])</code></td>
-<td>Bar chart</td>
-</tr>
-<tr>
-<td>Quota retry budget exhausted</td>
-<td><code>increase(actions_gateway_quota_retries_exhausted_total[1h])</code></td>
-<td>Stat (threshold: &gt;0 = red)</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 4 — Scale-set Acquisition Tier (per runner_set)</strong></p>
-<p>The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here. Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these — the <code>$runner_set</code> variable does.</p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Jobs assigned vs. provisioned/min</td>
-<td><code>sum by (namespace, runner_set) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60</code> and the <code>…_provisioned_total</code> counterpart</td>
-<td>Time series (a persistent gap = provisioning lagging)</td>
-</tr>
-<tr>
-<td>Provision success rate</td>
-<td><code>actions_gateway:scaleset_provision_success_rate:rate5m</code></td>
-<td>Gauge (green &gt;0.99, yellow &lt;0.99, red &lt;0.9)</td>
-</tr>
-<tr>
-<td>Provision errors/s</td>
-<td><code>sum by (namespace, runner_set) (rate(actions_gateway_scaleset_provision_errors_total[5m]))</code></td>
-<td>Stat (threshold: &gt;0 = yellow)</td>
-</tr>
-<tr>
-<td>Jobs completed by result (1h)</td>
-<td><code>sum by (result) (increase(actions_gateway_scaleset_jobs_completed_total[1h]))</code></td>
-<td>Bar chart by result</td>
-</tr>
-<tr>
-<td>Worker pods reaped/s (by reason)</td>
-<td><code>sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{runner_set!=""}[5m]))</code></td>
-<td>Time series — the reaper counter's scale-set series (Q514), joinable with the capacity gauges above on <code>(namespace, runner_set)</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 5 — Tenant Health Conditions</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Worker quota exceeded</td>
-<td><code>max(actions_gateway_worker_quota_exceeded or actions_gateway_runnerset_worker_quota_exceeded)</code></td>
-<td>Stat (1 = red)</td>
-</tr>
-<tr>
-<td>Workers unschedulable</td>
-<td><code>max(actions_gateway_workers_unschedulable or actions_gateway_runnerset_workers_unschedulable)</code></td>
-<td>Stat (1 = red)</td>
-</tr>
-<tr>
-<td>Worker quota pressure</td>
-<td><code>max(actions_gateway_worker_quota_pressure or actions_gateway_runnerset_worker_quota_pressure)</code></td>
-<td>Stat (1 = yellow)</td>
-</tr>
-<tr>
-<td>Worker capacity declined</td>
-<td><code>max by (reason) (actions_gateway_runnerset_worker_capacity_declined)</code></td>
-<td>Stat (1 = orange), reason shown beside the value</td>
-</tr>
-<tr>
-<td>Agent recycle errors</td>
-<td><code>rate(actions_gateway_agent_recycle_errors_total[5m])</code></td>
-<td>Time series</td>
-</tr>
-</tbody>
-</table>
-<blockquote>
-<p>The first three capacity panels union the v1 <code>RunnerGroup</code> family with its
-<code>actions_gateway_runnerset_*</code> v2 twin (Q319). The two families key on different
-labels — <code>runner_group</code> and <code>runner_set</code> — so <code>or</code> unions rather than overlaps them,
-and a panel that named only the v1 family would read a flat <code>0</code> on a v2-only deploy.
-To break either out per owner, replace <code>max(...)</code> with
-<code>max by (namespace, runner_set) (actions_gateway_runnerset_...)</code>.</p>
-<p><strong>Worker capacity declined has no v1 twin, and <code>No data</code> is a normal reading</strong>
-(Q643, Q658). The <a href="../observability-metrics/">gauge</a> is emitted only for a
-<code>RunnerSet</code> that set <code>spec.capacityGate.mode</code>, so an empty panel means no set
-opted in, not that the query is broken. It groups by <code>reason</code> rather than
-reducing to a bare <code>0</code>/<code>1</code> because the value alone cannot separate a live decline
-from the latched <code>AwaitingProbe</code> state, and those call for different actions;
-exactly one series exists per gated set, so <code>max by (reason)</code> cannot double-count.
-The <code>1</code> is orange rather than red on purpose: a latched gate is
-<a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">throttling intake, not failing</a>,
-and it can sit <code>True</code> indefinitely on an idle set whose shape stays unplaceable.</p>
-</blockquote>
-<p><strong>Row 6 — Egress Proxy (per tenant)</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Active CONNECT tunnels</td>
-<td><code>actions_gateway_proxy_connections_active</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>CONNECT tunnels opened/s</td>
-<td><code>rate(actions_gateway_proxy_connections_total[5m])</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Proxy dial errors/s</td>
-<td><code>rate(actions_gateway_proxy_dial_errors_total[5m])</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Denied CONNECTs/s (SSRF signal)</td>
-<td><code>rate(actions_gateway_proxy_connect_denied_total[5m])</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Tunnel duration p95</td>
-<td><code>histogram_quantile(0.95, rate(actions_gateway_proxy_tunnel_duration_seconds_bucket[5m]))</code></td>
-<td>Time series</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 7 — Proxy &amp; Quota (kube-state-metrics)</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Proxy replicas ready</td>
-<td><code>kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>HPA desired vs. current</td>
-<td><code>kube_horizontalpodautoscaler_status_*_replicas</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>ResourceQuota usage</td>
-<td><code>kube_resourcequota{type="used"}</code> filtered by namespace</td>
-<td>Bar gauge</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 7 — Reliability Signals (Q315)</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Job acquisition errors/s (by reason)</td>
-<td><code>sum by (namespace, reason) (rate(actions_gateway_job_acquisition_errors_total[5m]))</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Message poll errors/s (by reason)</td>
-<td><code>sum by (namespace, reason) (rate(actions_gateway_message_poll_errors_total[5m]))</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>RenewJob teardowns/s (by reason)</td>
-<td><code>sum by (namespace, reason) (rate(actions_gateway_renew_job_teardowns_total[5m]))</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Worker pods reaped/s (by reason)</td>
-<td><code>sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Broker token propagation retries/s</td>
-<td><code>sum by (runner_group) (rate(actions_gateway_broker_token_propagation_retries_total[5m]))</code></td>
-<td>Time series</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 8 — Fan-out Safety (Q260 / Q266)</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Duplicate job deliveries/s</td>
-<td><code>sum by (runner_group) (rate(actions_gateway_jobs_duplicate_delivery_total[5m]))</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Abandoned-delivery completions/s (by outcome)</td>
-<td><code>sum by (runner_group, outcome) (rate(actions_gateway_abandoned_delivery_completions_total[5m]))</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Fan-out loser recycle deferred/s (by outcome)</td>
-<td><code>sum by (runner_group, outcome) (rate(actions_gateway_fanout_loser_recycle_deferred_total[5m]))</code></td>
-<td>Time series</td>
-</tr>
-</tbody>
-</table>
-<h2 id="platform-dashboard">Platform dashboard<a class="headerlink" href="#platform-dashboard" title="Permanent link">&para;</a></h2>
-<p><img alt="The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, and cross-tenant throughput rows." src="../../assets/grafana-dashboard-platform.png" /></p>
-<p>Fleet-wide; <code>$namespace</code> filters the cross-tenant rows.</p>
-<p><strong>Row 1 — Fleet Overview</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Managed gateways</td>
-<td><code>actions_gateway_managed_gateways</code></td>
-<td>Stat</td>
-</tr>
-<tr>
-<td>Degraded gateways</td>
-<td><code>sum(actions_gateway_runnergroups_degraded)</code> (v1) / <code>sum(actions_gateway_runnersets_degraded)</code> (v2)</td>
-<td>Stat (&gt;0 = red)</td>
-</tr>
-<tr>
-<td>Egress allowlist stale</td>
-<td><code>sum(actions_gateway_egress_rules_stale)</code></td>
-<td>Stat (&gt;0 = red)</td>
-</tr>
-<tr>
-<td>Proxy quota exceeded</td>
-<td><code>sum(actions_gateway_proxy_quota_exceeded)</code></td>
-<td>Stat (&gt;0 = red)</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 2 — GMC Control Plane</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Reconcile errors by controller</td>
-<td><code>rate(controller_runtime_reconcile_errors_total[5m])</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Reconcile rate by controller</td>
-<td><code>rate(controller_runtime_reconcile_total[5m])</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>IP range refreshes (24h)</td>
-<td><code>sum(increase(actions_gateway_ip_range_updates_total[24h]))</code></td>
-<td>Stat</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 3 — Fleet Conditions (per gateway)</strong></p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Gateway condition rollups</td>
-<td><code>actions_gateway_runnergroups_degraded</code> / <code>_egress_rules_stale</code> / <code>_proxy_quota_pressure</code> / <code>_proxy_quota_exceeded</code> (v1); <code>_runnersets_degraded</code> / <code>_agc_available</code> / <code>_egress_unattributed</code> (v2); <code>_github_egress_incomplete</code> (v2 <code>EgressProxy</code> only)</td>
-<td>State timeline (1 = firing)</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Row 4 — Cross-tenant Throughput</strong> (requires the per-tenant AGC scrapes)</p>
-<table>
-<thead>
-<tr>
-<th>Panel</th>
-<th>Query</th>
-<th>Visualization</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Active sessions by namespace</td>
-<td><code>sum by (namespace) (actions_gateway_active_sessions)</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Jobs acquired/min by namespace (classic)</td>
-<td><code>sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Jobs assigned/min by namespace (scale-set)</td>
-<td><code>sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60</code></td>
-<td>Time series</td>
-</tr>
-<tr>
-<td>Pod creation p99 by namespace</td>
-<td><code>actions_gateway:pod_creation_latency_seconds:p99</code></td>
-<td>Time series</td>
-</tr>
-</tbody>
-</table>
-<h2 id="dashboard-variables">Dashboard Variables<a class="headerlink" href="#dashboard-variables" title="Permanent link">&para;</a></h2>
-<p>The dashboards ship with these template variables already wired:</p>
+<h1 id="q766-abandoned-run-recovery-on-the-scaleset-tier">Q766: abandoned-run recovery on the ScaleSet tier<a class="headerlink" href="#q766-abandoned-run-recovery-on-the-scaleset-tier" title="Permanent link">&para;</a></h1>
+<p>Port the Q683 force-cancel and the Q691 capacity-gated automatic re-run from the
+classic acquisition tier to the ScaleSet tier, so a worker removed before its
+container ever ran gets the same one-second <code>cancelled</code> ending and the same
+automatic re-run on both tiers.</p>
+<p>Design context: <a href="../../../design/04-operational-flows/#stuck-pending-worker-pod">04-operational-flows.md § Stuck-Pending Worker Pod</a>
+and <a href="../../../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">§ Which disruptions are recovered</a>.
+The two prior ports of the same shape are Q417 (eviction recovery) and Q443
+(the capacity ladder).</p>
+<h2 id="why-it-matters-now">Why it matters now<a class="headerlink" href="#why-it-matters-now" title="Permanent link">&para;</a></h2>
+<p><code>v2beta1</code> is ScaleSet-only and ScaleSet is the default <code>acquisitionProtocol</code>, so
+no v2 tenant has either recovery today. <a href="../../../STATUS/#Q264">Q264</a> deletes the
+classic machinery at <code>v2.0.0</code>, which would turn the gap into the silent
+capability deletion <a href="../../../design/04-operational-flows/">04-operational-flows.md</a>
+names, which is the outcome Q417 and Q443 were ported to avoid.</p>
+<h2 id="what-the-classic-tier-actually-does">What the classic tier actually does<a class="headerlink" href="#what-the-classic-tier-actually-does" title="Permanent link">&para;</a></h2>
+<p>Measured from source 2026-08-09.</p>
+<p><code>provision()</code> holds a goroutine for the life of the job. <code>InformerPodWaiter</code>
+resolves that wait from the pod's <strong>informer delete event</strong>, whose payload is the
+last-known pod object, and stamps <code>PodOutcome.DeletedBeforeStart</code> from
+<code>!podEverStarted(pod)</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/podwaiter.go">podwaiter.go:342</a>).
+<code>provision()</code> then force-cancels the run and registers it for a capacity-gated
+re-run, using the <code>owner/repo/run_id</code> it parsed out of the AcquireJob payload it
+still holds (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:661</a>).</p>
+<p>Two properties of that trigger matter for the port:</p>
 <ul>
-<li><code>$namespace</code> — <code>label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code> — filters to a single tenant (both dashboards). The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no <code>active_sessions</code>, so keying the variable on that alone would leave the dashboard blank.</li>
-<li><code>$runner_group</code> — <code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code> — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The <code>runner_set</code>-labelled panels are not filtered by it; <code>$runner_set</code> is their variable.</li>
-<li><code>$runner_set</code> — <code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code> — filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels (tenant dashboard). It reads its label values from the Q319 capacity gauges rather than the <code>scaleset_*</code> series on purpose: those gauges are emitted for <strong>every</strong> <code>RunnerSet</code>, while <code>scaleset_*</code> exists only for <code>ScaleSet</code>-protocol sets, so keying on the latter would hide a <code>Classic</code> set from the dropdown entirely.</li>
+<li><strong>It fires on the AGC's own deletes too.</strong> <code>DeletedBeforeStart</code> carries no
+  <code>AnnotationDeletionReason</code> exclusion, and the dominant cause is precisely an
+  AGC delete: the reaper's <code>pending_deadline</code> reap of a worker that never left
+  <code>Pending</code>. That is the flow the design doc's Stuck-Pending sequence draws.</li>
+<li><strong>It is not the <code>rerun-failed-jobs</code> path.</strong> A never-run job has no failed job
+  to re-run, which is why the run is force-cancelled <em>first</em>; the cancelled
+  conclusion is the state <code>rerun-failed-jobs</code> was measured to accept (Q683).</li>
 </ul>
-<hr />
-<p>← Back to <a href="../observability/">Observability</a></p>
+<h2 id="why-a-fourth-arm-on-disruptionawaitingrecovery-is-the-wrong-shape">Why a fourth arm on <code>disruptionAwaitingRecovery</code> is the wrong shape<a class="headerlink" href="#why-a-fourth-arm-on-disruptionawaitingrecovery-is-the-wrong-shape" title="Permanent link">&para;</a></h2>
+<p><code>RecoverEvictedScaleSetWorkers</code> scans <strong>surviving</strong> pods
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go">eviction_scaleset.go:75</a>),
+and each arm of <code>disruptionAwaitingRecovery</code> returns a <code>cause</code> that feeds
+<code>handleEviction</code>, i.e. <code>rerun-failed-jobs</code> directly. Both facts rule the fourth
+arm out:</p>
+<ul>
+<li>A pod reaped while <code>Pending</code> is <strong>gone</strong> by the time any later scan runs, so a
+  List-based predicate cannot see the common case at all.</li>
+<li>Routing a never-started pod into <code>handleEviction</code> is exactly the defect the
+  predicate's own doc comment excludes: it would re-run a job that never ran,
+  without the force-cancel that makes the re-run legal.</li>
+</ul>
+<p>The exclusion therefore stays. What is re-opened is narrower: the never-started
+shape gets its <strong>own</strong> detection and its <strong>own</strong> action (force-cancel, then
+register), and the two never overlap.</p>
+<h2 id="the-two-seams">The two seams<a class="headerlink" href="#the-two-seams" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Cause on the classic tier</th>
+<th>ScaleSet equivalent</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reaper deletes a stuck-<code>Pending</code> worker (<code>pending_deadline</code>)</td>
+<td>The reaper itself, which holds the pod and stamps its own delete</td>
+<td><code>reapWorkerPodsByLabel</code> hook → <code>RecoverAbandonedScaleSetWorker</code></td>
+</tr>
+<tr>
+<td>External delete of a never-started worker (a drain catching a <code>Pending</code> pod)</td>
+<td>The transient <code>Failed</code> + deletion mark + <strong>no</strong> container exit record the kubelet publishes</td>
+<td><code>RecoverEvictedScaleSetWorkers</code> scan, new <code>abandonedAwaitingRecovery</code> arm</td>
+</tr>
+</tbody>
+</table>
+<p>The two are disjoint by construction: the reaper stamps
+<code>AnnotationDeletionReason</code> before it deletes, and the scan arm requires
+<code>!deletedByAGC(pod)</code>. The scan runs before the reaper in the same reconcile, and
+a still-<code>Pending</code> pod matches no arm of either predicate, so nothing double-fires.</p>
+<p>Run identity comes from the pod's <code>actions-gateway.com/run-id</code> and
+<code>actions-gateway.com/repository</code> annotations, the same <code>runIdentityFromPod</code>
+read the Q417 eviction port already relies on.</p>
+<h3 id="what-is-deliberately-out">What is deliberately out<a class="headerlink" href="#what-is-deliberately-out" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>completed_pending</code></strong> (Q575): the job is already terminal at GitHub, so
+  there is nothing to cancel and a re-run would re-run finished work. The
+  reaper's own branch already separates it from <code>pending_deadline</code> by the
+  <code>job-completed-at</code> stamp, so the exclusion costs nothing.</li>
+<li><strong>Gateway teardown</strong> (<code>reapAllWorkerPodsByLabel</code>): the owning
+  <code>ActionsGateway</code> is being deleted, so <code>Target.Resolve</code> is about to fail and
+  no later worker pod will ever bind to satisfy the capacity wait.</li>
+<li><strong>A never-started worker that simply vanishes</strong> with no transient <code>Failed</code>
+  publish. That is the same inherent residual the doc already records for
+  preemption and drain recovery on this tier: the evidence is the pod, and the
+  delete removes it.</li>
+</ul>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>pendingAbandonedRerun</code> carries its tier; <code>sweepAbandonedReruns</code> stops
+   hardcoding <code>evictionTierClassic</code>.</li>
+<li><code>forceCancelAbandonedRun</code> takes a tier and labels its metric with it.</li>
+<li><code>RecoverAbandonedScaleSetWorker</code> — the shared action, gated on the pod
+   carrying <code>LabelAcquisitionProtocol: ScaleSet</code>.</li>
+<li><code>reapHooks.recoverAbandoned</code>, fired after a successful <code>pending_deadline</code>
+   delete, wired on the <code>RunnerSet</code> reaper only.</li>
+<li><code>abandonedAwaitingRecovery</code> arm in <code>RecoverEvictedScaleSetWorkers</code>.</li>
+<li><code>tier</code> label on <code>abandoned_run_force_cancels_total</code> and
+   <code>abandoned_run_rerun_waits_total</code>, matching the eviction metrics Q417 gave
+   the same treatment.</li>
+<li>Docs: the design boundary table and both prose blocks, the two observability
+   pages, <code>troubleshooting.md</code>'s WorkerPodStuckPending runbook and auto-re-run
+   matrix, and an <code>upgrade.md</code> migration note (which is what puts the change in
+   the curated release notes, since <code>operator-caveats-since.sh</code> reads the
+   <code>docs/operations/</code> diff).</li>
+</ol>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<ul>
+<li>2026-08-09: mechanism confirmed from source; plan written; shipped.</li>
+</ul>
+<h3 id="why-this-does-not-touch-featuresmd-release-14md-or-the-v2-gap-docs">Why this does not touch <code>features.md</code>, <code>release-1.4.md</code>, or the v2 gap docs<a class="headerlink" href="#why-this-does-not-touch-featuresmd-release-14md-or-the-v2-gap-docs" title="Permanent link">&para;</a></h3>
+<p>The tier scope those four surfaces state was added by PR #1365, which is still
+open. On <code>main</code> they make no tier claim at all, so nothing there is falsified by
+this change and there is nothing to rewrite. #1365 rebases on top of this work
+and reconciles them in one place, rather than the two branches editing the same
+prose from opposite directions.</p>
 
 
 
@@ -3219,44 +2829,6 @@ and it can sit <code>True</code> indefinitely on an idle set whose shape stays u
       
         <footer class="md-footer">
   
-    
-      
-      <nav class="md-footer__inner md-grid" aria-label="Footer" >
-        
-          
-          <a href="../observability-alerting/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Alerting &amp; SLOs">
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-            </div>
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Previous
-              </span>
-              <div class="md-ellipsis">
-                Alerting & SLOs
-              </div>
-            </div>
-          </a>
-        
-        
-          
-          <a href="../observability-logging/" class="md-footer__link md-footer__link--next" aria-label="Next: Logging &amp; tracing">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                Logging & tracing
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
-        
-      </nav>
     
   
   <div class="md-footer-meta md-typeset">
@@ -3309,12 +2881,12 @@ and it can sit <code>True</code> indefinitely on an idle set whose shape stays u
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../javascripts/extra.js"></script>
+        <script src="../../../javascripts/extra.js"></script>
       
     
   </body>

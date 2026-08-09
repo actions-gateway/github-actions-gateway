@@ -1672,6 +1672,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-abandoned-run-fast-cancel-and-auto-re-run-now-work-on-the-scaleset-tier-two-counters-gain-a-tier-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the abandoned-run fast cancel and auto re-run now work on the ScaleSet tier; two counters gain a tier label
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3237,6 +3248,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-abandoned-run-fast-cancel-and-auto-re-run-now-work-on-the-scaleset-tier-two-counters-gain-a-tier-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the abandoned-run fast cancel and auto re-run now work on the ScaleSet tier; two counters gain a tier label
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3885,6 +3907,31 @@
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-the-abandoned-run-fast-cancel-and-auto-re-run-now-work-on-the-scaleset-tier-two-counters-gain-a-tier-label">Non-breaking: the abandoned-run fast cancel and auto re-run now work on the ScaleSet tier; two counters gain a <code>tier</code> label<a class="headerlink" href="#non-breaking-the-abandoned-run-fast-cancel-and-auto-re-run-now-work-on-the-scaleset-tier-two-counters-gain-a-tier-label" title="Permanent link">&para;</a></h3>
+<p>1.4 added two recoveries for a worker removed before its container ever ran,
+the <code>pendingPodDeadline</code> reap being the common cause: the run is force-cancelled
+in about a second instead of waiting out GitHub's ~15-minute unstarted-job
+timeout (Q683), and it is then re-run automatically once the runner set places a
+worker pod again (Q691). In 1.4 both were wired into the classic acquisition
+path only, so on the ScaleSet tier (the default, and <code>v2beta1</code>'s only option)
+the same reap left the job unreported. This release closes that gap (Q766).</p>
+<p>The identity the port needed comes off the worker pod's
+<code>actions-gateway.com/run-id</code> annotation, read as the reaper deletes the pod. So
+a <code>ScaleSet</code> set whose assignment messages carry no <code>workflowRunId</code> gets an
+<code>EvictionRecoveryIdentityUnknown</code> Warning Event and
+<code>actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}</code>
+instead of the recovery. That is the same signal the Q417 eviction port already
+emits for the same missing field.</p>
+<p><code>actions_gateway_abandoned_run_force_cancels_total</code> and
+<code>actions_gateway_abandoned_run_rerun_waits_total</code> gain a <code>tier</code> label
+(<code>classic</code> / <code>scaleset</code>). Aggregations are unaffected; add <code>tier</code> to a
+<code>by (...)</code> clause where you want the split. Full note:
+<a href="../observability-metrics/#breaking-observability-changes-q417">Breaking observability changes</a>.</p>
+<p>No action is required at upgrade time. Two expectations do change on a
+<code>ScaleSet</code> set: those two counters start reporting where they were flat zero
+before, and a stuck-<code>Pending</code> worker's run now concludes in about a second
+rather than at GitHub's unstarted-job timeout. Behaviour is covered in
+<a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending</a>.</p>
 <h3 id="non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns">Non-breaking: <code>v1alpha1</code> is deprecated and the apiserver now warns<a class="headerlink" href="#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns" title="Permanent link">&para;</a></h3>
 <p>Both <code>actions-gateway.github.com</code> kinds carry <code>deprecated: true</code> on their <code>v1alpha1</code>
 version, so <code>kubectl</code> prints a warning on any <code>v1alpha1</code> read or write:</p>

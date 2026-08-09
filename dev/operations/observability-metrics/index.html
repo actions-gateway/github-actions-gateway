@@ -3002,7 +3002,7 @@
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
-<td>Recoveries <strong>started</strong> after a worker pod disruption — one per reserved retry-budget slot, incremented before the API calls. A recovery now outlasts GitHub's refusal window: the re-run is retried while GitHub answers <code>403 This workflow is already running</code> (which after an ungraceful eviction lasts until the job lock's TTL lapses, ~10 minutes — Q503), so in steady state each increment corresponds to a re-run that eventually lands. The recoveries that instead never landed are counted by <code>actions_gateway_eviction_rerun_failures_total</code> below — read the two together: <code>retries_total − rerun_failures_total</code> is the honest recovery count. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). <code>cause="eviction"</code> is the kubelet's node-pressure eviction; <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497); <code>cause="deletion"</code> is an external graceful deletion — a drain or a <code>kubectl delete pod</code> — whose worker published a terminal phase carrying the deletion mark (Q502; graceful too, with a measured 15–26s conclusion latency, so the retry loop lands it within a few paced attempts); <code>cause="abandoned"</code> is a worker reaped while still Pending, whose run was force-cancelled and is re-run once the owner places a worker pod again (Q691, classic tier only, and unlike the others its re-run is deferred until that placement rather than fired at once). The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and all causes</strong> together, not once per combination. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
+<td>Recoveries <strong>started</strong> after a worker pod disruption — one per reserved retry-budget slot, incremented before the API calls. A recovery now outlasts GitHub's refusal window: the re-run is retried while GitHub answers <code>403 This workflow is already running</code> (which after an ungraceful eviction lasts until the job lock's TTL lapses, ~10 minutes — Q503), so in steady state each increment corresponds to a re-run that eventually lands. The recoveries that instead never landed are counted by <code>actions_gateway_eviction_rerun_failures_total</code> below — read the two together: <code>retries_total − rerun_failures_total</code> is the honest recovery count. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). <code>cause="eviction"</code> is the kubelet's node-pressure eviction; <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497); <code>cause="deletion"</code> is an external graceful deletion — a drain or a <code>kubectl delete pod</code> — whose worker published a terminal phase carrying the deletion mark (Q502; graceful too, with a measured 15–26s conclusion latency, so the retry loop lands it within a few paced attempts); <code>cause="abandoned"</code> is a worker reaped while still Pending, whose run was force-cancelled and is re-run once the owner places a worker pod again (Q691, both tiers since Q766, and unlike the others its re-run is deferred until that placement rather than fired at once). The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and all causes</strong> together, not once per combination. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
@@ -3025,14 +3025,14 @@
 <tr>
 <td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
-<td>REST <code>force-cancel</code>s of the workflow run behind a worker pod removed before it ran: the fast honest ending for a job nothing will ever report (Q683). No <code>completejob</code> value ends such a job honestly (Q645/Q676), and told nothing GitHub cancels run and job at its ~15-minute unstarted-job timeout; the standalone force-cancel reaches the same <strong><code>cancelled</code></strong> conclusion in about a second (measured live 2026-08-05), and the cancelled run accepts <code>rerun-failed-jobs</code> where the false-green ending refused it. <code>outcome="cancelled"</code>: accepted. <code>outcome="identity_unknown"</code>: the acquire payload carried no <code>owner/repo/run_id</code>, so there was no endpoint to address. <code>outcome="error"</code>: GitHub refused the call or the API failed. On the latter two the unstarted-job timeout remains the honest backstop, so they cost latency, not correctness; a sustained non-zero rate on either is worth investigating. Increments alongside <code>worker_pods_reaped_total{reason="pending_deadline"}</code>; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">runbook</a>. An <code>outcome="cancelled"</code> run is then queued for automatic re-run, tracked by the next row.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>outcome</code></td>
+<td>REST <code>force-cancel</code>s of the workflow run behind a worker pod removed before it ran: the fast honest ending for a job nothing will ever report (Q683). No <code>completejob</code> value ends such a job honestly (Q645/Q676), and told nothing GitHub cancels run and job at its ~15-minute unstarted-job timeout; the standalone force-cancel reaches the same <strong><code>cancelled</code></strong> conclusion in about a second (measured live 2026-08-05), and the cancelled run accepts <code>rerun-failed-jobs</code> where the false-green ending refused it. <code>outcome="cancelled"</code>: accepted. <code>outcome="identity_unknown"</code>: the acquire payload carried no <code>owner/repo/run_id</code>, so there was no endpoint to address. <code>outcome="error"</code>: GitHub refused the call or the API failed. On the latter two the unstarted-job timeout remains the honest backstop, so they cost latency, not correctness; a sustained non-zero rate on either is worth investigating. <code>tier="classic"</code> is the acquiring goroutine, woken by its own worker pod's deletion; <code>tier="scaleset"</code> is the owning reconciler, which reads the run identity off the pod as the reaper deletes it (Q766), so on that tier <code>outcome="identity_unknown"</code> is unreachable, and the same failure is counted as <code>eviction_recovery_identity_unknown_total{cause="abandoned"}</code> instead. Increments alongside <code>worker_pods_reaped_total{reason="pending_deadline"}</code>; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">runbook</a>. An <code>outcome="cancelled"</code> run is then queued for automatic re-run, tracked by the next row.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_abandoned_run_rerun_waits_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
-<td>How the wait for capacity ended for a force-cancelled abandoned run queued for automatic re-run (Q691). The re-run is deliberately <strong>deferred</strong>: the job was abandoned because its worker could not be scheduled, so re-queueing it at once would put it back into the pool that was starved, and a shortage would compound into a re-run storm. It fires when a worker pod of the same owner <strong>binds to a node</strong> (<code>PodScheduled=True</code>) after the abandonment, the same evidence-of-capacity test the Q512 capacity-gate latch uses. <code>outcome="capacity_returned"</code>: a worker was placed and the re-run was handed to the shared per-run retry budget, where it continues as <code>eviction_retries_total{cause="abandoned"}</code> (and <code>eviction_retries_exhausted_total{cause="abandoned"}</code> once <code>maxEvictionRetries</code> re-runs are spent, which is the loop bound). <code>outcome="expired"</code>: nothing was placed within the 30-minute wait window, so the run stays cancelled and needs a manual re-run. A sustained <code>expired</code> rate means jobs are being lost silently to a pool that never recovers, and is worth alerting on. Classic acquisition tier only, matching the force-cancel it recovers.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>outcome</code></td>
+<td>How the wait for capacity ended for a force-cancelled abandoned run queued for automatic re-run (Q691). The re-run is deliberately <strong>deferred</strong>: the job was abandoned because its worker could not be scheduled, so re-queueing it at once would put it back into the pool that was starved, and a shortage would compound into a re-run storm. It fires when a worker pod of the same owner <strong>binds to a node</strong> (<code>PodScheduled=True</code>) after the abandonment, the same evidence-of-capacity test the Q512 capacity-gate latch uses. <code>outcome="capacity_returned"</code>: a worker was placed and the re-run was handed to the shared per-run retry budget, where it continues as <code>eviction_retries_total{cause="abandoned"}</code> (and <code>eviction_retries_exhausted_total{cause="abandoned"}</code> once <code>maxEvictionRetries</code> re-runs are spent, which is the loop bound). <code>outcome="expired"</code>: nothing was placed within the 30-minute wait window, so the run stays cancelled and needs a manual re-run. A sustained <code>expired</code> rate means jobs are being lost silently to a pool that never recovers, and is worth alerting on. <code>tier</code> carries the acquisition tier the abandonment was detected on, matching the force-cancel it recovers (both tiers since Q766); the wait, the evidence, and the retry budget are identical on each.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
@@ -3811,6 +3811,29 @@ different operator responses:</p>
 </tr>
 </tbody>
 </table>
+<p>Q766 then ported the abandoned-run force-cancel and its capacity-gated re-run to the
+scale-set tier, adding the same <code>tier</code> label to that pair for the same reason:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Labels before</th>
+<th>After Q766</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
+<td>+ <code>tier</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_run_rerun_waits_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
+<td>+ <code>tier</code></td>
+</tr>
+</tbody>
+</table>
 <p><strong>What breaks.</strong> Only queries that match the full label set exactly, or that render
 one series per metric and now render more. Aggregations are unaffected: <code>sum(...)</code>,
 <code>increase(...) &gt; 0</code>, and <code>sum by (namespace, runner_group) (...)</code> keep working
@@ -3822,8 +3845,12 @@ dashboard titled "evictions" was accurate. It now also counts preemptions, which
 routine consequence of running a <code>priorityTiers</code> floor rather than a sign of node
 trouble. An alert that pages on this counter rising should filter to
 <code>{cause="eviction"}</code> unless it genuinely wants both.</p>
-<p><strong>Continuity.</strong> Both counters keep their names, so history is preserved; series
+<p><strong>Continuity.</strong> Every counter keeps its name, so history is preserved; series
 recorded before the upgrade simply carry no <code>tier</code> label.</p>
+<p><strong>Q766 also changes what a zero means.</strong> Before it, an abandoned worker on a
+<code>ScaleSet</code> set produced no <code>abandoned_run_*</code> series at all, so a flat zero was the
+tier's normal state rather than the absence of abandonments. Those series now populate
+on both tiers, and a <code>ScaleSet</code> set that starts reporting them is not a regression.</p>
 <h2 id="breaking-observability-changes-q205">Breaking observability changes (Q205)<a class="headerlink" href="#breaking-observability-changes-q205" title="Permanent link">&para;</a></h2>
 <p>The Q205 naming audit aligned metric and span/attribute names to the Prometheus and
 OpenTelemetry conventions before the v2beta1 freeze. These are <strong>breaking</strong> for any
