@@ -2822,6 +2822,14 @@
 <td>Seen 3/6 <code>make check</code> runs 2026-08-08 under Q733, 0/4 under <code>make scripts-test</code> alone, 0/5 standalone: it needs full-check contention. The tree case waits 100×<code>sleep 0.1</code> for a <code>.launch</code> record. Q642/Q690's shape: bounds startup, not the subject.</td>
 </tr>
 <tr>
+<td><a id="Q747"></a>Q747</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/isolation_test.go">e2e cross-tenant NetworkPolicy probe intermittently connects instead of being blocked</a></td>
+<td><code>flake</code> <code>tests</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Failed on 9480f29b, passed unchanged on 7a531dff (#1344). The curl pod ended Succeeded with HTTP_CODE=400, so it reached the nsB proxy rather than timing out, and the spec's own gate pod had already observed enforcement live. Mechanism unverified.</td>
+</tr>
+<tr>
 <td><a id="Q706"></a>Q706</td>
 <td><a href="../development/testing/#two-clocks-in-one-assertion"><code>alloc-queue-id-test</code> bounds fleet startup on the wall clock</a></td>
 <td><code>tests</code> <code>retro</code></td>
@@ -2836,6 +2844,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-08 under Q733: 170 <code>scripts/</code> files now need <code>inherit_errexit</code> (bash 4.4+), stock macOS ships 3.2 at <code>/bin/bash</code>, and <code>check-tools.sh</code> checks no bash version. The 3 hooks fail open, the rest die confusingly. New required-tier prereq.</td>
+</tr>
+<tr>
+<td><a id="Q749"></a>Q749</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>STATUS_GATES</code> claims to be complete and omits two gates a STATUS.md change can fail</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Comment calls it the complete set a STATUS.md-only change can fail, but STATUS.md has an em-dash ceiling (39, at 32) and page-density scans <code>docs/*.md</code>; neither is listed. <code>gate-lists-check</code> checks only the subset direction, so nothing catches it.</td>
 </tr>
 <tr>
 <td><a id="Q742"></a>Q742</td>
