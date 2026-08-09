@@ -25,6 +25,7 @@
 # would otherwise pass by checking nothing.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 # The library is resolved from this script's own location rather than from the
 # git root, which a test suite scopes to a throwaway tree with no scripts/lib/.
