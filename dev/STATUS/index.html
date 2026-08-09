@@ -3483,6 +3483,22 @@
 <td>Measured 2026-08-06 at 1440px: 50 chars (3-col, 347px bullet), 77 (2-col, 559px), per <a href="../development/website/#card-bullets-fit-on-one-line">website.md</a>. Parsing density puts it in Go over goldmark, not shell. Both pages comply on main; starts green.</td>
 </tr>
 <tr>
+<td><a id="Q774"></a>Q774</td>
+<td><a href="../development/doc-update-matrix/">Gate design-doc scope statements against the operator surfaces</a></td>
+<td><code>ci</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>doc-update-matrix.md calls a design-doc-only update "the classic miss" and nothing enforces it; 1.4 missed it three times. Key on scope phrases added under <code>docs/design/</code>, not the file pair. <a href="#Q767">Q767</a> renders scope; this propagates it.</td>
+</tr>
+<tr>
+<td><a id="Q775"></a>Q775</td>
+<td><a href="../development/parallel-dispatch/">A shipped Q-ID can be re-filed as an open row with no gate catching it</a></td>
+<td><code>ci</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A dispatcher filed Q766 while its worker filed-and-deleted the same row, so landing both would have re-opened shipped work. <code>lint-backlog</code> rule 12 only checks the <code>refs/queue-ids</code> claim. Needs a parallel-dispatch note and a gate look.</td>
+</tr>
+<tr>
 <td><a id="Q734"></a>Q734</td>
 <td><a href="../development/website/#interface-rules-the-custom-layer-must-satisfy">Slate's body text sits below the APCA body floor, capping every muted token under it</a></td>
 <td><code>docs</code></td>
