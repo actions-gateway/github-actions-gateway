@@ -205,9 +205,14 @@ const (
 	// ReasonProxyDeleted — a previously-resolved proxy was deleted (degrade-not-block,
 	// §H.8): the set previously reported proxyMode Proxied under an unchanged spec
 	// generation, yet the proxy no longer resolves. Distinct from ProxyNotFound (never
-	// applied). A ProxyShareNotGranted reason for the cross-namespace consent handshake
-	// (§H.9) arrives with cross-namespace sharing (M4) — not declared until then.
+	// applied).
 	ReasonProxyDeleted = "ProxyDeleted"
+	// ReasonProxyShareNotGranted — a proxyRef/defaultProxyRef names an EgressProxy in
+	// another namespace that does not consent to the referrer's namespace (§H.9).
+	// Consent is provider-side: the proxy must list the referrer in
+	// spec.sharing.allowedNamespaces. Distinct from ProxyNotFound so the operator sees
+	// a proxy that exists but is not shared, rather than hunting a missing object.
+	ReasonProxyShareNotGranted = "ProxyShareNotGranted"
 	// ReasonCABundleNotFound — the ConfigMap named by githubCABundleRef does not exist,
 	// so the AGC cannot be provisioned with the trust it was asked to use (Degraded,
 	// fail closed: an appliance behind a private CA is unreachable without it).

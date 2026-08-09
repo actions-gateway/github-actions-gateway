@@ -32,31 +32,69 @@ import (
 //
 // A RunnerSet whose gateway is missing contributes nothing: with no githubURL there is
 // no host to allow, and the gateway's own arrival requeues this proxy.
-func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, namespace, proxyName string) ([]string, error) {
-	var gateways gmcv2alpha1.ActionsGatewayList
-	if err := c.List(ctx, &gateways, client.InNamespace(namespace)); err != nil {
-		return nil, fmt.Errorf("list ActionsGateways in %q: %w", namespace, err)
+// A cross-namespace referrer counts too (M4, §H.9): its GitHub host is just as
+// unreachable as a colocated one if the allowlist omits it, and a shared proxy exists
+// precisely to carry other namespaces' traffic.
+//
+// The scan widens to cluster-wide only for a proxy that actually grants something.
+// A proxy sharing nothing can have no cross-namespace referrer, so scanning past its
+// own namespace could only cost — and it costs on every reconcile, for every proxy in
+// the cluster, against a resync that re-enqueues them all. Keeping the unshared case
+// namespace-scoped leaves it exactly as expensive as it was before M4.
+func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2alpha1.EgressProxy) ([]string, error) {
+	namespace, proxyName := ep.Namespace, ep.Name
+
+	scope := []client.ListOption{client.InNamespace(namespace)}
+	if ep.Spec.Sharing != nil && len(ep.Spec.Sharing.AllowedNamespaces) > 0 {
+		scope = nil
 	}
-	gatewayByName := make(map[string]*gmcv2alpha1.ActionsGateway, len(gateways.Items))
+
+	var gateways gmcv2alpha1.ActionsGatewayList
+	if err := c.List(ctx, &gateways, scope...); err != nil {
+		return nil, fmt.Errorf("list ActionsGateways: %w", err)
+	}
+	// Keyed namespace/name: a RunnerSet's gatewayRef is always same-namespace, so two
+	// namespaces may hold same-named gateways with different GitHub URLs.
+	type gwKey struct{ ns, name string }
+	gatewayByKey := make(map[gwKey]*gmcv2alpha1.ActionsGateway, len(gateways.Items))
+
+	// binds reports whether a referrer in referrerNS naming (refNS, refName) resolves
+	// to this proxy AND is entitled to it. Consent is required for the cross-namespace
+	// case so an unconsented referrer cannot inject a hostname into another tenant's
+	// egress allowlist by naming their proxy.
+	binds := func(ref *gmcv2alpha1.ProxyObjectRef, referrerNS string) bool {
+		if ref == nil || ref.Name != proxyName {
+			return false
+		}
+		refNS := ref.Namespace
+		if refNS == "" {
+			refNS = referrerNS
+		}
+		if refNS != namespace {
+			return false
+		}
+		return referrerNS == namespace || proxyShareGranted(ep, referrerNS)
+	}
+
 	var hosts []string
 	for i := range gateways.Items {
 		gw := &gateways.Items[i]
-		gatewayByName[gw.Name] = gw
-		if gw.Spec.DefaultProxyRef != nil && gw.Spec.DefaultProxyRef.Name == proxyName {
+		gatewayByKey[gwKey{gw.Namespace, gw.Name}] = gw
+		if binds(gw.Spec.DefaultProxyRef, gw.Namespace) {
 			hosts = append(hosts, gitHubHostOf(gw.Spec.GitHubURL))
 		}
 	}
 
 	var runnerSets gmcv2alpha1.RunnerSetList
-	if err := c.List(ctx, &runnerSets, client.InNamespace(namespace)); err != nil {
-		return nil, fmt.Errorf("list RunnerSets in %q: %w", namespace, err)
+	if err := c.List(ctx, &runnerSets, scope...); err != nil {
+		return nil, fmt.Errorf("list RunnerSets: %w", err)
 	}
 	for i := range runnerSets.Items {
 		rs := &runnerSets.Items[i]
-		if rs.Spec.ProxyRef == nil || rs.Spec.ProxyRef.Name != proxyName {
+		if !binds(rs.Spec.ProxyRef, rs.Namespace) {
 			continue
 		}
-		if gw, ok := gatewayByName[rs.Spec.GatewayRef.Name]; ok {
+		if gw, ok := gatewayByKey[gwKey{rs.Namespace, rs.Spec.GatewayRef.Name}]; ok {
 			hosts = append(hosts, gitHubHostOf(gw.Spec.GitHubURL))
 		}
 	}
@@ -131,7 +169,33 @@ func (r *EgressProxyReconciler) referrerToEgressProxies(ctx context.Context, obj
 			Name:      list.Items[i].Name,
 		}})
 	}
+	// A referrer naming a proxy in another namespace (M4, §H.9) has to requeue that
+	// proxy too: it owns the CA projection into this namespace and the ingress rule
+	// admitting it, and neither converges off a same-namespace list. Named explicitly
+	// rather than swept, since a cross-namespace ref points at exactly one proxy.
+	for _, ref := range remoteProxyRefsOf(obj) {
+		reqs = append(reqs, ctrl.Request{NamespacedName: ref})
+	}
 	return reqs
+}
+
+// remoteProxyRefsOf returns the cross-namespace EgressProxy a referrer names, if any.
+// Only the two referrer kinds this reconciler watches carry a proxy reference; any
+// other object yields nothing.
+func remoteProxyRefsOf(obj client.Object) []types.NamespacedName {
+	var ref *gmcv2alpha1.ProxyObjectRef
+	switch o := obj.(type) {
+	case *gmcv2alpha1.ActionsGateway:
+		ref = o.Spec.DefaultProxyRef
+	case *gmcv2alpha1.RunnerSet:
+		ref = o.Spec.ProxyRef
+	default:
+		return nil
+	}
+	if ref == nil || ref.Namespace == "" || ref.Namespace == obj.GetNamespace() {
+		return nil
+	}
+	return []types.NamespacedName{{Namespace: ref.Namespace, Name: ref.Name}}
 }
 
 // gitHubHostOf returns the hostname of a gateway githubURL, or "" when it does not

@@ -43,7 +43,7 @@ func v2Gateway(namespace, name, gitHubURL, defaultProxy string) *agcv2alpha1.Act
 		Spec:       agcv2alpha1.ActionsGatewaySpec{GitHubURL: gitHubURL},
 	}
 	if defaultProxy != "" {
-		gw.Spec.DefaultProxyRef = &agcv2alpha1.LocalObjectRef{Name: defaultProxy}
+		gw.Spec.DefaultProxyRef = &agcv2alpha1.ProxyObjectRef{Name: defaultProxy}
 	}
 	return gw
 }
@@ -87,7 +87,7 @@ func TestV2ActionsGatewayWebhook_RejectsGHESHostExcludedByDefaultProxy(t *testin
 func TestV2ActionsGatewayWebhook_RejectsGHESHostExcludedByRunnerSetProxy(t *testing.T) {
 	ep := proxyWithNoProxy("team-a", "ep", ".corp.example")
 	rs := classicRS("rs", "team-a", "gw", "linux")
-	rs.Spec.ProxyRef = &agcv2alpha1.ObjectRef{Name: "ep"}
+	rs.Spec.ProxyRef = &agcv2alpha1.ProxyObjectRef{Name: "ep"}
 	v := &ActionsGatewayCustomValidator{reader: fakeReader(t, ep, rs)}
 
 	_, err := v.ValidateCreate(context.Background(), v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", ""))
@@ -127,7 +127,7 @@ func TestV2ActionsGatewayWebhook_AdmitsCompatibleProxyPairs(t *testing.T) {
 	t.Run("RunnerSet under another gateway does not bind this host", func(t *testing.T) {
 		ep := proxyWithNoProxy("team-a", "ep", "ghes.corp.example")
 		rs := classicRS("rs", "team-a", "other-gw", "linux")
-		rs.Spec.ProxyRef = &agcv2alpha1.ObjectRef{Name: "ep"}
+		rs.Spec.ProxyRef = &agcv2alpha1.ProxyObjectRef{Name: "ep"}
 		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, ep, rs)}
 		_, err := v.ValidateCreate(ctx, v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", ""))
 		require.NoError(t, err)

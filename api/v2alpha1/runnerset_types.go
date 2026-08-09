@@ -83,7 +83,7 @@ type RunnerSetSpec struct {
 	// (ProxyNotFound), not direct egress (Q168).
 	//
 	// +optional
-	ProxyRef *ObjectRef `json:"proxyRef,omitempty"`
+	ProxyRef *ProxyObjectRef `json:"proxyRef,omitempty"`
 
 	// MaxListeners is the maximum number of concurrent listener goroutines — a
 	// concurrency ceiling with a permanent baseline of one poller; extra pollers
