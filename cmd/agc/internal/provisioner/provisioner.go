@@ -663,7 +663,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		result = broker.TaskResultAbandoned
 		log.Warn("worker pod was removed before it ran; reporting the job as abandoned and force-cancelling its run",
 			"phase", outcome.Phase, "duration", duration)
-		p.forceCancelAbandonedRun(ctx, target, owner, repo, runID, log)
+		p.forceCancelAbandonedRun(ctx, target, owner, repo, runID, evictionTierClassic, log)
 	case outcome.Phase == corev1.PodFailed:
 		result = broker.TaskResultFailed
 	default:

@@ -284,6 +284,14 @@ type reapHooks struct {
 	// annotation reaches it. Best-effort: it owns its own logging and its outcome never
 	// changes whether the pod is reaped.
 	deregisterRunner func(ctx context.Context, runnerName string)
+	// recoverAbandoned force-cancels the run behind a worker pod the deadline reap just
+	// removed while it was still Pending, and queues it for automatic re-run once
+	// capacity returns (Q766). Called with the deleted pod, and only for a
+	// pending_deadline reap — the one reason that means the job was acquired, never ran,
+	// and is not already concluded at GitHub. Only the scale-set tier wires it: on
+	// classic the goroutine that owns the pod performs the same recovery from the
+	// informer's delete event. Best-effort and non-blocking; it owns its own logging.
+	recoverAbandoned func(ctx context.Context, pod *corev1.Pod)
 }
 
 // reapTarget binds a reap to one owning CR: which worker pods it selects, where it
@@ -482,6 +490,15 @@ func reapWorkerPodsByLabel(
 		}
 		if reason == reapReasonPendingDeadline && hooks.emitStuckPending != nil {
 			hooks.emitStuckPending(pod.Name, deadline)
+		}
+		// The job this pod was created for was acquired and never ran, and — unlike a
+		// completed_pending reap, which the branch above separates out by the
+		// job-completed-at stamp — its run is still open at GitHub. Conclude it fast and
+		// queue it for re-run (Q766). Passed the pod as the reaper still holds it: this
+		// is the scale-set tier's only sighting of it, and the classic tier's own
+		// recovery runs off the informer's delete event instead.
+		if reason == reapReasonPendingDeadline && hooks.recoverAbandoned != nil {
+			hooks.recoverAbandoned(ctx, pod)
 		}
 		if reason == reapReasonOrphanedRunning && hooks.emitOrphanedRunning != nil {
 			hooks.emitOrphanedRunning(pod.Name, completedJobRunningGrace)

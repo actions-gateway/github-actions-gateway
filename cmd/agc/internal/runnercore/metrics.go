@@ -85,8 +85,11 @@ type Metrics struct {
 	// nothing GitHub cancels run and job at its ~15-minute unstarted-job timeout;
 	// a standalone force-cancel reaches the same cancelled conclusion in about a
 	// second (measured 2026-08-05). By outcome: cancelled (accepted), identity_unknown
-	// (the payload carried no owner/repo/run_id), error (refused or API failure) —
-	// on the latter two the unstarted-job timeout remains the honest backstop.
+	// (the payload carried no owner/repo/run_id, or the worker pod carried no run-id
+	// annotation), error (refused or API failure) — on the latter two the unstarted-job
+	// timeout remains the honest backstop. The tier label splits the two detections
+	// (Q766): classic reads the identity from the payload it holds, scaleset from the
+	// worker pod's annotations.
 	AbandonedRunForceCancels *prometheus.CounterVec
 	// AbandonedRunRerunWaits counts how the wait for capacity ended for a run that
 	// was force-cancelled after its worker was removed before it ran (Q691). The
@@ -233,13 +236,13 @@ func NewMetrics() *Metrics {
 
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_abandoned_run_force_cancels_total",
-			Help: "REST force-cancels of the workflow run behind a worker pod removed before it ran, so the run and its job conclude cancelled in about a second instead of at GitHub's ~15-minute unstarted-job timeout (Q683). By outcome (cancelled, identity_unknown, error); on identity_unknown or error the unstarted-job timeout remains the honest backstop.",
-		}, []string{"namespace", "runner_group", "outcome"}),
+			Help: "REST force-cancels of the workflow run behind a worker pod removed before it ran, so the run and its job conclude cancelled in about a second instead of at GitHub's ~15-minute unstarted-job timeout (Q683). By acquisition tier (classic, scaleset) and outcome (cancelled, identity_unknown, error); on identity_unknown or error the unstarted-job timeout remains the honest backstop.",
+		}, []string{"namespace", "runner_group", "tier", "outcome"}),
 
 		AbandonedRunRerunWaits: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_abandoned_run_rerun_waits_total",
-			Help: "Force-cancelled abandoned runs waiting for the owner to place a worker pod again before their automatic re-run fires (Q691), by how the wait ended: capacity_returned (the re-run was handed to the shared per-run retry budget, and reports there as cause=abandoned) or expired (nothing was placed inside the wait window, so a manual re-run is required).",
-		}, []string{"namespace", "runner_group", "outcome"}),
+			Help: "Force-cancelled abandoned runs waiting for the owner to place a worker pod again before their automatic re-run fires (Q691), by acquisition tier (classic, scaleset) and how the wait ended: capacity_returned (the re-run was handed to the shared per-run retry budget, and reports there as cause=abandoned) or expired (nothing was placed inside the wait window, so a manual re-run is required).",
+		}, []string{"namespace", "runner_group", "tier", "outcome"}),
 
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_recovery_identity_unknown_total",
