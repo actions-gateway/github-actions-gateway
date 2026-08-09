@@ -211,6 +211,18 @@ and let the ledger's `-gate` rows answer "is it done?" until the tag.
 
 ### 1. Pre-flight
 
+**Which of these bind when the tag is a release candidate.** The first two bind
+at every tag: an RC cut from a red `main` validates nothing, and the version you
+pick fixes the stable tag's. The last four are stable-tag obligations, because a
+prerelease deploys no docs and its GitHub Release body is generated rather than
+curated, so there is no published surface for them to be wrong on yet.
+
+The **API surface review is the exception worth pulling forward to the first
+RC**. Its deadline really is the stable tag, but the RC is the artifact that
+gets validated, and a rename decided after the candidate is published costs a
+new RC and another hour-long dogfood run. Reviewing it at the first RC and
+recording the verdict then is what keeps that cheap.
+
 - `main` is green: unit/integration/e2e and `security-scan.yml` all passing on
   the commit you are about to tag. Run `make check` locally as a final gate.
 - Choose the version `vX.Y.Z` (semver). The tag **must** match `v*` or
