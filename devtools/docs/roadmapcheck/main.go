@@ -37,6 +37,33 @@
 //     documentation gap to file, not a longer bullet.
 //  6. The same for the roadmap's own gated bullets, under maxRoadmapWords —
 //     looser, because a roadmap bullet also has to name the gate it waits on.
+//  7. Every row labelled `X.Y-gate` is named by a roadmap bullet.
+//  8. A bullet that writes a release version into its prose names a row
+//     labelled with that gate.
+//
+// Rules 7 and 8 reconcile the one promise this page makes with a date attached.
+// A release gate lives in STATUS.md as an `X.Y-gate` label, meaning the row
+// blocks that tag; the roadmap is where an adopter reads it.
+//
+// Rule 7 is the load-bearing half, and it reads nothing but the `<!-- q:QN -->`
+// binding and the label. Both are machine-readable, so it is indifferent to how
+// the bullet renders the commitment: prose today, a derived version chip under
+// Q770, something else later. A rule that instead matched the sentence "Gating
+// the 1.5 release" would go quiet the moment that sentence became a pill, and a
+// gate that stops matching fails exactly as silently as one that matches
+// everything.
+//
+// Rule 8 is the narrower guard that a version typed by hand agrees with the
+// label it duplicates. Q770 makes the chip derived and never hand-typed, at
+// which point this rule finds nothing left to check — which is the intended end
+// state rather than a blind spot, because rule 7 never depended on it.
+//
+// A hand-typed version means a gating verb followed by a numbered release:
+// "Gating the 1.5 release", "so it gates the 1.5 release". Naming a version
+// without one is context rather than a commitment, and is deliberately not a
+// claim: Q273's bullet says `v2.0.0` "is the named release that removes all
+// three together", which describes where the removal lands and does not assert
+// that Q273 blocks that tag. Its row carries no gate label, and must not.
 //
 // Usage:
 //
@@ -52,6 +79,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/devtools/docs/markdown"
@@ -60,6 +88,9 @@ import (
 const (
 	nearTermHeading  = "In progress / near-term"
 	exploringHeading = "Exploring / longer-term"
+
+	// The STATUS.md column carrying the `X.Y-gate` labels rules 7 and 8 read.
+	labelsColumn = "Labels"
 
 	// Generous enough that a capability plus one qualifying clause fits; the
 	// longest bullet at extraction was 31 words. Tight enough that the 126-word
@@ -95,10 +126,14 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 		docs[p] = markdown.Parse(src)
 	}
 
-	queue := statusIDs(docs[statusPath], "Queue")
-	deferred := statusIDs(docs[statusPath], "Deferred")
+	queue, queueLabelled := statusRows(docs[statusPath], "Queue")
+	deferred, deferredLabelled := statusRows(docs[statusPath], "Deferred")
 	if len(queue) == 0 && len(deferred) == 0 {
 		_, _ = fmt.Fprintf(findings, "check-roadmap: parsed no Q-IDs from %s — the table format changed?\n", statusPath)
+		return 2
+	}
+	if !queueLabelled && !deferredLabelled {
+		_, _ = fmt.Fprintf(findings, "check-roadmap: found rows but no %q column in %s — the table format changed?\n", labelsColumn, statusPath)
 		return 2
 	}
 
@@ -111,9 +146,11 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 			nearTermHeading, exploringHeading, roadmapPath)
 		return 2
 	}
+	bound := map[string]bool{}
 	for _, b := range bullets {
-		c.checkRoadmapBullet(roadmapName, b)
+		c.checkRoadmapBullet(roadmapName, b, bound)
 	}
+	c.checkGateCoverage(base(statusPath), roadmapName, bound)
 
 	features := featureBullets(docs[featuresPath])
 	if len(features) == 0 {
@@ -141,9 +178,11 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 	return 0
 }
 
+// checker holds the two backlog tables by Q-ID, which is both the membership
+// test rules 2-4 need and the label side of rules 7 and 8.
 type checker struct {
 	findings        io.Writer
-	queue, deferred map[string]bool
+	queue, deferred map[string]statusRow
 	failed          bool
 }
 
@@ -152,7 +191,9 @@ func (c *checker) report(file string, line int, msg string) {
 	c.failed = true
 }
 
-func (c *checker) checkRoadmapBullet(file string, b bullet) {
+// checkRoadmapBullet applies rules 1-6 and 8 to one bullet, recording in bound
+// every live Q-ID it names so rule 7 can find the gated rows nothing names.
+func (c *checker) checkRoadmapBullet(file string, b bullet, bound map[string]bool) {
 	if !b.hasLink {
 		c.report(file, b.line, fmt.Sprintf(
 			"%q has no link. Point at the plan doc or Appendix G section carrying the detail.", b.label))
@@ -169,19 +210,25 @@ func (c *checker) checkRoadmapBullet(file string, b bullet) {
 	}
 
 	inQueue, inDeferred := false, false
+	var gates []string
 	for _, id := range b.ids {
+		row, queued, live := c.row(id)
 		switch {
 		case !qIDRE.MatchString(id):
 			c.report(file, b.line, fmt.Sprintf("%q annotation %q is not a Q-ID.", b.label, id))
-		case c.queue[id]:
-			inQueue = true
-		case c.deferred[id]:
-			inDeferred = true
-		default:
+			continue
+		case !live:
 			c.report(file, b.line, fmt.Sprintf(
 				"%q names %s, which no longer exists in STATUS.md — the row was deleted, so the work shipped. Move this bullet to docs/features.md, or drop %s if only part of it shipped.",
 				b.label, id, id))
+			continue
+		case queued:
+			inQueue = true
+		default:
+			inDeferred = true
 		}
+		bound[id] = true
+		gates = union(gates, row.gates)
 	}
 
 	if b.section == nearTermHeading && !inQueue && inDeferred {
@@ -192,25 +239,166 @@ func (c *checker) checkRoadmapBullet(file string, b bullet) {
 		c.report(file, b.line, fmt.Sprintf(
 			"%q names only Queue rows — it is active work. Move it to %q.", b.label, nearTermHeading))
 	}
+
+	c.checkHandTypedRelease(file, b, gates)
 }
 
-// statusIDs returns the Q-IDs of the rows in one STATUS.md table. A backlog
-// row's ID cell is `<a id="QN"></a>QN`, which renders as the bare ID; a
+// checkHandTypedRelease is rule 8: a version written into the bullet agrees
+// with the gate label it duplicates. Only rows that still exist contribute a
+// gate — a dangling ID is rule 2's finding, and re-reporting it here would
+// bury it.
+func (c *checker) checkHandTypedRelease(file string, b bullet, gates []string) {
+	for _, claim := range b.claims {
+		if !contains(gates, claim) {
+			c.report(file, b.line, fmt.Sprintf(
+				"%q writes the %s release into its prose, but no row it names carries `%s-gate` — the label was dropped or moved, so this page promises a release the backlog does not. Re-label the row, or drop the version and let the chip derive it.",
+				b.label, claim, claim))
+		}
+	}
+}
+
+// checkGateCoverage is rule 7: every gated row is bound to a bullet by its
+// `<!-- q:QN -->` annotation. A gate label with nowhere to render is a release
+// commitment published nowhere, and it is the one direction here that reads
+// only machine-readable inputs, so it cannot go quiet when the rendering
+// changes.
+func (c *checker) checkGateCoverage(statusFile, roadmapFile string, bound map[string]bool) {
+	var uncovered []struct {
+		id  string
+		row statusRow
+	}
+	for _, table := range []map[string]statusRow{c.queue, c.deferred} {
+		for id, row := range table {
+			if len(row.gates) == 0 || bound[id] {
+				continue
+			}
+			uncovered = append(uncovered, struct {
+				id  string
+				row statusRow
+			}{id, row})
+		}
+	}
+	// Map iteration is unordered; findings are read as a list, so sort them.
+	sort.Slice(uncovered, func(i, j int) bool { return uncovered[i].row.line < uncovered[j].row.line })
+	for _, u := range uncovered {
+		c.report(statusFile, u.row.line, fmt.Sprintf(
+			"%s is labelled %s but no %s bullet names it, so the release it blocks is committed nowhere an adopter reads. Add a bullet carrying <!-- q:%s -->, or drop the label if it no longer blocks the tag.",
+			u.id, gateLabels(u.row.gates), roadmapFile, u.id))
+	}
+}
+
+// gateLabels renders a row's gates the way STATUS.md writes them, for a
+// finding that has to be actionable without opening the file.
+func gateLabels(gates []string) string {
+	out := make([]string, 0, len(gates))
+	for _, g := range gates {
+		out = append(out, "`"+g+"-gate`")
+	}
+	return strings.Join(out, " ")
+}
+
+// row returns a Q-ID's row, which table it is in, and whether it exists at
+// all. A row in neither table has shipped, since done rows are deleted.
+func (c *checker) row(id string) (r statusRow, queued, live bool) {
+	if r, ok := c.queue[id]; ok {
+		return r, true, true
+	}
+	if r, ok := c.deferred[id]; ok {
+		return r, false, true
+	}
+	return statusRow{}, false, false
+}
+
+// statusRow is one backlog row, reduced to what the roadmap rules read.
+type statusRow struct {
+	// gates holds the `major.minor` of each `X.Y-gate` label on the row.
+	gates []string
+	line  int
+}
+
+// statusRows returns the rows of one STATUS.md table by Q-ID. A backlog row's
+// ID cell is `<a id="QN"></a>QN`, which renders as the bare ID; a
 // Progress-table cell carries a plan link instead, so it never matches.
-func statusIDs(doc *markdown.Document, heading string) map[string]bool {
+//
+// labelled reports whether the label column was found, which is what separates
+// "no row is gated" from "the column moved and rules 7-8 now check nothing".
+func statusRows(doc *markdown.Document, heading string) (rows map[string]statusRow, labelled bool) {
 	start, end, _ := doc.SectionRange(2, heading)
-	ids := map[string]bool{}
+	rows = map[string]statusRow{}
 	for _, table := range doc.Tables() {
+		labels := columnIndex(table.Header, labelsColumn)
 		for _, row := range table.Rows {
 			if row.Line < start || row.Line > end || len(row.Text) == 0 {
 				continue
 			}
-			if qIDRE.MatchString(row.Text[0]) {
-				ids[row.Text[0]] = true
+			if !qIDRE.MatchString(row.Text[0]) {
+				continue
 			}
+			if labels < 0 || labels >= len(row.Cells) {
+				rows[row.Text[0]] = statusRow{line: row.Line}
+				continue
+			}
+			labelled = true
+			rows[row.Text[0]] = statusRow{gates: gateVersions(row.Cells[labels]), line: row.Line}
 		}
 	}
-	return ids
+	return rows, labelled
+}
+
+// columnIndex finds a table column by its header text, reporting -1 when the
+// table has no such column.
+func columnIndex(header markdown.Row, name string) int {
+	for i, cell := range header.Text {
+		if strings.EqualFold(strings.TrimSpace(cell), name) {
+			return i
+		}
+	}
+	return -1
+}
+
+// gateVersions extracts the release gates a label cell declares, as `major.minor`.
+// The backticks are required: they are what separates the label from a mention
+// of one in prose.
+func gateVersions(cell string) []string {
+	var out []string
+	for _, m := range gateLabelRE.FindAllStringSubmatch(cell, -1) {
+		out = union(out, []string{m[1]})
+	}
+	return out
+}
+
+// releaseClaims extracts the releases a bullet's prose says it gates, as
+// `major.minor`. The whitespace around the version is optional because a
+// bullet wraps: a soft line break between "the" and "1.5 release" leaves the
+// two fused in the rendered text this reads.
+func releaseClaims(text string) []string {
+	var out []string
+	for _, m := range releaseClaimRE.FindAllStringSubmatch(text, -1) {
+		version := m[1]
+		if version == "" {
+			version = m[2]
+		}
+		out = union(out, []string{version})
+	}
+	return out
+}
+
+func union(dst, src []string) []string {
+	for _, s := range src {
+		if !contains(dst, s) {
+			dst = append(dst, s)
+		}
+	}
+	return dst
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
 
 type bullet struct {
@@ -220,6 +408,7 @@ type bullet struct {
 	words   int
 	hasLink bool
 	ids     []string
+	claims  []string
 }
 
 // roadmapBullets returns the top-level bullets of the two gated sections.
@@ -263,8 +452,18 @@ func featureBullets(doc *markdown.Document) []bullet {
 }
 
 var (
-	qIDRE   = regexp.MustCompile(`^Q[0-9]+$`)
-	annotRE = regexp.MustCompile(`<!--\s*q:([^-]*)-->`)
+	qIDRE       = regexp.MustCompile(`^Q[0-9]+$`)
+	annotRE     = regexp.MustCompile(`<!--\s*q:([^-]*)-->`)
+	gateLabelRE = regexp.MustCompile("`([0-9]+\\.[0-9]+)-gate`")
+
+	// A gating verb, then a numbered release close enough to be its object.
+	// The `[^.;]` window stops at a sentence or clause boundary so a verb
+	// cannot reach a version in the next thought, and the verb alternation is
+	// word-anchored because this page says "Gateway" constantly. A patch
+	// component is matched and discarded: `v2.0.0` is gated by `2.0-gate`.
+	releaseClaimRE = regexp.MustCompile(
+		`(?i)\b(?:gat(?:e|es|ed|ing)|block(?:s|ed|ing)?)\b[^.;]{0,32}?` +
+			`(?:v?([0-9]+\.[0-9]+)(?:\.[0-9]+)?\s*release|release\s*v?([0-9]+\.[0-9]+)(?:\.[0-9]+)?)`)
 )
 
 func newBullet(doc *markdown.Document, item markdown.ListItem) bullet {
@@ -273,6 +472,7 @@ func newBullet(doc *markdown.Document, item markdown.ListItem) bullet {
 		label:   item.Lead,
 		words:   len(strings.Fields(item.Text)),
 		hasLink: item.HasLink,
+		claims:  releaseClaims(item.Text),
 	}
 	if b.label == "" {
 		b.label = item.Text
