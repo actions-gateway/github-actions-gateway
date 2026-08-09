@@ -42,6 +42,12 @@ last gaps an outside operator hits.
   rules, and panels in both shipped dashboards have no data. Gating the 1.5
   release; until it lands, expect those panels to read empty.
 
+- **[Multi-label runner sets for `runs-on` arrays](plan/arc-parity.md#where-arc-is-actually-ahead)** <!-- q:Q726 -->
+  A runner set takes exactly one label today, so a workflow targeting
+  `runs-on: [linux, gpu]` needs one edit per target to move here from Actions
+  Runner Controller (ARC). That is the one gap breaking the otherwise zero-edit
+  migration, so it gates the 1.5 release.
+
 - **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 -->
   [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted*
   CI only: the micro-VM bounds the guest kernel, the runner's egress stays
@@ -61,6 +67,19 @@ last gaps an outside operator hits.
   `ReadWriteMany` is how jobs share files, and it is what ARC's
   `containerMode: kubernetes` depends on, so it also matters to anyone migrating
   off that mode. Validation and a reference architecture come before any API.
+
+- **[A non-privileged path for `container:` and `services:` steps](plan/arc-parity.md#the-collision-the-individual-rows-do-not-state)** <!-- q:Q727 -->
+  ARC runs these as separate pods on a shared volume under
+  `containerMode: kubernetes`. One worker pod per job means the path here is
+  Docker-in-Docker, unprivileged only under Kata. Sequenced behind the
+  `ReadWriteMany` validation above, which it depends on; documenting Kata
+  Docker-in-Docker as the permanent answer is a valid outcome.
+
+- **[Validate GHES against a real appliance](plan/arc-parity.md#where-arc-is-actually-ahead)** <!-- q:Q765 -->
+  Both GitHub Enterprise Server (GHES) capabilities ship marked untested against
+  real hardware: the appliance-addressing path and the private-CA bundle. They
+  are believed correct and unproven, which is not the same thing. Waits on
+  access to an appliance.
 
 The next four are all opt-in additions to the
 [per-tenant proxy](design/network-architecture.md), tracked and shipping

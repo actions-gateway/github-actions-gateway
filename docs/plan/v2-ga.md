@@ -26,7 +26,7 @@ API surface, and the contract cannot be walked back.
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
 | 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
-| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity cleared — Q417, Q443, and Q446 shipped 2026-07-26 |
+| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity was cleared by Q417/Q443/Q446 (2026-07-26) and **reopened** by [Q766](../STATUS.md#Q766), the classic-only abandoned-run recovery Q683/Q691 shipped after that date |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../STATUS.md#Q413)) |
 
 ## Why this is gated on a soak, not a date

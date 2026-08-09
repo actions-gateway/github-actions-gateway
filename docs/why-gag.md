@@ -198,7 +198,10 @@ only closes inside the controller that builds the pods.
 
 ## Where ARC is ahead
 
-Some of it is capability, not only maturity. Measured 2026-08-06.
+Some of it is capability, not only maturity. Measured 2026-08-06. Each gap below
+is tracked, and what closes it and when is on the
+[public roadmap](roadmap.md); the support entitlement is the one we do not plan
+to match.
 
 - **A GitHub Support entitlement**, covering ARC installed via the official
   Helm charts, GitHub Enterprise Server 3.9 and later. GAG has none. Read the
