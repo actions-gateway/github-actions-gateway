@@ -3,8 +3,8 @@
 > **Status: scope decided 2026-08-05. No gating Queue rows remain.** All three
 > `1.4-gate` items shipped 2026-08-08: Q691, Q554 (its
 > [plan](archive/runner-template-library.md) archived), and Q166. Everything else
-> the release contains is already merged, so the cut now needs its release
-> candidate and dogfood validation.
+> the release contains is already merged. `v1.4.0-rc.1` was cut from `162d97a7`
+> on 2026-08-09; the dogfood validation has not run yet.
 
 ## The minor was forced before anyone chose it
 
@@ -147,6 +147,32 @@ types) and `master` (`vault/vault.go`, `vault/azurekeyvault/`,
 The rest of the reconciliation, including whether the comparison table keeps its
 verdict-table shape, is [1.5 scope](release-1.5.md#in-scope-reconcile-the-marketing-surfaces).
 The recurring form is [release.md § Pre-flight](../operations/release.md#1-pre-flight).
+
+## Pre-flight: the API surface this tag publishes
+
+Recorded 2026-08-09 from `scripts/release/api-surface-since.sh` over
+`v1.3.0..162d97a7`, the commit `v1.4.0-rc.1` was cut from, per
+[release.md § Pre-flight](../operations/release.md#1-pre-flight). **Verdict:
+ship as-is.** Four wire fields and one condition reason are published for the
+first time; no enum constraint and no default changed.
+
+| Addition | Carried on | Why the shape is right |
+|---|---|---|
+| `allowedInfraPriorityClasses` (Q298) | `PriorityClassAllowlist` | Unset or empty forbids every named class, so the secure posture is the unset case. Name and validation mirror the sibling `allowedPriorityClasses`. |
+| `proxyRef` (Q166) | `RunnerSet` | Optional because direct egress is a defined behaviour rather than a failure, which is what separates it from the required `templateRef` (§H.4, §H.10). |
+| `defaultProxyRef` (Q166) | `ActionsGateway` | Inherited only by RunnerSets that set no `proxyRef`, so the narrower field always wins. |
+| `namespace` (Q166) | `ProxyObjectRef` | Empty means the referrer's own namespace, so the pre-M4 same-namespace posture is the default and the unset case. |
+| `ProxyShareNotGranted` | condition reason | Names the fail-closed outcome when a cross-namespace reference lacks provider consent. |
+
+**The one thing that looked like a gap is house style, checked rather than
+assumed.** `ProxyObjectRef` bounds both its fields by length and neither by
+pattern, while the allowlist fields next to it pattern every item. No object ref
+in `v2beta1` patterns a name: `ProxyObjectRef.Name` carries the same
+`MinLength=1`/`MaxLength=52` pair as `ObjectRef.Name`, and `LocalSecretReference`
+and `LocalConfigMapReference` are length-only too. Adding a pattern narrows a
+published field, so the cheap window for it closes at the stable tag and this is
+the pass that had to settle it. An unresolvable namespace string is rejected at
+resolution rather than at admission, and fails closed.
 
 ## The discipline this cycle could not apply
 
