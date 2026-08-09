@@ -2995,6 +2995,14 @@
 <td><code>validate-release.sh</code> has zero references to <code>capacityGate</code>, <code>nodeAutoscaling</code> or quota; its legs are deploy, e2e, sizing, CRD smoke. It builds an autoscaling cluster with headroom, so the constrained path is never driven on real infra.</td>
 </tr>
 <tr>
+<td><a id="Q773"></a>Q773</td>
+<td><a href="../operations/release/#validate-the-release-candidate-on-dogfood">release.md's <code>Throughput</code> expectation is stale: the gate now reports it <code>Active</code></a></td>
+<td><code>docs</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured on v1.4.0-rc.1 2026-08-09: <code>Throughput</code> reported <code>Active</code>, <code>sampleCounts=[166]</code>, where the runbook calls <code>NOT VALIDATED THIS RUN</code> normal for a ~7-job matrix. The sampler accrues regardless of <code>spec.sizing</code> and re-seeds from persisted status.</td>
+</tr>
+<tr>
 <td><a id="Q707"></a>Q707</td>
 <td><a href="../development/testing/#stopping-a-run-name-the-target-never-the-program">Ownership lease for local singleton tiers (e2e/kind slots)</a></td>
 <td><code>debt</code> <code>tests</code></td>
