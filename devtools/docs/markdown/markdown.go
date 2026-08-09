@@ -270,6 +270,14 @@ func (d *Document) inlineText(n ast.Node) string {
 				raw = util.UnescapePunctuations(raw)
 			}
 			b.Write(raw)
+			// A segment stops at the line break and excludes it, so without
+			// this the last word of one line fuses to the first of the next
+			// ("several"+"co-scheduled"). Any caller measuring words then
+			// reads a count that drops with every wrap: roadmapcheck's
+			// 60-word cap under-counted a 6-line bullet by 5.
+			if v.SoftLineBreak() || v.HardLineBreak() {
+				b.WriteByte(' ')
+			}
 		case *ast.String:
 			b.Write(v.Value)
 		case *ast.AutoLink:

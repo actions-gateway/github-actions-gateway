@@ -60,7 +60,7 @@ backlog rather than typed here, so it cannot outlive the commitment.
 - **[Persistent and shared worker storage](operations/README.md)** <!-- q:Q719 -->
   Workers are storage-less by design and nothing validates a `ReadWriteMany`
   volume mounted into one, so the stance is undocumented rather than decided.
-  `ReadWriteMany` is how jobs share files, and it is what ARC's
+  `ReadWriteMany` is how jobs share files and what ARC's
   `containerMode: kubernetes` depends on, so it also matters to anyone migrating
   off that mode. Validation and a reference architecture come before any API.
 
@@ -124,10 +124,9 @@ the exception: a firm commitment, waiting only on the release that carries it.
   set feel native, wait on a concrete GPU workload to design against.
 - **[Multi-node GPU jobs](design/appendix-e-capacity-planning.md)** <!-- q:Q718 --> One job needing several
   co-scheduled workers in one NVLink or InfiniBand domain is a different problem
-  from one job needing one GPU: capacity is advertised to GitHub as a single
-  integer, and a gang requirement is a placement predicate rather than a count.
-  Waits on a real multi-node workload, and would interact with a batch scheduler
-  such as Kueue or Volcano.
+  from one job needing one GPU: capacity is a single integer to GitHub, and a
+  gang requirement is a placement predicate rather than a count.
+  Waits on a real multi-node workload, and would interact with Kueue or Volcano.
 - **[A worker cache backend](plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane)** <!-- q:Q215 -->
   `actions/cache` already works. What is missing is a cache *inside* the
   cluster, to cut egress cost and restore latency. Docker layer caching has no

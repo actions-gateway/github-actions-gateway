@@ -275,6 +275,31 @@ func TestLine(t *testing.T) {
 	}
 }
 
+// A word count that moves when a paragraph is rewrapped is not a word count.
+// roadmapcheck enforces a 60-word cap on ListItem.Text, so a segment boundary
+// that swallowed its line break under-counted every wrapped bullet by one word
+// per wrap, and the cap passed on prose that exceeded it.
+func TestListItemTextSurvivesRewrapping(t *testing.T) {
+	const wrapped = "- one two three\n  four five six\n  seven eight\n"
+	const flat = "- one two three four five six seven eight\n"
+
+	words := func(src string) []string {
+		items := Parse([]byte(src)).TopLevelListItems()
+		if len(items) != 1 {
+			t.Fatalf("parsed %d list items from %q, want 1", len(items), src)
+		}
+		return strings.Fields(items[0].Text)
+	}
+
+	got, want := words(wrapped), words(flat)
+	if len(want) != 8 {
+		t.Fatalf("flat item has %d words (%v), want 8", len(want), want)
+	}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("wrapped item = %v (%d words), flat = %v (%d words)", got, len(got), want, len(want))
+	}
+}
+
 func TestSluggerDedupesAcrossDocument(t *testing.T) {
 	s := NewSlugger()
 	want := []string{"setup", "setup-1", "other", "setup-2"}
