@@ -2611,6 +2611,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#pre-flight-the-api-surface-this-tag-publishes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-flight: the API surface this tag publishes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-rc1-validation-verdict-2026-08-09" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rc.1 validation verdict, 2026-08-09
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The rc.1 validation verdict, 2026-08-09">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#no-candidate-had-cleared-this-gate-on-the-first-attempt-before" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No candidate had cleared this gate on the first attempt before
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#throughput-actuated-which-the-runbook-does-not-expect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Throughput actuated, which the runbook does not expect
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-discipline-this-cycle-could-not-apply" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2646,8 +2696,9 @@
 <p><strong>Status: scope decided 2026-08-05. No gating Queue rows remain.</strong> All three
 <code>1.4-gate</code> items shipped 2026-08-08: Q691, Q554 (its
 <a href="../archive/runner-template-library/">plan</a> archived), and Q166. Everything else
-the release contains is already merged, so the cut now needs its release
-candidate and dogfood validation.</p>
+the release contains is already merged. <code>v1.4.0-rc.1</code> was cut from <code>162d97a7</code>
+on 2026-08-09 and its dogfood validation <strong>PASSED on the first attempt</strong>, so
+the line is clear to promote once the curated notes are written.</p>
 </blockquote>
 <h2 id="the-minor-was-forced-before-anyone-chose-it">The minor was forced before anyone chose it<a class="headerlink" href="#the-minor-was-forced-before-anyone-chose-it" title="Permanent link">&para;</a></h2>
 <p><code>v1.3.0..main</code> carries 120 commits, 17 of them <code>feat</code>. Six change the shipped
@@ -2796,6 +2847,134 @@ types) and <code>master</code> (<code>vault/vault.go</code>, <code>vault/azureke
 <p>The rest of the reconciliation, including whether the comparison table keeps its
 verdict-table shape, is <a href="../release-1.5/#in-scope-reconcile-the-marketing-surfaces">1.5 scope</a>.
 The recurring form is <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>.</p>
+<h2 id="pre-flight-the-api-surface-this-tag-publishes">Pre-flight: the API surface this tag publishes<a class="headerlink" href="#pre-flight-the-api-surface-this-tag-publishes" title="Permanent link">&para;</a></h2>
+<p>Recorded 2026-08-09 from <code>scripts/release/api-surface-since.sh</code> over
+<code>v1.3.0..162d97a7</code>, the commit <code>v1.4.0-rc.1</code> was cut from, per
+<a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>. <strong>Verdict:
+ship as-is.</strong> Four wire fields and one condition reason are published for the
+first time; no enum constraint and no default changed.</p>
+<table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Carried on</th>
+<th>Why the shape is right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allowedInfraPriorityClasses</code> (Q298)</td>
+<td><code>PriorityClassAllowlist</code></td>
+<td>Unset or empty forbids every named class, so the secure posture is the unset case. Name and validation mirror the sibling <code>allowedPriorityClasses</code>.</td>
+</tr>
+<tr>
+<td><code>proxyRef</code> (Q166)</td>
+<td><code>RunnerSet</code></td>
+<td>Optional because direct egress is a defined behaviour rather than a failure, which is what separates it from the required <code>templateRef</code> (§H.4, §H.10).</td>
+</tr>
+<tr>
+<td><code>defaultProxyRef</code> (Q166)</td>
+<td><code>ActionsGateway</code></td>
+<td>Inherited only by RunnerSets that set no <code>proxyRef</code>, so the narrower field always wins.</td>
+</tr>
+<tr>
+<td><code>namespace</code> (Q166)</td>
+<td><code>ProxyObjectRef</code></td>
+<td>Empty means the referrer's own namespace, so the pre-M4 same-namespace posture is the default and the unset case.</td>
+</tr>
+<tr>
+<td><code>ProxyShareNotGranted</code></td>
+<td>condition reason</td>
+<td>Names the fail-closed outcome when a cross-namespace reference lacks provider consent.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The one thing that looked like a gap is house style, checked rather than
+assumed.</strong> <code>ProxyObjectRef</code> bounds both its fields by length and neither by
+pattern, while the allowlist fields next to it pattern every item. No object ref
+in <code>v2beta1</code> patterns a name: <code>ProxyObjectRef.Name</code> carries the same
+<code>MinLength=1</code>/<code>MaxLength=52</code> pair as <code>ObjectRef.Name</code>, and <code>LocalSecretReference</code>
+and <code>LocalConfigMapReference</code> are length-only too. Adding a pattern narrows a
+published field, so the cheap window for it closes at the stable tag and this is
+the pass that had to settle it. An unresolvable namespace string is rejected at
+resolution rather than at admission, and fails closed.</p>
+<h2 id="the-rc1-validation-verdict-2026-08-09">The rc.1 validation verdict, 2026-08-09<a class="headerlink" href="#the-rc1-validation-verdict-2026-08-09" title="Permanent link">&para;</a></h2>
+<p><code>validate-release.sh v1.4.0-rc.1</code> <strong>PASSED</strong>, exit 0, in 25m05s end to end, and
+the cluster was confirmed back at 0 nodes by polling <code>gcloud</code> rather than by
+reading the gate's own teardown line. These are the receipts the notes'
+Validation section draws on.</p>
+<table>
+<thead>
+<tr>
+<th>Leg</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>deploy</td>
+<td>RC deployed and CI routed to GAG in 2m43s</td>
+</tr>
+<tr>
+<td>e2e matrix</td>
+<td><strong>74/74 specs, 62 ok, 0 failed, 12 skipped</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31330763470">run 31330763470</a>)</td>
+</tr>
+<tr>
+<td>sizing, <code>NodeShare</code></td>
+<td><code>sizingProfileState=Active</code>; worker CPU request derived to <strong>1500m</strong> where the templates ask 2 and 3</td>
+</tr>
+<tr>
+<td>sizing, <code>Throughput</code></td>
+<td><code>Active</code>, <code>sampleCounts=[166]</code></td>
+</tr>
+<tr>
+<td>CRD smoke</td>
+<td>blob signature <code>Verified OK</code>; all five v2 CRDs server-side applied and registered</td>
+</tr>
+</tbody>
+</table>
+<p>Artifact verification cleared separately and before the gate: 7/7 OCI signatures
+(five images, both charts), the <code>verify-blob</code> signature on the v2 CRD manifest,
+and a build-provenance attestation whose <code>buildSignerURI</code> ends
+<code>publish.yml@refs/tags/v1.4.0-rc.1</code> with a <code>sourceRepositoryDigest</code> equal to the
+tagged commit. Each green check was re-run against a deliberately wrong identity
+(a <code>refs/heads/</code> regexp, and <code>unit-test.yml</code> as signer) and each failed, so the
+passes discriminate rather than merely exiting 0.</p>
+<h3 id="no-candidate-had-cleared-this-gate-on-the-first-attempt-before">No candidate had cleared this gate on the first attempt before<a class="headerlink" href="#no-candidate-had-cleared-this-gate-on-the-first-attempt-before" title="Permanent link">&para;</a></h3>
+<p>Worth stating in the notes because it is checkable and because it is the return
+on this cycle's release-tooling work, not a lucky run. The 1.3 line needed four
+candidates to produce any verdict at all: rc.1 aborted when the gate's then
+repo-wide e2e routing caught concurrent sessions' CI, rc.2 returned Q550 and
+Q551 instead of a result, rc.3 aborted at <code>start.sh</code>'s AGC wait, and rc.4 was
+"the first verdict any RC in this line has produced"
+(<a href="../release-1.3/">release-1.3.md</a>).</p>
+<p><strong>Scope the claim to what the record supports.</strong> <code>validate-release.sh</code> landed
+2026-07-12 (Q294, #619), the day <code>v1.1.0</code> was tagged, so <code>v1.0.0</code> and <code>v1.1.0</code>
+predate it entirely. <code>v1.2.0</code> had a single RC and the gate did exist by then,
+but no plan doc records a validation run for it, and no record is not the same
+as no run. So the defensible sentence is that 1.3 is the only prior line with a
+recorded validation history and rc.1 here is the first candidate to pass first
+time, not that this has never happened.</p>
+<p>The three failure modes that cost the 1.3 line its early candidates were each
+fixed since: run-scoped dispatch replaced repo-wide routing (repo-wide is now an
+explicit <code>E2E_ROUTE_VAR=1</code> opt-in), the gate settles the e2e lane before it
+scales a node, and Q629, Q640 and Q630 bounded the run watch, reclaimed orphaned
+leases, and reconciled sentinel silence against run status. Q630 earned itself
+on this run: the one stall event it raised came only after the run was no longer
+live, which is the reconciliation behaving as designed rather than a false
+positive on a quiet leg.</p>
+<h3 id="throughput-actuated-which-the-runbook-does-not-expect"><code>Throughput</code> actuated, which the runbook does not expect<a class="headerlink" href="#throughput-actuated-which-the-runbook-does-not-expect" title="Permanent link">&para;</a></h3>
+<p><a href="../../operations/release/#validate-the-release-candidate-on-dogfood">release.md</a>
+records <code>Throughput</code> as reported-but-never-fatal because it needs at least 20
+samples per template container and the gate's own ~7-job matrix cannot supply
+them, making <code>NOT VALIDATED THIS RUN</code> the documented normal outcome. It came back
+<code>Active</code> with 166 samples. Nothing anomalous happened: the sampler tracks every
+worker pod regardless of <code>spec.sizing</code> and the aggregate re-seeds from the
+persisted <code>status.sizingRecommendation</code>, so the dogfood cluster's ordinary CI
+traffic since 1.3.0 had already earned the history. The consequence for the notes
+is a stronger claim than a passing gate alone, that this RC ran its own CI on
+derived sizing. The runbook's expectation is now stale for this cluster and is
+worth correcting separately.</p>
 <h2 id="the-discipline-this-cycle-could-not-apply">The discipline this cycle could not apply<a class="headerlink" href="#the-discipline-this-cycle-could-not-apply" title="Permanent link">&para;</a></h2>
 <p>"Do not let a feature force a minor when the accumulated patches could ship
 first" is the right rule, and it binds at the <strong>start</strong> of a cycle. This one was
