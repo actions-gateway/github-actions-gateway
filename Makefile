@@ -1114,9 +1114,9 @@ ginkgo: $(GINKGO) ## Build ginkgo into .build/
 # root; mdreflow always excludes vendor/, so the tracked vendored Markdown is
 # untouched. md-reflow-check runs in CHECK_FAST_GATES (~1s for the tree) because
 # an unenforced wrap convention decays on the next hand-wrapped paragraph.
-# It converts ~97% of prose: a paragraph is skipped by design when a `(` that
-# opens a link destination, meaning one preceded by `]`, is left unclosed at a
-# line end. See documentation-standards.md for what that leaves.
+# It converts ~99.9% of prose: a paragraph is skipped by design when a link's
+# text or destination is left open at a line end. Never hand-wrap inside a link:
+# that wedges the paragraph permanently. See documentation-standards.md.
 .PHONY: md-reflow
 md-reflow: $(MDREFLOW) ## Reflow tracked Markdown prose to one sentence per line
 	$(MDREFLOW) .

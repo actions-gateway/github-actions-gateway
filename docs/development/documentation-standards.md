@@ -158,12 +158,9 @@ As it lands, `make em-dash-baseline` re-records the ceilings and the diff is the
 
 ## An upstream-behavior claim cites a measurement
 
-A sentence about how something outside this repo behaves is a claim nobody here can
-check, and it goes stale with no commit, no red gate, and no other signal. Write the
-version it was measured against and when, or name the gate that keeps re-measuring it.
-The Queue-row form of the same rule is [maintaining-backlog.md § A row's asserted defect
-is a claim](maintaining-backlog.md#a-rows-asserted-defect-is-a-claim-not-a-finding);
-this section is its other two homes, prose docs and code comments.
+A sentence about how something outside this repo behaves is a claim nobody here can check, and it goes stale with no commit, no red gate, and no other signal.
+Write the version it was measured against and when, or name the gate that keeps re-measuring it.
+The Queue-row form of the same rule is [maintaining-backlog.md § A row's asserted defect is a claim](maintaining-backlog.md#a-rows-asserted-defect-is-a-claim-not-a-finding); this section is its other two homes, prose docs and code comments.
 
 Four such claims shipped here from source inspection.
 All four were wrong:
@@ -175,11 +172,8 @@ All four were wrong:
 | Q584's own filing: `check-path-filters.sh`'s awk YAML parsing could "mis-read as full coverage, failing green" | The gate iterates a hardcoded filter registry against `go.work`, so a parse failure removes patterns and fails **closed**. The row reached `main` first and cost a second PR to correct. |
 | "Never `/tmp` **or the session scratchpad**", the `CLAUDE.md` workspace-guard bullet (#869) | Probed on workspace-guard 1.8.0: writing under this session's own scratchpad and reading it back both succeed silently, because `is_session_tmp_path` returns before the read/write split. The rule generalised a single prompt in a friction log that reached back before the guard widened the exemption to native `Edit`/`Write`. Eleven days of sessions routed temp files away from a directory they were allowed to use (#1319). |
 
-Q594 is the fifth, and the one caught in time: it asserted that `plan-hygiene.yml`'s
-`**.go` filter matched no Go file. Running the pinned action measured the opposite, so
-no fix was needed, and what landed instead is a compliant version of the finding
-([testing.md § Where a globstar works in a filter
-glob](testing.md#where-a-globstar-works-in-a-filter-glob)).
+Q594 is the fifth, and the one caught in time: it asserted that `plan-hygiene.yml`'s `**.go` filter matched no Go file.
+Running the pinned action measured the opposite, so no fix was needed, and what landed instead is a compliant version of the finding ([testing.md § Where a globstar works in a filter glob](testing.md#where-a-globstar-works-in-a-filter-glob)).
 
 ### What counts as upstream
 
@@ -278,10 +272,11 @@ The check is in `make check` and costs about a second for the whole tree. `.mdre
 
 ### What stays hard-wrapped, and why it stays that way
 
-Measured 2026-08-09 on the pinned build: 97.1% of top-level prose lines end at a sentence boundary, leaving 393 continuation lines.
+Measured 2026-08-09: 99.91% of in-scope prose lines end at a sentence boundary, leaving 12.
+"In-scope" excludes the generated docs and `docs/STATUS.md`, which `.mdreflow.yaml` skips.
 
 What remains is one guard, and it is a correctness property rather than a defect.
-A link construct's destination can span a soft line break, so moving a break inside one can turn literal text into a link or corrupt the destination it lands in. mdreflow passes over a paragraph where a `(` that actually opens a destination, meaning one immediately preceded by `]`, is left unclosed at a line end:
+Moving a break inside a link construct is where render changes come from, so mdreflow passes over any paragraph where a link's text or destination is left open at a line end:
 
 ```
 Control plane (GMC rolls to
@@ -291,11 +286,23 @@ rc.6, [self-hosted] ready). Second sentence.       → reflows
 b) here. Second one.                               → skipped
 ```
 
-Do not hand-wrap around it: the skip is what keeps a reflow from changing what a page renders, and a paragraph the formatter leaves alone is correctly formatted.
+The 12 survivors are the pages that document Markdown itself, where a literal `` `[label]: target` `` or `` `[!` `` in a code span arms the guard.
+Nothing removes those without changing what the page says.
+
+**Never hand-wrap inside a link.** A link whose text or destination straddles a source line break wedges its paragraph permanently: the formatter skips it because the link spans a break, and being skipped is exactly what stops that break being removed.
+Adopting sentence-per-line left 17 such paragraphs stranded at their old wrapping until each link was joined back onto one line by hand.
+Writing one sentence per line prevents it, since a sentence is never wrapped and so a link never straddles anything.
+
+### Measuring the residue
+
+Counting lines that "do not end in sentence punctuation" over-reports badly, and every intermediate figure in this section's history came from that mistake.
+It counts YAML front matter, `<details>` blocks, and `[label]: target` definitions as prose the formatter failed to split, and it misses a sentence ending `.)` or `."`.
+Corrected against the same tree, that metric read 97.1% where the honest number was 99.34%.
+Measure by excluding the constructs mdreflow never reflows, and treat a closing delimiter after terminal punctuation as a sentence end.
 
 Three mdreflow bugs surfaced while adopting this, all fixed upstream.
 [#14](https://github.com/jbeda/mdreflow/issues/14) skipped paragraphs holding no bracket at all and [#15](https://github.com/jbeda/mdreflow/issues/15) refused a valid file whose multi-byte rune straddled byte 8192, both fixed in v0.1.4.
-[#16](https://github.com/jbeda/mdreflow/issues/16) armed the guard on any paren in any paragraph containing a bracket, which in link-dense prose is nearly always: fixing it took the tree from 82.1% to 97.1%.
+[#16](https://github.com/jbeda/mdreflow/issues/16) armed the guard on any paren in any paragraph containing a bracket, which in link-dense prose is nearly always.
 
 One lesson worth keeping from #16.
 The narrowing this repo proposed was wrong in a way a 2.8M-execution fuzz run did not catch: it armed only at paren depth zero, so a destination opened inside an outer prose paren escaped it and was corrupted.
