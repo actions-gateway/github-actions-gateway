@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2796,6 +2796,16 @@ to track). A plan with only deferred residuals is ✅, not ⚠️ — see
 <td>ⓘ Ongoing goal doc. Foundations shipped (scale-to-zero, priority floors, GPU-safe right-sizing); <a href="../STATUS/#Q216">Q216</a> and <a href="../STATUS/#Q718">Q718</a> are demand-gated on purpose</td>
 </tr>
 <tr>
+<td><a href="release-ladder/">release-ladder.md</a></td>
+<td>The map between the individual release plans: how many releases stand between here and <code>v2.0.0</code>, what each carries, why 1.6 exists rather than folding into 1.5, and what is deliberately punted past 2.0 with the signal each waits on</td>
+<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09: 1.5 → 1.6 → 2.0. Establishes that the roadmap's near-term section means "committed to a named release"; the reshape that applies it is <a href="../STATUS/#Q772">Q772</a></td>
+</tr>
+<tr>
+<td><a href="arc-parity/">arc-parity.md</a></td>
+<td>The umbrella goal for the short list where a team on ARC cannot migrate without editing workflows or losing a capability: the measured gap inventory, what is deliberately never parity, and why <code>containerMode</code> waits on RWX storage</td>
+<td>ⓘ Ongoing goal doc. <a href="../STATUS/#Q712">Q712</a> gates 1.5 and <a href="../STATUS/#Q726">Q726</a> is admitted to it; <a href="../STATUS/#Q727">Q727</a> is sequenced behind <a href="../STATUS/#Q719">Q719</a>, and <a href="../STATUS/#Q765">Q765</a> needs an appliance</td>
+</tr>
+<tr>
 <td><a href="q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a></td>
 <td>Untrusted-PR posture for Kata workers (G.14): in-cluster registry pull-through mirrors (the Athens pattern applied to images) + delete the e2e open-egress NetworkPolicy, so a Kata worker's reachable set is DNS + GitHub + mirror only</td>
 <td>❌ Open — Phase 0 measured 2026-08-03; Phase 1 (hosted-only gating of <code>get.helm.sh</code> + the Actions cache data plane) implemented, its live validation run next, then Phase 2 mirror manifests (<a href="../STATUS/#Q408">Q408</a>)</td>
@@ -2983,7 +2993,7 @@ markers per item.</p>
 <tr>
 <td><a href="v2-api-gap-analysis/">v2-api-gap-analysis.md</a></td>
 <td>Full v1↔v2 gap analysis (API surface + controller/webhook behavior): what v1 does that v2 doesn't, with per-gap evidence; distinguishes genuine gaps from intentional design differences</td>
-<td>ⓘ Review — 8 gaps found: the noProxyCIDRs admission gap was fixed same-day (#641), its GHES residual closed by the Q322 follow-up, and Q323/Q324/Q325/Q326/Q327/Q328/Q329 since fixed. Parity/intentional differences recorded so future audits don't re-litigate them</td>
+<td>ⓘ Review — 8 gaps found: the noProxyCIDRs admission gap was fixed same-day (#641), its GHES residual closed by the Q322 follow-up, and Q323/Q324/Q325/Q326/Q327/Q328/Q329 since fixed. Parity/intentional differences recorded so future audits don't re-litigate them. Every gap closed as of 2026-08-09, and with M4 (Q166) shipped, v1→v2 functional parity is closed apart from multi-label runner sets (<a href="../STATUS/#Q726">Q726</a>)</td>
 </tr>
 <tr>
 <td><a href="q264-scale-set-protocol/">q264-scale-set-protocol.md</a></td>

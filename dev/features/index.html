@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2804,7 +2804,7 @@ chart yet.</p>
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong>: a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
 <li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to eviction, preemption, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
 <li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in. Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them. Off by default.</li>
-<li><strong><a href="../design/04-operational-flows/">Fast, honest ending for an abandoned run</a></strong>: a run whose worker is removed before it ever started is force-cancelled in about a second, measured live, rather than waiting out GitHub's unstarted-job timeout, and it accepts a re-run afterwards.</li>
+<li><strong><a href="../design/04-operational-flows/">Fast, honest ending for an abandoned run</a></strong>: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns. Both acquisition tiers.</li>
 <li><strong><a href="../design/02-architecture/">Priority tiers per runner set</a></strong>: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.</li>
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Worker scale-up rate limiting</a></strong>: opt-in token bucket capping how <em>fast</em> workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.</li>
 <li><strong><a href="../design/02-architecture/">Scale-to-zero workers</a></strong>: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.</li>
@@ -2851,8 +2851,8 @@ chart yet.</p>
 <li><strong><a href="../operations/observability-metrics/">Metrics reference</a></strong>: every Prometheus metric the GMC, AGC, and proxy export, scoped per tenant and runner group.</li>
 <li><strong><a href="../operations/observability-metrics/#full-metrics-reference">Fleet rollups for platform admins</a></strong>: cross-tenant degraded, egress-stale, and quota gauges in a single pane.</li>
 <li><strong><a href="../operations/observability-metrics-access/">Scraping setup</a></strong>: wiring the mutual-TLS metrics endpoints into your Prometheus.</li>
-<li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong>: ready-to-apply alert rules as code.</li>
-<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong>: a tenant dashboard and a platform dashboard, both as code.</li>
+<li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong>: ready-to-apply alert rules as code. Two SLOs and one alert read duration and latency series the ScaleSet tier does not emit yet, so they have no data there (<a href="../roadmap/">roadmap</a>).</li>
+<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong>: a tenant dashboard and a platform dashboard, both as code. Their duration and latency panels stay empty on the ScaleSet tier for the same reason.</li>
 <li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong>: structured logs and OpenTelemetry tracing across the four tiers.</li>
 </ul>
 <h2 id="install-and-day-2-operations">Install and day-2 operations<a class="headerlink" href="#install-and-day-2-operations" title="Permanent link">&para;</a></h2>

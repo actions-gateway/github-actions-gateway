@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2737,6 +2737,13 @@ last gaps an outside operator hits.</p>
   release; until it lands, expect those panels to read empty.</p>
 </li>
 <li>
+<p><strong><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Multi-label runner sets for <code>runs-on</code> arrays</a></strong> <!-- q:Q726 -->
+  A runner set takes exactly one label today, so a workflow targeting
+  <code>runs-on: [linux, gpu]</code> needs one edit per target to move here from Actions
+  Runner Controller (ARC). That is the one gap breaking the otherwise zero-edit
+  migration, so it gates the 1.5 release.</p>
+</li>
+<li>
 <p><strong><a href="../plan/q408-untrusted-pr-egress/">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 -->
   <a href="../operations/kata-dind-workloads/">Kata workers</a> are validated for <em>trusted</em>
   CI only: the micro-VM bounds the guest kernel, the runner's egress stays
@@ -2758,6 +2765,21 @@ last gaps an outside operator hits.</p>
   <code>ReadWriteMany</code> is how jobs share files, and it is what ARC's
   <code>containerMode: kubernetes</code> depends on, so it also matters to anyone migrating
   off that mode. Validation and a reference architecture come before any API.</p>
+</li>
+<li>
+<p><strong><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></strong> <!-- q:Q727 -->
+  ARC runs these as separate pods on a shared volume under
+  <code>containerMode: kubernetes</code>. One worker pod per job means the path here is
+  Docker-in-Docker, unprivileged only under Kata. Sequenced behind the
+  <code>ReadWriteMany</code> validation above, which it depends on; documenting Kata
+  Docker-in-Docker as the permanent answer is a valid outcome.</p>
+</li>
+<li>
+<p><strong><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate GHES against a real appliance</a></strong> <!-- q:Q765 -->
+  Both GitHub Enterprise Server (GHES) capabilities ship marked untested against
+  real hardware: the appliance-addressing path and the private-CA bundle. They
+  are believed correct and unproven, which is not the same thing. Waits on
+  access to an appliance.</p>
 </li>
 </ul>
 <p>The next four are all opt-in additions to the

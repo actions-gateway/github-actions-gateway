@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -3172,19 +3172,51 @@
 </tr>
 <tr>
 <td><a id="Q726"></a>Q726</td>
-<td><a href="../operations/migration-from-arc/">Multi-label runner sets for <code>runs-on</code> array targeting</a></td>
-<td><code>feature</code></td>
+<td><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Multi-label runner sets for <code>runs-on</code> array targeting</a></td>
+<td><code>feature</code> <code>1.5-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>ARC added multi-label scale sets in 0.14.0 (2026-03-19); a <code>v2beta1</code> RunnerSet is CEL-rejected above one <code>runnerLabel</code>. A workflow using <code>runs-on: [linux, gpu]</code> needs an edit per target to migrate, reversing the zero-edit claim.</td>
 </tr>
 <tr>
 <td><a id="Q727"></a>Q727</td>
-<td><a href="../operations/in-runner-image-builds/">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></td>
+<td><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></td>
 <td><code>feature</code></td>
 <td>🔲</td>
 <td>L</td>
-<td>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume. GAG runs one worker pod per job, so the path is DinD, unprivileged only under Kata. Needs a design: broker step pods, or document Kata DinD as the answer.</td>
+<td>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume. GAG runs one worker pod per job, so the path is DinD, unprivileged only under Kata. <strong>Blocked on <a href="#Q719">Q719</a>:</strong> it needs RWX, which nothing validates yet.</td>
+</tr>
+<tr>
+<td><a id="Q772"></a>Q772</td>
+<td><a href="../plan/release-ladder/">Park the nine ungated near-term items and apply the release ladder</a></td>
+<td><code>docs</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Near-term lists 12 items as "actively being built"; 9 carry no release. Park 7 to Deferred with triggers, gate Q719/Q727 to 1.6. Rows and roadmap bullets must move together or <code>roadmapcheck</code> rule 3 breaks. <strong>Blocked on Q769</strong>, same file.</td>
+</tr>
+<tr>
+<td><a id="Q770"></a>Q770</td>
+<td><a href="../development/website/">Release version chip on the roadmap page, derived from gate labels</a></td>
+<td><code>docs</code></td>
+<td>🚫</td>
+<td>S</td>
+<td>The roadmap states its gating release in prose on 3 of 23 bullets and uses no badges. Render <code>1.5</code>/<code>2.0</code> as a pill sourced from the row's <code>N-gate</code> label, never hand-typed. <strong>Blocked on Q769</strong>, which builds the reconciliation and owns the same file.</td>
+</tr>
+<tr>
+<td><a id="Q768"></a>Q768</td>
+<td><a href="../development/website/">Auto-expiring new-in-release chip on the marketing surfaces</a></td>
+<td><code>docs</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Declared by the PR that ships it, so no backfill: absence means "not new", which matters because <code>features.md</code> postdates 1.0-1.2. A gate expires any chip more than N releases behind the version <code>hooks/release_version.py</code> resolves. Pairs with Q767.</td>
+</tr>
+<tr>
+<td><a id="Q767"></a>Q767</td>
+<td><a href="../development/website/">Tier badge on the marketing surfaces, gated against the operator docs</a></td>
+<td><code>docs</code> <code>ci</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>features.md</code> states tier scope on 3 of 60 entries, and after Q766 only the duration/latency series (<a href="#Q713">Q713</a>) is still tier-limited. The badge names the row tracking its port, so the gate forces removal on parity.</td>
 </tr>
 <tr>
 <td><a id="Q719"></a>Q719</td>
@@ -3192,7 +3224,15 @@
 <td><code>docs</code> <code>tests</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Workers are storage-less and nothing validates a <code>ReadWriteMany</code> volume mounted into one. RWX is how jobs share files, and what ARC's <code>containerMode: kubernetes</code> needs, so it is also a migration blocker. Validate, then document the stance.</td>
+<td>Workers are storage-less and nothing validates a <code>ReadWriteMany</code> volume mounted into one. RWX is how jobs share files, and what ARC's <code>containerMode: kubernetes</code> needs, so it is also a migration blocker. <strong>Unblocks <a href="#Q727">Q727</a>.</strong></td>
+</tr>
+<tr>
+<td><a id="Q765"></a>Q765</td>
+<td><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate a GHES gateway against a real GitHub Enterprise Server appliance</a></td>
+<td><code>tests</code> <code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Both GHES capabilities ship marked untested against real hardware: the <code>gitHubURL</code> appliance path and <code>spec.githubCABundleRef</code>. ARC is tested on one, so an evaluator has no evidence either way. An appliance run, or a documented decline, closes it.</td>
 </tr>
 <tr>
 <td><a id="Q717"></a>Q717</td>

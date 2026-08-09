@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -7348,9 +7348,12 @@ force-cancelled first and re-run only once capacity returns. It is covered in
   (<code>maxWorkerLifetime</code>), the stuck-<code>Running</code> reap deadline, orphan cleanup.
   Each is stamped <code>actions-gateway.com/deletion-reason</code> before deletion and
   excluded: the gateway just judged that job stuck, so a re-run would loop it.</li>
-<li><strong>A worker whose container never ran</strong> — e.g. a drain catching a
-  still-<code>Pending</code> pod. There is no reportable failure for <code>rerun-failed-jobs</code>
-  to act on.</li>
+<li><strong>A worker whose container never ran</strong> does not fire <em>this</em> recovery. A drain
+  catching a still-<code>Pending</code> pod, or the <code>pendingPodDeadline</code> reap, leaves no
+  reportable failure for <code>rerun-failed-jobs</code> to act on. It is not lost, though:
+  the run is force-cancelled and then re-run once capacity returns, on <strong>both
+  tiers</strong>, which is the out-of-table <code>abandoned</code> cause named above. See
+  <a href="#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending</a>.</li>
 </ul>
 <p><strong>Fires but can come up short</strong> — each has its own runbook below:</p>
 <ul>
@@ -7476,10 +7479,13 @@ keys on that mark. Consequences an operator should know:</p>
   stamped <code>actions-gateway.com/deletion-reason: &lt;reason&gt;</code> first, and stamped deletions
   are excluded from recovery. Never set that annotation by hand on a live worker — it
   suppresses automatic recovery for that pod.</li>
-<li><strong>A worker whose container never ran is not re-run</strong> — e.g. a drain catching a
-  still-<code>Pending</code> worker. Its job never ran to a reportable end, so there is no
-  failed job for <code>rerun-failed-jobs</code> to act on; detection requires a recorded
-  container exit that the deletion preceded, which such a pod does not have.</li>
+<li><strong>A worker whose container never ran is not re-run <em>by this path</em></strong> — e.g. a
+  drain catching a still-<code>Pending</code> worker. Its job never ran to a reportable end,
+  so there is no failed job for <code>rerun-failed-jobs</code> to act on; detection requires
+  a recorded container exit that the deletion preceded, which such a pod does not
+  have. It is recovered by the <code>abandoned</code> path instead, which force-cancels the
+  run first: see
+  <a href="#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending</a>.</li>
 <li><strong>A cancelled run is never re-run.</strong> Nothing in the gateway deletes a cancelled
   run's pod, so it carries no mark.</li>
 <li><strong>The first re-run call may be refused.</strong> GitHub's conclusion on this path takes

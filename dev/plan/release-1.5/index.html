@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2556,15 +2556,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-these-two-gate-a-release-rather-than-riding-along" class="md-nav__link">
+  <a href="#why-these-gate-a-release-rather-than-riding-along" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why these two gate a release rather than riding along
+        Why these gate a release rather than riding along
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Why these two gate a release rather than riding along">
+    <nav class="md-nav" aria-label="Why these gate a release rather than riding along">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2651,14 +2651,19 @@
 <blockquote>
 <p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already
 scoped and its gating rows are fixed; 1.5 is where work identified after that
-line lands. Two gating Queue rows so far, labelled <code>1.5-gate</code>:
-<a href="../../STATUS/#Q712">Q712</a>, <a href="../../STATUS/#Q713">Q713</a>.</p>
+line lands. Three gating Queue rows so far, labelled <code>1.5-gate</code>:
+<a href="../../STATUS/#Q712">Q712</a>, <a href="../../STATUS/#Q713">Q713</a>, and
+<a href="../../STATUS/#Q726">Q726</a>, admitted 2026-08-09 from the candidate list below.</p>
 </blockquote>
-<h2 id="why-these-two-gate-a-release-rather-than-riding-along">Why these two gate a release rather than riding along<a class="headerlink" href="#why-these-two-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
-<p>Both came out of the 2026-08-06 competitive analysis, and both are defects in
-capabilities the project already claims, not new features. That is what makes
-them release-gating: shipping another minor while either is open means shipping
-a claim the product does not honour.</p>
+<h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
+<p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both are
+defects in capabilities the project already claims, not new features. That is
+what makes them release-gating: shipping another minor while either is open
+means shipping a claim the product does not honour.</p>
+<p>Q726 is the same shape read from the other side. It is the one
+<a href="../arc-parity/">ARC parity</a> gap that breaks the zero-edit migration claim the
+front door makes, so it gates for the same reason: the claim is published and
+the product does not honour it for a <code>runs-on</code> array.</p>
 <h3 id="q712--the-runner-group-binding-is-declared-and-never-wired">Q712 — the runner-group binding is declared and never wired<a class="headerlink" href="#q712--the-runner-group-binding-is-declared-and-never-wired" title="Permanent link">&para;</a></h3>
 <p><code>RunnerGroupName</code> exists on the scale-set listener config
 (<code>cmd/agc/internal/scalesetlistener/listener.go:372</code>) and is resolved when
@@ -2708,10 +2713,10 @@ should ship ahead of it.</p>
   until <code>pendingPodDeadline</code>.</li>
 <li><strong>Assert a worker pod cannot reach the cloud metadata server.</strong> Three docs
   advise denying <code>169.254.169.254/32</code>, Q226 measured HTTP 200 from inside a Kata
-  guest, and no test names the address.</li>
-<li><strong>Multi-label runner sets.</strong> ARC 0.14.0 (2026-03-19) added them; GAG rejects a
-  set with more than one <code>runnerLabel</code> at admission. This is a migration blocker
-  in the ARC → GAG direction and currently has no Queue row.</li>
+  guest, and no test names the address.
+<em>(Multi-label runner sets were held here too, and were accepted on 2026-08-09:
+the row is <a href="../../STATUS/#Q726">Q726</a>, now labelled <code>1.5-gate</code>, and the gap
+inventory it belongs to is <a href="../arc-parity/">arc-parity.md</a>.)</em></li>
 </ul>
 <h2 id="in-scope-reconcile-the-marketing-surfaces">In scope: reconcile the marketing surfaces<a class="headerlink" href="#in-scope-reconcile-the-marketing-surfaces" title="Permanent link">&para;</a></h2>
 <p>1.5 carries the marketing-claim work identified by the 2026-08-06 competitive

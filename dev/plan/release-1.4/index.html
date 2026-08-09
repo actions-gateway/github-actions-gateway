@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2578,10 +2578,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#deferred-to-150-and-why" class="md-nav__link">
+  <a href="#deferred-out-of-14-and-why" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Deferred to 1.5.0, and why
+        Deferred out of 1.4, and why
       
     </span>
   </a>
@@ -2611,60 +2611,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pre-flight-the-api-surface-this-tag-publishes" class="md-nav__link">
+  <a href="#sweep-verdict-the-docs-and-marketing-surfaces-2026-08-09" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pre-flight: the API surface this tag publishes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-rc1-validation-verdict-2026-08-09" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The rc.1 validation verdict, 2026-08-09
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The rc.1 validation verdict, 2026-08-09">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#no-candidate-had-cleared-this-gate-on-the-first-attempt-before" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        No candidate had cleared this gate on the first attempt before
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#throughput-actuated-which-the-runbook-does-not-expect" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Throughput actuated, which the runbook does not expect
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-discipline-this-cycle-could-not-apply" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The discipline this cycle could not apply
+        Sweep verdict: the docs and marketing surfaces, 2026-08-09
       
     </span>
   </a>
@@ -2697,8 +2647,10 @@
 <code>1.4-gate</code> items shipped 2026-08-08: Q691, Q554 (its
 <a href="../archive/runner-template-library/">plan</a> archived), and Q166. Everything else
 the release contains is already merged. <code>v1.4.0-rc.1</code> was cut from <code>162d97a7</code>
-on 2026-08-09 and its dogfood validation <strong>PASSED on the first attempt</strong>, so
-the line is clear to promote once the curated notes are written.</p>
+on 2026-08-09 and its dogfood validation <strong>PASSED on the first attempt</strong>.
+Work landed after that commit (the Q766 ScaleSet port and the docs sweep), so
+rc.1 is no longer the candidate: <strong>an rc.2 follows once those merge</strong>, and it
+is the one that has to validate before the stable tag.</p>
 </blockquote>
 <h2 id="the-minor-was-forced-before-anyone-chose-it">The minor was forced before anyone chose it<a class="headerlink" href="#the-minor-was-forced-before-anyone-chose-it" title="Permanent link">&para;</a></h2>
 <p><code>v1.3.0..main</code> carries 120 commits, 17 of them <code>feat</code>. Six change the shipped
@@ -2780,7 +2732,15 @@ the loop a re-run into a starved pool would otherwise cause is bounded by the
 existing per-run retry budget, with exhaustion on
 <code>eviction_retries_exhausted_total{cause="abandoned"}</code> and expiry on
 <code>abandoned_run_rerun_waits_total{outcome="expired"}</code>.</p>
-<h2 id="deferred-to-150-and-why">Deferred to 1.5.0, and why<a class="headerlink" href="#deferred-to-150-and-why" title="Permanent link">&para;</a></h2>
+<h2 id="deferred-out-of-14-and-why">Deferred out of 1.4, and why<a class="headerlink" href="#deferred-out-of-14-and-why" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>Corrected 2026-08-09.</strong> This section was headed "Deferred to 1.5.0", which
+promised a release none of these rows was ever labelled for. The proxy cluster
+in particular is demand-gated, as the paragraph below says in its own words, so
+it is parked rather than scheduled. The ladder is
+<a href="../release-ladder/">release-ladder.md</a>; the reshape is
+<a href="../../STATUS/#Q772">Q772</a>.</p>
+</blockquote>
 <p><strong>The proxy hardening cluster stays together</strong>:
 <a href="../../STATUS/#Q564">Q564</a> audit logging, <a href="../../STATUS/#Q565">Q565</a> per-tenant rate
 limiting, <a href="../../STATUS/#Q566">Q566</a> TLS on the in-cluster hop, and
@@ -2847,6 +2807,58 @@ types) and <code>master</code> (<code>vault/vault.go</code>, <code>vault/azureke
 <p>The rest of the reconciliation, including whether the comparison table keeps its
 verdict-table shape, is <a href="../release-1.5/#in-scope-reconcile-the-marketing-surfaces">1.5 scope</a>.
 The recurring form is <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>.</p>
+<h2 id="sweep-verdict-the-docs-and-marketing-surfaces-2026-08-09">Sweep verdict: the docs and marketing surfaces, 2026-08-09<a class="headerlink" href="#sweep-verdict-the-docs-and-marketing-surfaces-2026-08-09" title="Permanent link">&para;</a></h2>
+<p>The pre-flight sweep ran against <code>v1.3.0..main</code> (181 commits). Every mechanical
+gate was already green, including <code>doc-links</code>, <code>roadmap-check</code>, the nav-coverage
+gate and <code>release-pins-check</code>, and pre-flight question 3 is satisfied: after</p>
+<h1 id="1329-and-1362-every-arc-claim-on-why-gagmd-and-alternativesmd-carries-a">1329 and #1362 every ARC claim on <code>why-gag.md</code> and <code>alternatives.md</code> carries a<a class="headerlink" href="#1329-and-1362-every-arc-claim-on-why-gagmd-and-alternativesmd-carries-a" title="Permanent link">&para;</a></h1>
+<p>version and a measurement date. Three content gaps remained, all created this
+cycle, and all are now closed.</p>
+<p><strong>The auto-re-run docs did not agree with each other about Q683 and Q691, and
+none of them carried the tier scope.</strong> <code>04-operational-flows.md</code> records the
+scope correctly ("Classic tier only, matching the force-cancel it recovers");
+no operator-facing or marketing surface repeated it. Measured from source:
+<code>forceCancelAbandonedRun</code> has one caller, inside the classic <code>provision()</code>
+handler, and the ScaleSet tier's <code>disruptionAwaitingRecovery</code> has three arms
+(eviction, preemption, deletion) with no abandoned case, deliberately. So on the
+ScaleSet tier, which is the v2 default every new tenant runs, a worker reaped
+while Pending still concludes at GitHub's ~15-minute unstarted-job timeout and
+needs a manual re-run. <code>features.md</code> had been advertising the capability to those
+tenants unscoped, and it also said the run "accepts a re-run afterwards", which
+describes the pre-Q691 manual state. The consolidated matrix in
+<code>troubleshooting.md</code> said the opposite, excluding a never-started worker "by
+design" with no note that the classic tier now recovers it. All three are
+corrected, and the matrix preamble names <code>abandoned</code> as the fifth, out-of-table
+cause. This was a propagation failure rather than a code gap: the design doc had
+the answer the whole time.</p>
+<p><strong>Q166 and Q554 had reached <code>features.md</code> and stopped there.</strong> Neither appeared
+on <code>index.md</code>, <code>README.md</code> or <code>why-gag.md</code>, which is exactly the rot pre-flight
+question 1 exists to catch. Both are now on all three. They were deliberately
+<em>not</em> added to the ARC comparison table: a new row there needs a measured ARC
+column, and this sweep measured no new ARC behaviour, so adding one would have
+created precisely the undated claim the 2026-08-06 review was called to remove.</p>
+<p><strong>The announce bar still carried 1.3's highlight.</strong> <code>highlight_for</code> named
+<code>v1.3.0</code>, so a <code>v1.4.0</code> build degraded to the plain release-notes link (verified
+by building at <code>GAG_DOCS_RELEASE=v1.4.0</code>). It now names <code>v1.4.0</code> and leads with
+cross-namespace proxy sharing, the runner template library, and the v2
+worker-capacity gauges. The abandoned-run re-run was considered and rejected for
+the bar: it is classic-tier only, and a banner is the wrong place for a scope
+qualifier.</p>
+<h3 id="the-tier-caveat-that-no-longer-applies-and-why-it-is-recorded-anyway">The tier caveat that no longer applies, and why it is recorded anyway<a class="headerlink" href="#the-tier-caveat-that-no-longer-applies-and-why-it-is-recorded-anyway" title="Permanent link">&para;</a></h3>
+<p>The sweep found Q683 and Q691 wired into the classic path only, with the scope
+recorded in <a href="../../design/04-operational-flows/">04-operational-flows.md</a> and on
+no operator surface, so a <code>v2beta1</code> tenant reading this release would have
+expected a one-second cancel and an automatic re-run their tier did not perform.
+That was drafted as a caveat for the curated notes.</p>
+<p><strong>It is moot: Q766 ported both to the ScaleSet tier inside this release</strong>, so 1.4
+ships them on both tiers and there is no caveat to carry. The <code>upgrade.md</code>
+migration note says so directly.</p>
+<p>Worth keeping the trail. The gap existed for a few days and no operator surface
+named it, which is the failure the pre-flight sweep exists to catch, and it was
+caught by reading the code rather than the plan doc. The <code>upgrade.md</code> placement
+also turned out to be the load-bearing part: <code>operator-caveats-since.sh</code> builds
+the curated notes from the <code>docs/operations/</code> diff, so a tier scope documented
+only in a design doc never reaches them either way.</p>
 <h2 id="pre-flight-the-api-surface-this-tag-publishes">Pre-flight: the API surface this tag publishes<a class="headerlink" href="#pre-flight-the-api-surface-this-tag-publishes" title="Permanent link">&para;</a></h2>
 <p>Recorded 2026-08-09 from <code>scripts/release/api-surface-since.sh</code> over
 <code>v1.3.0..162d97a7</code>, the commit <code>v1.4.0-rc.1</code> was cut from, per

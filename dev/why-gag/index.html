@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -3053,15 +3053,20 @@ stamped above, re-check the column rather than trusting it, and
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too. -->
 <p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a drain
-and a stray <code>kubectl delete pod</code> all come back. A job that <em>failed</em>, a run you
-<em>cancelled</em>, and workers the reaper took never do.
+and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers. A job
+that <em>failed</em> and a run you <em>cancelled</em> never do. Nor do workers the reaper took,
+with one exception: a worker reaped while still <code>Pending</code> is re-run on the
+classic tier once capacity returns.
 <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">The full boundary</a>.</p>
 <p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one
 job and lives minutes, so stock Vertical Pod Autoscaler cannot size it. The loop
 only closes inside the controller that builds the pods.
 <a href="../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D.7</a>.</p>
 <h2 id="where-arc-is-ahead">Where ARC is ahead<a class="headerlink" href="#where-arc-is-ahead" title="Permanent link">&para;</a></h2>
-<p>Some of it is capability, not only maturity. Measured 2026-08-06.</p>
+<p>Some of it is capability, not only maturity. Measured 2026-08-06. Each gap below
+is tracked, and what closes it and when is on the
+<a href="../roadmap/">public roadmap</a>; the support entitlement is the one we do not plan
+to match.</p>
 <ul>
 <li><strong>A GitHub Support entitlement</strong>, covering ARC installed via the official
   Helm charts, GitHub Enterprise Server 3.9 and later. GAG has none. Read the
@@ -3104,6 +3109,7 @@ ships as reconciled defaults, not a post-install project.</p>
 <li>App keys read-only; never in env, never cached</li>
 <li>Or opt in to <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">no App key in the cluster at all</a></li>
 <li>Controller writes confined to tenant namespaces</li>
+<li><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Sharing a proxy across namespaces needs the owner's consent</a></li>
 </ul>
 </li>
 <li>
@@ -3124,6 +3130,7 @@ ships as reconciled defaults, not a post-install project.</p>
 <li>Default-deny ingress, cluster-only DNS</li>
 <li>Per-tenant egress IPs, mutual-TLS metrics</li>
 <li>Signed images, SBOM, and SLSA provenance</li>
+<li><a href="../operations/runner-template-library/">Three validated worker templates</a>, one <code>kubectl apply -k</code></li>
 </ul>
 </li>
 </ul>
