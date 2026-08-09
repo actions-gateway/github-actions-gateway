@@ -15,6 +15,13 @@ rather than leaking open — and turned up a test-harness defect that hides the
 probe's own diagnostic. See
 [2026-08-03](#2026-08-03-a-second-crosstenant-occurrence-and-what-its-phase-implies).
 
+The third occurrence (2026-08-08, Q747) **is** attributed, from the upgraded
+dump plus a local reproduction, and it is a fourth mechanism rather than any of
+the three hypotheses below: kindnetd crash-looped on the node hosting every pod
+in the spec, and kindnet's `queue flags bypass` rules accept every packet while
+nothing is bound to the nfqueue. See
+[2026-08-08](#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent).
+
 ## Post-#612 soak triage (corrected 2026-07-19)
 
 #612 merged 2026-07-13. Of ~26 `main` kindnet runs through 2026-07-19, three
@@ -325,6 +332,111 @@ of on the probe's own verdict. The failure then reports a bare phase rather than
 the probe's log, which is why this run needed arithmetic to attribute at all.
 The window and the loop budget should be derived from one another, against the
 blocked-iteration cost rather than the connected one.
+
+## 2026-08-08 (Q747): the enforcer was not starved, it was absent
+
+[Run 31272058691](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31272058691)
+on `main` at `9480f29b`. Third `CrossTenantNetworkBlocked` occurrence, same
+shape as 2026-07-15: the gate pod observed enforcement on attempts 1, 2 and 3
+(never once allowed), then the asserting curl pod completed with
+`HTTP_CODE=400`. It passed unchanged on `7a531dff`.
+
+This one is attributable, and the answer is **none of the three hypotheses
+above**. It is a fourth mechanism, and the failure dump already carried it.
+
+### Evidence, all from the run's own artifact
+
+| Signal | Value |
+|---|---|
+| `kindnet-jmxsm` (node `actions-gateway-e2e-worker2`) | `RESTARTS 3 (5m28s ago)`; dump ran ≈18:45:01, so the last restart was ≈18:39:33 |
+| kube-system events | `BackOff restarting failed container kindnet-cni in pod kindnet-jmxsm` at T-5m27s (≈18:39:33); `Created` T-5m3s (≈18:39:57); `Started` T-5m2s (≈18:39:58) |
+| `cross-tenant-probe` (the asserting curl) | Start Time **18:39:40**, node `actions-gateway-e2e-worker2` |
+| `cross-tenant-gate` | Start Time 18:38:54, same node, so it ran *before* the crash |
+| nsB `actions-gateway-proxy-d756c4f8f-h7mhm` | 18:38:47, same node. All three pods co-located |
+| kindnetd's current-container log on worker2 | first line **18:39:59** |
+| `nfnetlink_queue` (all three nodes) | `queue_dropped 0`, `user_dropped 0` |
+| `cpu.stat` (all three nodes) | `nr_periods 0`, so the #612 unthrottle is in effect; this is not CPU starvation |
+| `memory.events` | `max 3733` (worker2), `max 609` (worker), with `memory.current` 47.4 MiB and 49.0 MiB against the `50Mi` limit |
+
+The asserting curl ran **inside a ~25 s window in which no kindnetd process was
+running on that node at all**. kindnetd hardcodes `FailOpen: true`, which puts
+`queue flags bypass` on its nftables rules: with nothing bound to nfqueue 101
+the kernel skips the queue rule and the chain's `policy accept` takes every
+packet. NetworkPolicy was not being enforced on worker2, for any namespace, for
+that window.
+
+So the spec's observation was *correct*: the connection really was not blocked.
+The cause is the lane's enforcer being dead, not the GMC's policy. The
+policy objects were present and unchanged, and the same source namespace was
+demonstrably blocked from reaching the same destination pod 40 s earlier.
+
+`HTTP_CODE=400` also identifies the responder rather than merely implying it:
+the proxy serves its CONNECT listener with `ServeTLS`
+([`cmd/proxy/proxy.go`](../../cmd/proxy/proxy.go)), and Go's TLS server answers
+a plaintext request with `400 Bad Request: Client sent an HTTP request to an
+HTTPS server`. A plaintext listener would have returned **405** (the
+non-CONNECT branch of the same file). The connection reached nsB's proxy.
+
+### Hypotheses 1 and 2 are ruled out for this occurrence
+
+Hypothesis 1 (nfqueue overflow) needs a *running* agent whose queue overflows;
+hypothesis 2 (stale IP→pod mapping) needs a running agent to emit a verdict at
+all. No agent was running.
+
+**Correction to hypothesis 1's supporting claim.** It says the
+`queue_dropped`/`user_dropped` counters are "cumulative since boot, so overflow
+evidence survives even a late dump". They are not: they belong to the nfqueue
+*instance*, which is destroyed when the agent unbinds and recreated when it
+rebinds. Measured locally: after killing kindnetd, the same queue reappeared
+with a new `peer_portid` and `id_sequence` reset to 7. With 3-4 restarts on
+these nodes, the zeros in this dump describe only the window since 18:39:58.
+
+### Reproduced deterministically
+
+kind v0.32.0, `kindest/node:v1.35.5`, kindnetd `v20260528-9350166c`, two
+workers, with a mirror of `buildProxyNetworkPolicy`'s ingress half (default-deny
+ingress to `app=actions-gateway-proxy`, admitting only same-namespace
+`actions-gateway/component: workload` on the proxy port):
+
+| Enforcer | Cross-tenant connections |
+|---|---|
+| kindnetd running | **0 allowed of 38** consecutive attempts (each paying the full 3 s connect timeout) |
+| `pkill -KILL kindnetd` on the node hosting both pods | **664 allowed in ~1.0 s** (07:13:13.76 → 07:13:14.76), ending when the container restarted |
+| after the restart | blocked again |
+
+Window forced open → red; closed → green. Forty rounds of NetworkPolicy churn
+in unrelated namespaces against a live enforcer produced **zero** leaks, which
+is the negative control: policy-set churn alone does not open the window.
+
+### Fix
+
+1. **`tune_kindnet_limits` now raises the memory limit too**
+   ([`kind-with-registry.sh`](../../scripts/e2e/kind-with-registry.sh)),
+   default `256Mi` via `KINDNET_MEMORY_LIMIT`. #612 deliberately left the
+   `50Mi` limit alone on the grounds that "no OOM was ever observed"; this run
+   refutes that reading. Note the honest limit of this step: the crash-loop is
+   *measured*, and memory pressure at the ceiling is the leading cause of it,
+   but the terminating reason itself was never captured, which is why (2)
+   exists.
+2. **The dump now captures why the enforcer died**, not just that it did:
+   `lastState.terminated.{reason,exitCode,finishedAt}` per enforcer pod, plus
+   previous-container logs, in
+   [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) and in
+   `DumpCNIEnforcerState`
+   ([`cmd/gmc/test/utils/cni_enforcer.go`](../../cmd/gmc/test/utils/cni_enforcer.go)).
+   The next occurrence names its own cause.
+3. **The spec discriminates instead of guessing.**
+   [`isolation_test.go`](../../cmd/gmc/test/e2e/isolation_test.go) fingerprints
+   the enforcer pods (name/restartCount/startedAt) around its probe. An allow
+   observed across a changed fingerprint is discarded and re-measured; an allow
+   observed with the fingerprint *unchanged* fails immediately and says in the
+   message that no restart explains it. That is the distinction the row could
+   not make: lane artifact versus isolation regression.
+
+Deliberately not done: merging the gate and asserting pods into one pod to
+shrink the 40 s scheduling gap between them. The fingerprint check already
+makes that gap harmless, and folding two pods into one conflates their exit
+codes.
 
 ## Recurrence guard
 
