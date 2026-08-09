@@ -1277,6 +1277,44 @@ string panics the controller at startup (`invalid value of StaticCapacity`).
 The harness sets both to their defaults explicitly ([Q531](../STATUS.md#Q531)
 tracks reporting it upstream).
 
+## 9j. The gap is operator-visible in shipped docs (Q714)
+
+Q714's mechanism was a source read. It is now measured. A pod running the exact
+placeholder the 1.4 DinD templates ship,
+`example.invalid/build-capable-runner:replace-me`, was applied to a kind cluster
+and its conditions read directly:
+
+| t | What the pod reports |
+|---|---|
+| +0s | `Scheduled`, bound to a node, `PodScheduled=True` with an empty reason |
+| +1s | `Pulling` |
+| +2s | `ErrImagePull`, then `BackOff` and `ImagePullBackOff`; the `Failed` event names the unresolvable host |
+| onward | phase stays `Pending` |
+
+`PodScheduled=True` is the confirmation: `podUnschedulable()` requires
+`PodScheduled=False` with reason `Unschedulable`, so it returns false for the
+whole window. `WorkersUnschedulable` never trips, and neither
+`actions_gateway_workers_unschedulable` (v1) nor
+`actions_gateway_runnerset_workers_unschedulable` (v2) leaves 0. Both API
+versions share this,
+since `RunnerSetReconciler` reuses `evalWorkersUnschedulableForPods` and
+`PendingPodDeadlineOrDefault`.
+
+The pod is then reaped at `pendingPodDeadline` (default 10m) with a
+`WorkerPodStuckPending` Warning, which `E2E_AGC_StuckPendingPodReaped` already
+exercises on the same `.invalid` shape. Recovery does not loop tightly: the
+abandoned-run sweeper waits for capacity that an unpullable image never returns
+and expires after 30m.
+
+**Why this matters beyond intake.** Both 1.4 DinD templates ship that
+placeholder and require the operator to replace it, so this is the failure a
+first-time user of the library hits, not a corner case.
+[`runner-template-library.md`](../operations/runner-template-library.md) and
+[`kata-dind-workloads.md`](../operations/kata-dind-workloads.md) now describe
+the real split: the pod says `ImagePullBackOff` within seconds, while the
+`RunnerSet` stays quiet until the deadline. Closing Q714 changes what an
+operator watches, so it must update both.
+
 ## 10. Non-goals
 
 * Predicting schedulability in-process from node allocatable. Rejected: it

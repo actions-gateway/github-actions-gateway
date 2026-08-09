@@ -85,9 +85,29 @@ the namespace must be a marked tenant namespace per
 runner container needs a Docker CLI on `PATH`; the sidecar supplies the daemon,
 not the client, and the stock `ghcr.io/actions/actions-runner` image ships
 neither. The reserved `.invalid` host is chosen so an unreplaced value fails at
-image pull, immediately and legibly, rather than succeeding into a job that dies
-on `docker: not found` twenty minutes in. `scripts/dogfood/e2e-runner/Dockerfile`
-in this repo is a worked example.
+image pull rather than succeeding into a job that dies on `docker: not found`
+twenty minutes in. `scripts/dogfood/e2e-runner/Dockerfile` in this repo is a
+worked example.
+
+**Watch the worker pod, not the `RunnerSet`, when you suspect an unreplaced
+image.** The pod reports the problem within seconds: it binds to a node and then
+sits Pending in `ImagePullBackOff`, with a `Failed` event naming the host it
+could not resolve.
+
+```bash
+kubectl get pods -n team-a -l actions-gateway.com/runner-set=linux
+```
+
+The `RunnerSet` stays quiet for much longer, because a pod that cannot pull its
+image still scheduled perfectly well. `WorkersUnschedulable` reports only the
+scheduler's verdict, so it stays False and
+`actions_gateway_runnerset_workers_unschedulable` stays 0 for the whole window.
+The first
+`RunnerSet`-level signal is the `WorkerPodStuckPending` Warning event the reaper
+emits when it deletes the pod at `spec.pendingPodDeadline`, 10 minutes after the
+pod was created unless you lower that field. Until then the pod holds a
+concurrency slot, and each further job the set acquires starts the same cycle
+again.
 
 **A namespace at PSA `privileged`, plus GAG's three gates.** Both entries need
 capabilities that Pod Security Standards `baseline` forbids, and PSA has no
