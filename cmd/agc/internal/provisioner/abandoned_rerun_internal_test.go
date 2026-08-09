@@ -63,7 +63,7 @@ func abandonedRerunMetrics() *runnercore.Metrics {
 		}, []string{"namespace", "runner_group", "tier", "cause"}),
 		AbandonedRunRerunWaits: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q691_abandoned_run_rerun_waits_total",
-		}, []string{"namespace", "runner_group", "outcome"}),
+		}, []string{"namespace", "runner_group", "tier", "outcome"}),
 	}
 }
 
@@ -174,14 +174,14 @@ func TestAbandonedRerun_WaitsForCapacityBeforeReRunning(t *testing.T) {
 	f := newAbandonedRerunFixture(t, 2, stuck)
 	target := f.target("g", 2)
 
-	f.p.registerAbandonedRerun(target, "owner", "repo", "4242")
+	f.p.registerAbandonedRerun(target, "owner", "repo", "4242", evictionTierClassic)
 
 	// Pool still starved: the only worker pod is unschedulable.
 	f.clock = f.clock.Add(time.Minute)
 	sweepAndWait(t, f.p, ctx, 0)
 	assert.Equal(t, 0, f.tally.for_("4242"), "no re-run while the pool cannot place a worker")
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", abandonedRerunOutcomeCapacityReturned)))
+		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", evictionTierClassic, abandonedRerunOutcomeCapacityReturned)))
 
 	// A worker binds: capacity is back.
 	bound := workerPod("bound", "g", f.clock)
@@ -191,7 +191,7 @@ func TestAbandonedRerun_WaitsForCapacityBeforeReRunning(t *testing.T) {
 	sweepAndWait(t, f.p, ctx, 1)
 	assert.Equal(t, 1, f.tally.for_("4242"), "the re-run fires once a worker pod is placed")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", abandonedRerunOutcomeCapacityReturned)))
+		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", evictionTierClassic, abandonedRerunOutcomeCapacityReturned)))
 	assert.Equal(t, float64(1),
 		testutil.ToFloat64(f.m.EvictionRetries.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseAbandoned)),
 		"the recovery spends a slot of the shared per-run budget, labelled abandoned")
@@ -216,7 +216,7 @@ func TestAbandonedRerun_PodBoundBeforeTheAbandonmentIsNotEvidence(t *testing.T) 
 	old := workerPod("earlier", "g", f.clock.Add(-time.Hour))
 	require.NoError(t, f.fc.Create(ctx, old))
 
-	f.p.registerAbandonedRerun(target, "owner", "repo", "77")
+	f.p.registerAbandonedRerun(target, "owner", "repo", "77", evictionTierClassic)
 	f.clock = f.clock.Add(time.Minute)
 
 	sweepAndWait(t, f.p, ctx, 0)
@@ -234,18 +234,18 @@ func TestAbandonedRerun_ExpiresWhenCapacityNeverReturns(t *testing.T) {
 	f.p.AbandonedRerunWaitWindow = 10 * time.Minute
 	target := f.target("g", 2)
 
-	f.p.registerAbandonedRerun(target, "owner", "repo", "555")
+	f.p.registerAbandonedRerun(target, "owner", "repo", "555", evictionTierClassic)
 
 	f.clock = f.clock.Add(9 * time.Minute)
 	sweepAndWait(t, f.p, ctx, 0)
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", abandonedRerunOutcomeExpired)),
+		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", evictionTierClassic, abandonedRerunOutcomeExpired)),
 		"still inside the window")
 
 	f.clock = f.clock.Add(2 * time.Minute)
 	sweepAndWait(t, f.p, ctx, 0)
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", abandonedRerunOutcomeExpired)),
+		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", evictionTierClassic, abandonedRerunOutcomeExpired)),
 		"a wait that never saw capacity is an operator-visible ending, not a silent drop")
 	assert.Equal(t, 0, f.tally.for_("555"))
 
@@ -283,8 +283,8 @@ func TestAbandonedRerun_LoopBudgetBindsPerRun(t *testing.T) {
 	// (capacity returned), then the sweeper re-runs whatever the budget still allows.
 	// Without the budget this loop would issue `cycles` re-runs for each run.
 	for i := 0; i < cycles; i++ {
-		f.p.registerAbandonedRerun(target, "owner", "repo", "runA")
-		f.p.registerAbandonedRerun(target, "owner", "repo", "runB")
+		f.p.registerAbandonedRerun(target, "owner", "repo", "runA", evictionTierClassic)
+		f.p.registerAbandonedRerun(target, "owner", "repo", "runB", evictionTierClassic)
 
 		f.clock = f.clock.Add(time.Minute)
 		require.NoError(t, f.fc.Create(ctx, workerPod("bound-"+strconv.Itoa(i), "g", f.clock)))
@@ -316,8 +316,8 @@ func TestAbandonedRerun_OneRunOneEntry(t *testing.T) {
 	f := newAbandonedRerunFixture(t, 3)
 	target := f.target("g", 3)
 
-	f.p.registerAbandonedRerun(target, "owner", "repo", "9001")
-	f.p.registerAbandonedRerun(target, "owner", "repo", "9001")
+	f.p.registerAbandonedRerun(target, "owner", "repo", "9001", evictionTierClassic)
+	f.p.registerAbandonedRerun(target, "owner", "repo", "9001", evictionTierClassic)
 
 	f.clock = f.clock.Add(time.Minute)
 	require.NoError(t, f.fc.Create(ctx, workerPod("bound", "g", f.clock)))
@@ -359,7 +359,7 @@ func TestAbandonedRerun_OnlyTheCancelledOutcomeRegisters(t *testing.T) {
 			}
 			target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
 
-			p.forceCancelAbandonedRun(ctx, target, tc.owner, tc.repo, tc.runID, p.logFor())
+			p.forceCancelAbandonedRun(ctx, target, tc.owner, tc.repo, tc.runID, evictionTierClassic, p.logFor())
 
 			assert.Equal(t, tc.wantRegistered, len(p.pendingAbandonedRerunKeys()) == 1,
 				"only a run we know concluded cancelled is re-runnable")
@@ -374,7 +374,7 @@ func TestAbandonedRerun_UnreadablePodsDeferRatherThanDrop(t *testing.T) {
 	ctx := context.Background()
 	f := newAbandonedRerunFixture(t, 2)
 	target := f.target("g", 2)
-	f.p.registerAbandonedRerun(target, "owner", "repo", "31337")
+	f.p.registerAbandonedRerun(target, "owner", "repo", "31337", evictionTierClassic)
 
 	// A client whose List always fails.
 	f.p.Client = fake.NewClientBuilder().

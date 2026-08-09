@@ -966,6 +966,7 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 					provisioner.MaxWorkerLifetimeOrDefault(rs.Spec.MaxWorkerLifetime))
 			},
 			deregisterRunner: r.deregisterScaleSetRunner(rs, log),
+			recoverAbandoned: r.recoverAbandonedRun(rs),
 		})
 }
 
@@ -993,6 +994,21 @@ func (r *RunnerSetReconciler) deregisterScaleSetRunner(rs *v2alpha1.RunnerSet, l
 		case deleted:
 			log.Info("reaper: deregistered worker runner record", "runner", runnerName)
 		}
+	}
+}
+
+// recoverAbandonedRun returns the reaper's abandoned-run recovery hook: force-cancel the
+// run behind a worker pod the deadline reap just removed while it was still Pending, and
+// queue it for automatic re-run once capacity returns (Q766). The recovery is deliberately
+// not waited on — the force-cancel runs bounded on its own detached context, and a
+// reconcile must not stall on GitHub — and is a no-op on a Classic-protocol set, whose
+// pods carry no acquisition-protocol label.
+func (r *RunnerSetReconciler) recoverAbandonedRun(rs *v2alpha1.RunnerSet) func(context.Context, *corev1.Pod) {
+	if r.Provisioner == nil {
+		return nil
+	}
+	return func(ctx context.Context, pod *corev1.Pod) {
+		_ = r.Provisioner.RecoverAbandonedScaleSetWorker(ctx, r.provisionerTarget(rs), pod)
 	}
 }
 

@@ -34,7 +34,9 @@ const abandonedForceCancelTimeout = 30 * time.Second
 // A cancelled run is also registered for automatic re-run once the owner can place a
 // worker pod again (Q691) — not immediately, because the job was abandoned for want of
 // capacity and re-queueing it into the same starved pool is how a shortage compounds.
-func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger) {
+//
+// tier labels the metric only; both acquisition tiers run the identical call (Q766).
+func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target, owner, repo, runID, tier string, log *slog.Logger) {
 	outcome := "cancelled"
 	if owner == "" || repo == "" || runID == "" || runID == "0" {
 		log.Warn("run identity unknown; cannot force-cancel the abandoned job's run; GitHub cancels it at its ~15-minute unstarted-job timeout")
@@ -53,12 +55,12 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 			// Only this outcome is re-runnable: the cancelled conclusion is the state
 			// rerun-failed-jobs was measured to accept, and it is the one outcome in
 			// which we know the run concluded at all (Q691, abandoned_rerun.go).
-			p.registerAbandonedRerun(target, owner, repo, runID)
+			p.registerAbandonedRerun(target, owner, repo, runID, tier)
 		}
 	}
 	if p.Metrics != nil {
 		key := target.Key()
-		p.Metrics.AbandonedRunForceCancels.WithLabelValues(key.Namespace, key.Name, outcome).Inc()
+		p.Metrics.AbandonedRunForceCancels.WithLabelValues(key.Namespace, key.Name, tier, outcome).Inc()
 	}
 }
 

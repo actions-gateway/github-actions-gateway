@@ -53,7 +53,10 @@ const (
 // RecoverEvictedScaleSetWorkers finds this owner's scale-set worker pods that lost their
 // job to a disruption — the kubelet's node-pressure eviction, kube-scheduler preemption
 // (Q497), or an external graceful deletion such as a drain (Q502) — claims each one, and
-// triggers the same automatic re-run the classic tier performs. It returns a done channel that closes once every recovery this
+// triggers the same automatic re-run the classic tier performs. A worker deleted before
+// any container ran takes the same claim but a different action: its run is
+// force-cancelled first, because nothing failed for rerun-failed-jobs to act on (Q766,
+// abandoned_scaleset.go). It returns a done channel that closes once every recovery this
 // call started has finished, so a caller may block on it (tests) or ignore it (the
 // reconciler, which must not stall a reconcile on GitHub).
 //
@@ -93,11 +96,19 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 	type disrupted struct {
 		pod   *corev1.Pod
 		cause string
+		// abandoned routes the pod to the force-cancel path instead of straight to
+		// rerun-failed-jobs: it never ran its job, so the run has to be concluded
+		// before a re-run is legal (Q766, abandoned_scaleset.go).
+		abandoned bool
 	}
 	var recoverable []disrupted
 	for i := range pods.Items {
-		if cause, ok := disruptionAwaitingRecovery(&pods.Items[i]); ok {
-			recoverable = append(recoverable, disrupted{pod: &pods.Items[i], cause: cause})
+		pod := &pods.Items[i]
+		switch cause, ok := disruptionAwaitingRecovery(pod); {
+		case ok:
+			recoverable = append(recoverable, disrupted{pod: pod, cause: cause})
+		case abandonedAwaitingRecovery(pod):
+			recoverable = append(recoverable, disrupted{pod: pod, cause: recoveryCauseAbandoned, abandoned: true})
 		}
 	}
 	if len(recoverable) == 0 {
@@ -130,6 +141,14 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 				continue
 			}
 			podLog.Warn("could not claim scale-set worker disruption for recovery; skipping", "cause", cause, "error", err)
+			continue
+		}
+
+		// A never-started worker has no failed job for rerun-failed-jobs to act on, so
+		// it takes the force-cancel-then-defer path rather than handleEviction — which
+		// also owns its own identity read and its own identity-unknown reporting.
+		if d.abandoned {
+			recoveries = append(recoveries, p.recoverAbandoned(ctx, target, pod, abandonedDetectionDeleted))
 			continue
 		}
 
@@ -172,10 +191,11 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 // condition, Q497), and an external graceful deletion — a drain or a `kubectl delete
 // pod` — whose victim reached PodFailed before the object went away (Q502; see
 // deletion.go for the discriminator and its AGC-own-deletion exclusion). A pod deleted
-// without ever publishing a terminal phase is NOT recovered: it never ran its job to a
-// reportable end, so there is no failed job for rerun-failed-jobs to act on. A human
-// cancelling the run at GitHub deletes nothing, so it never enters any arm (measured,
-// Q459).
+// without ever publishing a terminal phase is NOT recovered here: it never ran its job
+// to a reportable end, so there is no failed job for rerun-failed-jobs to act on. That
+// shape has its own predicate and its own action, which concludes the run before
+// re-running it (abandonedAwaitingRecovery, Q766). A human cancelling the run at GitHub
+// deletes nothing, so it never enters any arm (measured, Q459).
 //
 // The full boundary, with the row-by-row reasoning for what is in and out, is the table
 // in docs/design/04-operational-flows.md §4.2 ("Which disruptions are recovered").
@@ -200,7 +220,9 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 //     terminal time. Without that, a cleanup delete of a pod whose job genuinely
 //     failed earlier — by an operator, since the reaper stamps its own deletions —
 //     would read as a disruption and re-run the failed job, and a deleted worker
-//     whose container never started would re-run a job that never ran.
+//     whose container never started would re-run a job that never ran. The
+//     never-started half of that is now recovered, but only by concluding the run
+//     first; the exclusion here is what keeps it off THIS path (Q766).
 func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
 	if _, handled := pod.Annotations[AnnotationEvictionHandledAt]; handled {
 		return "", false

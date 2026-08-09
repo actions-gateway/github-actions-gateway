@@ -85,6 +85,36 @@ Also check the release notes for the new version before upgrading, particularly:
 
 ## Migration Notes
 
+### Non-breaking: the abandoned-run fast cancel and auto re-run now work on the ScaleSet tier; two counters gain a `tier` label
+
+1.4 added two recoveries for a worker removed before its container ever ran,
+the `pendingPodDeadline` reap being the common cause: the run is force-cancelled
+in about a second instead of waiting out GitHub's ~15-minute unstarted-job
+timeout (Q683), and it is then re-run automatically once the runner set places a
+worker pod again (Q691). In 1.4 both were wired into the classic acquisition
+path only, so on the ScaleSet tier (the default, and `v2beta1`'s only option)
+the same reap left the job unreported. This release closes that gap (Q766).
+
+The identity the port needed comes off the worker pod's
+`actions-gateway.com/run-id` annotation, read as the reaper deletes the pod. So
+a `ScaleSet` set whose assignment messages carry no `workflowRunId` gets an
+`EvictionRecoveryIdentityUnknown` Warning Event and
+`actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}`
+instead of the recovery. That is the same signal the Q417 eviction port already
+emits for the same missing field.
+
+`actions_gateway_abandoned_run_force_cancels_total` and
+`actions_gateway_abandoned_run_rerun_waits_total` gain a `tier` label
+(`classic` / `scaleset`). Aggregations are unaffected; add `tier` to a
+`by (...)` clause where you want the split. Full note:
+[Breaking observability changes](observability-metrics.md#breaking-observability-changes-q417).
+
+No action is required at upgrade time. Two expectations do change on a
+`ScaleSet` set: those two counters start reporting where they were flat zero
+before, and a stuck-`Pending` worker's run now concludes in about a second
+rather than at GitHub's unstarted-job timeout. Behaviour is covered in
+[Worker Pod Reaped While Pending](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending).
+
 ### Non-breaking: `v1alpha1` is deprecated and the apiserver now warns
 
 Both `actions-gateway.github.com` kinds carry `deprecated: true` on their `v1alpha1`
