@@ -1517,6 +1517,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="H.9. Cross-namespace proxy sharing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-implementing-it-settled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What implementing it settled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3211,6 +3228,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="H.9. Cross-namespace proxy sharing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-implementing-it-settled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What implementing it settled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4383,6 +4417,8 @@ must never over-gate.</p>
   same informer/watch without taking on a finalizer that can block deletion.</li>
 </ul>
 <h2 id="h9-cross-namespace-proxy-sharing">H.9. Cross-namespace proxy sharing<a class="headerlink" href="#h9-cross-namespace-proxy-sharing" title="Permanent link">&para;</a></h2>
+<p><strong>Shipped (Q166, M4).</strong> The mechanisms below are implemented; two points this section
+originally left open are recorded at the end.</p>
 <p>Default is same-namespace. Cross-namespace sharing uses <strong>provider consent</strong>: the
 owner of the <code>EgressProxy</code> publishes that it is shareable (via
 <code>spec.sharing.allowedNamespaces</code> or a namespace selector). Naming a
@@ -4413,6 +4449,35 @@ not, and these are the bulk of the implementation cost:</p>
    may instead be published as a <code>Bundle</code>. No new secret-distribution mechanism is
    required — the earlier framing of this as a "secret" overstated the cost.</li>
 </ol>
+<h3 id="what-implementing-it-settled">What implementing it settled<a class="headerlink" href="#what-implementing-it-settled" title="Permanent link">&para;</a></h3>
+<p><strong>The reference needed a namespace, and it could not go on <code>ObjectRef</code>.</strong> Nothing in
+the v2 API could express a cross-namespace reference at all: <code>ObjectRef</code> and
+<code>LocalObjectRef</code> were name-only, and both resolution sites resolved in the referrer's
+own namespace. <code>ObjectRef</code> also backs <code>gatewayRef</code>, <code>templateRef</code> and
+<code>defaultTemplateRef</code>, so adding <code>Namespace</code> there would have made four references
+cross-namespace at once, three of them with no consent handshake behind them. The
+proxy references therefore moved to their own <code>ProxyObjectRef</code> (<code>name</code> +
+optional <code>namespace</code>). Empty <code>namespace</code> means the referrer's own, so every existing
+manifest keeps its meaning. This dropped the optional <code>kind</code> property from
+<code>proxyRef</code>'s schema, whose enum admitted only the two template kinds and which
+nothing read; structural-schema pruning means a manifest that set it still applies.</p>
+<p><strong>The AGC cannot read a remote <code>EgressProxy</code>, so the GMC mediates.</strong> The AGC's cache
+is pinned to its own tenant namespace precisely so it needs only the per-tenant <code>Role</code>
+the GMC creates rather than a <code>ClusterRole</code>, and <code>RunnerSet.spec.proxyRef</code> is resolved
+by the AGC. Widening that to a <code>ClusterRole</code> would let every tenant's AGC read every
+other tenant's <code>EgressProxy</code>, a blast-radius regression, and the secure-by-default
+rule keeps the narrower option. A per-grant <code>Role</code> plus an uncached read preserves
+least privilege but loses the watch, since controller-runtime fixes cache namespaces
+at manager construction.</p>
+<p>So the CA ConfigMap this section already mandates carries the decision as well as the
+trust material: <strong>its presence is the grant</strong>, and its data holds the proxy's Service
+DNS name and port. The AGC reads it from its own namespace, resolves nothing across a
+boundary, and fails closed when it is absent. Revoking a grant deletes it. That is one
+mechanism doing two jobs rather than a second mechanism invented for the purpose.</p>
+<p>One consequence worth stating: the GMC reads these projections through its <strong>uncached</strong>
+API reader. Its ConfigMap informer is pinned to a single name in its own namespace, so
+a cached label-selected list would return nothing and the prune that revokes a
+withdrawn grant would silently find nothing to delete.</p>
 <h2 id="h10-the-egress-proxy-becomes-optional">H.10. The egress proxy becomes optional<a class="headerlink" href="#h10-the-egress-proxy-becomes-optional" title="Permanent link">&para;</a></h2>
 <p>The proxy earns its keep for <strong>stable per-tenant egress IPs</strong> (GitHub
 IP-allowlisting, common with Enterprise Managed Users), <strong>egress attribution /

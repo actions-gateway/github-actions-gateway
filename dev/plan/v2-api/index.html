@@ -2828,10 +2828,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#m4--cross-namespace-egressproxy-sharing" class="md-nav__link">
+  <a href="#m4--cross-namespace-egressproxy-sharing--shipped-q166" class="md-nav__link">
     <span class="md-ellipsis">
       
-        M4 — Cross-namespace EgressProxy sharing
+        M4 — Cross-namespace EgressProxy sharing — shipped (Q166)
       
     </span>
   </a>
@@ -3334,13 +3334,23 @@ external PKI/Vault (different algorithm, lifetime, or HSM-backed issuance). <str
 invariant:</strong> the referenced Secret must be a same-namespace TLS Secret — no
 cross-tenant reuse. Additive optional field, deferred until an operator with managed
 PKI asks. Instantiates <a href="../../design/01-executive-summary/#design-goals">design goal 6</a>.</p>
-<h3 id="m4--cross-namespace-egressproxy-sharing">M4 — Cross-namespace <code>EgressProxy</code> sharing<a class="headerlink" href="#m4--cross-namespace-egressproxy-sharing" title="Permanent link">&para;</a></h3>
-<p>Additive on M3, gated on a <strong>concrete operator ask</strong> for cross-namespace sharing
-(same-namespace sharing already works without it). Adds: inline
-<code>spec.sharing.allowedNamespaces</code> provider consent, ConfigMap CA distribution into
-granted namespaces (trust-manager pattern), dual-side NetworkPolicy, and the
-managed-IP refresh relocation for remote consumers (<a href="../../design/appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharing">§H.9</a>).
-Tracked in <a href="../../STATUS/#deferred">STATUS.md Deferred</a>.</p>
+<h3 id="m4--cross-namespace-egressproxy-sharing--shipped-q166">M4 — Cross-namespace <code>EgressProxy</code> sharing — <strong>shipped</strong> (Q166)<a class="headerlink" href="#m4--cross-namespace-egressproxy-sharing--shipped-q166" title="Permanent link">&para;</a></h3>
+<p>Demand fired 2026-08-01 and it shipped into 1.4.0. <code>spec.sharing.allowedNamespaces</code>
+had been served by <code>v2beta1</code> since <code>v1.3.0</code> with <strong>no enforcement</strong>, so every release
+hardened a dormant field; implementing it while it was still effectively unused was
+what kept the fix from being a breaking change.</p>
+<p>Delivered: the proxy references carry an optional <code>namespace</code> on a dedicated
+<code>ProxyObjectRef</code> (not on the shared <code>ObjectRef</code>, which would have opened
+<code>gatewayRef</code>/<code>templateRef</code> too); provider-side consent failing closed with
+<code>ProxyShareNotGranted</code>; CA distribution as a ConfigMap into granted namespaces only;
+dual-side NetworkPolicy, with the granted peer carrying both selectors in one entry so
+they AND. Absent or empty <code>sharing</code> denies, so the same-namespace-only posture is both
+the default and the unset case.</p>
+<p>The GMC mediates every cross-namespace resolution, because the AGC's namespace-scoped
+cache and per-tenant <code>Role</code> cannot read a remote <code>EgressProxy</code> and widening them was a
+blast-radius regression. The projected ConfigMap's presence is the grant. Design
+detail and what the implementation settled:
+<a href="../../design/appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharing">§H.9</a>.</p>
 <h3 id="also-deferred--opportunistic-per-appendix-h">Also deferred / opportunistic (per Appendix H)<a class="headerlink" href="#also-deferred--opportunistic-per-appendix-h" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Admin policy singleton/class</strong> — keep flags; promote on the documented triggers (<a href="../../design/appendix-h-v2-api-decomposition/#h14-admin-policy-layer--deferred-until-tiering-is-real">§H.14</a>).</li>

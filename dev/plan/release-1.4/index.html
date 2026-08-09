@@ -2643,10 +2643,11 @@
 
 <h1 id="release-14-milestone-definition">Release 1.4 Milestone Definition<a class="headerlink" href="#release-14-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scope decided 2026-08-05. One gating Queue row remains</strong>, labelled
-<code>1.4-gate</code>: <a href="../../STATUS/#Q166">Q166</a>. Q691 and Q554 both shipped 2026-08-08
-(the latter's <a href="../archive/runner-template-library/">plan</a> is archived).
-Everything else the release contains is already merged.</p>
+<p><strong>Status: scope decided 2026-08-05. No gating Queue rows remain.</strong> All three
+<code>1.4-gate</code> items shipped 2026-08-08: Q691, Q554 (its
+<a href="../archive/runner-template-library/">plan</a> archived), and Q166. Everything else
+the release contains is already merged, so the cut now needs its release
+candidate and dogfood validation.</p>
 </blockquote>
 <h2 id="the-minor-was-forced-before-anyone-chose-it">The minor was forced before anyone chose it<a class="headerlink" href="#the-minor-was-forced-before-anyone-chose-it" title="Permanent link">&para;</a></h2>
 <p><code>v1.3.0..main</code> carries 120 commits, 17 of them <code>feat</code>. Six change the shipped
@@ -2697,13 +2698,19 @@ commit subjects, which is why it was discovered at scoping time rather than when
 it moved. A semver-floor instrument is being built to close that; until it lands,
 the floor is a manual reading.</p>
 <h2 id="what-140-adds-beyond-what-is-merged">What 1.4.0 adds beyond what is merged<a class="headerlink" href="#what-140-adds-beyond-what-is-merged" title="Permanent link">&para;</a></h2>
-<p><strong><a href="../../STATUS/#Q166">Q166</a>: v2 API M4, cross-namespace EgressProxy sharing.</strong>
-The one item here whose absence is a liability rather than a deferral.
-<code>sharing.allowedNamespaces</code> is <strong>served in the v2beta1 API with no enforcement</strong>,
-so an operator can set a field that nothing honours. That is a shipped defect
-wearing a feature label, and every release that ships it that way hardens a
-dormant contract further. Demand fired 2026-08-01. Remaining: the M4 consent
-check, CA distribution, dual-side NetworkPolicy.</p>
+<p><strong>Q166: v2 API M4, cross-namespace EgressProxy sharing. — shipped.</strong>
+The one item here whose absence was a liability rather than a deferral.
+<code>sharing.allowedNamespaces</code> was <strong>served in the v2beta1 API with no enforcement</strong>,
+so an operator could set a field that nothing honoured. That is a shipped defect
+wearing a feature label, and every release that shipped it that way hardened a
+dormant contract further. Demand fired 2026-08-01.</p>
+<p>Delivered whole: the consent check, CA distribution, and dual-side NetworkPolicy.
+Two things the plan had not accounted for turned up in the code and are recorded in
+<a href="../../design/appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharing">§H.9</a>
+— a cross-namespace reference was not expressible at all (so M4 had to build the
+path, not just guard it), and the AGC cannot read a remote <code>EgressProxy</code> without an
+RBAC widening nobody wanted, so the GMC mediates. Absent or empty <code>sharing</code> denies,
+which keeps the pre-M4 posture as the default and the unset case.</p>
 <p><strong>Q554: a curated runner template library. Shipped 2026-08-08.</strong> The cheapest
 real capability on the list: no new CRD, and it promotes templates CI already
 validates (dogfood kata-dind and privileged-dind) into a shipped kustomize base

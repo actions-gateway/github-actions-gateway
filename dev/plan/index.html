@@ -2973,7 +2973,7 @@ markers per item.</p>
 <tr>
 <td><a href="v2-api/">v2-api.md</a></td>
 <td>v2 API decomposition sequencing: split the monolithic <code>v1alpha1</code> <code>ActionsGateway</code>/<code>RunnerGroup</code> into the decomposed <code>v2alpha1</code> (<code>actions-gateway.com</code>) API across independently shippable milestones M1–M5 (large reusable pod templates, multiple gateways per namespace, optional/shared egress proxy)</td>
-<td>✅ Done — M1–M5 shipped; deferred residuals only (Q166/Q174)</td>
+<td>✅ Done: M1–M5 shipped, plus M4 cross-namespace sharing (Q166); deferred residual only (Q174)</td>
 </tr>
 <tr>
 <td><a href="v2beta1/">v2beta1.md</a></td>
@@ -3437,6 +3437,11 @@ markers per item.</p>
 <td><a href="archive/v2-api-m5-migration/">archive/v2-api-m5-migration.md</a></td>
 <td>v2 API M5 — one-shot <code>gag-migrate</code> tool fanning a v1alpha1 tenant out to v2alpha1 + the v1/v2 cutover</td>
 <td>2026-06-25 — Q165 (v2-api.md M5)</td>
+</tr>
+<tr>
+<td><a href="archive/v2-api-m4-cross-namespace-sharing/">archive/v2-api-m4-cross-namespace-sharing.md</a></td>
+<td>v2 API M4 — cross-namespace <code>EgressProxy</code> sharing: the provider-consent check, ConfigMap CA distribution, dual-side NetworkPolicy, and the two design holes the build surfaced (a cross-namespace ref was not expressible; the AGC cannot read a remote proxy)</td>
+<td>2026-08-08, Q166 (v2-api.md M4)</td>
 </tr>
 <tr>
 <td><a href="archive/q168-direct-egress/">archive/q168-direct-egress.md</a></td>
