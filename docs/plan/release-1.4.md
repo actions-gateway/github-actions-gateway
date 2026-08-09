@@ -4,8 +4,10 @@
 > `1.4-gate` items shipped 2026-08-08: Q691, Q554 (its
 > [plan](archive/runner-template-library.md) archived), and Q166. Everything else
 > the release contains is already merged. `v1.4.0-rc.1` was cut from `162d97a7`
-> on 2026-08-09 and its dogfood validation **PASSED on the first attempt**, so
-> the line is clear to promote once the curated notes are written.
+> on 2026-08-09 and its dogfood validation **PASSED on the first attempt**.
+> Work landed after that commit (the Q766 ScaleSet port and the docs sweep), so
+> rc.1 is no longer the candidate: **an rc.2 follows once those merge**, and it
+> is the one that has to validate before the stable tag.
 
 ## The minor was forced before anyone chose it
 
@@ -71,7 +73,14 @@ existing per-run retry budget, with exhaustion on
 `eviction_retries_exhausted_total{cause="abandoned"}` and expiry on
 `abandoned_run_rerun_waits_total{outcome="expired"}`.
 
-## Deferred to 1.5.0, and why
+## Deferred out of 1.4, and why
+
+> **Corrected 2026-08-09.** This section was headed "Deferred to 1.5.0", which
+> promised a release none of these rows was ever labelled for. The proxy cluster
+> in particular is demand-gated, as the paragraph below says in its own words, so
+> it is parked rather than scheduled. The ladder is
+> [release-ladder.md](release-ladder.md); the reshape is
+> [Q772](../STATUS.md#Q772).
 
 **The proxy hardening cluster stays together**:
 [Q564](../STATUS.md#Q564) audit logging, [Q565](../STATUS.md#Q565) per-tenant rate
@@ -148,6 +157,67 @@ types) and `master` (`vault/vault.go`, `vault/azurekeyvault/`,
 The rest of the reconciliation, including whether the comparison table keeps its
 verdict-table shape, is [1.5 scope](release-1.5.md#in-scope-reconcile-the-marketing-surfaces).
 The recurring form is [release.md § Pre-flight](../operations/release.md#1-pre-flight).
+
+## Sweep verdict: the docs and marketing surfaces, 2026-08-09
+
+The pre-flight sweep ran against `v1.3.0..main` (181 commits). Every mechanical
+gate was already green, including `doc-links`, `roadmap-check`, the nav-coverage
+gate and `release-pins-check`, and pre-flight question 3 is satisfied: after
+#1329 and #1362 every ARC claim on `why-gag.md` and `alternatives.md` carries a
+version and a measurement date. Three content gaps remained, all created this
+cycle, and all are now closed.
+
+**The auto-re-run docs did not agree with each other about Q683 and Q691, and
+none of them carried the tier scope.** `04-operational-flows.md` records the
+scope correctly ("Classic tier only, matching the force-cancel it recovers");
+no operator-facing or marketing surface repeated it. Measured from source:
+`forceCancelAbandonedRun` has one caller, inside the classic `provision()`
+handler, and the ScaleSet tier's `disruptionAwaitingRecovery` has three arms
+(eviction, preemption, deletion) with no abandoned case, deliberately. So on the
+ScaleSet tier, which is the v2 default every new tenant runs, a worker reaped
+while Pending still concludes at GitHub's ~15-minute unstarted-job timeout and
+needs a manual re-run. `features.md` had been advertising the capability to those
+tenants unscoped, and it also said the run "accepts a re-run afterwards", which
+describes the pre-Q691 manual state. The consolidated matrix in
+`troubleshooting.md` said the opposite, excluding a never-started worker "by
+design" with no note that the classic tier now recovers it. All three are
+corrected, and the matrix preamble names `abandoned` as the fifth, out-of-table
+cause. This was a propagation failure rather than a code gap: the design doc had
+the answer the whole time.
+
+**Q166 and Q554 had reached `features.md` and stopped there.** Neither appeared
+on `index.md`, `README.md` or `why-gag.md`, which is exactly the rot pre-flight
+question 1 exists to catch. Both are now on all three. They were deliberately
+*not* added to the ARC comparison table: a new row there needs a measured ARC
+column, and this sweep measured no new ARC behaviour, so adding one would have
+created precisely the undated claim the 2026-08-06 review was called to remove.
+
+**The announce bar still carried 1.3's highlight.** `highlight_for` named
+`v1.3.0`, so a `v1.4.0` build degraded to the plain release-notes link (verified
+by building at `GAG_DOCS_RELEASE=v1.4.0`). It now names `v1.4.0` and leads with
+cross-namespace proxy sharing, the runner template library, and the v2
+worker-capacity gauges. The abandoned-run re-run was considered and rejected for
+the bar: it is classic-tier only, and a banner is the wrong place for a scope
+qualifier.
+
+### The tier caveat that no longer applies, and why it is recorded anyway
+
+The sweep found Q683 and Q691 wired into the classic path only, with the scope
+recorded in [04-operational-flows.md](../design/04-operational-flows.md) and on
+no operator surface, so a `v2beta1` tenant reading this release would have
+expected a one-second cancel and an automatic re-run their tier did not perform.
+That was drafted as a caveat for the curated notes.
+
+**It is moot: Q766 ported both to the ScaleSet tier inside this release**, so 1.4
+ships them on both tiers and there is no caveat to carry. The `upgrade.md`
+migration note says so directly.
+
+Worth keeping the trail. The gap existed for a few days and no operator surface
+named it, which is the failure the pre-flight sweep exists to catch, and it was
+caught by reading the code rather than the plan doc. The `upgrade.md` placement
+also turned out to be the load-bearing part: `operator-caveats-since.sh` builds
+the curated notes from the `docs/operations/` diff, so a tier scope documented
+only in a design doc never reaches them either way.
 
 ## Pre-flight: the API surface this tag publishes
 

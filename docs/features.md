@@ -23,7 +23,7 @@ under its first stability contract.
 - **[Quota-aware intake](design/04-operational-flows.md#42-job-execution-flow-agc)**: a job the namespace `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub until there is capacity.
 - **[Auto re-run for disrupted jobs](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)**: a worker lost to eviction, preemption, a node drain, or a bare `kubectl delete pod` has its run re-run automatically, under a per-run budget.
 - **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in. Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them. Off by default.
-- **[Fast, honest ending for an abandoned run](design/04-operational-flows.md)**: a run whose worker is removed before it ever started is force-cancelled in about a second, measured live, rather than waiting out GitHub's unstarted-job timeout, and it accepts a re-run afterwards.
+- **[Fast, honest ending for an abandoned run](design/04-operational-flows.md)**: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns. Both acquisition tiers.
 - **[Priority tiers per runner set](design/02-architecture.md)**: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.
 - **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
 - **[Scale-to-zero workers](design/02-architecture.md)**: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.
@@ -70,8 +70,8 @@ under its first stability contract.
 - **[Metrics reference](operations/observability-metrics.md)**: every Prometheus metric the GMC, AGC, and proxy export, scoped per tenant and runner group.
 - **[Fleet rollups for platform admins](operations/observability-metrics.md#full-metrics-reference)**: cross-tenant degraded, egress-stale, and quota gauges in a single pane.
 - **[Scraping setup](operations/observability-metrics-access.md)**: wiring the mutual-TLS metrics endpoints into your Prometheus.
-- **[Alerting and SLOs](operations/observability-alerting.md)**: ready-to-apply alert rules as code.
-- **[Grafana dashboards](operations/observability-dashboards.md)**: a tenant dashboard and a platform dashboard, both as code.
+- **[Alerting and SLOs](operations/observability-alerting.md)**: ready-to-apply alert rules as code. Two SLOs and one alert read duration and latency series the ScaleSet tier does not emit yet, so they have no data there ([roadmap](roadmap.md)).
+- **[Grafana dashboards](operations/observability-dashboards.md)**: a tenant dashboard and a platform dashboard, both as code. Their duration and latency panels stay empty on the ScaleSet tier for the same reason.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
 
 ## Install and day-2 operations

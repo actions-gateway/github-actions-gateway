@@ -2,15 +2,21 @@
 
 > **Status: scope opening 2026-08-06.** [Release 1.4](release-1.4.md) is already
 > scoped and its gating rows are fixed; 1.5 is where work identified after that
-> line lands. Two gating Queue rows so far, labelled `1.5-gate`:
-> [Q712](../STATUS.md#Q712), [Q713](../STATUS.md#Q713).
+> line lands. Three gating Queue rows so far, labelled `1.5-gate`:
+> [Q712](../STATUS.md#Q712), [Q713](../STATUS.md#Q713), and
+> [Q726](../STATUS.md#Q726), admitted 2026-08-09 from the candidate list below.
 
-## Why these two gate a release rather than riding along
+## Why these gate a release rather than riding along
 
-Both came out of the 2026-08-06 competitive analysis, and both are defects in
-capabilities the project already claims, not new features. That is what makes
-them release-gating: shipping another minor while either is open means shipping
-a claim the product does not honour.
+Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both are
+defects in capabilities the project already claims, not new features. That is
+what makes them release-gating: shipping another minor while either is open
+means shipping a claim the product does not honour.
+
+Q726 is the same shape read from the other side. It is the one
+[ARC parity](arc-parity.md) gap that breaks the zero-edit migration claim the
+front door makes, so it gates for the same reason: the claim is published and
+the product does not honour it for a `runs-on` array.
 
 ### Q712 — the runner-group binding is declared and never wired
 
@@ -73,9 +79,9 @@ Held here so the reasoning is not lost, not committed to the release:
 - **Assert a worker pod cannot reach the cloud metadata server.** Three docs
   advise denying `169.254.169.254/32`, Q226 measured HTTP 200 from inside a Kata
   guest, and no test names the address.
-- **Multi-label runner sets.** ARC 0.14.0 (2026-03-19) added them; GAG rejects a
-  set with more than one `runnerLabel` at admission. This is a migration blocker
-  in the ARC → GAG direction and currently has no Queue row.
+*(Multi-label runner sets were held here too, and were accepted on 2026-08-09:
+the row is [Q726](../STATUS.md#Q726), now labelled `1.5-gate`, and the gap
+inventory it belongs to is [arc-parity.md](arc-parity.md).)*
 
 ## In scope: reconcile the marketing surfaces
 

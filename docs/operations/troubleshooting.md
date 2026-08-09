@@ -2851,9 +2851,12 @@ force-cancelled first and re-run only once capacity returns. It is covered in
   (`maxWorkerLifetime`), the stuck-`Running` reap deadline, orphan cleanup.
   Each is stamped `actions-gateway.com/deletion-reason` before deletion and
   excluded: the gateway just judged that job stuck, so a re-run would loop it.
-- **A worker whose container never ran** — e.g. a drain catching a
-  still-`Pending` pod. There is no reportable failure for `rerun-failed-jobs`
-  to act on.
+- **A worker whose container never ran** does not fire *this* recovery. A drain
+  catching a still-`Pending` pod, or the `pendingPodDeadline` reap, leaves no
+  reportable failure for `rerun-failed-jobs` to act on. It is not lost, though:
+  the run is force-cancelled and then re-run once capacity returns, on **both
+  tiers**, which is the out-of-table `abandoned` cause named above. See
+  [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 
 **Fires but can come up short** — each has its own runbook below:
 
@@ -2991,10 +2994,13 @@ keys on that mark. Consequences an operator should know:
   stamped `actions-gateway.com/deletion-reason: <reason>` first, and stamped deletions
   are excluded from recovery. Never set that annotation by hand on a live worker — it
   suppresses automatic recovery for that pod.
-- **A worker whose container never ran is not re-run** — e.g. a drain catching a
-  still-`Pending` worker. Its job never ran to a reportable end, so there is no
-  failed job for `rerun-failed-jobs` to act on; detection requires a recorded
-  container exit that the deletion preceded, which such a pod does not have.
+- **A worker whose container never ran is not re-run *by this path*** — e.g. a
+  drain catching a still-`Pending` worker. Its job never ran to a reportable end,
+  so there is no failed job for `rerun-failed-jobs` to act on; detection requires
+  a recorded container exit that the deletion preceded, which such a pod does not
+  have. It is recovered by the `abandoned` path instead, which force-cancels the
+  run first: see
+  [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 - **A cancelled run is never re-run.** Nothing in the gateway deletes a cancelled
   run's pod, so it carries no mark.
 - **The first re-run call may be refused.** GitHub's conclusion on this path takes

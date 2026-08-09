@@ -1,6 +1,28 @@
 # v2 ↔ v1 gap analysis (API + controller behavior)
 
 **Type:** ⓘ Review / evidence record. **Date:** 2026-07-14.
+**Status (2026-08-09):** every gap recorded below has since shipped, and the last
+v2 API milestone (M4 cross-namespace sharing, Q166) landed 2026-08-08. The audit's
+own scope is therefore closed. One capability drop survives it:
+
+- **Multi-label runner sets** ([Q726](../STATUS.md#Q726)). `v1alpha1` sets
+  `MinItems=1` with no ceiling; `v2beta1` CEL-enforces `size(self) == 1` because
+  the single label doubles as the scale-set name. Deliberate, and the field's
+  godoc offers a migration path (stay on a `v2alpha1` Classic RunnerSet), but
+  that path expires with `v2alpha1` at `v2.0.0`
+  ([Q264](../STATUS.md#Q264)), which is what makes it permanent.
+
+A second one opened and closed inside the same release. Q683 and Q691 shipped in
+August wired only into the classic `provision()` path, and `v2beta1` is
+ScaleSet-only, so for a few days `v2` tenants had neither; Q766 ported both and
+1.4 ships them on both tiers. It is worth recording because it is the shape
+[04-operational-flows.md](../design/04-operational-flows.md) calls a silent
+capability deletion, the one Q417 and Q443 were ported to avoid, and it reappeared
+without anyone deciding to reopen it.
+
+The doc is kept as the evidence record and, above all, as the list of
+[intentional differences](#intentional-differences--verified-no-action) so future
+audits do not re-litigate them.
 **Scope:** the v1 API (`actions-gateway.github.com/v1alpha1`: GMC `ActionsGateway` + AGC `RunnerGroup`) versus the v2 API (`actions-gateway.com` — `v2alpha1` served/reconciled, `v2beta1` storage/hub: `ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`/`ClusterRunnerTemplate`), covering both the API surface and what each controller/webhook actually does. Goal: find v1 behavior not yet ported to v2, now that v2 is the recommended front door (Q273) and v1 removal is on the deprecation clock (Q264/Q273).
 
 **Method:** field-by-field API comparison plus four parallel end-to-end code reads — GMC gateway reconcilers, proxy provisioning (v1 inline vs v2 `EgressProxy`), the full admission surface (webhooks + VAPs + CEL), and the AGC `RunnerGroup` vs `RunnerSet` controllers. Every finding below was verified against the code at the cited locations; the security-relevant ones were re-confirmed by hand.
@@ -53,7 +75,7 @@ The v2 reconciler (`cmd/gmc/internal/controller/actionsgateway_v2_controller.go`
 <a id="proxy"></a>
 ## Proxy provisioning (v1 inline `spec.proxy` vs v2 `EgressProxy`)
 
-Parity confirmed on: Deployment/HPA/PDB with byte-identical resource defaults, self-signed cert generation + rotation window, GitHub-CIDR egress NetworkPolicy incl. the Q229 NodeLocal-DNS third peer, fail-closed empty-IP-cache behavior, 24h IP-range refresh + `EgressRulesStale` (`IPRangeReconciler` patches v2 EgressProxy NPs when `V2Enabled`), NO_PROXY auto-append via shared `buildNoProxy`, Q283 HPA-revert-safe apply, quota condition math, Q320 v2-aware GMC gauges, and the built-in cross-node podAntiAffinity (v2 makes it an overridable default per Q282). v2-only supersets: FQDN egress modes, destination allowlists + CONNECT-allowlist env, scheduling passthrough, richer Events, multiple proxies per namespace. Cross-namespace sharing remains deferred (M4/Q166), `spec.sharing` inert.
+Parity confirmed on: Deployment/HPA/PDB with byte-identical resource defaults, self-signed cert generation + rotation window, GitHub-CIDR egress NetworkPolicy incl. the Q229 NodeLocal-DNS third peer, fail-closed empty-IP-cache behavior, 24h IP-range refresh + `EgressRulesStale` (`IPRangeReconciler` patches v2 EgressProxy NPs when `V2Enabled`), NO_PROXY auto-append via shared `buildNoProxy`, Q283 HPA-revert-safe apply, quota condition math, Q320 v2-aware GMC gauges, and the built-in cross-node podAntiAffinity (v2 makes it an overridable default per Q282). v2-only supersets: FQDN egress modes, destination allowlists + CONNECT-allowlist env, scheduling passthrough, richer Events, multiple proxies per namespace. Cross-namespace sharing was deferred at audit time (M4/Q166) with `spec.sharing` inert; it **shipped 2026-08-08**, enforcing provider-side consent with ConfigMap CA distribution and dual-side NetworkPolicy ([§H.9](../design/appendix-h-v2-api-decomposition.md#h9-cross-namespace-proxy-sharing)).
 
 **Gap — metrics-mTLS stack (Q324, FIXED).** As found, v1 wired the proxy metrics listener end to end (`PROXY_METRICS_*` env + TLS volume + `metrics` container/Service port + metrics-scrape NP ingress rule + ServiceMonitor) while the v2 builder omitted all of it, documented as "lands in M3a" — but M3a and M3b shipped without it, so a v2 proxy pool's `/metrics` fell back to plaintext on the health port and was unscrapable. Fixed: the v2 `EgressProxy` now mounts a per-`EgressProxy` metrics-mTLS bundle (`<ep>-metrics-tls`), publishes the scraper client bundle (`<ep>-metrics-client`), exposes the `metrics` container/Service port, threads all three `PROXY_METRICS_*` env (the mTLS gate — this removes the plaintext fallback), and admits the `:8443` scrape from `metrics: enabled` namespaces. Each `EgressProxy` owns its own metrics CA — no cross-tenant reuse, no security regression vs classic. Design: [appendix-h §H.8](../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion); operator doc: [observability-metrics-access.md](../operations/observability-metrics-access.md#v2-egressproxy-proxy-metrics).
 
@@ -72,14 +94,16 @@ The runtime machinery is shared through owner-agnostic seams (provisioner `Targe
 
 **Gap — ResourceQuota watch (Q326; FIXED).** v1 `RunnerGroupReconciler` watches ResourceQuota (`runnergroup_controller.go:169-173`); as found, the `RunnerSetReconciler` did not, so the Q303 quota conditions lagged an admin's quota edit until an unrelated event. The Q326 fix adds the same watch (`quotaToRunnerSets` + the shared `quotaHardChangedPredicate`), proven in envtest.
 
-**Gap — condition gauges (pre-existing Q319/Q321).** The `worker_quota_pressure`/`worker_quota_exceeded`/`workers_unschedulable` collectors List only `RunnerGroupList` and register only in the v1 reconciler (`runnergroup_controller.go:160-161`); no `RunnerSetsDegraded` gauge exists either. Already tracked; the analysis confirms both.
+**Gap — condition gauges (pre-existing Q319/Q321).** The `worker_quota_pressure`/`worker_quota_exceeded`/`workers_unschedulable` collectors List only `RunnerGroupList` and register only in the v1 reconciler (`runnergroup_controller.go:160-161`); no `RunnerSetsDegraded` gauge exists either. Already tracked; the analysis confirms both. **Both have since FIXED:** Q321 landed the gateway-level gauges, and Q319 exported the v2 RunnerSet worker-capacity conditions as gauges, with Q643 adding the `WorkerCapacityDeclined` reason label.
 
 **Minor (Q329):** ~~v2alpha1 lacks `ConditionRateLimited`/`ConditionRunnerVersionTooOld` constants — the classic path writes raw v1 strings onto RunnerSet status~~ — resolved with Q309, which declared the classic-listener vocabulary in both v2 packages (value-parity + mirror-sync tests) and documented it; ~~v2 AGC RBAC lives only in chart files (`charts/actions-gateway/files/agc-*-rules.yaml`) with no `+kubebuilder:rbac` markers, a drift risk relative to v1's generated role~~ — closed with Q329 (see the Minor section below).
 
 <a id="observability"></a>
 ## Observability roll-up
 
-Cross-cutting view of the gaps above plus what's already on the Queue: v2 proxy binary metrics-mTLS + per-`EgressProxy` ServiceMonitor now landed (Q324, fixed); remaining v2 condition-gauge gap is RunnerSet worker-capacity (Q319) — the gateway-level condition gauges (`runnersets_degraded`/`agc_available`/`egress_unattributed`) are now fixed (Q321); ScaleSet tier has metrics but no alerts/dashboards (Q311) — its missing failure conditions/events (Q325) are now fixed; dead/undocumented v2 condition vocabulary (Q309). An operator running pure-v2 today has status conditions and scale-set counters, but almost no alertable Prometheus surface for them.
+Cross-cutting view of the gaps above plus what was on the Queue at audit time. **All of them have since closed:** v2 proxy metrics-mTLS and the per-`EgressProxy` ServiceMonitor (Q324); the gateway-level condition gauges (Q321) and the RunnerSet worker-capacity gauges (Q319, extended by Q643's reason label); the ScaleSet tier's missing failure conditions and events (Q325); its alerts and dashboards (Q311); and the dead v2 condition vocabulary (Q309).
+
+The audit's closing verdict, that an operator running pure-v2 had status conditions and scale-set counters but almost no alertable Prometheus surface for them, no longer holds: [observability-alerting.md](../operations/observability-alerting.md) ships scale-set alert rules, and both shipped dashboards carry the tier.
 
 <a id="minor"></a>
 ## Minor / stale-doc findings (Q329)

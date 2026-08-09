@@ -185,8 +185,10 @@ which is where new tenants start.
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too. -->
 **Auto-re-run covers disruption, never failure.** Eviction, preemption, a drain
-and a stray `kubectl delete pod` all come back. A job that *failed*, a run you
-*cancelled*, and workers the reaper took never do.
+and a stray `kubectl delete pod` all come back, on both acquisition tiers. A job
+that *failed* and a run you *cancelled* never do. Nor do workers the reaper took,
+with one exception: a worker reaped while still `Pending` is re-run on the
+classic tier once capacity returns.
 [The full boundary](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
 **Right-sizing is structural, not a feature race.** An ephemeral pod runs one
@@ -196,7 +198,10 @@ only closes inside the controller that builds the pods.
 
 ## Where ARC is ahead
 
-Some of it is capability, not only maturity. Measured 2026-08-06.
+Some of it is capability, not only maturity. Measured 2026-08-06. Each gap below
+is tracked, and what closes it and when is on the
+[public roadmap](roadmap.md); the support entitlement is the one we do not plan
+to match.
 
 - **A GitHub Support entitlement**, covering ARC installed via the official
   Helm charts, GitHub Enterprise Server 3.9 and later. GAG has none. Read the
@@ -244,6 +249,7 @@ ships as reconciled defaults, not a post-install project.
     - App keys read-only; never in env, never cached
     - Or opt in to [no App key in the cluster at all](design/05-security.md#57-workload-identity-the-no-pem-delegation-model)
     - Controller writes confined to tenant namespaces
+    - [Sharing a proxy across namespaces needs the owner's consent](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)
 
 -   :material-clipboard-check:{ .lg .middle } __Lower operational cost__
 
@@ -264,6 +270,7 @@ ships as reconciled defaults, not a post-install project.
     - Default-deny ingress, cluster-only DNS
     - Per-tenant egress IPs, mutual-TLS metrics
     - Signed images, SBOM, and SLSA provenance
+    - [Three validated worker templates](operations/runner-template-library.md), one `kubectl apply -k`
 
 </div>
 </div>

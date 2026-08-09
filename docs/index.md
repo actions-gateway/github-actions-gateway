@@ -123,6 +123,7 @@ These ladder up one way: **safe quotas and self-healing disruption make shared c
     - Allow-list runners on Enterprise Managed Users
     - Live-validated on GKE, 2026-07-13
     - [Stable IP needs a gateway or cloud NAT under it](design/network-architecture.md#per-tenant-egress-ip-the-source-ip-mechanism)
+    - [Share a pool across namespaces, by consent](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)
     - v2: proxy optional
 
 -   :material-feather:{ .lg .middle } __Lower listener overhead__
@@ -155,6 +156,7 @@ These ladder up one way: **safe quotas and self-healing disruption make shared c
 
     - `RunnerTemplate` per many sets
     - Platform `ClusterRunnerTemplate`
+    - [Three validated templates ship in-box](operations/runner-template-library.md)
     - Identical templates collapse
     - Migrate v1→v2 with `gag-migrate`
 
