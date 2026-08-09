@@ -39,23 +39,57 @@ job that needs more than one node at once ([Q718](../STATUS.md#Q718)).
 
 ## The collision with the security goal
 
-**GPU and Kata do not compose on cloud today**, and no Queue row says so.
+**On managed cloud GPU, isolation and the accelerator do not compose the way
+GAG's defaults assume**, and no Queue row says so.
 
 Kata micro-VM workers are the shipped answer for giving a job root without a
-shared kernel, and they are the default in GAG's own end-to-end CI. They need
-nested virtualization. GKE's GPU machine families (A2, A3, G2) **do not support
-nested virtualization**, so the two defaults are mutually exclusive on managed
-cloud GPU nodes. PCIe passthrough of an NVIDIA or AMD GPU into a Kata guest
-works from bare metal, which makes bare metal or dedicated instances the
-reference architecture for isolated GPU CI. Both facts are already documented
-([kata-dind-workloads.md](../operations/kata-dind-workloads.md#caveats-and-limitations),
-[appendix-b](../design/appendix-b-worker-isolation.md) rates device passthrough
-as limited under a micro-VM).
+shared kernel, and they are the default in GAG's own end-to-end CI. Nested
+virtualization is *not* what blocks them on GPU nodes: A2, A3, and G2 all take
+`--enable-nested-virtualization` (measured 2026-08-02, [machine-family
+row](../operations/kata-dind-workloads.md#prerequisite--nested-virtualization-nodes)).
+The constraint sits one layer down, and it leaves an operator two real options.
+
+**gVisor runs on cloud GPU, and stops at the driver.** GKE Sandbox supports
+GPUs: GA on H100 80GB, A100 80GB/40GB, L4, and T4, preview on H200, B200,
+GB200, and RTX PRO 6000. Google bounds its own claim, "GKE Sandbox doesn't
+mitigate all NVIDIA driver vulnerabilities, but retains protection against Linux
+kernel vulnerabilities", and gVisor says the same from the other side: it "is
+much less effective at mitigating vulnerabilities within the NVIDIA GPU drivers
+themselves, because gVisor passes through calls to be handled by the kernel
+module"
+([GKE Sandbox](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/sandbox-pods),
+[gVisor GPU support](https://gvisor.dev/docs/user_guide/gpu/), both fetched
+2026-08-08).
+
+That uncovered half is where the recent critical escapes are. CVE-2024-0132
+(2024-09) is a time-of-check/time-of-use race in the NVIDIA Container Toolkit
+that lets a crafted image reach the host filesystem; CVE-2025-23359 (2025-02,
+CVSS 9.0) is its incomplete fix, reopening the same race; CVE-2025-23266
+"NVIDIAScape" (2025-07, CVSS 9.0) makes the privileged `createContainer` OCI
+hook inherit environment from the image, so an `LD_PRELOAD` pointing into the
+container's own filesystem loads inside a host process, in three lines of
+Dockerfile (fixed in Container Toolkit 1.17.8). All three are toolkit bugs
+rather than kernel bugs, which is exactly the half a sandbox does not take. That
+is a statement about coverage boundaries, not a claim that gVisor is unsafe or
+that any of these was exploited against a GAG deployment.
+
+**Kata covers the driver and asks for hardware you control.** NVIDIA documents
+the Kata passthrough path as needing hardware virtualization and Access Control
+Services (ACS) enabled in BIOS, IOMMU groups, *no* NVIDIA driver installed on
+the host (the GPU binds to `vfio-pci` instead), and every GPU on the node
+assigned to one Kata VM. vGPU is unsupported, containerd only, and "support for
+Kata Containers is limited to the implementation described on this page"
+([NVIDIA GPU Operator](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/deploy-kata-containers.html),
+fetched 2026-08-08). A managed node pool exposes none of those knobs, which is
+why [appendix-b](../design/appendix-b-worker-isolation.md) rates device
+passthrough as limited under a micro-VM.
 
 The consequence is a positioning constraint, not just an engineering one. The
 strongest audience for GAG's security story and the strongest audience for its
-GPU story are the same people, and today they must choose. On-premises and
-reserved hardware is where both hold at once, which is also where the
+GPU story are the same people, and on managed cloud they still have to choose
+between a sandbox that stops at the driver and a VM boundary they cannot
+configure. On-premises and reserved hardware is where both hold at once, which
+is also where the
 [location filter](../alternatives.md#location-location-location) already removes
 most of the competition. That is a coherent story, but only if it is stated
 rather than discovered by an operator after they buy A3 nodes.
@@ -110,8 +144,11 @@ Each demonstrated rather than argued:
   crosses a tenant boundary with it. Not without the isolation review
   [caching-and-worker-storage.md](caching-and-worker-storage.md) reframes for
   the cache.
-- **Cloud GPU under Kata.** Not a gap to close, a hardware fact to state. It
-  reopens if a cloud ships nested virtualization on an accelerator family.
+- **Cloud GPU under Kata.** Not a gap to close, a platform fact to state: the
+  BIOS, host-driver, and whole-GPU-per-guest requirements above are not knobs a
+  managed node pool exposes. It reopens if a managed cloud offers Kata with GPU
+  passthrough, or if gVisor gains meaningful coverage of the NVIDIA driver
+  surface.
 - **Non-NVIDIA accelerators as a first target.** TPUs, Gaudi, and AMD are the
   same shape of problem and none of them has a workload asking.
 - **Benchmarking against managed GPU CI.** Those services do not run on

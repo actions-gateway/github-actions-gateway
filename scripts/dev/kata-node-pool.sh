@@ -19,9 +19,13 @@
 #
 # Optional env (defaults shown):
 #   NODE_POOL          kata-pool        node-pool name to create
-#   MACHINE_TYPE       c2-standard-4    MUST be a nested-virt-capable family
-#                                       (n2/n2d/c2/c2d); a2/a3/g2 GPU families
-#                                       do NOT support nested virt on GKE.
+#   MACHINE_TYPE       c2-standard-4    MUST be a nested-virt-capable family.
+#                                       This script accepts n2/n2d/c2/c2d, a
+#                                       stale subset: gcloud named A2, A3, C2,
+#                                       C3, C4, C4D, C4N, G2, H3, H4D, N1, N2,
+#                                       N4, N4D, Z3, M4 on 2026-08-02 (no C2D,
+#                                       no N2D). See
+#                                       docs/operations/kata-dind-workloads.md.
 #   NUM_NODES          1                nodes in the pool
 #   DISK_SIZE          100              boot disk GiB (kind needs headroom)
 #   IMAGE_TYPE         UBUNTU_CONTAINERD  Kata's kata-deploy targets containerd;
@@ -80,7 +84,9 @@ main() {
 	n2-* | n2d-* | c2-* | c2d-*) ;;
 	*)
 		echo "ERROR: MACHINE_TYPE='${machine_type}' is not a nested-virt-capable family." >&2
-		echo "       Use an n2/n2d/c2/c2d type; GPU families (a2/a3/g2) do not support nested virt on GKE." >&2
+		echo "       This script accepts n2/n2d/c2/c2d. Other families gcloud names as capable" >&2
+		echo "       (a2/a3/g2 included) must be provisioned by hand; see" >&2
+		echo "       docs/operations/kata-dind-workloads.md." >&2
 		exit 1
 		;;
 	esac

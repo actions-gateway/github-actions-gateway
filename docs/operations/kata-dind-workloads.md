@@ -111,7 +111,7 @@ restricted by machine family:
 | Requirement | Detail |
 |---|---|
 | Cluster mode | **GKE Standard.** Autopilot does **not** allow nested virtualization. |
-| Machine family | **N2, N2D, C2, C2D** support nested virtualization and are the families the shipped [`scripts/dev/kata-node-pool.sh`](../../scripts/dev/kata-node-pool.sh) accepts. **N1** also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. **E2 does not.** The GPU families (**A2, A3, G2**) do not either — GPU + Kata on cloud needs bare metal or dedicated instances. |
+| Machine family | Take the list from the API, not from a doc. Measured 2026-08-02, `gcloud` rejected `c2d` and named the families that do take the flag: **A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3, M4**. **E2, C2D, and N2D are absent.** The shipped [`scripts/dev/kata-node-pool.sh`](../../scripts/dev/kata-node-pool.sh) accepts only `n2`, `n2d`, `c2`, `c2d`, which is a stale subset of that list; provision any other family by hand. **The GPU families A2, A3, and G2 are on the list**, so nested virtualization is *not* what stops GPU workloads running under Kata on GKE (see [what does](../plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal)). The newer accelerator families are absent from it: A4X is Arm-based, G4 AMD-based. Google's [restriction rules](https://docs.cloud.google.com/compute/docs/instances/nested-virtualization/overview) (fetched 2026-08-08) exclude E2, memory-optimized, AMD- and Arm-powered, and H4D VMs, which agrees on the GPU families but not in the margins (it excludes H4D, C4D, and N4D, which the API named). Where they disagree, the API's rejection is current. See [Caveats](#caveats-and-limitations). |
 | Node image | **`UBUNTU_CONTAINERD`**, or `COS_CONTAINERD` at `1.28.4-gke.1083000`+. |
 | Flag | `--enable-nested-virtualization` (GA). Accepted by *both* `gcloud container node-pools create` and `gcloud container clusters create` — prefer the cluster form so a capacity stockout fails fast instead of wedging the cluster. |
 | Workload Identity | `--workload-pool` + `--workload-metadata=GKE_METADATA`. **Required**, not optional — Kata does not block the metadata server. See [the security rationale](#the-security-rationale). |
@@ -461,10 +461,10 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
   shape; `N2_CPUS` defaults to 200.
 
   **`c2d` no longer takes `--enable-nested-virtualization`.** As of 2026-08-02
-  GCP rejects the create and names the families that can: A2, A3, C2, C3, C4,
-  C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3, M4 — no `C2D`, no `N2D`. Whether
-  support was withdrawn or the observation above was of a pool created without
-  the flag is unresolved; take the API's rejection as current.
+  GCP rejects the create and names the families that can, which is the list in
+  [the machine-family row](#prerequisite--nested-virtualization-nodes): no `C2D`,
+  no `N2D`. Whether support was withdrawn or the observation above was of a pool
+  created without the flag is unresolved; take the API's rejection as current.
 - **A node-pool stockout wedges the cluster.** A failing `CREATE_NODE_POOL`
   operation holds a cluster-level lock (`Cluster is running incompatible
   operation`) that blocks even deleting the pool, for tens of minutes. Prefer
@@ -475,8 +475,12 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
   the `RuntimeClass` survives.
 - **Not all kernel features pass through.** Workloads needing host kernel
   modules, specific `/dev` devices, or GPU passthrough need extra Kata
-  configuration (and, for GPU, bare-metal or dedicated instances — the
-  cloud GPU families lack nested virtualization).
+  configuration. GPU passthrough in particular still wants bare metal or
+  dedicated instances, but *not* because the cloud GPU families lack nested
+  virtualization (A2, A3, and G2 have it). It is because NVIDIA's Kata path
+  needs BIOS-level ACS and IOMMU, no NVIDIA driver bound on the host, and a
+  whole GPU per guest. See [GPU and accelerated
+  CI](../plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal).
 - **Run `dockerd` inside the runner container, not as a regular sidecar.**
   The pattern above keeps the daemon a nested process of the single `runner`
   container, so the pod reaps cleanly when the job ends. If you instead split

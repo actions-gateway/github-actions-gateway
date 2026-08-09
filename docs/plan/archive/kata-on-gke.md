@@ -378,7 +378,12 @@ virtualization — QEMU or Cloud Hypervisor runs directly. No machine-family con
 lower overhead, and the correct path for GPU workloads: PCIe passthrough of NVIDIA or AMD
 GPUs into the Kata micro-VM works from bare metal. GKE's GPU machine families (a2, a3,
 g2) do not support nested virtualization, so GPU + Kata on cloud requires bare-metal or
-dedicated instances. This tier is the reference architecture for teams running GPU CI on
+dedicated instances.
+<!-- Correction 2026-08-08: a2/a3/g2 DO support nested virtualization; gcloud named all
+three as capable on 2026-08-02. The bare-metal conclusion holds for a different reason
+(BIOS ACS/IOMMU, no host NVIDIA driver, whole-GPU-per-guest). See
+docs/plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal. -->
+This tier is the reference architecture for teams running GPU CI on
 owned hardware or cost-sensitive on-prem environments.
 
 **Tier 3 — pragmatic fallback (any provider).** Privileged DinD on a dedicated,
