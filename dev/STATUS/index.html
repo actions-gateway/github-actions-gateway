@@ -3123,14 +3123,6 @@
 <td>Q554 shipped <code>privileged-dind</code> on <code>docker:27-dind</code>, <code>kata-dind</code> on <code>docker:28-dind</code>: what CI exercises. As operator-facing artifacts the split reads as an accident. Bumping 27 changes what the dogfood e2e runs, so it needs a green e2e leg.</td>
 </tr>
 <tr>
-<td><a id="Q688"></a>Q688</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">15 test scripts have no <code>scripts/README.md</code> mention, blocking a coverage gate</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-04 under Q660: 15 <code>*-test.sh</code> across agent/, ci/, docs/, fetch/, go/ appear nowhere in the README. The convention names a test in its subject's row, applied unevenly.</td>
-</tr>
-<tr>
 <td><a id="Q698"></a>Q698</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/deletion_inventory_test.go">The delete-path inventory misses a <code>Delete</code> whose context arg is named unconventionally</a></td>
 <td><code>tests</code> <code>debt</code> <code>retro</code></td>
