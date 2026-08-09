@@ -2721,7 +2721,7 @@ to track). A plan with only deferred residuals is ✅, not ⚠️ — see
 <tr>
 <td><a href="release-1.4/">release-1.4.md</a></td>
 <td>The 1.4 release gate: why the minor was forced by merged work before anyone chose it, the three admitted items (Q166, Q554, Q691), and why the proxy-hardening cluster stays whole for 1.5</td>
-<td>❌ Open. All three gate items shipped (Q166 in #1347, Q554 in #1344, Q691 in #1336), but a 2026-08-09 audit found three things still gating the tag: the no-PEM workload-identity pull-up this plan calls for and which carries no row by design, Q747's unverified cross-tenant isolation bypass, and the placeholder image's documented failure mode, which Q714 contradicts. Then the release-candidate dogfood validation in <a href="../operations/release/">release.md</a>, which needs the actual RC image and so is deliberately not a Queue row</td>
+<td>✅ Scope complete. All three gate items shipped (Q166 in #1347, Q554 in #1344, Q691 in #1336), and the three blockers a 2026-08-09 audit found are all closed: the no-PEM credential row (#1362), Q747's probe, whose enforcer was dead rather than its policy wrong (#1363), and the unreplaced <code>workerImage</code> failure mode that Q714 contradicted (#1361). Awaiting the release-candidate dogfood validation in <a href="../operations/release/">release.md</a>, which needs the actual RC image and so is deliberately not a Queue row</td>
 </tr>
 <tr>
 <td><a href="release-1.5/">release-1.5.md</a></td>
