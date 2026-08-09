@@ -25,6 +25,7 @@
 # anywhere. confirm_or_exit runs for real against a scripted stdin, so the
 # decline path is the real gate rather than a stubbed stand-in.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 DELETE_LIB_ONLY=1

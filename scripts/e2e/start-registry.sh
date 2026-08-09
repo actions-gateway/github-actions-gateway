@@ -12,6 +12,7 @@
 #   REGISTRY_PORT  — host port the registry binds to (default: 5000)
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 REGISTRY_NAME=${REGISTRY_NAME:-kind-registry}
 REGISTRY_PORT=${REGISTRY_PORT:-5000}

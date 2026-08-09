@@ -31,6 +31,7 @@
 #   ASSUME_YES=1        skip the confirmation prompt
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

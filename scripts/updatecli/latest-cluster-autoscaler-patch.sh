@@ -26,6 +26,7 @@
 #
 # Usage: latest-cluster-autoscaler-patch.sh <current-pin>   # e.g. v1.36.1
 set -euo pipefail
+shopt -s inherit_errexit
 
 # The OCI tag-list endpoint for the image scripts/e2e/autoscaler-cluster.sh installs.
 CA_TAGS_URL='https://registry.k8s.io/v2/autoscaling/cluster-autoscaler/tags/list'

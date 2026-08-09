@@ -12,6 +12,7 @@
 #   COSIGN  Path to the cosign binary (default .build/cosign at the repo root —
 #           download the pinned version with `make cosign`).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

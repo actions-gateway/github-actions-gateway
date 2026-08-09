@@ -29,6 +29,7 @@
 # this covers the e2e-stop.sh/lib/workers.sh and e2e-stop.sh/lib/pool.sh seams
 # rather than restating what workers-test.sh and pool-test.sh already assert.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 E2E_STOP_LIB_ONLY=1

@@ -32,6 +32,9 @@
 # Wired up by .claude/settings.json as a PreToolUse hook on the Task|Agent
 # matcher. Requires jq; if jq is missing the hook is a no-op (fail-open).
 set -euo pipefail
+# Fail open on bash 3.2 (stock macOS), where inherit_errexit does not exist:
+# a hook must never block a tool call, which outranks the errexit coverage.
+shopt -s inherit_errexit 2>/dev/null || true
 
 # emit_allow_unchanged exits 0 with no output, letting the spawn proceed through
 # Claude Code's normal permission flow untouched.

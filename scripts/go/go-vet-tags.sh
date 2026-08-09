@@ -26,6 +26,7 @@
 # Applies the local throttle (GOMAXPROCS cap and a low-priority QoS prefix) on a
 # GUI dev shell; a no-op on CI/headless, see scripts/agent/local-throttle.sh.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

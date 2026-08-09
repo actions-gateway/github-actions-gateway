@@ -22,6 +22,7 @@
 # Sourcing this file defines its helpers without starting the loop, which is how
 # progress-watch-test.sh asserts the rendering.
 set -euo pipefail
+shopt -s inherit_errexit
 
 PROGRESS_FILE="${E2E_PROGRESS_FILE:-tmp/e2e-progress.jsonl}"
 # Shared with the unit tier's renderer (devtools/gotest/progress), so one knob

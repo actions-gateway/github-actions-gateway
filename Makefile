@@ -110,6 +110,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
                     v2-api-sync-check path-filters-check gate-lists-check shellcheck \
+                    errexit-prologue-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
@@ -303,7 +304,10 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 # coverage guard (a new tag must fail the gate, not silently skip files), that a
 # pinned download never writes bytes it did not verify (Q433), the shellcheck
 # gate's own file selection (an untracked-but-present script must be linted,
-# Q432), the dogfood worker-drain gate (an unreadable cluster must never read
+# Q432), the errexit-prologue gate, whose own failure mode is the one it exists
+# to catch — a rule that stopped matching would pass every script in silence, so
+# both directions are asserted and an empty selection must go red (Q733),
+# the dogfood worker-drain gate (an unreadable cluster must never read
 # as idle and let a teardown strand worker nodes, Q434), the on-demand e2e
 # tenant bring-up (its readiness wait is the bring-up's whole verdict and both
 # directions are silent: an undersized system pool leaves the AGC Pending, so a
@@ -351,6 +355,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-conflict-markers-test ci/check-dep-advisory-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
                  ci/gate-list-test ci/shellcheck-scripts-test \
+                 ci/check-errexit-prologue-test \
                  ci/check-uses-pinned-test ci/run-parallel-test \
                  ci/check-template-library-test \
                  docs/backlog-metrics-test docs/check-doc-links-test \
@@ -664,6 +669,16 @@ no-plan-refs-check: ## Assert Go code and shell/workflow comments don't referenc
 .PHONY: shellcheck
 shellcheck: ## Shellcheck every present scripts/*.sh — tracked or untracked-and-not-gitignored (recursive; matches the CI shellcheck gate)
 	scripts/ci/shellcheck-scripts.sh
+
+# `set -e` does not reach inside a command substitution, so `x="$$(f)"` runs f
+# past its own failure and yields the status of f's last command — a gate that
+# checked nothing, reporting success (Q733; Q670 is the same hole reached
+# without an injected fault). shellcheck has no check for it, and its SC2155
+# covers only the `local x="$$(f)"` half. Rationale and the exemption for
+# sourced lib/ files live in the script header.
+.PHONY: errexit-prologue-check
+errexit-prologue-check: ## Fail if a scripts/ script declares `set -euo pipefail` without `shopt -s inherit_errexit` (Q733)
+	scripts/ci/check-errexit-prologue.sh
 
 # The workflow-side half of the shellcheck gate above (Q579). Three docs credited
 # actionlint with keeping `uses:` and inline `run:` blocks clean while no gate ran

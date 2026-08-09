@@ -9,6 +9,7 @@
 # the on-demand e2e tenant grows the pool on every e2e re-run. kubectl is
 # stubbed, so no network and no cluster.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/dogfood/lib/pool.sh

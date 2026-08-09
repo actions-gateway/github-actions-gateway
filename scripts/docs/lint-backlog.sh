@@ -26,6 +26,7 @@
 #   BACKLOG_ALLOW_UNCLAIMED_ID    IDs claimed from another clone/session (rule 12)
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 # The library is resolved from this script's own location, not from the git root
 # below: the root is whatever tree the gate is pointed at, which a test suite

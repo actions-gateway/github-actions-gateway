@@ -16,6 +16,7 @@
 #
 # Usage: polaris-linux-amd64-sha256.sh <polaris-version-tag>   # e.g. v10.2.0
 set -euo pipefail
+shopt -s inherit_errexit
 
 main() {
   local version="${1:?usage: polaris-linux-amd64-sha256.sh <polaris-version-tag>}"

@@ -10,6 +10,7 @@
 #   ZONE      GCP zone (e.g. us-east1-b)
 #   REPO      GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

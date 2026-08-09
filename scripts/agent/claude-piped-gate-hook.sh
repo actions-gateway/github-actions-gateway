@@ -45,6 +45,9 @@
 #     0 with no output, which Claude Code reads as "no opinion". A hook on every
 #     Bash call must never be the reason one fails.
 set -euo pipefail
+# Fail open on bash 3.2 (stock macOS), where inherit_errexit does not exist:
+# a hook must never block a tool call, which outranks the errexit coverage.
+shopt -s inherit_errexit 2>/dev/null || true
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BIN="$REPO_ROOT/.build/pipedgate"

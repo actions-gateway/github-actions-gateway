@@ -42,6 +42,7 @@
 #                deploy/dogfood-e2e/overlays/<variant>; the two share one base,
 #                so switching variants is re-running this script.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

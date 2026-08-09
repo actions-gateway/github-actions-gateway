@@ -13,6 +13,7 @@
 # the wrong registry or the wrong binary, every Go assertion would still pass
 # while the installed hook did nothing.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 HOOK="$REPO_ROOT/scripts/agent/claude-piped-gate-hook.sh"

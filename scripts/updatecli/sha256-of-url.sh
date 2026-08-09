@@ -10,6 +10,7 @@
 #
 # Usage: sha256-of-url.sh <url>
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Script-scope so the EXIT trap can see it: a var local to main() is out of scope
 # by the time the trap fires, which under `set -u` would abort with a non-zero

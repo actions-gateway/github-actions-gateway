@@ -19,6 +19,7 @@
 #
 # Usage: scripts/ci/check-dep-advisory.sh   (invoked by `make check`)
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Dependency files whose drift the fast gate can't see but CI will. Extended-glob
 # alternation, matched against repo-relative paths in a `case` (see below).

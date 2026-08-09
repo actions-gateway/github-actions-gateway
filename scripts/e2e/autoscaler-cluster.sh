@@ -36,6 +36,7 @@
 # Tear down with `make autoscaler-cluster-delete`.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

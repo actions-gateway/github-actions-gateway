@@ -31,6 +31,7 @@
 #   PULL_RETRY_MAX_DELAY  — cap on the doubled delay, before jitter (default: 60)
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 image="${1:-}"
 if [[ -z "${image}" ]]; then

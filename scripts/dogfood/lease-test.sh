@@ -19,6 +19,7 @@
 # No cluster and no processes: `lease_process_command` is stubbed, so a pid is
 # whatever the test says it is, and RELEASE_LEASE_DIR points at scratch.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 

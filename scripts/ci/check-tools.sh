@@ -25,6 +25,7 @@
 #
 # Exit status: number of missing REQUIRED tools (0 = the dev loop is ready).
 set -euo pipefail
+shopt -s inherit_errexit
 
 # --- Tool registry ----------------------------------------------------------
 # This registry IS the project's approved set of host CLI dependencies. Keep it

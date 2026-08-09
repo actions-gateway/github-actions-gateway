@@ -12,6 +12,7 @@
 #
 # Usage: kind-linux-amd64-sha256.sh <kind-version-tag>   # e.g. v0.32.0
 set -euo pipefail
+shopt -s inherit_errexit
 
 main() {
   local version="${1:?usage: kind-linux-amd64-sha256.sh <kind-version-tag>}"

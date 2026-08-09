@@ -58,6 +58,7 @@
 # Rationale and the alternatives considered: docs/development/queue-id-allocation.md
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 readonly REF_NS='refs/queue-ids'
 # Bounds the advance-on-collision walk. Exceeding it means either a very large

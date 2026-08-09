@@ -26,6 +26,7 @@
 #
 # Usage: scripts/go/go-tidy-check.sh
 set -euo pipefail
+shopt -s inherit_errexit
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"

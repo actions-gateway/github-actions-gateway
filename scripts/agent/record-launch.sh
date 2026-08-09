@@ -32,6 +32,7 @@
 #
 # LAUNCH_RECORD_DIR overrides where records live; tests point it at scratch.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LAUNCH_RECORD_DIR="${LAUNCH_RECORD_DIR:-${REPO_ROOT}/tmp/launches}"

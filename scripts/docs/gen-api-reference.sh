@@ -21,6 +21,7 @@
 # Params: CRD_REF_DOCS (path to the tool binary; the Makefile builds it from the
 # vendored tools/ module into .build/).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

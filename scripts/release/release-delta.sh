@@ -30,6 +30,7 @@
 # docs/operations/release.md § When to cut.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

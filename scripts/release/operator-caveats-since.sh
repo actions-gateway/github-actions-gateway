@@ -28,6 +28,7 @@
 #   scripts/release/operator-caveats-since.sh v1.2.0     # since an explicit ref
 #   scripts/release/operator-caveats-since.sh --quiet    # exit 0 if anything changed, 1 if not
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Operator-facing docs whose diff is worth reading before a tag. upgrade.md is the
 # primary one (it is where upgrade-time edits are required to land);

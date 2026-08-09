@@ -20,6 +20,7 @@
 #
 # Requires: docker (with buildx), gh (authenticated; supplies the GHCR token).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

@@ -55,6 +55,7 @@
 # --workload-metadata=GKE_METADATA on the pool (and --workload-pool on the cluster)
 # before running untrusted code. See docs/operations/kata-dind-workloads.md.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

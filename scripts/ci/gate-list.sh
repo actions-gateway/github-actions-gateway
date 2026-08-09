@@ -49,6 +49,7 @@
 #   --doc PATH         the doc that must cite the list targets
 #   --scripts-dir PATH the tree scanned for *-test.sh files
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

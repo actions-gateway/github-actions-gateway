@@ -13,6 +13,7 @@
 # (scripts/ci/check-tools.sh, extended tier). On Debian/Ubuntu the stdlib venv
 # module ships separately — install python3-venv if `python3 -m venv` fails.
 set -euo pipefail
+shopt -s inherit_errexit
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly repo_root

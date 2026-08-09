@@ -55,6 +55,7 @@
 #
 # Needs .build/golangci-lint (`make golangci-lint`). No sudo required.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly REPO_ROOT
@@ -129,7 +130,10 @@ windowserver_reports() {
 	local f count=0
 	shopt -s nullglob nocaseglob
 	for f in "$dir"/*windowserver*; do
-		[[ -e "$f" ]] && (( count++ ))
+		# Not `(( count++ ))`: post-increment evaluates to the *old* value, so
+		# the first match returns 1 and, as the last command in the `&&` list,
+		# aborts the function under errexit (Q733).
+		[[ -e "$f" ]] && count=$(( count + 1 ))
 	done
 	shopt -u nullglob nocaseglob
 	printf '%s' "$count"

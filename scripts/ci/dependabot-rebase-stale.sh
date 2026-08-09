@@ -34,6 +34,7 @@
 # docs/development/go-workspaces.md, section "Dependabot Go bumps are
 # auto-synced".
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

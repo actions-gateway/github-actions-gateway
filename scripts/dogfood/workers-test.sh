@@ -11,6 +11,7 @@
 # leaves the system pool billing forever. kubectl and sleep are stubbed, so no
 # network, no cluster, and no wall-clock wait.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/dogfood/lib/workers.sh

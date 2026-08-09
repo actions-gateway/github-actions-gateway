@@ -18,6 +18,7 @@
 #
 # The --check mode backs the CI drift gate (manifest-validate.yml) and `make check`.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

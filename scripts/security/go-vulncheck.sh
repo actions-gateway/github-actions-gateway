@@ -9,6 +9,7 @@
 #   GOVULNCHECK  Path to the govulncheck binary (default .build/govulncheck at
 #                the repo root — build it with `make govulncheck`).
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

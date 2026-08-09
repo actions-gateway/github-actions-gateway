@@ -24,6 +24,7 @@
 # error. Every must-not-match case below is paired with a must-match one built
 # from the same text.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 HOOK="$REPO_ROOT/scripts/agent/claude-go-throttle-hook.sh"

@@ -25,6 +25,7 @@
 # `file: message` (GitHub `::error::` annotations under CI).
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 # The baseline and the checker are resolved from this script's own location,
 # not from the git root below: the root is whatever tree the gate is pointed

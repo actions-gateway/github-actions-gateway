@@ -32,6 +32,7 @@
 # CI workflow. Assertions: scripts/docs/check-release-pins-test.sh.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 

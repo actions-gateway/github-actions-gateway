@@ -20,6 +20,7 @@
 # tests, so this gate byte-compiles the module first: parsing it is coverage no
 # other gate provides, and it needs none of those unpinned dependencies.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

@@ -55,6 +55,7 @@
 #                   tick (default 8)
 #   ALLOW_NON_KIND  set to 1 to permit a context whose name does not start "kind-"
 set -euo pipefail
+shopt -s inherit_errexit
 
 KUBE_CONTEXT="${KUBE_CONTEXT:-kind-q444-lab}"
 GAP="${GAP:-8}"

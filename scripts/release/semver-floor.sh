@@ -31,6 +31,7 @@
 # the derivation does not cover, which is the one way this can go quietly wrong.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/common.sh

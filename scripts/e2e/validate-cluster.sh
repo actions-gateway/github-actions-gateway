@@ -42,6 +42,7 @@
 # any check hard-fails, when VALIDATE_STRICT and any check warns, or when the
 # cluster is unreachable (a preflight that cannot reach the cluster has failed).
 set -euo pipefail
+shopt -s inherit_errexit
 
 # --- pure helpers (unit-tested; no kubectl, no cluster) ----------------------
 

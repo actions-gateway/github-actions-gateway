@@ -21,6 +21,7 @@
 #   DONE_SENTINEL  Path to touch once every deletion has finished. The waiter
 #                  polls for it; leave unset for a synchronous run.
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Only these paths, and only ones this job provably never reads. `rm -rf` is
 # silent on an absent path, so a runner image that drops one of them is a no-op

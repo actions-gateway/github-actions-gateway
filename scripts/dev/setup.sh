@@ -2,6 +2,7 @@
 # setup.sh — initialise Go module dependencies and verify the build.
 # Run once after cloning, and again after any dependency change.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"

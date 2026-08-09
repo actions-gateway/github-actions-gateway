@@ -21,6 +21,7 @@
 # GitHub. The pool sizing runs for real against a stubbed gateway listing, so
 # this covers the e2e-start.sh/lib/pool.sh seam rather than restating it.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 E2E_START_LIB_ONLY=1

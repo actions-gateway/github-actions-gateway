@@ -18,6 +18,7 @@
 #   RETRY_DELAY     — base seconds, scaled by attempt number  (default: 5)
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 if [[ $# -eq 0 ]]; then
   echo "usage: $0 <command> [args...]" >&2

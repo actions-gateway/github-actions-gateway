@@ -25,6 +25,7 @@
 #
 # Usage: scripts/release/download-cosign.sh <output-path> <version>
 set -euo pipefail
+shopt -s inherit_errexit
 
 out="${1:-}"
 version="${2:-}"

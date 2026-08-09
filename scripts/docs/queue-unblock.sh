@@ -9,6 +9,7 @@
 # (e.g. `Blocked by [Q12](#Q12)`, including comma-separated lists). Use this
 # when the dependency lands so every dependent can be unblocked in one commit.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STATUS_FILE="$REPO_ROOT/docs/STATUS.md"

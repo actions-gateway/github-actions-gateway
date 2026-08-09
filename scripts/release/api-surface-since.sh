@@ -23,6 +23,7 @@
 # only want to know whether a review is needed.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

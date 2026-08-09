@@ -48,6 +48,7 @@
 # Calibration against the shipped backlog: docs/development/maintaining-backlog.md
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Flag a row on either signal:
 #   text alone      — >= MIN_SHARED shared content words AND containment >= MIN_SCORE

@@ -36,6 +36,7 @@
 #   SKIP_E2E_DRAIN=1   Skip both drains and delete the AGC regardless. Anything
 #                      still queued or running is knowingly stranded.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh

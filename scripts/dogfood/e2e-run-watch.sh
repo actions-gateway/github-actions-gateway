@@ -34,6 +34,7 @@
 # Sourcing this file defines its helpers without watching anything, which is how
 # e2e-run-watch-test.sh asserts them.
 set -euo pipefail
+shopt -s inherit_errexit
 
 E2E_RUN_WATCH_REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/dogfood/lib/progress.sh

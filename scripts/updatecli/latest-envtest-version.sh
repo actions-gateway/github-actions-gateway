@@ -19,6 +19,7 @@
 #
 # Usage: latest-envtest-version.sh
 set -euo pipefail
+shopt -s inherit_errexit
 
 main() {
   local url="https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/main/envtest-releases.yaml"

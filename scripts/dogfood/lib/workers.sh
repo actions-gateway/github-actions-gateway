@@ -218,10 +218,14 @@ explain_inflight_workers() {
 		[[ -n "${ref}" ]] || continue
 		ns="${ref%%/*}"
 		pod="${ref#*/}"
+		# `|| true` is what makes "best-effort" true: under pipefail a failed
+		# read fails the assignment, and errexit then aborts the whole
+		# diagnostic at the first unreadable pod — dropping every pod after it
+		# and, in stop.sh, the warning about not scaling the pool down (Q733).
 		why="$(worker_kubectl get events --namespace="${ns}" \
 			--field-selector="involvedObject.name=${pod},type=Warning" \
 			-o 'jsonpath={range .items[*]}{.reason}{": "}{.message}{"\n"}{end}' \
-			2>/dev/null | awk 'NF' | tail -n 1)"
+			2>/dev/null | awk 'NF' | tail -n 1 || true)"
 		printf '  %s  %s\n' "${ref}" "${why:-no warning events}"
 	done < <(list_inflight_workers)
 }

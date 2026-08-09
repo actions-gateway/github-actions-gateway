@@ -25,6 +25,7 @@
 #   ./gen-third-party-notices.sh --check   # fail if THIRD-PARTY-NOTICES is stale
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"

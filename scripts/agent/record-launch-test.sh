@@ -18,6 +18,7 @@
 # verbatim and then confirming a grandchild is gone. The pid-liveness rules are
 # asserted against a stubbed `ps`, so a pid is whatever the test says it is.
 set -euo pipefail
+shopt -s inherit_errexit
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/scripts/agent/record-launch.sh"

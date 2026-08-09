@@ -19,6 +19,7 @@
 #   DRIVER_SELF  ${BASH_SOURCE[0]} of the caller, for --help
 #   DEFAULT_PATH the file this driver merges, used when git passes no %P
 set -euo pipefail
+shopt -s inherit_errexit
 
 # merge_driver_note MSG — one line of driver commentary on stderr, so a
 # resolution (or a refusal) is never silent.
