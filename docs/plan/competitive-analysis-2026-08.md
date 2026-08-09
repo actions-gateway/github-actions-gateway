@@ -218,8 +218,9 @@ above has the dates and versions to reproduce it against.
   [gpu-and-accelerated-ci](gpu-and-accelerated-ci.md). Each surfaced a collision
   the individual rows do not state: closing untrusted-PR egress removes the
   `actions/cache` path that works today, and GPU plus Kata do not compose on
-  cloud accelerator families, which lack nested virtualization. Both corrected a
-  published claim in passing.
+  managed cloud (not for want of nested virtualization, which A2/A3/G2 have, but
+  because the Kata passthrough path needs BIOS and host-driver control a node
+  pool does not expose). Both corrected a published claim in passing.
 
 **Nothing from the 2026-08-06 research is unactioned.** Findings that became
 work are on the Queue; findings that became positioning are in
