@@ -2586,6 +2586,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="set -e stops at a command substitution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-claude-code-hooks-swallow-the-shopts-own-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Claude Code hooks swallow the shopt's own failure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2706,6 +2723,11 @@
 <td>2</td>
 </tr>
 <tr>
+<td><code>local repo="$(build)"</code></td>
+<td>0</td>
+<td>2</td>
+</tr>
+<tr>
 <td><code>repo="$(set -e; build)"</code></td>
 <td>1</td>
 <td>0</td>
@@ -2716,15 +2738,33 @@
 <td>0</td>
 </tr>
 <tr>
+<td><code>shopt -s inherit_errexit</code> then <code>local repo="$(build)"</code></td>
+<td><strong>0</strong></td>
+<td>0</td>
+</tr>
+<tr>
 <td><code>build</code> called directly, no substitution</td>
 <td>1</td>
 <td>0</td>
 </tr>
 </tbody>
 </table>
-<p><code>shopt -s inherit_errexit</code> is the remedy to reach for: one line at the top of the file covers every substitution in it, where the other two working forms have to be repeated per call site.</p>
+<p><code>shopt -s inherit_errexit</code> is the remedy to reach for: one line at the top of the file covers every <em>plain</em> substitution in it, where the other two working forms have to be repeated per call site. It is required in every executable script under <code>scripts/</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-errexit-prologue.sh"><code>make errexit-prologue-check</code></a> enforces that. Sourced <code>lib/</code> files are exempt and must not declare it: they run under the caller's shell options, a caller's shopt already covers the functions they define, and declaring it in a sourced file would switch the option on for every caller instead.</p>
+<p><strong>It does not cover a declaration builtin.</strong> The last-but-one row above is the trap: <code>local</code>, <code>declare</code>, <code>export</code> and <code>readonly</code> return their <em>own</em> status, which replaces the substitution's, so <code>local repo="$(build)"</code> stays exit 0 even with the shopt set. The shopt still stops the builder at its first failure, which makes this the worst of the three states: a value truncated <em>and</em> a clean exit. Split the declaration from the assignment, which is the one form that reports:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">local</span><span class="w"> </span>repo
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">repo</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>build<span class="k">)</span><span class="s2">&quot;</span>
+</code></pre></div>
+<p>shellcheck's SC2155 already rejects the combined form, and <code>make shellcheck</code> runs in the same <code>make check</code>, so this half of the class is closed by a gate that predates the rule. The prologue gate deliberately leaves it alone rather than half-duplicating it.</p>
+<h3 id="the-claude-code-hooks-swallow-the-shopts-own-failure">The Claude Code hooks swallow the shopt's own failure<a class="headerlink" href="#the-claude-code-hooks-swallow-the-shopts-own-failure" title="Permanent link">&para;</a></h3>
+<p><code>inherit_errexit</code> arrived in bash 4.4, and stock macOS still ships 3.2 at <code>/bin/bash</code>. There the <code>shopt</code> itself fails, and <code>set -e</code> turns that into a non-zero exit before the script does anything. For the three <code>PreToolUse</code> hooks in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/scripts/agent"><code>scripts/agent/</code></a> that breaks a contract that outranks this one: a hook must never block a tool call, on any bash it happens to run under. They alone carry the tolerant form, and the gate rejects it everywhere else:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">set</span><span class="w"> </span>-euo<span class="w"> </span>pipefail
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>inherit_errexit<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">true</span>
+</code></pre></div>
+<p>On bash 4.4+ this is identical to the strict line; on 3.2 it gives up the coverage rather than the hook. Only <code>claude-piped-gate-hook-test.sh</code> exercised this, because it is the one suite that strips <code>PATH</code> (to simulate a missing Go toolchain) and so is the only one that reaches the system bash at all.</p>
 <p>What this costs when it goes unnoticed is a misattributed failure, not just a late one. A fixture builder that keeps running after its setup broke turns one root failure into a cascade of downstream errors, and the last line in the log belongs to the <em>subject</em> rather than the fixture. In Q703, <code>release-delta-test</code>'s fixture repository lost a commit object partway through <code>build_repo</code>; the suite ran seven more failing <code>git commit</code> calls and ended on <code>release-delta: 'HEAD' is not a commit-ish in this repo</code>, which reads as a defect in the report under test. With <code>inherit_errexit</code> the same injected fault stops at the first <code>git</code> fatal and exits 128, git's own status, naming the fixture as the thing that broke.</p>
 <p>The hole was in 12 of 59 <code>scripts/**/*-test.sh</code> suites when it was found, including <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-v2-api-sync-test.sh"><code>check-v2-api-sync-test.sh</code></a>, whose own flake (Q596) was undiagnosable for the same reason: a failure that is not distinguished from a legitimate verdict. All 12 carry the shopt now.</p>
+<p>The gates were left behind by that pass, and Q733 closed them: 154 more scripts, of which 75 had at least one substitution running an in-script function, the shape that actually swallows a failure. The worst was <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh"><code>go-lint.sh</code></a>, whose <code>scoped_module_dirs</code> feeds the lint scope. With a fault injected into it the gate announced a full sweep, linted 1 module instead of 11, swallowed four <code>command not found</code> 127s and exited 0; with the shopt the same fault exits 127 at the first one. Q670 is the same hole reached without an injected fault, and its fix addressed the scope computation rather than the swallowing.</p>
+<p>Adding the shopt is a behaviour change, which is the point: it turns a silent pass into a failure. It found one, in <code>windowserver_reports</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/validate-throttle.sh"><code>validate-throttle.sh</code></a>, which counted with <code>[[ -e "$f" ]] &amp;&amp; (( count++ ))</code>. Post-increment evaluates to the <em>old</em> value, so the first match returns 1, and as the last command in an <code>&amp;&amp;</code> list that aborts the function. The count was right only because errexit could not reach it.</p>
 <h2 id="shared-helpers-and-makefile-wiring">Shared helpers and Makefile wiring<a class="headerlink" href="#shared-helpers-and-makefile-wiring" title="Permanent link">&para;</a></h2>
 <p>Before writing a new helper function, check <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a> — <code>require_cmd</code>, <code>workspace_modules</code>, and the throttle setup already live there. The root <code>Makefile</code> keeps recipes as thin target→script wiring so the logic stays shellcheck-covered; see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> for the script inventory and parameter conventions.</p>
 <p><strong>A new script goes in a <code>scripts/&lt;group&gt;/</code> directory, never at the top level.</strong> The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> and the rule is explained in <a href="../testing/#scripts-is-grouped-by-blast-radius">testing.md § <code>scripts/</code> is grouped by blast radius</a>. Put a <code>*-test.sh</code> beside its subject.</p>
@@ -2736,12 +2776,12 @@
 <h3 id="sc2329-on-a-trap-invoked-cleanup-function">SC2329 on a <code>trap</code>-invoked cleanup function<a class="headerlink" href="#sc2329-on-a-trap-invoked-cleanup-function" title="Permanent link">&para;</a></h3>
 <p>shellcheck 0.11 reports <code>SC2329 (info): This function is never invoked</code> for a function reached only through <code>trap</code>, but <strong>only when the script's final statement is an unconditional <code>exit</code></strong>. The same script ending in an ordinary command is clean, and a conditional <code>exit</code> inside an <code>if</code> does not trigger it either — so most scripts here never see it, and the ones that do look identical to the ones that do not.</p>
 <p>It is a false positive: the function <em>is</em> invoked, by the <code>EXIT</code> trap. Keep the <code>exit</code> if the script needs a meaningful status, and disable the check where the function is defined:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># that whenever the script ends in an explicit `exit`.</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>cleanup<span class="o">()</span><span class="w"> </span><span class="o">{</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>rm<span class="w"> </span>-rf<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">work_dir</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">}</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nb">trap</span><span class="w"> </span>cleanup<span class="w"> </span>EXIT
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># that whenever the script ends in an explicit `exit`.</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>cleanup<span class="o">()</span><span class="w"> </span><span class="o">{</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>rm<span class="w"> </span>-rf<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">work_dir</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">}</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nb">trap</span><span class="w"> </span>cleanup<span class="w"> </span>EXIT
 </code></pre></div>
 <p>Do not delete the trailing <code>exit</code> or restructure the cleanup to silence it — the exit status is the useful thing and the warning is the wrong one. Live example: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>.</p>
 

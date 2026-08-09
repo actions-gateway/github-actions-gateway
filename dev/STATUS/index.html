@@ -2814,6 +2814,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q752"></a>Q752</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch-test.sh"><code>record-launch-test</code>'s 10s launch bound fails under the <code>make check</code> fan-out, passes standalone</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Seen 3/6 <code>make check</code> runs 2026-08-08 under Q733, 0/4 under <code>make scripts-test</code> alone, 0/5 standalone: it needs full-check contention. The tree case waits 100×<code>sleep 0.1</code> for a <code>.launch</code> record. Q642/Q690's shape: bounds startup, not the subject.</td>
+</tr>
+<tr>
 <td><a id="Q706"></a>Q706</td>
 <td><a href="../development/testing/#two-clocks-in-one-assertion"><code>alloc-queue-id-test</code> bounds fleet startup on the wall clock</a></td>
 <td><code>tests</code> <code>retro</code></td>
@@ -2822,12 +2830,12 @@
 <td>Read 2026-08-05: <code>alloc-queue-id-test.sh:166</code> waits ~1000×<code>sleep 0.01</code> for the fleet, then fails <code>fleet startup</code>; it bounds the scheduler, not the subject. Q642 measured p99 469ms and 0.45% still starting at 10s. The last such site.</td>
 </tr>
 <tr>
-<td><a id="Q733"></a>Q733</td>
-<td><a href="../development/bash-style/#set--e-stops-at-a-command-substitution"><code>set -e</code> does not reach into a command substitution: 9 gate scripts, and nothing stops a 10th</a></td>
+<td><a id="Q751"></a>Q751</td>
+<td><a href="../development/bash-style/#set--e-stops-at-a-command-substitution">Nothing declares the bash 4.4+ floor <code>inherit_errexit</code> makes load-bearing</a></td>
 <td><code>debt</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-08 under Q703: <code>x="$(f)"</code> runs past its own failure, rc 0. 12 suites fixed; 9 gates still carry it, incl. <code>go-lint.sh</code> and three e2e <code>chart-*-check.sh</code> where it can green a failed <code>kubectl</code>. Wants a check so a 10th cannot appear.</td>
+<td>Measured 2026-08-08 under Q733: 170 <code>scripts/</code> files now need <code>inherit_errexit</code> (bash 4.4+), stock macOS ships 3.2 at <code>/bin/bash</code>, and <code>check-tools.sh</code> checks no bash version. The 3 hooks fail open, the rest die confusingly. New required-tier prereq.</td>
 </tr>
 <tr>
 <td><a id="Q742"></a>Q742</td>
