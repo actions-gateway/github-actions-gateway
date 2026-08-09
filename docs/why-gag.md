@@ -153,6 +153,7 @@ is what surrounds that shared core.
 | Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner set](design/02-architecture.md) |
 | Throttle the *rate* new workers start (anti-stampede) | :material-close-circle:{ .gag-no } **no per-set start-rate control**<br><span class="gag-cont">its throttles are controller-wide and meter API calls, not worker onset</span> | :material-check-circle:{ .gag-yes } **opt-in [per-set creation-rate limit](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**<br><span class="gag-cont">for shared-egress onset (NAT, firewall, VPN)</span> |
 | Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } **points at a proxy you already run**<br><span class="gag-cont">provisions no pool, manages no lifecycle, gives no per-tenant addresses</span> | :material-check-circle:{ .gag-yes } **provisioned per-tenant pool, [live-validated on GKE](design/network-architecture.md#per-tenant-egress-ip-the-source-ip-mechanism)**<br><span class="gag-cont">2026-07-13: one distinct, stable per-tenant NAT IP. A stable source IP needs Cilium Egress Gateway or cloud NAT beneath the pool, both specified <span class="gag-v2-badge">v2</span></span> |
+| GitHub App private key kept out of the cluster | :material-close-circle:{ .gag-no } **the listener reads the key either way**<br><span class="gag-cont">the PEM sits in `githubConfigSecret` and is copied into the generated listener config Secret too; opt-in Azure Key Vault keeps it out of etcd, but the listener still fetches the key itself</span> | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> **opt-in [`workloadIdentity`](design/05-security.md#57-workload-identity-the-no-pem-delegation-model)**<br><span class="gag-cont">an external signer signs the App JWT, so no App key exists in the cluster in any form. Its default `githubApp` member is the same in-cluster PEM as ARC's</span> |
 | Listener footprint at rest | :material-close-circle:{ .gag-no } one always-on listener pod per scale set, each holding a pod IP<br><span class="gag-cont">they run in the controller's namespace, so the cost lands on platform pod density rather than the tenant's quota</span> | :material-check-circle:{ .gag-yes } 1 shared pod, ~12 KiB per listener session |
 | Per-tenant utilization metrics | :material-close-circle:{ .gag-no } **opt-in, per scale set**<br><span class="gag-cont">ships commented out; carries a `namespace` label but nothing aggregates across sets, and no quota-headroom series</span> | :material-check-circle:{ .gag-yes } **[per tenant and per runner set](operations/observability.md)**<br><span class="gag-cont">plus a [dashboard and 20 alert rules as code](operations/observability-dashboards.md#tenant-dashboard)</span> |
 | Right-size runner resources from measured usage | :material-close-circle:{ .gag-no } no feedback loop, so runner `resources` stay a guess | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [measured recommendations in `RunnerSet` status](operations/worker-rightsizing.md)<br><span class="gag-cont">+ opt-in profiles that auto-apply them at pod build (`Binpack`/`Throughput`/`NodeShare`), a `SizingDrift` condition, and per-job peak metrics</span> |
@@ -167,8 +168,9 @@ which is where new tenants start.
 !!! note "When the ARC column was measured, and why that matters"
 
     **Measured against ARC `gha-runner-scale-set` 0.14.2 (released 2026-05-22)
-    and the `master` branch, on 2026-08-06**, by reading the controller source,
-    the chart values, and the release notes rather than the documentation.
+    and the `master` branch, on 2026-08-06, and the credential row on
+    2026-08-09**, by reading the controller source, the chart values, and the
+    release notes rather than the documentation.
 
     ARC moves, and an undated comparison rots into a false one. Two rows here
     changed at datable releases: 0.13.1 (2025-12-23) changed how a quota-blocked
@@ -240,6 +242,7 @@ ships as reconciled defaults, not a post-install project.
     - `baseline` Pod Security Admission per namespace
     - Default-deny network: DNS + own proxy only
     - App keys read-only; never in env, never cached
+    - Or opt in to [no App key in the cluster at all](design/05-security.md#57-workload-identity-the-no-pem-delegation-model)
     - Controller writes confined to tenant namespaces
 
 -   :material-clipboard-check:{ .lg .middle } __Lower operational cost__
