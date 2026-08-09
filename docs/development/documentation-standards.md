@@ -12,13 +12,10 @@ The goal hierarchy below makes that ordering explicit; the rest of the page is h
 
 ## The docset in one paragraph
 
-`docs/` is plain GitHub-native Markdown — no MkDocs front matter, no transclusion, no
-versioned-docs tree (a [deliberate choice](../plan/docs-six-layer-audit.md): renders on
-GitHub, git is the single source of truth). The taxonomy is the per-directory
-`README.md` index. There are two audiences: `docs/design/` (how the system works, for
-contributors) and `docs/operations/` (what an operator does and sees). A change that
-alters operator-visible behaviour must update the operations docs too — design-only is
-the classic miss.
+`docs/` is plain GitHub-native Markdown — no MkDocs front matter, no transclusion, no versioned-docs tree (a [deliberate choice](../plan/docs-six-layer-audit.md): renders on GitHub, git is the single source of truth).
+The taxonomy is the per-directory `README.md` index.
+There are two audiences: `docs/design/` (how the system works, for contributors) and `docs/operations/` (what an operator does and sees).
+A change that alters operator-visible behaviour must update the operations docs too — design-only is the classic miss.
 
 The docs also serve **two kinds of reader**: humans, and the AI agents that build on this repo.
 They want compatible things — agents reward deterministic, greppable, single-canonical-home content; humans reward narrative and onboarding — but optimise for one blindly and you degrade the other.
@@ -139,11 +136,8 @@ Neither half is optional, and neither substitutes for the other.
 `make em-dash-check` ([`scripts/docs/check-em-dash.sh`](../../scripts/docs/check-em-dash.sh)) counts the dashes and fails the build.
 It runs inside `make check` and as its own job in the `doc-links` CI workflow.
 
-**What it does not count.** A raw `grep -o '—' | wc -l` was the rule's only instrument
-before, and it counts four shapes where the dash is legitimate, which is most of why the
-rule was unmeasurable. The counter reads the parsed document instead
-([`devtools/docs/emdash`](../../devtools/docs/emdash/), over the goldmark layer Q612
-built), and skips:
+**What it does not count.** A raw `grep -o '—' | wc -l` was the rule's only instrument before, and it counts four shapes where the dash is legitimate, which is most of why the rule was unmeasurable.
+The counter reads the parsed document instead ([`devtools/docs/emdash`](../../devtools/docs/emdash/), over the goldmark layer Q612 built), and skips:
 
 | Skipped | Why | In the tree |
 |---|---|---|
@@ -284,29 +278,29 @@ The check is in `make check` and costs about a second for the whole tree. `.mdre
 
 ### What stays hard-wrapped, and why it stays that way
 
-Measured on mdreflow v0.1.4, 2026-08-09: 82.1% of top-level prose lines end at a sentence boundary, leaving 2,804 continuation lines across 132 files.
+Measured 2026-08-09 on the pinned build: 97.1% of top-level prose lines end at a sentence boundary, leaving 393 continuation lines.
 
-One guard accounts for nearly all of it, and it is a correctness property rather than a defect.
-A CommonMark link reference definition's label, destination, and title can each span a soft line break, so moving a break inside one can quietly swallow the rest of a paragraph into an invisible definition. mdreflow passes over any paragraph carrying both a bracket and a paren that span a line break:
+What remains is one guard, and it is a correctness property rather than a defect.
+A link construct's destination can span a soft line break, so moving a break inside one can turn literal text into a link or corrupt the destination it lands in. mdreflow passes over a paragraph where a `(` that actually opens a destination, meaning one immediately preceded by `]`, is left unclosed at a line end:
 
 ```
 Control plane (GMC rolls to
-rc.6, gateway ready). Second sentence here.        → reflows
+rc.6, [self-hosted] ready). Second sentence.       → reflows
 
-Control plane (GMC rolls to
-rc.6, [self-hosted] ready). Second sentence.       → skipped
+[t](/a
+b) here. Second one.                               → skipped
 ```
 
-Our docs are link-dense, so an inline `[text](url)` arms it often.
 Do not hand-wrap around it: the skip is what keeps a reflow from changing what a page renders, and a paragraph the formatter leaves alone is correctly formatted.
 
-Some of this residue is recoverable and some is not.
-Only a `(` immediately preceded by `]` can open a link destination, so a prose parenthetical opens nothing and is safe to reflow: [#16](https://github.com/jbeda/mdreflow/issues/16) proposes that narrowing, tested against upstream's suite and a 2.8M-execution fuzz run, and it would convert 137 more of our files.
-[Q753](../STATUS.md#Q753) re-runs the reflow if it lands.
-What survives any narrowing is a paragraph where a link construct genuinely spans a break, and that stays skipped by design.
+Three mdreflow bugs surfaced while adopting this, all fixed upstream.
+[#14](https://github.com/jbeda/mdreflow/issues/14) skipped paragraphs holding no bracket at all and [#15](https://github.com/jbeda/mdreflow/issues/15) refused a valid file whose multi-byte rune straddled byte 8192, both fixed in v0.1.4.
+[#16](https://github.com/jbeda/mdreflow/issues/16) armed the guard on any paren in any paragraph containing a bracket, which in link-dense prose is nearly always: fixing it took the tree from 82.1% to 97.1%.
 
-Two mdreflow bugs surfaced while adopting this, both fixed upstream in v0.1.4.
-[#14](https://github.com/jbeda/mdreflow/issues/14) skipped paragraphs holding no bracket at all, which cost 3,122 of these lines; [#15](https://github.com/jbeda/mdreflow/issues/15) refused a valid file whose multi-byte rune straddled byte 8192.
+One lesson worth keeping from #16.
+The narrowing this repo proposed was wrong in a way a 2.8M-execution fuzz run did not catch: it armed only at paren depth zero, so a destination opened inside an outer prose paren escaped it and was corrupted.
+Upstream tracks the armed flag per open paren instead.
+A large execution count over a corpus that never contained the shape is weaker evidence than one deliberately constructed case.
 
 ## Maintenance
 
