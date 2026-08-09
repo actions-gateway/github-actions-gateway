@@ -9,6 +9,23 @@ At release time the section is retitled to the version and the prose lead is wri
 
 ## Unreleased
 
+## v0.1.4 (2026-08-08)
+
+Hardening and simplification. A day-long fuzzing campaign fixed the whole family of edge cases where reflowed output could parse differently than the input — splits manufacturing accidental tables, definitions, or headings; escapes re-pairing code spans; typography flipping raw-HTML recognition. All were pathological shapes that never occur in normal prose; each is now pinned by a regression seed. Alongside the fixes, some deliberately over-clever handling was descoped in favor of simpler, safer rules.
+
+### Fixed
+
+- Two field reports from real docsets: hard-wrapped prose with a parenthetical spanning a line break is no longer silently skipped (#14), and a valid UTF-8 file is no longer refused when a multi-byte character straddles the 8 KB detection boundary (#15).
+- Roughly twenty fuzz-found idempotency and render-preservation corners (#4–#8, #10–#13 and successors), none affecting normal documents.
+
+### Changed
+
+- **Formatting is now guaranteed stable**: `Format`'s output is a fixpoint — running the tool twice never produces a second diff, even on adversarial input.
+- **Invalid UTF-8 is rejected outright** with the typed error `mdreflow.ErrInvalidUTF8` (CLI: exit 3, even under `--force`); Markdown is text, and bytes with no character interpretation have nothing meaningful to reflow.
+- **Simpler scope around link reference definitions**: any paragraph containing or directly touching a `[label]:`-shaped line now passes through unchanged, replacing subtle partial handling. Definitions in their own blank-line-separated block — the common layout — were already skipped, so typical documents are unaffected.
+- **Footnote bodies** (`[^label]: ...`) still reflow as ordinary prose, and their continuation lines are now indented four spaces — the one spelling every Markdown renderer keeps inside the footnote.
+- Paragraphs containing control characters (form feed, vertical tab, …) pass through unchanged.
+
 ## v0.1.3 (2026-08-08)
 
 Performance fix: width-constrained wrapping no longer blows up on long paragraphs.

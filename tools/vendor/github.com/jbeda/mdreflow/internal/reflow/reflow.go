@@ -18,8 +18,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 
 	"github.com/jbeda/mdreflow/internal/blockmap"
+	"github.com/jbeda/mdreflow/internal/gm"
 	"github.com/jbeda/mdreflow/internal/segment"
 	"github.com/jbeda/mdreflow/internal/typography"
 )
@@ -112,6 +114,20 @@ type outLine struct {
 	// the raw source (container prefix included): ContPrefix must not be
 	// prepended to it, since it already carries its own real prefix.
 	verbatim bool
+	// noEscape is true for a dialect-marker boundary line whose content is
+	// emitted from the paragraph's own first line (verbatim handles the
+	// i > 0 case). A boundary line's bytes ARE its verdict: blockmap
+	// re-derives "immovable marker" from them on the next parse, so
+	// escapeBlockInterrupt must never touch them — found by FuzzFormat on
+	// "#\n:::-\n0" (seed 8430eba8c33c2dd7), where the first-line marker
+	// ":::-" also happens to be table-delimiter-row-shaped and the
+	// heading above made prevLineNonBlank true, so the delimiter-row
+	// trigger backslash-escaped it; the next pass no longer saw a marker
+	// and joined the cluster, an idempotency flip. Escaping is also never
+	// NEEDED here: the line's bytes existed at this exact line start in
+	// the source and parsed as paragraph content, so identical bytes at
+	// the identical position reparse identically.
+	noEscape bool
 }
 
 // writeParagraph joins p's prose lines into hard-break clusters — stopping
@@ -161,12 +177,39 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 	var outLines []outLine
 	var curLines []lineFrag
 
-	flush := func(marker string) {
+	flush := func(marker string, lastCluster bool) {
 		if len(curLines) == 0 && marker == "" {
 			return
 		}
-		text := joinClusterLines(curLines)
+		text := joinClusterLines(curLines, marker != "")
 		curLines = nil
+		if marker == "" {
+			// The join itself can manufacture a hard-break spelling no
+			// source line carried: a multi-line inline tag like
+			// "<Br\n/>" joins to "<Br />", which IS the self-closing
+			// br-marker form the next pass's per-line detection will
+			// recognize and normalize — an idempotency flip (found by
+			// FuzzFormat on "0<Br\n/>", seed 731b45747c153106, thirty
+			// minutes into a soak; sibling of the "<Br >" find, but this
+			// spelling is legitimate and cannot be dropped from
+			// hardBreakBrRE). Run the same detection pass 2 will run on
+			// this joined line, so pass 1 already speaks with pass 2's
+			// voice. The cluster boundary a non-final flush
+			// creates means a following line exists in the emitted
+			// paragraph whenever the manufactured marker could matter.
+			// lastCluster threads the same isLastLine semantics the
+			// per-line calls use: a paragraph-final backslash or double
+			// space is NOT a break (a lone "\" document must stay a lone
+			// "\" — seed 577e36abd20bf697 pinned the regression from an
+			// earlier hardcoded false here), while the br-tag form
+			// normalizes even paragraph-finally, exactly as pass 2's
+			// per-line pass would. insideSpan=false matches the per-line
+			// call for a line whose span context the join has resolved.
+			if m, rest := detectHardBreak(text, opts, lastCluster, false); m != "" {
+				marker = m
+				text = rest
+			}
+		}
 		// Typography substitution happens here — on the whole joined
 		// cluster, *before* computeLines segments or wraps it — not on
 		// the per-line output afterwards. Two reasons:
@@ -190,8 +233,46 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 		// by original-text byte position while a quote substitution
 		// grows from 1 byte to 3 (see typography.Apply).
 		if opts.Typography != 0 {
-			text = typography.Apply(text, segment.NoBreakSpans(text), opts.Typography)
+			text = typography.Apply(text, segment.NoBreakSpans(fenceEscapeNeutralize(text)), opts.Typography)
 		}
+		// A fence-opener-shaped cluster is pre-escaped here, before
+		// computeLines ever measures or wraps it — not left for
+		// escapeBlockInterrupt to handle only once a final output line is
+		// chosen, the way every other block-interrupt trigger is. This
+		// cluster's own leading bytes always become its first *output*
+		// line's leading bytes (computeLines/wrapRanked never introduce a
+		// break before position 0), so the run is always eventually
+		// escaped regardless; doing it now instead means every width
+		// decision from here on (fitLen, wordBreaks, wrapRanked's
+		// candidate measurement) operates on the exact bytes that will
+		// actually be emitted and exactly what the next reformat pass
+		// will reparse as its own raw source — not on a backtick-shaped
+		// stand-in whose *escaped* width and canonical-collapsing
+		// behavior can differ from the real thing in ways a canonical-
+		// plus-delta estimate (escapeDeltaMax) cannot safely bound, since
+		// the escape only touches the run itself and leaves the rest of
+		// the cluster's real, uncollapsed bytes untouched.
+		//
+		// This replaced an earlier attempt at teaching widthMeasurer to
+		// compute a fence candidate's *exact* real (uncollapsed) width
+		// instead of estimating it: that fixed the immediate
+		// under-estimate but introduced a *worse* problem — a candidate
+		// it rejected because the raw suffix didn't fit forced an earlier
+		// cut, but that cut's own leftover, being an ordinary (no hard
+		// break) continuation line, gets rejoined by joinClusterLines on
+		// the *next* pass and re-measured there canonically (since it no
+		// longer starts with a backtick once escaped, so the *generic*
+		// path governs it then) — a different rule on each side of the
+		// escape, with no local, per-candidate fix able to predict what
+		// the far side will decide. Found by FuzzFormat on ModeSentence,
+		// MaxWidth 17, " \r```  b 0" and " \r``` Z C00": whichever
+		// candidate pass 1 picked, pass 2's rejoin-and-recanonicalize of
+		// the leftover chose differently. Pre-escaping first sidesteps
+		// the whole class: computeLines runs the *same*, unmodified,
+		// already-idempotent canonical algorithm pass 2 will *also* run
+		// on this same content, because by the time either pass reaches
+		// it, it is no longer fence-shaped at all.
+		text = escapeFenceOpenerRun(text)
 		clusterLines := computeLines(text, seg, opts)
 		for i, s := range clusterLines {
 			if i == len(clusterLines)-1 {
@@ -206,7 +287,7 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 		content := rawContents[i]
 
 		if p.Boundary[i] {
-			flush("")
+			flush("", false)
 			text := content
 			verbatim := false
 			if i > 0 {
@@ -217,7 +298,7 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 				text, _ = stripLineEnding(full)
 				verbatim = true
 			}
-			outLines = append(outLines, outLine{text: text, verbatim: verbatim})
+			outLines = append(outLines, outLine{text: text, verbatim: verbatim, noEscape: true})
 			continue
 		}
 
@@ -263,8 +344,24 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 			trailingProtected: insideSpanAfter[i],
 		})
 		if marker != "" || i == n-1 {
-			flush(marker)
+			flush(marker, i == n-1)
 		}
+	}
+
+	// precededByNonBlankLine reports whether the raw source line
+	// immediately before this paragraph's own first physical line is
+	// non-blank — the one piece of context escapeBlockInterrupt's
+	// table-delimiter-row check needs for the paragraph's first output
+	// line (i == 0) that it cannot derive from that line alone, the same
+	// way firstLinePrefix supplies isThematicBreak's joint context. See
+	// escapeBlockInterrupt's prevLineNonBlank parameter doc comment for
+	// why this is needed at all and why it is safe to compute once, from
+	// the unmodified source, rather than per output line.
+	precededByNonBlankLine := false
+	if physStart := blockmap.LineStart(source, p.Start); physStart > 0 {
+		prevStart := blockmap.LineStart(source, physStart-1)
+		prevLine, _ := stripLineEnding(source[prevStart:physStart])
+		precededByNonBlankLine = trimLineSpace(prevLine) != ""
 	}
 
 	for i, ol := range outLines {
@@ -274,7 +371,7 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 				buf.WriteString(p.ContPrefix)
 			}
 		}
-		if !ol.verbatim {
+		if !ol.verbatim && !ol.noEscape {
 			// Applied to every non-verbatim output line, not just
 			// continuation lines: a paragraph's very first output line is
 			// only ever the unmodified start of the source's own first
@@ -292,12 +389,17 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 			// the line's own leading bytes, though — see
 			// escapeBlockInterrupt's firstLinePrefix parameter doc comment
 			// for the container-marker-plus-wrapped-content case it
-			// doesn't cover.
+			// doesn't cover, and its prevLineNonBlank parameter doc
+			// comment for the table-delimiter-row case, which depends on
+			// the *previous* line's content instead.
 			prefix := ""
+			prevNonBlank := precededByNonBlankLine
 			if i == 0 {
 				prefix = firstLinePrefix
+			} else {
+				prevNonBlank = trimLineSpace(outLines[i-1].text) != ""
 			}
-			ol.text = escapeBlockInterrupt(ol.text, i == 0, prefix)
+			ol.text = escapeBlockInterrupt(ol.text, i == 0, prefix, prevNonBlank)
 		}
 		buf.WriteString(ol.text)
 	}
@@ -696,14 +798,20 @@ func (m *widthMeasurer) canonSlice(a, b int) string {
 }
 
 // escapeDeltaMax bounds how many runes escapeBlockInterrupt can add to
-// any line starting at byte a: a fence-opener-shaped line gains one
-// backslash per backtick/tilde in its leading run (see the escape loop in
-// escapeBlockInterrupt), every other trigger gains exactly one. The
-// leading run depends only on the line's start, so the bound does too.
+// any line starting at byte a: a fence-opener-shaped line gains, per
+// character of its leading backtick/tilde run (see the escape loop in
+// escapeBlockInterrupt), one rune for a tilde ("~" -> "\~") or four for a
+// backtick ("`" -> "&#96;", 1 rune growing to 5); every other trigger gains
+// exactly one. The leading run depends only on the line's start, so the
+// bound does too.
 func (m *widthMeasurer) escapeDeltaMax(a int) int {
 	n := 0
 	for i := a; i < len(m.text) && (m.text[i] == '`' || m.text[i] == '~'); i++ {
-		n++
+		if m.text[i] == '`' {
+			n += 4
+		} else {
+			n++
+		}
 	}
 	return max(n, 1)
 }
@@ -712,6 +820,16 @@ func (m *widthMeasurer) escapeDeltaMax(a int) int {
 // escaped: the prefix-table width answers all but the ambiguous band
 // [maxWidth-escapeDeltaMax, maxWidth], where the real escape is simulated
 // exactly as fitLen would.
+//
+// A fence-opener-shaped [a:b) is not specially handled here, unlike an
+// earlier version of this function: see writeParagraph's flush, which
+// pre-escapes a hard-break cluster's own leading fence-opener run before
+// computeLines (hence wrapRanked, hence this) ever sees it, and
+// filterUnsafeLineEnds's fence-suffix rule, which stops any *other*
+// position from ever becoming one via a width cut. So text[a] is never
+// '`' or '~' for any (a, b) this function is actually asked about, and
+// escapeDeltaMax's fence-aware bound (kept for defense in depth) never
+// exercises its interesting case.
 func (m *widthMeasurer) fits(a, b, maxWidth int) bool {
 	w := m.width(a, b)
 	if w > maxWidth {
@@ -720,7 +838,7 @@ func (m *widthMeasurer) fits(a, b, maxWidth int) bool {
 	if w+m.escapeDeltaMax(a) <= maxWidth {
 		return true
 	}
-	return runeLen(escapeBlockInterrupt(m.canonSlice(a, b), true, "")) <= maxWidth
+	return runeLen(escapeBlockInterrupt(m.canonSlice(a, b), true, "", true)) <= maxWidth
 }
 
 // lastFit returns the largest i >= from with fits(a, cands[i].Start), or
@@ -738,7 +856,7 @@ func (m *widthMeasurer) lastFit(cands []segment.Span, from, a, maxWidth int) int
 		if w+dmax <= maxWidth {
 			return i
 		}
-		if runeLen(escapeBlockInterrupt(m.canonSlice(a, cands[i].Start), true, "")) <= maxWidth {
+		if runeLen(escapeBlockInterrupt(m.canonSlice(a, cands[i].Start), true, "", true)) <= maxWidth {
 			return i
 		}
 	}
@@ -967,16 +1085,47 @@ func isWrapRunByte(b byte) bool {
 // silently misbehave on reparse).
 var clauseBreaksRE = regexp.MustCompile(`[,;][ \t\r]+`)
 
+// entityRefTailRE matches an HTML entity or numeric character reference
+// ending exactly at the string's end ("&" then digits/letters then ";")
+// — used to recognize when a semicolon clauseBreaksRE matched is markup
+// syntax, not clause-terminal punctuation.
+var entityRefTailRE = regexp.MustCompile(`&#?[0-9A-Za-z]+;$`)
+
 // clauseBreaks returns text's clause-boundary break candidates, excluding
 // any match whose run is pure '\r' (see wordBreaks's doc comment — that
-// is not a real clause boundary) or that lands inside a no-break span
-// (e.g. a comma inside inline code).
+// is not a real clause boundary), that lands inside a no-break span (e.g.
+// a comma inside inline code), or whose semicolon terminates an HTML
+// entity/numeric character reference rather than actual prose punctuation
+// (entityRefTailRE) — e.g. "&#96;", never real clause punctuation despite
+// ending in ';'.
+//
+// The last exclusion matters beyond ordinary prose containing a literal
+// reference like "caf&eacute;, more text" (a pre-existing quirk of no
+// consequence there, since the same text is present and read the same way
+// on every pass): escapeBlockInterrupt's fence-opener branch emits
+// "&#96;" for every escaped backtick, so a paragraph whose pre-escape text
+// has no semicolon at all can gain one, mid-cluster, purely from that
+// escape — one this function would otherwise treat as a *new* clause
+// break unavailable to the pre-escape planning pass. Since a clause break
+// is preferred over a plain word break whenever both fit
+// (docs/design.md's Modes table, computeLines), the spurious candidate
+// can steer ModeSentence's MaxWidth wrapping to a different cut than the
+// pre-escape pass chose — an idempotency break. Found by FuzzFormat
+// (ModeSentence, MaxWidth 17) on " \r``` Z C00": pass 1, still working
+// from unescaped text, has no semicolon to prefer and wraps after "Z"
+// ("``` Z" / "C00"); pass 2, reparsing the escaped "&#96;&#96;&#96; Z
+// C00", finds the third entity's terminating ';' immediately before a
+// space and treats it as a preferred clause break, wrapping right after
+// the run instead ("&#96;&#96;&#96;" / "Z C00").
 func clauseBreaks(text string) []segment.Span {
 	noBreak := segment.NoBreakSpans(text)
 	var out []segment.Span
 	for _, m := range clauseBreaksRE.FindAllStringIndex(text, -1) {
-		start, end := m[0]+1, m[1]
+		punct, start, end := m[0], m[0]+1, m[1]
 		if !strings.ContainsAny(text[start:end], " \t") || spanContains(noBreak, start) {
+			continue
+		}
+		if text[punct] == ';' && entityRefTailRE.MatchString(text[:start]) {
 			continue
 		}
 		out = append(out, segment.Span{Start: start, End: end})
@@ -1033,8 +1182,42 @@ func runeLen(s string) int {
 // always runs with the true prefix regardless of what fitLen estimated,
 // so no idempotency or render-preservation guarantee depends on this
 // function's precision here.
+//
+// Deliberately stays canonical (not exact-fence-aware, unlike
+// widthMeasurer.exactFenceEscapedWidth) even for a fence-opener-shaped s:
+// this measures the "keep the whole cluster as one line" verdict, and
+// canonical measurement of that verdict is a stable fixpoint across
+// passes in a way an exact one is not. If this text is kept together
+// (verdict: fits), it is emitted unchanged and re-read on the next pass
+// as ordinary, no-longer-fence-shaped text (the fence branch only ever
+// escapes the leading run) — whose own fitLen also canonicalizes the same
+// whitespace, arriving at the identical number. If instead the text gets
+// split later (wrapRanked, via widthMeasurer), the pieces are ordinary
+// paragraph continuation lines with no hard break between them, so the
+// *next* pass's joinClusterLines rejoins them with a single space before
+// that pass's own fitLen ever runs on them again — which is exactly what
+// canonical measurement already assumes happens to any uncut interior
+// run, fence or not. An exact/raw verdict here does not enjoy either
+// fixpoint: it can force a split canonical measurement alone would not
+// have needed, and that split's own rejoin-and-recanonicalize on the next
+// pass can undo it — found by constructing exactly that shape (ModeWrap,
+// MaxWidth 17, a hard-break cluster's second line "```  b" indented 4+
+// spaces in the source, i.e. ordinary paragraph continuation text until
+// reflow's own dedent exposes the leading backticks): an exact fitLen
+// here forces a split into "```" + "b", which the next pass — no longer
+// seeing a fence shape once escaped — rejoins and re-measures as fitting
+// on one line after all, disagreeing with pass 1. Leaving fitLen
+// canonical accepts the pre-existing, already-documented tradeoff instead
+// (a kept-together real line can land a few runes past MaxWidth when it
+// contains an interior uncut whitespace run — see canonicalizeForWidth),
+// which is a real, independent gap but not one this function's escape
+// awareness should try to close by itself; widthMeasurer.fits/lastFit's
+// exact fence check (used only once a split is already required) is the
+// safe place for exactness, since candidates it rejects fall back to
+// *earlier* candidates within the very same wrapRanked call rather than
+// to a decision a whole reformat pass later has to reconcile against.
 func fitLen(s string) int {
-	return runeLen(escapeBlockInterrupt(canonicalizeForWidth(s), true, ""))
+	return runeLen(escapeBlockInterrupt(canonicalizeForWidth(s), true, "", true))
 }
 
 // splitSentences takes one cluster's already-joined prose, asks seg for
@@ -1097,7 +1280,7 @@ func filterBreaks(breaks, noBreak []segment.Span) []segment.Span {
 // fits a single linear regex alternative here. (Setext heading underlines
 // share the "-"/"=" triggers already covered by isThematicBreak.) A link
 // reference definition's "[label]: destination" opener is also handled
-// separately (linkRefDefOpenerRE), not folded in here: unlike every other
+// separately (isCompleteLinkRefDefLine), not folded in here: unlike every other
 // trigger in this list, it needs an end anchor as well as a start anchor
 // — see that variable's doc comment for why.
 //
@@ -1204,7 +1387,12 @@ const htmlBlockTagNames = `address|article|aside|base|basefont|blockquote|body|c
 // (allowing only trailing whitespace there) did not match at all.
 var htmlBlockAnyOpenerRE = regexp.MustCompile(`(?i)^(<[A-Za-z][A-Za-z0-9-]*( [^<>\t]*)?/?>|</ *[A-Za-z][A-Za-z0-9-]*( [^<>\t]*)?/?>) *$`)
 
-// linkRefDefOpenerRE matches a link-reference-definition-shaped
+// The empirical notes below were accumulated on linkRefDefOpenerRE, the
+// hand-mirrored-grammar predecessor of isCompleteLinkRefDefLine (which
+// answers the same question by parsing the line with goldmark itself).
+// They remain the record of WHY the question is subtle:
+//
+// linkRefDefOpenerRE matched a link-reference-definition-shaped
 // "[label]: destination" line that is *complete on this line alone*: the
 // whole remainder after "[label]:" is (optional space) one bare
 // destination token (no ASCII whitespace, doesn't start with "<") and
@@ -1229,20 +1417,38 @@ var htmlBlockAnyOpenerRE = regexp.MustCompile(`(?i)^(<[A-Za-z][A-Za-z0-9-]*( [^<
 //     position instead of this) defeated a *working* "[0]" reference link
 //     resolved against an earlier real definition — found by FuzzFormat on
 //     "[0]:0 \"\"\n[0]:0 ! 00000000".
-//   - "[0]:" — nothing at all after the colon — incomplete, safe (no
-//     token for `[^\s<][^\s]*` to match, so this regex correctly does not
-//     match it either).
+//   - "[0]:" — nothing at all after the colon — incomplete, so this
+//     regex correctly does not match it (no token for `[^\s<][^\s]*`).
+//     "Incomplete" is NOT "safe", though: an emitted line consisting of
+//     only a bare opener completes using the NEXT line as its
+//     destination, so it needs its own escape — see
+//     bareLinkRefDefOpenerLineRE below. (For non-caret labels blockmap's
+//     whole-paragraph net usually skips such paragraphs first; the
+//     caret-label variant reaches emission, and a narrow width cut can
+//     isolate the opener — found by FuzzFormat on " [^(]: !y )9.20",
+//     seed f0699d6787522cd5, whose MaxWidth cut left " [^(]:" alone and
+//     the reparse swallowed "!y" as the definition's destination.)
 //
-// It excludes a "[^..." bracket (i.e. "[^label]:") on purpose: that shape
-// is a *footnote* definition, a completely different, already-legitimate
-// construct whose "[^label]: " prefix goldmark keeps as literal text at
-// the start of the footnote body's own Paragraph node (unlike a real link
-// reference definition, which is its own dedicated AST node — see
-// package blockmap's doc comment — and so can never reach this check as
-// an unmodified first line to begin with). Escaping a real footnote
-// body's own marker would sever the link between it and its "[^label]"
-// reference elsewhere in the document — caught by the golden fixture
-// testdata/no-break-spans.md before it could ship.
+// Footnote-shaped "[^label]:" openers are INCLUDED (an earlier version
+// excluded them as "a footnote definition's own legitimate marker"):
+// mdreflow's goldmark configuration does not enable the footnote
+// extension at all, so "[^label]:" is nothing special to the parser this
+// package must stay consistent with — a line-start "[^label]: dest" that
+// completes on its own line is consumed as an ordinary link reference
+// definition with a caret-leading label (confirmed by AST dump), exactly
+// the vanishing-content hazard this escape exists for. Found by
+// FuzzFormat on " [^1]: !Y )9.01" (seed 425ffd537fd28733): the source
+// line is a plain paragraph (the trailing ")9.01" disqualifies the
+// definition), but the sentence split's shorter first line " [^1]: !Y"
+// reparses as a real definition and the text vanishes from the paragraph
+// flow. The fear the old exclusion encoded — escaping a real footnote
+// body's own marker and severing its reference link — cannot fire
+// through this regex: a footnote body with prose after the marker never
+// matches the complete-on-this-line-alone anchoring (multi-word
+// remainder), which is also why testdata/no-break-spans.md's footnote
+// fixture reflows identically with the exclusion gone; and a
+// single-token "[^1]: word" source line is already an LRD node to this
+// parser, passed through byte-for-byte, never reaching this check.
 //
 // The label body also excludes a raw "[" (not just "]"): a real
 // CommonMark link label cannot contain an unescaped "[" either, so
@@ -1250,7 +1456,24 @@ var htmlBlockAnyOpenerRE = regexp.MustCompile(`(?i)^(<[A-Za-z][A-Za-z0-9-]*( [^<
 // escaping it anyway, besides being unnecessary, changed how the rest of
 // the line's autolink recognition behaved, found by FuzzFormat on exactly
 // that input.
-var linkRefDefOpenerRE = regexp.MustCompile(`^\[(\^\]|[^\^\[\]][^\[\]]*\]):[ \t]*[^\s<][^\s]*[ \t]*$`)
+// The `[ \t]{0,3}` leading-indent and `[ \t\f\v]` whitespace classes track
+// goldmark's actual acceptance, wider than the spec's space/tab: a
+// definition indented up to three columns is still a definition, and a
+// form feed after the colon still separates the destination — found by
+// FuzzFormat on " [^X]:\f!y 00" (seed 617a8c27848709db), whose split-off
+// first line " [^X]:\f!y" reparsed as a complete definition that this
+// regex, anchored at column 0 with space/tab-only runs, failed to escape.
+
+// bareLinkRefDefOpenerLineRE matches an emitted line that is ONLY a
+// link-reference-definition opener — "[label]:" plus optional trailing
+// whitespace, no destination. Such a line is incomplete rather than
+// inert: CommonMark completes the definition using the following line as
+// its destination, so leaving one at a line start lets the reparse
+// swallow the next line's text (see the notes above isCompleteLinkRefDefLine's
+// history block,
+// third bullet, for the fuzz find). Escaping the bracket renders as the
+// same literal text the paragraph showed before.
+var bareLinkRefDefOpenerLineRE = regexp.MustCompile(`^[ \t]{0,3}\[[^\[\]]*\]:[ \t\f\v]*$`)
 
 // backtickFenceStart and tildeFenceStart match a fenced-code-block opener's
 // leading run of 3+ backticks or tildes, so isFenceOpener can inspect what
@@ -1272,6 +1495,136 @@ func isFenceOpener(line string) bool {
 		return !strings.ContainsRune(line[m[1]:], '`')
 	}
 	return tildeFenceStart.MatchString(line)
+}
+
+// fenceOpenerRunLen returns the length of line's leading run of backticks
+// and/or tildes — the run isFenceOpener recognizes and that
+// escapeBlockInterrupt's fence-opener branch (and fenceEscapeNeutralize)
+// both walk. Factored out so the two stay in lockstep.
+func fenceOpenerRunLen(line string) int {
+	i := 0
+	for i < len(line) && (line[i] == '`' || line[i] == '~') {
+		i++
+	}
+	return i
+}
+
+// escapeFenceOpenerRun returns line with its leading fence-opener run
+// (isFenceOpener) replaced by exactly the bytes escapeBlockInterrupt's
+// fence-opener branch would produce for it — a backtick as the HTML
+// character reference "&#96;" (never a backtick byte, so it can never
+// pair as a code-span delimiter on any reparse), a tilde as "\~" — with
+// the rest of line untouched. If line is not fence-opener-shaped, line is
+// returned unchanged. Shared by escapeBlockInterrupt itself and by
+// writeParagraph's flush (which pre-escapes a hard-break cluster's own
+// leading run before computeLines ever measures or wraps it — see flush's
+// call site) so the two can never drift apart.
+func escapeFenceOpenerRun(line string) string {
+	if !isFenceOpener(line) {
+		return line
+	}
+	n := fenceOpenerRunLen(line)
+	var b strings.Builder
+	b.Grow(len(line) + 4*n)
+	for _, c := range line[:n] {
+		if c == '`' {
+			b.WriteString("&#96;")
+		} else {
+			b.WriteByte('\\')
+			b.WriteRune(c)
+		}
+	}
+	b.WriteString(line[n:])
+	return b.String()
+}
+
+// fenceEscapeNeutralize returns text with its leading fence-opener run's
+// backtick characters (if any) replaced by tildes, matching the same
+// byte length so that a Span computed against the result still indexes
+// correctly into the real, unmodified text.
+//
+// This exists because a hard-break cluster's whole joined text (what flush
+// calls this with) always becomes its first *output* line's own leading
+// bytes — computeLines never introduces a break before position 0 — so a
+// fence-opener-shaped text is always, eventually, run through
+// escapeBlockInterrupt's fence-opener branch. That branch runs much later
+// (per output line, after wrapping), well after this cluster's
+// typography.Apply/segment.NoBreakSpans have already decided what to
+// protect from the *pre*-escape text. If the leading run is itself one
+// side of a genuine code span reaching further into the cluster,
+// pre-escape text answers a question about a span that will not survive
+// to the emitted output: escaping the run's backticks (whichever escape
+// form is used, backslash or the current HTML-entity form — see
+// escapeBlockInterrupt) removes them from ever pairing as a delimiter
+// again, so the span's *other* side goes unmatched, and whatever it used
+// to protect (e.g. a quote typography would otherwise leave alone)
+// reparses completely differently on the very next pass.
+//
+// Found by FuzzFormat (issue #8, see issues_test.go's
+// issue8-fence-escape-codespan-pairing-smartquotes for the exact repro
+// bytes: ModeWrap, SmartQuotes, a tilde-fence-shaped leading run whose
+// trailing backtick pair genuinely pairs with a later, matching backtick
+// pair further into the line): the leading run's backtick pair pairs
+// with that later one on the pre-escape text, so typography leaves the
+// apostrophe between them straight — but escaping the leading run to
+// defeat the tilde-fence
+// block trigger destroys that pairing, so a second pass (parsing the
+// first pass's own output fresh) finds no code span there at all and
+// curls it: an idempotency break, and incidentally a render-preservation
+// one too (the original source genuinely renders that apostrophe inside
+// a <code> span; escaping the fence run unavoidably loses it either way,
+// but the decision should agree with that loss immediately, not one pass
+// late). Neutralizing the run here — before NoBreakSpans ever sees it —
+// makes this cluster's *own* protection decision agree with what its
+// output will actually reparse as, so there is nothing left for a second
+// pass to disagree about.
+//
+// The placeholder is '~', not deletion or any other rewrite, specifically
+// to keep every later byte offset identical to the real text: the caller
+// passes this function's result to segment.NoBreakSpans only, and applies
+// the resulting spans against the real, unescaped text directly — no
+// offset remapping needed. '~' is never itself scanned by
+// segment.codeSpans (backtick-only) and is inert to every other
+// NoBreakSpans sub-scanner (brackets, autolinks, HTML tags, ...), none of
+// which treats a bare run of tildes specially.
+func fenceEscapeNeutralize(text string) string {
+	// Second instance of the same mismatch, for the link-ref-def escapes
+	// instead of the fence escape: a cluster that will itself be emitted
+	// def-opener-shaped gets its leading "[" backslash-escaped at
+	// emission, which destroys any bracketed span NoBreakSpans would
+	// otherwise derive from that "[" — and with it, e.g., smart-quote
+	// protection for a quote inside the brackets, which then curls one
+	// pass late. Found by FuzzFormat on "[^\\]:\"1A0]" in ModePara with
+	// SmartQuotes (seed 38cbdf400862101d). Neutralize the leading "["
+	// (length-preserving, same rationale as the fence case below) so the
+	// protection decision matches the escaped output's reparse.
+	if isCompleteLinkRefDefLine(text) || bareLinkRefDefOpenerLineRE.MatchString(text) {
+		// The opener bracket may sit after up to 3 columns of indent
+		// (up to 3 columns of indent); neutralize the bracket itself.
+		b := []byte(text)
+		i := 0
+		for i < len(b) && (b[i] == ' ' || b[i] == '\t') {
+			i++
+		}
+		if i < len(b) && b[i] == '[' {
+			b[i] = '~'
+		}
+		return string(b)
+	}
+	if !isFenceOpener(text) {
+		return text
+	}
+	n := fenceOpenerRunLen(text)
+	if !strings.ContainsRune(text[:n], '`') {
+		return text // pure tilde run: nothing here for codeSpans to see anyway
+	}
+	b := []byte(text)
+	for i := 0; i < n; i++ {
+		if b[i] == '`' {
+			b[i] = '~'
+		}
+	}
+	return string(b)
 }
 
 // orderedListRE matches an ordered-list marker: 1-9 digits followed by "."
@@ -1354,7 +1707,37 @@ var orderedListRE = regexp.MustCompile(`^\d{1,9}([.)])(\s|$)`)
 // one, an idempotency break, not just a render-preservation one.
 // Checking line alone here would have missed it, since line alone was
 // never wrong; only line as it will actually be *placed* was.
-func escapeBlockInterrupt(line string, isFirstLine bool, firstLinePrefix string) string {
+//
+// prevLineNonBlank is a second, narrower piece of joint context, needed for
+// the same reason firstLinePrefix is but from the *other* side: whether
+// this line, once trimmed, is shaped like a GFM table delimiter row
+// (isTableDelimiterRowShaped) is dangerous only jointly with whatever line
+// immediately precedes it — a delimiter row directly under a non-blank
+// "header" line is exactly GFM's own table-recognition rule, and reflow
+// can manufacture that adjacency purely as a byproduct of where a
+// width-based cut (or a sentence break) happens to land, the same class of
+// hazard filterLineStartHazards already guards against for dialect markers
+// and linkify, just discovered one line later than a candidate-break
+// filter can see: the *break* that creates this line's start is safe in
+// isolation (nothing about landing "-:" at a line start is inherently
+// wrong), and what makes it unsafe only exists once the *previous* line's
+// content is also known. Found by FuzzFormat in ModeSentence at a small
+// MaxWidth on "\f -:" (issue #13) and "\v -|-|-|-|-|-|-" (issue #5): both
+// single physical source lines, split by a forced width cut into a first
+// line ("\f"/"\v", non-blank) and a second, delimiter-row-shaped line
+// ("-:"/"-|-|-|-|-|-|-"), which the very next parse reads as a table
+// header and delimiter row instead of two lines of one paragraph. Callers
+// pass the previous *output* line's own blankness for a continuation line
+// (i > 0, computed directly from writeParagraph's already-built outLines)
+// and the previous *source* line's blankness for the paragraph's own first
+// output line (i == 0, since nothing in this package's own output exists
+// yet to consult there — see writeParagraph's precededByNonBlankLine).
+// Width-estimation callers (fitLen, widthMeasurer) always pass true, the
+// same conservative-overestimate choice already documented for
+// isFirstLine: a table-delimiter escape can only make a candidate line's
+// simulated width larger, never smaller, than its real final width,
+// whatever this line's real neighbor turns out to be.
+func escapeBlockInterrupt(line string, isFirstLine bool, firstLinePrefix string, prevLineNonBlank bool) string {
 	if line == "" {
 		return line
 	}
@@ -1374,28 +1757,96 @@ func escapeBlockInterrupt(line string, isFirstLine bool, firstLinePrefix string)
 		// behind, which then paired with the trailing "``" to form a
 		// code span spanning content that was never inside one. Escaping
 		// every backtick/tilde in the run individually removes all of
-		// them from participating in any run-length match at all, fixing
-		// both hazards at once, and still renders identically (each is a
-		// literal escaped punctuation character either way).
-		i := 0
-		for i < len(line) && (line[i] == '`' || line[i] == '~') {
-			i++
-		}
-		var b strings.Builder
-		for _, c := range line[:i] {
-			b.WriteByte('\\')
-			b.WriteRune(c)
-		}
-		b.WriteString(line[i:])
-		return b.String()
+		// them from participating in any run-length match at all as an
+		// *opener* — fixing that hazard — and still renders identically
+		// (each is a literal escaped punctuation character either way).
+		//
+		// A backslash-escaped backtick, though, only defeats the opener
+		// half: it does not stop the same backtick from acting as a
+		// *closer* for some unrelated, genuinely open backtick run
+		// earlier in the same paragraph. Confirmed directly against
+		// goldmark, not assumed: "`\`" (a lone opening backtick, later a
+		// backslash-escaped one) renders as `<code>\</code>` — the
+		// backslash does not prevent the second backtick from closing
+		// the span, because CommonMark's code-span closing search
+		// matches any same-length backtick run regardless of what
+		// precedes it (backslash-escape processing is a lower-precedence
+		// pass that never gets a chance to run inside what codeSpans
+		// finds delimits a span). This is a live hazard here: an earlier
+		// line in the same cluster/paragraph can carry a real, dangling
+		// (unmatched, so segment.CodeSpans correctly does not protect
+		// anything around it, and mdreflow's own decisions were made on
+		// that basis) single backtick with no partner in the *original*
+		// source, but once this run's own backticks are individually
+		// escaped, one of them can spuriously close against that
+		// dangling backtick on reparse — retroactively manufacturing a
+		// code span (and its no-break protection) that never existed,
+		// changing what a hard-break marker or a typography substitution
+		// downstream of it decided. Found by FuzzFormat (issues #6/#12)
+		// on "`  \n    ```" in ModeWrap: the hard-break-separated "`"
+		// has no partner pre-escape, but pass 1's fence-defeating escape
+		// of the following "```" pairs one of its now-individual
+		// backticks against it on pass 2's reparse, flipping whether the
+		// hard break is honored and producing different output than pass
+		// 1's own.
+		//
+		// A backtick escaped as an HTML character reference instead of a
+		// backslash sidesteps this structurally rather than case by
+		// case: "&#96;" is not a backtick byte at all, so it can never
+		// open *or* close a code span on any reparse, ever — and it
+		// still decodes to a literal "`" on render, identically to the
+		// backslash form. Tildes have no such closer hazard (inline code
+		// spans are backtick-only; segment.codeSpans never scans for
+		// '~'), so they stay backslash-escaped.
+		return escapeFenceOpenerRun(line)
 	}
-	if isThematicBreak(firstLinePrefix+line) || isSetextUnderline(line) || blockInterruptTriggers.MatchString(line) || linkRefDefOpenerRE.MatchString(line) {
-		return "\\" + line
+	if isThematicBreak(firstLinePrefix+line) || isSetextUnderline(line) || blockInterruptTriggers.MatchString(line) || isCompleteLinkRefDefLine(line) || bareLinkRefDefOpenerLineRE.MatchString(line) || (prevLineNonBlank && isTableDelimiterRowShaped(line)) {
+		return escapeAfterIndent(line)
 	}
 	if isFirstLine && htmlBlockAnyOpenerRE.MatchString(line) {
-		return "\\" + line
+		return escapeAfterIndent(line)
 	}
 	return line
+}
+
+// isCompleteLinkRefDefLine reports whether line, parsed by goldmark in
+// total isolation, is a complete link reference definition — the
+// authoritative form of the question linkRefDefOpenerRE used to
+// approximate with a hand-mirrored grammar. The mirroring kept losing to
+// goldmark's implementation details (seed 617a8c27848709db: up to 3
+// columns of indent and \f accepted as separator whitespace; seed
+// afe8aadcbee7bf0d: yet \f INSIDE a destination token continues it — the
+// skip-before and end-of-token whitespace classes simply differ), so the
+// emitted line is now judged by the same parser whose reparse the escape
+// exists to control. The "]:" pre-filter keeps the parse off the hot
+// path for ordinary prose. An already-escaped "\[label]:" line parses as
+// a paragraph and correctly answers false, so escapes never stack.
+func isCompleteLinkRefDefLine(line string) bool {
+	if !strings.Contains(line, "]:") {
+		return false
+	}
+	doc := gm.New().Parser().Parse(text.NewReader([]byte(line)))
+	first := doc.FirstChild()
+	return first != nil && first.Kind() == ast.KindLinkReferenceDefinition && first.NextSibling() == nil
+}
+
+// escapeAfterIndent backslash-escapes line's first non-space/tab byte —
+// not byte 0: several trigger shapes tolerate leading indent (a link
+// reference definition up to 3 columns, a setext underline, a table
+// delimiter row), and a backslash placed BEFORE that whitespace is an
+// escaped space, i.e. a literal backslash character in the rendered
+// output — the escape itself would break render preservation. Escaping
+// the first content byte renders as exactly the original text for every
+// trigger class here (all begin with escapable ASCII punctuation).
+func escapeAfterIndent(line string) string {
+	i := 0
+	for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+		i++
+	}
+	if i >= len(line) {
+		return line
+	}
+	return line[:i] + "\\" + line[i:]
 }
 
 // isThematicBreak reports whether line (ignoring up to 3 leading spaces)
@@ -1403,6 +1854,30 @@ func escapeBlockInterrupt(line string, isFirstLine bool, firstLinePrefix string)
 // optionally separated by spaces — CommonMark's thematic-break rule. Go's
 // RE2 regexp engine has no backreferences, so this can't be expressed as
 // a single regex the way the other triggers can; it is checked directly.
+//
+// The separator class is ' ', '\t', AND a bare '\r': goldmark's own
+// thematic-break scanner (parser.isThematicBreak, via util.IsSpace, whose
+// spaceTable includes 0x0D) treats a lone '\r' as just another ignorable
+// separator between the repeated marks, not as a disqualifying character —
+// the same asymmetry already documented on filterUnsafeLineEnds and
+// joinClusterLines, where a bare '\r' is ordinary literal content to
+// mdreflow's own line-splitting but goldmark's scanners still fold it in
+// as whitespace in specific places. Missing that asymmetry here left a
+// joint-context gap in escapeBlockInterrupt's firstLinePrefix check (see
+// its doc comment): a list item's own marker plus a wrapped first line
+// like "---\r-" reads as only two real dashes to this function without the
+// '\r' concession, so it never escaped — but goldmark's actual parser DOES
+// count it as thematic-break-shaped ("- ---\r-" scans as marker "-" plus
+// three dashes separated by a space and an ignorable '\r'), reparsing the
+// list item as a ThematicBreak instead. That flips the item from a List
+// (whose content the following empty "*" bullet cannot lazily join) to a
+// bare Paragraph (which an empty bullet line CANNOT interrupt, so it
+// lazily continues into it instead) — an idempotency break found by
+// FuzzFormat (ModeWrap, MaxWidth 6, SmartQuotes|Ellipses) on
+// "\n- ---\r- % \n*" (seed ad20670286270350): pass 1 wrapped the list
+// item's "---\r- %" onto "---\r-" / "%", pass 2 reparsed "- ---\r-" as a
+// thematic break and merged "%" with the following "*" that pass 1 had
+// kept as a separate, empty list item.
 func isThematicBreak(line string) bool {
 	s := line
 	for i := 0; i < 3 && strings.HasPrefix(s, " "); i++ {
@@ -1420,7 +1895,7 @@ func isThematicBreak(line string) bool {
 		switch s[i] {
 		case want:
 			count++
-		case ' ', '\t':
+		case ' ', '\t', '\r':
 		default:
 			return false
 		}
@@ -1468,6 +1943,26 @@ func isSetextUnderline(line string) bool {
 		}
 	}
 	return count >= 1
+}
+
+// isTableDelimiterRowShaped reports whether line is shaped like a GFM
+// table delimiter row: once trimmed of leading/trailing space/tab, it
+// contains only "-", ":", "|", spaces, and tabs, with at least one "-".
+// Deliberately crude and permissive, matching GFM's own leniency (a bare
+// "-|" or ":-" already qualifies, and spaces are allowed *within* the
+// shape, not just at its edges — e.g. "-- |" is still a valid delimiter
+// row): this only needs to decide whether escaping this line's first byte
+// is warranted, and escaping a line that turns out not to have been truly
+// delimiter-row-shaped after all costs nothing but one superfluous,
+// identically-rendering backslash, while under-matching risks a real
+// table forming on reparse — this is deliberately the fuzz-test package's
+// own isTableDelimiterRowShaped oracle's shape (see fuzz_test.go), kept as
+// an independent implementation here since the two serve different roles:
+// that one decides whether to skip an assertion, this one decides whether
+// to change output.
+func isTableDelimiterRowShaped(line string) bool {
+	trimmed := strings.Trim(line, " \t")
+	return trimmed != "" && strings.ContainsRune(trimmed, '-') && strings.Trim(trimmed, "-:| \t") == ""
 }
 
 // attachMarker appends marker directly after s, unless doing so would
@@ -1568,16 +2063,30 @@ type lineFrag struct {
 //   - A fragment that trims to nothing (e.g. a degenerate zero-width line
 //     segment — see the allBlank check in package blockmap for why that
 //     can happen at all) contributes no text and no separator.
-func joinClusterLines(frags []lineFrag) string {
+func joinClusterLines(frags []lineFrag, hasTrailingMarker bool) string {
 	var b strings.Builder
 	wrote := false
+	lastTrimmed := false
+	lastPieceEnd := ""
 	for _, f := range frags {
 		piece := f.text
+		// The trim set includes '\r': a fragment's bytes have had their
+		// real line ending stripped already, so any trailing '\r' here is
+		// a bare carriage return in content — part of reflow's [ \t\r]
+		// whitespace class (see segment.isBoundaryWhitespaceByte) — and
+		// leaving it exposed at a fragment edge manufactures a CRLF on
+		// emission: found by FuzzFormat on "0\r \n:::" (seed
+		// 555aadec1740c6ec), where trimming only the trailing space left
+		// "0\r" whose emitted "\r\n" the next pass read as a CRLF line
+		// ending and stripped — an idempotency flip from the trim itself.
 		if !f.leadingProtected {
-			piece = strings.TrimLeft(piece, " \t")
+			piece = strings.TrimLeft(piece, " \t\r")
 		}
+		trimmed := false
 		if !f.trailingProtected {
-			piece = strings.TrimRight(piece, " \t")
+			t := strings.TrimRight(piece, " \t\r")
+			trimmed = t != piece
+			piece = t
 		}
 		if piece == "" {
 			continue
@@ -1587,6 +2096,56 @@ func joinClusterLines(frags []lineFrag) string {
 		}
 		b.WriteString(piece)
 		wrote = true
+		lastTrimmed = trimmed
+		lastPieceEnd = piece
+	}
+	// Restoring one trimmed space when the cluster now ends in an ODD
+	// backslash run: the cluster's end becomes a line end on emission, and
+	// a line ending in an odd backslash run IS a backslash hard break to
+	// the next parse — so the trim itself would manufacture a break the
+	// source never had, which the second pass then normalizes to the
+	// configured marker: found by FuzzFormat on "0\\ \n:::" (seed
+	// cf5efcc4d8ee400c), where trimming "0\\ " to "0\\" turned a literal
+	// backslash into a break and pass 2 rewrote it to "0<br>". The
+	// restored space renders identically (a backslash before a space is
+	// just a literal backslash either way) and the decision is stable: a
+	// re-format re-trims and re-restores the same byte. Only applies when
+	// something was actually trimmed — a trailing-protected fragment
+	// (code-span interior) must not grow a space, and an untrimmed
+	// ordinary fragment cannot end in an odd run at all (a source line
+	// ending in one is a real hard break and travels the marker path,
+	// never this join) — UNLESS this cluster itself has a trailing
+	// marker (hasTrailingMarker), which is the one case an "untrimmed"
+	// fragment genuinely can still end in a bare backslash: detectHardBreak
+	// strips a "<br>" hard-break marker's own leading whitespace as part
+	// of the match (hardBreakBrRE greedily consumes it), so the
+	// marker-stripped "rest" for a line like "\ <br>" is already just "\"
+	// — no trailing space for *this* function to trim at all, yet it
+	// still ends in a bare backslash.
+	//
+	// hasTrailingMarker suppresses the restore for exactly that case,
+	// because the caller (writeParagraph's flush) is about to call
+	// attachMarker on this cluster's last output line regardless, and
+	// attachMarker already inserts its own separating space whenever the
+	// text it's attaching to ends in an unescaped backslash
+	// (endsInUnescapedBackslash) — the identical hazard, independently
+	// guarded, closer to where the marker is actually attached. Letting
+	// *both* guards fire here double-guessed a space that then has no
+	// stable meaning on reparse: found by FuzzFormat (MaxWidth 4,
+	// SmartQuotes) on "\\\t\ \\\n0" (seed 8732e6eb8a47d4f3) — this
+	// restore added a trailing space to a cluster ending "...\\ " that
+	// then got split (needed once counted as 5 runes, not 4) into
+	// "\\\\" / "\\ ", with "<br>" attached to the second piece. On
+	// reparse, hardBreakBrRE's own greedy whitespace consumption ate that
+	// *same* restored space as part of the marker match, so the
+	// reconstructed cluster measured one rune narrower than pass 1's
+	// — 4, not 5 — and no longer needed the split at all: pass 2 rejoined
+	// onto one line despite MaxWidth 4, an idempotency break. Skipping the
+	// restore when a marker follows removes the extra rune from pass 1's
+	// own width accounting in the first place, so both passes agree on
+	// the same, already-stable-via-attachMarker text.
+	if !hasTrailingMarker && lastTrimmed && trailingBackslashCount(lastPieceEnd)%2 == 1 {
+		b.WriteByte(' ')
 	}
 	return b.String()
 }
@@ -1694,7 +2253,15 @@ func stripLineEnding(raw []byte) (content string, hadNewline bool) {
 // discarded the original content outright, replacing it with a lone
 // backslash — silent, severe data loss for real prose that merely
 // contained a stray form-feed byte.
-var hardBreakBrRE = regexp.MustCompile(`(?i)[ \t]*<br[ \t]*/?>[ \t]*$`)
+// Interior whitespace is accepted only in the self-closing spelling
+// ("<br />"), not before a bare ">" ("<br >"): the latter is a shape
+// mdreflow's own line-joining can manufacture from a multi-line inline
+// tag ("<Br\n\t>" joins to "<Br >"), and recognizing it as a marker meant
+// pass 1 produced text that pass 2 re-read as a hard break and rewrote —
+// found by FuzzFormat on "0<Br\n\t>" (seed a9266695f535279c). A real
+// "<br >" in source loses marker normalization and passes through as the
+// raw HTML it already is; renders identically either way.
+var hardBreakBrRE = regexp.MustCompile(`(?i)[ \t]*<br([ \t]*/)?>[ \t]*$`)
 
 // sentenceTerminalEndRE matches text ending in sentence-terminal
 // punctuation (optionally followed by closing quotes/brackets), used by

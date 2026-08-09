@@ -6,9 +6,11 @@ This is the standard Go [tool-dependency pattern](https://go.dev/wiki/Modules#ho
 
 Currently tracked:
 
-- `github.com/elastic/crd-ref-docs` — generates the published field-level API reference (`docs/reference/api.md`) from the same `+kubebuilder` markers. See [docs/development/code-generation.md](../docs/development/code-generation.md#the-generated-api-reference).
+- `github.com/elastic/crd-ref-docs` — generates the published field-level API reference (`docs/reference/api.md`) from the same `+kubebuilder` markers.
+  See [docs/development/code-generation.md](../docs/development/code-generation.md#the-generated-api-reference).
 - `sigs.k8s.io/controller-runtime/tools/setup-envtest` — fetches the envtest binaries used by controller integration suites.
-- `sigs.k8s.io/controller-tools/cmd/controller-gen` — generates CRDs, deepcopy methods, and RBAC manifests from `+kubebuilder` markers. See [docs/development/code-generation.md](../docs/development/code-generation.md).
+- `sigs.k8s.io/controller-tools/cmd/controller-gen` — generates CRDs, deepcopy methods, and RBAC manifests from `+kubebuilder` markers.
+  See [docs/development/code-generation.md](../docs/development/code-generation.md).
 - `sigs.k8s.io/kubebuilder/v4` — scaffolding for new controllers.
 
 To invoke a tool at its pinned version: `(cd tools && go run sigs.k8s.io/controller-tools/cmd/controller-gen ...)`.
