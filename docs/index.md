@@ -38,7 +38,7 @@ hide:
 ```sh
 helm install gag \
   oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.3.0 \
+  --version 1.4.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -47,7 +47,7 @@ helm install gag \
 
 # v2 API (recommended): apply the signed, pre-rendered CRDs
 kubectl apply --server-side -f \
-  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.3.0/actions-gateway-crds-v2.yaml
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.4.0/actions-gateway-crds-v2.yaml
 ```
 
 </div>
