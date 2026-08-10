@@ -1,19 +1,17 @@
 # Plans
 
-Topic-organized index of plan files. For current status and priorities, see [docs/STATUS.md](../STATUS.md).
+Topic-organized index of plan files.
+For current status and priorities, see [docs/STATUS.md](../STATUS.md).
 
-Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top. Authoritative state always lives in the individual file.
+Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top.
+Authoritative state always lives in the individual file.
 
-Legend: ✅ done, ⚠️ partial / mixed (open **Queue** item remains), 💤 deferred
-(parked with a trigger, tracked in [STATUS.md Deferred](../STATUS.md#deferred)),
-❌ open, ⓘ informational (forward-looking spec or design rationale, no progress
-to track). A plan with only deferred residuals is ✅, not ⚠️ — see
-[maintaining-backlog.md](../development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count).
+Legend: ✅ done, ⚠️ partial / mixed (open **Queue** item remains), 💤 deferred (parked with a trigger, tracked in [STATUS.md Deferred](../STATUS.md#deferred)), ❌ open, ⓘ informational (forward-looking spec or design rationale, no progress to track).
+A plan with only deferred residuals is ✅, not ⚠️ — see [maintaining-backlog.md](../development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count).
 
 ## Implementation roadmap
 
-The five-milestone delivery from
-[docs/design/06-implementation-phases.md](../design/06-implementation-phases.md).
+The five-milestone delivery from [docs/design/06-implementation-phases.md](../design/06-implementation-phases.md).
 
 | Plan | Scope | Status |
 |---|---|---|
@@ -48,11 +46,8 @@ The five-milestone delivery from
 
 ## Test plans
 
-Per-milestone test gap plans. The durable design rationale for what the
-unit/integration/e2e layers cover lives in
-[`docs/design/07-test-plan.md`](../design/07-test-plan.md); developer
-run commands live in
-[`docs/development/testing.md`](../development/testing.md).
+Per-milestone test gap plans.
+The durable design rationale for what the unit/integration/e2e layers cover lives in [`docs/design/07-test-plan.md`](../design/07-test-plan.md); developer run commands live in [`docs/development/testing.md`](../development/testing.md).
 
 | Plan | Scope | Status |
 |---|---|---|
@@ -66,8 +61,8 @@ run commands live in
 
 ## Speed improvements
 
-Performance plans for build and test pipelines. Each has inline ✓
-markers per item.
+Performance plans for build and test pipelines.
+Each has inline ✓ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
@@ -112,7 +107,9 @@ markers per item.
 
 ## Archive
 
-Plans whose work has fully landed and which `docs/STATUS.md` no longer references. Moved here so `ls docs/plan/` shows active work only. The doc remains available — the rationale is often more valuable than the diff.
+Plans whose work has fully landed and which `docs/STATUS.md` no longer references.
+Moved here so `ls docs/plan/` shows active work only.
+The doc remains available — the rationale is often more valuable than the diff.
 
 | Plan | Scope | Closed |
 |---|---|---|
@@ -213,30 +210,22 @@ Plans whose work has fully landed and which `docs/STATUS.md` no longer reference
 
 When adding a new plan:
 
-- Put it at the top of the file: a one-paragraph "what and why," then a
-  **Status at a glance** table if there are 3+ discrete work items with
-  mixed state. The table is the index a returning reader scans first.
-- Cite code with file:line links. They go stale, but stale links are
-  easier to fix than missing ones.
-- Mark deferred or accepted items explicitly (⚠️ Partial — *what was
-  accepted and why*). Silent omissions become land mines.
-- Once everything in a plan ships, leave the plan in place with the
-  status table updated to ✅ Done. Don't delete it — the rationale
-  is more valuable than the diff.
+- Put it at the top of the file: a one-paragraph "what and why," then a **Status at a glance** table if there are 3+ discrete work items with mixed state.
+  The table is the index a returning reader scans first.
+- Cite code with file:line links.
+  They go stale, but stale links are easier to fix than missing ones.
+- Mark deferred or accepted items explicitly (⚠️ Partial — *what was accepted and why*).
+  Silent omissions become land mines.
+- Once everything in a plan ships, leave the plan in place with the status table updated to ✅ Done.
+  Don't delete it — the rationale is more valuable than the diff.
 
 When a plan fully closes:
 
-- If `docs/STATUS.md` still references it (Progress table or any Queue
-  row), leave it under `docs/plan/`.
-- Once STATUS.md no longer references it, `git mv` it to
-  `docs/plan/archive/` and move its row in this README to the Archive
-  section. Update any other in-repo links to the new path **and the moved
-  doc's own relative links** (dropping into `archive/` adds one `../` level).
-  The doc stays available; the working directory just gets less noisy. See the
-  full protocol in [`docs/development/maintaining-backlog.md`](../development/maintaining-backlog.md#archiving-completed-plan-docs).
-- **Do this on close, not in a later audit** — in the same change that drops the
-  plan's last STATUS reference. `make plan-index-check` (part of `make check`)
-  fails when an active, non-`ⓘ` plan here is no longer referenced by STATUS.md,
-  so a forgotten archival can't ship silently.
+- If `docs/STATUS.md` still references it (Progress table or any Queue row), leave it under `docs/plan/`.
+- Once STATUS.md no longer references it, `git mv` it to `docs/plan/archive/` and move its row in this README to the Archive section.
+  Update any other in-repo links to the new path **and the moved doc's own relative links** (dropping into `archive/` adds one `../` level).
+  The doc stays available; the working directory just gets less noisy.
+  See the full protocol in [`docs/development/maintaining-backlog.md`](../development/maintaining-backlog.md#archiving-completed-plan-docs).
+- **Do this on close, not in a later audit** — in the same change that drops the plan's last STATUS reference. `make plan-index-check` (part of `make check`) fails when an active, non-`ⓘ` plan here is no longer referenced by STATUS.md, so a forgotten archival can't ship silently.
 
 Add a row to this README when creating, completing, or archiving a plan.

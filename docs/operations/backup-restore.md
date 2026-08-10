@@ -2,11 +2,15 @@
 
 > **Audience:** Platform engineer
 
-The `ActionsGateway` custom resource (CR) is the **source of truth** for a tenant gateway. The Gateway Manager Controller (GMC) provisions every per-gateway child resource — the Actions Gateway Controller (AGC) Deployment, ServiceAccounts, RoleBinding, Service, NetworkPolicies, and metrics TLS Secrets — from that single CR, and owner-references each child to it. Deleting the CR therefore **cascades**: the apiserver garbage-collects all owner-referenced children. This makes the gateway cheap to recreate, but it also means an accidental `kubectl delete actionsgateway` (or a deleted namespace) tears down the running control plane.
+The `ActionsGateway` custom resource (CR) is the **source of truth** for a tenant gateway.
+The Gateway Manager Controller (GMC) provisions every per-gateway child resource — the Actions Gateway Controller (AGC) Deployment, ServiceAccounts, RoleBinding, Service, NetworkPolicies, and metrics TLS Secrets — from that single CR, and owner-references each child to it.
+Deleting the CR therefore **cascades**: the apiserver garbage-collects all owner-referenced children.
+This makes the gateway cheap to recreate, but it also means an accidental `kubectl delete actionsgateway` (or a deleted namespace) tears down the running control plane.
 
 This document covers the backup posture that protects against that, and a runnable recovery procedure for restoring a deleted or corrupted gateway.
 
-For component upgrade/rollback (a different concern — the binary version, not the CR) see [upgrade.md](upgrade.md). For symptom-driven diagnosis see [troubleshooting.md](troubleshooting.md).
+For component upgrade/rollback (a different concern — the binary version, not the CR) see [upgrade.md](upgrade.md).
+For symptom-driven diagnosis see [troubleshooting.md](troubleshooting.md).
 
 ---
 
@@ -52,7 +56,9 @@ Restore planning hinges on one distinction: **GMC-generated children reconcile b
 | The cluster-scoped `ClusterRoleBinding` granting the AGC read of `ClusterRunnerTemplate` | Cluster-scoped objects cannot carry an owner reference to a namespaced CR, so the GMC deletes it explicitly via its cleanup finalizer and recreates it on reconcile. | Reconciles automatically from the CR — no action needed. |
 | `RunnerSet` CRs that target the gateway | Reference the gateway but are **not** owned by it; they are never deleted by gateway teardown — they degrade to `Ready=False`/`GatewayNotFound` and recover when the gateway returns. Their **worker pods** are deleted, though: the AGC is their only reaper and goes with the gateway, so it reaps them first (`Ready=False`/`GatewayTerminating`, `reason="gateway_deleted"`) and any job they were running is lost. | No action needed; the sets re-bind automatically. Drain before deleting a gateway if you need in-flight jobs to finish. |
 
-> **In-flight jobs are not recoverable.** Running jobs whose renew loop lapses during the outage are cancelled by GitHub and require a manual re-run. Queued (not-yet-acquired) jobs are redelivered to the next healthy session within ~2 minutes. This matches [Runbook — AGC Total Failure](runbook.md#agc-total-failure).
+> **In-flight jobs are not recoverable.** Running jobs whose renew loop lapses during the outage are cancelled by GitHub and require a manual re-run.
+> Queued (not-yet-acquired) jobs are redelivered to the next healthy session within ~2 minutes.
+> This matches [Runbook — AGC Total Failure](runbook.md#agc-total-failure).
 
 ---
 
@@ -69,21 +75,28 @@ Track in version control, per tenant namespace:
 - The tenant `Namespace` manifest (including its security-profile label).
 - The namespace `ResourceQuota`.
 
-**Never commit the GitHub App credential `Secret` in plaintext.** Manage it with a secrets-aware tool — [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets), [External Secrets Operator](https://external-secrets.io/), or SOPS-encrypted manifests — so the encrypted form is safe in Git and the plaintext only ever exists in the cluster. The private key itself is never recoverable from the cluster (it is held only inside the Secret); keep the source `.pem` in a password manager or secrets vault so a new Secret can be minted if the namespace is lost. See [Security Operations](security-operations.md) for credential-handling guidance.
+**Never commit the GitHub App credential `Secret` in plaintext.** Manage it with a secrets-aware tool — [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets), [External Secrets Operator](https://external-secrets.io/), or SOPS-encrypted manifests — so the encrypted form is safe in Git and the plaintext only ever exists in the cluster.
+The private key itself is never recoverable from the cluster (it is held only inside the Secret); keep the source `.pem` in a password manager or secrets vault so a new Secret can be minted if the namespace is lost.
+See [Security Operations](security-operations.md) for credential-handling guidance.
 
 ### Secondary: etcd and per-resource backups
 
-GitOps protects the *desired* state. To also capture live status and resources not in Git, add one of:
+GitOps protects the *desired* state.
+To also capture live status and resources not in Git, add one of:
 
-- **etcd snapshots** — a cluster-level backup (`etcdctl snapshot save`, or your managed-cluster provider's equivalent) captures every object, including the credential Secret and live CR status. This is the broadest safety net and the basis for [Scenario C](#scenario-c-full-cluster--etcd-restore). Treat the snapshot as sensitive: it contains every Secret in the cluster.
-- **Namespace-scoped backups** — a tool such as [Velero](https://velero.io/) can back up and restore a tenant namespace (CRs, Secrets, quota) as a unit, which is convenient for [Scenario B](#scenario-b-whole-tenant-namespace-lost). For concrete Velero backup/restore commands grounded in the ownership model above — including the label selector that skips the GMC-owned children so the controllers rebuild them — see [Velero Backup and Restore](velero-backup-restore.md).
+- **etcd snapshots** — a cluster-level backup (`etcdctl snapshot save`, or your managed-cluster provider's equivalent) captures every object, including the credential Secret and live CR status.
+  This is the broadest safety net and the basis for [Scenario C](#scenario-c-full-cluster--etcd-restore).
+  Treat the snapshot as sensitive: it contains every Secret in the cluster.
+- **Namespace-scoped backups** — a tool such as [Velero](https://velero.io/) can back up and restore a tenant namespace (CRs, Secrets, quota) as a unit, which is convenient for [Scenario B](#scenario-b-whole-tenant-namespace-lost).
+  For concrete Velero backup/restore commands grounded in the ownership model above — including the label selector that skips the GMC-owned children so the controllers rebuild them — see [Velero Backup and Restore](velero-backup-restore.md).
 - **Ad-hoc CR export** — for a point-in-time copy of a single gateway:
 
   ```sh
   kubectl get actionsgateway -n <namespace> <name> -o yaml > backup-<name>.yaml
   ```
 
-  Strip the runtime fields before re-applying (`status`, `metadata.uid`, `metadata.resourceVersion`, `metadata.creationTimestamp`, and the `metadata.finalizers` entry) — re-applying them can wedge the apply or resurrect a stale finalizer. The spec is the only part you need.
+  Strip the runtime fields before re-applying (`status`, `metadata.uid`, `metadata.resourceVersion`, `metadata.creationTimestamp`, and the `metadata.finalizers` entry) — re-applying them can wedge the apply or resurrect a stale finalizer.
+  The spec is the only part you need.
 
 ### What to Back Up
 
@@ -127,9 +140,11 @@ The namespace and the GitHub App credential Secret are intact; only the CR is go
 
 The namespace and everything in it — CR, credential Secret, quota — are gone.
 
-1. **Recreate and mark the namespace** (including its security-profile label) from version control. See [Getting Started §2](../getting-started.md#2-create-and-mark-the-tenant-namespace-and-set-its-quota).
+1. **Recreate and mark the namespace** (including its security-profile label) from version control.
+   See [Getting Started §2](../getting-started.md#2-create-and-mark-the-tenant-namespace-and-set-its-quota).
 2. **Re-apply the `ResourceQuota`** from version control.
-3. **Recreate the GitHub App credential Secret** from your encrypted backup (or mint a fresh one from the source `.pem` in your vault). See [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret).
+3. **Recreate the GitHub App credential Secret** from your encrypted backup (or mint a fresh one from the source `.pem` in your vault).
+   See [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret).
 4. **Re-apply the `EgressProxy` CR**, if the gateway references one.
 5. **Re-apply the `ActionsGateway` CR.**
 6. **[Verify](#verification).** `RunnerSet`s that targeted this gateway flip from `Ready=False`/`GatewayNotFound` back to ready automatically once the gateway is up.
@@ -138,15 +153,19 @@ The namespace and everything in it — CR, credential Secret, quota — are gone
 
 ### Scenario C: Full Cluster / etcd Restore
 
-For a control-plane loss, restore etcd from a snapshot per your Kubernetes distribution's documented procedure. After restore:
+For a control-plane loss, restore etcd from a snapshot per your Kubernetes distribution's documented procedure.
+After restore:
 
 1. Confirm the GMC is running: `kubectl rollout status deploy/gmc-controller-manager -n gmc-system`.
-2. The GMC reconciles every restored `ActionsGateway` CR idempotently — it compares desired vs. actual state and only applies what is missing. No resources are duplicated. This is the same idempotent recovery described in [Runbook — GMC Total Failure](runbook.md#gmc-total-failure).
+2. The GMC reconciles every restored `ActionsGateway` CR idempotently — it compares desired vs. actual state and only applies what is missing.
+   No resources are duplicated.
+   This is the same idempotent recovery described in [Runbook — GMC Total Failure](runbook.md#gmc-total-failure).
 3. **[Verify](#verification)** each tenant namespace.
 
 ### CR Stuck Terminating
 
-If a deleted CR hangs in `Terminating`, the GMC's cleanup finalizer (`actions-gateway.github.com/gmc-cleanup`) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down). The finalizer exists precisely to avoid orphaning the cluster-scoped `ClusterRoleBinding`.
+If a deleted CR hangs in `Terminating`, the GMC's cleanup finalizer (`actions-gateway.github.com/gmc-cleanup`) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down).
+The finalizer exists precisely to avoid orphaning the cluster-scoped `ClusterRoleBinding`.
 
 1. Check the GMC is running and reconciling — restart it if needed (`kubectl rollout restart deploy/gmc-controller-manager -n gmc-system`); it will complete teardown and clear the finalizer.
 2. Only **force-remove the finalizer as a last resort** when the GMC is permanently gone, and understand the trade-off: it leaves the cluster-scoped `ClusterRoleBinding` (`agc-clusterrunnertemplate-reader.<namespace>.<name>`) orphaned, which you must then delete by hand.
@@ -176,8 +195,10 @@ After any restore, confirm the gateway is healthy — the same checks as [Runboo
    kubectl get actionsgateway -n <namespace> <name> \
      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}{"\n"}'
    ```
-   Expect `True`. If `CredentialUnavailable` or `ProxyNotFound`, the credential Secret or `EgressProxy` is still missing — recheck the relevant scenario step.
-4. Sessions are polling — `actions_gateway_active_sessions` should reach ≥ 1 per RunnerGroup within seconds. See [Observability](observability.md).
+   Expect `True`.
+   If `CredentialUnavailable` or `ProxyNotFound`, the credential Secret or `EgressProxy` is still missing — recheck the relevant scenario step.
+4. Sessions are polling — `actions_gateway_active_sessions` should reach ≥ 1 per RunnerGroup within seconds.
+   See [Observability](observability.md).
 5. Trigger a test workflow and confirm a worker pod is provisioned and the job completes.
 
 ---

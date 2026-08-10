@@ -1,17 +1,13 @@
 # Documentation
 
-Documentation for the GitHub Actions Gateway — a four-tier system for running
-GitHub Actions self-hosted runners at scale on Kubernetes. For the project
-overview see the top-level [README](../README.md); for the condensed design entry
-point see [DESIGN.md](../DESIGN.md).
+Documentation for the GitHub Actions Gateway — a four-tier system for running GitHub Actions self-hosted runners at scale on Kubernetes.
+For the project overview see the top-level [README](../README.md); for the condensed design entry point see [DESIGN.md](../DESIGN.md).
 
 ## Start here
 
-- [getting-started.md](getting-started.md) — deploy the system, wire up the GitHub
-  App, validate, and rotate credentials.
+- [getting-started.md](getting-started.md) — deploy the system, wire up the GitHub App, validate, and rotate credentials.
 - [STATUS.md](STATUS.md) — single source of truth for progress and priorities.
-  Also published as a [filterable page](https://actions-gateway.com/dev/STATUS/)
-  on the `dev` docs site, with label, status, and size chips.
+  Also published as a [filterable page](https://actions-gateway.com/dev/STATUS/) on the `dev` docs site, with label, status, and size chips.
 
 ## Sections
 
@@ -26,7 +22,7 @@ point see [DESIGN.md](../DESIGN.md).
 
 ## Find your path
 
-Each section's `README.md` is its index. For role-based reading orders (architect,
-platform engineer, security engineer, tenant team) see
-[design/README.md § Reading Paths by Role](design/README.md#reading-paths-by-role).
-New to the vocabulary? Start with the [glossary](design/08-glossary.md).
+Each section's `README.md` is its index.
+For role-based reading orders (architect, platform engineer, security engineer, tenant team) see [design/README.md § Reading Paths by Role](design/README.md#reading-paths-by-role).
+New to the vocabulary?
+Start with the [glossary](design/08-glossary.md).

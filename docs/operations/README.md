@@ -1,6 +1,7 @@
 # Operations
 
-Operator-facing references for the two roles that run GitHub Actions Gateway (GAG): the **platform engineer** who owns the cluster and the Gateway Manager Controller (GMC), and the **tenant operator** who owns one namespace's Actions Gateway Controller (AGC), runner sets, and the workflows that target them. [Who owns what](personas.md) defines every role and what each cannot do.
+Operator-facing references for the two roles that run GitHub Actions Gateway (GAG): the **platform engineer** who owns the cluster and the Gateway Manager Controller (GMC), and the **tenant operator** who owns one namespace's Actions Gateway Controller (AGC), runner sets, and the workflows that target them.
+[Who owns what](personas.md) defines every role and what each cannot do.
 
 | Doc | Personas | Purpose |
 |---|---|---|

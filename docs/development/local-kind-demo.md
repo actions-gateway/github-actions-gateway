@@ -1,32 +1,22 @@
 # Reproduce the local-kind demo (from source)
 
-This is the from-source procedure behind the [demo recording](../demo.md) — one
-real GitHub Actions job run through GitHub Actions Gateway (GAG) on a local
-[kind](https://kind.sigs.k8s.io/) cluster, against **real GitHub**. It uses the
-repo's `make` targets and a local image registry, so run it from a checkout with
-the dev toolchain (`make doctor` checks it).
+This is the from-source procedure behind the [demo recording](../demo.md) — one real GitHub Actions job run through GitHub Actions Gateway (GAG) on a local [kind](https://kind.sigs.k8s.io/) cluster, against **real GitHub**.
+It uses the repo's `make` targets and a local image registry, so run it from a checkout with the dev toolchain (`make doctor` checks it).
 
-> To **install** GAG the normal way (the released Helm chart with digest-pinned
-> images), follow [Getting Started](../getting-started.md) instead — this guide is
-> for reproducing the demo end-to-end from a source build.
+> To **install** GAG the normal way (the released Helm chart with digest-pinned images), follow [Getting Started](../getting-started.md) instead — this guide is for reproducing the demo end-to-end from a source build.
 
-Two things this flow does that a released install would not, both flagged as
-backlog items:
+Two things this flow does that a released install would not, both flagged as backlog items:
 
-- Installs the **v2alpha1 CRDs** alongside the v1 platform. A v1-only install
-  currently crash-loops the AGC (its v2 `RunnerSet` reconciler is registered
-  unconditionally and its informer cache never syncs) — see `Q261` in
-  [docs/STATUS.md](../STATUS.md).
-- Adds a **`LimitRange`** so the requests-less AGC pod is admitted under the
-  namespace `ResourceQuota` — see `Q262`.
+- Installs the **v2alpha1 CRDs** alongside the v1 platform.
+  A v1-only install currently crash-loops the AGC (its v2 `RunnerSet` reconciler is registered unconditionally and its informer cache never syncs) — see `Q261` in [docs/STATUS.md](../STATUS.md).
+- Adds a **`LimitRange`** so the requests-less AGC pod is admitted under the namespace `ResourceQuota` — see `Q262`.
 
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/), [kind](https://kind.sigs.k8s.io/), and [kubectl](https://kubernetes.io/docs/tasks/tools/) (`make doctor` checks your toolchain).
 - The [GitHub CLI](https://cli.github.com/) (`gh`), authenticated (`gh auth login`) with rights to dispatch workflows in your test repo.
-- A **GitHub App** with runner control-plane permissions, and a repo (or org) that
-  App is installed on, containing a workflow that targets a self-hosted label. The
-  demo uses a one-line workflow:
+- A **GitHub App** with runner control-plane permissions, and a repo (or org) that App is installed on, containing a workflow that targets a self-hosted label.
+  The demo uses a one-line workflow:
 
   ```yaml
   # .github/workflows/test-job.yml
@@ -39,8 +29,7 @@ backlog items:
         - run: echo "job acquired by gateway runner"
   ```
 
-  See [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret)
-  for how to create the GitHub App credential Secret.
+  See [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret) for how to create the GitHub App credential Secret.
 
 ## 1. Cluster and platform
 
@@ -72,9 +61,7 @@ kubectl create namespace team-a
 kubectl label ns team-a actions-gateway.github.com/tenant=true
 ```
 
-Apply a platform-owned `ResourceQuota` and a `LimitRange` that supplies default
-container requests (so pods without explicit requests are admitted under the
-quota):
+Apply a platform-owned `ResourceQuota` and a `LimitRange` that supplies default container requests (so pods without explicit requests are admitted under the quota):
 
 ```yaml
 # tenant-quota.yaml
@@ -104,9 +91,7 @@ kubectl create secret generic team-a-github-app -n team-a \
   --from-file=privateKey=app.pem
 ```
 
-Apply one `ActionsGateway` CR. `completedPodTTL: 0s` deletes each worker pod the
-moment its job finishes (the default retains terminal pods for 5 minutes so their
-logs stay inspectable):
+Apply one `ActionsGateway` CR. `completedPodTTL: 0s` deletes each worker pod the moment its job finishes (the default retains terminal pods for 5 minutes so their logs stay inspectable):
 
 ```yaml
 # actionsgateway.yaml
@@ -135,7 +120,8 @@ kubectl apply -f actionsgateway.yaml
 kubectl wait --for=condition=Available deploy/actions-gateway-controller -n team-a --timeout=5m
 ```
 
-The AGC registers runners with GitHub. Confirm they are online and idle:
+The AGC registers runners with GitHub.
+Confirm they are online and idle:
 
 ```sh
 kubectl get actionsgateway,runnergroup -n team-a
@@ -153,8 +139,8 @@ kubectl get pods -n team-a -w
 gh workflow run test-job.yml --repo <your-org>/<your-repo> --ref main
 ```
 
-A `runner-…` pod appears, runs the job, and is deleted on completion. Confirm the
-run is green on GitHub:
+A `runner-…` pod appears, runs the job, and is deleted on completion.
+Confirm the run is green on GitHub:
 
 ```sh
 gh run list --repo <your-org>/<your-repo> --workflow test-job.yml --limit 1
@@ -169,8 +155,5 @@ make e2e-clean      # deletes the kind cluster and the local registry
 
 ## The recording
 
-The animated recording embedded on the [demo page](../demo.md) is a hand-authored
-[asciinema](https://asciinema.org/) cast (v2) assembled from the real command
-outputs of a run of these steps, then rendered to a self-contained animated SVG.
-The cast and its generator live in [`docs/assets/`](../assets/README.md) — see
-[docs/assets/README.md](../assets/README.md) for how to regenerate them.
+The animated recording embedded on the [demo page](../demo.md) is a hand-authored [asciinema](https://asciinema.org/) cast (v2) assembled from the real command outputs of a run of these steps, then rendered to a self-contained animated SVG.
+The cast and its generator live in [`docs/assets/`](../assets/README.md) — see [docs/assets/README.md](../assets/README.md) for how to regenerate them.

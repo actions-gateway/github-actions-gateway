@@ -5,9 +5,7 @@ hide:
 
 # Choosing how to run self-hosted CI
 
-One question decides most of this: **must the compute be yours, and do several
-teams have to share it?** If either half is no, something simpler than GitHub
-Actions Gateway (GAG) is probably right.
+One question decides most of this: **must the compute be yours, and do several teams have to share it?** If either half is no, something simpler than GitHub Actions Gateway (GAG) is probably right.
 
 ## When not to choose GAG
 
@@ -20,13 +18,11 @@ Actions Gateway (GAG) is probably right.
 
 !!! tip "GAG is for what is left"
 
-    The nodes are big and expensive, several teams have to share them, and that
-    sharing has to be safe.
+    The nodes are big and expensive, several teams have to share them, and that sharing has to be safe.
 
 ## Location, location, location
 
-Where each option can actually run is the fastest filter, and most comparisons
-omit it: "self-hosted" usually means "self-hosted on AWS".
+Where each option can actually run is the fastest filter, and most comparisons omit it: "self-hosted" usually means "self-hosted on AWS".
 
 | Option | Runs on |
 |---|---|
@@ -37,22 +33,16 @@ omit it: "self-hosted" usually means "self-hosted on AWS".
 
 !!! tip "On-premises, most of this list is already gone"
 
-    Only the last row is left, ruled out by the same constraint that made you
-    self-host in the first place, before a single feature is compared.
+    Only the last row is left, ruled out by the same constraint that made you self-host in the first place, before a single feature is compared.
 
-That also breaks account-per-tenant isolation, which is ForgeMT's model and the
-serious argument against a shared cluster: an AWS account is a free API call,
-but its bare-metal equivalent is a hardware purchase, and partitioned capacity
-cannot be shifted between tenants.
-[Appendix D.9](design/appendix-d-alternatives-considered.md#d9-forgemt-and-account-per-tenant-runner-platforms)
-takes it seriously and states both trade-offs.
+That also breaks account-per-tenant isolation, which is ForgeMT's model and the serious argument against a shared cluster: an AWS account is a free API call, but its bare-metal equivalent is a hardware purchase, and partitioned capacity cannot be shifted between tenants.
+[Appendix D.9](design/appendix-d-alternatives-considered.md#d9-forgemt-and-account-per-tenant-runner-platforms) takes it seriously and states both trade-offs.
 
 ## Multi-tenant platforms are an order of magnitude more complex
 
-Adding teams does not add a feature, it adds roles. Three end up in the room,
-each with different powers and a different blast radius, and holding them apart
-is most of the work. ARC models the first two as one person, which is coherent
-for a single-owner cluster and is why it has no primitive separating them.
+Adding teams does not add a feature, it adds roles.
+Three end up in the room, each with different powers and a different blast radius, and holding them apart is most of the work.
+ARC models the first two as one person, which is coherent for a single-owner cluster and is why it has no primitive separating them.
 
 | The boundary | How GAG draws it |
 |---|---|
@@ -68,8 +58,7 @@ Each role and what it cannot do: [Personas](operations/personas.md).
 ## A paved road is worth more than a trail map
 
 - **Feature comparisons** tell you what *can* be done.
-- **Reference architectures** prove it has been validated, and tell you how to
-  do it.
+- **Reference architectures** prove it has been validated, and tell you how to do it.
 - **Runbooks, dashboards, and alerts** tell you how to operate it.
 
 Measured 2026-08-06 against ARC 0.14.2 and `master`.
@@ -81,8 +70,7 @@ Measured 2026-08-06 against ARC 0.14.2 and `master`.
 
 ## No offering is perfect, yet…
 
-Here is where GAG loses, and to whom. **No single alternative holds all of
-these**, which is why the middle column matters as much as the first.
+Here is where GAG loses, and to whom. **No single alternative holds all of these**, which is why the middle column matters as much as the first.
 
 | What GAG lacks | Who has it | Tracked |
 |---|---|---|
@@ -97,23 +85,13 @@ these**, which is why the middle column matters as much as the first.
 
 Two footnotes on that table.
 
-**Cache is usually misread.** `actions/cache` works on GAG today; what is
-missing is a cache *inside* the cluster. ARC has none either, so this is not a
-reason to prefer ARC.
+**Cache is usually misread.** `actions/cache` works on GAG today; what is missing is a cache *inside* the cluster.
+ARC has none either, so this is not a reason to prefer ARC.
 
-**Install base has no engineering answer.** If being the first production
-deployment is unacceptable, that settles it. The only counterweight is the
-evidence trail: dated measurements, failure modes documented with the incidents
-that found them, and a
-[published retraction](design/appendix-a-capacity-slos.md) of the project's own
-best number once it proved unmeasurable.
+**Install base has no engineering answer.** If being the first production deployment is unacceptable, that settles it.
+The only counterweight is the evidence trail: dated measurements, failure modes documented with the incidents that found them, and a [published retraction](design/appendix-a-capacity-slos.md) of the project's own best number once it proved unmeasurable.
 
 ## Reading further
 
-[Appendix D](design/appendix-d-alternatives-considered.md) argues every
-alternative in full, including
-[Prow](design/appendix-d-alternatives-considered.md#d10-prow-and-the-prior-art-for-automatic-re-run),
-which is why GAG does not claim automatic re-run is novel, and
-[GitLab Runner](design/appendix-d-alternatives-considered.md#d12-gitlab-runners-kubernetes-executor),
-which faces the identical problem and resolves it the other way.
+[Appendix D](design/appendix-d-alternatives-considered.md) argues every alternative in full, including [Prow](design/appendix-d-alternatives-considered.md#d10-prow-and-the-prior-art-for-automatic-re-run), which is why GAG does not claim automatic re-run is novel, and [GitLab Runner](design/appendix-d-alternatives-considered.md#d12-gitlab-runners-kubernetes-executor), which faces the identical problem and resolves it the other way.
 [Why GAG?](why-gag.md) is the capability-by-capability comparison against ARC.

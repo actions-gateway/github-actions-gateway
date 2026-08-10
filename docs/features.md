@@ -1,31 +1,25 @@
 # Features
 
-Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that
-explains each one. For the argument against Actions Runner Controller (ARC), see
-[Why GAG?](why-gag.md); for what is not here yet, see the [roadmap](roadmap.md).
+Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
+For the argument against Actions Runner Controller (ARC), see [Why GAG?](why-gag.md); for what is not here yet, see the [roadmap](roadmap.md).
 
-Three badges appear below. <span class="gag-v2-badge">v2</span> marks a
-capability available only in the `actions-gateway.com/v2beta1` API;
-<span class="gag-maturity-badge">beta</span> marks one whose API shape is still
-under its first stability contract; and
-<span class="gag-tier-badge">partly classic-only</span> marks one that does not
-reach the ScaleSet acquisition tier every new tenant runs. No tier badge means
-both tiers, and a gate removes the badge when the gap closes.
+Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the `actions-gateway.com/v2beta1` API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+No tier badge means both tiers, and a gate removes the badge when the gap closes.
 
 !!! tip "Check the version you're running"
 
-    Use the **version selector** at the top of the page to switch between the
-    latest stable [release](https://github.com/actions-gateway/github-actions-gateway/releases)
-    (the default) and **`dev`**, the unreleased `main` branch. A capability listed
-    under `dev` but not under a numbered release has not shipped in a tagged
-    chart yet.
+    Use the **version selector** at the top of the page to switch between the latest stable [release](https://github.com/actions-gateway/github-actions-gateway/releases) (the default) and **`dev`**, the unreleased `main` branch.
+    A capability listed under `dev` but not under a numbered release has not shipped in a tagged chart yet.
 
 ## Job intake and recovery
 
-- **[Runner-scale-set acquisition](design/04-operational-flows.md#42-job-execution-flow-agc)**: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out. The default in v2.
+- **[Runner-scale-set acquisition](design/04-operational-flows.md#42-job-execution-flow-agc)**: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out.
+  The default in v2.
 - **[Quota-aware intake](design/04-operational-flows.md#42-job-execution-flow-agc)**: a job the namespace `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub until there is capacity.
 - **[Auto re-run for disrupted jobs](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)**: a worker lost to eviction, preemption, a node drain, or a bare `kubectl delete pod` has its run re-run automatically, under a per-run budget.
-- **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in. Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them. Off by default.
+- **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in.
+  Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
+  Off by default.
 - **[Fast, honest ending for an abandoned run](design/04-operational-flows.md)**: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.
 - **[Priority tiers per runner set](design/02-architecture.md)**: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.
 - **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
@@ -46,7 +40,8 @@ both tiers, and a gate removes the badge when the gap closes.
 
 - **[Per-tenant egress IPs](design/network-architecture.md)**: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.
 - **[Standalone `EgressProxy`](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays `NetworkPolicy`-restricted.
-- **[Cross-namespace proxy sharing](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`. Consent is provider-side, so naming a proxy from the consumer side grants nothing; unlisted stays denied, and only the proxy's public certificate crosses the namespace boundary.
+- **[Cross-namespace proxy sharing](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`.
+  Consent is provider-side, so naming a proxy from the consumer side grants nothing; unlisted stays denied, and only the proxy's public certificate crosses the namespace boundary.
 - **[FQDN egress policy](operations/security-operations.md#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)**: express GitHub egress by hostname instead of CIDR on Cilium, Calico, or GKE Dataplane V2.
 - **[Auto-refreshed GitHub egress rules](operations/troubleshooting.md#actionsgateway-reports-egressrulesstale)**: the Gateway Manager Controller (GMC) re-reads GitHub's published IP ranges every 24 hours into each tenant's `NetworkPolicy`, and an `EgressRulesStale` condition, with a paging alert, fires when the refresh stalls past its window.
 - **[Bring your own proxy autoscaler](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: `managedAutoscaling: false` hands the proxy pool to KEDA, VPA, or a custom HorizontalPodAutoscaler.
@@ -56,12 +51,15 @@ both tiers, and a gate removes the badge when the gap closes.
 ## Security posture
 
 - **[Secure-by-default hardening](design/05-security.md)**: Pod Security Admission per namespace, default-deny NetworkPolicies, and credentials kept out of environment variables, all reconciled rather than opt-in.
-- **[Runner template library](operations/runner-template-library.md)**: three shipped worker pod shapes (`plain`, `kata-dind`, `privileged-dind`), each applied with one `kubectl apply -k`, so a tenant starts from a validated template instead of transcribing a capability set by hand. Only templates CI exercises may ship, and a gate enforces it.
+- **[Runner template library](operations/runner-template-library.md)**: three shipped worker pod shapes (`plain`, `kata-dind`, `privileged-dind`), each applied with one `kubectl apply -k`, so a tenant starts from a validated template instead of transcribing a capability set by hand.
+  Only templates CI exercises may ship, and a gate enforces it.
 - **[Kata micro-VM workers](operations/kata-dind-workloads.md)**: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker pod.
 - **[In-runner image builds](operations/in-runner-image-builds.md)**: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right `securityProfile` and PSA level.
 - **[Signed images, SBOM, and SLSA provenance](operations/release.md)**: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.
 - **[Admission policy compatibility](operations/admission-policies.md)**: a Kyverno/Gatekeeper matrix covering whether GAG pods comply with common cluster policies, plus sample enforce and exception policies.
-- **[Optional CONNECT destination allow-listing](operations/security-operations.md)**: defense in depth, off by default. An opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal. The mandatory default-deny NetworkPolicy stays the primary gate.
+- **[Optional CONNECT destination allow-listing](operations/security-operations.md)**: defense in depth, off by default.
+  An opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal.
+  The mandatory default-deny NetworkPolicy stays the primary gate.
 - **[Self-confining controller privileges](design/05-security.md#gmc-privilege-escalation-blast-radius-and-compensating-controls)**: shipped `ValidatingAdmissionPolicy` guards deny the GMC's own cluster-wide writes outside admin-marked tenant namespaces, so a compromised manager cannot touch `kube-system` or any unmarked namespace.
 - **[Restart-free platform allowlists](operations/security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298)**: grow the worker and infra PriorityClass allowlists and the egress-destination allowlist by editing a watched `PriorityClassAllowlist` custom resource (CR) or ConfigMap, no GMC restart; a missing, invalid, or overlapping object fails safe back to the flag baseline.
 - **[Credential redaction in logs](operations/observability-logging.md#what-never-appears-in-logs)**: every GitHub response body passes one sanitizer that strips tokens, JWTs, and JIT configs before it can reach a log line, at every log level.
@@ -73,8 +71,10 @@ both tiers, and a gate removes the badge when the gap closes.
 - **[Metrics reference](operations/observability-metrics.md)**: every Prometheus metric the GMC, AGC, and proxy export, scoped per tenant and runner group.
 - **[Fleet rollups for platform admins](operations/observability-metrics.md#full-metrics-reference)**: cross-tenant degraded, egress-stale, and quota gauges in a single pane.
 - **[Scraping setup](operations/observability-metrics-access.md)**: wiring the mutual-TLS metrics endpoints into your Prometheus.
-- **[Alerting and SLOs](operations/observability-alerting.md)** <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: ready-to-apply alert rules as code. Two SLOs and one alert read duration and latency series the ScaleSet tier does not emit yet, so they have no data there ([roadmap](roadmap.md)).
-- **[Grafana dashboards](operations/observability-dashboards.md)** <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: a tenant dashboard and a platform dashboard, both as code. Their duration and latency panels stay empty on the ScaleSet tier for the same reason.
+- **[Alerting and SLOs](operations/observability-alerting.md)** <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: ready-to-apply alert rules as code.
+  Two SLOs and one alert read duration and latency series the ScaleSet tier does not emit yet, so they have no data there ([roadmap](roadmap.md)).
+- **[Grafana dashboards](operations/observability-dashboards.md)** <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: a tenant dashboard and a platform dashboard, both as code.
+  Their duration and latency panels stay empty on the ScaleSet tier for the same reason.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
 
 ## Install and day-2 operations
@@ -99,4 +99,5 @@ both tiers, and a gate removes the badge when the gap closes.
 - **[`gag-migrate`](operations/migration-v1-to-v2.md)**: a one-shot fan-out that moves a tenant off `v1alpha1` without changing how jobs are acquired: dry-run, review, apply.
 - **[Deprecations and the `v2.0.0` removal](operations/v1alpha1-deprecation.md)**: what `v2.0.0` removes, what keeps working until then, and the pre-upgrade checklist.
 - **[Migrating from ARC](operations/migration-from-arc.md)**: concept mapping, behavioral differences, and a worked zero-downtime migration of one runner group.
-- **[Getting started](getting-started.md)**: first-time GitHub App setup, the v2 object set, and credential rotation. There is also a [recorded demo](demo.md) of one real job on a local kind cluster.
+- **[Getting started](getting-started.md)**: first-time GitHub App setup, the v2 object set, and credential rotation.
+  There is also a [recorded demo](demo.md) of one real job on a local kind cluster.

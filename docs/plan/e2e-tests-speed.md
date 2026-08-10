@@ -1,6 +1,7 @@
 # E2E Test Speed Improvements
 
-This document analyses where time is spent in the e2e suite and describes five concrete improvements, in order of estimated impact. Each section covers motivation, implementation steps, files affected, and estimated savings.
+This document analyses where time is spent in the e2e suite and describes five concrete improvements, in order of estimated impact.
+Each section covers motivation, implementation steps, files affected, and estimated savings.
 
 ---
 
@@ -37,7 +38,9 @@ A typical CI run of `make e2e` breaks down roughly as follows:
 | Test execution — 6 `Describe` suites, sequential | ~15–20 min |
 | **Total** | **~30–40 min** (limit: 45 min) |
 
-The test execution phase dominates and is where the biggest gains are available. Each `Describe` suite has its own `BeforeAll` that provisions a fresh namespace and waits for deployments to reach Ready (~1–3 min actual). Running them serially means those waits stack up; running them concurrently collapses them to the single longest wait.
+The test execution phase dominates and is where the biggest gains are available.
+Each `Describe` suite has its own `BeforeAll` that provisions a fresh namespace and waits for deployments to reach Ready (~1–3 min actual).
+Running them serially means those waits stack up; running them concurrently collapses them to the single longest wait.
 
 The five improvements below are ordered by estimated CI savings.
 
@@ -49,13 +52,18 @@ The five improvements below are ordered by estimated CI savings.
 
 ### Problem
 
-Ginkgo runs all specs in a single OS thread by default. The six independent `Describe` suites — `E2E_GMC_Provisioning`, `E2E_GMC_Isolation`, `E2E_GMC_RBAC`, `E2E_GMC_HPA_PDB`, `E2E_GMC_Resilience`, and `E2E_AGC_JobLifecycle` — each spin up a dedicated tenant namespace and wait for their own `ActionsGateway` CR to provision. Those waits are completely independent and can overlap.
+Ginkgo runs all specs in a single OS thread by default.
+The six independent `Describe` suites — `E2E_GMC_Provisioning`, `E2E_GMC_Isolation`, `E2E_GMC_RBAC`, `E2E_GMC_HPA_PDB`, `E2E_GMC_Resilience`, and `E2E_AGC_JobLifecycle` — each spin up a dedicated tenant namespace and wait for their own `ActionsGateway` CR to provision.
+Those waits are completely independent and can overlap.
 
 ### Approach
 
-Ginkgo v2 supports `--procs=N` (or `-p` for auto-detect). Each process receives a disjoint partition of the spec tree and runs it concurrently. The catch is that `BeforeSuite` runs once per process; without coordination, all six processes would each try to install cert-manager and deploy GMC.
+Ginkgo v2 supports `--procs=N` (or `-p` for auto-detect).
+Each process receives a disjoint partition of the spec tree and runs it concurrently.
+The catch is that `BeforeSuite` runs once per process; without coordination, all six processes would each try to install cert-manager and deploy GMC.
 
-The fix is to replace `BeforeSuite`/`AfterSuite` with `SynchronizedBeforeSuite`/`SynchronizedAfterSuite`. Node 0 does the shared, destructive setup; all other nodes wait for it to finish, then receive shared state (image names) via the byte slice return value.
+The fix is to replace `BeforeSuite`/`AfterSuite` with `SynchronizedBeforeSuite`/`SynchronizedAfterSuite`.
+Node 0 does the shared, destructive setup; all other nodes wait for it to finish, then receive shared state (image names) via the byte slice return value.
 
 ### Implementation steps
 
@@ -126,11 +134,18 @@ The fix is to replace `BeforeSuite`/`AfterSuite` with `SynchronizedBeforeSuite`/
            -args -ginkgo.label-filter='!local-only' -ginkgo.procs=6
    ```
 
-3. **Verify namespace uniqueness** — all six suites already use distinct namespace names (`tenant-provisioning`, `tenant-isolation-a/b`, `tenant-rbac`, `tenant-hpa-pdb`, `tenant-resilience`, `tenant-job-lifecycle`). No conflicts expected.
+3. **Verify namespace uniqueness** — all six suites already use distinct namespace names (`tenant-provisioning`, `tenant-isolation-a/b`, `tenant-rbac`, `tenant-hpa-pdb`, `tenant-resilience`, `tenant-job-lifecycle`).
+   No conflicts expected.
 
-4. **Watch out for `Manager` suite global state** — `e2e_test.go`'s `Manager` `Describe` block labels the `gmc-system` namespace with `pod-security.kubernetes.io/enforce=restricted`. This is idempotent but should be verified as safe when running concurrently with other suites. The `metricsRoleBindingName` ClusterRoleBinding is also a cluster-scoped resource; if two processes try to create it simultaneously one will get a conflict. Guard with `--dry-run` or `IgnoreAlreadyExists`.
+4. **Watch out for `Manager` suite global state** — `e2e_test.go`'s `Manager` `Describe` block labels the `gmc-system` namespace with `pod-security.kubernetes.io/enforce=restricted`.
+   This is idempotent but should be verified as safe when running concurrently with other suites.
+   The `metricsRoleBindingName` ClusterRoleBinding is also a cluster-scoped resource; if two processes try to create it simultaneously one will get a conflict.
+   Guard with `--dry-run` or `IgnoreAlreadyExists`.
 
-5. **`fakegithub` port-forward per process** — with parallel execution each process may need to access the fakegithub control API at the same time. The current approach (spin up a port-forward per call) works but is slow (see §2). After implementing §2, each process maintains its own local port on a distinct port number. Use `GinkgoParallelProcess()` to derive a unique local port: `19090 + GinkgoParallelProcess()`.
+5. **`fakegithub` port-forward per process** — with parallel execution each process may need to access the fakegithub control API at the same time.
+   The current approach (spin up a port-forward per call) works but is slow (see §2).
+   After implementing §2, each process maintains its own local port on a distinct port number.
+   Use `GinkgoParallelProcess()` to derive a unique local port: `19090 + GinkgoParallelProcess()`.
 
 ### Files
 
@@ -146,11 +161,14 @@ The fix is to replace `BeforeSuite`/`AfterSuite` with `SynchronizedBeforeSuite`/
 
 ### Problem
 
-`fakegithubControlRequest` starts a new `kubectl port-forward` process, sleeps 500 ms for it to establish, makes one HTTP call, then kills the process — for every single call. Across `E2E_AGC_SessionRegistered`, `E2E_AGC_JobDelivered`, and `E2E_AGC_MultipleJobsQueued`, this is called 10–15 times = **5–8 seconds of pure sleep**, plus port-forward startup variance that can cause flakiness.
+`fakegithubControlRequest` starts a new `kubectl port-forward` process, sleeps 500 ms for it to establish, makes one HTTP call, then kills the process — for every single call.
+Across `E2E_AGC_SessionRegistered`, `E2E_AGC_JobDelivered`, and `E2E_AGC_MultipleJobsQueued`, this is called 10–15 times = **5–8 seconds of pure sleep**, plus port-forward startup variance that can cause flakiness.
 
 ### Approach
 
-Start one port-forward in the job lifecycle suite's `BeforeAll` and keep it alive until `AfterAll`. Expose a package-level `fakegithubLocalPort` variable. All helper functions use that port directly without spawning a new process.
+Start one port-forward in the job lifecycle suite's `BeforeAll` and keep it alive until `AfterAll`.
+Expose a package-level `fakegithubLocalPort` variable.
+All helper functions use that port directly without spawning a new process.
 
 With parallel execution (§1), derive the port from `GinkgoParallelProcess()` to avoid collision.
 
@@ -184,7 +202,8 @@ With parallel execution (§1), derive the port from `GinkgoParallelProcess()` to
    }
    ```
 
-2. **Simplify `fakegithubControlRequest`** — remove the port-forward lifecycle from inside the function; just use `fakegithubLocalPort` directly. Remove the `time.Sleep(500ms)`.
+2. **Simplify `fakegithubControlRequest`** — remove the port-forward lifecycle from inside the function; just use `fakegithubLocalPort` directly.
+   Remove the `time.Sleep(500ms)`.
 
 3. **Retry on HTTP error** — a single retry with 100 ms back-off handles rare cases where the persistent port-forward is momentarily unavailable (e.g., the pod was restarted by a resilience test running in parallel).
 
@@ -200,7 +219,10 @@ With parallel execution (§1), derive the port from `GinkgoParallelProcess()` to
 
 ### Problem
 
-Every `SetDefaultEventuallyPollingInterval(5 * time.Second)` means that when a condition is satisfied at time T, the test doesn't detect it until up to T + 5 s. The suite has roughly 30 `Eventually` assertions. With 5s polling the expected overshoot per assertion is ~2.5 s; with 2 s polling it drops to ~1 s, saving ~45 s per assertion in the worst case. Total expected savings across all assertions: **~1–2 min**.
+Every `SetDefaultEventuallyPollingInterval(5 * time.Second)` means that when a condition is satisfied at time T, the test doesn't detect it until up to T + 5 s.
+The suite has roughly 30 `Eventually` assertions.
+With 5s polling the expected overshoot per assertion is ~2.5 s; with 2 s polling it drops to ~1 s, saving ~45 s per assertion in the worst case.
+Total expected savings across all assertions: **~1–2 min**.
 
 ### Implementation steps
 
@@ -229,7 +251,9 @@ Every `SetDefaultEventuallyPollingInterval(5 * time.Second)` means that when a c
 
 ### Problem
 
-`test/kind-config.yaml` provisions 1 control-plane + 2 worker nodes. The only test that requires 2 workers is `E2E_GMC_ProxyPodScheduledOnWorker` — already tagged `local-only` and excluded from CI. A 2-node cluster (1 control-plane + 1 worker) spins up ~30–45 s faster and loads images faster (one fewer node to push to).
+`test/kind-config.yaml` provisions 1 control-plane + 2 worker nodes.
+The only test that requires 2 workers is `E2E_GMC_ProxyPodScheduledOnWorker` — already tagged `local-only` and excluded from CI.
+A 2-node cluster (1 control-plane + 1 worker) spins up ~30–45 s faster and loads images faster (one fewer node to push to).
 
 ### Implementation steps
 
@@ -274,11 +298,15 @@ Every `SetDefaultEventuallyPollingInterval(5 * time.Second)` means that when a c
 
 ### Problem
 
-Each CI run builds four Docker images from scratch. The Go compilation layer — the heaviest — is invalidated whenever any `.go` file changes, which is every PR. However, the `go mod download` / vendor layer is stable across most commits and could be cached. GitHub Actions supports build cache via `actions/cache` or Docker's `--cache-from` with a registry.
+Each CI run builds four Docker images from scratch.
+The Go compilation layer — the heaviest — is invalidated whenever any `.go` file changes, which is every PR.
+However, the `go mod download` / vendor layer is stable across most commits and could be cached.
+GitHub Actions supports build cache via `actions/cache` or Docker's `--cache-from` with a registry.
 
 ### Approach
 
-Use GitHub Actions' built-in Docker layer cache. The `docker/build-push-action` action supports `cache-from: type=gha` and `cache-to: type=gha,mode=max`, which stores layer blobs in the GitHub Actions cache without requiring a container registry.
+Use GitHub Actions' built-in Docker layer cache.
+The `docker/build-push-action` action supports `cache-from: type=gha` and `cache-to: type=gha,mode=max`, which stores layer blobs in the GitHub Actions cache without requiring a container registry.
 
 Alternatively, add `--cache-from=type=local,src=/tmp/.buildx-cache` with a matching `actions/cache` step — simpler but requires manual cache key management.
 
@@ -336,7 +364,9 @@ The recommended approach is `docker/build-push-action` with `type=gha`.
 
 ### Note on savings
 
-The first run of a branch after the cache is primed sees the full benefit. A cold cache run (new Dockerfile, new Go dependencies) is no slower than today. The `go mod download` and base image layers are typically 60–70% of build time, so cached runs of PRs that only change `.go` files should save 3–6 min.
+The first run of a branch after the cache is primed sees the full benefit.
+A cold cache run (new Dockerfile, new Go dependencies) is no slower than today.
+The `go mod download` and base image layers are typically 60–70% of build time, so cached runs of PRs that only change `.go` files should save 3–6 min.
 
 ---
 
@@ -346,19 +376,15 @@ The first run of a branch after the cache is primed sees the full benefit. A col
 
 ### Problem
 
-The Makefile uses `--procs=6` but there are 8 `Describe` blocks that run in CI:
-`Manager`, `E2E_GMC_Provisioning`, `E2E_GMC_Isolation`, `E2E_GMC_RBAC`,
-`E2E_GMC_HPA_PDB`, `E2E_GMC_Resilience`, `E2E_AGC_JobLifecycle`, and
-`E2E_GMC_Teardown`. (`E2E_GitHub_RealDispatch` self-skips without credentials.)
+The Makefile uses `--procs=6` but there are 8 `Describe` blocks that run in CI: `Manager`, `E2E_GMC_Provisioning`, `E2E_GMC_Isolation`, `E2E_GMC_RBAC`, `E2E_GMC_HPA_PDB`, `E2E_GMC_Resilience`, `E2E_AGC_JobLifecycle`, and `E2E_GMC_Teardown`.
+(`E2E_GitHub_RealDispatch` self-skips without credentials.)
 
-With fewer processes than ordered containers, Ginkgo places 2 suites on 2
-processes, serialising them and negating part of the parallelism benefit.
+With fewer processes than ordered containers, Ginkgo places 2 suites on 2 processes, serialising them and negating part of the parallelism benefit.
 
 ### Implementation steps
 
 1. Change `-ginkgo.procs=6` to `-ginkgo.procs=8` in the `e2e` Makefile target.
-   Alternatively use `-ginkgo.procs=-1` (auto-detect based on CPU count) so the
-   count doesn't need to be updated when suites are added.
+   Alternatively use `-ginkgo.procs=-1` (auto-detect based on CPU count) so the count doesn't need to be updated when suites are added.
 
 ### Files
 
@@ -372,15 +398,13 @@ processes, serialising them and negating part of the parallelism benefit.
 
 ### Problem
 
-`WaitForDeploymentReady` in `cmd/gmc/test/utils/resources.go` has a hardcoded
-5 s polling interval. Improvement 3 reduced `SetDefaultEventuallyPollingInterval`
-to 2 s across all test files, but this utility function was missed. It is the
-most-called waiter in the suite — every `BeforeAll` invokes it.
+`WaitForDeploymentReady` in `cmd/gmc/test/utils/resources.go` has a hardcoded 5 s polling interval.
+Improvement 3 reduced `SetDefaultEventuallyPollingInterval` to 2 s across all test files, but this utility function was missed.
+It is the most-called waiter in the suite — every `BeforeAll` invokes it.
 
 ### Implementation steps
 
-1. Change the hardcoded `5*time.Second` interval in `WaitForDeploymentReady` to
-   `2*time.Second`.
+1. Change the hardcoded `5*time.Second` interval in `WaitForDeploymentReady` to `2*time.Second`.
 
 ### Files
 
@@ -394,22 +418,18 @@ most-called waiter in the suite — every `BeforeAll` invokes it.
 
 ### Problem
 
-`E2E_GMC_TwoTenantsIndependentResources` in `isolation_test.go` calls
-`WaitForDeploymentReady` for `nsA` then `nsB` sequentially, even though both
-deployments were applied concurrently in `BeforeAll`:
+`E2E_GMC_TwoTenantsIndependentResources` in `isolation_test.go` calls `WaitForDeploymentReady` for `nsA` then `nsB` sequentially, even though both deployments were applied concurrently in `BeforeAll`:
 
 ```go
 utils.WaitForDeploymentReady(nsA, "actions-gateway-proxy", 4*time.Minute)
 utils.WaitForDeploymentReady(nsB, "actions-gateway-proxy", 4*time.Minute)
 ```
 
-The second wait starts only after the first completes, adding up to one full
-deployment-ready wait unnecessarily.
+The second wait starts only after the first completes, adding up to one full deployment-ready wait unnecessarily.
 
 ### Implementation steps
 
-1. Check both deployments in a single `Eventually` that asserts ready replicas
-   for both `nsA` and `nsB` in one closure, so both are polled together:
+1. Check both deployments in a single `Eventually` that asserts ready replicas for both `nsA` and `nsB` in one closure, so both are polled together:
 
    ```go
    It("E2E_GMC_TwoTenantsIndependentResources: each tenant has its own proxy deployment", func() {
@@ -438,16 +458,13 @@ deployment-ready wait unnecessarily.
 
 ### Problem
 
-`E2E_GMC_DeleteCRRemovesResources` in `teardown_test.go` uses four separate
-`Eventually` blocks to check that proxy Deployment, AGC Deployment,
-NetworkPolicy, and Service are removed after CR deletion. All four resources
-disappear at roughly the same time (when the finalizer clears). Running four
-separate polling loops serialises checks that could overlap.
+`E2E_GMC_DeleteCRRemovesResources` in `teardown_test.go` uses four separate `Eventually` blocks to check that proxy Deployment, AGC Deployment, NetworkPolicy, and Service are removed after CR deletion.
+All four resources disappear at roughly the same time (when the finalizer clears).
+Running four separate polling loops serialises checks that could overlap.
 
 ### Implementation steps
 
-1. Replace the four `Eventually` blocks with a single one that checks all four
-   resources in one closure:
+1. Replace the four `Eventually` blocks with a single one that checks all four resources in one closure:
 
    ```go
    Eventually(func(g Gomega) {
@@ -470,24 +487,18 @@ separate polling loops serialises checks that could overlap.
 
 ### Problem
 
-`E2E_GMC_GMCRestartPreservesState` in `resilience_test.go` calls
-`kubectl rollout restart deployment/gmc-controller-manager` against the shared
-`gmc-system` namespace. During the ~60 s the controller pod is cycling, every
-other parallel suite's reconcile loop stalls. Other suites have generous
-`Eventually` timeouts so they should survive, but this adds timing variance and
-can cause flakiness on a loaded CI runner.
+`E2E_GMC_GMCRestartPreservesState` in `resilience_test.go` calls `kubectl rollout restart deployment/gmc-controller-manager` against the shared `gmc-system` namespace.
+During the ~60 s the controller pod is cycling, every other parallel suite's reconcile loop stalls.
+Other suites have generous `Eventually` timeouts so they should survive, but this adds timing variance and can cause flakiness on a loaded CI runner.
 
 ### Approach
 
-Label the resilience suite `Serial` (Ginkgo runs `Serial` specs only after all
-parallel specs complete) or add a `local-only` label to the restart test so it
-is excluded from CI. The pure-observation tests in `resilience_test.go`
-(`E2E_GMC_ProxyRecoversAfterPodDelete`) can remain parallel.
+Label the resilience suite `Serial` (Ginkgo runs `Serial` specs only after all parallel specs complete) or add a `local-only` label to the restart test so it is excluded from CI.
+The pure-observation tests in `resilience_test.go` (`E2E_GMC_ProxyRecoversAfterPodDelete`) can remain parallel.
 
 ### Files
 
-- `cmd/gmc/test/e2e/resilience_test.go` — add `Label("local-only")` to the
-  GMC restart `It` block, or wrap it in a `Serial` container
+- `cmd/gmc/test/e2e/resilience_test.go` — add `Label("local-only")` to the GMC restart `It` block, or wrap it in a `Serial` container
 
 ---
 
@@ -497,17 +508,14 @@ is excluded from CI. The pure-observation tests in `resilience_test.go`
 
 ### Problem
 
-With 8 parallel processes each emitting `By(...)` steps, spec start/end lines,
-and failure output, the Actions log is a stream of interleaved text from 8
-sources. It is difficult to find which suite failed or which step a slow spec
-is stuck on.
+With 8 parallel processes each emitting `By(...)` steps, spec start/end lines, and failure output, the Actions log is a stream of interleaved text from 8 sources.
+It is difficult to find which suite failed or which step a slow spec is stuck on.
 
 ### Approach
 
-Ginkgo v2's `--github-output` flag emits GitHub Actions workflow commands
-(`::group::` / `::endgroup::` / `::error::`) around each spec. In the Actions
-log viewer every suite collapses to a single line; failed suites expand
-automatically. This is the lowest-effort improvement to CI observability.
+Ginkgo v2's `--github-output` flag emits GitHub Actions workflow commands (`::group::` / `::endgroup::` / `::error::`) around each spec.
+In the Actions log viewer every suite collapses to a single line; failed suites expand automatically.
+This is the lowest-effort improvement to CI observability.
 
 ### Implementation steps
 
@@ -525,25 +533,19 @@ automatically. This is the lowest-effort improvement to CI observability.
 
 ### Problem
 
-When a long-running spec (e.g. `WaitForDeploymentReady`) stalls in a parallel
-process, there is no signal in the log until the timeout fires — which can be
-3–4 minutes later. By that point other suites have already finished and the
-failure is hard to attribute to a specific `By(...)` step.
+When a long-running spec (e.g. `WaitForDeploymentReady`) stalls in a parallel process, there is no signal in the log until the timeout fires — which can be 3–4 minutes later.
+By that point other suites have already finished and the failure is hard to attribute to a specific `By(...)` step.
 
 ### Approach
 
-Ginkgo v2's `--poll-progress-after=Xs` flag prints a progress report for any
-spec that has not completed within X seconds. The report shows the current
-`By(...)` step and a goroutine trace, making it immediately clear which step is
-hanging and in which process.
+Ginkgo v2's `--poll-progress-after=Xs` flag prints a progress report for any spec that has not completed within X seconds.
+The report shows the current `By(...)` step and a goroutine trace, making it immediately clear which step is hanging and in which process.
 
-A 60 s threshold catches genuine stalls (deployment waits should complete well
-under 3 min) without producing noise on healthy runs.
+A 60 s threshold catches genuine stalls (deployment waits should complete well under 3 min) without producing noise on healthy runs.
 
 ### Implementation steps
 
-1. Add `-ginkgo.poll-progress-after=60s` to the `-args` list in the `e2e`
-   Makefile target.
+1. Add `-ginkgo.poll-progress-after=60s` to the `-args` list in the `e2e` Makefile target.
 
 ### Files
 
@@ -557,29 +559,23 @@ under 3 min) without producing noise on healthy runs.
 
 ### Problem
 
-After a parallel run there is no structured summary — pass/fail is buried in
-hundreds of lines of log output. Reviewers and authors have to scroll to find
-out which specific tests failed.
+After a parallel run there is no structured summary — pass/fail is buried in hundreds of lines of log output.
+Reviewers and authors have to scroll to find out which specific tests failed.
 
 ### Approach
 
 Ginkgo v2's `-ginkgo.junit-report=e2e-report.xml` writes a JUnit XML file.
 
-> **Correction (Q608, 2026-08-02).** This section originally claimed Actions
-> would render the upload as a test summary table via a "built-in test reporter
-> (no third-party action required as of runner v2.308+)". There is no such
-> reporter. The upload shipped and the rendering never did, so for four months
-> reading a failed run's results meant downloading 300 KB of XML by hand.
-> [`scripts/e2e/e2e-report-summary.sh`](../../scripts/e2e/e2e-report-summary.sh)
-> now does the rendering explicitly — see
-> [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md).
+> **Correction (Q608, 2026-08-02).** This section originally claimed Actions would render the upload as a test summary table via a "built-in test reporter (no third-party action required as of runner v2.308+)".
+> There is no such reporter.
+> The upload shipped and the rendering never did, so for four months reading a failed run's results meant downloading 300 KB of XML by hand.
+> [`scripts/e2e/e2e-report-summary.sh`](../../scripts/e2e/e2e-report-summary.sh) now does the rendering explicitly — see [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md).
 
 ### Implementation steps
 
 1. Add `-ginkgo.junit-report=/tmp/e2e-report.xml` to the `e2e` Makefile target.
 
-2. Add an upload step to `.github/workflows/e2e-test.yml` after the `make e2e`
-   step (runs even on failure):
+2. Add an upload step to `.github/workflows/e2e-test.yml` after the `make e2e` step (runs even on failure):
 
    ```yaml
    - name: Upload e2e test report
@@ -603,26 +599,20 @@ Ginkgo v2's `-ginkgo.junit-report=e2e-report.xml` writes a JUnit XML file.
 
 ### Problem
 
-`E2E_GMC_HPAScalesUpUnderLoad` burns CPU inside the proxy pod and waits for
-HPA to observe utilisation above its threshold and scale up. This is inherently
-flaky because it depends on two independent scrape windows (metrics-server at
-15 s, kube-controller-manager HPA sync at 15 s) both seeing high-enough CPU at
-the same time — which is not guaranteed on a loaded CI runner where the `yes`
-loop competes with everything else.
+`E2E_GMC_HPAScalesUpUnderLoad` burns CPU inside the proxy pod and waits for HPA to observe utilisation above its threshold and scale up.
+This is inherently flaky because it depends on two independent scrape windows (metrics-server at 15 s, kube-controller-manager HPA sync at 15 s) both seeing high-enough CPU at the same time — which is not guaranteed on a loaded CI runner where the `yes` loop competes with everything else.
 
-The test also loses the CPU-threshold coverage that justified it. That gap
-belongs in a unit test on `buildHPA`, not in a slow integration loop.
+The test also loses the CPU-threshold coverage that justified it.
+That gap belongs in a unit test on `buildHPA`, not in a slow integration loop.
 
 ### Approach
 
-Patch `HPA.spec.minReplicas` from 1 to 2 directly. This bypasses the
-metrics-server loop entirely and drives the HPA→Deployment control path
-deterministically. Restore to 1 in `DeferCleanup`. Remove the `local-only`
-label so it runs in CI.
+Patch `HPA.spec.minReplicas` from 1 to 2 directly.
+This bypasses the metrics-server loop entirely and drives the HPA→Deployment control path deterministically.
+Restore to 1 in `DeferCleanup`.
+Remove the `local-only` label so it runs in CI.
 
-Add unit tests in `builder_test.go` to cover the HPA spec fields the e2e test
-no longer exercises: `ScaleTargetRef`, `Resource.Name`, `Target.Type`, and the
-default min/max replica values.
+Add unit tests in `builder_test.go` to cover the HPA spec fields the e2e test no longer exercises: `ScaleTargetRef`, `Resource.Name`, `Target.Type`, and the default min/max replica values.
 
 ### Implementation steps
 
@@ -652,8 +642,7 @@ default min/max replica values.
    })
    ```
 
-2. **Add unit tests to `builder_test.go`** covering the fields no longer
-   exercised by the e2e test:
+2. **Add unit tests to `builder_test.go`** covering the fields no longer exercised by the e2e test:
 
    ```go
    func TestBuildHPA_ScaleTargetRef(t *testing.T) { ... }
@@ -691,7 +680,9 @@ default min/max replica values.
 
 ## Round 2 — CI pipeline (job-level) optimizations
 
-Round 1 (above) optimized the test phase. This round targets the **setup/scaffolding** around it, with a hard constraint: *no increase in billed Actions minutes*. The e2e job runs on a single `ubuntu-latest` runner, so wall-clock == billed minutes 1:1 — every change below cuts both, and none shard across runners or upsize the runner (the two moves that would trade minutes for latency).
+Round 1 (above) optimized the test phase.
+This round targets the **setup/scaffolding** around it, with a hard constraint: *no increase in billed Actions minutes*.
+The e2e job runs on a single `ubuntu-latest` runner, so wall-clock == billed minutes 1:1 — every change below cuts both, and none shard across runners or upsize the runner (the two moves that would trade minutes for latency).
 
 | # | Change | Effort | Savings | Status |
 |---|---|---|---|---|
@@ -702,18 +693,27 @@ Round 1 (above) optimized the test phase. This round targets the **setup/scaffol
 
 ### 15. Cancel superseded PR runs
 
-`.github/workflows/e2e-test.yml` had no `concurrency` block, so every push to an open PR ran the full ~35 min job to completion even after a newer push made it moot. Added a workflow-level `concurrency` group keyed on `github.ref`, with `cancel-in-progress` gated to `pull_request` events so pushes to `main` (each a distinct post-merge gate) are never cancelled. The key uses `github.ref` rather than `github.head_ref`: for a PR it resolves to the unique `refs/pull/<n>/merge`, so a fork PR cannot pick a colliding source-branch name to cancel another PR's in-progress runs. Pure minutes saver, zero latency cost.
+`.github/workflows/e2e-test.yml` had no `concurrency` block, so every push to an open PR ran the full ~35 min job to completion even after a newer push made it moot.
+Added a workflow-level `concurrency` group keyed on `github.ref`, with `cancel-in-progress` gated to `pull_request` events so pushes to `main` (each a distinct post-merge gate) are never cancelled.
+The key uses `github.ref` rather than `github.head_ref`: for a PR it resolves to the unique `refs/pull/<n>/merge`, so a fork PR cannot pick a colliding source-branch name to cancel another PR's in-progress runs.
+Pure minutes saver, zero latency cost.
 
 ### 16. Overlap build with cluster bring-up
 
-The image build (`docker buildx bake`) is the long pole on a cold GHA cache (~8 min) and depends only on the local registry, not the kind cluster. The registry bring-up was split out of `scripts/e2e/kind-with-registry.sh` into `scripts/e2e/start-registry.sh` (and a `make e2e-registry` target) so CI can start the registry first, kick the bake off in the background, and create the cluster + apply cert-manager (~2 min) underneath it. A `trap` kills the background build if cluster bring-up fails; the build's exit code is surfaced via `wait`.
+The image build (`docker buildx bake`) is the long pole on a cold GHA cache (~8 min) and depends only on the local registry, not the kind cluster.
+The registry bring-up was split out of `scripts/e2e/kind-with-registry.sh` into `scripts/e2e/start-registry.sh` (and a `make e2e-registry` target) so CI can start the registry first, kick the bake off in the background, and create the cluster + apply cert-manager (~2 min) underneath it.
+A `trap` kills the background build if cluster bring-up fails; the build's exit code is surfaced via `wait`.
 
 ### 17. Pin kind to a release binary
 
-`go install sigs.k8s.io/kind@latest` compiled kind from source every run (~20–40 s) and pinned nothing — a new kind release could change CI behavior with no code change. Replaced with a checksum-verified download of a pinned `kind` release binary (`KIND_VERSION`, `KIND_BINARY_SHA256` in the workflow env).
+`go install sigs.k8s.io/kind@latest` compiled kind from source every run (~20–40 s) and pinned nothing — a new kind release could change CI behavior with no code change.
+Replaced with a checksum-verified download of a pinned `kind` release binary (`KIND_VERSION`, `KIND_BINARY_SHA256` in the workflow env).
 
 ### 18. Cache the kind node image
 
-The ~1 GB `kindest/node` image was pulled from Docker Hub on every run — slow and a flake source under Hub rate limits. Added an `actions/cache` step keyed on the digest-pinned `KIND_NODE_IMAGE`, with a load-or-pull step that `docker save`s the image on a miss and `docker load`s it on a hit. The cluster is created with `KIND_NODE_IMAGE` set (via the new optional flag threaded through `kind-with-registry.sh`), pinning the cluster's K8s version. kind is handed the **tag-only** ref because `docker save`/`load` drops the registry digest, so a `@sha256:` ref would miss the pre-loaded image and trigger a re-pull; the pull/save still use the digest, so the cached content is pinned.
+The ~1 GB `kindest/node` image was pulled from Docker Hub on every run — slow and a flake source under Hub rate limits.
+Added an `actions/cache` step keyed on the digest-pinned `KIND_NODE_IMAGE`, with a load-or-pull step that `docker save`s the image on a miss and `docker load`s it on a hit.
+The cluster is created with `KIND_NODE_IMAGE` set (via the new optional flag threaded through `kind-with-registry.sh`), pinning the cluster's K8s version. kind is handed the **tag-only** ref because `docker save`/`load` drops the registry digest, so a `@sha256:` ref would miss the pre-loaded image and trigger a re-pull; the pull/save still use the digest, so the cached content is pinned.
 
-> Not done: caching the cert-manager images. Their pull already overlaps the background build (§16), and caching them would mean reintroducing a slow `kind load` or containerd surgery for little wall-clock gain.
+> Not done: caching the cert-manager images.
+> Their pull already overlaps the background build (§16), and caching them would mean reintroducing a slow `kind load` or containerd surgery for little wall-clock gain.

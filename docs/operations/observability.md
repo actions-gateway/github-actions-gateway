@@ -2,10 +2,14 @@
 
 > **Audience:** Platform engineer, Tenant operator
 
-Every component exposes Prometheus metrics from the standard `controller-runtime` metrics server, so built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics documented in this guide. The serving posture differs by component:
+Every component exposes Prometheus metrics from the standard `controller-runtime` metrics server, so built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics documented in this guide.
+The serving posture differs by component:
 
-- **GMC manager** — `:8443/metrics`, served over TLS. How a scrape verifies the cert is controlled by `metrics.tls.certManager.enabled` (see [Verifying the metrics scrape TLS (GMC manager)](observability-metrics-access.md#verifying-the-metrics-scrape-tls-gmc-manager)).
-- **Per-tenant AGC and proxy** — `:8443/metrics`, served over **mutual TLS**: a scraper must present a client certificate signed by that tenant's metrics CA. The GMC publishes the scraper's client bundle per tenant. See [Scraping per-tenant AGC and proxy metrics (mTLS)](observability-metrics-access.md#scraping-per-tenant-agc-and-proxy-metrics-mtls).
+- **GMC manager** — `:8443/metrics`, served over TLS.
+  How a scrape verifies the cert is controlled by `metrics.tls.certManager.enabled` (see [Verifying the metrics scrape TLS (GMC manager)](observability-metrics-access.md#verifying-the-metrics-scrape-tls-gmc-manager)).
+- **Per-tenant AGC and proxy** — `:8443/metrics`, served over **mutual TLS**: a scraper must present a client certificate signed by that tenant's metrics CA.
+  The GMC publishes the scraper's client bundle per tenant.
+  See [Scraping per-tenant AGC and proxy metrics (mTLS)](observability-metrics-access.md#scraping-per-tenant-agc-and-proxy-metrics-mtls).
 
 For SLO targets associated with these metrics, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
 

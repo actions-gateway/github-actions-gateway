@@ -2,14 +2,11 @@
 
 ## Logomark & icons
 
-The brand mark is a **faceted "gateway ring"** — a crystalline torus (a portal
-you pass through) in the Kubernetes-blue → teal gradient (`#326CE5 → #2DD4BF`),
-lit from the top-left for depth. Same identity as the social card.
+The brand mark is a **faceted "gateway ring"** — a crystalline torus (a portal you pass through) in the Kubernetes-blue → teal gradient (`#326CE5 → #2DD4BF`), lit from the top-left for depth.
+Same identity as the social card.
 
-The three SVG masters are **generated** from `generate-logomark.py` (the ring is
-parametric — point count, spike depth, contrast, and light angle are all tunable
-constants at the top of the script). Run it from `docs/assets/`, then re-render
-the rasters with resvg:
+The three SVG masters are **generated** from `generate-logomark.py` (the ring is parametric — point count, spike depth, contrast, and light angle are all tunable constants at the top of the script).
+Run it from `docs/assets/`, then re-render the rasters with resvg:
 
 ```sh
 python3 generate-logomark.py   # writes logo.svg, icon-tile.svg, favicon.svg
@@ -21,17 +18,15 @@ python3 generate-logomark.py   # writes logo.svg, icon-tile.svg, favicon.svg
 | `favicon.svg` | `favicon-16.png`, `favicon-32.png`, `favicon-48.png`, `favicon.ico` | browser-tab favicon — a **simplified** spiky ring (the star silhouette, no internal facet seams) that stays legible at 16 px (the SVG is wired via `theme.favicon`; the `.ico` is the raster fallback) |
 | `icon-tile.svg` | `apple-touch-icon.png` (180), `icon-512.png` | iOS / PWA icons (full faceted ring on an opaque navy tile, maskable-safe padding) |
 
-The Apple/PWA rasters and the `.ico` are linked from `overrides/main.html`. The
-social card (`social-preview.svg`, below) has the ring baked in inline with its
-kicker — re-run `generate-logomark.py`'s `social_ring_group()` and re-paste if
-the ring geometry changes.
+The Apple/PWA rasters and the `.ico` are linked from `overrides/main.html`.
+The social card (`social-preview.svg`, below) has the ring baked in inline with its kicker — re-run `generate-logomark.py`'s `social_ring_group()` and re-paste if the ring geometry changes.
 
 ### Re-rendering the rasters
 
-Generated with [resvg](https://github.com/linebender/resvg) — a single static
-binary, no browser. Install with `brew install resvg`. Render natively at each
-target size (do **not** render large and downscale — facets soften under a
-resample). Run from `docs/assets/`:
+Generated with [resvg](https://github.com/linebender/resvg) — a single static binary, no browser.
+Install with `brew install resvg`.
+Render natively at each target size (do **not** render large and downscale — facets soften under a resample).
+Run from `docs/assets/`:
 
 ```sh
 # Simplified-ring favicons + packed .ico
@@ -62,24 +57,21 @@ Verify: `file favicon.ico` should report three icons (16/32/48).
 
 ## Social preview card — `social-preview.svg` / `social-preview.png`
 
-The GitHub social preview (Open Graph) image for this repository: the card shown
-when the repo link is shared on Slack, X, LinkedIn, and other link unfurlers.
+The GitHub social preview (Open Graph) image for this repository: the card shown when the repo link is shared on Slack, X, LinkedIn, and other link unfurlers.
 
-- **`social-preview.svg`** — the editable source. Make changes here.
-- **`social-preview.png`** — a 1280×640 raster rendered from the SVG. This is the
-  file uploaded to GitHub, because **Settings → General → Social preview** only
-  accepts a raster image (PNG/JPG/GIF), not SVG.
+- **`social-preview.svg`** — the editable source.
+  Make changes here.
+- **`social-preview.png`** — a 1280×640 raster rendered from the SVG.
+  This is the file uploaded to GitHub, because **Settings → General → Social preview** only accepts a raster image (PNG/JPG/GIF), not SVG.
 
-GitHub does **not** read the social preview from the repository tree — it must be
-uploaded manually via **Settings → General → Social preview**. Re-upload
-`social-preview.png` whenever it changes.
+GitHub does **not** read the social preview from the repository tree — it must be uploaded manually via **Settings → General → Social preview**.
+Re-upload `social-preview.png` whenever it changes.
 
 ### Re-rendering the PNG
 
-Rendered with [resvg](https://github.com/linebender/resvg) (`brew install resvg`)
-— the same renderer as the icons above. The SVG declares its 1280×640 size, so no
-`-w/-h` is needed. It uses CSS system-font stacks (`-apple-system`, …) which are
-**not** real font names, so pass concrete installed families or the metrics shift.
+Rendered with [resvg](https://github.com/linebender/resvg) (`brew install resvg`) — the same renderer as the icons above.
+The SVG declares its 1280×640 size, so no `-w/-h` is needed.
+It uses CSS system-font stacks (`-apple-system`, …) which are **not** real font names, so pass concrete installed families or the metrics shift.
 Run from `docs/assets/`:
 
 ```sh
@@ -92,15 +84,10 @@ Verify the result has no clipped text and a crisp logomark.
 ## Animated logomark
 
 A looping animation of the gateway ring opening into a glowing wormhole portal.
-Like the static mark it is **generated, not hand-authored**:
-`generate-wormhole-animation.py` emits the per-frame SVGs and
-`render-wormhole-animation.sh` rasters and packs them.
+Like the static mark it is **generated, not hand-authored**: `generate-wormhole-animation.py` emits the per-frame SVGs and `render-wormhole-animation.sh` rasters and packs them.
 
-One ~2.6 s loop: a closed crystalline spiral iris opens, the wormhole ignites and erupts a
-water/plasma burst along the gate's normal, the plume expands and retracts
-into a shimmering event horizon, and the iris closes again — seamless at the loop
-boundary. The ring geometry, palette, timing, and iris are tunable constants at
-the top of the Python file.
+One ~2.6 s loop: a closed crystalline spiral iris opens, the wormhole ignites and erupts a water/plasma burst along the gate's normal, the plume expands and retracts into a shimmering event horizon, and the iris closes again — seamless at the loop boundary.
+The ring geometry, palette, timing, and iris are tunable constants at the top of the Python file.
 
 ```sh
 # needs resvg, ImageMagick 7 (magick), img2webp (libwebp), ffmpeg, python3
@@ -113,19 +100,14 @@ the top of the Python file.
 | `wormhole-animation.webp` | **yes** (~610 KB) | 480 px, transparent, looping | README footer + the docs **404** page (`overrides/404.html`) |
 | `wormhole-animation.mp4` | no — written to `OUTDIR` (default `tmp/wormhole/`, gitignored) | 1080×808 (~4:3), opaque | social upload, e.g. Bluesky/X (animates where an uploaded GIF/WebP would be static) |
 
-The committed WebP is **transparent** so a single asset works in both light and
-dark page themes (the cyan plume and blue ring read on either background) — no
-baked-in backdrop, so it floats cleanly on the README and the docs site. Alpha
-costs bytes: it's encoded with `img2webp -m6 -q74` (≈15% smaller than magick at
-matched quality, and q74 is indistinguishable from q80 on the soft plume) to
-keep it reasonable. The MP4 stays opaque (H.264 has no alpha) and is cropped
-tighter than the 1.91:1 WebP to drop the side margins for a feed video.
+The committed WebP is **transparent** so a single asset works in both light and dark page themes (the cyan plume and blue ring read on either background) — no baked-in backdrop, so it floats cleanly on the README and the docs site.
+Alpha costs bytes: it's encoded with `img2webp -m6 -q74` (≈15% smaller than magick at matched quality, and q74 is indistinguishable from q80 on the soft plume) to keep it reasonable.
+The MP4 stays opaque (H.264 has no alpha) and is cropped tighter than the 1.91:1 WebP to drop the side margins for a feed video.
 
 ## End-to-end demo cast — `demo-local-kind.svg` / `.cast`
 
-The animated terminal recording on the [Demo](../demo.md) page. Like the marks
-above it is **generated, not hand-edited by hand in the SVG**: the source of
-truth is the asciinema **cast v2** file, and the SVG is rendered from it.
+The animated terminal recording on the [Demo](../demo.md) page.
+Like the marks above it is **generated, not hand-edited by hand in the SVG**: the source of truth is the asciinema **cast v2** file, and the SVG is rendered from it.
 
 | Artefact | Committed? | What it is |
 | --- | --- | --- |
@@ -133,17 +115,13 @@ truth is the asciinema **cast v2** file, and the SVG is rendered from it.
 | `demo-local-kind.cast` | yes (~4 KB) | asciinema v2 cast — one JSON header line + `[t,"o","…"]` event lines. |
 | `demo-local-kind.svg` | yes (~20 KB) | Self-contained animated SVG rendered from the cast; embedded on the demo page. |
 
-**Truthfulness:** every command and every line of output in the screenplay is
-transcribed from a **real run** on a kind cluster against **real GitHub** — no
-invented output. It was *not* recorded with the `asciinema` binary (a live
-recorder); the cast is authored directly so the timing is controlled and no live
-session is captured. If you re-run the flow and the tool output drifts, update
-the screenplay so a reproducer still sees matching output. Keep every token, PEM,
-and registration secret out of the screenplay (the GitHub App key is passed as
-`--from-file=privateKey=app.pem`, never inlined).
+**Truthfulness:** every command and every line of output in the screenplay is transcribed from a **real run** on a kind cluster against **real GitHub** — no invented output.
+It was *not* recorded with the `asciinema` binary (a live recorder); the cast is authored directly so the timing is controlled and no live session is captured.
+If you re-run the flow and the tool output drifts, update the screenplay so a reproducer still sees matching output.
+Keep every token, PEM, and registration secret out of the screenplay (the GitHub App key is passed as `--from-file=privateKey=app.pem`, never inlined).
 
-Regenerate (needs `python3` and Docker; no host binaries are installed — the SVG
-renderer runs in a throwaway Node container). Run from `docs/assets/`:
+Regenerate (needs `python3` and Docker; no host binaries are installed — the SVG renderer runs in a throwaway Node container).
+Run from `docs/assets/`:
 
 ```sh
 python3 generate-demo-cast.py            # writes demo-local-kind.cast
@@ -154,6 +132,4 @@ docker run --rm -v "$PWD:/data" -w /data node:20-alpine \
            --out demo-local-kind.svg --window --width 100 --height 24"
 ```
 
-Commands are revealed whole (not typed char-by-char) on purpose: a typing
-animation multiplies the SVG's text nodes ~one-per-character and bloats the asset
-several-fold for little gain on a docs page.
+Commands are revealed whole (not typed char-by-char) on purpose: a typing animation multiplies the SVG's text nodes ~one-per-character and bloats the asset several-fold for little gain on a docs page.

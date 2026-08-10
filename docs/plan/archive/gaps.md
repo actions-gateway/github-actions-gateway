@@ -1,6 +1,7 @@
 # Implementation Plans — Code and Design Fixes
 
-Three issues identified during the documentation audit require code or design changes, not just documentation. This doc covers each one.
+Three issues identified during the documentation audit require code or design changes, not just documentation.
+This doc covers each one.
 
 ## Status at a glance
 
@@ -20,7 +21,9 @@ All three fixes shipped.
 
 ### Problem
 
-`MaxEvictionRetries` and `EvictionRetryDelay` are hardcoded in `NewProvisioner` (`provisioner.go:89–90`). Every RunnerGroup in every tenant uses the same retry budget (2 retries, 5s delay) regardless of workload characteristics. A GPU job that legitimately OOMs every time and a CPU job that hit a transient node eviction should not share a retry budget or delay.
+`MaxEvictionRetries` and `EvictionRetryDelay` are hardcoded in `NewProvisioner` (`provisioner.go:89–90`).
+Every RunnerGroup in every tenant uses the same retry budget (2 retries, 5s delay) regardless of workload characteristics.
+A GPU job that legitimately OOMs every time and a CPU job that hit a transient node eviction should not share a retry budget or delay.
 
 ### Design
 
@@ -37,7 +40,8 @@ Operators setting `maxEvictionRetries: 0` disable auto-retry entirely (useful fo
 
 **`cmd/agc/api/v1alpha1/runnergroup_types.go`**
 
-Add the two fields to `RunnerGroupSpec` with kubebuilder markers matching the design doc. Add a CEL validation rule that rejects `evictionRetryDelay` below 1s:
+Add the two fields to `RunnerGroupSpec` with kubebuilder markers matching the design doc.
+Add a CEL validation rule that rejects `evictionRetryDelay` below 1s:
 
 ```go
 // +kubebuilder:validation:XValidation:rule="!has(self.evictionRetryDelay) || self.evictionRetryDelay.seconds >= 1",message="evictionRetryDelay must be at least 1s"
@@ -45,7 +49,8 @@ Add the two fields to `RunnerGroupSpec` with kubebuilder markers matching the de
 
 **`cmd/agc/internal/provisioner/provisioner.go`**
 
-`HandlerFor` already receives a `*v1alpha1.RunnerGroup`. Read the spec fields and override the provisioner-level defaults when the fields are set:
+`HandlerFor` already receives a `*v1alpha1.RunnerGroup`.
+Read the spec fields and override the provisioner-level defaults when the fields are set:
 
 ```go
 func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFunc {
@@ -74,7 +79,8 @@ Add table-driven cases:
 
 **CRD regeneration**
 
-Run `make generate manifests` after the type change. The generated CRD YAML in `config/crd/bases/` will include the new fields and CEL rule.
+Run `make generate manifests` after the type change.
+The generated CRD YAML in `config/crd/bases/` will include the new fields and CEL rule.
 
 ### Acceptance criteria
 
@@ -86,7 +92,9 @@ Run `make generate manifests` after the type change. The generated CRD YAML in `
 
 ## 2. Fix proxy resource override dropping CPU request (HPA silent failure) — ✅ Done
 
-Per-key merge implemented in `builder.go:273-278`; webhook warning for `requests`-set-without-`cpu` in `actionsgateway_webhook.go:138-151`. Builder unit tests at `builder_test.go:140-185` and webhook tests at `actionsgateway_webhook_test.go:182-223` cover the four cases (default, partial override, limits-only, full override) and the warning. The original problem and design are kept below for historical reference.
+Per-key merge implemented in `builder.go:273-278`; webhook warning for `requests`-set-without-`cpu` in `actionsgateway_webhook.go:138-151`.
+Builder unit tests at `builder_test.go:140-185` and webhook tests at `actionsgateway_webhook_test.go:182-223` cover the four cases (default, partial override, limits-only, full override) and the warning.
+The original problem and design are kept below for historical reference.
 
 ### Problem
 
@@ -98,11 +106,14 @@ if ag.Spec.Proxy.Resources.Requests != nil || ag.Spec.Proxy.Resources.Limits != 
 }
 ```
 
-If an operator sets only `resources.limits` (or sets `requests` without a `cpu` entry), the proxy Deployment ends up with no `requests.cpu`. The HPA's CPU utilization metric becomes `<unknown>` and autoscaling stops silently. There is no error, no event, no condition — the proxy pool just sticks at `minReplicas` indefinitely under load.
+If an operator sets only `resources.limits` (or sets `requests` without a `cpu` entry), the proxy Deployment ends up with no `requests.cpu`.
+The HPA's CPU utilization metric becomes `<unknown>` and autoscaling stops silently.
+There is no error, no event, no condition — the proxy pool just sticks at `minReplicas` indefinitely under load.
 
 ### Design
 
-Merge user-supplied values over the defaults instead of replacing them. The merge should be field-level (requests and limits independently) so an operator who sets only `limits.memory` still gets the default `requests.cpu`.
+Merge user-supplied values over the defaults instead of replacing them.
+The merge should be field-level (requests and limits independently) so an operator who sets only `limits.memory` still gets the default `requests.cpu`.
 
 ### Implementation
 
@@ -137,7 +148,9 @@ This means:
 
 **`cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go`**
 
-Add a validation warning (not a rejection) in `ValidateCreate` and `ValidateUpdate` if `proxy.resources.requests` is explicitly set but contains no `cpu` key. This catches the case where an operator provides a `requests` map without `cpu`, which would suppress the default and break HPA. A `Warning` (not an `error`) allows the apply to succeed while surfacing the issue in `kubectl apply` output.
+Add a validation warning (not a rejection) in `ValidateCreate` and `ValidateUpdate` if `proxy.resources.requests` is explicitly set but contains no `cpu` key.
+This catches the case where an operator provides a `requests` map without `cpu`, which would suppress the default and break HPA.
+A `Warning` (not an `error`) allows the apply to succeed while surfacing the issue in `kubectl apply` output.
 
 ```go
 if ag.Spec.Proxy.Resources.Requests != nil {
@@ -167,17 +180,27 @@ Add cases:
 
 ### Problem
 
-The current `buildAGCDeployment` embeds the Secret name in `secretKeyRef` env vars. When an operator creates a new Secret and updates `gitHubAppRef.Name` in the CR, the GMC reconciler produces a new Deployment spec where the `secretKeyRef.Name` fields change. Kubernetes detects the pod template change and performs a rolling restart — so the mechanics work. However:
+The current `buildAGCDeployment` embeds the Secret name in `secretKeyRef` env vars.
+When an operator creates a new Secret and updates `gitHubAppRef.Name` in the CR, the GMC reconciler produces a new Deployment spec where the `secretKeyRef.Name` fields change.
+Kubernetes detects the pod template change and performs a rolling restart — so the mechanics work.
+However:
 
-1. **No pod-template annotation records the rotation.** After the pod restarts, `kubectl rollout history` shows a revision but no cause. An operator debugging a broken rotation has no record of which Secret name was in effect at each revision.
-2. **Silent failure if Secret content is updated in place.** If an operator updates the Secret content without changing the name (wrong procedure, but common), the Deployment spec does not change, so the pod is never restarted. The AGC continues to use the old cached env vars. There is no event or condition to indicate the mismatch. This is especially dangerous during a key-compromise scenario where speed matters.
-3. **No watch on the referenced Secret.** The GMC reconciler is only triggered by changes to `ActionsGateway` objects. If the referenced Secret is deleted or corrupted, the AGC pod continues running until it restarts (at which point it fails to start). The operator has no proactive signal.
+1. **No pod-template annotation records the rotation.** After the pod restarts, `kubectl rollout history` shows a revision but no cause.
+   An operator debugging a broken rotation has no record of which Secret name was in effect at each revision.
+2. **Silent failure if Secret content is updated in place.** If an operator updates the Secret content without changing the name (wrong procedure, but common), the Deployment spec does not change, so the pod is never restarted.
+   The AGC continues to use the old cached env vars.
+   There is no event or condition to indicate the mismatch.
+   This is especially dangerous during a key-compromise scenario where speed matters.
+3. **No watch on the referenced Secret.** The GMC reconciler is only triggered by changes to `ActionsGateway` objects.
+   If the referenced Secret is deleted or corrupted, the AGC pod continues running until it restarts (at which point it fails to start).
+   The operator has no proactive signal.
 
 ### Design
 
 Three targeted changes:
 
-**A. Add a pod-template annotation with the Secret name**
+**A.
+Add a pod-template annotation with the Secret name**
 
 In `buildAGCDeployment`, add an annotation to the pod template metadata:
 
@@ -190,11 +213,15 @@ ObjectMeta: metav1.ObjectMeta{
 },
 ```
 
-When `gitHubAppRef.Name` changes, the pod template annotation changes, which guarantees Kubernetes generates a new ReplicaSet and records the rotation cause in rollout history. This change alone makes rotations fully observable with `kubectl rollout history deployment/actions-gateway-agc`.
+When `gitHubAppRef.Name` changes, the pod template annotation changes, which guarantees Kubernetes generates a new ReplicaSet and records the rotation cause in rollout history.
+This change alone makes rotations fully observable with `kubectl rollout history deployment/actions-gateway-agc`.
 
-**B. Watch the referenced Secret for deletion**
+**B.
+Watch the referenced Secret for deletion**
 
-Add a watch on Secrets to the GMC controller setup, filtered to Secrets that are referenced by an `ActionsGateway`. When the referenced Secret is deleted or enters an error state, the GMC should set a `CredentialUnavailable` condition on the `ActionsGateway` CR and emit a Warning event. This gives the operator a signal without requiring log scraping.
+Add a watch on Secrets to the GMC controller setup, filtered to Secrets that are referenced by an `ActionsGateway`.
+When the referenced Secret is deleted or enters an error state, the GMC should set a `CredentialUnavailable` condition on the `ActionsGateway` CR and emit a Warning event.
+This gives the operator a signal without requiring log scraping.
 
 In `actionsgateway_controller.go`, add to `SetupWithManager`:
 
@@ -205,9 +232,11 @@ Watches(
 )
 ```
 
-Where `secretToActionsGateway` maps a Secret event to the `ActionsGateway` objects that reference it by name. The reconciler then checks that the referenced Secret exists; if not, it sets the `CredentialUnavailable` condition instead of proceeding.
+Where `secretToActionsGateway` maps a Secret event to the `ActionsGateway` objects that reference it by name.
+The reconciler then checks that the referenced Secret exists; if not, it sets the `CredentialUnavailable` condition instead of proceeding.
 
-**C. Document the rotation procedure**
+**C.
+Document the rotation procedure**
 
 Update `docs/getting-started.md` with a "Rotating GitHub App credentials" section that explains:
 - Create a new Secret with a new name containing the updated key.

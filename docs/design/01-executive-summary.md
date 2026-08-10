@@ -10,47 +10,75 @@
 
 **Make GitHub Actions self-hosted runners safe and economical to operate at multi-tenant enterprise scale.** This system turns the shared Kubernetes cluster hosting CI/CD into a managed internal platform: one operator, deployed once, that lets dozens of tenant teams onboard themselves and run thousands of jobs per hour — without the platform team becoming the bottleneck and without any one team's incident becoming everyone's outage.
 
-- **Engineering velocity for product teams.** Tenant teams onboard themselves via a single custom resource in their own namespace and own every subsequent change — new runner types, GPU quota rebalancing, scale limits. Changes that today wait days for a platform-team ticket ship in minutes. Teams iterating quickly — especially those adding new GPU test suites — are no longer rate-limited by platform availability.
+- **Engineering velocity for product teams.** Tenant teams onboard themselves via a single custom resource in their own namespace and own every subsequent change — new runner types, GPU quota rebalancing, scale limits.
+  Changes that today wait days for a platform-team ticket ship in minutes.
+  Teams iterating quickly — especially those adding new GPU test suites — are no longer rate-limited by platform availability.
 
-- **GPU utilization that holds under contention.** GPU runners are guaranteed scheduling slots even when cheap CPU runners flood a shared quota, so the most expensive hardware actually runs instead of losing the race. GPU nodes return to the cluster scheduler the moment each job completes, freeing them for other workloads between CI jobs. Per-tenant utilization metrics give finance and platform leadership the data to justify GPU allocations and reclaim under-used capacity.
+- **GPU utilization that holds under contention.** GPU runners are guaranteed scheduling slots even when cheap CPU runners flood a shared quota, so the most expensive hardware actually runs instead of losing the race.
+  GPU nodes return to the cluster scheduler the moment each job completes, freeing them for other workloads between CI jobs.
+  Per-tenant utilization metrics give finance and platform leadership the data to justify GPU allocations and reclaim under-used capacity.
 
-- **No manual recovery when the cluster takes a worker away.** Three causes are recovered: kubelet eviction under node pressure, scheduler preemption by a `priorityTiers` floor, and deletion of a running worker by a node drain or a bare `kubectl delete pod`. A preemption or a drain concludes at GitHub in seconds (measured 15–26s) because the runner gets its grace period and reports; a hard eviction has to wait out the job lock instead, ~10 minutes at worst. Either way the run is re-run automatically under a per-run retry budget, so the class of "my CI job died on infrastructure, please rerun it" support tickets is closed by construction. A job that ran and *failed* on its own merits, including an OOM-killed container, is deliberately never re-run: that would mask real breakage. The full boundary is in [Which disruptions auto-re-run a job](../operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
+- **No manual recovery when the cluster takes a worker away.** Three causes are recovered: kubelet eviction under node pressure, scheduler preemption by a `priorityTiers` floor, and deletion of a running worker by a node drain or a bare `kubectl delete pod`.
+  A preemption or a drain concludes at GitHub in seconds (measured 15–26s) because the runner gets its grace period and reports; a hard eviction has to wait out the job lock instead, ~10 minutes at worst.
+  Either way the run is re-run automatically under a per-run retry budget, so the class of "my CI job died on infrastructure, please rerun it" support tickets is closed by construction.
+  A job that ran and *failed* on its own merits, including an OOM-killed container, is deliberately never re-run: that would mask real breakage.
+  The full boundary is in [Which disruptions auto-re-run a job](../operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
-- **Per-tenant security and audit isolation.** Every tenant's GitHub traffic exits through a dedicated egress IP pool, enabling per-team IP allowlisting on the GitHub side and per-tenant audit attribution. A rate limit, abuse flag, or IP ban triggered by one team is contained to that team — other tenants are unaffected. For organizations with GitHub Enterprise IP allowlist requirements or regulated workloads, this is what makes a shared cluster viable instead of one cluster per tenant.
+- **Per-tenant security and audit isolation.** Every tenant's GitHub traffic exits through a dedicated egress IP pool, enabling per-team IP allowlisting on the GitHub side and per-tenant audit attribution.
+  A rate limit, abuse flag, or IP ban triggered by one team is contained to that team — other tenants are unaffected.
+  For organizations with GitHub Enterprise IP allowlist requirements or regulated workloads, this is what makes a shared cluster viable instead of one cluster per tenant.
 
-- **Operational leverage for the platform team.** One operator at the cluster level replaces a per-tenant runner deployment for every team. The platform team's job shrinks to running one controller; first-line debugging shifts to the tenant teams who know their own workloads. Fewer escalations, fewer on-call pages, no per-tenant configuration drift to manage.
+- **Operational leverage for the platform team.** One operator at the cluster level replaces a per-tenant runner deployment for every team.
+  The platform team's job shrinks to running one controller; first-line debugging shifts to the tenant teams who know their own workloads.
+  Fewer escalations, fewer on-call pages, no per-tenant configuration drift to manage.
 
-**On cost.** The largest idle-GPU savings come from eliminating the per-team `minRunners > 0` pattern frequently used in production runner deployments to mask runner-pod cold-start latency — a pattern that silently holds GPUs around the clock. Teams migrating from older runner deployments see the largest absolute reductions; teams already on modern auto-scaling runners gain primarily from the operational, scheduling, and security benefits above, plus reduced always-on listener overhead. A second, independent lever comes from priority tiers: because GPU runners are guaranteed to schedule on demand, the shared quota can be packed with cheap work instead of holding idle headroom in reserve for GPU jobs — raising utilization and throughput of capacity you already pay for, and lowering cost per job. See [Appendix F — Cost Model](appendix-f-cost-model.md) for a configuration-by-configuration breakdown.
+**On cost.** The largest idle-GPU savings come from eliminating the per-team `minRunners > 0` pattern frequently used in production runner deployments to mask runner-pod cold-start latency — a pattern that silently holds GPUs around the clock.
+Teams migrating from older runner deployments see the largest absolute reductions; teams already on modern auto-scaling runners gain primarily from the operational, scheduling, and security benefits above, plus reduced always-on listener overhead.
+A second, independent lever comes from priority tiers: because GPU runners are guaranteed to schedule on demand, the shared quota can be packed with cheap work instead of holding idle headroom in reserve for GPU jobs — raising utilization and throughput of capacity you already pay for, and lowering cost per job.
+See [Appendix F — Cost Model](appendix-f-cost-model.md) for a configuration-by-configuration breakdown.
 
-**The ask.** Engineering investment to build and operate the Gateway Manager Controller. Payback comes from platform-team leverage, tenant self-service, GPU utilization under contention, eliminated incident-recovery toil, and the security posture needed to host regulated and high-value tenants on a shared cluster.
+**The ask.** Engineering investment to build and operate the Gateway Manager Controller.
+Payback comes from platform-team leverage, tenant self-service, GPU utilization under contention, eliminated incident-recovery toil, and the security posture needed to host regulated and high-value tenants on a shared cluster.
 
 ### For Tenant Teams
 
-**Own your CI infrastructure end-to-end, without waiting on the platform team.** Declare every runner type your team needs in one custom resource in your own namespace and iterate on it as your test matrix changes. Get the GPU slots you ask for, see exactly how much capacity you actually use, and stop losing afternoons to mysteriously-failed CI jobs.
+**Own your CI infrastructure end-to-end, without waiting on the platform team.** Declare every runner type your team needs in one custom resource in your own namespace and iterate on it as your test matrix changes.
+Get the GPU slots you ask for, see exactly how much capacity you actually use, and stop losing afternoons to mysteriously-failed CI jobs.
 
-- **One CR, one source of truth.** All your runner sets, GPU allocations, scale limits, and priority tiers live in a single `ActionsGateway` resource in your own namespace. Changes are a `kubectl edit` away, owned by the team that needs them.
+- **One CR, one source of truth.** All your runner sets, GPU allocations, scale limits, and priority tiers live in a single `ActionsGateway` resource in your own namespace.
+  Changes are a `kubectl edit` away, owned by the team that needs them.
 
-- **GPU slots that are actually guaranteed under contention.** Priority tiers let you declare a minimum number of GPU runner pods that schedule even when the cluster's GPU quota is otherwise saturated. The cheap CPU runners that today crowd you out of the queue cannot push your GPU jobs out of the schedule.
+- **GPU slots that are actually guaranteed under contention.** Priority tiers let you declare a minimum number of GPU runner pods that schedule even when the cluster's GPU quota is otherwise saturated.
+  The cheap CPU runners that today crowd you out of the queue cannot push your GPU jobs out of the schedule.
 
-- **Jobs the cluster interrupts recover themselves.** When a worker pod is preempted by a higher-priority tier, drained off a node, or evicted under node pressure, the run concludes at GitHub and is re-run automatically, with no ticket to file. That is exactly the "did this fail for a real reason or was it just infrastructure?" question, answered by construction: infrastructure took it away, so it comes back; the job failed on its own, so it stays failed.
+- **Jobs the cluster interrupts recover themselves.** When a worker pod is preempted by a higher-priority tier, drained off a node, or evicted under node pressure, the run concludes at GitHub and is re-run automatically, with no ticket to file.
+  That is exactly the "did this fail for a real reason or was it just infrastructure?" question, answered by construction: infrastructure took it away, so it comes back; the job failed on its own, so it stays failed.
 
-- **No cold-start tax to pay around.** You don't need to pin a minimum runner count to mask first-job latency — the listener is always warm, and worker pods are created on demand. Configure for the load you actually have, not the cold start you're trying to hide.
+- **No cold-start tax to pay around.** You don't need to pin a minimum runner count to mask first-job latency — the listener is always warm, and worker pods are created on demand.
+  Configure for the load you actually have, not the cold start you're trying to hide.
 
-- **First-class utilization metrics in your own namespace.** Per-tenant, per-runner-group GPU-hours, job counts, queue times, and pod-creation latency are exposed as Prometheus metrics. Use them to right-size your quota, justify increases when you need more, and identify runner shapes that are over- or under-used.
+- **First-class utilization metrics in your own namespace.** Per-tenant, per-runner-group GPU-hours, job counts, queue times, and pod-creation latency are exposed as Prometheus metrics.
+  Use them to right-size your quota, justify increases when you need more, and identify runner shapes that are over- or under-used.
 
-- **Contained blast radius for cross-tenant incidents.** Another team's CI incident — a runaway job hitting GitHub rate limits, an abuse flag, an IP ban triggered by their traffic — does not propagate to your pipeline. Your egress IPs are your own.
+- **Contained blast radius for cross-tenant incidents.** Another team's CI incident — a runaway job hitting GitHub rate limits, an abuse flag, an IP ban triggered by their traffic — does not propagate to your pipeline.
+  Your egress IPs are your own.
 
 ### For Platform Engineering
 
-**Stop being the bottleneck for every tenant runner change and the first responder for every tenant runner failure.** Deploy one operator at the cluster level; tenants own their own configuration, debugging, and capacity planning beneath it. Onboarding a new team is approving a namespace, not standing up a deployment.
+**Stop being the bottleneck for every tenant runner change and the first responder for every tenant runner failure.** Deploy one operator at the cluster level; tenants own their own configuration, debugging, and capacity planning beneath it.
+Onboarding a new team is approving a namespace, not standing up a deployment.
 
-- **One operator, many tenants.** The Gateway Manager Controller watches `ActionsGateway` resources cluster-wide and provisions everything a tenant needs — RBAC, NetworkPolicies, egress proxy, the AGC, and every runner group declared in the CR — operating within the platform-owned namespace `ResourceQuota`. No per-tenant Helm releases or bespoke YAML to maintain.
+- **One operator, many tenants.** The Gateway Manager Controller watches `ActionsGateway` resources cluster-wide and provisions everything a tenant needs — RBAC, NetworkPolicies, egress proxy, the AGC, and every runner group declared in the CR — operating within the platform-owned namespace `ResourceQuota`.
+  No per-tenant Helm releases or bespoke YAML to maintain.
 
-- **First-line debugging shifts to the tenant.** Tenants who own their own configuration can answer their own "why isn't my runner scaling?" and "why did my job fail?" questions. The escalation path back to platform shrinks to the controller itself.
+- **First-line debugging shifts to the tenant.** Tenants who own their own configuration can answer their own "why isn't my runner scaling?" and "why did my job fail?" questions.
+  The escalation path back to platform shrinks to the controller itself.
 
-- **Tenant security policies enforced by construction, not convention.** Per-tenant egress IP pools, namespace-scoped RBAC, and NetworkPolicies are part of what the controller provisions, all operating within the platform-owned namespace `ResourceQuota`. Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.
+- **Tenant security policies enforced by construction, not convention.** Per-tenant egress IP pools, namespace-scoped RBAC, and NetworkPolicies are part of what the controller provisions, all operating within the platform-owned namespace `ResourceQuota`.
+  Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.
 
-- **Worker eviction is no longer a paging event.** Evicted, preempted, and drained workers have their runs recovered automatically, under one shared per-run budget. The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.
+- **Worker eviction is no longer a paging event.** Evicted, preempted, and drained workers have their runs recovered automatically, under one shared per-run budget.
+  The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.
 
 - **Per-tenant cost and capacity visibility out of the box.** Prometheus metrics scoped per tenant and per runner group make it straightforward to spot under-used GPU quota, hot tenants approaching their limits, and which runner shapes are driving the most cost — without per-tenant deployment-level instrumentation to assemble.
 
@@ -62,74 +90,134 @@
 
 ### The Problem: Scheduling Fairness in a Shared Namespace
 
-In a multi-tenant Kubernetes cluster, teams running multiple types of GitHub Actions self-hosted runners face a scheduling fairness problem that existing solutions — including Actions Runner Controller (ARC) — cannot address. When a namespace's `ResourceQuota` is shared across runner groups, smaller and cheaper runner pods can exhaust available quota before larger pods have a chance to schedule. The result is that GPU runners — which carry the most expensive hardware requirements and the longest queue times — are systematically starved by a flood of small CPU runner pods claiming quota first.
+In a multi-tenant Kubernetes cluster, teams running multiple types of GitHub Actions self-hosted runners face a scheduling fairness problem that existing solutions — including Actions Runner Controller (ARC) — cannot address.
+When a namespace's `ResourceQuota` is shared across runner groups, smaller and cheaper runner pods can exhaust available quota before larger pods have a chance to schedule.
+The result is that GPU runners — which carry the most expensive hardware requirements and the longest queue times — are systematically starved by a flood of small CPU runner pods claiming quota first.
 
-ARC provides no mechanism to express minimum scheduling guarantees across runner sets within a shared pool. Each `RunnerScaleSet` has an independent `maxRunners` cap, making it impossible to declare "GPU runners must always be able to claim at least N slots, regardless of how many CPU runners are active." The only workaround — lowering CPU runner caps to protect headroom — still cannot guarantee that headroom is actually available for GPU runners when they need it, and introduces a separate per-set configuration burden that grows with the number of runner types.
+ARC provides no mechanism to express minimum scheduling guarantees across runner sets within a shared pool.
+Each `RunnerScaleSet` has an independent `maxRunners` cap, making it impossible to declare "GPU runners must always be able to claim at least N slots, regardless of how many CPU runners are active."
+The only workaround — lowering CPU runner caps to protect headroom — still cannot guarantee that headroom is actually available for GPU runners when they need it, and introduces a separate per-set configuration burden that grows with the number of runner types.
 
-This design addresses the problem through a `priorityTiers` field on each `RunnerGroup`: a ranked list of Kubernetes `PriorityClass` assignments with cumulative pod-count thresholds. The first N pods of a GPU runner group are assigned a higher-priority `PriorityClass` and (if that class preempts) will displace lower-priority CPU runner pods when the namespace is contended — guaranteeing they schedule; subsequent tiers gain scheduling priority for burst and best-effort pods. A final threshold caps total concurrency per group. The platform owns which `PriorityClass` names a tenant may reference (the GMC `--allowed-priority-classes` allowlist) and whether each class preempts (set on the platform-created `PriorityClass` object — defaulting to non-preempting so a tenant cannot evict *other tenants'* pods); see [§5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped). This lets a platform team express "GPU runners always get at least 5 slots, can burst to 20, and are capped at 30," all enforced by the Kubernetes scheduler against a single shared namespace `ResourceQuota`.
+This design addresses the problem through a `priorityTiers` field on each `RunnerGroup`: a ranked list of Kubernetes `PriorityClass` assignments with cumulative pod-count thresholds.
+The first N pods of a GPU runner group are assigned a higher-priority `PriorityClass` and (if that class preempts) will displace lower-priority CPU runner pods when the namespace is contended — guaranteeing they schedule; subsequent tiers gain scheduling priority for burst and best-effort pods.
+A final threshold caps total concurrency per group.
+The platform owns which `PriorityClass` names a tenant may reference (the GMC `--allowed-priority-classes` allowlist) and whether each class preempts (set on the platform-created `PriorityClass` object — defaulting to non-preempting so a tenant cannot evict *other tenants'* pods); see [§5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped).
+This lets a platform team express "GPU runners always get at least 5 slots, can burst to 20, and are capped at 30," all enforced by the Kubernetes scheduler against a single shared namespace `ResourceQuota`.
 
-Framed defensively, priority tiers stop expensive runners from being starved. Framed offensively, they are a utilization-and-cost lever. Without a scheduling guarantee, the only way to keep GPU runners schedulable under a shared quota is to hold headroom in reserve — cap cheap runners below the quota, or leave slack unused — so a GPU pod always has room. That reserved headroom is idle, paid-for capacity.
+Framed defensively, priority tiers stop expensive runners from being starved.
+Framed offensively, they are a utilization-and-cost lever.
+Without a scheduling guarantee, the only way to keep GPU runners schedulable under a shared quota is to hold headroom in reserve — cap cheap runners below the quota, or leave slack unused — so a GPU pod always has room.
+That reserved headroom is idle, paid-for capacity.
 
-The floor tier removes the need for it: because guaranteed pods preempt their way in on demand, cheap and burst runners can fill the quota to capacity and yield the instant a GPU job arrives. This is oversubscription of the shared quota — more runner demand is admitted than the guaranteed floors reserve, with the Kubernetes scheduler arbitrating by priority instead of an operator pre-reserving idle slack. The same provisioned cluster runs closer to full utilization and clears more jobs per hour, which is what lowers cost per unit of work.
+The floor tier removes the need for it: because guaranteed pods preempt their way in on demand, cheap and burst runners can fill the quota to capacity and yield the instant a GPU job arrives.
+This is oversubscription of the shared quota — more runner demand is admitted than the guaranteed floors reserve, with the Kubernetes scheduler arbitrating by priority instead of an operator pre-reserving idle slack.
+The same provisioned cluster runs closer to full utilization and clears more jobs per hour, which is what lowers cost per unit of work.
 
-**What the displaced job costs, stated plainly.** Both halves are now measured: the guaranteed tier really does preempt its way in, *and* the work it displaces comes back by itself. The residual cost is the displaced job's own elapsed time — it restarts from the beginning, not from where it was interrupted — so this lever is still best pointed at low-priority work that is cheap to repeat.
+**What the displaced job costs, stated plainly.** Both halves are now measured: the guaranteed tier really does preempt its way in, *and* the work it displaces comes back by itself.
+The residual cost is the displaced job's own elapsed time — it restarts from the beginning, not from where it was interrupted — so this lever is still best pointed at low-priority work that is cheap to repeat.
 
-When a worker loses its job to infrastructure, the AGC automatically re-queues it without user intervention: it stops renewing the job lock to prompt a fast GitHub cancellation, then calls GitHub's rerun API to reschedule. Two disruptions qualify. The **kubelet's node-pressure eviction** (memory or disk exhaustion) is detected from the `Evicted` pod status. **kube-scheduler preemption** — what a floor tier actually drives — deletes its victim instead, and is detected from the `DisruptionTarget` condition with reason `PreemptionByScheduler` that the scheduler stamps on the way out (Q497, measured 2026-07-29 as Q423).
+When a worker loses its job to infrastructure, the AGC automatically re-queues it without user intervention: it stops renewing the job lock to prompt a fast GitHub cancellation, then calls GitHub's rerun API to reschedule.
+Two disruptions qualify.
+The **kubelet's node-pressure eviction** (memory or disk exhaustion) is detected from the `Evicted` pod status. **kube-scheduler preemption** — what a floor tier actually drives — deletes its victim instead, and is detected from the `DisruptionTarget` condition with reason `PreemptionByScheduler` that the scheduler stamps on the way out (Q497, measured 2026-07-29 as Q423).
 
-Both acquisition tiers cover both causes, by different routes: on the classic tier the Job Lock Renewer observes the pod it is already watching, while the scale-set tier — which provisions fire-and-forget — records the workflow run on the worker pod and lets the owning reconciler detect the disruption from the pod itself (Q417). A configurable retry budget, shared across both tiers *and* both causes per workflow run, prevents infinite loops on persistently failing workloads. Jobs that exhaust their retry budget surface via a dedicated metric rather than silently disappearing.
+Both acquisition tiers cover both causes, by different routes: on the classic tier the Job Lock Renewer observes the pod it is already watching, while the scale-set tier — which provisions fire-and-forget — records the workflow run on the worker pod and lets the owning reconciler detect the disruption from the pod itself (Q417).
+A configurable retry budget, shared across both tiers *and* both causes per workflow run, prevents infinite loops on persistently failing workloads.
+Jobs that exhaust their retry budget surface via a dedicated metric rather than silently disappearing.
 
-**What about a drain?** An operator's `kubectl drain` or `kubectl delete pod` leaves the same graceful-termination path a preemption does — the Q385 SIGTERM relay gives the runner its grace period to abort and report, so the job concludes on GitHub promptly rather than hanging — and since Q502 it is **also re-run automatically**, keyed on the pod's `deletionTimestamp` at the moment its terminal phase publishes. That mark was measured (2026-07-29) to be absent on a human-cancelled run and on a genuine failure, which is what made it safe to act on; the AGC's own deletions (the reaper's, and the Q501 reclaim of an abandoned job's worker) are excluded by a stamp written before each delete, and a deleted worker whose container never ran stays unrecovered (no reportable failure exists to re-run). Detail: [§4.2](04-operational-flows.md#which-disruptions-are-recovered-and-which-are-not) and [the experiment](../plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction).
+**What about a drain?** An operator's `kubectl drain` or `kubectl delete pod` leaves the same graceful-termination path a preemption does — the Q385 SIGTERM relay gives the runner its grace period to abort and report, so the job concludes on GitHub promptly rather than hanging — and since Q502 it is **also re-run automatically**, keyed on the pod's `deletionTimestamp` at the moment its terminal phase publishes.
+That mark was measured (2026-07-29) to be absent on a human-cancelled run and on a genuine failure, which is what made it safe to act on; the AGC's own deletions (the reaper's, and the Q501 reclaim of an abandoned job's worker) are excluded by a stamp written before each delete, and a deleted worker whose container never ran stays unrecovered (no reportable failure exists to re-run).
+Detail: [§4.2](04-operational-flows.md#which-disruptions-are-recovered-and-which-are-not) and [the experiment](../plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction).
 
-This recovery runs on **both acquisition tiers**. It was classic-only until Q417, because the `ScaleSet` protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since `ScaleSet` is the default and the only protocol `v2beta1` exposes. The port records the workflow run on the worker pod and moves detection to the owning reconciler, so the capability survives the `v2.0.0` removal of classic ([plan](../plan/scaleset-eviction-recovery.md), [§4](04-operational-flows.md#on-the-scale-set-tier-q417)).
+This recovery runs on **both acquisition tiers**.
+It was classic-only until Q417, because the `ScaleSet` protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since `ScaleSet` is the default and the only protocol `v2beta1` exposes.
+The port records the workflow run on the worker pod and moves detection to the owning reconciler, so the capability survives the `v2.0.0` removal of classic ([plan](../plan/scaleset-eviction-recovery.md), [§4](04-operational-flows.md#on-the-scale-set-tier-q417)).
 
 ### GPU Node Utilization
 
-For teams running GPU-accelerated workflows, runner pod lifecycle is a direct driver of hardware utilization. Where GAG provides headroom over ARC depends on how ARC is configured:
+For teams running GPU-accelerated workflows, runner pod lifecycle is a direct driver of hardware utilization.
+Where GAG provides headroom over ARC depends on how ARC is configured:
 
-* **ARC scale-set mode with `minRunners: 0`** (the current best practice for scale sets) scales runner pods to zero between jobs. GPU allocation between jobs is comparable to GAG: GPU nodes are consumed only while a job is running, and the listener pod sits on a CPU node. GAG's advantage in this configuration is listener footprint (one shared pod versus N per-scale-set pods) and the fact that tenants do not need to pin `minRunners > 0` to avoid cold-start latency — not GPU allocation per se.
-* **ARC scale-set mode with `minRunners > 0`**, commonly configured per scale set to mask runner-pod cold-start latency, holds N runner pods continuously per scale set even with no work queued. A tenant with 10 GPU scale sets at `minRunners: 1` holds 10 GPU pods around the clock. GAG eliminates this entirely — the goroutine listener never goes cold, so no minimum-pod tuning is needed.
-* **Legacy ARC (`RunnerDeployment` + HRA)** had a per-pod `Runner.Listener` and no clean scale-to-zero parity. Teams migrating from this configuration see the largest absolute idle-GPU reductions.
+* **ARC scale-set mode with `minRunners: 0`** (the current best practice for scale sets) scales runner pods to zero between jobs.
+  GPU allocation between jobs is comparable to GAG: GPU nodes are consumed only while a job is running, and the listener pod sits on a CPU node.
+  GAG's advantage in this configuration is listener footprint (one shared pod versus N per-scale-set pods) and the fact that tenants do not need to pin `minRunners > 0` to avoid cold-start latency — not GPU allocation per se.
+* **ARC scale-set mode with `minRunners > 0`**, commonly configured per scale set to mask runner-pod cold-start latency, holds N runner pods continuously per scale set even with no work queued.
+  A tenant with 10 GPU scale sets at `minRunners: 1` holds 10 GPU pods around the clock.
+  GAG eliminates this entirely — the goroutine listener never goes cold, so no minimum-pod tuning is needed.
+* **Legacy ARC (`RunnerDeployment` + HRA)** had a per-pod `Runner.Listener` and no clean scale-to-zero parity.
+  Teams migrating from this configuration see the largest absolute idle-GPU reductions.
 
-In all configurations, the AGC itself runs on a CPU-only node pool, so no GPU capacity is consumed by the controller. Worker pods are provisioned on-demand after a job is acquired and release their compute — including the GPU — the moment the job completes (the terminal pod object is deleted after a short configurable TTL and holds no resources in the meantime). Across a shared GPU node pool, GAG keeps GPU nodes available to other workloads up until the moment a job arrives, with no per-scale-set baseline tuning to maintain.
+In all configurations, the AGC itself runs on a CPU-only node pool, so no GPU capacity is consumed by the controller.
+Worker pods are provisioned on-demand after a job is acquired and release their compute — including the GPU — the moment the job completes (the terminal pod object is deleted after a short configurable TTL and holds no resources in the meantime).
+Across a shared GPU node pool, GAG keeps GPU nodes available to other workloads up until the moment a job arrives, with no per-scale-set baseline tuning to maintain.
 
 ### For Teams Migrating from Host-Machine or VM Runners
 
-The arguments above apply equally to teams already running Kubernetes-native runners. For teams migrating from runners on host machines or virtual machines — where runners are registered as persistent processes rather than Kubernetes pods — the Kubernetes model itself introduces an additional overhead worth quantifying.
+The arguments above apply equally to teams already running Kubernetes-native runners.
+For teams migrating from runners on host machines or virtual machines — where runners are registered as persistent processes rather than Kubernetes pods — the Kubernetes model itself introduces an additional overhead worth quantifying.
 
-In a traditional self-hosted runner setup (host or VM), each registered runner slot runs a full .NET `Runner.Listener` process held resident around the clock: 1,000 concurrent slots means 1,000 always-on listener processes across the fleet, regardless of whether any jobs are pending. ARC's `RunnerScaleSet` mode improves on this — it runs one listener per scale set rather than one per slot (a Go binary, `ghalistener`, distinct from the runner's .NET `Runner.Listener`) — but each listener is still its own always-on pod with its own cluster IP: a tenant operating 10 RunnerScaleSets holds 10 listener pods at rest.
+In a traditional self-hosted runner setup (host or VM), each registered runner slot runs a full .NET `Runner.Listener` process held resident around the clock: 1,000 concurrent slots means 1,000 always-on listener processes across the fleet, regardless of whether any jobs are pending.
+ARC's `RunnerScaleSet` mode improves on this — it runs one listener per scale set rather than one per slot (a Go binary, `ghalistener`, distinct from the runner's .NET `Runner.Listener`) — but each listener is still its own always-on pod with its own cluster IP: a tenant operating 10 RunnerScaleSets holds 10 listener pods at rest.
 
-In contrast, this system runs every listener session as a goroutine inside one shared AGC pod, at a measured ~12 KiB of AGC state per session (~60 KiB as the conservative design bound; see [Appendix A](appendix-a-capacity-slos.md)). At the 1,000-session burst ceiling, the AGC's goroutine working set is roughly 60 MiB under that conservative bound; the steady-state cost at rest is one goroutine per RunnerGroup regardless of how many slots are configured — and still one pod, one cluster IP per tenant.
+In contrast, this system runs every listener session as a goroutine inside one shared AGC pod, at a measured ~12 KiB of AGC state per session (~60 KiB as the conservative design bound; see [Appendix A](appendix-a-capacity-slos.md)).
+At the 1,000-session burst ceiling, the AGC's goroutine working set is roughly 60 MiB under that conservative bound; the steady-state cost at rest is one goroutine per RunnerGroup regardless of how many slots are configured — and still one pod, one cluster IP per tenant.
 
-The IP address problem compounds this for pod-per-slot deployments. Every runner pod consumes a cluster IP. In clusters already dense with application workloads, 1,000 idle runner pods exhaust a significant fraction of the available address space — a hard limit that cannot be worked around without re-addressing the cluster. Each pod's long-poll connection also generates sustained polling noise through network firewalls, adding to the operational burden of teams managing cluster egress.
+The IP address problem compounds this for pod-per-slot deployments.
+Every runner pod consumes a cluster IP.
+In clusters already dense with application workloads, 1,000 idle runner pods exhaust a significant fraction of the available address space — a hard limit that cannot be worked around without re-addressing the cluster.
+Each pod's long-poll connection also generates sustained polling noise through network firewalls, adding to the operational burden of teams managing cluster egress.
 
 ### Design Goals
 
 The system is designed to satisfy four requirements that existing solutions do not address together:
 
-1. **Shared quota with per-group priority guarantees.** All `RunnerGroup`s within a tenant draw from a single namespace-level `ResourceQuota`. Each group optionally defines a `priorityTiers` list to express a priority floor, an opportunistic burst range, and a hard concurrency ceiling — enforced by the Kubernetes scheduler without idle resource reservation. The referenced `PriorityClass` names come from a platform-owned allowlist, and whether the floor tier preempts is set on the platform-created `PriorityClass` object — so a tenant cannot name a class that evicts other tenants' pods.
-2. **Automatic eviction retry.** When a worker pod is evicted, the AGC detects it and stops renewing the job lock, so GitHub cancels the run once the outstanding lock lapses (within the remaining lock window, ~10 minutes at worst); the AGC then re-queues the job via GitHub's rerun API, with no user action required. This holds on both acquisition tiers (Q417). A configurable retry budget caps automatic retries per workflow run; exhausted budgets are surfaced as a metric rather than silent failures.
-3. **Eliminate idle resource overhead.** Virtual runner sessions are goroutines, not pods. Compute is provisioned only when a job is acquired and released immediately on completion — including GPU allocations.
-4. **Per-tenant egress IP isolation.** Each tenant's GitHub traffic — both AGC control-plane calls and worker data-plane traffic — exits through a dedicated proxy pool. This gives operators IP-based allowlisting at the GitHub side, per-tenant audit attribution, and a per-tenant kill-switch: GitHub-side rate limits, abuse flags, or IP bans against one tenant's egress IPs do not affect other tenants. See [§2.3](02-architecture.md#23-tier-3--egress-proxy-pool) for why worker egress also flows through the proxy.
-5. **Self-service multi-tenant onboarding.** A team creates one `ActionsGateway` CR in their existing namespace and receives a fully isolated gateway instance. No cluster-admin involvement is required after initial GMC installation.
-6. **Replaceable managed defaults — good-enough by default, opt-out to specialist tools.** For each managed concern, the platform provisions an opinionated default so a tenant onboards with zero tuning — but every such concern exposes an opt-out (a `managed…: false` toggle or a `…Ref` to operator-supplied material) that disables the default and lets an operator substitute a more capable tool. Today: `managedNetworkPolicy: false` → bring Cilium/Calico FQDN policies; `managedAutoscaling: false` (v2 `EgressProxy`) → bring KEDA/VPA/a custom HPA for the proxy pool. Planned, behind triggers: an operator-supplied proxy TLS certificate → external PKI/Vault ([Q174](../STATUS.md#deferred)). The opt-out shifts *ownership*, never a security invariant: a replacement must still satisfy the property the default guaranteed — e.g. `managedNetworkPolicy: false` still requires equivalent egress restriction. This keeps the common path simple and the advanced path unblocked, and pairs with [secure-by-default](05-security.md): the managed default is the safe one, the opt-out is explicit. Not every managed component gets an opt-out — safety invariants (PodDisruptionBudget, pod security context), architectural constraints (single-replica AGC, fixed proxy ports), and non-tenant-facing plumbing (Services, RBAC) stay managed.
+1. **Shared quota with per-group priority guarantees.** All `RunnerGroup`s within a tenant draw from a single namespace-level `ResourceQuota`.
+   Each group optionally defines a `priorityTiers` list to express a priority floor, an opportunistic burst range, and a hard concurrency ceiling — enforced by the Kubernetes scheduler without idle resource reservation.
+   The referenced `PriorityClass` names come from a platform-owned allowlist, and whether the floor tier preempts is set on the platform-created `PriorityClass` object — so a tenant cannot name a class that evicts other tenants' pods.
+2. **Automatic eviction retry.** When a worker pod is evicted, the AGC detects it and stops renewing the job lock, so GitHub cancels the run once the outstanding lock lapses (within the remaining lock window, ~10 minutes at worst); the AGC then re-queues the job via GitHub's rerun API, with no user action required.
+   This holds on both acquisition tiers (Q417).
+   A configurable retry budget caps automatic retries per workflow run; exhausted budgets are surfaced as a metric rather than silent failures.
+3. **Eliminate idle resource overhead.** Virtual runner sessions are goroutines, not pods.
+   Compute is provisioned only when a job is acquired and released immediately on completion — including GPU allocations.
+4. **Per-tenant egress IP isolation.** Each tenant's GitHub traffic — both AGC control-plane calls and worker data-plane traffic — exits through a dedicated proxy pool.
+   This gives operators IP-based allowlisting at the GitHub side, per-tenant audit attribution, and a per-tenant kill-switch: GitHub-side rate limits, abuse flags, or IP bans against one tenant's egress IPs do not affect other tenants.
+   See [§2.3](02-architecture.md#23-tier-3--egress-proxy-pool) for why worker egress also flows through the proxy.
+5. **Self-service multi-tenant onboarding.** A team creates one `ActionsGateway` CR in their existing namespace and receives a fully isolated gateway instance.
+   No cluster-admin involvement is required after initial GMC installation.
+6. **Replaceable managed defaults — good-enough by default, opt-out to specialist tools.** For each managed concern, the platform provisions an opinionated default so a tenant onboards with zero tuning — but every such concern exposes an opt-out (a `managed…: false` toggle or a `…Ref` to operator-supplied material) that disables the default and lets an operator substitute a more capable tool.
+   Today: `managedNetworkPolicy: false` → bring Cilium/Calico FQDN policies; `managedAutoscaling: false` (v2 `EgressProxy`) → bring KEDA/VPA/a custom HPA for the proxy pool.
+   Planned, behind triggers: an operator-supplied proxy TLS certificate → external PKI/Vault ([Q174](../STATUS.md#deferred)).
+   The opt-out shifts *ownership*, never a security invariant: a replacement must still satisfy the property the default guaranteed — e.g. `managedNetworkPolicy: false` still requires equivalent egress restriction.
+   This keeps the common path simple and the advanced path unblocked, and pairs with [secure-by-default](05-security.md): the managed default is the safe one, the opt-out is explicit.
+   Not every managed component gets an opt-out — safety invariants (PodDisruptionBudget, pod security context), architectural constraints (single-replica AGC, fixed proxy ports), and non-tenant-facing plumbing (Services, RBAC) stay managed.
 
 ### The Solution: A Four-Tier Virtualized Gateway
 
 This document outlines the design for a **four-tier system** that addresses these problems at their root:
 
-* **Tier 1 — Gateway Manager Controller (GMC):** A cluster-scoped operator that watches namespace-scoped `ActionsGateway` Custom Resources across all namespaces and provisions isolated, fully independent gateway instances — one per CR. It owns the lifecycle of all AGC-related resources within the tenant's existing namespace: RBAC, network policies, resource quotas, and the AGC deployment itself.
+* **Tier 1 — Gateway Manager Controller (GMC):** A cluster-scoped operator that watches namespace-scoped `ActionsGateway` Custom Resources across all namespaces and provisions isolated, fully independent gateway instances — one per CR.
+  It owns the lifecycle of all AGC-related resources within the tenant's existing namespace: RBAC, network policies, resource quotas, and the AGC deployment itself.
 
-* **Tier 2 — Actions Gateway Controller (AGC):** A Go-based operator deployed once per tenant by the GMC. It acts as a highly concurrent, virtualized gateway, scaling lightweight **Go routines** to multiplex virtual runner sessions — designed to scale to thousands per AGC pod. Compute resources (Pods) are provisioned purely on-demand, executing jobs ephemerally and tearing down immediately upon completion. The thousands-per-AGC figure is a **design target not yet validated at scale** (the load-test run is deferred post-1.0); see [Appendix A — Capacity Targets & SLOs](appendix-a-capacity-slos.md).
+* **Tier 2 — Actions Gateway Controller (AGC):** A Go-based operator deployed once per tenant by the GMC.
+  It acts as a highly concurrent, virtualized gateway, scaling lightweight **Go routines** to multiplex virtual runner sessions — designed to scale to thousands per AGC pod.
+  Compute resources (Pods) are provisioned purely on-demand, executing jobs ephemerally and tearing down immediately upon completion.
+  The thousands-per-AGC figure is a **design target not yet validated at scale** (the load-test run is deferred post-1.0); see [Appendix A — Capacity Targets & SLOs](appendix-a-capacity-slos.md).
 
-* **Tier 3 — Egress Proxy Pool:** A horizontally autoscaled pool of stateless HTTPS CONNECT proxy pods, deployed per tenant by the GMC. All GitHub traffic from both the AGC and worker pods routes through this pool, giving each tenant a distinct set of egress IPs isolated from other tenants. This enables per-team IP allowlisting on the GitHub side, produces clean per-tenant audit trails, and contains GitHub-side incident impact: a rate limit, abuse flag, or IP ban triggered by one tenant's egress IPs does not propagate to other tenants on different IPs. (Note: this is a containment property at the *network attribution* layer; it is not a substitute for per-installation authorization, which already scopes what a compromised worker can do at GitHub.)
+* **Tier 3 — Egress Proxy Pool:** A horizontally autoscaled pool of stateless HTTPS CONNECT proxy pods, deployed per tenant by the GMC.
+  All GitHub traffic from both the AGC and worker pods routes through this pool, giving each tenant a distinct set of egress IPs isolated from other tenants.
+  This enables per-team IP allowlisting on the GitHub side, produces clean per-tenant audit trails, and contains GitHub-side incident impact: a rate limit, abuse flag, or IP ban triggered by one tenant's egress IPs does not propagate to other tenants on different IPs.
+  (Note: this is a containment property at the *network attribution* layer; it is not a substitute for per-installation authorization, which already scopes what a compromised worker can do at GitHub.)
 
-* **Tier 4 — Ephemeral Worker Pod:** A short-lived, single-use pod that executes exactly one workflow job. Provisioned on-demand by the AGC after a job is acquired; its compute is released the moment the job completes, and the terminal pod object is deleted after a short configurable TTL. Because worker pods consume resources only while a job is running, there are zero idle compute resources between jobs — the cluster pays only for work actually being done.
+* **Tier 4 — Ephemeral Worker Pod:** A short-lived, single-use pod that executes exactly one workflow job.
+  Provisioned on-demand by the AGC after a job is acquired; its compute is released the moment the job completes, and the terminal pod object is deleted after a short configurable TTL.
+  Because worker pods consume resources only while a job is running, there are zero idle compute resources between jobs — the cluster pays only for work actually being done.
 
 ### Operational Model
 
 This architecture makes it practical to operate GitHub Actions self-hosted runners in a multi-tenant Kubernetes cluster: a platform team deploys the GMC once at the cluster level, while individual teams create an `ActionsGateway` resource in their own existing namespace and receive fully isolated runner capacity — no cluster-admin involvement required after initial GMC installation.
 
-The four-tier design is intentionally more complex than a simple self-hosted runner deployment. That complexity is load-bearing: it is what makes goroutine-level multiplexing, per-tenant egress isolation, and zero-idle compute possible simultaneously in a shared cluster. For a detailed evaluation of simpler alternatives and the reasons they fall short at multi-tenant scale, see [Appendix D](appendix-d-alternatives-considered.md).
+The four-tier design is intentionally more complex than a simple self-hosted runner deployment.
+That complexity is load-bearing: it is what makes goroutine-level multiplexing, per-tenant egress isolation, and zero-idle compute possible simultaneously in a shared cluster.
+For a detailed evaluation of simpler alternatives and the reasons they fall short at multi-tenant scale, see [Appendix D](appendix-d-alternatives-considered.md).
 
 ---
 

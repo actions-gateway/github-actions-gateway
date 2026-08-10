@@ -2,52 +2,30 @@
 
 > **Audience:** Platform engineer running [Actions Runner Controller (ARC)](https://github.com/actions/actions-runner-controller) scale-set mode on a shared, multi-tenant Kubernetes cluster and evaluating GitHub Actions Gateway (GAG) as a replacement.
 
-This guide maps ARC scale-set concepts onto GAG, calls out the behavioral
-differences you will actually hit, and walks one runner group from ARC to GAG
-end to end. It assumes you already run ARC's `gha-runner-scale-set` chart; if you
-are new to GAG, read [Why GAG](../why-gag.md) and
-[Getting Started](../getting-started.md) first, then come back here.
+This guide maps ARC scale-set concepts onto GAG, calls out the behavioral differences you will actually hit, and walks one runner group from ARC to GAG end to end.
+It assumes you already run ARC's `gha-runner-scale-set` chart; if you are new to GAG, read [Why GAG](../why-gag.md) and [Getting Started](../getting-started.md) first, then come back here.
 
-The good news up front: GAG was designed to make this migration cheap. The worker
-pod template is the **same Kubernetes type** ARC uses, so your pod spec transfers
-with no schema translation; job routing is the **same single-name model** ARC
-scale sets use, so your `runs-on` lines need no edit; and ARC and GAG can run
-**side by side** on the same cluster, so you migrate one scale set at a time and
-roll back by pointing `runs-on` back at the old name.
+The good news up front: GAG was designed to make this migration cheap.
+The worker pod template is the **same Kubernetes type** ARC uses, so your pod spec transfers with no schema translation; job routing is the **same single-name model** ARC scale sets use, so your `runs-on` lines need no edit; and ARC and GAG can run **side by side** on the same cluster, so you migrate one scale set at a time and roll back by pointing `runs-on` back at the old name.
 
-**Scope.** This covers ARC's **scale-set mode** (the `AutoscalingRunnerSet` /
-`gha-runner-scale-set` chart — GitHub's current and recommended mode), and targets
-GAG's **v2 API** (`actions-gateway.com/v2beta1`), which is where new tenants
-onboard. Legacy ARC (`RunnerDeployment` + `HorizontalRunnerAutoscaler`) maps
-similarly, but its multi-label routing needs one extra step called out in
-[Job routing](#job-routing-a-11-map).
+**Scope.** This covers ARC's **scale-set mode** (the `AutoscalingRunnerSet` / `gha-runner-scale-set` chart — GitHub's current and recommended mode), and targets GAG's **v2 API** (`actions-gateway.com/v2beta1`), which is where new tenants onboard.
+Legacy ARC (`RunnerDeployment` + `HorizontalRunnerAutoscaler`) maps similarly, but its multi-label routing needs one extra step called out in [Job routing](#job-routing-a-11-map).
 
-> **Do not migrate via GAG's v1 API.** The older single-CR
-> `actions-gateway.github.com/v1alpha1` shape is
-> **[deprecated](v1alpha1-deprecation.md)** and, more to the point here, it is
-> *Classic-protocol only* — it would move you **off** the single-acquirer model
-> your ARC scale sets already use. Migrate straight to v2.
+> **Do not migrate via GAG's v1 API.** The older single-CR `actions-gateway.github.com/v1alpha1` shape is **[deprecated](v1alpha1-deprecation.md)** and, more to the point here, it is *Classic-protocol only* — it would move you **off** the single-acquirer model your ARC scale sets already use.
+> Migrate straight to v2.
 
 ---
 
 ## The mental model
 
-In ARC scale-set mode, **each scale set is its own controller surface**: one
-`AutoscalingRunnerSet` CR, one long-running listener pod, its own
-`maxRunners` cap, configured by its own Helm release. Ten runner types means ten
-scale sets, ten listener pods, ten Helm releases.
+In ARC scale-set mode, **each scale set is its own controller surface**: one `AutoscalingRunnerSet` CR, one long-running listener pod, its own `maxRunners` cap, configured by its own Helm release.
+Ten runner types means ten scale sets, ten listener pods, ten Helm releases.
 
-In GAG, a tenant declares one `ActionsGateway` (identity and GitHub binding) and
-one `RunnerSet` per runner type. A single per-gateway controller — the Actions
-Gateway Controller (AGC) — multiplexes every set's listener as a goroutine
-(~12 KiB) in one shared pod, instead of one always-on listener pod per scale set.
-The platform installs the Gateway Manager Controller (GMC) **once**; from there a
-tenant's whole gateway (controller, egress proxy, RBAC, NetworkPolicies) is
-provisioned from those CRs.
+In GAG, a tenant declares one `ActionsGateway` (identity and GitHub binding) and one `RunnerSet` per runner type.
+A single per-gateway controller — the Actions Gateway Controller (AGC) — multiplexes every set's listener as a goroutine (~12 KiB) in one shared pod, instead of one always-on listener pod per scale set.
+The platform installs the Gateway Manager Controller (GMC) **once**; from there a tenant's whole gateway (controller, egress proxy, RBAC, NetworkPolicies) is provisioned from those CRs.
 
-So the shape of the migration is: **N ARC scale sets in a namespace → 1
-`ActionsGateway` + N `RunnerSet`s in that namespace**, sharing a `RunnerTemplate`
-wherever the pod shapes are the same.
+So the shape of the migration is: **N ARC scale sets in a namespace → 1 `ActionsGateway` + N `RunnerSet`s in that namespace**, sharing a `RunnerTemplate` wherever the pod shapes are the same.
 
 ```
 ARC (scale-set mode)                    GAG (v2 API)
@@ -63,9 +41,7 @@ namespace: team-a                       namespace: team-a
                                           └─ per-tenant egress proxy pool
 ```
 
-Unlike GAG's deprecated v1 shape, v2 puts **no one-gateway-per-namespace limit**
-on you: if your ARC namespace spans two GitHub orgs, that is two
-`ActionsGateway`s side by side, closer to how your scale sets are laid out today.
+Unlike GAG's deprecated v1 shape, v2 puts **no one-gateway-per-namespace limit** on you: if your ARC namespace spans two GitHub orgs, that is two `ActionsGateway`s side by side, closer to how your scale sets are laid out today.
 
 ---
 
@@ -93,41 +69,26 @@ on you: if your ARC namespace spans two GitHub orgs, that is two
 
 ### Your runner image works unchanged
 
-Point `workerImage` at your **existing ARC runner image** — no rebuild — or leave it
-unset to use the upstream `ghcr.io/actions/actions-runner` default. GAG's AGC
-**pre-acquires** each job from the GitHub broker and hands it to the pod (rather than
-letting the pod's runner register and poll), so the worker needs GAG's small
-**wrapper** to feed the job payload into `Runner.Worker`. Rather than make you bake
-that wrapper into your image, the AGC **injects** it into every worker pod at runtime
-— a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that —
-and runs it in place of the image entrypoint. The only requirement is that the image
-be `actions/runner`-derived (it must contain `Runner.Worker`) — the same agent
-requirement ARC has, so **any image that works on ARC qualifies**, with its tools and
-userland intact.
+Point `workerImage` at your **existing ARC runner image** — no rebuild — or leave it unset to use the upstream `ghcr.io/actions/actions-runner` default.
+GAG's AGC **pre-acquires** each job from the GitHub broker and hands it to the pod (rather than letting the pod's runner register and poll), so the worker needs GAG's small **wrapper** to feed the job payload into `Runner.Worker`.
+Rather than make you bake that wrapper into your image, the AGC **injects** it into every worker pod at runtime — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — and runs it in place of the image entrypoint.
+The only requirement is that the image be `actions/runner`-derived (it must contain `Runner.Worker`) — the same agent requirement ARC has, so **any image that works on ARC qualifies**, with its tools and userland intact.
 
-> **Docker-in-Docker:** because the injected wrapper runs in place of the image
-> entrypoint, an `actions-runner-dind` image's bundled `dockerd` startup is
-> **skipped**. Run DinD as a **sidecar** container in a privileged
-> `ClusterRunnerTemplate` instead (see [Security profiles](#security-profiles)) —
-> GAG's DinD model regardless of the worker image.
+> **Docker-in-Docker:** because the injected wrapper runs in place of the image entrypoint, an `actions-runner-dind` image's bundled `dockerd` startup is **skipped**.
+> Run DinD as a **sidecar** container in a privileged `ClusterRunnerTemplate` instead (see [Security profiles](#security-profiles)) — GAG's DinD model regardless of the worker image.
 
 ---
 
 ## Job routing: a 1:1 map
 
-This is the section that used to carry a warning. Against GAG's v2 API it does not,
-and that is worth stating plainly because it is the difference between a migration
-that touches your workflows and one that does not.
+This is the section that used to carry a warning.
+Against GAG's v2 API it does not, and that is worth stating plainly because it is the difference between a migration that touches your workflows and one that does not.
 
-**ARC scale-set mode routes by the scale-set name.** A workflow targets a scale set
-with `runs-on: <runnerScaleSetName>` — a single name that equals the install name.
-Scale-set mode deliberately dropped the arbitrary multi-label matching legacy ARC
-`RunnerDeployment` had; the name *is* the selector.
+**ARC scale-set mode routes by the scale-set name.** A workflow targets a scale set with `runs-on: <runnerScaleSetName>` — a single name that equals the install name.
+Scale-set mode deliberately dropped the arbitrary multi-label matching legacy ARC `RunnerDeployment` had; the name *is* the selector.
 
-**GAG v2 routes the same way.** A `RunnerSet` declares **exactly one**
-`runnerLabels` entry, that label is the scale set's name at GitHub, and a workflow
-targets it with that one label in `runs-on`. So carrying your ARC scale-set name
-across as the label means **existing workflows route unchanged**:
+**GAG v2 routes the same way.** A `RunnerSet` declares **exactly one** `runnerLabels` entry, that label is the scale set's name at GitHub, and a workflow targets it with that one label in `runs-on`.
+So carrying your ARC scale-set name across as the label means **existing workflows route unchanged**:
 
 ```yaml
 # ARC:  runs-on: gpu-large   →   GAG: runs-on: gpu-large   (no edit)
@@ -137,75 +98,42 @@ spec:
 
 Rules worth knowing:
 
-- **Exactly one label.** A set with two or more labels is rejected at admission —
-  the scale set has one name, so it has one match target.
-- **Unique per gateway.** Two `RunnerSet`s under one `ActionsGateway` may not share
-  their label; they would register the same scale-set name at GitHub and collide.
-  Keeping your ARC names gives you uniqueness for free, since ARC already required
-  distinct install names.
-- **No `self-hosted`.** Under the scale-set model `self-hosted` is not part of the
-  match, exactly as in ARC scale-set mode. Do not add it.
+- **Exactly one label.** A set with two or more labels is rejected at admission — the scale set has one name, so it has one match target.
+- **Unique per gateway.** Two `RunnerSet`s under one `ActionsGateway` may not share their label; they would register the same scale-set name at GitHub and collide.
+  Keeping your ARC names gives you uniqueness for free, since ARC already required distinct install names.
+- **No `self-hosted`.** Under the scale-set model `self-hosted` is not part of the match, exactly as in ARC scale-set mode.
+  Do not add it.
 - **Labels are ≤ 256 chars** and may not contain whitespace or commas.
 
-> **Coming from legacy ARC (`RunnerDeployment` + multi-label `runs-on`)?** This is
-> the one place your migration needs a workflow edit, and it is the same edit
-> GitHub's own scale-set migration requires: multi-label matching does not exist in
-> the scale-set model. Split each `runs-on: [self-hosted, linux, gpu]` target into
-> its own `RunnerSet` with a single descriptive label (`gpu-linux`), and update the
-> workflows to `runs-on: gpu-linux`. Migrate to ARC scale sets first if you would
-> rather do that change under ARC.
+> **Coming from legacy ARC (`RunnerDeployment` + multi-label `runs-on`)?** This is the one place your migration needs a workflow edit, and it is the same edit GitHub's own scale-set migration requires: multi-label matching does not exist in the scale-set model.
+> Split each `runs-on: [self-hosted, linux, gpu]` target into its own `RunnerSet` with a single descriptive label (`gpu-linux`), and update the workflows to `runs-on: gpu-linux`.
+> Migrate to ARC scale sets first if you would rather do that change under ARC.
 
 ---
 
 ## Egress isolation: the big difference
 
-ARC runners share the cluster's egress path: GitHub (and any other) traffic
-leaves via whatever node / NAT the pod lands on, so you cannot attribute a source
-IP to a tenant or allow-list one team's runners without allow-listing the whole
-cluster.
+ARC runners share the cluster's egress path: GitHub (and any other) traffic leaves via whatever node / NAT the pod lands on, so you cannot attribute a source IP to a tenant or allow-list one team's runners without allow-listing the whole cluster.
 
-GAG gives **each tenant its own egress proxy pool** (Tier 3), declared as an
-`EgressProxy` and pointed at by the gateway's `defaultProxyRef`. All GitHub-bound
-traffic from the AGC and worker pods routes through that pool, so every tenant
-gets a dedicated, stable set of egress IPs never shared with another tenant. That
-is what makes GitHub Enterprise Managed Users (EMU) IP allow-listing, per-tenant
-incident attribution, and avoiding shared-NAT throttling possible. The pool is
-HPA-managed between `spec.minReplicas` and `maxReplicas`.
+GAG gives **each tenant its own egress proxy pool** (Tier 3), declared as an `EgressProxy` and pointed at by the gateway's `defaultProxyRef`.
+All GitHub-bound traffic from the AGC and worker pods routes through that pool, so every tenant gets a dedicated, stable set of egress IPs never shared with another tenant.
+That is what makes GitHub Enterprise Managed Users (EMU) IP allow-listing, per-tenant incident attribution, and avoiding shared-NAT throttling possible.
+The pool is HPA-managed between `spec.minReplicas` and `maxReplicas`.
 
 Differences and quirks an ARC operator should know:
 
-- **The proxy is optional, but it is the reason to be here.** A gateway with no
-  `defaultProxyRef` and sets with no `proxyRef` egress **directly**: still
-  default-deny-restricted to DNS + the GitHub CIDR allowlist, but with no
-  per-tenant IP *attribution*. The trade is surfaced as `status.proxyMode: Direct`
-  plus an advisory `EgressUnattributed` condition. If per-tenant egress IPs are
-  what brought you off ARC, keep the proxy. See
-  [Proxy-less onboarding](tenant-onboarding.md#proxy-less-onboarding-direct-egress).
-- **Default-deny egress is the default, and it needs a policy-aware CNI.** GAG
-  provisions NetworkPolicies that restrict worker pods to **DNS + the tenant
-  proxy only** (no direct GitHub, no Kubernetes API), and the proxy pods to the
-  **GitHub IP allow-list + DNS**. These rules are inert unless your Container
-  Network Interface (CNI) plugin enforces egress NetworkPolicy — Calico or Cilium
-  do; kind's default kindnet does **not**. If you ran ARC on a cluster whose CNI
-  does not enforce egress, **isolation is silently void** until you switch CNI.
-  Validate with the probes in
-  [network-architecture § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation).
-- **The GitHub IP allow-list is maintained for you.** The GMC refreshes the
-  GitHub CIDR set the proxy permits, so the egress allow-list tracks GitHub's
-  published ranges without operator action. `egressPolicyMode: FQDN` allow-lists
-  GitHub by hostname instead, where your CNI supports it.
-- **Internal destinations need `noProxyCIDRs`.** Anything your jobs reach
-  *inside* the cluster or your network (artifact stores, internal registries)
-  must be excluded from the proxy via `EgressProxy.spec.noProxyCIDRs` (CIDRs, bare
-  IPs, or `NO_PROXY` domain suffixes). Cluster-internal defaults are appended
-  automatically on every distribution — `svc.cluster.local`,
-  `kubernetes.default.svc`, `localhost`, `127.0.0.1`, and the cluster's API server
-  ClusterIP — so neither the API server nor the service CIDR belongs in this field. **Admission rejects any entry that would route GitHub traffic
-  around the proxy** (a host matching `githubURL` or `github.com` /
-  `githubusercontent.com` / `ghcr.io`) — that would break egress-IP attribution.
-- **The AGC↔proxy hop is HTTPS with a pinned cert.** The GMC issues a per-tenant
-  self-signed cert and pins it into the AGC trust store, so the proxy hop is not
-  eavesdroppable by other tenants on the cluster.
+- **The proxy is optional, but it is the reason to be here.** A gateway with no `defaultProxyRef` and sets with no `proxyRef` egress **directly**: still default-deny-restricted to DNS + the GitHub CIDR allowlist, but with no per-tenant IP *attribution*.
+  The trade is surfaced as `status.proxyMode: Direct` plus an advisory `EgressUnattributed` condition.
+  If per-tenant egress IPs are what brought you off ARC, keep the proxy.
+  See [Proxy-less onboarding](tenant-onboarding.md#proxy-less-onboarding-direct-egress).
+- **Default-deny egress is the default, and it needs a policy-aware CNI.** GAG provisions NetworkPolicies that restrict worker pods to **DNS + the tenant proxy only** (no direct GitHub, no Kubernetes API), and the proxy pods to the **GitHub IP allow-list + DNS**.
+  These rules are inert unless your Container Network Interface (CNI) plugin enforces egress NetworkPolicy — Calico or Cilium do; kind's default kindnet does **not**.
+  If you ran ARC on a cluster whose CNI does not enforce egress, **isolation is silently void** until you switch CNI.
+  Validate with the probes in [network-architecture § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation).
+- **The GitHub IP allow-list is maintained for you.** The GMC refreshes the GitHub CIDR set the proxy permits, so the egress allow-list tracks GitHub's published ranges without operator action. `egressPolicyMode: FQDN` allow-lists GitHub by hostname instead, where your CNI supports it.
+- **Internal destinations need `noProxyCIDRs`.** Anything your jobs reach *inside* the cluster or your network (artifact stores, internal registries) must be excluded from the proxy via `EgressProxy.spec.noProxyCIDRs` (CIDRs, bare IPs, or `NO_PROXY` domain suffixes).
+  Cluster-internal defaults are appended automatically on every distribution — `svc.cluster.local`, `kubernetes.default.svc`, `localhost`, `127.0.0.1`, and the cluster's API server ClusterIP — so neither the API server nor the service CIDR belongs in this field. **Admission rejects any entry that would route GitHub traffic around the proxy** (a host matching `githubURL` or `github.com` / `githubusercontent.com` / `ghcr.io`) — that would break egress-IP attribution.
+- **The AGC↔proxy hop is HTTPS with a pinned cert.** The GMC issues a per-tenant self-signed cert and pins it into the AGC trust store, so the proxy hop is not eavesdroppable by other tenants on the cluster.
 
 ---
 
@@ -230,75 +158,46 @@ Differences and quirks an ARC operator should know:
 
 ### Quotas and scheduling
 
-In ARC, each scale set's `maxRunners` is its own independent cap. In GAG, the real
-ceiling is the **platform-owned namespace `ResourceQuota`**, shared across every
-runner set, and `maxWorkers` is a per-set ceiling within it. This is deliberate — a
-tenant-authored cap is no cap (the tenant could raise it), and it is what makes
-per-tenant quotas *safe*: a quota-blocked job recovers instead of dying. Size the
-quota for the proxy pool at `maxReplicas` **plus** worker pods up to each set's
-`maxWorkers`; the
-[onboarding quota step](tenant-onboarding.md#step-1b-set-the-platform-owned-resourcequota)
-has the formula. When a set should never be starved by cheaper runners, use
-`priorityTiers` to reserve a floor of preempting slots — the primitive ARC's
-per-scale-set model has no equivalent for.
+In ARC, each scale set's `maxRunners` is its own independent cap.
+In GAG, the real ceiling is the **platform-owned namespace `ResourceQuota`**, shared across every runner set, and `maxWorkers` is a per-set ceiling within it.
+This is deliberate — a tenant-authored cap is no cap (the tenant could raise it), and it is what makes per-tenant quotas *safe*: a quota-blocked job recovers instead of dying.
+Size the quota for the proxy pool at `maxReplicas` **plus** worker pods up to each set's `maxWorkers`; the [onboarding quota step](tenant-onboarding.md#step-1b-set-the-platform-owned-resourcequota) has the formula.
+When a set should never be starved by cheaper runners, use `priorityTiers` to reserve a floor of preempting slots — the primitive ARC's per-scale-set model has no equivalent for.
 
 ### Security profiles
 
-ARC's `containerMode: dind` becomes two platform-owned grants in GAG v2, neither
-tenant-settable:
+ARC's `containerMode: dind` becomes two platform-owned grants in GAG v2, neither tenant-settable:
 
-1. **A privileged namespace.** The Pod Security level is a **namespace label** in
-   v2 (`actions-gateway.com/security-profile`), shared by every gateway in the
-   namespace. `privileged` additionally requires the namespace to carry
-   `actions-gateway.com/privileged-profile: allowed`, applied by an administrator,
-   or admission rejects it.
-2. **A privileged template.** A namespaced `RunnerTemplate` may **not** declare
-   privileged containers — a tenant must not self-author a privileged worker
-   shape. Privileged DinD/sysbox/Kata shapes are published by a platform admin as a
-   cluster-scoped `ClusterRunnerTemplate`, which a `RunnerSet` references with
-   `templateRef: { kind: ClusterRunnerTemplate, name: … }`.
+1. **A privileged namespace.** The Pod Security level is a **namespace label** in v2 (`actions-gateway.com/security-profile`), shared by every gateway in the namespace. `privileged` additionally requires the namespace to carry `actions-gateway.com/privileged-profile: allowed`, applied by an administrator, or admission rejects it.
+2. **A privileged template.** A namespaced `RunnerTemplate` may **not** declare privileged containers — a tenant must not self-author a privileged worker shape.
+   Privileged DinD/sysbox/Kata shapes are published by a platform admin as a cluster-scoped `ClusterRunnerTemplate`, which a `RunnerSet` references with `templateRef: { kind: ClusterRunnerTemplate, name: … }`.
 
-The default `baseline` profile is correct for ordinary build/test workloads; use
-`restricted` for high-isolation tenants. You can *harden* a profile in place freely
-but *relaxing* it is an explicit annotated opt-in. Full rules:
-[tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions) and
-[Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+The default `baseline` profile is correct for ordinary build/test workloads; use `restricted` for high-isolation tenants.
+You can *harden* a profile in place freely but *relaxing* it is an explicit annotated opt-in.
+Full rules: [tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions) and [Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
 
 ---
 
 ## Worked migration: one scale set, end to end
 
-This migrates a single ARC scale set to a GAG runner set with **zero downtime**
-— ARC keeps serving until you cut workflows over, and rollback is one line.
+This migrates a single ARC scale set to a GAG runner set with **zero downtime** — ARC keeps serving until you cut workflows over, and rollback is one line.
 
-Worked example: an ARC scale set named **`gpu-large`** in namespace **`team-a`**,
-authenticated with a GitHub App, running GPU workflows.
+Worked example: an ARC scale set named **`gpu-large`** in namespace **`team-a`**, authenticated with a GitHub App, running GPU workflows.
 
 ### 0. Confirm prerequisites
 
-The GMC is installed **with the v2 CRD chart** ([Install](install.md#optional-the-v2-api-crds)),
-the cluster is **Kubernetes ≥ 1.31**, and its CNI enforces egress NetworkPolicy
-([Egress isolation](#egress-isolation-the-big-difference)). Confirm the namespace is
-marked a managed tenant, carries its security-profile label, and has a
-platform-owned `ResourceQuota` — see the
-[tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions). **Leave
-the ARC scale set running** throughout.
+The GMC is installed **with the v2 CRD chart** ([Install](install.md#optional-the-v2-api-crds)), the cluster is **Kubernetes ≥ 1.31**, and its CNI enforces egress NetworkPolicy ([Egress isolation](#egress-isolation-the-big-difference)).
+Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned `ResourceQuota` — see the [tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions). **Leave the ARC scale set running** throughout.
 
 ### 1. Create the GitHub App Secret
 
-If your ARC scale set used a **GitHub App** already, you can reuse the same App —
-create a GAG-shaped Secret (`appId`, `installationId`, `privateKey`) in the tenant
-namespace per
-[tenant-onboarding Step 1](tenant-onboarding.md#step-1-create-the-github-app-secret).
-If your scale set used a **PAT**, register a GitHub App now (`Actions: Read` +
-`Administration: Read`, installed on the same org/repos) — GAG has no PAT path.
+If your ARC scale set used a **GitHub App** already, you can reuse the same App — create a GAG-shaped Secret (`appId`, `installationId`, `privateKey`) in the tenant namespace per [tenant-onboarding Step 1](tenant-onboarding.md#step-1-create-the-github-app-secret).
+If your scale set used a **PAT**, register a GitHub App now (`Actions: Read` + `Administration: Read`, installed on the same org/repos) — GAG has no PAT path.
 Never copy a private key through an environment variable or shell history.
 
 ### 2. Translate the scale set into the v2 object set
 
-Lift your ARC `spec.template` straight into the `RunnerTemplate` (same type), and
-carry the scale-set name across as the runner set's single label so existing
-`runs-on` keeps working:
+Lift your ARC `spec.template` straight into the `RunnerTemplate` (same type), and carry the scale-set name across as the runner set's single label so existing `runs-on` keeps working:
 
 ```yaml
 apiVersion: actions-gateway.com/v2beta1
@@ -355,9 +254,8 @@ spec:
   # No minRunners: GAG scales to zero with no cold-start penalty.
 ```
 
-Add one `RunnerSet` per ARC scale set you are migrating in this namespace — they
-all point at the same `ActionsGateway`, and share a `RunnerTemplate` wherever the
-pod shapes match. Where they differ, add a template per shape.
+Add one `RunnerSet` per ARC scale set you are migrating in this namespace — they all point at the same `ActionsGateway`, and share a `RunnerTemplate` wherever the pod shapes match.
+Where they differ, add a template per shape.
 
 ### 3. Apply and validate provisioning
 
@@ -365,54 +263,38 @@ pod shapes match. Where they differ, add a template per shape.
 kubectl apply -f gateway.yaml
 ```
 
-Wait for `Ready=True` on the gateway and each runner set, and confirm the AGC,
-proxy pool, RBAC, and NetworkPolicies came up — follow
-[tenant-onboarding Step 3](tenant-onboarding.md#step-3-validate-provisioning) and
-[Step 4](tenant-onboarding.md#step-4-validate-listener-sessions). At this point
-**both** the ARC scale set and the GAG runner set are registered with GitHub;
-GitHub routes a matching job to whichever acquires it first.
+Wait for `Ready=True` on the gateway and each runner set, and confirm the AGC, proxy pool, RBAC, and NetworkPolicies came up — follow [tenant-onboarding Step 3](tenant-onboarding.md#step-3-validate-provisioning) and [Step 4](tenant-onboarding.md#step-4-validate-listener-sessions).
+At this point **both** the ARC scale set and the GAG runner set are registered with GitHub; GitHub routes a matching job to whichever acquires it first.
 
 ### 4. Cut workflows over and verify
 
-Run a test job targeting the label and confirm a GAG worker pod is created,
-egresses through the proxy, and is deleted on completion
-([tenant-onboarding Step 5](tenant-onboarding.md#step-5-run-a-test-job)). Because
-you carried the name across as the label, existing `runs-on: gpu-large` workflows
-already land on GAG. Watch a few real jobs through the GAG path before removing
-ARC.
+Run a test job targeting the label and confirm a GAG worker pod is created, egresses through the proxy, and is deleted on completion ([tenant-onboarding Step 5](tenant-onboarding.md#step-5-run-a-test-job)).
+Because you carried the name across as the label, existing `runs-on: gpu-large` workflows already land on GAG.
+Watch a few real jobs through the GAG path before removing ARC.
 
 ### 5. Decommission the ARC scale set
 
-Once you trust the GAG path, scale the ARC scale set to zero / uninstall its Helm
-release:
+Once you trust the GAG path, scale the ARC scale set to zero / uninstall its Helm release:
 
 ```sh
 helm uninstall gpu-large -n team-a   # removes the AutoscalingRunnerSet + its listener pod
 ```
 
-Repeat steps 2–5 for each remaining scale set, then remove any bespoke
-NetworkPolicy / RBAC / quota manifests you hand-built around ARC — GAG reconciles
-those from the CRs now.
+Repeat steps 2–5 for each remaining scale set, then remove any bespoke NetworkPolicy / RBAC / quota manifests you hand-built around ARC — GAG reconciles those from the CRs now.
 
 ### Rollback
 
-Nothing in this flow removes ARC until step 5, so rollback during migration is
-trivial: if the GAG path misbehaves, **keep the ARC scale set running** and delete
-the GAG `RunnerSet` (or point `runs-on` back at the ARC scale-set name if you gave
-the GAG set a different label). Because both register independently with GitHub,
-there is no split-brain to untangle.
+Nothing in this flow removes ARC until step 5, so rollback during migration is trivial: if the GAG path misbehaves, **keep the ARC scale set running** and delete the GAG `RunnerSet` (or point `runs-on` back at the ARC scale-set name if you gave the GAG set a different label).
+Because both register independently with GitHub, there is no split-brain to untangle.
 
 ---
 
 ## Where to go next
 
-- [Tenant onboarding checklist](tenant-onboarding.md) — the full pre-conditions →
-  first-job reference this guide builds on.
+- [Tenant onboarding checklist](tenant-onboarding.md) — the full pre-conditions → first-job reference this guide builds on.
 - [Why GAG over ARC](../why-gag.md) — the capability-by-capability comparison.
 - [Getting Started](../getting-started.md) — the end-to-end first install.
-- [Network architecture](../design/network-architecture.md) — egress proxy and
-  NetworkPolicy detail, with isolation-validation probes.
+- [Network architecture](../design/network-architecture.md) — egress proxy and NetworkPolicy detail, with isolation-validation probes.
 - [Troubleshooting](troubleshooting.md) — common first-day failures.
-- [Deprecation and removal notice](v1alpha1-deprecation.md), covering what `v2.0.0`
-  removes (`v1alpha1`, `v2alpha1`, Classic acquisition). Relevant only if you are
-  *already* on GAG's v1 API; new migrations should not start there.
+- [Deprecation and removal notice](v1alpha1-deprecation.md), covering what `v2.0.0` removes (`v1alpha1`, `v2alpha1`, Classic acquisition).
+  Relevant only if you are *already* on GAG's v1 API; new migrations should not start there.

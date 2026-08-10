@@ -23,7 +23,8 @@ func buildNoProxy(userCIDRs []string) string {
 }
 ```
 
-**Impact:** If a user sets `spec.proxy.noProxyCIDRs`, the AGC's Kubernetes API calls may be routed through the CONNECT proxy instead of going directly to the API server. This would cause the AGC to malfunction at runtime.
+**Impact:** If a user sets `spec.proxy.noProxyCIDRs`, the AGC's Kubernetes API calls may be routed through the CONNECT proxy instead of going directly to the API server.
+This would cause the AGC to malfunction at runtime.
 
 **Fix:** Always append the mandatory defaults, prepending user-provided CIDRs if any:
 
@@ -51,7 +52,8 @@ func buildNoProxy(userCIDRs []string) string {
 
 **File:** `cmd/gmc/internal/controller/builder.go`
 
-`TestBuildNetworkPolicy_ProxyEgress` passes a non-empty `proxyClusterIP` but only asserts the port-443 GitHub CIDR rule. Two other rules in the policy are not verified:
+`TestBuildNetworkPolicy_ProxyEgress` passes a non-empty `proxyClusterIP` but only asserts the port-443 GitHub CIDR rule.
+Two other rules in the policy are not verified:
 
 - **AGC/worker egress:** the `proxyClusterIP/32` peer on port 8080 (routes AGC and worker pod traffic to the proxy)
 - **DNS egress:** port 53 UDP and TCP (always present, regardless of `managedNetworkPolicy`)
@@ -71,7 +73,8 @@ func buildNoProxy(userCIDRs []string) string {
 
 **File:** `cmd/gmc/internal/controller/ipranges.go`
 
-`HTTPGitHubIPRangeFetcher.FetchIPRanges` is the only production implementation of `GitHubIPRangeFetcher` and is entirely untested. All existing IP range tests use `stubFetcher`.
+`HTTPGitHubIPRangeFetcher.FetchIPRanges` is the only production implementation of `GitHubIPRangeFetcher` and is entirely untested.
+All existing IP range tests use `stubFetcher`.
 
 **Tests to add in `ipranges_test.go`** (using `httptest.NewServer`):
 
@@ -90,7 +93,8 @@ func buildNoProxy(userCIDRs []string) string {
 
 **File:** `cmd/gmc/internal/controller/builder.go`
 
-`buildProxyServiceAddr` produces the `HTTP_PROXY`/`HTTPS_PROXY` value that the AGC uses for all outbound traffic. It is not directly tested; `TestBuildAGCDeployment_ProxyEnv` only checks that the env is non-empty.
+`buildProxyServiceAddr` produces the `HTTP_PROXY`/`HTTPS_PROXY` value that the AGC uses for all outbound traffic.
+It is not directly tested; `TestBuildAGCDeployment_ProxyEnv` only checks that the env is non-empty.
 
 **Tests to add in `builder_test.go`:**
 
@@ -103,7 +107,8 @@ func buildNoProxy(userCIDRs []string) string {
 
 ## 5. Missing builder coverage — untested resource constructors
 
-Several builder functions have no direct tests. Most are simple but some have non-trivial field choices.
+Several builder functions have no direct tests.
+Most are simple but some have non-trivial field choices.
 
 **Tests to add in `builder_test.go`:**
 
@@ -127,7 +132,9 @@ Several builder functions have no direct tests. Most are simple but some have no
 
 **File:** `cmd/proxy/proxy.go`
 
-`ListenAndServe` is the entry point for the proxy in production but is not tested. The existing tests bypass it by calling `handleConnect` directly via `httptest.NewServer`. The context cancellation path (the `select { case <-ctx.Done() }` branch) is completely untested.
+`ListenAndServe` is the entry point for the proxy in production but is not tested.
+The existing tests bypass it by calling `handleConnect` directly via `httptest.NewServer`.
+The context cancellation path (the `select { case <-ctx.Done() }` branch) is completely untested.
 
 **Tests to add in `proxy_test.go`:**
 
@@ -142,7 +149,8 @@ Several builder functions have no direct tests. Most are simple but some have no
 
 **File:** `cmd/gmc/internal/controller/ipranges.go`
 
-`Start` is the `manager.Runnable` entry point and contains: an immediate first call, a ticker loop, and context-cancellation exit. None of this is tested — existing tests call `reconcileAll` directly.
+`Start` is the `manager.Runnable` entry point and contains: an immediate first call, a ticker loop, and context-cancellation exit.
+None of this is tested — existing tests call `reconcileAll` directly.
 
 **Tests to add in `ipranges_test.go`:**
 
@@ -158,7 +166,8 @@ Several builder functions have no direct tests. Most are simple but some have no
 
 **File:** `cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go`
 
-`ValidateDelete` is a no-op but is not explicitly covered. The plan's test table mentions it should return no error.
+`ValidateDelete` is a no-op but is not explicitly covered.
+The plan's test table mentions it should return no error.
 
 **Test to add in `actionsgateway_webhook_test.go`:**
 

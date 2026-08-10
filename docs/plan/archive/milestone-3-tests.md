@@ -16,10 +16,9 @@ Items are ranked by impact on bug detection.
 
 ## Status
 
-**All High- and Medium-priority items are implemented and merged** — H1 landed first,
-and H2–H5 plus M1–M4 landed together in commit `17a7f5c`
-("test: implement Milestone 3 test improvements from plan"). The Low-priority items
-are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.
+**All High- and Medium-priority items are implemented and merged** — H1 landed first, and H2–H5 plus M1–M4 landed together in commit `17a7f5c` ("test: implement Milestone 3 test improvements from plan").
+The Low-priority items are resolved or obsolete (see L1/L2 below).
+Q9 is therefore complete.
 
 | Item | State | Where |
 |---|---|---|
@@ -57,7 +56,9 @@ Per-item detail follows below for historical context.
 
 ### H2 — Rerun API 5xx is non-fatal but no test verifies it ✅ Done
 
-**What's missing:** `handleEviction` logs the error and continues when the GitHub rerun API returns a non-2xx status. No test verifies that: (a) `provision` still returns `nil` (non-fatal), (b) the retry budget counter is still incremented. A regression making the error fatal would go undetected.
+**What's missing:** `handleEviction` logs the error and continues when the GitHub rerun API returns a non-2xx status.
+No test verifies that: (a) `provision` still returns `nil` (non-fatal), (b) the retry budget counter is still incremented.
+A regression making the error fatal would go undetected.
 
 **Proposed fix:**
 
@@ -72,7 +73,9 @@ Add `TestProvisioner_EvictionRerunAPI5xx`:
 
 ### H3 — `handleJob` decryption-failure fallback path is untested ✅ Done
 
-**What's missing:** `goroutine.go` falls back to the raw `msg.Body` when `DecryptMessageBody` fails (wrong key produces bad PKCS#7 padding). No test exercises this branch. The contract — silent fallback vs. metric/log — is unverified, and a wrong-key scenario producing garbage is invisible to the test suite.
+**What's missing:** `goroutine.go` falls back to the raw `msg.Body` when `DecryptMessageBody` fails (wrong key produces bad PKCS#7 padding).
+No test exercises this branch.
+The contract — silent fallback vs. metric/log — is unverified, and a wrong-key scenario producing garbage is invisible to the test suite.
 
 **Proposed fix:**
 
@@ -85,7 +88,8 @@ Add `TestListener_DecryptFailureFallsBackToPlaintext`:
 
 ### H4 — Second priority tier never assigned; tier boundary off-by-one untested ✅ Done
 
-**What's missing:** `TestProvisioner_PriorityTiersAssignment` tests only 3 active pods against thresholds of 5 and 10, so only tier 1 (`runner-critical`) is ever assigned. Flipping `<` to `<=` in `ceilingCheck` would silently mis-assign pods at the boundary without any test failing.
+**What's missing:** `TestProvisioner_PriorityTiersAssignment` tests only 3 active pods against thresholds of 5 and 10, so only tier 1 (`runner-critical`) is ever assigned.
+Flipping `<` to `<=` in `ceilingCheck` would silently mis-assign pods at the boundary without any test failing.
 
 **Proposed fix:**
 
@@ -96,11 +100,13 @@ Add `TestListener_DecryptFailureFallsBackToPlaintext`:
 
 ### H5 — Budget-exhaustion negative assertion uses a 100 ms wall-clock sleep ✅ Done
 
-**What's missing:** `TestProvisioner_EvictionRetryBudgetExhausted` uses `time.After(100ms)` to assert "no API call made." This is racy on loaded CI machines (the handler may not have returned yet) and would silently pass if a bug introduced a >100 ms delay before calling the API.
+**What's missing:** `TestProvisioner_EvictionRetryBudgetExhausted` uses `time.After(100ms)` to assert "no API call made."
+This is racy on loaded CI machines (the handler may not have returned yet) and would silently pass if a bug introduced a >100 ms delay before calling the API.
 
 **Proposed fix:**
 
-Replace the channel-based negative assertion with a synchronous metric counter check. Since `provision` returns only after `handleEviction` finishes, asserting `testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues(...)) == 1` and `rerunCount == 1` directly after `runCycle` returns is race-free with no sleep required.
+Replace the channel-based negative assertion with a synchronous metric counter check.
+Since `provision` returns only after `handleEviction` finishes, asserting `testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues(...)) == 1` and `rerunCount == 1` directly after `runCycle` returns is race-free with no sleep required.
 
 ---
 
@@ -108,7 +114,9 @@ Replace the channel-based negative assertion with a synchronous metric counter c
 
 ### M1 — `createSession` raw-key and no-key branches untested ✅ Done
 
-**What's missing:** `createSession` has three encryption branches: (a) `encrypted == true` — RSA decrypt (tested); (b) `encrypted == false` — use raw key bytes; (c) no `encryptionKey` field — `aesKey` stays `nil`, messages parsed as plaintext. Branches (b) and (c) are dead to the test suite. A bug that sets `aesKey` to an empty slice instead of `nil` in branch (b) would cause every subsequent `DecryptMessageBody` call to fail with a cipher error.
+**What's missing:** `createSession` has three encryption branches: (a) `encrypted == true` — RSA decrypt (tested); (b) `encrypted == false` — use raw key bytes; (c) no `encryptionKey` field — `aesKey` stays `nil`, messages parsed as plaintext.
+Branches (b) and (c) are dead to the test suite.
+A bug that sets `aesKey` to an empty slice instead of `nil` in branch (b) would cause every subsequent `DecryptMessageBody` call to fail with a cipher error.
 
 **Proposed fix:**
 
@@ -119,7 +127,8 @@ Replace the channel-based negative assertion with a synchronous metric counter c
 
 ### M2 — `writePayloadToPipe` with an empty payload is untested ✅ Done
 
-**What's missing:** A misconfigured empty Kubernetes Secret produces a `[0,0,0,0]` wire message with no body bytes. `Runner.Worker` would then read zero bytes after the prefix, potentially hanging or erroring. No test covers this case or verifies the length prefix round-trips correctly for large payloads.
+**What's missing:** A misconfigured empty Kubernetes Secret produces a `[0,0,0,0]` wire message with no body bytes. `Runner.Worker` would then read zero bytes after the prefix, potentially hanging or erroring.
+No test covers this case or verifies the length prefix round-trips correctly for large payloads.
 
 **Proposed fix:**
 
@@ -130,7 +139,8 @@ Replace the channel-based negative assertion with a synchronous metric counter c
 
 ### M3 — `activePodCount` Pending-pod branch is untested ✅ Done
 
-**What's missing:** `activePodCount` counts both `PodRunning` and `PodPending` pods, but every ceiling test seeds only `PodRunning` pods. Removing the `PodPending` branch from the count would silently allow over-provisioning past the ceiling.
+**What's missing:** `activePodCount` counts both `PodRunning` and `PodPending` pods, but every ceiling test seeds only `PodRunning` pods.
+Removing the `PodPending` branch from the count would silently allow over-provisioning past the ceiling.
 
 **Proposed fix:**
 
@@ -140,7 +150,9 @@ Add `TestProvisioner_PendingPodsCountTowardCeiling`: pre-populate 2 Running + 1 
 
 ### M4 — Externally deleted pod path untested ✅ Done
 
-**What's missing:** `waitForPodCompletion` returns `(PodSucceeded, "", nil)` when a pod disappears (not-found), representing an operator manually deleting the pod mid-run. No test verifies this does not trigger eviction-retry handling. Inverting the not-found logic to return `PodFailed` would spuriously fire the rerun API.
+**What's missing:** `waitForPodCompletion` returns `(PodSucceeded, "", nil)` when a pod disappears (not-found), representing an operator manually deleting the pod mid-run.
+No test verifies this does not trigger eviction-retry handling.
+Inverting the not-found logic to return `PodFailed` would spuriously fire the rerun API.
 
 **Proposed fix:**
 
@@ -156,7 +168,8 @@ Add `TestProvisioner_PodDeletedExternallySucceeds`:
 
 ### L1 — `TestWrapper_WritesToNamedPipes` has no timeout ❎ Obsolete
 
-**What's missing:** The reader goroutine has no deadline. A blocked FIFO open (e.g., `Mkfifo` fails silently and `writePayloadToPipe` never opens the write end) would hang the test indefinitely in CI rather than report a clear failure.
+**What's missing:** The reader goroutine has no deadline.
+A blocked FIFO open (e.g., `Mkfifo` fails silently and `writePayloadToPipe` never opens the write end) would hang the test indefinitely in CI rather than report a clear failure.
 
 **Proposed fix:**
 
@@ -166,8 +179,10 @@ Add a `context.WithTimeout(t.Context(), 5*time.Second)` and select on `ctx.Done(
 
 ### L2 — `closeHTTP` uses an unconditional 50 ms sleep for goroutine drain ✅ Done
 
-**What's missing:** `closeHTTP` in `goroutine_test.go` calls `time.Sleep(50ms)` before returning, and this pattern appears ~13 times in the file, adding ~650 ms of synthetic wait per test run. The sleep is undocumented and may be insufficient on slow hardware.
+**What's missing:** `closeHTTP` in `goroutine_test.go` calls `time.Sleep(50ms)` before returning, and this pattern appears ~13 times in the file, adding ~650 ms of synthetic wait per test run.
+The sleep is undocumented and may be insufficient on slow hardware.
 
 **Proposed fix:**
 
-Call `srv.CloseClientConnections()` before `srv.Close()` to drain in-flight connections without a fixed wait. If a sleep is still required for a specific goroutine, document the race it guards against with a comment.
+Call `srv.CloseClientConnections()` before `srv.Close()` to drain in-flight connections without a fixed wait.
+If a sleep is still required for a specific goroutine, document the race it guards against with a comment.

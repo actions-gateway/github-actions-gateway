@@ -16,9 +16,18 @@ This chapter specifies the contracts the system is built against: the Kubernetes
 
 ## 3.1. Kubernetes CRD Schemas
 
-Two Custom Resource Definitions are introduced. `ActionsGateway` is namespace-scoped and owned by the GMC. `RunnerGroup` is namespace-scoped and owned by the AGC. Both live in the tenant's namespace. The GMC creates `RunnerGroup` resources as part of AGC bootstrapping.
+Two Custom Resource Definitions are introduced. `ActionsGateway` is namespace-scoped and owned by the GMC. `RunnerGroup` is namespace-scoped and owned by the AGC.
+Both live in the tenant's namespace.
+The GMC creates `RunnerGroup` resources as part of AGC bootstrapping.
 
-> **v2 API (`v2beta1`, group `actions-gateway.com`).** A decomposed v2 API is served side by side with this `v1alpha1` (`actions-gateway.github.com`) surface during the coexistence window. It is **fully shipped** (milestones M1–M5): the five kinds and their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built. v2 has since graduated: **`v2beta1`** is the storage and hub version and the shape new tenants onboard on, while `v2alpha1` stays served as the migration on-ramp. Every `v2alpha1` kind carries `+kubebuilder:deprecatedversion`, so the apiserver warns on any `v2alpha1` read or write; the version stays served either way, and the conversion webhook still round-trips it. Both `v1alpha1` kinds carry the same marker (Q633), naming the v2 kind that replaces each and `gag-migrate` as the move — the v1 monolith fans out, so the replacement is a different kind rather than the same kind at a newer version. Tenants migrate on their own schedule via the migration tool, and nothing in the `v1alpha1` surface below changes until it is removed. This `v1alpha1` surface, `v2alpha1`, and the classic acquisition machinery are all **deprecated and removed at `v2.0.0`**, announced one release ahead in `v1.3.0`; see the [deprecation and removal notice](../operations/v1alpha1-deprecation.md). v2 splits the `ActionsGateway` + `RunnerGroup` monolith into five kinds (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`), renames the group to the project-owned domain, and freezes the field-naming/immutability decisions. The full v2 shape and rationale are the design source of truth in [Appendix H — v2 API Decomposition](appendix-h-v2-api-decomposition.md); the milestone sequencing is in the [v2 API plan](../plan/v2-api.md). The schemas below remain authoritative for the running `v1alpha1` API.
+> **v2 API (`v2beta1`, group `actions-gateway.com`).** A decomposed v2 API is served side by side with this `v1alpha1` (`actions-gateway.github.com`) surface during the coexistence window.
+> It is **fully shipped** (milestones M1–M5): the five kinds and their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built. v2 has since graduated: **`v2beta1`** is the storage and hub version and the shape new tenants onboard on, while `v2alpha1` stays served as the migration on-ramp.
+> Every `v2alpha1` kind carries `+kubebuilder:deprecatedversion`, so the apiserver warns on any `v2alpha1` read or write; the version stays served either way, and the conversion webhook still round-trips it.
+> Both `v1alpha1` kinds carry the same marker (Q633), naming the v2 kind that replaces each and `gag-migrate` as the move — the v1 monolith fans out, so the replacement is a different kind rather than the same kind at a newer version.
+> Tenants migrate on their own schedule via the migration tool, and nothing in the `v1alpha1` surface below changes until it is removed.
+> This `v1alpha1` surface, `v2alpha1`, and the classic acquisition machinery are all **deprecated and removed at `v2.0.0`**, announced one release ahead in `v1.3.0`; see the [deprecation and removal notice](../operations/v1alpha1-deprecation.md). v2 splits the `ActionsGateway` + `RunnerGroup` monolith into five kinds (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`), renames the group to the project-owned domain, and freezes the field-naming/immutability decisions.
+> The full v2 shape and rationale are the design source of truth in [Appendix H — v2 API Decomposition](appendix-h-v2-api-decomposition.md); the milestone sequencing is in the [v2 API plan](../plan/v2-api.md).
+> The schemas below remain authoritative for the running `v1alpha1` API.
 
 ```go
 // SecretReference is a pointer to a Kubernetes Secret, with an optional
@@ -792,7 +801,8 @@ The Secret referenced by `gitHubAppRef` must be of `type: Opaque` and contain th
 | `privateKey` | PEM-encoded PKCS#1 RSA private key | Yes | The private key downloaded from the App settings page. Must include the `-----BEGIN RSA PRIVATE KEY-----` header and footer. |
 | `installationId` | Decimal integer string, e.g. `"78901234"` | Yes | The installation ID for the App's installation on the target organization or repository. Found in the webhook payload or via the GitHub API (`GET /app/installations`). |
 
-No other keys are read. Unknown keys are ignored.
+No other keys are read.
+Unknown keys are ignored.
 
 A minimal example manifest:
 
@@ -812,17 +822,25 @@ stringData:
     -----END RSA PRIVATE KEY-----
 ```
 
-The AGC uses these three values to generate short-lived GitHub App installation access tokens at session creation time. The `privateKey` is used to sign a JWT asserting the App's identity using the RS256 algorithm; the JWT is then exchanged for an installation token scoped to the `installationId`. Tokens are never written to disk and are refreshed in-memory before expiry.
+The AGC uses these three values to generate short-lived GitHub App installation access tokens at session creation time.
+The `privateKey` is used to sign a JWT asserting the App's identity using the RS256 algorithm; the JWT is then exchanged for an installation token scoped to the `installationId`.
+Tokens are never written to disk and are refreshed in-memory before expiry.
 
-**Secrets are treated as immutable.** Kubernetes does not deliver Secret updates to running Pods reliably or at a predictable time, making in-place rotation difficult to reason about and hard to test. Instead, credential rotation is performed by creating a new Secret with the updated values and updating `gitHubAppRef.Name` in the `ActionsGateway` CR to reference it. The GMC detects the changed reference during reconciliation and rolls the AGC Deployment to a new Pod mounted with the new Secret. The old Secret can be deleted once the new Pod is healthy. This pattern makes rotation observable (it is a normal Deployment rollout), testable (assert the new Pod references the new Secret by name), and safe to automate.
+**Secrets are treated as immutable.** Kubernetes does not deliver Secret updates to running Pods reliably or at a predictable time, making in-place rotation difficult to reason about and hard to test.
+Instead, credential rotation is performed by creating a new Secret with the updated values and updating `gitHubAppRef.Name` in the `ActionsGateway` CR to reference it.
+The GMC detects the changed reference during reconciliation and rolls the AGC Deployment to a new Pod mounted with the new Secret.
+The old Secret can be deleted once the new Pod is healthy.
+This pattern makes rotation observable (it is a normal Deployment rollout), testable (assert the new Pod references the new Secret by name), and safe to automate.
 
 ---
 
 ## 3.3. Re-implemented Broker API Endpoints
 
-> **Common pitfall — the two-URL model.** GitHub's broker protocol uses two distinct base URLs and it is easy to conflate them in client code. **`broker_url`** is static for a given runner registration and is used by `POST /sessions` and `GET /message`. **`run_service_url`** is dynamic, extracted from each `GetMessage` response body, and is the base for that job's `POST /acquirejob` and `POST /renewjob` calls. The run service URL differs per job and must not be cached globally — caching it across jobs is the most common cause of mysterious 404s in custom broker clients.
+> **Common pitfall — the two-URL model.** GitHub's broker protocol uses two distinct base URLs and it is easy to conflate them in client code. **`broker_url`** is static for a given runner registration and is used by `POST /sessions` and `GET /message`. **`run_service_url`** is dynamic, extracted from each `GetMessage` response body, and is the base for that job's `POST /acquirejob` and `POST /renewjob` calls.
+> The run service URL differs per job and must not be cached globally — caching it across jobs is the most common cause of mysterious 404s in custom broker clients.
 
-These endpoints are called by each AGC instance. The GMC has no direct relationship with this API.
+These endpoints are called by each AGC instance.
+The GMC has no direct relationship with this API.
 
 | HTTP Method | Target Path | Handled By | Purpose |
 | --- | --- | --- | --- |
@@ -833,17 +851,22 @@ These endpoints are called by each AGC instance. The GMC has no direct relations
 | **POST** | `{run_service_url}/completejob` | Worker pod runner binary; AGC Goroutine (fan-out completion only) | Reports a job's terminal result (`planId`, `jobId`, `result`). Normally called by the worker pod's runner binary for the job it ran. The AGC calls it directly **only** to reconcile a fanned-out job's deduped sibling deliveries (Q260 Option A): when the winner's job finishes it fans a `completejob` out to **each** deduped sibling delivery — keyed on that sibling's own `jobId`, with the winner's pod-phase-proxy `result` (Failed pod → `failed`, else `succeeded`) — so GitHub does not cancel the job at its ~15-minute unstarted-job timeout; a late redelivery within the linger window is resolved with the same recorded result. **Auth:** job-scoped token, same as `renewjob`. **On by default (`AGC_FANOUT_COMPLETION`):** the re-route #5 dogfood experiment (2026-07-04) live-confirmed the run service's completion is per-delivery, not plan-ID-scoped — `completejob` on a sibling's own `jobId` resolves only that assignment (returns OK) and the winner's own delivery still carries the real workflow result, so previously-wedged concurrent jobs concluded green. Opt out with `AGC_FANOUT_COMPLETION=false`. See [`docs/plan/q260-fanout-completion-reconciliation.md`](../plan/archive/q260-fanout-completion-reconciliation.md). |
 | **POST** | `{broker_url}/acknowledge` | AGC Goroutine | Post-dispatch telemetry notification to the broker (`AcknowledgeRunnerRequestAsync` in the official runner source). Confirmed in Milestone 1 (Investigation A) as **not required for correct job delivery** — `acquirejob` alone is the atomic claim. The v2 broker host does not expose the v1 VSTS delete-message endpoint; the correct v2 path is `POST {brokerURL}acknowledge?sessionId={sessionId}` with body `{"runnerRequestId": "…"}`. Callers MAY skip this call; it has no effect on job delivery semantics. |
 
-**Retry policy for `GET /message`:** Based on `MessageListener.cs` in the official runner source, the AGC session goroutine should implement a two-tier random backoff on errors: up to 5 consecutive errors use [15s, 30s] jitter; beyond 5 errors the window widens to [30s, 60s]. After 50 consecutive empty-body (202) responses within 30 minutes, apply the same [15s, 30s] backoff as a server-anomaly guard. **Non-retriable errors** (surface as a `RunnerGroup` status Condition, do not retry in a tight loop): session not found, pool not found, unauthorized, access denied. **Special case:** a session-expired error should trigger session recreation before resuming the poll loop.
+**Retry policy for `GET /message`:** Based on `MessageListener.cs` in the official runner source, the AGC session goroutine should implement a two-tier random backoff on errors: up to 5 consecutive errors use [15s, 30s] jitter; beyond 5 errors the window widens to [30s, 60s].
+After 50 consecutive empty-body (202) responses within 30 minutes, apply the same [15s, 30s] backoff as a server-anomaly guard. **Non-retriable errors** (surface as a `RunnerGroup` status Condition, do not retry in a tight loop): session not found, pool not found, unauthorized, access denied. **Special case:** a session-expired error should trigger session recreation before resuming the poll loop.
 
-**Session reuse after `acquirejob`.** Confirmed in Milestone 1 (Investigation C): a goroutine may call `GET /message` again on the same `sessionId` immediately after a successful `acquirejob` — the session remains live and returns `202` without error. The AGC does not need a delete→create cycle between jobs.
+**Session reuse after `acquirejob`.** Confirmed in Milestone 1 (Investigation C): a goroutine may call `GET /message` again on the same `sessionId` immediately after a successful `acquirejob` — the session remains live and returns `202` without error.
+The AGC does not need a delete→create cycle between jobs.
 
-**One active session per registered runner agent.** `POST /sessions` returns `409 Conflict` if the supplied `agentId` already has an active session (confirmed in Milestone 1, Investigation D). The AGC must assign a distinct pre-registered agent to each concurrent listener goroutine. Agent provisioning (runner registration) is a RunnerGroup setup concern, not a per-session concern — see [§2.2](02-architecture.md#22-tier-2--actions-gateway-controller-agc) for the agent pool model.
+**One active session per registered runner agent.** `POST /sessions` returns `409 Conflict` if the supplied `agentId` already has an active session (confirmed in Milestone 1, Investigation D).
+The AGC must assign a distinct pre-registered agent to each concurrent listener goroutine.
+Agent provisioning (runner registration) is a RunnerGroup setup concern, not a per-session concern — see [§2.2](02-architecture.md#22-tier-2--actions-gateway-controller-agc) for the agent pool model.
 
 ---
 
 ## 3.4. Broker Payload Blueprints (Go Structs)
 
-The AGC uses the following request and response shapes. The `GetMessage` response body contains the `run_service_url` and `runner_request_id` needed for the subsequent `acquirejob` and `renewjob` calls — these values must be extracted and used per-job, not cached globally.
+The AGC uses the following request and response shapes.
+The `GetMessage` response body contains the `run_service_url` and `runner_request_id` needed for the subsequent `acquirejob` and `renewjob` calls — these values must be extracted and used per-job, not cached globally.
 
 ```go
 // TaskAgentMessage is the response body from GET {broker_url}/message.
@@ -931,11 +954,13 @@ type RenewJobResponse struct {
 
 ## 3.5. GitHub API Rate Limit Budget
 
-Each GitHub App installation receives **15,000 requests per hour** against the broker and run service endpoints combined. The AGC's per-session and per-job request mix produces a predictable steady-state load that operators should size against this budget.
+Each GitHub App installation receives **15,000 requests per hour** against the broker and run service endpoints combined.
+The AGC's per-session and per-job request mix produces a predictable steady-state load that operators should size against this budget.
 
 **Per-session steady-state cost** (one idle long-polling goroutine, no active job):
 
-* `GET /message` — 50s long-poll, returns 202 on empty. At maximum density an idle session issues ~72 requests/hour against the broker.
+* `GET /message` — 50s long-poll, returns 202 on empty.
+  At maximum density an idle session issues ~72 requests/hour against the broker.
 
 **Per-active-job steady-state cost** (one goroutine with a running job):
 
@@ -948,9 +973,14 @@ Each GitHub App installation receives **15,000 requests per hour** against the b
   250 sessions × 72 message-polls/hr   = 18,000  -- already exceeds 15K alone
 ```
 
-In practice the empty-message poll budget dominates everything else. Tenants who need to operate at higher session counts MUST shard across multiple GitHub App installations (one installation per `ActionsGateway` CR, multiple CRs in separate namespaces). Multi-installation per single AGC is explicitly out of scope for v1.
+In practice the empty-message poll budget dominates everything else.
+Tenants who need to operate at higher session counts MUST shard across multiple GitHub App installations (one installation per `ActionsGateway` CR, multiple CRs in separate namespaces).
+Multi-installation per single AGC is explicitly out of scope for v1.
 
-**429 handling.** On a `429 Too Many Requests` response, the AGC honors the `Retry-After` header (or falls back to exponential backoff capped at 5 minutes), increments `actions_gateway_message_poll_errors_total{reason="rate_limited"}`, and surfaces a `RateLimited=True` condition (reason `SustainedRateLimit`) on the affected `RunnerGroup` once the 429s persist past 10 minutes, so operators see the saturation in `kubectl describe runnergroup` without scraping logs. Sustained rate-limited state (more than 10 minutes) should page on-call. The first successful poll after the budget recovers clears it to `RateLimited=False` (reason `PollingHealthy`) — the condition does not require an AGC restart to reset (Q332). The scale-set acquisition tier handles a 429 the same way — same counter and label, same condition on the owning `RunnerSet` — so the query an operator writes does not depend on which tier a tenant is on (Q446).
+**429 handling.** On a `429 Too Many Requests` response, the AGC honors the `Retry-After` header (or falls back to exponential backoff capped at 5 minutes), increments `actions_gateway_message_poll_errors_total{reason="rate_limited"}`, and surfaces a `RateLimited=True` condition (reason `SustainedRateLimit`) on the affected `RunnerGroup` once the 429s persist past 10 minutes, so operators see the saturation in `kubectl describe runnergroup` without scraping logs.
+Sustained rate-limited state (more than 10 minutes) should page on-call.
+The first successful poll after the budget recovers clears it to `RateLimited=False` (reason `PollingHealthy`) — the condition does not require an AGC restart to reset (Q332).
+The scale-set acquisition tier handles a 429 the same way — same counter and label, same condition on the owning `RunnerSet` — so the query an operator writes does not depend on which tier a tenant is on (Q446).
 
 **Capacity planning corollary.** The 250-session ceiling combines with the per-AGC memory budget ([Appendix A](appendix-a-capacity-slos.md)) to determine when to add a second `RunnerGroup` (same installation, more goroutines within budget) vs. a second `ActionsGateway` CR (separate installation, separate budget).
 

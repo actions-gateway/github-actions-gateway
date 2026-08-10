@@ -1,10 +1,8 @@
 # Kubernetes Ecosystem Integration Landscape — Research & GAG Relevance
 
-> Research artifact (2026-06-25). Goal: catalog the ~100 most-adopted Kubernetes
-> integrations, flag which **interact**, **conflict**, or **need integration**
-> with github-actions-gateway (GAG), and propose backlog items + conventions to
-> adopt. Popularity is a rough guestimate from CNCF landscape + GitHub stars +
-> field adoption; exact ranking is not the point.
+> Research artifact (2026-06-25).
+> Goal: catalog the ~100 most-adopted Kubernetes integrations, flag which **interact**, **conflict**, or **need integration** with github-actions-gateway (GAG), and propose backlog items + conventions to adopt.
+> Popularity is a rough guestimate from CNCF landscape + GitHub stars + field adoption; exact ranking is not the point.
 
 ## How to read the relevance column
 
@@ -175,26 +173,28 @@ GAG facts that drive the mapping (from `docs/design/`):
 
 ## What to evaluate further — backlog candidates
 
-> **Filed to the backlog 2026-06-25** (`docs/STATUS.md`). Mapping: Q218 worker
-> disruption-safety (**v2beta1 gate**), Q205 label/metric naming audit
-> (**recommended before the beta freeze**), Q206 service-mesh, Q207 policy-engine
-> matrix, Q208 CNI FQDN egress, Q209 GitOps+ESO examples, Q210 in-runner build,
-> Q211 P2P image distribution, Q212 Velero, Q213 OpenCost — all Queue. Deferred
-> (trigger-gated, additive): Q214 SPIFFE/SPIRE signer, Q215 worker cache backend,
-> Q216 GPU runner support, Q217 OLM bundle. KEDA proxy scaling shipped as the
-> Q173 `managedAutoscaling` opt-out. Only Q218/Q205 touch the v2beta1 cut; everything else is additive and
-> sorts after it. See [v2beta1.md](v2beta1.md) for why Q218 gates the beta.
+> **Filed to the backlog 2026-06-25** (`docs/STATUS.md`).
+> Mapping: Q218 worker disruption-safety (**v2beta1 gate**), Q205 label/metric naming audit (**recommended before the beta freeze**), Q206 service-mesh, Q207 policy-engine matrix, Q208 CNI FQDN egress, Q209 GitOps+ESO examples, Q210 in-runner build, Q211 P2P image distribution, Q212 Velero, Q213 OpenCost — all Queue.
+> Deferred (trigger-gated, additive): Q214 SPIFFE/SPIRE signer, Q215 worker cache backend, Q216 GPU runner support, Q217 OLM bundle.
+> KEDA proxy scaling shipped as the Q173 `managedAutoscaling` opt-out.
+> Only Q218/Q205 touch the v2beta1 cut; everything else is additive and sorts after it.
+> See [v2beta1.md](v2beta1.md) for why Q218 gates the beta.
 
-Ranked by value × likelihood users hit it. Bare-ID Queue items to file:
+Ranked by value × likelihood users hit it.
+Bare-ID Queue items to file:
 
-1. **Service-mesh coexistence guide (Istio/Linkerd/Cilium ambient).** 🔴 The #1 silent breakage: injected sidecars prevent run-to-completion worker pods from terminating, and mesh egress interception fights the per-tenant proxy. Deliver: per-namespace injection opt-out, native-sidecar/ambient guidance, egress-exclusion notes. *Highest priority — affects every mesh user.*
-2. **Node-autoscaler disruption safety (Karpenter + Cluster Autoscaler).** ✅ **Done (Q218).** The provisioner gap-fills `karpenter.sh/do-not-disrupt: "true"` and `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` on every worker pod so consolidation/scale-down doesn't strand running jobs. Overridable per-key via `podTemplate.metadata.annotations`.
+1. **Service-mesh coexistence guide (Istio/Linkerd/Cilium ambient).** 🔴 The #1 silent breakage: injected sidecars prevent run-to-completion worker pods from terminating, and mesh egress interception fights the per-tenant proxy.
+   Deliver: per-namespace injection opt-out, native-sidecar/ambient guidance, egress-exclusion notes. *Highest priority — affects every mesh user.*
+2. **Node-autoscaler disruption safety (Karpenter + Cluster Autoscaler).** ✅ **Done (Q218).** The provisioner gap-fills `karpenter.sh/do-not-disrupt: "true"` and `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` on every worker pod so consolidation/scale-down doesn't strand running jobs.
+   Overridable per-key via `podTemplate.metadata.annotations`.
 3. **Descheduler exclusion.** ✅ **Done (Q218).** Worker pods are gap-filled with `descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"` (current well-known key) so the descheduler doesn't evict mid-job.
 4. **Policy-engine compatibility matrix (Kyverno / Gatekeeper).** ✅ **Done (Q207).** [`docs/operations/admission-policies.md`](../operations/admission-policies.md) maps each common policy class to GAG's real pod posture (per worker profile + proxy/AGC/GMC) and ships applyable Kyverno + Gatekeeper enforce/exception samples under [`operations/examples/policies/`](../operations/examples/policies/README.md).
-5. **CNI-native egress policy (Cilium FQDN / Calico DNS policy).** 🟠 Offer an opt-in that replaces GMC's GitHub-CIDR feed with `toFQDNs: api.github.com` — simpler, no 24h CIDR reconcile. Pairs with existing `managedNetworkPolicy: false`.
+5. **CNI-native egress policy (Cilium FQDN / Calico DNS policy).** 🟠 Offer an opt-in that replaces GMC's GitHub-CIDR feed with `toFQDNs: api.github.com` — simpler, no 24h CIDR reconcile.
+   Pairs with existing `managedNetworkPolicy: false`.
 6. **External Secrets Operator example for the GitHub App key.** 🟠 Low-risk, high-demand: wire `gitHubAppRef` to an ESO-synced Secret; also Sealed Secrets variant for GitOps.
 7. **GitOps install examples (Argo CD Application + Flux HelmRelease).** 🟠 OCI Helm chart + CRD `resource-policy: keep` has pruning gotchas worth a tested example.
-8. **KEDA-driven scaling (proxy pool and/or capacity signal).** 🟠 Proxy-pool half shipped (Q173 `managedAutoscaling: false`); a GitHub-queue-depth capacity signal remains open. ARC users expect KEDA.
+8. **KEDA-driven scaling (proxy pool and/or capacity signal).** 🟠 Proxy-pool half shipped (Q173 `managedAutoscaling: false`); a GitHub-queue-depth capacity signal remains open.
+   ARC users expect KEDA.
 9. **In-runner image build guidance (BuildKit/Kaniko/Sysbox + PSA profiles).** 🟠 The most common runner workload; map each build approach to the right `securityProfile`.
 10. **P2P image distribution (Spegel/Dragonfly) recommendation.** ✅ **Done (Q211).** Ephemeral workers cause image-pull storms at scale; recommended-companion guide at [operations/p2p-image-distribution.md](../operations/p2p-image-distribution.md) covers Spegel vs Dragonfly and the `imagePullPolicy`/digest-pin interplay.
 11. **SPIFFE/SPIRE workload-identity signer.** 🟠 Realize the pluggable signer interface beyond Vault; keyless App-JWT signing.
@@ -207,10 +207,12 @@ Ranked by value × likelihood users hit it. Bare-ID Queue items to file:
 ## Conventions & best practices to adopt (so GAG feels native to these users)
 
 - **Pod disruption annotations as a contract.** ✅ **Done (Q218).** Worker pods declare `karpenter.sh/do-not-disrupt: "true"`, `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`, and `descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"` (gap-filled, per-key overridable) — the single biggest "plays well with my cluster" signal.
-- **Standard well-known labels.** Apply `app.kubernetes.io/{name,instance,component,part-of,managed-by}` consistently across GMC/AGC/proxy/worker objects (verify current coverage). Tools like Lens/k9s/Argo group by these.
+- **Standard well-known labels.** Apply `app.kubernetes.io/{name,instance,component,part-of,managed-by}` consistently across GMC/AGC/proxy/worker objects (verify current coverage).
+  Tools like Lens/k9s/Argo group by these.
 - **OTel semantic conventions.** Name spans/attributes per OTel semconv; align metric names with Prometheus naming guidelines (`_total`, base units) so dashboards and recording rules are portable.
 - **`ServiceMonitor` + `PrometheusRule` as packaged, opt-in extras** (already partly done) — ship alerts as an installable bundle, not just sample YAML.
-- **BYO everything the secure default provides.** cert-manager issuer, CNI policy engine, metrics CA — each should have a documented "bring your own / disable managed" path (mostly present). Make the secure default explicit and the opt-out idiomatic.
+- **BYO everything the secure default provides.** cert-manager issuer, CNI policy engine, metrics CA — each should have a documented "bring your own / disable managed" path (mostly present).
+  Make the secure default explicit and the opt-out idiomatic.
 - **GitOps-first packaging.** Treat Argo CD / Flux as primary consumers: CRDs installable separately, `resource-policy: keep` documented, server-side-apply friendliness, no Helm hooks that break GitOps.
 - **PSA + policy-engine layering.** Document that GAG uses PSA as a floor and is *compatible with* (not a replacement for) Kyverno/Gatekeeper; provide complementary policies rather than assuming none exist.
 - **Sidecar-aware lifecycle.** Where mesh injection is unavoidable, lean on Kubernetes native sidecars (restartPolicy: Always init containers, 1.29+) and document the egress-exclusion annotations.

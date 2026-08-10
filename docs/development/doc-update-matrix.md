@@ -1,6 +1,7 @@
 # Doc-update matrix
 
-Which docs to update for each kind of change. Use this after making changes, before committing — update docs proactively rather than waiting to be asked.
+Which docs to update for each kind of change.
+Use this after making changes, before committing — update docs proactively rather than waiting to be asked.
 
 The `docs/` tree has two audiences: `docs/design/` explains how the system works (for contributors); `docs/operations/` explains what an operator does and sees (onboarding, runbooks, upgrades). **Updating the design docs is not sufficient** — if a change alters what an operator does, configures, or observes, the operator-facing docs must be updated too.
 
@@ -20,31 +21,19 @@ The `docs/` tree has two audiences: `docs/design/` explains how the system works
 
 ## Name the acquisition tier when a capability is not universal
 
-Applies across every row above. **Before writing that the gateway does X, check
-which acquisition tier actually does X** — and if it is not both, say so in the
-same sentence. Prose that reads as a property of the system is the failure mode;
-it is not repaired by being true of the tier the author had in mind.
+Applies across every row above. **Before writing that the gateway does X, check which acquisition tier actually does X** — and if it is not both, say so in the same sentence.
+Prose that reads as a property of the system is the failure mode; it is not repaired by being true of the tier the author had in mind.
 
-This has bitten three times (Q419 eviction recovery, Q439 the pre-claim quota
-gate, Q446 poll-error metrics), and once in a change whose whole purpose was to
-polish the same paragraphs. The claims are not wrong so much as unqualified, so
-review does not catch them — only checking the code does.
+This has bitten three times (Q419 eviction recovery, Q439 the pre-claim quota gate, Q446 poll-error metrics), and once in a change whose whole purpose was to polish the same paragraphs.
+The claims are not wrong so much as unqualified, so review does not catch them — only checking the code does.
 
-How to check: the tier seams are the `ScaleSet` early return in
-`runnerset_controller.go` (everything after it is classic-only by construction),
-`provision()` versus `ProvisionScaleSetWorker`, and the `listener/` versus
-`scalesetlistener/` packages.
+How to check: the tier seams are the `ScaleSet` early return in `runnerset_controller.go` (everything after it is classic-only by construction), `provision()` versus `ProvisionScaleSetWorker`, and the `listener/` versus `scalesetlistener/` packages.
 
 Two places it costs the most:
 
-- **Metrics tables.** A counter emitted from one tier reads a flat zero on the
-  other, and zero looks like "nothing happened" rather than "nothing is
-  watching". Say which tier emits it, and name the signal that substitutes.
-- **Positioning copy** (`README.md`, `why-gag.md`, `features.md`, `roadmap.md`). A capability
-  claimed for the system but implemented only on the deprecated tier is
-  scheduled for deletion, not shipped — it belongs in the parity table in
-  [v2-ga.md](../plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal),
-  which gates the `v2.0.0` removal on closing exactly this gap.
+- **Metrics tables.** A counter emitted from one tier reads a flat zero on the other, and zero looks like "nothing happened" rather than "nothing is watching".
+  Say which tier emits it, and name the signal that substitutes.
+- **Positioning copy** (`README.md`, `why-gag.md`, `features.md`, `roadmap.md`).
+  A capability claimed for the system but implemented only on the deprecated tier is scheduled for deletion, not shipped — it belongs in the parity table in [v2-ga.md](../plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which gates the `v2.0.0` removal on closing exactly this gap.
 
-This convention retires with the classic tier at `v2.0.0`; until then the parity
-table is the tracking mechanism, and anything found classic-only joins it.
+This convention retires with the classic tier at `v2.0.0`; until then the parity table is the tracking mechanism, and anything found classic-only joins it.

@@ -13,9 +13,7 @@ hide:
 
 <p class="gag-vs-hero__lede">Actions Runner Controller (ARC) struggles with one job: <strong>many runner sets, many tenants, one shared cluster, each tenant safely capped by its own <code>ResourceQuota</code></strong>. GitHub Actions Gateway (GAG) is built for that job.</p>
 
-[Get started](getting-started.md){ .md-button .md-button--primary }
-[Migrating from ARC](operations/migration-from-arc.md){ .md-button }
-[See the architecture](design/02-architecture.md){ .md-button }
+[Get started](getting-started.md){ .md-button .md-button--primary } [Migrating from ARC](operations/migration-from-arc.md){ .md-button } [See the architecture](design/02-architecture.md){ .md-button }
 
 </div>
 <div class="gag-vs-hero__proof">
@@ -27,10 +25,8 @@ hide:
 
 ## The problem ARC leaves you with
 
-All four trace to one root, and it is not a missing feature. **ARC models a
-cluster with one owner**, so it has no primitive separating what the platform
-owns from what a tenant owns. That is a reasonable product for a single-tenant
-cluster, and the same gap from four angles once teams share one.
+All four trace to one root, and it is not a missing feature. **ARC models a cluster with one owner**, so it has no primitive separating what the platform owns from what a tenant owns.
+That is a reasonable product for a single-tenant cluster, and the same gap from four angles once teams share one.
 
 <div class="gag-pillars gag-pillars--problem gag-cols-2" markdown>
 <div class="grid cards" markdown>
@@ -127,19 +123,13 @@ Three capabilities that only pay off together, and what they unlock:
   </div>
 </div>
 
-A tenant declares only namespaced resources; the GMC provisions the rest inside
-a platform-owned quota it cannot write, with no cluster admin after the install
-([the object set](getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)).
-The [cost model](design/appendix-f-cost-model.md) runs the utilization argument
-in numbers, but a benchmark at scale is [on the roadmap](roadmap.md) and not yet
-done: treat those figures as a model, not a measurement.
+A tenant declares only namespaced resources; the GMC provisions the rest inside a platform-owned quota it cannot write, with no cluster admin after the install ([the object set](getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)).
+The [cost model](design/appendix-f-cost-model.md) runs the utilization argument in numbers, but a benchmark at scale is [on the roadmap](roadmap.md) and not yet done: treat those figures as a model, not a measurement.
 
 ## GAG vs ARC (scale-set mode)
 
-**This is not a protocol argument.** GAG acquires jobs with the same
-runner-scale-set protocol ARC uses, shipped as the v2 default, so every row
-below is additive rather than a different-architecture trade-off. What differs
-is what surrounds that shared core.
+**This is not a protocol argument.** GAG acquires jobs with the same runner-scale-set protocol ARC uses, shipped as the v2 default, so every row below is additive rather than a different-architecture trade-off.
+What differs is what surrounds that shared core.
 
 | Capability | ARC (scale-set mode) | GitHub Actions Gateway |
 | --- | --- | --- |
@@ -161,9 +151,8 @@ is what surrounds that shared core.
 | Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [multiple scoped gateways per namespace](operations/migration-v1-to-v2.md) |
 | Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet` | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> shared [`RunnerTemplate`](operations/migration-v1-to-v2.md)<br><span class="gag-cont">cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md)</span> |
 
-Every GAG capability above is available today. Rows marked
-<span class="gag-v2-badge">v2</span> need the `actions-gateway.com/v2beta1` API,
-which is where new tenants start.
+Every GAG capability above is available today.
+Rows marked <span class="gag-v2-badge">v2</span> need the `actions-gateway.com/v2beta1` API, which is where new tenants start.
 
 !!! note "When the ARC column was measured, and why that matters"
 
@@ -184,56 +173,40 @@ which is where new tenants start.
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too. -->
-**Auto-re-run covers disruption, never failure.** Eviction, preemption, a drain
-and a stray `kubectl delete pod` all come back, on both acquisition tiers. A job
-that *failed* and a run you *cancelled* never do. Nor do workers the reaper took,
-with one exception: a worker reaped while still `Pending` is re-run on the
-classic tier once capacity returns.
+**Auto-re-run covers disruption, never failure.** Eviction, preemption, a drain and a stray `kubectl delete pod` all come back, on both acquisition tiers.
+A job that *failed* and a run you *cancelled* never do.
+Nor do workers the reaper took, with one exception: a worker reaped while still `Pending` is re-run on the classic tier once capacity returns.
 [The full boundary](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
-**Right-sizing is structural, not a feature race.** An ephemeral pod runs one
-job and lives minutes, so stock Vertical Pod Autoscaler cannot size it. The loop
-only closes inside the controller that builds the pods.
+**Right-sizing is structural, not a feature race.** An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
+The loop only closes inside the controller that builds the pods.
 [Appendix D.7](design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on).
 
 ## Where ARC is ahead
 
-Some of it is capability, not only maturity. Measured 2026-08-06. Each gap below
-is tracked, and what closes it and when is on the
-[public roadmap](roadmap.md); the support entitlement is the one we do not plan
-to match.
+Some of it is capability, not only maturity.
+Measured 2026-08-06.
+Each gap below is tracked, and what closes it and when is on the [public roadmap](roadmap.md); the support entitlement is the one we do not plan to match.
 
-- **A GitHub Support entitlement**, covering ARC installed via the official
-  Helm charts, GitHub Enterprise Server 3.9 and later. GAG has none. Read the
-  scope exclusions before relying on it: Kubernetes orchestration, policy
-  application, and template customization are explicitly out of scope, which
-  is much of what a multi-tenant platform team actually pages about.
-- **Multi-label scale sets** since 0.14.0. A workflow using
-  `runs-on: [linux, gpu]` needs one edit per target to move to GAG, which
-  admits exactly one label per runner set.
-- **`containerMode: kubernetes`**, which runs `container:` and `services:`
-  steps as separate pods with a provisioned volume. GAG runs one worker pod
-  per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather
-  than a non-privileged pod-per-step model.
-- **GitHub runner groups** (`runnerGroup`), the forge-side control over which
-  repositories may target a runner set.
-- **GHES that is actually tested.** GAG serves GHES gateways and marks both
-  of its GHES features untested against a real appliance.
+- **A GitHub Support entitlement**, covering ARC installed via the official Helm charts, GitHub Enterprise Server 3.9 and later.
+  GAG has none.
+  Read the scope exclusions before relying on it: Kubernetes orchestration, policy application, and template customization are explicitly out of scope, which is much of what a multi-tenant platform team actually pages about.
+- **Multi-label scale sets** since 0.14.0.
+  A workflow using `runs-on: [linux, gpu]` needs one edit per target to move to GAG, which admits exactly one label per runner set.
+- **`containerMode: kubernetes`**, which runs `container:` and `services:` steps as separate pods with a provisioned volume.
+  GAG runs one worker pod per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather than a non-privileged pod-per-step model.
+- **GitHub runner groups** (`runnerGroup`), the forge-side control over which repositories may target a runner set.
+- **GHES that is actually tested.** GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.
 
-The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API
-has only just reached beta (`v2beta1`, its first stability contract). That is why
-the v1 to v2 migration runs on a committed, documented schedule with a working
-[`gag-migrate`](operations/migration-v1-to-v2.md) tool. The discipline is the
-"won't strand you" signal while the track record accumulates.
+The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API has only just reached beta (`v2beta1`, its first stability contract).
+That is why the v1 to v2 migration runs on a committed, documented schedule with a working [`gag-migrate`](operations/migration-v1-to-v2.md) tool.
+The discipline is the "won't strand you" signal while the track record accumulates.
 
-One thing is **not** a differentiator either way: both ride the same
-Public-Preview runner-scale-set protocol, through the same
-[`actions/scaleset`](https://github.com/actions/scaleset) client library.
+One thing is **not** a differentiator either way: both ride the same Public-Preview runner-scale-set protocol, through the same [`actions/scaleset`](https://github.com/actions/scaleset) client library.
 
 ## Secure by default
 
-Built for shared clusters running other teams' code: the multi-tenant hardening
-ships as reconciled defaults, not a post-install project.
+Built for shared clusters running other teams' code: the multi-tenant hardening ships as reconciled defaults, not a post-install project.
 
 <div class="gag-pillars" markdown>
 <div class="grid cards" markdown>
@@ -277,17 +250,14 @@ ships as reconciled defaults, not a post-install project.
 
 ### Sandboxing is not the `runtimeClassName` field
 
-Both GAG and ARC can set one. The differentiator is the layer underneath.
+Both GAG and ARC can set one.
+The differentiator is the layer underneath.
 
-**Kata bounds the kernel, not the pod network**, so cloud metadata still answers
-from inside the guest. GAG's default-deny NetworkPolicies close that path.
+**Kata bounds the kernel, not the pod network**, so cloud metadata still answers from inside the guest.
+GAG's default-deny NetworkPolicies close that path.
 
-**GAG's own CI runs this way**, building a `kind` cluster inside a worker pod
-with **zero** `privileged: true` ([how, and what Kata does not buy
-you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you)).
+**GAG's own CI runs this way**, building a `kind` cluster inside a worker pod with **zero** `privileged: true` ([how, and what Kata does not buy you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you)).
 
-**Not yet a claim about untrusted pull requests**, which need the egress work
-on the [roadmap](roadmap.md#in-progress--near-term).
+**Not yet a claim about untrusted pull requests**, which need the egress work on the [roadmap](roadmap.md#in-progress--near-term).
 
-Threat model and abuse-response playbooks: [Security](design/05-security.md),
-[Security operations](operations/security-operations.md).
+Threat model and abuse-response playbooks: [Security](design/05-security.md), [Security operations](operations/security-operations.md).

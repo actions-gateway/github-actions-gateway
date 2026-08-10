@@ -1,8 +1,10 @@
 # Unit Test Speed Improvements
 
-**Status: Complete (Q17).** Items 1–4 below all shipped together in `c4660ea` (2026-05-23, the same commit that wrote this doc). The Q17 revival (2026-07-20) re-baselined against CI and shipped the single-invocation change described in [the re-baseline section](#2026-07-20-re-baseline-q17-revival); the remaining CI-latency levers (lint, coverage) are parked as [Q361](../../STATUS.md#Q361).
+**Status: Complete (Q17).** Items 1–4 below all shipped together in `c4660ea` (2026-05-23, the same commit that wrote this doc).
+The Q17 revival (2026-07-20) re-baselined against CI and shipped the single-invocation change described in [the re-baseline section](#2026-07-20-re-baseline-q17-revival); the remaining CI-latency levers (lint, coverage) are parked as [Q361](../../STATUS.md#Q361).
 
-This document analyses where time is spent in the unit test suite and describes four concrete improvements, in order of estimated impact. Each section covers motivation, implementation steps, files affected, and estimated savings.
+This document analyses where time is spent in the unit test suite and describes four concrete improvements, in order of estimated impact.
+Each section covers motivation, implementation steps, files affected, and estimated savings.
 
 ---
 
@@ -24,7 +26,8 @@ A typical `go test ./...` run (excluding e2e and integration suites) breaks down
 | `proxy`, `worker` | ~0.5s each |
 | **Total (sequential)** | **~22s** |
 
-The listener package dominates. Within it, the slowest individual tests are:
+The listener package dominates.
+Within it, the slowest individual tests are:
 
 | Test | Time | Root cause |
 |---|---|---|
@@ -39,7 +42,8 @@ The listener package dominates. Within it, the slowest individual tests are:
 
 ### Problem
 
-`TestRenewLoop_TicksAt60s` and `TestRenewLoop_NonOKContinues` each take ~1.8s despite using a `fakeClock`. `StartRenewLoop` waits for `clk.After(60 * time.Second)`. The tests verify each of 3 RenewJob calls in a loop:
+`TestRenewLoop_TicksAt60s` and `TestRenewLoop_NonOKContinues` each take ~1.8s despite using a `fakeClock`. `StartRenewLoop` waits for `clk.After(60 * time.Second)`.
+The tests verify each of 3 RenewJob calls in a loop:
 
 ```go
 for i := 0; i < 3; i++ {
@@ -50,11 +54,13 @@ for i := 0; i < 3; i++ {
 }
 ```
 
-To trigger a single 60s tick, the loop must advance 60 times × 10ms real time = 0.6s. Across 3 iterations that is ~1.8s of real wall time per test.
+To trigger a single 60s tick, the loop must advance 60 times × 10ms real time = 0.6s.
+Across 3 iterations that is ~1.8s of real wall time per test.
 
 ### Fix
 
-Advance the clock by a large step (enough to pass the 60s threshold) before entering the `Eventually` poll. The poll then only needs one or two iterations to observe the call.
+Advance the clock by a large step (enough to pass the 60s threshold) before entering the `Eventually` poll.
+The poll then only needs one or two iterations to observe the call.
 
 ```go
 for i := 0; i < 3; i++ {
@@ -88,12 +94,14 @@ case <-time.After(time.Second):
 
 Two tests are directly slowed by this:
 
-- `TestMultiplexer_NonRetriableNoRestart` calls `assert.Never(..., 2*time.Second, 50*time.Millisecond)` to confirm no restart occurs. The 2s window is necessary only to hold past the 1s backoff.
+- `TestMultiplexer_NonRetriableNoRestart` calls `assert.Never(..., 2*time.Second, 50*time.Millisecond)` to confirm no restart occurs.
+  The 2s window is necessary only to hold past the 1s backoff.
 - `TestMultiplexer_RestartOnCrash` must wait for the goroutine to exit, sleep 1s, then restart and reach `ActiveCount == 1`.
 
 ### Fix
 
-Add a `restartDelay time.Duration` field to `Multiplexer`. Production code defaults to `time.Second` when zero; tests set it to 0 (or 1ms) via a new `WithRestartDelay` option or an exported field.
+Add a `restartDelay time.Duration` field to `Multiplexer`.
+Production code defaults to `time.Second` when zero; tests set it to 0 (or 1ms) via a new `WithRestartDelay` option or an exported field.
 
 ```go
 // multiplexer.go
@@ -144,7 +152,8 @@ Total: ~20 key generations × ~50–100ms each = ~1–2s spread across packages.
 
 ### Fix
 
-Declare a package-level test key generated once. Tests that only need a valid key (i.e., not testing key parsing) share it.
+Declare a package-level test key generated once.
+Tests that only need a valid key (i.e., not testing key parsing) share it.
 
 ```go
 // goroutine_test.go (package-level)
@@ -165,7 +174,8 @@ func makeAgent(t *testing.T, oauthSrvURL string) *agentpool.Agent {
 }
 ```
 
-For tests that explicitly test key generation or parsing (e.g., `TestParseRunnerRSAKey_RoundTrip`), keep per-test generation where correctness requires it. Alternatively, use 1024-bit keys in tests where key strength is irrelevant — they generate ~4× faster.
+For tests that explicitly test key generation or parsing (e.g., `TestParseRunnerRSAKey_RoundTrip`), keep per-test generation where correctness requires it.
+Alternatively, use 1024-bit keys in tests where key strength is irrelevant — they generate ~4× faster.
 
 ### Files affected
 
@@ -185,11 +195,14 @@ For tests that explicitly test key generation or parsing (e.g., `TestParseRunner
 
 ### Problem
 
-No test in the entire codebase calls `t.Parallel()`. Within a package, Go runs tests sequentially by default. Several packages contain tests that are fully independent (separate HTTP servers, no shared global state) and would parallelize cleanly.
+No test in the entire codebase calls `t.Parallel()`.
+Within a package, Go runs tests sequentially by default.
+Several packages contain tests that are fully independent (separate HTTP servers, no shared global state) and would parallelize cleanly.
 
 ### Fix
 
-Add `t.Parallel()` at the top of tests in packages where tests do not share mutable globals. Safe candidates:
+Add `t.Parallel()` at the top of tests in packages where tests do not share mutable globals.
+Safe candidates:
 
 - `broker/` — all tests use local `httptest.Server` instances
 - `githubapp/` — same pattern
@@ -207,7 +220,9 @@ Packages with `envtest` or shared Kubernetes state (`gmc/internal/controller`, `
 
 ### Estimated saving
 
-Depends on CPU count. On a 4-core machine the listener package alone (currently ~11.5s sequential) could drop to ~4–5s if the top independent tests run in parallel. Total across all packages: **~5–8s** on typical CI hardware.
+Depends on CPU count.
+On a 4-core machine the listener package alone (currently ~11.5s sequential) could drop to ~4–5s if the top independent tests run in parallel.
+Total across all packages: **~5–8s** on typical CI hardware.
 
 ---
 
@@ -220,13 +235,15 @@ Depends on CPU count. On a 4-core machine the listener package alone (currently 
 | 3 | Share package-level RSA test key | Low — test-only | ~1s |
 | 4 | Add `t.Parallel()` to independent tests | Medium — needs per-package audit | ~5–8s on CI |
 
-Implementing 1–3 alone saves ~6–7s (reducing total suite time from ~22s to ~15s) with minimal risk. Adding parallelism (4) could cut the total further by half on multi-core CI runners.
+Implementing 1–3 alone saves ~6–7s (reducing total suite time from ~22s to ~15s) with minimal risk.
+Adding parallelism (4) could cut the total further by half on multi-core CI runners.
 
 ---
 
 ## 2026-07-20 re-baseline (Q17 revival)
 
-Items 1–4 had all shipped in `c4660ea`, so the revival re-measured where CI unit-workflow time actually goes. From `unit-test.yml` run 29722162250 (jobs run in parallel; workflow wall ≈ 270 s):
+Items 1–4 had all shipped in `c4660ea`, so the revival re-measured where CI unit-workflow time actually goes.
+From `unit-test.yml` run 29722162250 (jobs run in parallel; workflow wall ≈ 270 s):
 
 | Job | Wall | Notes |
 |---|---|---|
@@ -236,11 +253,17 @@ Items 1–4 had all shipped in `c4660ea`, so the revival re-measured where CI un
 
 Inside the 189 s unit-test job, **compilation dominates, not test execution**: the sequential per-module loop spent ~39 s on `./api`, ~93 s on `./cmd/agc`, and ~35 s on `./cmd/gmc`, and within `cmd/agc` only ~20 s was actual test packages running — the rest was the `-race` compile of the controller-runtime/k8s dependency graph, serialized behind the smaller modules.
 
-**Change shipped by the Q17 revival PR:** `scripts/go/go-test.sh` now issues **one** `go test` invocation over every `./<module>/...` pattern (a repo-root `./...` still does not work in a workspace, but explicit multi-module patterns do). Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big `cmd/agc`/`cmd/gmc` compiles instead of queueing behind them. Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged. Applies to both `make test` and the CI `-race` gate (`make test-race`).
+**Change shipped by the Q17 revival PR:** `scripts/go/go-test.sh` now issues **one** `go test` invocation over every `./<module>/...` pattern (a repo-root `./...` still does not work in a workspace, but explicit multi-module patterns do).
+Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big `cmd/agc`/`cmd/gmc` compiles instead of queueing behind them.
+Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged.
+Applies to both `make test` and the CI `-race` gate (`make test-race`).
 
-**Measured outcome (first PR run):** the `-race` unit gate dropped 189s → 163s (−14%). Smaller than the compile-serialization arithmetic suggests because the 4-vCPU CI runner was already near CPU-bound during the `cmd/agc`/`cmd/gmc` compiles — the win is the removal of the inter-module barriers (small-module idle time), not extra parallelism during the big compiles.
+**Measured outcome (first PR run):** the `-race` unit gate dropped 189s → 163s (−14%).
+Smaller than the compile-serialization arithmetic suggests because the 4-vCPU CI runner was already near CPU-bound during the `cmd/agc`/`cmd/gmc` compiles — the win is the removal of the inter-module barriers (small-module idle time), not extra parallelism during the big compiles.
 
 **Remaining levers (parked as [Q361](../../STATUS.md#Q361)):**
 
-- **lint** is now the workflow critical path: the per-module `golangci-lint` loop re-loads the shared dependency graph per module. Levers: a workspace-aware golangci-lint invocation, cross-run analysis cache tuning, or running the module loop concurrently on CI.
-- **coverage** re-runs the suite per module for the ratchet's per-module floors. Levers: run the module loop concurrently, or a single multi-module `-coverprofile` run split per module by package prefix before `go tool cover -func`.
+- **lint** is now the workflow critical path: the per-module `golangci-lint` loop re-loads the shared dependency graph per module.
+  Levers: a workspace-aware golangci-lint invocation, cross-run analysis cache tuning, or running the module loop concurrently on CI.
+- **coverage** re-runs the suite per module for the ratchet's per-module floors.
+  Levers: run the module loop concurrently, or a single multi-module `-coverprofile` run split per module by package prefix before `go tool cover -func`.

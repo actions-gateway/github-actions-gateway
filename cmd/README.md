@@ -1,6 +1,7 @@
 # cmd/
 
-Entrypoints for every binary built from this repo. Each subdirectory is its own Go module (see [go-workspaces.md](../docs/development/go-workspaces.md)).
+Entrypoints for every binary built from this repo.
+Each subdirectory is its own Go module (see [go-workspaces.md](../docs/development/go-workspaces.md)).
 
 | Binary | Role | Tier |
 |---|---|---|

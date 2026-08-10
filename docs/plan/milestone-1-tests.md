@@ -6,11 +6,14 @@
 
 ## Overview
 
-**Goal:** Fill the test gaps identified in a post-implementation coverage review of the Milestone 1 packages (`broker`, `githubapp`). Overall coverage sits at 72.6%; the gaps below are the meaningful ones — code paths that carry real production risk, not just syntactic line misses.
+**Goal:** Fill the test gaps identified in a post-implementation coverage review of the Milestone 1 packages (`broker`, `githubapp`).
+Overall coverage sits at 72.6%; the gaps below are the meaningful ones — code paths that carry real production risk, not just syntactic line misses.
 
-**Status:** All gaps implemented. Coverage improved from 72.6% → 80.3% (broker: 81.0%, githubapp: 79.4%).
+**Status:** All gaps implemented.
+Coverage improved from 72.6% → 80.3% (broker: 81.0%, githubapp: 79.4%).
 
-All tests are unit tests using `httptest` stubs and in-memory fixtures. No network access or credentials required.
+All tests are unit tests using `httptest` stubs and in-memory fixtures.
+No network access or credentials required.
 
 ---
 
@@ -18,11 +21,11 @@ All tests are unit tests using `httptest` stubs and in-memory fixtures. No netwo
 
 ### Gap 1 — `DecryptSessionKey` completely untested ✓
 
-**Package:** `broker`
-**Function:** `DecryptSessionKey` in `crypto.go`
-**Coverage:** 0% → 100%
+**Package:** `broker` **Function:** `DecryptSessionKey` in `crypto.go` **Coverage:** 0% → 100%
 
-`DecryptSessionKey` unwraps the RSA-OAEP (SHA-1) encrypted AES session key returned in the `CreateSession` response. It is called by every listener before any message can be decrypted, yet has no test at all. A mismatched hash function or wrong key format would produce a silent failure only discovered during a live probe run.
+`DecryptSessionKey` unwraps the RSA-OAEP (SHA-1) encrypted AES session key returned in the `CreateSession` response.
+It is called by every listener before any message can be decrypted, yet has no test at all.
+A mismatched hash function or wrong key format would produce a silent failure only discovered during a live probe run.
 
 **Tests to add in `crypto_test.go`:**
 
@@ -39,11 +42,10 @@ All tests are unit tests using `httptest` stubs and in-memory fixtures. No netwo
 
 ### Gap 2 — v2 flow paths in `CreateSession`, `GetMessage`, `DeleteSession` ✓
 
-**Package:** `broker`
-**Functions:** `CreateSession`, `GetMessage`, `DeleteSession` in `client.go`
-**Coverage impact:** `GetMessage` 57% → 85.7%, `DeleteSession` 71% → 78.6%
+**Package:** `broker` **Functions:** `CreateSession`, `GetMessage`, `DeleteSession` in `client.go` **Coverage impact:** `GetMessage` 57% → 85.7%, `DeleteSession` 71% → 78.6%
 
-All three methods branch on `UseV2Flow`. The v1 VSTS pool paths are well-covered; the v2 paths (`{BrokerURL}/session`, `{BrokerURL}/message?sessionId=...&status=online&runnerVersion=...`, `{BrokerURL}/session` DELETE) are completely untested despite being the code path used by modern runner registrations.
+All three methods branch on `UseV2Flow`.
+The v1 VSTS pool paths are well-covered; the v2 paths (`{BrokerURL}/session`, `{BrokerURL}/message?sessionId=...&status=online&runnerVersion=...`, `{BrokerURL}/session` DELETE) are completely untested despite being the code path used by modern runner registrations.
 
 **Tests to add in `client_test.go`:**
 
@@ -62,11 +64,11 @@ All three methods branch on `UseV2Flow`. The v1 VSTS pool paths are well-covered
 
 ### Gap 3 — `RenewJobLoop` error propagation ✓
 
-**Package:** `broker`
-**Function:** `RenewJobLoop` in `client.go`
-**Coverage:** `errCh <- err` path now exercised by `TestRenewJobLoop_ErrorPropagated`
+**Package:** `broker` **Function:** `RenewJobLoop` in `client.go` **Coverage:** `errCh <- err` path now exercised by `TestRenewJobLoop_ErrorPropagated`
 
-When `RenewJob` returns an error, `RenewJobLoop` must send that error to the returned channel and then exit. The current test (`TestRenewJob_Interval`) only exercises the happy path; the error branch is untested. A regression here would cause the AGC's renewal goroutine to silently swallow job-expiry errors.
+When `RenewJob` returns an error, `RenewJobLoop` must send that error to the returned channel and then exit.
+The current test (`TestRenewJob_Interval`) only exercises the happy path; the error branch is untested.
+A regression here would cause the AGC's renewal goroutine to silently swallow job-expiry errors.
 
 **Test to add in `client_test.go`:**
 
@@ -82,11 +84,11 @@ When `RenewJob` returns an error, `RenewJobLoop` must send that error to the ret
 
 ### Gap 4 — `parseRSAPrivateKey` PKCS#8 path ✓
 
-**Package:** `githubapp`
-**Function:** `parseRSAPrivateKey` in `auth.go`
-**Coverage:** 38.5% → 92.3%
+**Package:** `githubapp` **Function:** `parseRSAPrivateKey` in `auth.go` **Coverage:** 38.5% → 92.3%
 
-GitHub App private keys are distributed as PKCS#1 PEM files today, but the PKCS#8 path (`PRIVATE KEY`) was added for forward-compatibility. It has two sub-branches: RSA key (success) and non-RSA key (error). Neither is tested.
+GitHub App private keys are distributed as PKCS#1 PEM files today, but the PKCS#8 path (`PRIVATE KEY`) was added for forward-compatibility.
+It has two sub-branches: RSA key (success) and non-RSA key (error).
+Neither is tested.
 
 **Tests to add in `auth_test.go`:**
 
@@ -109,8 +111,8 @@ These are lower-priority; each is a one-test fix.
 
 #### 5a — `CreateSession` non-400 error status ✓
 
-**Code path:** `CreateSession` → `resp.StatusCode` is not 200, 201, or 400 (e.g. 503)
-**Coverage:** the `fmt.Errorf("unexpected status %d")` branch is untested.
+**Code path:** `CreateSession` → `resp.StatusCode` is not 200, 201, or 400 (e.g.
+503\) **Coverage:** the `fmt.Errorf("unexpected status %d")` branch is untested.
 
 | Test | What it verifies |
 |---|---|
@@ -118,8 +120,7 @@ These are lower-priority; each is a one-test fix.
 
 #### 5b — `AcquireJob` non-200 error status ✓
 
-**Code path:** `AcquireJob` → `resp.StatusCode != 200` → error return
-**Coverage:** untested → covered.
+**Code path:** `AcquireJob` → `resp.StatusCode != 200` → error return **Coverage:** untested → covered.
 
 | Test | What it verifies |
 |---|---|
@@ -127,8 +128,7 @@ These are lower-priority; each is a one-test fix.
 
 #### 5c — `ParseRunnerRSAKey` with BOM-prefixed file ✓
 
-**Code path:** `ParseRunnerRSAKey` → `stripBOM` removes the `.NET` UTF-8 BOM before JSON parsing.
-**Coverage:** `stripBOM` is tested in `TestParseRunnerCredentials_DOTNETBOM` but not for the RSA params file.
+**Code path:** `ParseRunnerRSAKey` → `stripBOM` removes the `.NET` UTF-8 BOM before JSON parsing. **Coverage:** `stripBOM` is tested in `TestParseRunnerCredentials_DOTNETBOM` but not for the RSA params file.
 
 | Test | What it verifies |
 |---|---|
@@ -136,8 +136,7 @@ These are lower-priority; each is a one-test fix.
 
 #### 5d — `FetchRunnerOAuthToken` missing `access_token` field ✓
 
-**Code path:** server returns 200 with a JSON body that has an empty or missing `access_token` → error return.
-**Coverage:** untested → covered.
+**Code path:** server returns 200 with a JSON body that has an empty or missing `access_token` → error return. **Coverage:** untested → covered.
 
 | Test | What it verifies |
 |---|---|

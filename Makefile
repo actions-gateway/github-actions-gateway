@@ -18,6 +18,7 @@ GINKGO         := $(REPO_ROOT)/.build/ginkgo
 GOLANGCI_LINT  := $(REPO_ROOT)/.build/golangci-lint
 GOVULNCHECK    := $(REPO_ROOT)/.build/govulncheck
 CRD_REF_DOCS   := $(REPO_ROOT)/.build/crd-ref-docs
+MDREFLOW       := $(REPO_ROOT)/.build/mdreflow
 COSIGN         := $(REPO_ROOT)/.build/cosign
 # COSIGN_VERSION pins the cosign release used to verify published signatures.
 # Keep in step with the `cosign-release` pinned in .github/workflows/publish.yml
@@ -114,7 +115,8 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    script-docs-check semver-floor-sources-check template-library-check
+                    script-docs-check semver-floor-sources-check template-library-check \
+                    md-reflow-check
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
 .PHONY: check
@@ -1094,7 +1096,7 @@ karpenter-cluster-delete: ## Delete the live-Karpenter kind cluster (no-op if it
 ##@ Tools
 
 .PHONY: tools
-tools: $(ACTIONLINT) $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) $(GOVULNCHECK) ## Build all vendored build tools into .build/
+tools: $(ACTIONLINT) $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) $(GOVULNCHECK) $(MDREFLOW) ## Build all vendored build tools into .build/
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Build golangci-lint into .build/
@@ -1107,6 +1109,25 @@ setup-envtest: $(SETUP_ENVTEST) ## Build setup-envtest into .build/
 
 .PHONY: ginkgo
 ginkgo: $(GINKGO) ## Build ginkgo into .build/
+
+# Sentence-per-line prose formatting. Configured by .mdreflow.yaml at the repo
+# root; mdreflow always excludes vendor/, so the tracked vendored Markdown is
+# untouched. md-reflow-check runs in CHECK_FAST_GATES (~1s for the tree) because
+# an unenforced wrap convention decays on the next hand-wrapped paragraph.
+# It converts ~99.9% of prose: a paragraph is skipped by design when a link's
+# text or destination is left open at a line end. Never hand-wrap inside a link:
+# that wedges the paragraph permanently. See documentation-standards.md.
+.PHONY: md-reflow
+md-reflow: $(MDREFLOW) ## Reflow tracked Markdown prose to one sentence per line
+	$(MDREFLOW) .
+
+.PHONY: md-reflow-check
+md-reflow-check: $(MDREFLOW) ## Report Markdown that is not sentence-per-line; writes nothing
+	$(MDREFLOW) --check .
+
+.PHONY: md-reflow-diff
+md-reflow-diff: $(MDREFLOW) ## Print the reflow diff without writing
+	$(MDREFLOW) --diff .
 
 .PHONY: cosign
 cosign: $(COSIGN) ## Download pinned cosign (COSIGN_VERSION) into .build/
@@ -1126,8 +1147,9 @@ $(KUBEBUILDER):    TOOL_PKG := sigs.k8s.io/kubebuilder/v4
 $(SETUP_ENVTEST):  TOOL_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 $(GOLANGCI_LINT):  TOOL_PKG := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 $(GOVULNCHECK):    TOOL_PKG := golang.org/x/vuln/cmd/govulncheck
+$(MDREFLOW):       TOOL_PKG := github.com/jbeda/mdreflow/cmd/mdreflow
 
-$(ACTIONLINT) $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK):
+$(ACTIONLINT) $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK) $(MDREFLOW):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ $(TOOL_PKG)
 
