@@ -2786,10 +2786,13 @@
 <p>Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that
 explains each one. For the argument against Actions Runner Controller (ARC), see
 <a href="../why-gag/">Why GAG?</a>; for what is not here yet, see the <a href="../roadmap/">roadmap</a>.</p>
-<p>Two badges appear below: <span class="gag-v2-badge">v2</span> marks a capability
-available only in the <code>actions-gateway.com/v2beta1</code> API, and
+<p>Three badges appear below. <span class="gag-v2-badge">v2</span> marks a
+capability available only in the <code>actions-gateway.com/v2beta1</code> API;
 <span class="gag-maturity-badge">beta</span> marks one whose API shape is still
-under its first stability contract.</p>
+under its first stability contract; and
+<span class="gag-tier-badge">partly classic-only</span> marks one that does not
+reach the ScaleSet acquisition tier every new tenant runs. No tier badge means
+both tiers, and a gate removes the badge when the gap closes.</p>
 <div class="admonition tip">
 <p class="admonition-title">Check the version you're running</p>
 <p>Use the <strong>version selector</strong> at the top of the page to switch between the
@@ -2804,7 +2807,7 @@ chart yet.</p>
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong>: a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
 <li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to eviction, preemption, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
 <li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in. Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them. Off by default.</li>
-<li><strong><a href="../design/04-operational-flows/">Fast, honest ending for an abandoned run</a></strong>: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns. Both acquisition tiers.</li>
+<li><strong><a href="../design/04-operational-flows/">Fast, honest ending for an abandoned run</a></strong>: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.</li>
 <li><strong><a href="../design/02-architecture/">Priority tiers per runner set</a></strong>: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.</li>
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Worker scale-up rate limiting</a></strong>: opt-in token bucket capping how <em>fast</em> workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.</li>
 <li><strong><a href="../design/02-architecture/">Scale-to-zero workers</a></strong>: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.</li>
@@ -2851,8 +2854,8 @@ chart yet.</p>
 <li><strong><a href="../operations/observability-metrics/">Metrics reference</a></strong>: every Prometheus metric the GMC, AGC, and proxy export, scoped per tenant and runner group.</li>
 <li><strong><a href="../operations/observability-metrics/#full-metrics-reference">Fleet rollups for platform admins</a></strong>: cross-tenant degraded, egress-stale, and quota gauges in a single pane.</li>
 <li><strong><a href="../operations/observability-metrics-access/">Scraping setup</a></strong>: wiring the mutual-TLS metrics endpoints into your Prometheus.</li>
-<li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong>: ready-to-apply alert rules as code. Two SLOs and one alert read duration and latency series the ScaleSet tier does not emit yet, so they have no data there (<a href="../roadmap/">roadmap</a>).</li>
-<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong>: a tenant dashboard and a platform dashboard, both as code. Their duration and latency panels stay empty on the ScaleSet tier for the same reason.</li>
+<li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong> <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: ready-to-apply alert rules as code. Two SLOs and one alert read duration and latency series the ScaleSet tier does not emit yet, so they have no data there (<a href="../roadmap/">roadmap</a>).</li>
+<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong> <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: a tenant dashboard and a platform dashboard, both as code. Their duration and latency panels stay empty on the ScaleSet tier for the same reason.</li>
 <li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong>: structured logs and OpenTelemetry tracing across the four tiers.</li>
 </ul>
 <h2 id="install-and-day-2-operations">Install and day-2 operations<a class="headerlink" href="#install-and-day-2-operations" title="Permanent link">&para;</a></h2>

@@ -2966,13 +2966,13 @@
 <td><code>actions_gateway_job_duration_seconds</code></td>
 <td>Histogram</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td>Wall time from <code>acquirejob</code> success to worker pod terminal phase.</td>
+<td>Wall time from <code>acquirejob</code> success to worker pod terminal phase. <strong>Classic acquisition only.</strong> The observation sits in <code>provision()</code>, which <code>ProvisionScaleSetWorker</code> never reaches, so the series is absent on a <code>ScaleSet</code> set. Unlike the classic-only counters above there is no scale-set analog to read instead (Q713), so the <code>actions_gateway:job_duration_seconds:p50</code> and <code>:p95</code> recording rules read blank on the default tier too.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_pod_creation_latency_seconds</code></td>
 <td>Histogram</td>
 <td><code>namespace</code></td>
-<td>Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>.</td>
+<td>Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>. <strong>Classic acquisition only</strong>, recorded by the classic pod waiter that the scale-set path does not use, so the series is absent on a <code>ScaleSet</code> set and, unlike the counters above, has no scale-set analog (Q713). <code>ActionsGatewayPodCreationLatencyP99</code> and <code>ActionsGatewayPodCreationLatencyP95</code> therefore never fire on the default tier. A silent latency alert there means an absent series, not a healthy one.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_token_refreshes_total</code></td>

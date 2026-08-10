@@ -2641,7 +2641,7 @@
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> 🔲 ready · 🚫 blocked<br />
 <strong>Size:</strong> S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in <code>docs/plan/</code><br />
-<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.0-gate</code> (blocks the <a href="../plan/release-1.0/">Release 1.0</a> tag) <code>1.3-gate</code> (blocks the <a href="../plan/release-1.3/">Release 1.3</a> tag) <code>1.4-gate</code> (blocks the <a href="../plan/release-1.4/">Release 1.4</a> tag) <code>1.5-gate</code> (blocks the <a href="../plan/release-1.5/">Release 1.5</a> tag) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/"><code>v2.0.0</code></a> tag)<br />
+<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.0-gate</code> (blocks the <a href="../plan/release-1.0/">Release 1.0</a> tag) <code>1.3-gate</code> (blocks the <a href="../plan/release-1.3/">Release 1.3</a> tag) <code>1.4-gate</code> (blocks the <a href="../plan/release-1.4/">Release 1.4</a> tag) <code>1.5-gate</code> (blocks the <a href="../plan/release-1.5/">Release 1.5</a> tag) <code>1.6-gate</code> (blocks the Release 1.6 tag, <a href="../plan/release-ladder/">scoped on the ladder</a>) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/"><code>v2.0.0</code></a> tag)<br />
 <strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter here</a>)</p>
 <p>Maintained per <a href="../development/maintaining-backlog/"><code>docs/development/maintaining-backlog.md</code></a>: done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in <a href="#deferred">Deferred</a>, and every edit is an isolated <code>docs(status):</code> commit gated by <code>scripts/docs/lint-backlog.sh</code>.</p>
 <hr />
@@ -2843,6 +2843,14 @@
 <td>Measured 2026-08-08 on <code>origin/main</code> 70ec7925, alone: 324.5s vs <code>-timeout 5m</code>, panic, CredRotation red. Runs: 246s green, 315s, 326s. Whichever test holds the wall takes the blame, so the name moves. Split the package or raise the budget.</td>
 </tr>
 <tr>
+<td><a id="Q777"></a>Q777</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-run-watch-test.sh"><code>e2e-run-watch-test</code> writes into the live release-validation stream</a></td>
+<td><code>bug</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Sets <code>REPO=owner/repo</code> but never scopes <code>RELEASE_PROGRESS_FILE</code>/<code>RELEASE_STATUS_FILE</code>, so <code>progress_run</code> writes the defaults. Measured 2026-08-09: <code>make check</code> during the rc.2 gate injected 3 <code>owner/repo</code>/<code>42</code> events, breaking the Q630 stall check.</td>
+</tr>
+<tr>
 <td><a id="Q706"></a>Q706</td>
 <td><a href="../development/testing/#two-clocks-in-one-assertion"><code>alloc-queue-id-test</code> bounds fleet startup on the wall clock</a></td>
 <td><code>tests</code> <code>retro</code></td>
@@ -2953,14 +2961,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Safe to gate on only if no other actor waits on that signal to make capacity appear: it generalises to any admission controller above an autoscaler. Evaluate promoting to why-gag.md or the under-claims list; keep the table.</td>
-</tr>
-<tr>
-<td><a id="Q408"></a>Q408</td>
-<td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
-<td><code>security</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>Phase 1 (self-hosted lane drops <code>get.helm.sh</code> + the Actions-cache data plane; hosted lane keeps caches) awaits its validation run: green Kata e2e whose log names no non-GitHub non-registry host. Then Phase 2 mirror manifests.</td>
 </tr>
 <tr>
 <td><a id="Q595"></a>Q595</td>
@@ -3189,58 +3189,18 @@
 <tr>
 <td><a id="Q727"></a>Q727</td>
 <td><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></td>
-<td><code>feature</code></td>
+<td><code>feature</code> <code>1.6-gate</code></td>
 <td>🔲</td>
 <td>L</td>
 <td>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume. GAG runs one worker pod per job, so the path is DinD, unprivileged only under Kata. <strong>Blocked on <a href="#Q719">Q719</a>:</strong> it needs RWX, which nothing validates yet.</td>
 </tr>
 <tr>
-<td><a id="Q772"></a>Q772</td>
-<td><a href="../plan/release-ladder/">Park the nine ungated near-term items and apply the release ladder</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Near-term lists 12 items as "actively being built"; 9 carry no release. Park 7 to Deferred with triggers, gate Q719/Q727 to 1.6. Rows and roadmap bullets must move together or <code>roadmapcheck</code> rule 3 breaks.</td>
-</tr>
-<tr>
-<td><a id="Q770"></a>Q770</td>
-<td><a href="../development/website/">Release version chip on the roadmap page, derived from gate labels</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The roadmap states its gating release in prose on 3 of 23 bullets and uses no badges. Render <code>1.5</code>/<code>2.0</code> as a pill sourced from the row's <code>N-gate</code> label, never hand-typed. <code>roadmapcheck</code> rule 7 guarantees every gated row has a bullet to render into.</td>
-</tr>
-<tr>
-<td><a id="Q768"></a>Q768</td>
-<td><a href="../development/website/">Auto-expiring new-in-release chip on the marketing surfaces</a></td>
-<td><code>docs</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Declared by the PR that ships it, so no backfill: absence means "not new", which matters because <code>features.md</code> postdates 1.0-1.2. A gate expires any chip more than N releases behind the version <code>hooks/release_version.py</code> resolves. Pairs with Q767.</td>
-</tr>
-<tr>
-<td><a id="Q767"></a>Q767</td>
-<td><a href="../development/website/">Tier badge on the marketing surfaces, gated against the operator docs</a></td>
-<td><code>docs</code> <code>ci</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>features.md</code> states tier scope on 3 of 60 entries, and after Q766 only the duration/latency series (<a href="#Q713">Q713</a>) is still tier-limited. The badge names the row tracking its port, so the gate forces removal on parity.</td>
-</tr>
-<tr>
 <td><a id="Q719"></a>Q719</td>
 <td><a href="../operations/">Validate RWX persistent storage for worker jobs, and put it in the reference architecture</a></td>
-<td><code>docs</code> <code>tests</code></td>
+<td><code>docs</code> <code>tests</code> <code>1.6-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>Workers are storage-less and nothing validates a <code>ReadWriteMany</code> volume mounted into one. RWX is how jobs share files, and what ARC's <code>containerMode: kubernetes</code> needs, so it is also a migration blocker. <strong>Unblocks <a href="#Q727">Q727</a>.</strong></td>
-</tr>
-<tr>
-<td><a id="Q765"></a>Q765</td>
-<td><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate a GHES gateway against a real GitHub Enterprise Server appliance</a></td>
-<td><code>tests</code> <code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Both GHES capabilities ship marked untested against real hardware: the <code>gitHubURL</code> appliance path and <code>spec.githubCABundleRef</code>. ARC is tested on one, so an evaluator has no evidence either way. An appliance run, or a documented decline, closes it.</td>
 </tr>
 <tr>
 <td><a id="Q717"></a>Q717</td>
@@ -3305,46 +3265,6 @@
 <td>🔲</td>
 <td>S</td>
 <td><code>check-release-pins.sh</code> reads every bare <code>X.Y.Z</code> in its five pin files as a GAG pin, so <code>README.md</code> cannot name the ARC version a measurement used. The <a href="../operations/release/#1-pre-flight">pre-flight</a> asks for that re-measurement every release.</td>
-</tr>
-<tr>
-<td><a id="Q555"></a>Q555</td>
-<td><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Opt-in auto-retry for flaky jobs</a></td>
-<td><code>tests</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Extend the disruption re-run machinery to tenant-opted flaky-job retry: detection first, then <code>spec.flakyRetry</code> with its own budget. Detection needs a real job outcome, which only the unread exit code carries; G.17 has that, the channels, the costs.</td>
-</tr>
-<tr>
-<td><a id="Q564"></a>Q564</td>
-<td><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></td>
-<td><code>security</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>A structured line per accepted CONNECT (tenant, host:port, bytes each way, duration), off by default. Today the proxy emits counters only, so per-tenant egress is reconstructable just from cluster flow logs. Decide the opt-in field against v2.</td>
-</tr>
-<tr>
-<td><a id="Q565"></a>Q565</td>
-<td><a href="../design/appendix-g-future-enhancements/#g2-proxy-enforced-per-tenant-rate-limiting">Proxy-enforced per-tenant rate limiting</a></td>
-<td><code>security</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Token bucket at the proxy so one looping tenant can be slowed before it hits GitHub's ceiling — today the only feedback is a 429 and AGC backoff. In-process state per pod; global limits would need a shared backend, out of scope.</td>
-</tr>
-<tr>
-<td><a id="Q566"></a>Q566</td>
-<td><a href="../design/appendix-g-future-enhancements/#g4-tls-between-agcworkers-and-the-proxy">TLS between AGC/workers and the proxy</a></td>
-<td><code>security</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>The CONNECT target host:port is cleartext on the in-cluster hop, observable to eBPF taps and shared-CNI visibility; the tunneled payload stays TLS to GitHub. Mount a cert-manager cert and move AGC/workers to an <code>https://</code> proxy URL.</td>
-</tr>
-<tr>
-<td><a id="Q567"></a>Q567</td>
-<td><a href="../design/appendix-g-future-enhancements/#g5-per-runnergroup-dedicated-proxy-pool">Per-tenant-group dedicated proxy pool</a></td>
-<td><code>feature</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>One pool per gateway today, so a bandwidth-heavy group can saturate a co-tenant's. Provision a dedicated Deployment/Service/HPA per opted-in group and make <code>HTTP_PROXY</code> per-group. Largest of the four — needs a plan doc before code.</td>
 </tr>
 <tr>
 <td><a id="Q568"></a>Q568</td>
@@ -3496,7 +3416,7 @@
 <td><code>ci</code> <code>docs</code> <code>retro</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>doc-update-matrix.md calls a design-doc-only update "the classic miss" and nothing enforces it; 1.4 missed it three times. Key on scope phrases added under <code>docs/design/</code>, not the file pair. <a href="#Q767">Q767</a> renders scope; this propagates it.</td>
+<td>doc-update-matrix.md calls a design-doc-only update "the classic miss" and nothing enforces it; 1.4 missed it three times. Key on scope phrases added under <code>docs/design/</code>, not the file pair. The tier badge renders scope; this propagates it.</td>
 </tr>
 <tr>
 <td><a id="Q776"></a>Q776</td>
@@ -3808,6 +3728,55 @@
 <td><code>debt</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Decision:</strong> enough gate cores have moved to Go to judge the seam on more than one instance. Every devtools program is fronted by a <code>scripts/&lt;group&gt;/</code> script doing file selection plus the build; whether that still earns its keep is unmeasured.</td>
+</tr>
+<tr>
+<td><a id="Q765"></a>Q765</td>
+<td><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate a GHES gateway against a real GitHub Enterprise Server appliance</a></td>
+<td><code>tests</code> <code>docs</code></td>
+<td>M</td>
+<td><strong>Event:</strong> a real GHES appliance becomes reachable. Both capabilities ship untested against hardware: the <code>gitHubURL</code> path and <code>spec.githubCABundleRef</code>. One run, or a documented decline, closes it.</td>
+</tr>
+<tr>
+<td><a id="Q408"></a>Q408</td>
+<td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
+<td><code>security</code></td>
+<td>L</td>
+<td><strong>Demand:</strong> an operator asks for untrusted-PR CI on Kata; measurement first. Phase 1 is built and awaits a green Kata e2e whose log names no non-GitHub non-registry host, then Phase 2 mirrors.</td>
+</tr>
+<tr>
+<td><a id="Q555"></a>Q555</td>
+<td><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Opt-in auto-retry for flaky jobs</a></td>
+<td><code>tests</code> <code>feature</code></td>
+<td>M</td>
+<td><strong>Demand:</strong> an operator asks for flaky-job retry, OR the runner exit code becomes readable: detection needs a real job outcome and nothing carries one. Then <code>spec.flakyRetry</code> on the re-run machinery.</td>
+</tr>
+<tr>
+<td><a id="Q564"></a>Q564</td>
+<td><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></td>
+<td><code>security</code> <code>feature</code></td>
+<td>M</td>
+<td><strong>Demand:</strong> an operator asks for per-connection egress records; <a href="#Q725">Q725</a> is the in-house ask. A structured line per accepted CONNECT, off by default; the proxy emits counters only today.</td>
+</tr>
+<tr>
+<td><a id="Q565"></a>Q565</td>
+<td><a href="../design/appendix-g-future-enhancements/#g2-proxy-enforced-per-tenant-rate-limiting">Proxy-enforced per-tenant rate limiting</a></td>
+<td><code>security</code> <code>feature</code></td>
+<td>M</td>
+<td><strong>Demand:</strong> an operator hits GitHub's ceiling because a co-tenant loops. Token bucket at the proxy, in-process per pod; the only feedback today is a 429 and AGC backoff. Global limits need a backend.</td>
+</tr>
+<tr>
+<td><a id="Q566"></a>Q566</td>
+<td><a href="../design/appendix-g-future-enhancements/#g4-tls-between-agcworkers-and-the-proxy">TLS between AGC/workers and the proxy</a></td>
+<td><code>security</code> <code>feature</code></td>
+<td>M</td>
+<td><strong>Demand:</strong> an operator's threat model covers the in-cluster hop. The CONNECT target host:port is cleartext there, readable by an eBPF tap; the tunneled payload stays TLS. Mount a cert-manager cert.</td>
+</tr>
+<tr>
+<td><a id="Q567"></a>Q567</td>
+<td><a href="../design/appendix-g-future-enhancements/#g5-per-runnergroup-dedicated-proxy-pool">Per-tenant-group dedicated proxy pool</a></td>
+<td><code>feature</code></td>
+<td>L</td>
+<td><strong>Demand:</strong> a bandwidth-heavy runner group saturates a co-tenant's pool. One pool per gateway today; give an opted-in group its own Deployment/Service/HPA. Largest of the four; needs a plan doc.</td>
 </tr>
 </tbody>
 </table>

@@ -2718,55 +2718,43 @@ to <a href="https://github.com/actions-gateway/github-actions-gateway/issues">op
 describing your setup. Every open item, in priority order, is in the
 <a href="https://actions-gateway.com/dev/STATUS/">working backlog</a>.</p>
 <h2 id="in-progress--near-term">In progress / near-term<a class="headerlink" href="#in-progress--near-term" title="Permanent link">&para;</a></h2>
-<p>Work that is scoped and actively being built: adoption-enabling polish and the
-last gaps an outside operator hits.</p>
+<p>Committed to a named release. Every item here blocks a release tag, and nothing
+else appears in this section: work waiting on demand, on an unbuilt
+prerequisite, or on hardware sits under
+<a href="#exploring--longer-term">Exploring / longer-term</a> with the signal that revives
+it. The pill beside each title names the release it blocks, read from the
+backlog rather than typed here, so it cannot outlive the commitment.</p>
 <ul>
 <li>
-<p><strong><a href="../plan/release-1.5/#q712--the-runner-group-binding-is-declared-and-never-wired">Bind each runner set to a GitHub runner group</a></strong> <!-- q:Q712 -->
+<p><strong><a href="../plan/release-1.5/#q712--the-runner-group-binding-is-declared-and-never-wired">Bind each runner set to a GitHub runner group</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q712 -->
   The runner group is GitHub's own control over which repositories may target a
   runner set, and GAG does not set it today, so every scale set registers into
   the installation's default group. Kubernetes-side isolation is unaffected;
-  what is unbounded is which repositories can send work to a tenant. Gating the
-  1.5 release.</p>
+  what is unbounded is which repositories can send work to a tenant.</p>
 </li>
 <li>
-<p><strong><a href="../plan/release-1.5/#q713--the-shipped-tier-emits-no-duration-or-latency-series">Job duration and pod-creation latency on the default tier</a></strong> <!-- q:Q713 -->
+<p><strong><a href="../plan/release-1.5/#q713--the-shipped-tier-emits-no-duration-or-latency-series">Job duration and pod-creation latency on the default tier</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q713 -->
   Both series are emitted on the classic tier only, so on the scale-set tier that
   every new tenant runs, two Service Level Objectives, an alert, four recording
-  rules, and panels in both shipped dashboards have no data. Gating the 1.5
-  release; until it lands, expect those panels to read empty.</p>
+  rules, and panels in both shipped dashboards have no data. Until it lands,
+  expect those panels to read empty.</p>
 </li>
 <li>
-<p><strong><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Multi-label runner sets for <code>runs-on</code> arrays</a></strong> <!-- q:Q726 -->
+<p><strong><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Multi-label runner sets for <code>runs-on</code> arrays</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q726 -->
   A runner set takes exactly one label today, so a workflow targeting
   <code>runs-on: [linux, gpu]</code> needs one edit per target to move here from Actions
   Runner Controller (ARC). That is the one gap breaking the otherwise zero-edit
-  migration, so it gates the 1.5 release.</p>
+  migration.</p>
 </li>
 <li>
-<p><strong><a href="../operations/tenant-onboarding/">Detect the runner version a tenant's worker image ships</a></strong> <!-- q:Q715 -->
+<p><strong><a href="../operations/tenant-onboarding/">Detect the runner version a tenant's worker image ships</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q715 -->
   The version GAG reports to GitHub is the pinned default, whatever
   <code>spec.workerImage</code> holds, and the too-old warning fires on the classic tier
   only. GitHub raises its enforced minimum on 2026-09-25, so a stale image fails
-  with no prior signal. Gating the 1.5 release.</p>
+  with no prior signal.</p>
 </li>
 <li>
-<p><strong><a href="../plan/q408-untrusted-pr-egress/">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 -->
-  <a href="../operations/kata-dind-workloads/">Kata workers</a> are validated for <em>trusted</em>
-  CI only: the micro-VM bounds the guest kernel, the runner's egress stays
-  permissive. Untrusted PRs need an in-cluster pull-through registry mirror plus
-  egress scoped to it, GitHub, and DNS. Scheduled on an operator's ask;
-  measurement first.</p>
-</li>
-<li>
-<p><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Opt-in auto-retry for flaky jobs</a></strong> <!-- q:Q555 -->
-  A job the cluster disrupts already
-  <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>;
-  a flaky failure does not. Same machinery, opted in per runner set with its own
-  budget so a broken test cannot loop. Detection comes first.</p>
-</li>
-<li>
-<p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <!-- q:Q719 -->
+<p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q719 -->
   Workers are storage-less by design and nothing validates a <code>ReadWriteMany</code>
   volume mounted into one, so the stance is undocumented rather than decided.
   <code>ReadWriteMany</code> is how jobs share files, and it is what ARC's
@@ -2774,49 +2762,12 @@ last gaps an outside operator hits.</p>
   off that mode. Validation and a reference architecture come before any API.</p>
 </li>
 <li>
-<p><strong><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></strong> <!-- q:Q727 -->
+<p><strong><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q727 -->
   ARC runs these as separate pods on a shared volume under
   <code>containerMode: kubernetes</code>. One worker pod per job means the path here is
   Docker-in-Docker, unprivileged only under Kata. Sequenced behind the
   <code>ReadWriteMany</code> validation above, which it depends on; documenting Kata
   Docker-in-Docker as the permanent answer is a valid outcome.</p>
-</li>
-<li>
-<p><strong><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate GHES against a real appliance</a></strong> <!-- q:Q765 -->
-  Both GitHub Enterprise Server (GHES) capabilities ship marked untested against
-  real hardware: the appliance-addressing path and the private-CA bundle. They
-  are believed correct and unproven, which is not the same thing. Waits on
-  access to an appliance.</p>
-</li>
-</ul>
-<p>The next four are all opt-in additions to the
-<a href="../design/network-architecture/">per-tenant proxy</a>, tracked and shipping
-separately.</p>
-<ul>
-<li>
-<p><strong><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></strong> <!-- q:Q564 -->
-  A structured line per accepted CONNECT: tenant, host and port, bytes each way,
-  duration. The proxy emits counters only today, so per-tenant egress is
-  reconstructable just from cluster flow logs. Off by default.</p>
-</li>
-<li>
-<p><strong><a href="../design/appendix-g-future-enhancements/#g2-proxy-enforced-per-tenant-rate-limiting">Per-tenant proxy rate limiting</a></strong> <!-- q:Q565 -->
-  A token bucket at the proxy, so one looping tenant is slowed before it reaches
-  GitHub's ceiling; today the only feedback is a 429 and Actions Gateway
-  Controller (AGC) backoff. Per-pod state, since global limits would need a
-  shared backend.</p>
-</li>
-<li>
-<p><strong><a href="../design/appendix-g-future-enhancements/#g4-tls-between-agcworkers-and-the-proxy">TLS on the in-cluster proxy hop</a></strong> <!-- q:Q566 -->
-  The CONNECT target is cleartext between the AGC or workers and the proxy,
-  readable by an eBPF tap, though the tunnelled payload stays TLS to GitHub.
-  Mount a cert-manager certificate and move to an <code>https://</code> proxy URL.</p>
-</li>
-<li>
-<p><strong><a href="../design/appendix-g-future-enhancements/#g5-per-runnergroup-dedicated-proxy-pool">A dedicated proxy pool per runner group</a></strong> <!-- q:Q567 -->
-  One pool per gateway today, so a bandwidth-heavy group can saturate a
-  co-tenant's. Give an opted-in group its own Deployment, Service, and
-  autoscaler. Largest of the four; needs a plan doc before code.</p>
 </li>
 </ul>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
@@ -2831,6 +2782,29 @@ the exception: a firm commitment, waiting only on the release that carries it.</
   <strong><code>v2.0.0</code></strong> is the named release that removes all three together, since
   <code>v2beta1</code> is already ScaleSet-only. Gated on the <code>v2</code> GA API being validated,
   not on a date.</p>
+</li>
+<li>
+<p><strong><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate GHES against a real appliance</a></strong> <!-- q:Q765 -->
+  Both GitHub Enterprise Server (GHES) capabilities ship marked untested against
+  real hardware: the appliance-addressing path and the private-CA bundle. They
+  are believed correct and unproven, which is not the same thing. Waits on
+  access to an appliance.</p>
+</li>
+<li>
+<p><strong><a href="../plan/q408-untrusted-pr-egress/">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 -->
+  <a href="../operations/kata-dind-workloads/">Kata workers</a> are validated for <em>trusted</em>
+  CI only: the micro-VM bounds the guest kernel, the runner's egress stays
+  permissive. Untrusted PRs need an in-cluster pull-through registry mirror plus
+  egress scoped to it, GitHub, and DNS. Waits on an operator's ask, then a
+  measurement.</p>
+</li>
+<li>
+<p><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Opt-in auto-retry for flaky jobs</a></strong> <!-- q:Q555 -->
+  A job the cluster disrupts already
+  <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>;
+  a flaky failure does not. Same machinery, opted in per runner set with its own
+  budget so a broken test cannot loop. Waits on detection, which needs a real
+  job outcome.</p>
 </li>
 <li>
 <p><strong>Controller horizontal scaling / high availability.</strong> <!-- q:Q169 --> The
@@ -2883,6 +2857,36 @@ the exception: a firm commitment, waiting only on the release that carries it.</
 <li><strong>A published benchmark and case study.</strong> <!-- q:Q198 --> Real GitHub-at-scale
   numbers behind the <a href="../design/appendix-f-cost-model/">cost model</a>, which needs a
   funded scale run rather than a local cluster.</li>
+</ul>
+<p>The last four are opt-in additions to the
+<a href="../design/network-architecture/">per-tenant proxy</a>, shelved together because
+none has demand recorded against it. A coherent theme is not a release.</p>
+<ul>
+<li>
+<p><strong><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></strong> <!-- q:Q564 -->
+  A structured line per accepted CONNECT: tenant, host and port, bytes each way,
+  duration. The proxy emits counters only today, so per-tenant egress is
+  reconstructable just from cluster flow logs. Off by default.</p>
+</li>
+<li>
+<p><strong><a href="../design/appendix-g-future-enhancements/#g2-proxy-enforced-per-tenant-rate-limiting">Per-tenant proxy rate limiting</a></strong> <!-- q:Q565 -->
+  A token bucket at the proxy, so one looping tenant is slowed before it reaches
+  GitHub's ceiling; today the only feedback is a 429 and Actions Gateway
+  Controller (AGC) backoff. Per-pod state, since global limits would need a
+  shared backend.</p>
+</li>
+<li>
+<p><strong><a href="../design/appendix-g-future-enhancements/#g4-tls-between-agcworkers-and-the-proxy">TLS on the in-cluster proxy hop</a></strong> <!-- q:Q566 -->
+  The CONNECT target is cleartext between the AGC or workers and the proxy,
+  readable by an eBPF tap, though the tunnelled payload stays TLS to GitHub.
+  Mount a cert-manager certificate and move to an <code>https://</code> proxy URL.</p>
+</li>
+<li>
+<p><strong><a href="../design/appendix-g-future-enhancements/#g5-per-runnergroup-dedicated-proxy-pool">A dedicated proxy pool per runner group</a></strong> <!-- q:Q567 -->
+  One pool per gateway today, so a bandwidth-heavy group can saturate a
+  co-tenant's. Give an opted-in group its own Deployment, Service, and
+  autoscaler. Largest of the four; needs a plan doc before code.</p>
+</li>
 </ul>
 <h2 id="how-priorities-are-set">How priorities are set<a class="headerlink" href="#how-priorities-are-set" title="Permanent link">&para;</a></h2>
 <p>GAG's success metric is <strong>external operators running it and telling us what
