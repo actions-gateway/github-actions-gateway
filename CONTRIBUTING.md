@@ -203,6 +203,20 @@ Keep commits small and focused.
 Never commit broken code or failing tests.
 Amending unpushed commits is fine; once pushed, prefer a follow-up commit unless a rebase is explicitly needed.
 
+### Skip the reflow commit in `git blame`
+
+Every prose line was rewritten once, mechanically, when the docs moved to one sentence per line.
+That commit sits between each line and the author who wrote it.
+[`.git-blame-ignore-revs`](.git-blame-ignore-revs) lists it; point git at the file once per clone:
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+Without it, `git blame README.md` credits 93 lines to the reflow.
+With it, none.
+The file holds full 40-character commit hashes because that is all `git blame` parses — a short hash or a tag makes it exit with `fatal: invalid object name`, and a hash naming no commit is accepted and silently matches nothing.
+
 ### Pushing to a PR that is already open
 
 Prefer putting everything in the first push — but "never push again" is too strong, and the reason matters.
