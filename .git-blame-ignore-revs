@@ -1,0 +1,7 @@
+# Commits that changed formatting only, never authorship of the prose.
+# Configure git to use this file once per clone:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub reads it automatically.
+
+# docs: reflow every tracked Markdown file to one sentence per line
+2ba8b25d405d45599a80bc0a56477e952c74bccc
