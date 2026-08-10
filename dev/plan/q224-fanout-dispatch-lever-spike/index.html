@@ -2720,243 +2720,125 @@
 
 
 <h1 id="q224--agc-side-lever-spike-can-we-beat-githubs-fan-out-distinct-delivery-starvation-without-option-e">Q224 — AGC-side lever spike: can we beat GitHub's fan-out distinct-delivery starvation without Option E?<a class="headerlink" href="#q224--agc-side-lever-spike-can-we-beat-githubs-fan-out-distinct-delivery-starvation-without-option-e" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> spike <strong>complete</strong>, no code changed. This is the escape-hatch check
-the <a href="../archive/gke-dogfood-turnup-findings/">re-route #8 conclusion</a> invited: #8 isolated the
-last Q224 blocker to <strong>GitHub's server-side fan-out distinct-delivery
-starvation</strong> on GAG's many-acquirers topology and called
-<a href="../q264-scale-set-protocol/">Option E / Q264</a> the structural fix. Before the user
-commits to (or declines) the Q264 scale-set rewrite, this spike tests two
-proposed AGC-side levers against the mechanism and the existing live evidence.</p>
-<p><strong>Verdict up front: no AGC-side lever provides a <em>reliable</em> fix; #530/§5 stands —
-<a href="../q264-scale-set-protocol/">Option E (Q264)</a> is the only structural fix.</strong></p>
+<p><strong>Status:</strong> spike <strong>complete</strong>, no code changed.
+This is the escape-hatch check the <a href="../archive/gke-dogfood-turnup-findings/">re-route #8 conclusion</a> invited: #8 isolated the last Q224 blocker to <strong>GitHub's server-side fan-out distinct-delivery starvation</strong> on GAG's many-acquirers topology and called <a href="../q264-scale-set-protocol/">Option E / Q264</a> the structural fix.
+Before the user commits to (or declines) the Q264 scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.</p>
+<p><strong>Verdict up front: no AGC-side lever provides a <em>reliable</em> fix; #530/§5 stands — <a href="../q264-scale-set-protocol/">Option E (Q264)</a> is the only structural fix.</strong></p>
 <ul>
-<li><strong>H2 (unique/ephemeral runner names): NON-LEVER (reasoned, high confidence).</strong>
-  Renaming the same reactively-grown slots adds <strong>zero</strong> distinct idle runners —
-  the actual binding constraint — while defeating the <a href="../../STATUS/">Q114</a> recycle
-  optimization and worsening the stale-runner-record clutter that already
-  confounds re-routes. The #8 orphaning is runner-<strong>id</strong> churn on recycle, not
-  name reuse; unique names do not fix it and can worsen it.</li>
-<li><strong>H1 (warm idle <em>listener</em> baseline): at best a probabilistic stopgap, not a
-  fix — and its efficacy is unconfirmed (the #8 data leans <em>against</em> it).</strong>
-  Note the reframe: the lever the dispatch problem needs is a warm baseline of
-  idle <strong>long-poll listeners</strong> (a <em>new</em> <code>minIdleListeners</code>-style knob), <strong>not</strong>
-  Q261/<a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">G.12</a>
-  <code>minIdleWorkers</code> (warm worker <strong>pods</strong>), which presents no extra idle runners to
-  GitHub and so does nothing for dispatch starvation. Even in its favourable case,
-  H1 converges on reimplementing the scale-set capacity model on top of the
-  fan-out-prone offer-to-many protocol, <em>without</em> the single authoritative stream
-  or capacity header — strictly dominated by Option E.</li>
-<li><strong>Combination H1+H2</strong> = "a warm baseline of unique ephemeral non-recycling
-  runners" = a poor-man's scale set on the wrong protocol. Dominated by Option E.</li>
+<li><strong>H2 (unique/ephemeral runner names): NON-LEVER (reasoned, high confidence).</strong> Renaming the same reactively-grown slots adds <strong>zero</strong> distinct idle runners — the actual binding constraint — while defeating the <a href="../../STATUS/">Q114</a> recycle optimization and worsening the stale-runner-record clutter that already confounds re-routes.
+  The #8 orphaning is runner-<strong>id</strong> churn on recycle, not name reuse; unique names do not fix it and can worsen it.</li>
+<li><strong>H1 (warm idle <em>listener</em> baseline): at best a probabilistic stopgap, not a fix — and its efficacy is unconfirmed (the #8 data leans <em>against</em> it).</strong> Note the reframe: the lever the dispatch problem needs is a warm baseline of idle <strong>long-poll listeners</strong> (a <em>new</em> <code>minIdleListeners</code>-style knob), <strong>not</strong> Q261/<a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">G.12</a> <code>minIdleWorkers</code> (warm worker <strong>pods</strong>), which presents no extra idle runners to GitHub and so does nothing for dispatch starvation.
+  Even in its favourable case, H1 converges on reimplementing the scale-set capacity model on top of the fan-out-prone offer-to-many protocol, <em>without</em> the single authoritative stream or capacity header — strictly dominated by Option E.</li>
+<li><strong>Combination H1+H2</strong> = "a warm baseline of unique ephemeral non-recycling runners" = a poor-man's scale set on the wrong protocol.
+  Dominated by Option E.</li>
 </ul>
-<p><strong>Recommendation: do not invest in H1/H2 as the Q224 fix. Proceed to the Q264
-go/no-go.</strong> H1 (the warm-listener-baseline form only) may be worth a small,
-flagged, opt-in <em>stopgap</em> to raise dogfood green-<em>rate</em> while Q264 is evaluated —
-but only if a live probe (§5, designed and ready, not run this session) first
-confirms a warm-wide classic pool actually spreads distinct jobs. The verdict
-does <strong>not</strong> hinge on that probe (§5.3).</p>
+<p><strong>Recommendation: do not invest in H1/H2 as the Q224 fix.
+Proceed to the Q264 go/no-go.</strong> H1 (the warm-listener-baseline form only) may be worth a small, flagged, opt-in <em>stopgap</em> to raise dogfood green-<em>rate</em> while Q264 is evaluated — but only if a live probe (§5, designed and ready, not run this session) first confirms a warm-wide classic pool actually spreads distinct jobs.
+The verdict does <strong>not</strong> hinge on that probe (§5.3).</p>
 <hr />
 <h2 id="1-the-problem-restated-and-grounded-in-code">1. The problem, restated and grounded in code<a class="headerlink" href="#1-the-problem-restated-and-grounded-in-code" title="Permanent link">&para;</a></h2>
-<p>Re-route #8's decisive AGC debug-log analysis
-(<a href="../archive/gke-dogfood-turnup-findings/">gke-dogfood.md</a>, re-route #8): a ~7-job burst to an
-idle pool at <code>maxListeners = 48</code>, clean namespace, all recycle/capacity/tax seams
-(Q259/Q266/Q267/Q248/Q265) resolved and quiet. Outcome — <strong>2/7 green, 5/7 wedged
-<code>in_progress</code> indefinitely</strong>:</p>
+<p>Re-route #8's decisive AGC debug-log analysis (<a href="../archive/gke-dogfood-turnup-findings/">gke-dogfood.md</a>, re-route #8): a ~7-job burst to an idle pool at <code>maxListeners = 48</code>, clean namespace, all recycle/capacity/tax seams (Q259/Q266/Q267/Q248/Q265) resolved and quiet.
+Outcome — <strong>2/7 green, 5/7 wedged <code>in_progress</code> indefinitely</strong>:</p>
 <ul>
-<li>GitHub fanned <strong>one</strong> job's planID (<code>coverage</code>, <code>62d2c792</code>) out as ~6 sibling
-  deliveries; the AGC deduped every sibling on planID and released each via
-  Option A <code>completejob</code> — <strong>correct</strong>.</li>
-<li>The <strong>other 5 jobs' own planIDs were never delivered</strong> to the AGC. GitHub had
-  marked those 5 jobs <code>in_progress</code>/<code>started</code> on the recycled stable-named runners
-  (<code>ci8-1</code>, <code>ci8-2</code> each carried 3 assignments) and left them dangling.</li>
-<li>The online-idle pool <strong>stalled at 3 active sessions ≪ 48</strong> — "a fan-out
-  <em>duplicate</em> delivery does not grow the demand-driven 1:1 replacement pool the way
-  a distinct acquisition does" — so GitHub never saw enough distinct idle runners
-  to place the 5 distinct jobs.</li>
+<li>GitHub fanned <strong>one</strong> job's planID (<code>coverage</code>, <code>62d2c792</code>) out as ~6 sibling deliveries; the AGC deduped every sibling on planID and released each via Option A <code>completejob</code> — <strong>correct</strong>.</li>
+<li>The <strong>other 5 jobs' own planIDs were never delivered</strong> to the AGC.
+  GitHub had marked those 5 jobs <code>in_progress</code>/<code>started</code> on the recycled stable-named runners (<code>ci8-1</code>, <code>ci8-2</code> each carried 3 assignments) and left them dangling.</li>
+<li>The online-idle pool <strong>stalled at 3 active sessions ≪ 48</strong> — "a fan-out <em>duplicate</em> delivery does not grow the demand-driven 1:1 replacement pool the way a distinct acquisition does" — so GitHub never saw enough distinct idle runners to place the 5 distinct jobs.</li>
 </ul>
-<p><strong>The binding constraint is the number of <em>distinct idle long-poll sessions</em> the
-AGC presents to GitHub at burst.</strong> Two facts decide whether an AGC lever can move
-it — one AGC-side (§2, ours to change), one GitHub-side (§4, the crux we cannot
-change).</p>
+<p><strong>The binding constraint is the number of <em>distinct idle long-poll sessions</em> the AGC presents to GitHub at burst.</strong> Two facts decide whether an AGC lever can move it — one AGC-side (§2, ours to change), one GitHub-side (§4, the crux we cannot change).</p>
 <h2 id="2-why-only-3-of-48-listeners-were-online-idle-at-burst-agc-side-from-code">2. Why only 3 of 48 listeners were online-idle at burst (AGC-side, from code)<a class="headerlink" href="#2-why-only-3-of-48-listeners-were-online-idle-at-burst-agc-side-from-code" title="Permanent link">&para;</a></h2>
 <p>Pinned to the multiplexer/listener code, not assumed:</p>
 <ol>
-<li><strong>Baseline is exactly one permanent poller.</strong> <code>Multiplexer.Start</code> spawns a
-   single permanent baseline goroutine (<code>m.spawn(ctx, true)</code>,
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:152</code></a>); there is
-   <strong>no</strong> <code>minIdleListeners</code> / eager-warm knob. <code>maxListeners</code> is only a <em>ceiling</em>
-   (<code>SpawnReplacement</code> no-ops at the cap,
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:174</code></a>).</li>
-<li><strong>Growth is reactive and 1:1, triggered only by a distinct-planID acquisition.</strong>
-   <code>SpawnReplacement</code> is called by a listener <strong>after it wins a job</strong>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go:924</code></a>) — <em>after</em> the
-   <code>ClaimJob</code> dedup gate. A <strong>deduped loser skips SpawnReplacement entirely</strong>
-   (<code>goroutine.go:866</code>: "SpawnReplacement/renew/provision are all skipped for the
-   loser"; the loser returns at <code>goroutine.go:909</code>). So <strong>F duplicate deliveries of
-   one job grow the pool by exactly 1</strong> (the single winner), not by F.</li>
-<li><strong>Therefore, from an idle start, the pool can only grow as fast as <em>distinct</em>
-   planIDs are won.</strong> When GitHub feeds the small idle pool duplicates of one job
-   (§1), each duplicate is a loser → no growth → the pool never climbs toward 48.
-   <code>maxListeners</code> width is <strong>not</strong> the lever (#8 confirmed a 3-session stall at 48);
-   the reactive, winner-only, demand-driven growth is.</li>
+<li><strong>Baseline is exactly one permanent poller.</strong> <code>Multiplexer.Start</code> spawns a single permanent baseline goroutine (<code>m.spawn(ctx, true)</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:152</code></a>); there is <strong>no</strong> <code>minIdleListeners</code> / eager-warm knob. <code>maxListeners</code> is only a <em>ceiling</em> (<code>SpawnReplacement</code> no-ops at the cap, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:174</code></a>).</li>
+<li><strong>Growth is reactive and 1:1, triggered only by a distinct-planID acquisition.</strong> <code>SpawnReplacement</code> is called by a listener <strong>after it wins a job</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go:924</code></a>) — <em>after</em> the <code>ClaimJob</code> dedup gate.
+   A <strong>deduped loser skips SpawnReplacement entirely</strong> (<code>goroutine.go:866</code>: "SpawnReplacement/renew/provision are all skipped for the loser"; the loser returns at <code>goroutine.go:909</code>).
+   So <strong>F duplicate deliveries of one job grow the pool by exactly 1</strong> (the single winner), not by F.</li>
+<li><strong>Therefore, from an idle start, the pool can only grow as fast as <em>distinct</em> planIDs are won.</strong> When GitHub feeds the small idle pool duplicates of one job (§1), each duplicate is a loser → no growth → the pool never climbs toward 48. <code>maxListeners</code> width is <strong>not</strong> the lever (#8 confirmed a 3-session stall at 48); the reactive, winner-only, demand-driven growth is.</li>
 </ol>
-<p>This is genuinely AGC-side and changeable — an eager warm baseline of idle
-listeners <em>would</em> present more distinct idle runners at t=0 (that is H1). Whether
-that helps is decided entirely by §4.</p>
+<p>This is genuinely AGC-side and changeable — an eager warm baseline of idle listeners <em>would</em> present more distinct idle runners at t=0 (that is H1).
+Whether that helps is decided entirely by §4.</p>
 <h2 id="3-h2--uniqueephemeral-runner-names-non-lever">3. H2 — unique/ephemeral runner names: NON-LEVER<a class="headerlink" href="#3-h2--uniqueephemeral-runner-names-non-lever" title="Permanent link">&para;</a></h2>
-<p>Today the agent name is deterministic by slot index —
-<code>fmt.Sprintf("%s-%d", groupName, index)</code> →<code>ci8-1</code>, <code>ci8-2</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:328</code></a>) — and
-<a href="../../STATUS/">Q114</a> single-use recycle <strong>re-registers the same name</strong> (same index)
-after each job. H2 proposes a unique/ephemeral name per registration so GitHub
-"distributes" rather than "piles."</p>
+<p>Today the agent name is deterministic by slot index — <code>fmt.Sprintf("%s-%d", groupName, index)</code> →<code>ci8-1</code>, <code>ci8-2</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:328</code></a>) — and <a href="../../STATUS/">Q114</a> single-use recycle <strong>re-registers the same name</strong> (same index) after each job.
+H2 proposes a unique/ephemeral name per registration so GitHub "distributes" rather than "piles."</p>
 <p>It fails on the mechanism:</p>
 <ul>
-<li><strong>Names are not the binding constraint; distinct <em>idle sessions</em> are (§1–§2).</strong>
-  Unique names relabel the same ~3 reactively-grown slots. Three uniquely-named
-  idle runners are still three idle runners — GitHub has the same three targets.</li>
-<li><strong>The #8 pile-up is runner-<em>id</em> churn, not name reuse.</strong> <code>generate-jitconfig</code>
-  mints a <strong>new runner id every registration even for the same name</strong>; GitHub tracks
-  assignments by id. On recycle, the old id's staged assignments <strong>orphan</strong> (the new
-  same-named runner is a different id). Unique names change the label but not the
-  id-churn — every recycle is still a brand-new runner GitHub has never balanced to.
-  If anything, unique names make it <em>worse</em>: they forfeit the Q114 same-name
-  fast-path and multiply distinct runner records (the stale-<code>ci-N</code> clutter that
-  guard-blocked cleanup already amplified in re-routes #6/#7).</li>
-<li><strong>Secure-by-default / cost:</strong> no security change, but a strict regression in
-  registration churn and record hygiene for no dispatch benefit.</li>
+<li><strong>Names are not the binding constraint; distinct <em>idle sessions</em> are (§1–§2).</strong> Unique names relabel the same ~3 reactively-grown slots.
+  Three uniquely-named idle runners are still three idle runners — GitHub has the same three targets.</li>
+<li><strong>The #8 pile-up is runner-<em>id</em> churn, not name reuse.</strong> <code>generate-jitconfig</code> mints a <strong>new runner id every registration even for the same name</strong>; GitHub tracks assignments by id.
+  On recycle, the old id's staged assignments <strong>orphan</strong> (the new same-named runner is a different id).
+  Unique names change the label but not the id-churn — every recycle is still a brand-new runner GitHub has never balanced to.
+  If anything, unique names make it <em>worse</em>: they forfeit the Q114 same-name fast-path and multiply distinct runner records (the stale-<code>ci-N</code> clutter that guard-blocked cleanup already amplified in re-routes #6/#7).</li>
+<li><strong>Secure-by-default / cost:</strong> no security change, but a strict regression in registration churn and record hygiene for no dispatch benefit.</li>
 </ul>
-<p><strong>H2 verdict: reject.</strong> It does not add idle capacity, does not fix id-churn
-orphaning, and worsens record clutter.</p>
+<p><strong>H2 verdict: reject.</strong> It does not add idle capacity, does not fix id-churn orphaning, and worsens record clutter.</p>
 <h2 id="4-h1--warm-idle-listener-baseline-the-crux-and-why-it-is-not-a-reliable-fix">4. H1 — warm idle <em>listener</em> baseline: the crux, and why it is not a reliable fix<a class="headerlink" href="#4-h1--warm-idle-listener-baseline-the-crux-and-why-it-is-not-a-reliable-fix" title="Permanent link">&para;</a></h2>
 <h3 id="41-the-reframe-warm-listeners-not-q261-warm-workers">4.1 The reframe: warm <em>listeners</em>, not Q261 warm <em>workers</em><a class="headerlink" href="#41-the-reframe-warm-listeners-not-q261-warm-workers" title="Permanent link">&para;</a></h3>
-<p>The task framed H1 as "warm/eager idle pool (Q261)." That conflates two different
-things and the distinction is load-bearing:</p>
+<p>The task framed H1 as "warm/eager idle pool (Q261)."
+That conflates two different things and the distinction is load-bearing:</p>
 <ul>
-<li><strong>Warm idle <em>worker pods</em></strong> = <a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">Q261/G.12</a>
-  <code>minIdleWorkers</code>. A pre-scheduled idle <strong>pod</strong> cuts pod-schedule latency after a
-  job is <em>acquired</em>. It is <strong>not</strong> a long-poll session and presents <strong>no</strong> extra
-  idle runner to GitHub → <strong>zero</strong> effect on dispatch starvation. Reviving Q261 as
-  specified does <strong>not</strong> address Q224's blocker.</li>
-<li><strong>Warm idle <em>listeners</em></strong> = a <em>new</em> <code>minIdleListeners</code> / <code>baselineListeners</code> knob
-  that eagerly maintains N idle long-poll sessions (each a distinct registered idle
-  runner) instead of the single reactive baseline (§2). <em>This</em> is what H1 needs, and
-  it does not exist today.</li>
+<li><strong>Warm idle <em>worker pods</em></strong> = <a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">Q261/G.12</a> <code>minIdleWorkers</code>.
+  A pre-scheduled idle <strong>pod</strong> cuts pod-schedule latency after a job is <em>acquired</em>.
+  It is <strong>not</strong> a long-poll session and presents <strong>no</strong> extra idle runner to GitHub → <strong>zero</strong> effect on dispatch starvation.
+  Reviving Q261 as specified does <strong>not</strong> address Q224's blocker.</li>
+<li><strong>Warm idle <em>listeners</em></strong> = a <em>new</em> <code>minIdleListeners</code> / <code>baselineListeners</code> knob that eagerly maintains N idle long-poll sessions (each a distinct registered idle runner) instead of the single reactive baseline (§2). <em>This</em> is what H1 needs, and it does not exist today.</li>
 </ul>
 <p>So even to <em>try</em> H1 faithfully you build the warm-listener baseline, not Q261.</p>
 <h3 id="42-efficacy-hinges-on-one-github-side-unknown">4.2 Efficacy hinges on one GitHub-side unknown<a class="headerlink" href="#42-efficacy-hinges-on-one-github-side-unknown" title="Permanent link">&para;</a></h3>
-<p>With N warm distinct idle classic listeners and N queued jobs, GitHub's classic
-offer-to-many broker does one of two things:</p>
+<p>With N warm distinct idle classic listeners and N queued jobs, GitHub's classic offer-to-many broker does one of two things:</p>
 <ul>
 <li><strong>(a) Spread</strong> — assign job-i to runner-i (1:1 load-balance). → H1 helps.</li>
-<li><strong>(b) Fan-out-first</strong> — offer job-1 to <em>all</em> N idle pollers (N-way race, 1 winner,
-  N−1 dedup losers), only advancing to job-2 as pollers free up. → H1 fails: more
-  warm runners just get more duplicates of the front-of-queue job.</li>
+<li><strong>(b) Fan-out-first</strong> — offer job-1 to <em>all</em> N idle pollers (N-way race, 1 winner, N−1 dedup losers), only advancing to job-2 as pollers free up. → H1 fails: more warm runners just get more duplicates of the front-of-queue job.</li>
 </ul>
-<p>We have <strong>no direct classic-protocol evidence</strong> of (a) vs (b) on a <em>warm, wide,
-non-churning</em> pool — every Q260 observation was on a small, reactive, churning pool
-where the two are hard to separate. But the existing evidence <strong>leans toward (b)</strong>:</p>
+<p>We have <strong>no direct classic-protocol evidence</strong> of (a) vs (b) on a <em>warm, wide, non-churning</em> pool — every Q260 observation was on a small, reactive, churning pool where the two are hard to separate.
+But the existing evidence <strong>leans toward (b)</strong>:</p>
 <ul>
-<li><strong>#8 is the strongest tell.</strong> Faced with 7 queued jobs and a small idle pool,
-  GitHub fed the ~3 idle slots <strong>~6 duplicates of ONE planID</strong> while <strong>5 distinct
-  planIDs went undelivered</strong>. If GitHub load-balanced distinct jobs across idle
-  runners (a), those 5 planIDs would have gone to the idle slots; instead the same
-  job was re-offered/fanned. That is the signature of (b). <em>(Consistent-with, not
-  proof: the 5 could in principle have been withheld by an unrelated per-group
-  serialization — which is exactly what the §5 probe would settle.)</em></li>
-<li><strong>The scale-set 1:1 result does <em>not</em> transfer.</strong> Investigation E2
-  (<a href="../archive/q264-scale-set-protocol-phases/#2b-investigation-e2--capacity-gating-recovery-and-a-real-runner-2026-07-04">q264 §2b</a>)
-  showed GitHub delivering distinct jobs 1:1 — but on the <strong>auto-assign scale-set
-  backend</strong> (server pushes assignments up to a capacity header), a <em>different
-  dispatch algorithm</em> from classic offer-to-many long-poll. It proves GitHub <em>can</em>
-  spread when it owns the assignment; it says nothing about classic pollers.</li>
+<li><strong>#8 is the strongest tell.</strong> Faced with 7 queued jobs and a small idle pool, GitHub fed the ~3 idle slots <strong>~6 duplicates of ONE planID</strong> while <strong>5 distinct planIDs went undelivered</strong>.
+  If GitHub load-balanced distinct jobs across idle runners (a), those 5 planIDs would have gone to the idle slots; instead the same job was re-offered/fanned.
+  That is the signature of (b). <em>(Consistent-with, not proof: the 5 could in principle have been withheld by an unrelated per-group serialization — which is exactly what the §5 probe would settle.)</em></li>
+<li><strong>The scale-set 1:1 result does <em>not</em> transfer.</strong> Investigation E2 (<a href="../archive/q264-scale-set-protocol-phases/#2b-investigation-e2--capacity-gating-recovery-and-a-real-runner-2026-07-04">q264 §2b</a>) showed GitHub delivering distinct jobs 1:1 — but on the <strong>auto-assign scale-set backend</strong> (server pushes assignments up to a capacity header), a <em>different dispatch algorithm</em> from classic offer-to-many long-poll.
+  It proves GitHub <em>can</em> spread when it owns the assignment; it says nothing about classic pollers.</li>
 </ul>
 <h3 id="43-even-the-favourable-case-is-not-a-reliable-fix">4.3 Even the favourable case is not a reliable fix<a class="headerlink" href="#43-even-the-favourable-case-is-not-a-reliable-fix" title="Permanent link">&para;</a></h3>
-<p>Suppose the §5 probe shows (a) — warm-wide classic spreads. H1 would still be a
-<strong>probability improvement, not a structural guarantee</strong>, because GAG's topology
-re-enters churn the moment load is sustained:</p>
+<p>Suppose the §5 probe shows (a) — warm-wide classic spreads.
+H1 would still be a <strong>probability improvement, not a structural guarantee</strong>, because GAG's topology re-enters churn the moment load is sustained:</p>
 <ul>
-<li>Every completed job <strong>recycles</strong> its runner (<a href="../../STATUS/">Q114</a> single-use):
-  deregister → re-register, a seconds-long window in which that runner is absent and
-  any job GitHub stages to its old id <strong>orphans</strong> (the #8 failure, unchanged).</li>
-<li>Sustaining N warm idle listeners under continuous burst means continuously
-  re-warming through that churn.</li>
+<li>Every completed job <strong>recycles</strong> its runner (<a href="../../STATUS/">Q114</a> single-use): deregister → re-register, a seconds-long window in which that runner is absent and any job GitHub stages to its old id <strong>orphans</strong> (the #8 failure, unchanged).</li>
+<li>Sustaining N warm idle listeners under continuous burst means continuously re-warming through that churn.</li>
 </ul>
-<p>To make H1 reliable you would additionally need <strong>non-recycling ephemeral runners</strong>
-(one runner per job, never reused) <strong>plus</strong> a continuously-maintained warm baseline
-<strong>plus</strong> capacity-accurate advertisement — i.e. you reconstruct the <strong>scale-set
-capacity model</strong> on top of the <strong>fan-out-prone offer-to-many protocol</strong>, keeping the
-very race Option E removes by construction. That is strictly more work than Option E
-for a strictly worse result (no single authoritative stream, no capacity header, the
-fan-out race still latent).</p>
-<p><strong>H1 verdict: not a reliable fix.</strong> Its efficacy is unconfirmed and the evidence
-leans against it; even its best case converges on a dominated reimplementation of
-Option E. Its only defensible use is a small, opt-in, flagged <strong>stopgap</strong> to raise
-dogfood green-<em>rate</em> while Q264 is decided — contingent on the §5 probe first
-confirming (a).</p>
+<p>To make H1 reliable you would additionally need <strong>non-recycling ephemeral runners</strong> (one runner per job, never reused) <strong>plus</strong> a continuously-maintained warm baseline <strong>plus</strong> capacity-accurate advertisement — i.e. you reconstruct the <strong>scale-set capacity model</strong> on top of the <strong>fan-out-prone offer-to-many protocol</strong>, keeping the very race Option E removes by construction.
+That is strictly more work than Option E for a strictly worse result (no single authoritative stream, no capacity header, the fan-out race still latent).</p>
+<p><strong>H1 verdict: not a reliable fix.</strong> Its efficacy is unconfirmed and the evidence leans against it; even its best case converges on a dominated reimplementation of Option E. Its only defensible use is a small, opt-in, flagged <strong>stopgap</strong> to raise dogfood green-<em>rate</em> while Q264 is decided — contingent on the §5 probe first confirming (a).</p>
 <h2 id="5-the-decisive-experiment-designed-ready-to-run--not-run-this-session">5. The decisive experiment (designed, ready to run — not run this session)<a class="headerlink" href="#5-the-decisive-experiment-designed-ready-to-run--not-run-this-session" title="Permanent link">&para;</a></h2>
-<p>Because GitHub's server-side distribution (§4.2, (a) vs (b)) is the one crux a fake
-cannot prove, the confirmatory step is a <strong>live wire probe against real GitHub</strong> — a
-classic analogue of the <a href="../archive/q264-scale-set-protocol-phases/#2a-investigation-e--live-wire-probe-2026-07-04">Investigation E/E2</a>
-scale-set probes.</p>
+<p>Because GitHub's server-side distribution (§4.2, (a) vs (b)) is the one crux a fake cannot prove, the confirmatory step is a <strong>live wire probe against real GitHub</strong> — a classic analogue of the <a href="../archive/q264-scale-set-protocol-phases/#2a-investigation-e--live-wire-probe-2026-07-04">Investigation E/E2</a> scale-set probes.</p>
 <h3 id="51-design">5.1 Design<a class="headerlink" href="#51-design" title="Permanent link">&para;</a></h3>
-<p>Reuses existing tooling: the classic broker client
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go"><code>broker/client.go</code></a>), the probe's session lifecycle and
-its two-session delivery-observation primitive
-(<code>investigateJobDelivery</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/probe/main.go"><code>cmd/probe/main.go</code></a>), and
-<code>config.sh</code>/JIT registration
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/probe-investigations-cd.sh"><code>scripts/dev/probe-investigations-cd.sh</code></a>).
+<p>Reuses existing tooling: the classic broker client (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go"><code>broker/client.go</code></a>), the probe's session lifecycle and its two-session delivery-observation primitive (<code>investigateJobDelivery</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/probe/main.go"><code>cmd/probe/main.go</code></a>), and <code>config.sh</code>/JIT registration (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/probe-investigations-cd.sh"><code>scripts/dev/probe-investigations-cd.sh</code></a>).
 New: a <code>classic_dispatch.go</code> scenario that</p>
 <ol>
-<li><strong>Registers M distinct classic runners</strong> into a runner group carrying a dedicated
-   label, varying the naming axis: <strong>stable/recycled</strong> (<code>probe-N</code>) vs
-   <strong>unique/ephemeral</strong> (<code>probe-&lt;nonce&gt;</code>) — the H2 variable.</li>
-<li><strong>Opens all M long-poll sessions and confirms all M are idle-polling (warm)</strong>
-   <em>before</em> queuing — the H1 variable (contrast: reactively grow from 1).</li>
-<li><strong>Queues N distinct jobs</strong> near-simultaneously via a fixture workflow
-   (<code>classic-dispatch-probe.yml</code>, an N-job <code>matrix</code> on <code>runs-on: [self-hosted,
-   &lt;label&gt;]</code>), analogous to <code>scaleset-probe.yml</code>.</li>
-<li><strong>Records, per delivery</strong>: which session/runner received it, the <code>planID</code>
-   (post-<code>AcquireJob</code>) and <code>RunnerRequestID</code>, and time. <strong>Metric:</strong> distinct planIDs
-   delivered vs duplicate deliveries, and their distribution across the M sessions.</li>
-<li><strong>Cleans up</strong> all M runner records (a fresh dedicated group/label to avoid the
-   shared-repo <code>ci-N</code> clutter hazard).</li>
+<li><strong>Registers M distinct classic runners</strong> into a runner group carrying a dedicated label, varying the naming axis: <strong>stable/recycled</strong> (<code>probe-N</code>) vs <strong>unique/ephemeral</strong> (<code>probe-&lt;nonce&gt;</code>) — the H2 variable.</li>
+<li><strong>Opens all M long-poll sessions and confirms all M are idle-polling (warm)</strong> <em>before</em> queuing — the H1 variable (contrast: reactively grow from 1).</li>
+<li><strong>Queues N distinct jobs</strong> near-simultaneously via a fixture workflow (<code>classic-dispatch-probe.yml</code>, an N-job <code>matrix</code> on <code>runs-on: [self-hosted, &lt;label&gt;]</code>), analogous to <code>scaleset-probe.yml</code>.</li>
+<li><strong>Records, per delivery</strong>: which session/runner received it, the <code>planID</code> (post-<code>AcquireJob</code>) and <code>RunnerRequestID</code>, and time. <strong>Metric:</strong> distinct planIDs delivered vs duplicate deliveries, and their distribution across the M sessions.</li>
+<li><strong>Cleans up</strong> all M runner records (a fresh dedicated group/label to avoid the shared-repo <code>ci-N</code> clutter hazard).</li>
 </ol>
-<p>Run the 2×2: {stable, unique} × {warm, reactive}, N ≈ M ≈ 6–8. Same App creds as the
-scale-set probe (App <code>actions-gateway-test</code>, id 3752347; PEM in keychain), repo-scoped
-to <code>github-actions-gateway</code> (bypasses org runner-group policy, per
-<a href="../archive/q264-scale-set-protocol-phases/#2a-investigation-e--live-wire-probe-2026-07-04">q264 §2a-6</a>).</p>
+<p>Run the 2×2: {stable, unique} × {warm, reactive}, N ≈ M ≈ 6–8.
+Same App creds as the scale-set probe (App <code>actions-gateway-test</code>, id 3752347; PEM in keychain), repo-scoped to <code>github-actions-gateway</code> (bypasses org runner-group policy, per <a href="../archive/q264-scale-set-protocol-phases/#2a-investigation-e--live-wire-probe-2026-07-04">q264 §2a-6</a>).</p>
 <h3 id="52-reading-the-result">5.2 Reading the result<a class="headerlink" href="#52-reading-the-result" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Warm/stable and warm/unique both still fan out</strong> (multiple sessions get the same
-  planID; distinct planIDs starve) → <strong>(b) confirmed; H1 and H2 both fail;
-  #530/§5 and this verdict are airtight; Option E is the only fix.</strong></li>
-<li><strong>Warm spreads (distinct planID per idle session), stable or unique</strong> → <strong>(a);
-  H1 is a real lever</strong> for green-<em>rate</em> (still a stopgap per §4.3, not a structural
-  fix). This is the single result that would upgrade H1 from "stopgap" to "worth a
-  flagged implementation."</li>
-<li><strong>Unique spreads but stable does not</strong> → H2 matters after all (contradicts §3);
-  would warrant reopening the naming analysis.</li>
+<li><strong>Warm/stable and warm/unique both still fan out</strong> (multiple sessions get the same planID; distinct planIDs starve) → <strong>(b) confirmed; H1 and H2 both fail; #530/§5 and this verdict are airtight; Option E is the only fix.</strong></li>
+<li><strong>Warm spreads (distinct planID per idle session), stable or unique</strong> → <strong>(a); H1 is a real lever</strong> for green-<em>rate</em> (still a stopgap per §4.3, not a structural fix).
+  This is the single result that would upgrade H1 from "stopgap" to "worth a flagged implementation."</li>
+<li><strong>Unique spreads but stable does not</strong> → H2 matters after all (contradicts §3); would warrant reopening the naming analysis.</li>
 </ul>
 <h3 id="53-why-it-was-not-run-here-and-why-the-verdict-holds-without-it">5.3 Why it was not run here, and why the verdict holds without it<a class="headerlink" href="#53-why-it-was-not-run-here-and-why-the-verdict-holds-without-it" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>This is a spike; the deliverable is the verdict + design</strong> (per the task and the
-  CLAUDE.md fix/flag/defer discipline). Creds are usable — the <a href="../archive/q264-scale-set-protocol-phases/#5-load-bearing-unknowns">q264
-  §5</a> "STOP if no creds" bar is <em>not</em> what gates this;
-  the value-of-information does.</li>
-<li><strong>The result does not move the Q264 go/no-go.</strong> By §4.3, even the favourable (a)
-  outcome yields only a probabilistic stopgap that converges on a dominated Option E
-  reimplementation — so the <em>structural</em> verdict (Option E is the only reliable fix)
-  is invariant to the probe. Running it would refine H1's stopgap value, not decide
-  Q264.</li>
-<li><strong>Cost/risk:</strong> a faithful 2×2 warm-burst run needs M live registrations, a new
-  fixture, tight burst timing, and cleanup on the <strong>shared</strong> dogfood repo — the exact
-  clutter/coordination hazard flagged across re-routes #6–#8. Better run as its own
-  focused live session with the user aware.</li>
+<li><strong>This is a spike; the deliverable is the verdict + design</strong> (per the task and the CLAUDE.md fix/flag/defer discipline).
+  Creds are usable — the <a href="../archive/q264-scale-set-protocol-phases/#5-load-bearing-unknowns">q264 §5</a> "STOP if no creds" bar is <em>not</em> what gates this; the value-of-information does.</li>
+<li><strong>The result does not move the Q264 go/no-go.</strong> By §4.3, even the favourable (a) outcome yields only a probabilistic stopgap that converges on a dominated Option E reimplementation — so the <em>structural</em> verdict (Option E is the only reliable fix) is invariant to the probe.
+  Running it would refine H1's stopgap value, not decide Q264.</li>
+<li><strong>Cost/risk:</strong> a faithful 2×2 warm-burst run needs M live registrations, a new fixture, tight burst timing, and cleanup on the <strong>shared</strong> dogfood repo — the exact clutter/coordination hazard flagged across re-routes #6–#8.
+  Better run as its own focused live session with the user aware.</li>
 </ul>
-<p><strong>If the user wants the empirical confirmation</strong> (e.g. to justify a green-rate
-stopgap while deciding Q264), running §5.1's <code>classic-dispatch-probe</code> is the next
-step — it is fully specified above.</p>
+<p><strong>If the user wants the empirical confirmation</strong> (e.g. to justify a green-rate stopgap while deciding Q264), running §5.1's <code>classic-dispatch-probe</code> is the next step — it is fully specified above.</p>
 <h2 id="6-verdict-and-recommendation">6. Verdict and recommendation<a class="headerlink" href="#6-verdict-and-recommendation" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2989,13 +2871,10 @@ step — it is fully specified above.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Bottom line:</strong> #530's conclusion survives the escape-hatch check. No AGC-side
-lever makes the classic many-acquirers protocol <em>reliably</em> full-matrix green under
-fan-out. The user has a clean go/no-go on the <a href="../q264-scale-set-protocol/">Q264</a>
-rewrite: <strong>go</strong> if reliable concurrent full-matrix green on GitHub-hosted-parity is
-required; a small flagged <strong>warm-listener stopgap</strong> (H1, pending the §5 probe) is the
-only interim AGC-side option, and it does not close the gap. Q224/Q242 stay open,
-blocked on this dispatch topology, not on any recycle/capacity/tax seam.</p>
+<p><strong>Bottom line:</strong> #530's conclusion survives the escape-hatch check.
+No AGC-side lever makes the classic many-acquirers protocol <em>reliably</em> full-matrix green under fan-out.
+The user has a clean go/no-go on the <a href="../q264-scale-set-protocol/">Q264</a> rewrite: <strong>go</strong> if reliable concurrent full-matrix green on GitHub-hosted-parity is required; a small flagged <strong>warm-listener stopgap</strong> (H1, pending the §5 probe) is the only interim AGC-side option, and it does not close the gap.
+Q224/Q242 stay open, blocked on this dispatch topology, not on any recycle/capacity/tax seam.</p>
 
 
 

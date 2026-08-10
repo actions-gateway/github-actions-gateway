@@ -2670,55 +2670,33 @@
 
 
 <h1 id="q220--validate-service-mesh-coexistence-guidance-on-a-live-cluster">Q220 — Validate service-mesh coexistence guidance on a live cluster<a class="headerlink" href="#q220--validate-service-mesh-coexistence-guidance-on-a-live-cluster" title="Permanent link">&para;</a></h1>
-<p><strong>Status: COMPLETE (evidence record).</strong> Istio and Linkerd <strong>sidecar mode</strong> were validated
-end-to-end on kind (k8s 1.35) and the guide
-<a href="../../../operations/service-mesh-coexistence/"><code>docs/operations/service-mesh-coexistence.md</code></a>
-was corrected accordingly. Istio ambient / Cilium, and the Linkerd worker-lifecycle
-(blocked by a sidecar egress break), remain for the follow-up (Q280).</p>
-<p><strong>Goal:</strong> Empirically validate (and correct) the in-mesh recipes in the coexistence guide,
-which were reasoned from code + upstream docs but never tested against a running
-mesh. Deliverable is the corrected guide + this evidence log.</p>
+<p><strong>Status: COMPLETE (evidence record).</strong> Istio and Linkerd <strong>sidecar mode</strong> were validated end-to-end on kind (k8s 1.35) and the guide <a href="../../../operations/service-mesh-coexistence/"><code>docs/operations/service-mesh-coexistence.md</code></a> was corrected accordingly.
+Istio ambient / Cilium, and the Linkerd worker-lifecycle (blocked by a sidecar egress break), remain for the follow-up (Q280).</p>
+<p><strong>Goal:</strong> Empirically validate (and correct) the in-mesh recipes in the coexistence guide, which were reasoned from code + upstream docs but never tested against a running mesh.
+Deliverable is the corrected guide + this evidence log.</p>
 <h2 id="conclusion-what-passed--what-didnt">Conclusion (what passed / what didn't)<a class="headerlink" href="#conclusion-what-passed--what-didnt" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Istio 1.30.2 sidecar mode — fully validated.</strong> Problem 1 (classic sidecar strands the
-  worker) and Fix B (native sidecar terminates it, +1 s after runner exit) both reproduced
-  at container-state granularity; egress path preserved through the sidecar (HTTP 200 via
-  the tenant proxy, matching a no-sidecar baseline).</li>
-<li><strong>Linkerd edge-26.6.3 sidecar mode — partially validated + a new blocker found.</strong> The
-  setup findings (annotation-not-label, baseline-PSA rejection of <code>linkerd-init</code> → need
-  linkerd2-cni, native-sidecar default, control-plane egress NP) all confirmed and mirror
-  Istio. But the Linkerd sidecar then <strong>broke GAG's data-plane egress</strong> (HTTP 504 at its
-  1 s connect timeout, client-side LB to pod IPs vs GAG's NP), so the meshed AGC couldn't
-  fetch its token and never started — worker termination could not be observed.</li>
-<li><strong>Three previously-undocumented, guide-rewriting findings</strong> (both meshes): (1) baseline
-  PSA rejects the privileged proxy-init container → the mesh CNI is <em>mandatory</em>, not
-  optional; (2) GAG's default-deny egress NP blocks the sidecar→control-plane path → an
-  additive NP is required; (3) native sidecars are now the <em>default</em> on both meshes (the
-  guide had presented the flag as a required manual step).</li>
-<li><strong>Not validated (→ Q280):</strong> Istio ambient, Cilium Service Mesh, and whether Linkerd's
-  <code>skip-outbound-ports</code> fully restores GAG egress. The guide now flags these honestly.</li>
+<li><strong>Istio 1.30.2 sidecar mode — fully validated.</strong> Problem 1 (classic sidecar strands the worker) and Fix B (native sidecar terminates it, +1 s after runner exit) both reproduced at container-state granularity; egress path preserved through the sidecar (HTTP 200 via the tenant proxy, matching a no-sidecar baseline).</li>
+<li><strong>Linkerd edge-26.6.3 sidecar mode — partially validated + a new blocker found.</strong> The setup findings (annotation-not-label, baseline-PSA rejection of <code>linkerd-init</code> → need linkerd2-cni, native-sidecar default, control-plane egress NP) all confirmed and mirror Istio.
+  But the Linkerd sidecar then <strong>broke GAG's data-plane egress</strong> (HTTP 504 at its 1 s connect timeout, client-side LB to pod IPs vs GAG's NP), so the meshed AGC couldn't fetch its token and never started — worker termination could not be observed.</li>
+<li><strong>Three previously-undocumented, guide-rewriting findings</strong> (both meshes): (1) baseline PSA rejects the privileged proxy-init container → the mesh CNI is <em>mandatory</em>, not optional; (2) GAG's default-deny egress NP blocks the sidecar→control-plane path → an additive NP is required; (3) native sidecars are now the <em>default</em> on both meshes (the guide had presented the flag as a required manual step).</li>
+<li><strong>Not validated (→ Q280):</strong> Istio ambient, Cilium Service Mesh, and whether Linkerd's <code>skip-outbound-ports</code> fully restores GAG egress.
+  The guide now flags these honestly.</li>
 </ul>
 <h2 id="two-properties-under-test">Two properties under test<a class="headerlink" href="#two-properties-under-test" title="Permanent link">&para;</a></h2>
 <p>For each mesh/mode, run a GAG worker through a meshed tenant namespace and confirm:</p>
 <ul>
-<li><strong>(a) Termination</strong> — the worker pod reaches a terminal phase (<code>Succeeded</code>/<code>Failed</code>)
-  and is reaped, rather than being pinned <code>Running</code> by a never-exiting sidecar
-  (the problem-1 hazard). A <em>classic</em> sidecar should strand it; a <em>native</em>
-  sidecar / ambient / opt-out should let it complete.</li>
-<li><strong>(b) Egress-IP preservation</strong> — GitHub-bound traffic still exits via the
-  per-tenant proxy (the proxy is the source identity fakegithub sees), not
-  rewritten/hijacked by the mesh.</li>
+<li><strong>(a) Termination</strong> — the worker pod reaches a terminal phase (<code>Succeeded</code>/<code>Failed</code>) and is reaped, rather than being pinned <code>Running</code> by a never-exiting sidecar (the problem-1 hazard).
+  A <em>classic</em> sidecar should strand it; a <em>native</em> sidecar / ambient / opt-out should let it complete.</li>
+<li><strong>(b) Egress-IP preservation</strong> — GitHub-bound traffic still exits via the per-tenant proxy (the proxy is the source identity fakegithub sees), not rewritten/hijacked by the mesh.</li>
 </ul>
 <h2 id="environment">Environment<a class="headerlink" href="#environment" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Local <strong>kind</strong> cluster <code>actions-gateway-e2e</code> (k8s v1.35), kindnet CNI.</li>
-<li>Infra (cert-manager + GMC + fakegithub) stood up via the e2e suite's
-  <code>SynchronizedBeforeSuite</code> with <code>E2E_SKIP_TEARDOWN=true</code>, then tenants driven
-  manually with kubectl + the fakegithub control API.</li>
-<li>Meshes installed via <strong>Helm</strong> (no new host binary — istioctl/linkerd not on PATH,
-  per task guidance prefer Helm). Istio 1.30.2.</li>
-<li>The e2e "worker" is a fast-exiting placeholder (AGC image) — ideal for the
-  termination test: if the pod stays <code>Running</code>, only the sidecar can be pinning it.</li>
+<li>Infra (cert-manager + GMC + fakegithub) stood up via the e2e suite's <code>SynchronizedBeforeSuite</code> with <code>E2E_SKIP_TEARDOWN=true</code>, then tenants driven manually with kubectl + the fakegithub control API.</li>
+<li>Meshes installed via <strong>Helm</strong> (no new host binary — istioctl/linkerd not on PATH, per task guidance prefer Helm).
+  Istio 1.30.2.</li>
+<li>The e2e "worker" is a fast-exiting placeholder (AGC image) — ideal for the termination test: if the pod stays <code>Running</code>, only the sidecar can be pinning it.</li>
 </ul>
 <h2 id="test-matrix">Test matrix<a class="headerlink" href="#test-matrix" title="Permanent link">&para;</a></h2>
 <table>
@@ -2764,108 +2742,61 @@ mesh. Deliverable is the corrected guide + this evidence log.</p>
 </tbody>
 </table>
 <ul>
-<li><strong>Linkerd sidecar breaks GAG's data-plane egress (severe).</strong> Even after clearing PSA
-  (linkerd2-cni) and control-plane NP, a meshed workload-labeled pod hitting the
-  fakegithub Service (the GitHub token/broker stand-in) gets <strong>HTTP 504 at t=1.01s</strong>
-  (Linkerd's 1s connect timeout); a non-meshed pod succeeds. Linkerd does client-side
-  load-balancing directly to endpoint pod IPs (via linkerd-destination), and that
-  connection is dropped under GAG's NetworkPolicy-gated egress where Istio's passthrough
-  was preserved. Consequence: the meshed AGC's installation-token fetch fails (504) →
-  <code>startup failed</code> → the tenant never starts. Linkerd in-mesh coexistence is materially
-  more fragile than Istio; the worker-termination behavior could not be observed because
-  the AGC never started (it is expected to parallel Istio's native-sidecar termination,
-  same kubelet mechanism, but this was NOT directly observed).</li>
+<li><strong>Linkerd sidecar breaks GAG's data-plane egress (severe).</strong> Even after clearing PSA (linkerd2-cni) and control-plane NP, a meshed workload-labeled pod hitting the fakegithub Service (the GitHub token/broker stand-in) gets <strong>HTTP 504 at t=1.01s</strong> (Linkerd's 1s connect timeout); a non-meshed pod succeeds.
+  Linkerd does client-side load-balancing directly to endpoint pod IPs (via linkerd-destination), and that connection is dropped under GAG's NetworkPolicy-gated egress where Istio's passthrough was preserved.
+  Consequence: the meshed AGC's installation-token fetch fails (504) → <code>startup failed</code> → the tenant never starts.
+  Linkerd in-mesh coexistence is materially more fragile than Istio; the worker-termination behavior could not be observed because the AGC never started (it is expected to parallel Istio's native-sidecar termination, same kubelet mechanism, but this was NOT directly observed).</li>
 </ul>
 <h3 id="linkerd--findings-edge-2663-k8s-135">Linkerd — findings (edge-26.6.3, k8s 1.35)<a class="headerlink" href="#linkerd--findings-edge-2663-k8s-135" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Injection is an ANNOTATION, not a label.</strong> <code>kubectl label ns … linkerd.io/inject=enabled</code>
-  is silently ignored (<code>InjectionSkipped</code> event); it must be
-  <code>kubectl annotate ns … linkerd.io/inject=enabled</code>. (The guide's opt-out table already
-  uses <code>annotate</code> — good — but this is worth calling out explicitly vs Istio's label.)</li>
-<li><strong>Same baseline-PSA rejection as Istio.</strong> With injection on, <code>linkerd-init</code> requests
-  <code>NET_ADMIN</code>/<code>NET_RAW</code> → baseline PSA rejects every pod (<code>FailedCreate</code>). Fix: the
-  <strong>linkerd2-cni</strong> chart + <code>cniEnabled=true</code> on the control plane (drops <code>linkerd-init</code>),
-  exactly paralleling Istio CNI. Confirms the PSA collision is mesh-general, not
-  Istio-specific.</li>
-<li>The free <strong>stable</strong> Linkerd line is frozen at 2.14 (no native sidecar); the FOSS
-  <strong>edge</strong> channel (<code>linkerd-edge/linkerd-control-plane</code>, edge-26.6.x) is the current
-  line and the one that supports <code>proxy.nativeSidecar</code> and recent k8s.</li>
-<li><strong>Native sidecar is Linkerd edge's default too</strong> — under linkerd-cni the injected
-  layout is <code>initC: linkerd-network-validator, linkerd-proxy(restartPolicy=Always)</code>;
-  <code>linkerd-proxy</code> is a native sidecar with no explicit <code>proxy.nativeSidecar=true</code>.</li>
-<li><strong>Same control-plane-egress block as Istio.</strong> The GAG deny-all egress NP blocks the
-  proxy from reaching <code>linkerd-dst:8086</code>, <code>linkerd-identity:8080</code>, <code>linkerd-policy:8090</code>
-  (<code>connect timed out</code>, <code>Failed to obtain identity</code>) → pod stuck at <code>Init</code>, AGC never
-  starts. Fix: extend the tenant NP to allow egress to the <code>linkerd</code> namespace on those
-  ports (parallel to the istiod <code>:15012</code> allowance).</li>
+<li><strong>Injection is an ANNOTATION, not a label.</strong> <code>kubectl label ns … linkerd.io/inject=enabled</code> is silently ignored (<code>InjectionSkipped</code> event); it must be <code>kubectl annotate ns … linkerd.io/inject=enabled</code>.
+  (The guide's opt-out table already uses <code>annotate</code> — good — but this is worth calling out explicitly vs Istio's label.)</li>
+<li><strong>Same baseline-PSA rejection as Istio.</strong> With injection on, <code>linkerd-init</code> requests <code>NET_ADMIN</code>/<code>NET_RAW</code> → baseline PSA rejects every pod (<code>FailedCreate</code>).
+  Fix: the <strong>linkerd2-cni</strong> chart + <code>cniEnabled=true</code> on the control plane (drops <code>linkerd-init</code>), exactly paralleling Istio CNI.
+  Confirms the PSA collision is mesh-general, not Istio-specific.</li>
+<li>The free <strong>stable</strong> Linkerd line is frozen at 2.14 (no native sidecar); the FOSS <strong>edge</strong> channel (<code>linkerd-edge/linkerd-control-plane</code>, edge-26.6.x) is the current line and the one that supports <code>proxy.nativeSidecar</code> and recent k8s.</li>
+<li><strong>Native sidecar is Linkerd edge's default too</strong> — under linkerd-cni the injected layout is <code>initC: linkerd-network-validator, linkerd-proxy(restartPolicy=Always)</code>; <code>linkerd-proxy</code> is a native sidecar with no explicit <code>proxy.nativeSidecar=true</code>.</li>
+<li><strong>Same control-plane-egress block as Istio.</strong> The GAG deny-all egress NP blocks the proxy from reaching <code>linkerd-dst:8086</code>, <code>linkerd-identity:8080</code>, <code>linkerd-policy:8090</code> (<code>connect timed out</code>, <code>Failed to obtain identity</code>) → pod stuck at <code>Init</code>, AGC never starts.
+  Fix: extend the tenant NP to allow egress to the <code>linkerd</code> namespace on those ports (parallel to the istiod <code>:15012</code> allowance).</li>
 </ul>
 <h3 id="istio-problem-1--fix-b--confirmed-istio-1302-k8s-135">Istio Problem-1 / Fix-B — CONFIRMED (Istio 1.30.2, k8s 1.35)<a class="headerlink" href="#istio-problem-1--fix-b--confirmed-istio-1302-k8s-135" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Classic sidecar strands the worker (Problem 1).</strong> With <code>ENABLE_NATIVE_SIDECARS=false</code>,
-  the worker's <code>istio-proxy</code> is injected as a <em>regular container</em>. Terminal capture:
-  <code>runner</code> terminated (exitCode 1) at 09:13:42; <code>istio-proxy</code> <strong>still <code>running</code></strong> 98s
-  later; pod stuck <code>1/2</code>, phase never terminal. GAG's <code>completedPodTTL</code> reaper only
-  acts on terminal-phase pods, so the slot leaks — exactly the documented hazard.</li>
+<li><strong>Classic sidecar strands the worker (Problem 1).</strong> With <code>ENABLE_NATIVE_SIDECARS=false</code>, the worker's <code>istio-proxy</code> is injected as a <em>regular container</em>.
+  Terminal capture: <code>runner</code> terminated (exitCode 1) at 09:13:42; <code>istio-proxy</code> <strong>still <code>running</code></strong> 98s later; pod stuck <code>1/2</code>, phase never terminal.
+  GAG's <code>completedPodTTL</code> reaper only acts on terminal-phase pods, so the slot leaks — exactly the documented hazard.</li>
 <li><strong>Native sidecar lets the worker terminate (Fix B).</strong> Default injection (native).
-  Terminal capture: <code>runner</code> exited (exitCode 1) at 09:05:45; kubelet terminated the
-  <code>istio-proxy</code> native sidecar at 09:05:46 (<strong>+1s</strong>, exitCode 0, Completed); pod reached
-  terminal <code>Failed</code> and GAG reaped it. No stranding.</li>
-<li><strong>Native sidecars are the Istio 1.30 default</strong> — <code>ENABLE_NATIVE_SIDECARS</code> was unset on
-  istiod yet the proxy injected as an init container with <code>restartPolicy: Always</code>. The
-  guide's Fix B presents the flag as a required manual step; on current Istio it is the
-  default (the flag now matters for turning native sidecars <em>off</em>).</li>
-<li><strong>Egress path preserved through the sidecar (Problem 2, no egress gateway).</strong> A
-  meshed, workload-labeled pod reached <code>https://api.github.com/zen</code> <strong>through the tenant
-  proxy</strong> (<code>--proxy https://actions-gateway-proxy:8080</code>) → HTTP 200, identical to a
-  sidecar-excluded baseline pod (both <code>remote=&lt;proxy ClusterIP&gt;</code>). The Istio sidecar
-  transparently forwards the worker→proxy CONNECT; it does not reroute GitHub-bound
-  egress to a mesh egress gateway. Caveat matches the guide: <strong>no</strong> egress
-  <code>Gateway</code>/<code>ServiceEntry</code> claiming GitHub hosts was defined. The guide's port-8080
-  exclusion is an optimization (skips the extra Envoy hop / mTLS-wrap of the worker→proxy
-  leg), not a correctness requirement — the path works without it. (Per-tenant <em>egress
-  IP</em> preservation is a GKE property; kind has no per-tenant IP, so this validates
-  path/transit preservation, not the cloud IP attribution.)</li>
-<li>The tenant egress proxy listens <strong>TLS on :8080</strong> — clients must use
-  <code>--proxy https://… --proxy-insecure</code> (plaintext <code>http://</code> proxy scheme fails).</li>
+  Terminal capture: <code>runner</code> exited (exitCode 1) at 09:05:45; kubelet terminated the <code>istio-proxy</code> native sidecar at 09:05:46 (<strong>+1s</strong>, exitCode 0, Completed); pod reached terminal <code>Failed</code> and GAG reaped it.
+  No stranding.</li>
+<li><strong>Native sidecars are the Istio 1.30 default</strong> — <code>ENABLE_NATIVE_SIDECARS</code> was unset on istiod yet the proxy injected as an init container with <code>restartPolicy: Always</code>.
+  The guide's Fix B presents the flag as a required manual step; on current Istio it is the default (the flag now matters for turning native sidecars <em>off</em>).</li>
+<li><strong>Egress path preserved through the sidecar (Problem 2, no egress gateway).</strong> A meshed, workload-labeled pod reached <code>https://api.github.com/zen</code> <strong>through the tenant proxy</strong> (<code>--proxy https://actions-gateway-proxy:8080</code>) → HTTP 200, identical to a sidecar-excluded baseline pod (both <code>remote=&lt;proxy ClusterIP&gt;</code>).
+  The Istio sidecar transparently forwards the worker→proxy CONNECT; it does not reroute GitHub-bound egress to a mesh egress gateway.
+  Caveat matches the guide: <strong>no</strong> egress <code>Gateway</code>/<code>ServiceEntry</code> claiming GitHub hosts was defined.
+  The guide's port-8080 exclusion is an optimization (skips the extra Envoy hop / mTLS-wrap of the worker→proxy leg), not a correctness requirement — the path works without it.
+  (Per-tenant <em>egress IP</em> preservation is a GKE property; kind has no per-tenant IP, so this validates path/transit preservation, not the cloud IP attribution.)</li>
+<li>The tenant egress proxy listens <strong>TLS on :8080</strong> — clients must use <code>--proxy https://… --proxy-insecure</code> (plaintext <code>http://</code> proxy scheme fails).</li>
 </ul>
 <h2 id="manual-tenant-flow-per-config">Manual tenant flow (per config)<a class="headerlink" href="#manual-tenant-flow-per-config" title="Permanent link">&para;</a></h2>
 <ol>
 <li><code>kubectl create ns &lt;tenant&gt;</code> (+ mesh enrolment label as the case requires).</li>
 <li>Create <code>github-app-secret</code> (test RSA key at <code>tmp/mesh/test-app.pem</code>).</li>
-<li>Apply an ActionsGateway CR with a RunnerGroup (workerImage = AGC image,
-   short <code>completedPodTTL</code>), + the additive fakegithub-egress NetworkPolicy.</li>
+<li>Apply an ActionsGateway CR with a RunnerGroup (workerImage = AGC image, short <code>completedPodTTL</code>), + the additive fakegithub-egress NetworkPolicy.</li>
 <li>Wait for AGC ready + RunnerGroup reconciled (broker session registers).</li>
-<li>Port-forward fakegithub <code>:9090</code> control API; enqueue a job onto each active
-   session → worker pod spawns.</li>
+<li>Port-forward fakegithub <code>:9090</code> control API; enqueue a job onto each active session → worker pod spawns.</li>
 <li>Observe: worker pod container set, phase transition, reaping; proxy path.</li>
 </ol>
 <h2 id="findings-log">Findings log<a class="headerlink" href="#findings-log" title="Permanent link">&para;</a></h2>
 <p><em>(appended as each config is validated)</em></p>
 <ul>
-<li>Istio injector webhooks (<code>istio-sidecar-injector</code>) are <code>failurePolicy: Fail</code>
-  but their objectSelectors only fire on pods in <code>istio-injection=enabled</code>
-  namespaces or pods explicitly labeled <code>sidecar.istio.io/inject=true</code>, so a bare
-  Istio install does NOT break pod creation in unlabeled namespaces (confirmed:
-  namespaceSelector/objectSelector are evaluated by the apiserver before the
-  webhook is called, so unmatched pods never reach istiod).</li>
-<li><strong>HEADLINE (Istio):</strong> With <code>istio-injection=enabled</code> on a GAG tenant namespace,
-  the GMC's default <strong><code>pod-security.kubernetes.io/enforce=baseline</code></strong> label makes
-  the apiserver <strong>reject every AGC/proxy/worker pod at creation</strong>: Istio's
-  classic injection adds an <code>istio-init</code> init container requesting <code>NET_ADMIN</code> +
-  <code>NET_RAW</code>, which <code>baseline</code> forbids. Deployments sit at 0 replicas with
-  <code>FailedCreate</code> events; no pod (and thus no sidecar, no stranding) ever exists.
-  The guide's problem-1 narrative ("the sidecar keeps the pod Running") never
-  triggers — the pod isn't admitted. Fix: install the <strong>Istio CNI plugin</strong> so the
-  privileged <code>istio-init</code> container is not injected (node-level redirect instead),
-  OR relax the namespace to <code>enforce=privileged</code> (a PSA regression — not
-  recommended). Confirmed on Istio 1.30.2 / k8s 1.35.</li>
-<li>Onboarding gate (not mesh-specific but required to reproduce): the GMC's
-  <code>gmc-namespace-psa-guard</code> ValidatingAdmissionPolicy refuses to reconcile a
-  namespace unless it carries <code>actions-gateway.com/tenant=managed</code>.</li>
-<li>Infra bring-up (cert-manager/fakegithub rollout) is sensitive to peak-load
-  resource contention on a 3-node kind cluster — running the mesh install + image
-  builds concurrently caused rollout-status timeouts that tore down the whole
-  suite. Bring up infra on a calm cluster (builds + mesh done first).</li>
+<li>Istio injector webhooks (<code>istio-sidecar-injector</code>) are <code>failurePolicy: Fail</code> but their objectSelectors only fire on pods in <code>istio-injection=enabled</code> namespaces or pods explicitly labeled <code>sidecar.istio.io/inject=true</code>, so a bare Istio install does NOT break pod creation in unlabeled namespaces (confirmed: namespaceSelector/objectSelector are evaluated by the apiserver before the webhook is called, so unmatched pods never reach istiod).</li>
+<li><strong>HEADLINE (Istio):</strong> With <code>istio-injection=enabled</code> on a GAG tenant namespace, the GMC's default <strong><code>pod-security.kubernetes.io/enforce=baseline</code></strong> label makes the apiserver <strong>reject every AGC/proxy/worker pod at creation</strong>: Istio's classic injection adds an <code>istio-init</code> init container requesting <code>NET_ADMIN</code> + <code>NET_RAW</code>, which <code>baseline</code> forbids.
+  Deployments sit at 0 replicas with <code>FailedCreate</code> events; no pod (and thus no sidecar, no stranding) ever exists.
+  The guide's problem-1 narrative ("the sidecar keeps the pod Running") never triggers — the pod isn't admitted.
+  Fix: install the <strong>Istio CNI plugin</strong> so the privileged <code>istio-init</code> container is not injected (node-level redirect instead), OR relax the namespace to <code>enforce=privileged</code> (a PSA regression — not recommended).
+  Confirmed on Istio 1.30.2 / k8s 1.35.</li>
+<li>Onboarding gate (not mesh-specific but required to reproduce): the GMC's <code>gmc-namespace-psa-guard</code> ValidatingAdmissionPolicy refuses to reconcile a namespace unless it carries <code>actions-gateway.com/tenant=managed</code>.</li>
+<li>Infra bring-up (cert-manager/fakegithub rollout) is sensitive to peak-load resource contention on a 3-node kind cluster — running the mesh install + image builds concurrently caused rollout-status timeouts that tore down the whole suite.
+  Bring up infra on a calm cluster (builds + mesh done first).</li>
 </ul>
 
 

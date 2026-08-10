@@ -2681,79 +2681,44 @@
 
 
 <h1 id="release-decision-support-delta-report--scope-ledger-q556">Release decision support: delta report + scope ledger (Q556)<a class="headerlink" href="#release-decision-support-delta-report--scope-ledger-q556" title="Permanent link">&para;</a></h1>
-<p>Make the three release-timing questions answerable from data the repo already
-records, instead of by narrative and judgment: <em>has enough been delivered to
-justify a release?</em> — <em>what was planned vs what's delivered?</em> — <em>punt the
-item or delay the tag?</em> Filed 2026-07-31 from a release-process design
-discussion; this doc records the decisions so the implementing session
-doesn't re-litigate them.</p>
+<p>Make the three release-timing questions answerable from data the repo already records, instead of by narrative and judgment: <em>has enough been delivered to justify a release?</em> — <em>what was planned vs what's delivered?</em> — <em>punt the item or delay the tag?</em> Filed 2026-07-31 from a release-process design discussion; this doc records the decisions so the implementing session doesn't re-litigate them.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>Complete.</strong> All three deliverables shipped 2026-07-31:
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/release-delta.sh"><code>scripts/release/release-delta.sh</code></a> with
-<code>release-delta-test.sh</code> under <code>make scripts-test</code>, the <em>When to cut</em> section in
-<a href="../../../operations/release/#when-to-cut">operations/release.md</a>, and the
-scope-ledger convention in
-<a href="../../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">maintaining-backlog.md</a>.</p>
-<p>The fourth acceptance criterion — a release plan doc that opens with a ledger —
-is satisfied by <a href="../../release-1.3/#scope-ledger">release-1.3.md</a> rather than deferred
-to 1.4: 1.3 was mid-flight with the prose status banner the gap section names, so
-it is both the worked example and the first beneficiary.</p>
+<p><strong>Complete.</strong> All three deliverables shipped 2026-07-31: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/release-delta.sh"><code>scripts/release/release-delta.sh</code></a> with <code>release-delta-test.sh</code> under <code>make scripts-test</code>, the <em>When to cut</em> section in <a href="../../../operations/release/#when-to-cut">operations/release.md</a>, and the scope-ledger convention in <a href="../../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">maintaining-backlog.md</a>.</p>
+<p>The fourth acceptance criterion — a release plan doc that opens with a ledger — is satisfied by <a href="../../release-1.3/#scope-ledger">release-1.3.md</a> rather than deferred to 1.4: 1.3 was mid-flight with the prose status banner the gap section names, so it is both the worked example and the first beneficiary.</p>
 <p>Two decisions the implementation changed from the plan above:</p>
 <ul>
-<li><strong>The completed-Q-ID list is derived from STATUS.md's revisions, not from
-  <code>docs(status)</code> subject verbs.</strong> PRs squash-merge, so a Queue row's deletion
-  reaches <code>main</code> inside the <em>work</em> commit — <code>fix(agc): … (Q550)</code>, not
-  <code>docs(status): … complete Q550</code>. Reading each revision's Queue section and
-  diffing the sets is immune to that, and it distinguishes a row <em>parked</em> in
-  Deferred from one delivered, which a subject verb cannot. The removing commit's
-  subject then labels the row, which is more useful than the verb would have been.</li>
-<li><strong>A <code>!</code> commit does not auto-promote the suggested bump to major.</strong> The
-  operative question is not which API version the change landed on but whether
-  the last stable tag ever <em>published</em> the surface it changed: all three
-  <code>!</code>-marked commits between <code>v1.2.0</code> and 2026-07-31 renamed or reshaped fields
-  absent from every API tree at <code>v1.2.0</code>, so none of them broke a contract. The
-  report prints the breaking subjects and asks for that judgement, and
-  <a href="../../../development/api-review/#ask-it-in-this-order-at-pr-review">api-review.md</a>
-  moves the question to PR review, where the answer is still an edit.</li>
+<li><strong>The completed-Q-ID list is derived from STATUS.md's revisions, not from <code>docs(status)</code> subject verbs.</strong> PRs squash-merge, so a Queue row's deletion reaches <code>main</code> inside the <em>work</em> commit — <code>fix(agc): … (Q550)</code>, not <code>docs(status): … complete Q550</code>.
+  Reading each revision's Queue section and diffing the sets is immune to that, and it distinguishes a row <em>parked</em> in Deferred from one delivered, which a subject verb cannot.
+  The removing commit's subject then labels the row, which is more useful than the verb would have been.</li>
+<li><strong>A <code>!</code> commit does not auto-promote the suggested bump to major.</strong> The operative question is not which API version the change landed on but whether the last stable tag ever <em>published</em> the surface it changed: all three <code>!</code>-marked commits between <code>v1.2.0</code> and 2026-07-31 renamed or reshaped fields absent from every API tree at <code>v1.2.0</code>, so none of them broke a contract.
+  The report prints the breaking subjects and asks for that judgement, and <a href="../../../development/api-review/#ask-it-in-this-order-at-pr-review">api-review.md</a> moves the question to PR review, where the answer is still an edit.</li>
 </ul>
 <h2 id="the-gap">The gap<a class="headerlink" href="#the-gap" title="Permanent link">&para;</a></h2>
-<p><a href="../../../operations/release/">operations/release.md</a> covers <em>how</em> to cut a
-release (mechanics, verification, the RC dogfood gate) but says nothing about
-<em>when</em>. The gate-label machinery answers "can we cut the scoped release?"
-crisply, but two questions have no canonical answer today:</p>
+<p><a href="../../../operations/release/">operations/release.md</a> covers <em>how</em> to cut a release (mechanics, verification, the RC dogfood gate) but says nothing about <em>when</em>.
+The gate-label machinery answers "can we cut the scoped release?" crisply, but two questions have no canonical answer today:</p>
 <ul>
-<li><strong>"Has enough accumulated to justify a tag?"</strong> — the delete-on-done Queue
-  erases delivered work from STATUS.md by design, so nothing shows the
-  unreleased delta.</li>
-<li><strong>"What was planned vs delivered?"</strong> — release plan docs narrate this in a
-  prose status banner (<a href="../../release-1.3/">release-1.3.md</a>), faithful but not
-  measurable at a glance.</li>
+<li><strong>"Has enough accumulated to justify a tag?"</strong> — the delete-on-done Queue erases delivered work from STATUS.md by design, so nothing shows the unreleased delta.</li>
+<li><strong>"What was planned vs delivered?"</strong> — release plan docs narrate this in a prose status banner (<a href="../../release-1.3/">release-1.3.md</a>), faithful but not measurable at a glance.</li>
 </ul>
-<p>Both are <em>derivable</em> because two disciplines are already enforced:
-Conventional Commits, and verbed <code>docs(status): … complete QN</code> subjects.
-Baseline measurement (2026-07-31): since <code>v1.2.0</code>, main had accumulated 332
-commits — 31 <code>feat</code>, 65 <code>fix</code>, 10 <code>perf</code> — computed with two <code>git log</code>
-one-liners. The data exists; only the view and the "enough" definition are
-missing.</p>
+<p>Both are <em>derivable</em> because two disciplines are already enforced: Conventional Commits, and verbed <code>docs(status): … complete QN</code> subjects.
+Baseline measurement (2026-07-31): since <code>v1.2.0</code>, main had accumulated 332 commits — 31 <code>feat</code>, 65 <code>fix</code>, 10 <code>perf</code> — computed with two <code>git log</code> one-liners.
+The data exists; only the view and the "enough" definition are missing.</p>
 <h2 id="the-model-two-complementary-views">The model: two complementary views<a class="headerlink" href="#the-model-two-complementary-views" title="Permanent link">&para;</a></h2>
 <p><strong>Delta-out — "should a release exist?"</strong> A report off the last non-RC tag.
 This view is what <em>triggers</em> scoping a release plan doc.</p>
-<p><strong>Scope-in — "is the scoped release done?"</strong> The release plan doc + scope
-ledger + <code>-gate</code> labels. Takes over from the moment the release doc is
-written until the tag.</p>
+<p><strong>Scope-in — "is the scoped release done?"</strong> The release plan doc + scope ledger + <code>-gate</code> labels.
+Takes over from the moment the release doc is written until the tag.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <h3 id="1-scriptsreleaserelease-deltash">1. <code>scripts/release/release-delta.sh</code><a class="headerlink" href="#1-scriptsreleaserelease-deltash" title="Permanent link">&para;</a></h3>
-<p>Prints, for the range <code>&lt;last non-RC tag&gt;..origin/main</code> (tag overridable by
-argument):</p>
+<p>Prints, for the range <code>&lt;last non-RC tag&gt;..origin/main</code> (tag overridable by argument):</p>
 <ul>
 <li>commit counts by Conventional Commit type, breaking changes called out;</li>
 <li>completed Q-IDs, from <code>docs(status)</code> subjects' removal verbs;</li>
-<li><code>api/</code> diffstat — the semver signal (breaking → major, feat → minor,
-  fix-only → patch);</li>
+<li><code>api/</code> diffstat — the semver signal (breaking → major, feat → minor, fix-only → patch);</li>
 <li><code>docs/operations/</code> pages touched — the operator-visible surface.</li>
 </ul>
-<p>Bash-style compliant, shellcheck-gated, with a test per the <code>scripts-test</code>
-convention. Read-only; no state, no recording step.</p>
+<p>Bash-style compliant, shellcheck-gated, with a test per the <code>scripts-test</code> convention.
+Read-only; no state, no recording step.</p>
 <h3 id="2-releasemd-when-to-cut-section">2. release.md "When to cut" section<a class="headerlink" href="#2-releasemd-when-to-cut-section" title="Permanent link">&para;</a></h3>
 <p>Standing triggers, with the delta report as input:</p>
 <ul>
@@ -2762,41 +2727,24 @@ convention. Read-only; no state, no recording step.</p>
 <li>accumulated user-visible fixes with no feature → patch release;</li>
 <li>internal-only churn → wait.</li>
 </ul>
-<p>Counterweight that makes "enough" a real bar: every tag costs the RC dogfood
-validation, so releases are not free.</p>
+<p>Counterweight that makes "enough" a real bar: every tag costs the RC dogfood validation, so releases are not free.</p>
 <h3 id="3-scope-ledger-convention-in-maintaining-backlogmd">3. Scope-ledger convention in maintaining-backlog.md<a class="headerlink" href="#3-scope-ledger-convention-in-maintaining-backlogmd" title="Permanent link">&para;</a></h3>
-<p>A "Cutting a release" subsection: a release plan doc opens with a <strong>scope
-ledger</strong> table — one row per planned item: Q-ID, item, gate-or-rides,
-status (open / shipped / punted with a why-link). Delivered = ticked rows
-(updated when the Queue row is deleted, riding the existing
-plan-docs-stay-current discipline); cut condition = zero open <code>-gate</code> rows
-(one grep) + the RC validation; <strong>punt</strong> = remove the label and move the item
-to "Explicitly out of scope" (it keeps its Queue position — punting from a
-release doesn't demote priority); <strong>delay</strong> = leave the label on.</p>
-<p>Also extend the existing "Don't pre-assign release versions" rule with its
-corollary: even once a release <em>is</em> scoped, non-gating "planned" items live
-in the ledger, never as labels.</p>
+<p>A "Cutting a release" subsection: a release plan doc opens with a <strong>scope ledger</strong> table — one row per planned item: Q-ID, item, gate-or-rides, status (open / shipped / punted with a why-link).
+Delivered = ticked rows (updated when the Queue row is deleted, riding the existing plan-docs-stay-current discipline); cut condition = zero open <code>-gate</code> rows (one grep) + the RC validation; <strong>punt</strong> = remove the label and move the item to "Explicitly out of scope" (it keeps its Queue position — punting from a release doesn't demote priority); <strong>delay</strong> = leave the label on.</p>
+<p>Also extend the existing "Don't pre-assign release versions" rule with its corollary: even once a release <em>is</em> scoped, non-gating "planned" items live in the ledger, never as labels.</p>
 <h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>No soft <code>X.Y-plan</code> labels.</strong> A soft assignment is a guess nothing
-  enforces: it goes stale silently, needs manual relabeling each slip, and
-  blurs the <code>-gate</code> label's crisp semantics ("the tag waits for this"). The
-  ledger carries "planned" because the release doc's lifecycle matches the
-  release's — written at scoping, archived at tag.</li>
+<li><strong>No soft <code>X.Y-plan</code> labels.</strong> A soft assignment is a guess nothing enforces: it goes stale silently, needs manual relabeling each slip, and blurs the <code>-gate</code> label's crisp semantics ("the tag waits for this").
+  The ledger carries "planned" because the release doc's lifecycle matches the release's — written at scoping, archived at tag.</li>
 <li>No new Queue states or STATUS.md format changes.</li>
-<li>No automation of the cut decision itself — the report informs judgment,
-  the triggers frame it.</li>
+<li>No automation of the cut decision itself — the report informs judgment, the triggers frame it.</li>
 </ul>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>scripts/release/release-delta.sh</code> ships with a test and produces the four report
-   sections against the live repo.</li>
-<li>release.md gains "When to cut" with the triggers and the RC-cost
-   counterweight, referencing the script.</li>
-<li>maintaining-backlog.md gains the scope-ledger convention and the
-   no-soft-labels corollary.</li>
-<li>The next release plan doc written (1.4 or later) opens with a scope
-   ledger.</li>
+<li><code>scripts/release/release-delta.sh</code> ships with a test and produces the four report sections against the live repo.</li>
+<li>release.md gains "When to cut" with the triggers and the RC-cost counterweight, referencing the script.</li>
+<li>maintaining-backlog.md gains the scope-ledger convention and the no-soft-labels corollary.</li>
+<li>The next release plan doc written (1.4 or later) opens with a scope ledger.</li>
 </ol>
 
 

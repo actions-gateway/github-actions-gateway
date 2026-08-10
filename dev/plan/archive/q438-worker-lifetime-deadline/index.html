@@ -2720,29 +2720,22 @@
 
 
 <h1 id="q438-a-durable-reap-deadline-for-a-worker-orphaned-while-the-agc-is-down">Q438: a durable reap deadline for a worker orphaned while the AGC is down<a class="headerlink" href="#q438-a-durable-reap-deadline-for-a-worker-orphaned-while-the-agc-is-down" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> decided and implemented 2026-07-27. The job's declared timeout does
-<strong>not</strong> reach the AGC on either tier, so deriving a deadline from it is not
-available. Shipped instead: a <strong>12-hour default worker lifetime</strong>, stamped at
-provision time as the pod's <code>activeDeadlineSeconds</code> and enforced by the kubelet,
-overridable per RunnerGroup / RunnerSet.</p>
-<p>This closes the residual <a href="../q435-restart-orphan-reclaim/#residual-and-why-it-is-not-fixed-here">Q435</a>
-left open: a <code>Running</code> worker whose job ended while the AGC was down carries no
-deadline of any kind, and only a redelivered <code>JobCompleted</code> reclaims it.</p>
+<p><strong>Status:</strong> decided and implemented 2026-07-27.
+The job's declared timeout does <strong>not</strong> reach the AGC on either tier, so deriving a deadline from it is not available.
+Shipped instead: a <strong>12-hour default worker lifetime</strong>, stamped at provision time as the pod's <code>activeDeadlineSeconds</code> and enforced by the kubelet, overridable per RunnerGroup / RunnerSet.</p>
+<p>This closes the residual <a href="../q435-restart-orphan-reclaim/#residual-and-why-it-is-not-fixed-here">Q435</a> left open: a <code>Running</code> worker whose job ended while the AGC was down carries no deadline of any kind, and only a redelivered <code>JobCompleted</code> reclaims it.</p>
 <h2 id="the-problem-restated">The problem, restated<a class="headerlink" href="#the-problem-restated" title="Permanent link">&para;</a></h2>
-<p>Q435 measured four orphan classes. Three recover from durable pod state. The
-fourth — <code>Running</code>, no <code>actions-gateway.com/job-completed-at</code> stamp, AGC down
-when the job ended — is <strong>identical in cluster state</strong> to a worker running a
-legitimately long job. No AGC-side reconciliation can tell them apart, which is
-why the deadline has to be stamped at provision time rather than inferred later.</p>
+<p>Q435 measured four orphan classes.
+Three recover from durable pod state.
+The fourth — <code>Running</code>, no <code>actions-gateway.com/job-completed-at</code> stamp, AGC down when the job ended — is <strong>identical in cluster state</strong> to a worker running a legitimately long job.
+No AGC-side reconciliation can tell them apart, which is why the deadline has to be stamped at provision time rather than inferred later.</p>
 <p>The motivating dogfood incident ran 16 hours and stranded 82 spot node-hours.</p>
 <h2 id="research">Research<a class="headerlink" href="#research" title="Permanent link">&para;</a></h2>
 <h3 id="1-does-the-acquired-job-message-carry-the-jobs-timeout-no--on-either-tier">1. Does the acquired-job message carry the job's timeout? No — on either tier.<a class="headerlink" href="#1-does-the-acquired-job-message-carry-the-jobs-timeout-no--on-either-tier" title="Permanent link">&para;</a></h3>
-<p>This was the pivotal question: a derived deadline is principled, an invented one
-is not. The answer is no, and it is no on both tiers for different reasons.</p>
-<p><strong>Scale-set tier.</strong> The message that says "provision a worker" is <code>JobAssigned</code>,
-whose body is a <code>JobMessageBase</code>. Upstream
-<a href="https://github.com/actions/scaleset/blob/main/types.go"><code>actions/scaleset/types.go</code></a>
-defines that base as exactly:</p>
+<p>This was the pivotal question: a derived deadline is principled, an invented one is not.
+The answer is no, and it is no on both tiers for different reasons.</p>
+<p><strong>Scale-set tier.</strong> The message that says "provision a worker" is <code>JobAssigned</code>, whose body is a <code>JobMessageBase</code>.
+Upstream <a href="https://github.com/actions/scaleset/blob/main/types.go"><code>actions/scaleset/types.go</code></a> defines that base as exactly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">JobMessageBase</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nx">JobMessageType</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nx">RunnerRequestID</span><span class="w">    </span><span class="kt">int64</span>
@@ -2760,14 +2753,10 @@ defines that base as exactly:</p>
 <a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nx">FinishTime</span><span class="w">         </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span>
 <a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="p">}</span>
 </code></pre></div>
-<p>No timeout, no deadline, no expiry. The only durations are timestamps of things
-that already happened (<code>QueueTime</code>, <code>ScaleSetAssignTime</code>, <code>RunnerAssignTime</code>,
-<code>FinishTime</code>).</p>
-<p>Per <code>CLAUDE.md</code>, source inspection is a hypothesis until confirmed against the
-real thing, so this is checked against GAG's own <strong>captured live wire evidence</strong>
-rather than left at the upstream struct. The
-<a href="../../scaleset-eviction-recovery/">scale-set eviction-recovery plan</a> records a full
-raw <code>JobAssigned</code> body dumped from the dotcom broker-host backend on 2026-07-26:</p>
+<p>No timeout, no deadline, no expiry.
+The only durations are timestamps of things that already happened (<code>QueueTime</code>, <code>ScaleSetAssignTime</code>, <code>RunnerAssignTime</code>, <code>FinishTime</code>).</p>
+<p>Per <code>CLAUDE.md</code>, source inspection is a hypothesis until confirmed against the real thing, so this is checked against GAG's own <strong>captured live wire evidence</strong> rather than left at the upstream struct.
+The <a href="../../scaleset-eviction-recovery/">scale-set eviction-recovery plan</a> records a full raw <code>JobAssigned</code> body dumped from the dotcom broker-host backend on 2026-07-26:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span><span class="nt">&quot;messageType&quot;</span><span class="p">:</span><span class="s2">&quot;JobAssigned&quot;</span><span class="p">,</span><span class="nt">&quot;repositoryName&quot;</span><span class="p">:</span><span class="s2">&quot;github-actions-gateway&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w"> </span><span class="nt">&quot;ownerName&quot;</span><span class="p">:</span><span class="s2">&quot;actions-gateway&quot;</span><span class="p">,</span><span class="nt">&quot;workflowRunId&quot;</span><span class="p">:</span><span class="mi">30225287326</span><span class="p">,</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w"> </span><span class="nt">&quot;jobDisplayName&quot;</span><span class="p">:</span><span class="s2">&quot;probe-fast&quot;</span><span class="p">,</span><span class="nt">&quot;eventName&quot;</span><span class="p">:</span><span class="s2">&quot;workflow_dispatch&quot;</span><span class="p">,</span>
@@ -2775,161 +2764,88 @@ raw <code>JobAssigned</code> body dumped from the dotcom broker-host backend on 
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w"> </span><span class="nt">&quot;requestLabels&quot;</span><span class="p">:[</span><span class="s2">&quot;gag-probe-scaleset&quot;</span><span class="p">],</span><span class="nt">&quot;scaleSetAssignTime&quot;</span><span class="p">:</span><span class="s2">&quot;2026-07-26T23:29:36Z&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w"> </span><span class="nt">&quot;jobId&quot;</span><span class="p">:</span><span class="s2">&quot;bd59f43d-2e1a-567a-b5a4-c147b94d0766&quot;</span><span class="p">,</span><span class="nt">&quot;runnerRequestId&quot;</span><span class="p">:</span><span class="mi">0</span><span class="p">}</span>
 </code></pre></div>
-<p>That is the whole body, not a projection through GAG's narrower model — the
-probe logs the raw wire through the client's <code>ResponseObserver</code> precisely so the
-typed API cannot hide a field. There is no timeout on it. The observed shape
-matches <code>JobMessageBase</code> field-for-field, which is also how Q417 established that
-the run identity was on the wire all along.</p>
-<p><strong>Classic tier.</strong> Two independent reasons. First, the AGC's <code>AcquireJobResponse</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/types.go"><code>broker/types.go</code></a>) models <code>plan.planId</code> and
-<code>resources.endpoints</code> only; the rest of the body is forwarded opaquely to the
-worker and never parsed for scheduling. Second and more decisive, on the
-scale-set tier — the tier dogfood runs and the tier the entire Q435 residual
-lives on — the AGC issues no acquire call at all: it mints a JIT config and the
-worker's own runner acquires. There is no acquire response for the AGC to read.</p>
-<p><strong>Consequence: option 3 (derive from the declared timeout) is not viable.</strong> It
-was the preferred shape going in. The evidence removes it.</p>
+<p>That is the whole body, not a projection through GAG's narrower model — the probe logs the raw wire through the client's <code>ResponseObserver</code> precisely so the typed API cannot hide a field.
+There is no timeout on it.
+The observed shape matches <code>JobMessageBase</code> field-for-field, which is also how Q417 established that the run identity was on the wire all along.</p>
+<p><strong>Classic tier.</strong> Two independent reasons.
+First, the AGC's <code>AcquireJobResponse</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/types.go"><code>broker/types.go</code></a>) models <code>plan.planId</code> and <code>resources.endpoints</code> only; the rest of the body is forwarded opaquely to the worker and never parsed for scheduling.
+Second and more decisive, on the scale-set tier — the tier dogfood runs and the tier the entire Q435 residual lives on — the AGC issues no acquire call at all: it mints a JIT config and the worker's own runner acquires.
+There is no acquire response for the AGC to read.</p>
+<p><strong>Consequence: option 3 (derive from the declared timeout) is not viable.</strong> It was the preferred shape going in.
+The evidence removes it.</p>
 <h3 id="2-github-actions-job-timeout-semantics">2. GitHub Actions job-timeout semantics<a class="headerlink" href="#2-github-actions-job-timeout-semantics" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>jobs.&lt;job_id&gt;.timeout-minutes</code> — <em>"The maximum number of minutes to let a job
-  run before GitHub automatically cancels it. Default: 360"</em> (6 hours), per the
-  workflow-syntax reference as quoted in
-  <a href="https://github.com/github/docs/issues/7984">github/docs#7984</a>.</li>
-<li><strong>GitHub-hosted:</strong> 360 minutes is a hard ceiling — <em>"Each job in a workflow can
-  run for up to 6 hours of execution time. If a job reaches this limit, the job
-  is terminated and fails."</em> Users can only lower it.</li>
-<li><strong>Self-hosted:</strong> the 360-minute default still applies but is <em>not</em> a ceiling —
-  a workflow may raise <code>timeout-minutes</code> beyond it. GitHub instead enforces
-  <em>"Each job in a workflow can run for up to 5 days of execution time"</em>
-  (<a href="https://docs.github.com/en/actions/reference/limits">Actions limits</a>;
-  introduced by the <a href="https://github.blog/changelog/2024-04-04-actions-jobs-executing-on-self-hosted-runners-will-now-timeout-in-5-days/">2024-04-04 changelog</a>).</li>
+<li><code>jobs.&lt;job_id&gt;.timeout-minutes</code> — <em>"The maximum number of minutes to let a job run before GitHub automatically cancels it.
+  Default: 360"</em> (6 hours), per the workflow-syntax reference as quoted in <a href="https://github.com/github/docs/issues/7984">github/docs#7984</a>.</li>
+<li><strong>GitHub-hosted:</strong> 360 minutes is a hard ceiling — <em>"Each job in a workflow can run for up to 6 hours of execution time.
+  If a job reaches this limit, the job is terminated and fails."</em> Users can only lower it.</li>
+<li><strong>Self-hosted:</strong> the 360-minute default still applies but is <em>not</em> a ceiling — a workflow may raise <code>timeout-minutes</code> beyond it.
+  GitHub instead enforces <em>"Each job in a workflow can run for up to 5 days of execution time"</em> (<a href="https://docs.github.com/en/actions/reference/limits">Actions limits</a>; introduced by the <a href="https://github.blog/changelog/2024-04-04-actions-jobs-executing-on-self-hosted-runners-will-now-timeout-in-5-days/">2024-04-04 changelog</a>).</li>
 </ul>
-<p>Two numbers matter for choosing a default. <strong>6 hours</strong> is the timeout every job
-gets unless its author explicitly opted out of it — so a job running longer than
-6 hours is always a deliberate act. <strong>5 days</strong> is the absolute ceiling above
-which no self-hosted job can run, so any cap we pick below it strictly tightens
-a bound GitHub already imposes.</p>
+<p>Two numbers matter for choosing a default. <strong>6 hours</strong> is the timeout every job gets unless its author explicitly opted out of it — so a job running longer than 6 hours is always a deliberate act. <strong>5 days</strong> is the absolute ceiling above which no self-hosted job can run, so any cap we pick below it strictly tightens a bound GitHub already imposes.</p>
 <h3 id="3-message-retention--redelivery-undocumented-and-this-is-the-honest-answer">3. Message retention / redelivery: undocumented, and this is the honest answer<a class="headerlink" href="#3-message-retention--redelivery-undocumented-and-this-is-the-honest-answer" title="Permanent link">&para;</a></h3>
-<p>Q435 flagged this as unmeasured. It remains <strong>unmeasured and undocumented</strong>, and
-no amount of reading settles it.</p>
-<p>What <em>is</em> documented is only the within-session acknowledgement contract: a
-client must call <code>DeleteMessage</code> to acknowledge, and unacknowledged messages are
-redelivered on the next poll. That describes a client crashing mid-batch with the
-session still alive. It says nothing about how long GitHub holds a terminal
-<code>JobCompleted</code> when <strong>no session exists at all</strong> for hours — which is the Q435
-replay path. There is no published retention period for that case.</p>
-<p>Stating this plainly rather than inferring a number: <strong>we do not know whether the
-replay path survives a multi-hour outage.</strong> GAG's <code>scalesettest</code> fake keeps a
-session-independent queue log, which is the <em>permissive</em> assumption; real
-retention could be far shorter. If it is, the replay path is not a recovery path
-after a long outage and this item's deadline is the <em>only</em> one — which is an
-argument for the default being <strong>on</strong>, not opt-in.</p>
-<p>Filed as <strong>Q468</strong> for a live measurement; it needs cluster-only / live credentials and
-does not belong in this PR. <strong>Measured 2026-07-29</strong>
-(<a href="../q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a>): retention is
-<em>not</em> far shorter — a <code>JobCompleted</code> was still redelivered to a new session after
-13 h 3 m with no session in between. That is past this item's 12 h default, so
-the two mechanisms overlap: the cap fires while redelivery is still live, rather
-than either leaving a window uncovered.</p>
+<p>Q435 flagged this as unmeasured.
+It remains <strong>unmeasured and undocumented</strong>, and no amount of reading settles it.</p>
+<p>What <em>is</em> documented is only the within-session acknowledgement contract: a client must call <code>DeleteMessage</code> to acknowledge, and unacknowledged messages are redelivered on the next poll.
+That describes a client crashing mid-batch with the session still alive.
+It says nothing about how long GitHub holds a terminal <code>JobCompleted</code> when <strong>no session exists at all</strong> for hours — which is the Q435 replay path.
+There is no published retention period for that case.</p>
+<p>Stating this plainly rather than inferring a number: <strong>we do not know whether the replay path survives a multi-hour outage.</strong> GAG's <code>scalesettest</code> fake keeps a session-independent queue log, which is the <em>permissive</em> assumption; real retention could be far shorter.
+If it is, the replay path is not a recovery path after a long outage and this item's deadline is the <em>only</em> one — which is an argument for the default being <strong>on</strong>, not opt-in.</p>
+<p>Filed as <strong>Q468</strong> for a live measurement; it needs cluster-only / live credentials and does not belong in this PR. <strong>Measured 2026-07-29</strong> (<a href="../q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a>): retention is <em>not</em> far shorter — a <code>JobCompleted</code> was still redelivered to a new session after 13 h 3 m with no session in between.
+That is past this item's 12 h default, so the two mechanisms overlap: the cap fires while redelivery is still live, rather than either leaving a window uncovered.</p>
 <h3 id="4-prior-art">4. Prior art<a class="headerlink" href="#4-prior-art" title="Permanent link">&para;</a></h3>
-<p><strong>ARC does not solve this.</strong> Actions Runner Controller exposes no maximum-runner-
-lifetime or deadline knob, and orphaned/stuck runner pods are a long-standing open
-class of issues against it —
-<a href="https://github.com/actions/actions-runner-controller/issues/1833">#1833</a> (runner
-not cleaned up after completion),
-<a href="https://github.com/actions/actions-runner-controller/issues/3821">#3821</a>
-(AutoscalingRunnerSet stuck believing runners exist),
-<a href="https://github.com/actions/actions-runner-controller/issues/4136">#4136</a>,
-<a href="https://github.com/actions/actions-runner-controller/issues/4203">#4203</a>. The
-documented workaround is periodic manual deletion — the same hand-delete step
-GAG's runbook currently names. So ARC is a confirmation that the gap is real and
-not a design to copy.</p>
-<p><strong>The idiomatic Kubernetes mechanism is <code>activeDeadlineSeconds</code>.</strong> Its contract,
-from the vendored API source (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/k8s.io/api/core/v1/types.go"><code>vendor/k8s.io/api/core/v1/types.go</code></a>):</p>
+<p><strong>ARC does not solve this.</strong> Actions Runner Controller exposes no maximum-runner- lifetime or deadline knob, and orphaned/stuck runner pods are a long-standing open class of issues against it — <a href="https://github.com/actions/actions-runner-controller/issues/1833">#1833</a> (runner not cleaned up after completion), <a href="https://github.com/actions/actions-runner-controller/issues/3821">#3821</a> (AutoscalingRunnerSet stuck believing runners exist), <a href="https://github.com/actions/actions-runner-controller/issues/4136">#4136</a>, <a href="https://github.com/actions/actions-runner-controller/issues/4203">#4203</a>.
+The documented workaround is periodic manual deletion — the same hand-delete step GAG's runbook currently names.
+So ARC is a confirmation that the gap is real and not a design to copy.</p>
+<p><strong>The idiomatic Kubernetes mechanism is <code>activeDeadlineSeconds</code>.</strong> Its contract, from the vendored API source (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/k8s.io/api/core/v1/types.go"><code>vendor/k8s.io/api/core/v1/types.go</code></a>):</p>
 <blockquote>
-<p>Optional duration in seconds the pod may be active on the node relative to
-StartTime before the system will actively try to mark it failed and kill
-associated containers.</p>
+<p>Optional duration in seconds the pod may be active on the node relative to StartTime before the system will actively try to mark it failed and kill associated containers.</p>
 </blockquote>
 <p>Three properties decide it:</p>
 <ol>
-<li><strong>The kubelet enforces it, not the AGC.</strong> This is the decisive one. In the
-   dogfood incident the AGC was <code>Pending</code> for the entire 16 hours — so a
-   <em>reaper-side</em> deadline would not have bounded that incident either, because
-   there was no reaper running. <code>activeDeadlineSeconds</code> needs only the node.</li>
-<li><strong>Measured from <code>StartTime</code></strong>, i.e. active-on-node time, so it does not
-   double-count scheduling latency. Stuck-<code>Pending</code> is already covered
-   separately by <code>pendingPodDeadline</code>.</li>
-<li><strong>It composes with the existing reaper.</strong> The pod lands in <code>Failed</code> with
-   <code>Status.Reason == "DeadlineExceeded"</code>, which the reaper's existing terminal
-   arm already reclaims via <code>completedPodTTL</code>.</li>
+<li><strong>The kubelet enforces it, not the AGC.</strong> This is the decisive one.
+   In the dogfood incident the AGC was <code>Pending</code> for the entire 16 hours — so a <em>reaper-side</em> deadline would not have bounded that incident either, because there was no reaper running. <code>activeDeadlineSeconds</code> needs only the node.</li>
+<li><strong>Measured from <code>StartTime</code></strong>, i.e. active-on-node time, so it does not double-count scheduling latency.
+   Stuck-<code>Pending</code> is already covered separately by <code>pendingPodDeadline</code>.</li>
+<li><strong>It composes with the existing reaper.</strong> The pod lands in <code>Failed</code> with <code>Status.Reason == "DeadlineExceeded"</code>, which the reaper's existing terminal arm already reclaims via <code>completedPodTTL</code>.</li>
 </ol>
-<p>Failure modes, stated honestly: it is not enforced if the node or kubelet is
-gone (such a pod becomes <code>Unknown</code> and the terminal arm reaps it anyway); and it
-cannot distinguish a wedged worker from a slow legitimate job any better than we
-can — it is a blunt cap, which is exactly why the value and the override matter.</p>
+<p>Failure modes, stated honestly: it is not enforced if the node or kubelet is gone (such a pod becomes <code>Unknown</code> and the terminal arm reaps it anyway); and it cannot distinguish a wedged worker from a slow legitimate job any better than we can — it is a blunt cap, which is exactly why the value and the override matter.</p>
 <h2 id="decision">Decision<a class="headerlink" href="#decision" title="Permanent link">&para;</a></h2>
-<p><strong>Option 2 — a generous fixed default, on by default, enforced as
-<code>activeDeadlineSeconds</code>.</strong> Option 3 is unavailable (§1); option 1 (opt-in, no
-default) fixes nothing by default and is close to what already exists, since a
-determined operator can already set <code>podTemplate.spec.activeDeadlineSeconds</code> by
-hand — the missing piece was never the field, it was the default.</p>
+<p><strong>Option 2 — a generous fixed default, on by default, enforced as <code>activeDeadlineSeconds</code>.</strong> Option 3 is unavailable (§1); option 1 (opt-in, no default) fixes nothing by default and is close to what already exists, since a determined operator can already set <code>podTemplate.spec.activeDeadlineSeconds</code> by hand — the missing piece was never the field, it was the default.</p>
 <p><strong>Default: 12 hours.</strong></p>
 <p>The reasoning, and the tension the Queue row names:</p>
 <ul>
-<li>It is <strong>2× GitHub's own 360-minute default job timeout</strong>. A job this kills has
-  explicitly declared a <code>timeout-minutes</code> more than twice the default it would
-  otherwise have received. That is a principled anchor rather than an invented
-  round number, which is the best available substitute for deriving from the
-  real timeout.</li>
-<li>It <strong>bounds the pathological case</strong>: the 16-hour incident becomes a 12-hour
-  one. A 24-hour default would not have bounded that incident at all, which is
-  what rules out the top of the range.</li>
-<li>It <strong>strictly tightens an existing bound</strong>: GitHub already terminates a
-  self-hosted job at 5 days, so this is not a new class of failure, only a
-  nearer one.</li>
-<li>Going lower was considered — 8 hours (6 h + headroom) bounds the incident
-  better. It was rejected because the population of jobs between 8 and 12 hours
-  is essentially the same population (both are far past the 6-hour default), so
-  the extra aggression buys little while making a legitimate long job likelier to
-  die on a default nobody chose. When the safe default and the useful default
-  point in opposite directions, the tie goes to not breaking a tenant's job.</li>
+<li>It is <strong>2× GitHub's own 360-minute default job timeout</strong>.
+  A job this kills has explicitly declared a <code>timeout-minutes</code> more than twice the default it would otherwise have received.
+  That is a principled anchor rather than an invented round number, which is the best available substitute for deriving from the real timeout.</li>
+<li>It <strong>bounds the pathological case</strong>: the 16-hour incident becomes a 12-hour one.
+  A 24-hour default would not have bounded that incident at all, which is what rules out the top of the range.</li>
+<li>It <strong>strictly tightens an existing bound</strong>: GitHub already terminates a self-hosted job at 5 days, so this is not a new class of failure, only a nearer one.</li>
+<li>Going lower was considered — 8 hours (6 h + headroom) bounds the incident better.
+  It was rejected because the population of jobs between 8 and 12 hours is essentially the same population (both are far past the 6-hour default), so the extra aggression buys little while making a legitimate long job likelier to die on a default nobody chose.
+  When the safe default and the useful default point in opposite directions, the tie goes to not breaking a tenant's job.</li>
 </ul>
-<p><strong>A legitimately long job under this default:</strong> a job that runs past 12 hours is
-killed. Its pod goes <code>Failed</code>/<code>DeadlineExceeded</code>, the job fails at GitHub, and
-the operator raises <code>maxWorkerLifetime</code> on that RunnerGroup / RunnerSet — or sets
-it to <code>0s</code> to opt out entirely. The failure is legible enough to point straight at
-the cause (§ Legibility), which is the difference between a one-minute diagnosis
-and the mystery termination this item exists to avoid.</p>
+<p><strong>A legitimately long job under this default:</strong> a job that runs past 12 hours is killed.
+Its pod goes <code>Failed</code>/<code>DeadlineExceeded</code>, the job fails at GitHub, and the operator raises <code>maxWorkerLifetime</code> on that RunnerGroup / RunnerSet — or sets it to <code>0s</code> to opt out entirely.
+The failure is legible enough to point straight at the cause (§ Legibility), which is the difference between a one-minute diagnosis and the mystery termination this item exists to avoid.</p>
 <h3 id="precedence">Precedence<a class="headerlink" href="#precedence" title="Permanent link">&para;</a></h3>
 <ol>
-<li>An explicit <code>podTemplate.spec.activeDeadlineSeconds</code> <strong>wins</strong> — if an operator
-   set it by hand, GAG does not overwrite it. Same idiom as <code>buildPod</code>'s
-   worker-image gap-fill.</li>
+<li>An explicit <code>podTemplate.spec.activeDeadlineSeconds</code> <strong>wins</strong> — if an operator set it by hand, GAG does not overwrite it.
+   Same idiom as <code>buildPod</code>'s worker-image gap-fill.</li>
 <li>Otherwise <code>maxWorkerLifetime</code> on the RunnerGroup (v1) / RunnerSet (v2).</li>
 <li>Otherwise the 12-hour default.</li>
-<li><code>maxWorkerLifetime: 0s</code> disables the cap — the field is left unset and no
-   deadline is stamped.</li>
+<li><code>maxWorkerLifetime: 0s</code> disables the cap — the field is left unset and no deadline is stamped.</li>
 </ol>
 <h3 id="legibility">Legibility<a class="headerlink" href="#legibility" title="Permanent link">&para;</a></h3>
-<p>An operator debugging a killed long job must see the cause immediately, not a
-mystery termination. Three signals, in increasing order of how hard you have to
-look:</p>
+<p>An operator debugging a killed long job must see the cause immediately, not a mystery termination.
+Three signals, in increasing order of how hard you have to look:</p>
 <ul>
-<li>The pod itself carries <code>Failed</code> / <code>DeadlineExceeded</code> for its whole
-  <code>completedPodTTL</code> window — visible in plain <code>kubectl get</code>/<code>describe</code>.</li>
-<li>The reaper classifies it as its own reap reason, <strong><code>lifetime_exceeded</code></strong>,
-  rather than folding it into the generic <code>completed_ttl</code>, so
-  <code>actions_gateway_worker_pods_reaped_total{reason="lifetime_exceeded"}</code> is a
-  distinct, alertable series.</li>
-<li>A Warning Event <strong><code>WorkerPodLifetimeExceeded</code></strong> is recorded on the owning
-  RunnerGroup / RunnerSet naming the pod and the lifetime that killed it.</li>
+<li>The pod itself carries <code>Failed</code> / <code>DeadlineExceeded</code> for its whole <code>completedPodTTL</code> window — visible in plain <code>kubectl get</code>/<code>describe</code>.</li>
+<li>The reaper classifies it as its own reap reason, <strong><code>lifetime_exceeded</code></strong>, rather than folding it into the generic <code>completed_ttl</code>, so <code>actions_gateway_worker_pods_reaped_total{reason="lifetime_exceeded"}</code> is a distinct, alertable series.</li>
+<li>A Warning Event <strong><code>WorkerPodLifetimeExceeded</code></strong> is recorded on the owning RunnerGroup / RunnerSet naming the pod and the lifetime that killed it.</li>
 </ul>
-<p><code>Status.Reason == "DeadlineExceeded"</code> is also disjoint from the eviction path,
-which matches strictly on <code>Reason == "Evicted"</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go"><code>eviction_scaleset.go</code></a>),
-so a deadline kill cannot be mistaken for a node-pressure eviction and cannot
-trigger a spurious <code>rerun-failed-jobs</code>.</p>
+<p><code>Status.Reason == "DeadlineExceeded"</code> is also disjoint from the eviction path, which matches strictly on <code>Reason == "Evicted"</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go"><code>eviction_scaleset.go</code></a>), so a deadline kill cannot be mistaken for a node-pressure eviction and cannot trigger a spurious <code>rerun-failed-jobs</code>.</p>
 <h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2963,25 +2879,18 @@ trigger a spurious <code>rerun-failed-jobs</code>.</p>
 </table>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Unit (<code>cmd/agc/internal/provisioner</code>): defaulting and precedence —
-  default applied, per-owner override applied, <code>0s</code> disables, explicit
-  <code>podTemplate.spec.activeDeadlineSeconds</code> preserved.</li>
-<li>Unit (<code>cmd/agc/internal/controller</code>): a <code>Failed</code>/<code>DeadlineExceeded</code> pod reaps
-  under <code>lifetime_exceeded</code>, an ordinary <code>Failed</code> pod still reaps under
-  <code>completed_ttl</code>, and an <code>Evicted</code> pod is untouched by the new arm.</li>
-<li>Integration (envtest, <code>cmd/agc/internal/controller/integration/</code>): a worker pod
-  driven to <code>Failed</code>/<code>DeadlineExceeded</code> against a real apiserver is reaped with
-  the distinct reason and Event — the Q435 residual class, now bounded.</li>
+<li>Unit (<code>cmd/agc/internal/provisioner</code>): defaulting and precedence — default applied, per-owner override applied, <code>0s</code> disables, explicit <code>podTemplate.spec.activeDeadlineSeconds</code> preserved.</li>
+<li>Unit (<code>cmd/agc/internal/controller</code>): a <code>Failed</code>/<code>DeadlineExceeded</code> pod reaps under <code>lifetime_exceeded</code>, an ordinary <code>Failed</code> pod still reaps under <code>completed_ttl</code>, and an <code>Evicted</code> pod is untouched by the new arm.</li>
+<li>Integration (envtest, <code>cmd/agc/internal/controller/integration/</code>): a worker pod driven to <code>Failed</code>/<code>DeadlineExceeded</code> against a real apiserver is reaped with the distinct reason and Event — the Q435 residual class, now bounded.</li>
 </ul>
 <h2 id="open">Open<a class="headerlink" href="#open" title="Permanent link">&para;</a></h2>
-<p>Nothing. The one follow-up is closed:</p>
+<p>Nothing.
+The one follow-up is closed:</p>
 <ul>
-<li><strong>Q468</strong> — measure real <code>JobCompleted</code> retention across a multi-hour gap with
-  no session (§3). Live-only. Answered 2026-07-29
-  (<a href="../q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a>): RETAINED at
-  13 h 3 m, so the replay path can be relied on across any gap in which a worker
-  is still alive to reclaim. As predicted, it did not change this decision — the
-  deadline was required either way.</li>
+<li><strong>Q468</strong> — measure real <code>JobCompleted</code> retention across a multi-hour gap with no session (§3).
+  Live-only.
+  Answered 2026-07-29 (<a href="../q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a>): RETAINED at 13 h 3 m, so the replay path can be relied on across any gap in which a worker is still alive to reclaim.
+  As predicted, it did not change this decision — the deadline was required either way.</li>
 </ul>
 
 

@@ -2930,12 +2930,9 @@
 
 
 <h1 id="agent-reference-api-design-and-pre-release-review">Agent reference: API design and pre-release review<a class="headerlink" href="#agent-reference-api-design-and-pre-release-review" title="Permanent link">&para;</a></h1>
-<p>An API field costs almost nothing to change while it is a pull request, a rename
-while it is unreleased, and a conversion shim plus a deprecation window once a
-tag publishes it. After that it is load-bearing for the life of the version.
-This page is how we spend the cheap window on purpose: the rules to apply when
-designing a field, and the review that runs before a tag closes the window on
-everything added since the last one.</p>
+<p>An API field costs almost nothing to change while it is a pull request, a rename while it is unreleased, and a conversion shim plus a deprecation window once a tag publishes it.
+After that it is load-bearing for the life of the version.
+This page is how we spend the cheap window on purpose: the rules to apply when designing a field, and the review that runs before a tag closes the window on everything added since the last one.</p>
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="#when-to-read-what">When to read what</a></li>
@@ -2973,16 +2970,14 @@ everything added since the last one.</p>
 </tr>
 </tbody>
 </table>
-<p>The pre-release review is the backstop, not the design step. Everything it
-catches was cheaper to get right in the PR that introduced it.</p>
+<p>The pre-release review is the backstop, not the design step.
+Everything it catches was cheaper to get right in the PR that introduced it.</p>
 <h3 id="why-the-backstop-exists">Why the backstop exists<a class="headerlink" href="#why-the-backstop-exists" title="Permanent link">&para;</a></h3>
-<p>Q476 renamed <code>capacityGate.mode: On</code> to <code>Observe</code> days before 1.3.0 would have
-published it. Nothing surfaced that question: it came up in an unrelated
-conversation, and the value was one commit from being frozen for the life of
-<code>v2beta1</code>. The review turns that from luck into a step.</p>
-<p>The rules below are not generic API advice. Each one is a mistake this project
-actually made, or a convention that upstream Kubernetes will hold us to whether
-or not we noticed it.</p>
+<p>Q476 renamed <code>capacityGate.mode: On</code> to <code>Observe</code> days before 1.3.0 would have published it.
+Nothing surfaced that question: it came up in an unrelated conversation, and the value was one commit from being frozen for the life of <code>v2beta1</code>.
+The review turns that from luck into a step.</p>
+<p>The rules below are not generic API advice.
+Each one is a mistake this project actually made, or a convention that upstream Kubernetes will hold us to whether or not we noticed it.</p>
 <h2 id="the-cost-curve">The cost curve<a class="headerlink" href="#the-cost-curve" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3053,126 +3048,73 @@ or not we noticed it.</p>
 </tr>
 </tbody>
 </table>
-<p>Out of scope here: metric names (see
-<a href="../../operations/observability-metrics/">observability-metrics.md</a>) and Go
-symbols that do not appear on the wire — a bare <code>string</code> field promoted to a
-named type serialises identically, so it is a Go-API break for <code>api</code> module
-consumers only and does not need to beat a tag.</p>
+<p>Out of scope here: metric names (see <a href="../../operations/observability-metrics/">observability-metrics.md</a>) and Go symbols that do not appear on the wire — a bare <code>string</code> field promoted to a named type serialises identically, so it is a Go-API break for <code>api</code> module consumers only and does not need to beat a tag.</p>
 <h2 id="design-rules">Design rules<a class="headerlink" href="#design-rules" title="Permanent link">&para;</a></h2>
 <h3 id="one-field-answers-one-question">One field answers one question<a class="headerlink" href="#one-field-answers-one-question" title="Permanent link">&para;</a></h3>
-<p>An enum carrying two axes makes their cross-product unrepresentable and asks one
-party to assert something they may not know. The tells are mechanical:</p>
+<p>An enum carrying two axes makes their cross-product unrepresentable and asks one party to assert something they may not know.
+The tells are mechanical:</p>
 <ul>
 <li>Values that each activate a <em>different</em> sibling field.</li>
 <li>Cross-field CEL rules shaped <code>field X is only meaningful when mode == Y</code>.</li>
 </ul>
 <p>Q470 split <code>capacityGate.mode</code> for exactly this reason.</p>
-<p>When the axes genuinely belong together, the Kubernetes shape for it is a
-discriminated union: a required discriminator field plus optional, pointer union
-members — not one flat enum whose values imply which sibling to read.</p>
-<p><strong>A "yes" to the tells is not automatically a split.</strong> The same tell is visible
-in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2beta1/runnerset_types.go"><code>WorkerSizing</code></a>, whose three
-<code>XValidation</code> rules each tie a sibling field to one <code>profile</code> value. Q481 asked
-the question of <code>sizing.profile</code> before 1.3.0 and shipped it bundled anyway.
+<p>When the axes genuinely belong together, the Kubernetes shape for it is a discriminated union: a required discriminator field plus optional, pointer union members — not one flat enum whose values imply which sibling to read.</p>
+<p><strong>A "yes" to the tells is not automatically a split.</strong> The same tell is visible in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2beta1/runnerset_types.go"><code>WorkerSizing</code></a>, whose three <code>XValidation</code> rules each tie a sibling field to one <code>profile</code> value.
+Q481 asked the question of <code>sizing.profile</code> before 1.3.0 and shipped it bundled anyway.
 Three follow-ups decide it, in ascending order of how much they settle:</p>
 <ol>
-<li><em>Whose facts are the axes?</em> Q470's split was forced because one axis was the
-   platform operator's and the other the tenant's — <a href="#ask-whose-fact-it-is">whose fact is
-   it</a> is the argument that made it worth a break. When
-   both axes belong to the same party, that argument is simply unavailable.</li>
-<li><em>Are the axes actually orthogonal?</em> If one axis's parameter is defined in
-   terms of the other's mechanism, splitting <strong>relocates</strong> the <code>only meaningful
-   when</code> rule rather than removing it, and the cross-product gains undefined
-   cells rather than useful ones. <code>Throughput</code>'s headroom multiplies an
-   <em>observed peak</em>, which exists only under the usage source.</li>
-<li><em>Is the missing cell reachable additively?</em> This is the one that decides
-   whether the question must beat a tag. Q470's fix <strong>removed</strong> enum values, so
-   it had to land first; a gap a later minor can fill with one defaulted field
-   does not. Check whether it is reachable <em>at all</em> first — Q481's headline gap,
-   a Guaranteed node share, turned out to be reachable already, by a side effect
-   of an unrelated guard.</li>
+<li><em>Whose facts are the axes?</em> Q470's split was forced because one axis was the platform operator's and the other the tenant's — <a href="#ask-whose-fact-it-is">whose fact is it</a> is the argument that made it worth a break.
+   When both axes belong to the same party, that argument is simply unavailable.</li>
+<li><em>Are the axes actually orthogonal?</em> If one axis's parameter is defined in terms of the other's mechanism, splitting <strong>relocates</strong> the <code>only meaningful when</code> rule rather than removing it, and the cross-product gains undefined cells rather than useful ones. <code>Throughput</code>'s headroom multiplies an <em>observed peak</em>, which exists only under the usage source.</li>
+<li><em>Is the missing cell reachable additively?</em> This is the one that decides whether the question must beat a tag.
+   Q470's fix <strong>removed</strong> enum values, so it had to land first; a gap a later minor can fill with one defaulted field does not.
+   Check whether it is reachable <em>at all</em> first — Q481's headline gap, a Guaranteed node share, turned out to be reachable already, by a side effect of an unrelated guard.</li>
 </ol>
-<p>When the answer is "ship bundled", record what the enum bundles <em>on purpose</em>.
-<code>sizing.profile</code> is an <strong>intent</strong> enum — every value names what the operator
-wants, and the mechanism follows — which is a legitimate shape and, more
-usefully, hands the next reviewer the rule for extending it: new values name a
-distinct intent, mechanism recombinations go in a sibling field. Worked example:
-<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>.</p>
+<p>When the answer is "ship bundled", record what the enum bundles <em>on purpose</em>. <code>sizing.profile</code> is an <strong>intent</strong> enum — every value names what the operator wants, and the mechanism follows — which is a legitimate shape and, more usefully, hands the next reviewer the rule for extending it: new values name a distinct intent, mechanism recombinations go in a sibling field.
+Worked example: <a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>.</p>
 <h3 id="name-the-method-not-the-on-state">Name the method, not the on-state<a class="headerlink" href="#name-the-method-not-the-on-state" title="Permanent link">&para;</a></h3>
-<p><code>On</code> is fine as the second of two values and stops carrying information the
-moment a third arrives. Name the <em>method</em>, so the axis stays legible as it
-grows — that is why the capacity gate's modes are <code>Off</code>/<code>Observe</code> with
-<code>Probe</code>/<code>Provision</code> reserved, not <code>On</code> plus two strangers (Q476).</p>
+<p><code>On</code> is fine as the second of two values and stops carrying information the moment a third arrives.
+Name the <em>method</em>, so the axis stays legible as it grows — that is why the capacity gate's modes are <code>Off</code>/<code>Observe</code> with <code>Probe</code>/<code>Provision</code> reserved, not <code>On</code> plus two strangers (Q476).</p>
 <h3 id="prefer-a-string-enum-to-a-bool">Prefer a string enum to a bool<a class="headerlink" href="#prefer-a-string-enum-to-a-bool" title="Permanent link">&para;</a></h3>
-<p>Upstream puts it as "think twice about <code>bool</code> fields": most ideas that start
-binary trend toward a small set of mutually exclusive options, and a <code>bool</code> that
-grows a third state has nowhere to go. A <code>bool</code> is defensible when the axis is
-genuinely two-valued and cannot grow — <code>tracing.insecure</code> is either TLS or it is
-not. Anything describing a <em>policy</em> or a <em>method</em> should be a string enum from
-birth.</p>
-<p>The same rule is sharper for label and annotation values, where a bare <code>true</code> is
-also a YAML coercion footgun: use an enum keyword (<code>allowed</code>, <code>managed</code>). See
-<a href="../kubernetes-conventions/#label--annotation-value-conventions">kubernetes-conventions.md</a>.</p>
+<p>Upstream puts it as "think twice about <code>bool</code> fields": most ideas that start binary trend toward a small set of mutually exclusive options, and a <code>bool</code> that grows a third state has nowhere to go.
+A <code>bool</code> is defensible when the axis is genuinely two-valued and cannot grow — <code>tracing.insecure</code> is either TLS or it is not.
+Anything describing a <em>policy</em> or a <em>method</em> should be a string enum from birth.</p>
+<p>The same rule is sharper for label and annotation values, where a bare <code>true</code> is also a YAML coercion footgun: use an enum keyword (<code>allowed</code>, <code>managed</code>).
+See <a href="../kubernetes-conventions/#label--annotation-value-conventions">kubernetes-conventions.md</a>.</p>
 <h3 id="dont-collide-with-an-established-meaning">Don't collide with an established meaning<a class="headerlink" href="#dont-collide-with-an-established-meaning" title="Permanent link">&para;</a></h3>
-<p><code>observe</code>/<code>audit</code>/<code>dry-run</code> mean <em>report-only, do not enforce</em> in Pod Security
-Admission and Gatekeeper. Our <code>Observe</code> gates. Either avoid the collision or
-neutralise it everywhere an operator will meet it — the field godoc, the
-generated CRD description, the operator docs, and the admission message. Never
-leave it to inference.</p>
+<p><code>observe</code>/<code>audit</code>/<code>dry-run</code> mean <em>report-only, do not enforce</em> in Pod Security Admission and Gatekeeper.
+Our <code>Observe</code> gates.
+Either avoid the collision or neutralise it everywhere an operator will meet it — the field godoc, the generated CRD description, the operator docs, and the admission message.
+Never leave it to inference.</p>
 <h3 id="ask-whose-fact-it-is">Ask whose fact it is<a class="headerlink" href="#ask-whose-fact-it-is" title="Permanent link">&para;</a></h3>
 <p>Three separate questions, and a field can fail any one of them:</p>
 <ol>
-<li><strong>Who knows the answer?</strong> A tenant should not be asked to assert a property of
-   infrastructure they do not own. When the correct value is identical for every
-   object in the cluster and known to whoever runs the nodes, it belongs on the
-   platform-owned object — <code>clusterCapacity.nodeAutoscaling</code> on <code>ActionsGateway</code>,
-   not on each <code>RunnerSet</code> (Q470).</li>
-<li><strong>Who is allowed to decide?</strong> A cap a tenant can raise is not a cap. Q130
-   removed <code>spec.namespaceQuota</code> outright and made the namespace <code>ResourceQuota</code>
-   platform-owned; the tenant-facing fields that survived (<code>maxQuotaRetries</code>,
-   <code>quotaRetryDelay</code>) are about <em>operating within</em> a quota, not owning one.</li>
-<li><strong>What happens if the tenant lies?</strong> Sometimes the tenant may legitimately
-   <em>name</em> a thing while the platform decides which names are legal. <code>priorityTiers[].priorityClassName</code>
-   is tenant-authored but checked against <code>--allowed-priority-classes</code> by the GMC
-   webhook, so a tenant cannot name a preempting class and evict other tenants
-   (Q132). Privileged eligibility goes further: it lives on a namespace label the
-   tenant cannot set at all.</li>
+<li><strong>Who knows the answer?</strong> A tenant should not be asked to assert a property of infrastructure they do not own.
+   When the correct value is identical for every object in the cluster and known to whoever runs the nodes, it belongs on the platform-owned object — <code>clusterCapacity.nodeAutoscaling</code> on <code>ActionsGateway</code>, not on each <code>RunnerSet</code> (Q470).</li>
+<li><strong>Who is allowed to decide?</strong> A cap a tenant can raise is not a cap.
+   Q130 removed <code>spec.namespaceQuota</code> outright and made the namespace <code>ResourceQuota</code> platform-owned; the tenant-facing fields that survived (<code>maxQuotaRetries</code>, <code>quotaRetryDelay</code>) are about <em>operating within</em> a quota, not owning one.</li>
+<li><strong>What happens if the tenant lies?</strong> Sometimes the tenant may legitimately <em>name</em> a thing while the platform decides which names are legal. <code>priorityTiers[].priorityClassName</code> is tenant-authored but checked against <code>--allowed-priority-classes</code> by the GMC webhook, so a tenant cannot name a preempting class and evict other tenants (Q132).
+   Privileged eligibility goes further: it lives on a namespace label the tenant cannot set at all.</li>
 </ol>
 <h3 id="make-the-default-fail-in-the-safe-direction">Make the default fail in the safe direction<a class="headerlink" href="#make-the-default-fail-in-the-safe-direction" title="Permanent link">&para;</a></h3>
 <p>Not "is the default common" — <em>which way does a wrong answer fail?</em></p>
 <ul>
-<li><code>clusterCapacity.nodeAutoscaling</code> defaults to <code>Present</code> because that direction
-  can only under-gate (today's behaviour), while <code>Absent</code> can starve a tenant.</li>
-<li>Q109 is the security version: an empty agent <code>keyType</code> resolved to Ed25519,
-  which cannot decrypt the broker's RSA-OAEP session key, silently dropping a
-  defence-in-depth layer. Empty and unrecognised now both resolve to RSA-3072,
-  and Ed25519 is an explicit opt-in. An unset value must land on the safe
-  option, never the convenient one; a less secure option may be offered as an
-  explicit opt-in, never as the default. See the
-  <a href="../../design/05-security/">security design</a>.</li>
+<li><code>clusterCapacity.nodeAutoscaling</code> defaults to <code>Present</code> because that direction can only under-gate (today's behaviour), while <code>Absent</code> can starve a tenant.</li>
+<li>Q109 is the security version: an empty agent <code>keyType</code> resolved to Ed25519, which cannot decrypt the broker's RSA-OAEP session key, silently dropping a defence-in-depth layer.
+  Empty and unrecognised now both resolve to RSA-3072, and Ed25519 is an explicit opt-in.
+  An unset value must land on the safe option, never the convenient one; a less secure option may be offered as an explicit opt-in, never as the default.
+  See the <a href="../../design/05-security/">security design</a>.</li>
 </ul>
-<p>The zero value is a default whether or not you chose it. A non-pointer <code>string</code>
-with no <code>+kubebuilder:default</code> means <code>""</code> reaches your code; decide what <code>""</code>
-means before someone else's <code>switch</code> decides for you.</p>
+<p>The zero value is a default whether or not you chose it.
+A non-pointer <code>string</code> with no <code>+kubebuilder:default</code> means <code>""</code> reaches your code; decide what <code>""</code> means before someone else's <code>switch</code> decides for you.</p>
 <h3 id="let-the-opt-ins-direction-follow-what-already-ships">Let the opt-in's direction follow what already ships<a class="headerlink" href="#let-the-opt-ins-direction-follow-what-already-ships" title="Permanent link">&para;</a></h3>
-<p>Opt-in or opt-out is decided by the behaviour that is already published, not by
-taste. A switch that turns <em>off</em> behaviour operators already have must default to
-keeping it (<code>EgressProxy.spec.managedAutoscaling</code> and <code>managedNetworkPolicy</code>,
-both <code>*bool</code> defaulting <code>true</code>); a switch that turns <em>on</em> new behaviour must
-default to off (<code>ActionsGateway.spec.agcAutoscaling</code> unset ⇒ no
-<code>VerticalPodAutoscaler</code>). Two features on one axis therefore look asymmetric when
-one predates the other, and that is the correct outcome — forcing them to match
-either deletes something on upgrade or turns something on that nobody asked for
-(Q486).</p>
-<p>The <em>container</em> answers a second question: does the opt-in carry knobs of its
-own? A pure ownership toggle whose knobs already exist as siblings is a <code>*bool</code>;
-an opt-in with settings meaningful only while it is on is a block whose presence
-<strong>is</strong> the switch — never a block with an <code>enabled</code> field, which is two fields
-answering one question. Match the neighbours on the same object before matching a
-different CRD: an operator meets the field in the object it lives in. Worked
-example, including why the <code>*bool</code> survives
-<a href="#prefer-a-string-enum-to-a-bool">prefer a string enum</a>:
-§ E of <a href="../../plan/release-1.3/">release-1.3.md</a>.</p>
+<p>Opt-in or opt-out is decided by the behaviour that is already published, not by taste.
+A switch that turns <em>off</em> behaviour operators already have must default to keeping it (<code>EgressProxy.spec.managedAutoscaling</code> and <code>managedNetworkPolicy</code>, both <code>*bool</code> defaulting <code>true</code>); a switch that turns <em>on</em> new behaviour must default to off (<code>ActionsGateway.spec.agcAutoscaling</code> unset ⇒ no <code>VerticalPodAutoscaler</code>).
+Two features on one axis therefore look asymmetric when one predates the other, and that is the correct outcome — forcing them to match either deletes something on upgrade or turns something on that nobody asked for (Q486).</p>
+<p>The <em>container</em> answers a second question: does the opt-in carry knobs of its own?
+A pure ownership toggle whose knobs already exist as siblings is a <code>*bool</code>; an opt-in with settings meaningful only while it is on is a block whose presence <strong>is</strong> the switch — never a block with an <code>enabled</code> field, which is two fields answering one question.
+Match the neighbours on the same object before matching a different CRD: an operator meets the field in the object it lives in.
+Worked example, including why the <code>*bool</code> survives <a href="#prefer-a-string-enum-to-a-bool">prefer a string enum</a>: § E of <a href="../../plan/release-1.3/">release-1.3.md</a>.</p>
 <h3 id="decide-optional-required-pointer-and-default-together">Decide optional, required, pointer, and default together<a class="headerlink" href="#decide-optional-required-pointer-and-default-together" title="Permanent link">&para;</a></h3>
 <p>They are one decision with four outputs, and getting a corner wrong is silent.</p>
 <table>
@@ -3203,140 +3145,90 @@ example, including why the <code>*bool</code> survives
 </table>
 <p>Two things that bite:</p>
 <ul>
-<li><strong><code>omitempty</code> decides optionality, not <code>+optional</code>.</strong> controller-gen reads the
-  JSON tag. <code>RunnerGroupSpec.MaxListeners</code> has <code>omitempty</code> and no <code>+optional</code>,
-  and lands optional; <code>RunnerGroupStatus.ActiveSessions</code> has neither, and lands
-  in the generated CRD's <code>required</code> list. That one is harmless — the controller
-  always writes status — but the same slip on a spec field rejects every
-  existing manifest.</li>
-<li><strong>A CRD default is written into stored objects.</strong> It applies at admission, so
-  changing it later does not change existing objects — you get two populations
-  and a behaviour change for new ones. That is why a default you are unsure about
-  belongs in the controller, where it stays changeable.</li>
+<li><strong><code>omitempty</code> decides optionality, not <code>+optional</code>.</strong> controller-gen reads the JSON tag. <code>RunnerGroupSpec.MaxListeners</code> has <code>omitempty</code> and no <code>+optional</code>, and lands optional; <code>RunnerGroupStatus.ActiveSessions</code> has neither, and lands in the generated CRD's <code>required</code> list.
+  That one is harmless — the controller always writes status — but the same slip on a spec field rejects every existing manifest.</li>
+<li><strong>A CRD default is written into stored objects.</strong> It applies at admission, so changing it later does not change existing objects — you get two populations and a behaviour change for new ones.
+  That is why a default you are unsure about belongs in the controller, where it stays changeable.</li>
 </ul>
 <h3 id="choose-the-list-semantics-deliberately">Choose the list semantics deliberately<a class="headerlink" href="#choose-the-list-semantics-deliberately" title="Permanent link">&para;</a></h3>
-<p>A list's <code>x-kubernetes-list-type</code> decides who can own it under server-side apply
-and whether validation ratcheting can see individual items. The default is
-<code>atomic</code>: one applier replaces the whole list, and no item within it can be
-ratcheted.</p>
+<p>A list's <code>x-kubernetes-list-type</code> decides who can own it under server-side apply and whether validation ratcheting can see individual items.
+The default is <code>atomic</code>: one applier replaces the whole list, and no item within it can be ratcheted.</p>
 <ul>
-<li>Conditions are <code>+listType=map +listMapKey=type</code> — independently owned entries
-  with a natural key. Every status conditions slice in this repo uses that.</li>
-<li><code>priorityTiers</code> is atomic, and its "strictly ascending threshold" ordering is a
-  <em>caller contract</em> that neither admission nor a status condition enforces — an
-  out-of-order tier is simply unreachable. If an ordering or uniqueness rule is
-  load-bearing, either validate it or say plainly in the godoc that it is not
-  validated. It is documented in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go"><code>runnergroup_types.go</code></a>.</li>
+<li>Conditions are <code>+listType=map +listMapKey=type</code> — independently owned entries with a natural key.
+  Every status conditions slice in this repo uses that.</li>
+<li><code>priorityTiers</code> is atomic, and its "strictly ascending threshold" ordering is a <em>caller contract</em> that neither admission nor a status condition enforces — an out-of-order tier is simply unreachable.
+  If an ordering or uniqueness rule is load-bearing, either validate it or say plainly in the godoc that it is not validated.
+  It is documented in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go"><code>runnergroup_types.go</code></a>.</li>
 </ul>
 <h3 id="put-a-constraint-on-the-narrowest-field-that-expresses-it">Put a constraint on the narrowest field that expresses it<a class="headerlink" href="#put-a-constraint-on-the-narrowest-field-that-expresses-it" title="Permanent link">&para;</a></h3>
-<p>CRD validation ratcheting (KEP-4008, default-on from Kubernetes 1.30) suppresses
-a rule only while <em>the value it sits on</em> is unchanged. A rule on the spec
-therefore re-fires on every write to any field.</p>
-<p>Q398 is the worked example: a <code>RunnerSetSpec</code>-level rule requiring exactly one
-<code>runnerLabel</code> re-evaluated on every unqualified <code>kubectl edit</code>, so editing an
-unrelated field on a stored-but-noncompliant object failed on labels. Moving the
-rule onto <code>spec.runnerLabels</code> kept the constraint exactly where it matters and
-let ratcheting suppress it everywhere else.</p>
-<p>Related: pick the right enforcement point at all. CEL <code>XValidation</code> is cheap and
-always on; a webhook can read <code>metadata</code> and name the offending component in the
-message (which is why <code>gitHubURL</code> structure and <code>securityProfile</code> downgrades are
-webhook-enforced). The CEL marker gotchas — gofmt corrupting <code>''</code>, and
-<code>selectableFields</code> on one version only — are in
-<a href="../code-generation/#crd-marker-and-api-file-gotchas">code-generation.md</a>.</p>
+<p>CRD validation ratcheting (KEP-4008, default-on from Kubernetes 1.30) suppresses a rule only while <em>the value it sits on</em> is unchanged.
+A rule on the spec therefore re-fires on every write to any field.</p>
+<p>Q398 is the worked example: a <code>RunnerSetSpec</code>-level rule requiring exactly one <code>runnerLabel</code> re-evaluated on every unqualified <code>kubectl edit</code>, so editing an unrelated field on a stored-but-noncompliant object failed on labels.
+Moving the rule onto <code>spec.runnerLabels</code> kept the constraint exactly where it matters and let ratcheting suppress it everywhere else.</p>
+<p>Related: pick the right enforcement point at all.
+CEL <code>XValidation</code> is cheap and always on; a webhook can read <code>metadata</code> and name the offending component in the message (which is why <code>gitHubURL</code> structure and <code>securityProfile</code> downgrades are webhook-enforced).
+The CEL marker gotchas — gofmt corrupting <code>''</code>, and <code>selectableFields</code> on one version only — are in <a href="../code-generation/#crd-marker-and-api-file-gotchas">code-generation.md</a>.</p>
 <h3 id="derived-names-are-part-of-the-contract">Derived names are part of the contract<a class="headerlink" href="#derived-names-are-part-of-the-contract" title="Permanent link">&para;</a></h3>
-<p>Names the controllers build from a CR's name are pod names, Secret names, and
-label values on running clusters. Changing how one is derived orphans live
-objects, which is worse than a field rename because nothing warns.</p>
+<p>Names the controllers build from a CR's name are pod names, Secret names, and label values on running clusters.
+Changing how one is derived orphans live objects, which is worse than a field rename because nothing warns.</p>
 <ul>
-<li>Split the budget <strong>before</strong> joining, not after (the lesson of Q467): the
-  sanitizers were never the bug, composition was. Use
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apinames/names.go"><code>api/apinames</code></a> rather than a fifth copy of
-  "sanitize, cap, append a hash".</li>
-<li>Include the owner's <strong>kind</strong>, not just its name (Q466). A v1 <code>RunnerGroup</code> and a
-  v2 <code>RunnerSet</code> of the same name share a namespace for the whole coexistence
-  window — that is what makes rollback possible — so a name derived from the name
-  alone has two controllers managing one object.</li>
-<li>Respect the budgets: 253 characters for a DNS subdomain name, 63 for a label
-  value, and less once a suffix is appended.</li>
+<li>Split the budget <strong>before</strong> joining, not after (the lesson of Q467): the sanitizers were never the bug, composition was.
+  Use <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apinames/names.go"><code>api/apinames</code></a> rather than a fifth copy of "sanitize, cap, append a hash".</li>
+<li>Include the owner's <strong>kind</strong>, not just its name (Q466).
+  A v1 <code>RunnerGroup</code> and a v2 <code>RunnerSet</code> of the same name share a namespace for the whole coexistence window — that is what makes rollback possible — so a name derived from the name alone has two controllers managing one object.</li>
+<li>Respect the budgets: 253 characters for a DNS subdomain name, 63 for a label value, and less once a suffix is appended.</li>
 </ul>
 <h3 id="status-reports-it-does-not-control">Status reports, it does not control<a class="headerlink" href="#status-reports-it-does-not-control" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Status is written by the controller and ignored on create/update. Never make a
-  spec decision depend on a value only status carries.</li>
-<li>Condition types and reasons are runtime strings, not schema, so they carry <strong>no
-  version and have no conversion path</strong>. Renaming one breaks every operator alert
-  at once, in every served version simultaneously. Declare them in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apiconditions/conditions.go"><code>api/apiconditions</code></a> and re-export from
-  both version packages; <code>make v2-api-sync-check</code> fails a one-sided add.</li>
-<li>Keep the polarity convention: normal-is-True (<code>Ready</code>), with abnormal-is-True
-  conditions named so they read that way (<code>CredentialUnavailable</code>).</li>
-<li>Carry <code>observedGeneration</code> so a reader can tell a stale status from a current
-  one.</li>
+<li>Status is written by the controller and ignored on create/update.
+  Never make a spec decision depend on a value only status carries.</li>
+<li>Condition types and reasons are runtime strings, not schema, so they carry <strong>no version and have no conversion path</strong>.
+  Renaming one breaks every operator alert at once, in every served version simultaneously.
+  Declare them in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apiconditions/conditions.go"><code>api/apiconditions</code></a> and re-export from both version packages; <code>make v2-api-sync-check</code> fails a one-sided add.</li>
+<li>Keep the polarity convention: normal-is-True (<code>Ready</code>), with abnormal-is-True conditions named so they read that way (<code>CredentialUnavailable</code>).</li>
+<li>Carry <code>observedGeneration</code> so a reader can tell a stale status from a current one.</li>
 </ul>
 <h3 id="design-for-the-values-that-have-not-arrived-yet">Design for the values that have not arrived yet<a class="headerlink" href="#design-for-the-values-that-have-not-arrived-yet" title="Permanent link">&para;</a></h3>
-<p>Check the planned-but-unbuilt work the field already anticipates — the Queue and
-<a href="../../design/appendix-h-v2-api-decomposition/">appendix H</a>. If a deferred item
-extends the same axis, the shape has to accommodate it now. Enum values that are
-<em>not yet accepted</em> are still a design constraint: <code>Probe</code>/<code>Provision</code> are the
-reason <code>Observe</code> is named the way it is.</p>
+<p>Check the planned-but-unbuilt work the field already anticipates — the Queue and <a href="../../design/appendix-h-v2-api-decomposition/">appendix H</a>.
+If a deferred item extends the same axis, the shape has to accommodate it now.
+Enum values that are <em>not yet accepted</em> are still a design constraint: <code>Probe</code>/<code>Provision</code> are the reason <code>Observe</code> is named the way it is.</p>
 <h3 id="if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty">If the chart renders an instance of the CRD, omit the new field when empty<a class="headerlink" href="#if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty" title="Permanent link">&para;</a></h3>
-<p>Adding an optional field is additive to the <em>schema</em> and still breaks
-<code>helm upgrade</code> when the chart also renders an object of that kind. Helm applies
-the chart-root <code>crds/</code> directory on <code>helm install</code> <strong>only</strong>, never on upgrade, so
-an upgrading cluster still holds the CRD its <em>current</em> release installed. A field
-that CRD does not declare fails server-side apply midway through the upgrade:</p>
+<p>Adding an optional field is additive to the <em>schema</em> and still breaks <code>helm upgrade</code> when the chart also renders an object of that kind.
+Helm applies the chart-root <code>crds/</code> directory on <code>helm install</code> <strong>only</strong>, never on upgrade, so an upgrading cluster still holds the CRD its <em>current</em> release installed.
+A field that CRD does not declare fails server-side apply midway through the upgrade:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>failed to create typed patch object: .spec.&lt;newField&gt;: field not declared in schema
 </code></pre></div>
-<p>Midway is the damage — the release revision has already advanced, leaving a
-half-upgraded cluster. <code>make check</code> cannot see this; the signal comes from
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh"><code>chart-released-upgrade-check.sh</code></a>,
-which runs in e2e.</p>
+<p>Midway is the damage — the release revision has already advanced, leaving a half-upgraded cluster. <code>make check</code> cannot see this; the signal comes from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh"><code>chart-released-upgrade-check.sh</code></a>, which runs in e2e.</p>
 <p>So render the key only when the value is non-empty:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>{{- with .Values.myNewField }}
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>myNewField:
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  {{- toYaml . | nindent 4 }}
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>{{- end }}
 </code></pre></div>
-<p>Unset and empty mean the same thing to both the CRD and the controller, but only
-the omitted form survives an upgrade against the older CRD — and empty is the
-default, so that is the path every existing release takes. When the value <em>is</em>
-set, the operator is adopting a new feature and the chart's documented
-<code>helm show crds … | kubectl apply -f -</code> step applies; preflight it with <code>lookup</code>
-and fail at <strong>render</strong> rather than midway.</p>
-<p>Q298 shipped this break and the gate caught it. The trap is that the chart's
-older preflight tests whether the <em>kind</em> is present, which reads as "the hazard
-is a new CRD" — it is equally a new <strong>field</strong> on an existing one, and a stale
-schema is invisible to a presence check. Today this applies to
-<code>PriorityClassAllowlist</code>, the one CRD the chart both installs and instantiates.</p>
+<p>Unset and empty mean the same thing to both the CRD and the controller, but only the omitted form survives an upgrade against the older CRD — and empty is the default, so that is the path every existing release takes.
+When the value <em>is</em> set, the operator is adopting a new feature and the chart's documented <code>helm show crds … | kubectl apply -f -</code> step applies; preflight it with <code>lookup</code> and fail at <strong>render</strong> rather than midway.</p>
+<p>Q298 shipped this break and the gate caught it.
+The trap is that the chart's older preflight tests whether the <em>kind</em> is present, which reads as "the hazard is a new CRD" — it is equally a new <strong>field</strong> on an existing one, and a stale schema is invisible to a presence check.
+Today this applies to <code>PriorityClassAllowlist</code>, the one CRD the chart both installs and instantiates.</p>
 <h2 id="is-this-change-breaking">Is this change breaking?<a class="headerlink" href="#is-this-change-breaking" title="Permanent link">&para;</a></h2>
-<p>"Breaking" here means the wire contract, which is what a tag freezes. Go-symbol
-breaks affect <code>api</code> module consumers only and do not need to beat a tag.</p>
+<p>"Breaking" here means the wire contract, which is what a tag freezes.
+Go-symbol breaks affect <code>api</code> module consumers only and do not need to beat a tag.</p>
 <h3 id="ask-it-in-this-order-at-pr-review">Ask it in this order, at PR review<a class="headerlink" href="#ask-it-in-this-order-at-pr-review" title="Permanent link">&para;</a></h3>
-<p>Two questions come before the table, and both are cheap only while the PR is
-open. Asking them at release pre-flight is already late: by then the answer costs
-a rebase of merged work instead of an edit to a draft.</p>
-<p><strong>1. Has this element shipped in a stable tag?</strong> Everything below assumes it has
-— that premise is what turns a rename into a conversion shim plus a deprecation
-window. It is false more often than the <code>!</code> markers suggest. All three
-<code>!</code>-marked commits between <code>v1.2.0</code> and 2026-07-31 changed surface no stable tag
-had ever published: <code>windowStart</code> and <code>capacityGate</code> are both absent from every
-API tree at <code>v1.2.0</code>, so renaming and reshaping them broke nothing. Each sat at
-the <em>merged, before the tag</em> row of <a href="#the-cost-curve">the cost curve</a> — an edit.</p>
+<p>Two questions come before the table, and both are cheap only while the PR is open.
+Asking them at release pre-flight is already late: by then the answer costs a rebase of merged work instead of an edit to a draft.</p>
+<p><strong>1.
+Has this element shipped in a stable tag?</strong> Everything below assumes it has — that premise is what turns a rename into a conversion shim plus a deprecation window.
+It is false more often than the <code>!</code> markers suggest.
+All three <code>!</code>-marked commits between <code>v1.2.0</code> and 2026-07-31 changed surface no stable tag had ever published: <code>windowStart</code> and <code>capacityGate</code> are both absent from every API tree at <code>v1.2.0</code>, so renaming and reshaping them broke nothing.
+Each sat at the <em>merged, before the tag</em> row of <a href="#the-cost-curve">the cost curve</a> — an edit.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>grep<span class="w"> </span>-l<span class="w"> </span><span class="s1">&#39;&lt;field&gt;&#39;</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>git<span class="w"> </span>tag<span class="w"> </span>--list<span class="w"> </span><span class="s1">&#39;v*&#39;</span><span class="w"> </span>--sort<span class="o">=</span>-v:refname<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>--<span class="w"> </span><span class="s1">&#39;-&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>--<span class="w"> </span>api<span class="w"> </span>cmd/agc/api<span class="w"> </span>cmd/gmc/api
 </code></pre></div>
-<p>No hit means no cluster can be holding it and no manifest can name it: not
-breaking. <code>scripts/release/api-surface-since.sh &lt;tag&gt;</code> lists everything a tag cut now
-would publish for the first time, which is the same question asked over the whole
-surface at once. If you still mark the commit <code>!</code> for a Go-symbol break, say so
-in the body — nothing downstream can tell the two kinds of break apart, and only
-the wire kind bears on the tag.</p>
-<p><strong>2. If it did ship, does the change have to break?</strong> A breaking shape is
-sometimes the <em>first</em> shape reached rather than the one required. Adding a field
-beside the old one, widening a validation instead of tightening it, or accepting
-both spellings for a version reaches the same end state without the shim. Ask
-before the PR lands, while the alternative is still a design choice; afterwards
-it is a migration.</p>
+<p>No hit means no cluster can be holding it and no manifest can name it: not breaking. <code>scripts/release/api-surface-since.sh &lt;tag&gt;</code> lists everything a tag cut now would publish for the first time, which is the same question asked over the whole surface at once.
+If you still mark the commit <code>!</code> for a Go-symbol break, say so in the body — nothing downstream can tell the two kinds of break apart, and only the wire kind bears on the tag.</p>
+<p><strong>2.
+If it did ship, does the change have to break?</strong> A breaking shape is sometimes the <em>first</em> shape reached rather than the one required.
+Adding a field beside the old one, widening a validation instead of tightening it, or accepting both spellings for a version reaches the same end state without the shim.
+Ask before the PR lands, while the alternative is still a design choice; afterwards it is a migration.</p>
 <table>
 <thead>
 <tr>
@@ -3404,44 +3296,25 @@ it is a migration.</p>
 </tbody>
 </table>
 <h3 id="removal-needs-a-version-increment-not-a-promise">Removal needs a version increment, not a promise<a class="headerlink" href="#removal-needs-a-version-increment-not-a-promise" title="Permanent link">&para;</a></h3>
-<p>An API element is removable only by incrementing the version — never by deleting
-it from a version still being served. Q428 is where that bit: the deprecated
-<code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases promised removal "in a future release, on the
-v1alpha1 deprecation clock", but they are enum members of <code>v2beta1</code>, and v2.0.0
-deliberately keeps serving <code>v2beta1</code>. The aliases live exactly as long as
-<code>v2beta1</code> does, which puts the earliest possible removal at <code>v3.0.0</code>. The fix was
-to state that floor identically in the enum godoc for both v2 versions, the
-generated CRD descriptions, the admission warning, and the operator docs.</p>
-<p>Name a floor ("no earlier than vX"), not a schedule, and never promise a removal
-the version lifecycle cannot deliver.</p>
+<p>An API element is removable only by incrementing the version — never by deleting it from a version still being served.
+Q428 is where that bit: the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases promised removal "in a future release, on the v1alpha1 deprecation clock", but they are enum members of <code>v2beta1</code>, and v2.0.0 deliberately keeps serving <code>v2beta1</code>.
+The aliases live exactly as long as <code>v2beta1</code> does, which puts the earliest possible removal at <code>v3.0.0</code>.
+The fix was to state that floor identically in the enum godoc for both v2 versions, the generated CRD descriptions, the admission warning, and the operator docs.</p>
+<p>Name a floor ("no earlier than vX"), not a schedule, and never promise a removal the version lifecycle cannot deliver.</p>
 <h3 id="a-new-version-must-round-trip-losslessly">A new version must round-trip losslessly<a class="headerlink" href="#a-new-version-must-round-trip-losslessly" title="Permanent link">&para;</a></h3>
-<p><code>v2alpha1</code> is a spoke and <code>v2beta1</code> is the hub/storage version, so every served
-version converts to and from one hub rather than pairwise. If a new version drops
-a field the old one has, the object must still round-trip: <code>RunnerSet</code> conversion
-stashes the dropped <code>acquisitionProtocol</code> and <code>maxListeners</code> in
-<code>conversion.actions-gateway.com/*</code> annotations and restores them on the way back,
-so a coexistence-era object is never silently re-protocol'd. Any such carrier
-needs a round-trip test — see <code>TestRunnerSetConversion_RoundTrip</code> and friends in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/conversion_test.go"><code>api/v2alpha1/conversion_test.go</code></a>.</p>
-<p>Two supporting habits: mark the outgoing version with
-<code>+kubebuilder:deprecatedversion:warning=…</code> naming the replacement <em>and</em> the
-release that removes it, so the apiserver warns at apply time; and keep the two
-version packages byte-identical except for the entitled differences, which
-<code>make v2-api-sync-check</code> enforces.</p>
+<p><code>v2alpha1</code> is a spoke and <code>v2beta1</code> is the hub/storage version, so every served version converts to and from one hub rather than pairwise.
+If a new version drops a field the old one has, the object must still round-trip: <code>RunnerSet</code> conversion stashes the dropped <code>acquisitionProtocol</code> and <code>maxListeners</code> in <code>conversion.actions-gateway.com/*</code> annotations and restores them on the way back, so a coexistence-era object is never silently re-protocol'd.
+Any such carrier needs a round-trip test — see <code>TestRunnerSetConversion_RoundTrip</code> and friends in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/conversion_test.go"><code>api/v2alpha1/conversion_test.go</code></a>.</p>
+<p>Two supporting habits: mark the outgoing version with <code>+kubebuilder:deprecatedversion:warning=…</code> naming the replacement <em>and</em> the release that removes it, so the apiserver warns at apply time; and keep the two version packages byte-identical except for the entitled differences, which <code>make v2-api-sync-check</code> enforces.</p>
 <h2 id="the-pre-release-review">The pre-release review<a class="headerlink" href="#the-pre-release-review" title="Permanent link">&para;</a></h2>
-<p>Run this in <a href="../../operations/release/#1-pre-flight">release pre-flight</a>, before
-tagging any release — including a prerelease that will become a stable line.</p>
+<p>Run this in <a href="../../operations/release/#1-pre-flight">release pre-flight</a>, before tagging any release — including a prerelease that will become a stable line.</p>
 <h3 id="step-1--enumerate-what-is-new">Step 1 — enumerate what is new<a class="headerlink" href="#step-1--enumerate-what-is-new" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
-<p>It diffs the API packages and CRD manifests between the last tag and <code>HEAD</code> and
-prints what changed. Everything it lists is surface this release publishes for
-the first time; everything it does not list has already shipped and is governed
-by the compatibility rules instead.</p>
+<p>It diffs the API packages and CRD manifests between the last tag and <code>HEAD</code> and prints what changed.
+Everything it lists is surface this release publishes for the first time; everything it does not list has already shipped and is governed by the compatibility rules instead.</p>
 <p>Pass an explicit ref to review a different span, e.g. <code>scripts/release/api-surface-since.sh v1.1.0</code>.</p>
-<p>It reports rather than passing or failing on purpose: every question below needs
-a human, and a gate answering them mechanically would be wrong in both
-directions.</p>
+<p>It reports rather than passing or failing on purpose: every question below needs a human, and a gate answering them mechanically would be wrong in both directions.</p>
 <h3 id="step-2--ask-these-of-each-addition">Step 2 — ask these of each addition<a class="headerlink" href="#step-2--ask-these-of-each-addition" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3514,41 +3387,27 @@ directions.</p>
 </tr>
 </tbody>
 </table>
-<p>That last question is what keeps the urgent pile small: only wire-breaking
-changes must beat the tag.</p>
+<p>That last question is what keeps the urgent pile small: only wire-breaking changes must beat the tag.</p>
 <h3 id="step-3--record-the-outcome">Step 3 — record the outcome<a class="headerlink" href="#step-3--record-the-outcome" title="Permanent link">&para;</a></h3>
-<p>Write the verdict into the release's plan doc under <code>docs/plan/</code> (its Definition
-of Done section), naming what was reviewed and what was decided. Record all three
-buckets — reviewed, found-and-fixed, and accepted-without-change — so the next
-release can tell a deliberate choice from an unexamined one. §E of
-<a href="../../plan/release-1.3/">release-1.3.md</a> is the worked example.</p>
-<p><strong>"Ship as-is, deliberately" is a valid outcome</strong> and the most common one. The
-point is that the choice is made rather than defaulted into.</p>
-<p>Anything deferred gets a Queue row with the release's gate label (<code>1.3-gate</code> and
-friends) so it cannot be frozen by the tag while nobody is looking. Allocate the
-ID with <code>make queue-id TITLE="…"</code>; format per
-<a href="../maintaining-backlog/">maintaining-backlog.md</a>.</p>
+<p>Write the verdict into the release's plan doc under <code>docs/plan/</code> (its Definition of Done section), naming what was reviewed and what was decided.
+Record all three buckets — reviewed, found-and-fixed, and accepted-without-change — so the next release can tell a deliberate choice from an unexamined one. §E of <a href="../../plan/release-1.3/">release-1.3.md</a> is the worked example.</p>
+<p><strong>"Ship as-is, deliberately" is a valid outcome</strong> and the most common one.
+The point is that the choice is made rather than defaulted into.</p>
+<p>Anything deferred gets a Queue row with the release's gate label (<code>1.3-gate</code> and friends) so it cannot be frozen by the tag while nobody is looking.
+Allocate the ID with <code>make queue-id TITLE="…"</code>; format per <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</p>
 <h3 id="scope-discipline">Scope discipline<a class="headerlink" href="#scope-discipline" title="Permanent link">&para;</a></h3>
-<p>This reviews <em>newly published</em> surface, not the whole API. Older fields have had
-real soak and operator contact that this release's additions have not.
-Re-litigating them here makes the gate expensive, and an expensive gate gets
-skipped.</p>
+<p>This reviews <em>newly published</em> surface, not the whole API.
+Older fields have had real soak and operator contact that this release's additions have not.
+Re-litigating them here makes the gate expensive, and an expensive gate gets skipped.</p>
 <h2 id="further-reading">Further reading<a class="headerlink" href="#further-reading" title="Permanent link">&para;</a></h2>
-<p>Upstream sources these rules follow, worth reading directly when a case is not
-covered above:</p>
+<p>Upstream sources these rules follow, worth reading directly when a case is not covered above:</p>
 <ul>
-<li><a href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md">Kubernetes API conventions</a>
-  — naming, units, optional/required, conditions, unions, object references.</li>
-<li><a href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api_changes.md">Changing the API</a>
-  — what is and is not a compatible change, and the alpha/beta/GA bar.</li>
-<li><a href="https://kubernetes.io/docs/reference/using-api/deprecation-policy/">Kubernetes deprecation policy</a>
-  — support windows and the rule that removal requires a version increment.</li>
-<li><a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/4008-crd-ratcheting">KEP-4008: CRD validation ratcheting</a>
-  — what ratcheting does and does not suppress.</li>
-<li><a href="https://github.com/openshift/enhancements/blob/master/dev-guide/api-conventions.md">OpenShift API conventions</a>
-  — a stricter, CRD-specific take on pointers, unions, and where to default.</li>
-<li><a href="https://book.kubebuilder.io/reference/markers/crd-processing.html">Kubebuilder CRD processing markers</a>
-  — the marker reference behind the generated schema.</li>
+<li><a href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md">Kubernetes API conventions</a> — naming, units, optional/required, conditions, unions, object references.</li>
+<li><a href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api_changes.md">Changing the API</a> — what is and is not a compatible change, and the alpha/beta/GA bar.</li>
+<li><a href="https://kubernetes.io/docs/reference/using-api/deprecation-policy/">Kubernetes deprecation policy</a> — support windows and the rule that removal requires a version increment.</li>
+<li><a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/4008-crd-ratcheting">KEP-4008: CRD validation ratcheting</a> — what ratcheting does and does not suppress.</li>
+<li><a href="https://github.com/openshift/enhancements/blob/master/dev-guide/api-conventions.md">OpenShift API conventions</a> — a stricter, CRD-specific take on pointers, unions, and where to default.</li>
+<li><a href="https://book.kubebuilder.io/reference/markers/crd-processing.html">Kubebuilder CRD processing markers</a> — the marker reference behind the generated schema.</li>
 </ul>
 
 

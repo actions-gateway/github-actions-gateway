@@ -2726,48 +2726,31 @@
 
 
 <h1 id="q444--priorityclass-vap-cannot-resolve-its-params">Q444 — PriorityClass VAP cannot resolve its params<a class="headerlink" href="#q444--priorityclass-vap-cannot-resolve-its-params" title="Permanent link">&para;</a></h1>
-<p><strong>Status: mechanism ESTABLISHED; product exposure CLOSED (Q492).</strong> The trigger,
-the code path and the two observable failure modes are all reproduced
-deterministically. The defect is a kube-apiserver bug and is still unfixed
-upstream, but the product no longer sits on it: the PriorityClass guard's
-<code>paramKind</code> moved from a <code>ConfigMap</code> to the cluster-scoped <code>PriorityClassAllowlist</code>
-CRD, which measurement shows is structurally immune (see
-<a href="#where-this-goes-next">Where this goes next</a>).</p>
-<p>Symptom: every <code>runnergroups</code> / <code>runnersets</code> / <code>runnertemplates</code> write is denied
-with</p>
+<p><strong>Status: mechanism ESTABLISHED; product exposure CLOSED (Q492).</strong> The trigger, the code path and the two observable failure modes are all reproduced deterministically.
+The defect is a kube-apiserver bug and is still unfixed upstream, but the product no longer sits on it: the PriorityClass guard's <code>paramKind</code> moved from a <code>ConfigMap</code> to the cluster-scoped <code>PriorityClassAllowlist</code> CRD, which measurement shows is structurally immune (see <a href="#where-this-goes-next">Where this goes next</a>).</p>
+<p>Symptom: every <code>runnergroups</code> / <code>runnersets</code> / <code>runnertemplates</code> write is denied with</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ValidatingAdmissionPolicy &#39;gmc-priorityclass-allowlist-guard&#39; with binding
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>&#39;gmc-priorityclass-allowlist-guard-binding&#39; denied request: failed to configure
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>binding: no params found for policy binding with `Deny` parameterNotFoundAction
 </code></pre></div>
-<p>while the param ConfigMap sits at exactly the name and namespace the binding
-references. Because <code>parameterNotFoundAction: Deny</code> resolves params <em>before</em> any
-per-object matching, this denies <strong>every</strong> matched write, class-naming or not —
-a total outage of the product's CRs, cluster-wide.</p>
-<p>Observed on Kubernetes 1.35.5 and 1.36.1. Prior sighting:
-<a href="../q414-dind-tenant-fixture/"><code>q414-dind-tenant-fixture.md</code></a>
-§ Local-loop notes.</p>
+<p>while the param ConfigMap sits at exactly the name and namespace the binding references.
+Because <code>parameterNotFoundAction: Deny</code> resolves params <em>before</em> any per-object matching, this denies <strong>every</strong> matched write, class-naming or not — a total outage of the product's CRs, cluster-wide.</p>
+<p>Observed on Kubernetes 1.35.5 and 1.36.1.
+Prior sighting: <a href="../q414-dind-tenant-fixture/"><code>q414-dind-tenant-fixture.md</code></a> § Local-loop notes.</p>
 <h2 id="the-trigger">The trigger<a class="headerlink" href="#the-trigger" title="Permanent link">&para;</a></h2>
-<p><strong>The param informer for a <code>paramKind</code> dies permanently, in that
-kube-apiserver process, the moment the set of <em>bindings</em> whose policy names that
-<code>paramKind</code> becomes empty for at least one policy-refresh tick (default 1s).</strong></p>
-<p>For us that set has exactly one member, so <code>helm uninstall</code> — which deletes the
-binding — is the trigger. <code>helm upgrade</code> never empties the set and is safe.</p>
+<p><strong>The param informer for a <code>paramKind</code> dies permanently, in that kube-apiserver process, the moment the set of <em>bindings</em> whose policy names that <code>paramKind</code> becomes empty for at least one policy-refresh tick (default 1s).</strong></p>
+<p>For us that set has exactly one member, so <code>helm uninstall</code> — which deletes the binding — is the trigger. <code>helm upgrade</code> never empties the set and is safe.</p>
 <p>Two consequences follow, and they explain everything previously observed:</p>
 <ul>
-<li>The informer is keyed by <code>paramKind</code> <strong>GVK</strong>, shared by every policy naming it,
-  so one policy losing its binding is enough to kill the informer for all of them.</li>
-<li>A policy with <strong>no binding contributes nothing</strong>. Retaining the policy across
-  the uninstall — the reverted fix <code>07061175</code> — could never have worked; the
-  binding is what holds the GVK alive.</li>
+<li>The informer is keyed by <code>paramKind</code> <strong>GVK</strong>, shared by every policy naming it, so one policy losing its binding is enough to kill the informer for all of them.</li>
+<li>A policy with <strong>no binding contributes nothing</strong>.
+  Retaining the policy across the uninstall — the reverted fix <code>07061175</code> — could never have worked; the binding is what holds the GVK alive.</li>
 </ul>
 <h2 id="the-mechanism">The mechanism<a class="headerlink" href="#the-mechanism" title="Permanent link">&para;</a></h2>
-<p>From <code>kube-apiserver</code> v1.36.1,
-<code>staging/src/k8s.io/apiserver/pkg/admission/plugin/policy/generic/policy_source.go</code>:</p>
+<p>From <code>kube-apiserver</code> v1.36.1, <code>staging/src/k8s.io/apiserver/pkg/admission/plugin/policy/generic/policy_source.go</code>:</p>
 <ol>
-<li><code>calculatePolicyData</code> builds <code>usedParams</code> by iterating <code>policiesToBindings</code> —
-   bindings, not policies.</li>
-<li>Any <code>paramKind</code> missing from <code>usedParams</code> has <code>info.cancelFunc()</code> called on it
-   and is dropped from <code>paramsCRDControllers</code> (keyed by GVK).</li>
+<li><code>calculatePolicyData</code> builds <code>usedParams</code> by iterating <code>policiesToBindings</code> — bindings, not policies.</li>
+<li>Any <code>paramKind</code> missing from <code>usedParams</code> has <code>info.cancelFunc()</code> called on it and is dropped from <code>paramsCRDControllers</code> (keyed by GVK).</li>
 <li><code>ensureParamsForPolicyLocked</code> takes two different paths:</li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">if</span><span class="w"> </span><span class="nx">genericInformer</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">s</span><span class="p">.</span><span class="nx">informerFactory</span><span class="p">.</span><span class="nx">ForResource</span><span class="p">(</span><span class="nx">mapping</span><span class="p">.</span><span class="nx">Resource</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
@@ -2778,19 +2761,14 @@ binding — is the trigger. <code>helm upgrade</code> never empties the set and 
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="k">go</span><span class="w"> </span><span class="nx">informer</span><span class="p">.</span><span class="nx">Informer</span><span class="p">().</span><span class="nx">Run</span><span class="p">(</span><span class="nx">instanceContext</span><span class="p">.</span><span class="nx">Done</span><span class="p">())</span><span class="w"> </span><span class="c1">// CRDs: a FRESH informer</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">}</span>
 </code></pre></div>
-<p><code>ConfigMap</code> is a core type, so it takes the first path — and that path starts a
-<strong>shared</strong> informer with a <strong>per-instance</strong> context. <code>sharedInformerFactory</code>
-records <code>startedInformers[type] = true</code> and never clears it, so once
-<code>cancelFunc</code> fires:</p>
+<p><code>ConfigMap</code> is a core type, so it takes the first path — and that path starts a <strong>shared</strong> informer with a <strong>per-instance</strong> context. <code>sharedInformerFactory</code> records <code>startedInformers[type] = true</code> and never clears it, so once <code>cancelFunc</code> fires:</p>
 <ul>
-<li>the informer's <code>Run</code> returns and it is never restarted — <code>Start()</code> skips it
-  forever;</li>
+<li>the informer's <code>Run</code> returns and it is never restarted — <code>Start()</code> skips it forever;</li>
 <li>its store is <strong>frozen</strong>, not cleared, at whatever it last held;</li>
-<li>the source still logs <code>informer started for /v1, Kind=ConfigMap</code> on every
-  subsequent re-add, because it believes <code>ForResource</code> handed it a live informer.</li>
+<li>the source still logs <code>informer started for /v1, Kind=ConfigMap</code> on every subsequent re-add, because it believes <code>ForResource</code> handed it a live informer.</li>
 </ul>
-<p>Only a process restart rebuilds the factory. That is why a restart is the
-recovery and why no object change helps.</p>
+<p>Only a process restart rebuilds the factory.
+That is why a restart is the recovery and why no object change helps.</p>
 <h3 id="two-failure-modes-decided-by-a-race">Two failure modes, decided by a race<a class="headerlink" href="#two-failure-modes-decided-by-a-race" title="Permanent link">&para;</a></h3>
 <p>Whether the frozen store still holds the param decides which symptom you see.
 The race is between the ConfigMap's delete event and the ≤1s refresh tick:</p>
@@ -2812,15 +2790,11 @@ The race is between the ConfigMap's delete event and the ≤1s refresh tick:</p>
 </tr>
 </tbody>
 </table>
-<p>A fresh install after the break lands in the second row: a newly created
-ConfigMap is invisible to a stopped informer. This is also why the defect "does
-not fire on every run" — a clean pass may just be the first row.</p>
-<p>The first row is the more alarming one: it fails <em>open</em> and silently, enforcing a
-stale allowlist with no error anywhere.</p>
+<p>A fresh install after the break lands in the second row: a newly created ConfigMap is invisible to a stopped informer.
+This is also why the defect "does not fire on every run" — a clean pass may just be the first row.</p>
+<p>The first row is the more alarming one: it fails <em>open</em> and silently, enforcing a stale allowlist with no error anywhere.</p>
 <h2 id="measurements">Measurements<a class="headerlink" href="#measurements" title="Permanent link">&para;</a></h2>
-<p>Run on a single-node kind cluster at v1.35.5 via
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>,
-all on one apiserver process, in order:</p>
+<p>Run on a single-node kind cluster at v1.35.5 via <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>, all on one apiserver process, in order:</p>
 <table>
 <thead>
 <tr>
@@ -2867,19 +2841,13 @@ all on one apiserver process, in order:</p>
 </tr>
 </tbody>
 </table>
-<p>Arm 1 passing and arm 2 failing on the same apiserver isolates the cause to the
-empty-set transition: object churn, gap length and Helm are all held constant
-between them.</p>
+<p>Arm 1 passing and arm 2 failing on the same apiserver isolates the cause to the empty-set transition: object churn, gap length and Helm are all held constant between them.</p>
 <p>Measurement 4 is the direct proof that the store is frozen rather than emptied.
-Measurement 6 is the direct proof that the fault is per-GVK and specific to the
-shared-factory path — the CRD path allocates a fresh informer per context and is
-immune.</p>
+Measurement 6 is the direct proof that the fault is per-GVK and specific to the shared-factory path — the CRD path allocates a fresh informer per context and is immune.</p>
 <h3 id="arm-3--the-crd-paramkind-under-the-same-transition-q492">Arm 3 — the CRD <code>paramKind</code> under the same transition (Q492)<a class="headerlink" href="#arm-3--the-crd-paramkind-under-the-same-transition-q492" title="Permanent link">&para;</a></h3>
-<p>Measurement 6 showed a CRD <code>paramKind</code> <em>resolving on an already-broken
-apiserver</em>. That is necessary but not sufficient for the fix: it never subjected a
-CRD <code>paramKind</code> to its own empty-binding-set transition. Arm 3 does, on
-Kubernetes <strong>1.36.1</strong>, ordered <strong>before</strong> arm 2 so no pass can be attributed to
-contamination:</p>
+<p>Measurement 6 showed a CRD <code>paramKind</code> <em>resolving on an already-broken apiserver</em>.
+That is necessary but not sufficient for the fix: it never subjected a CRD <code>paramKind</code> to its own empty-binding-set transition.
+Arm 3 does, on Kubernetes <strong>1.36.1</strong>, ordered <strong>before</strong> arm 2 so no pass can be attributed to contamination:</p>
 <table>
 <thead>
 <tr>
@@ -2910,148 +2878,82 @@ contamination:</p>
 </tr>
 </tbody>
 </table>
-<p>Arm 3 and arm 2 run the byte-identical transition one GVK apart, on one apiserver
-process. That contrast — not the source read — is what makes "move the <code>paramKind</code>
-to a CRD" a fix rather than an inference.</p>
-<p>Note <code>kubectl delete pod -n kube-system kube-apiserver-…</code> <strong>does not restart the
-apiserver</strong> — it recreates the static pod's <em>mirror object</em> while the container
-keeps running (<code>restartCount</code> stays 0). Use <code>crictl stop</code> and confirm via the
-container's <code>createdAt</code>. A conclusion was drawn from that non-restart earlier in
-this investigation and had to be withdrawn.</p>
+<p>Arm 3 and arm 2 run the byte-identical transition one GVK apart, on one apiserver process.
+That contrast — not the source read — is what makes "move the <code>paramKind</code> to a CRD" a fix rather than an inference.</p>
+<p>Note <code>kubectl delete pod -n kube-system kube-apiserver-…</code> <strong>does not restart the apiserver</strong> — it recreates the static pod's <em>mirror object</em> while the container keeps running (<code>restartCount</code> stays 0).
+Use <code>crictl stop</code> and confirm via the container's <code>createdAt</code>.
+A conclusion was drawn from that non-restart earlier in this investigation and had to be withdrawn.</p>
 <h2 id="ruled-out">Ruled out<a class="headerlink" href="#ruled-out" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Retaining the paramKind-bearing policy across the uninstall.</strong> Shipped as
-  <code>07061175</code>, reverted in <code>70b4b351</code>. Now explained: <code>usedParams</code> is built from
-  bindings, so a policy without one is invisible to it.</li>
+<li><strong>Retaining the paramKind-bearing policy across the uninstall.</strong> Shipped as <code>07061175</code>, reverted in <code>70b4b351</code>.
+  Now explained: <code>usedParams</code> is built from bindings, so a policy without one is invisible to it.</li>
 <li><strong>CNI.</strong> CI reproduced it on both kindnet and calico lanes.</li>
-<li><strong>Object churn rate, cluster ConfigMap count, cluster load.</strong> Arm 1 holds all
-  of these constant against arm 2 and does not break.</li>
-<li><strong>Helm.</strong> Helm is not involved in param resolution; it only performs the
-  delete that empties the binding set. The same break reproduces with plain
-  <code>kubectl</code>.</li>
+<li><strong>Object churn rate, cluster ConfigMap count, cluster load.</strong> Arm 1 holds all of these constant against arm 2 and does not break.</li>
+<li><strong>Helm.</strong> Helm is not involved in param resolution; it only performs the delete that empties the binding set.
+  The same break reproduces with plain <code>kubectl</code>.</li>
 </ul>
-<p>The four scenarios tested earlier all reported "recovers" because each either
-kept the binding set non-empty or left the param in the frozen store — the
-second row of the table above, mistaken for health.</p>
+<p>The four scenarios tested earlier all reported "recovers" because each either kept the binding set non-empty or left the param in the frozen store — the second row of the table above, mistaken for health.</p>
 <h2 id="upstream">Upstream<a class="headerlink" href="#upstream" title="Permanent link">&para;</a></h2>
-<p>Filed at
-<a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>,
-open since 2025-03. Our mechanism write-up is
-<a href="https://github.com/kubernetes/kubernetes/issues/130887#issuecomment-5111110494">posted there</a>.</p>
-<p>The bug is <code>informerFactory.Start(instanceContext.Done())</code>: a shared factory must
-not be started with a caller-scoped context, because <code>startedInformers</code> makes
-that first context permanent for the process.</p>
-<p><strong>Fix proposed upstream:</strong>
-<a href="https://github.com/kubernetes/kubernetes/pull/141015">kubernetes/kubernetes#141015</a>
-— start the shared factory with the policy source's own context, and make that
-branch's <code>cancelFunc</code> an explicit no-op, since a <code>SharedInformerFactory</code> can
-neither stop an individual informer nor restart one it has already started. Its
-regression test fails on master with two <code>informer started</code> log lines while
-resolution stays broken: the source logs a start the factory silently refuses to
-perform. The alternative offered there is to drop the shared-factory fast path
-entirely and always use a dynamic informer — uniform and genuinely stoppable, at
-the cost of losing informer sharing for the common ConfigMap case.</p>
-<p><strong>Q492 did not wait for it.</strong> As of 2026-07-28 that PR is unreviewed and
-untriaged, v1.37 is in code freeze, and it would still need a cherry-pick to
-reach a version anyone runs — so the fix that shipped is ours, not upstream's, and
-does not depend on this landing. See
-<a href="#still-open-upstream">Still open upstream</a>.</p>
-<p>Related but <strong>not</strong> the same bug:
-<a href="https://github.com/kubernetes/kubernetes/issues/122658">#122658</a> /
-<a href="https://github.com/kubernetes/kubernetes/pull/123003">PR #123003</a> — there a CRD
-<code>paramKind</code> fails because discovery has not caught up and an apiserver restart
-<em>causes</em> it; the fix merged for v1.30 in Jan 2024. Ours is a core type that is
-always discoverable, and a restart <em>fixes</em> it.</p>
+<p>Filed at <a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>, open since 2025-03.
+Our mechanism write-up is <a href="https://github.com/kubernetes/kubernetes/issues/130887#issuecomment-5111110494">posted there</a>.</p>
+<p>The bug is <code>informerFactory.Start(instanceContext.Done())</code>: a shared factory must not be started with a caller-scoped context, because <code>startedInformers</code> makes that first context permanent for the process.</p>
+<p><strong>Fix proposed upstream:</strong> <a href="https://github.com/kubernetes/kubernetes/pull/141015">kubernetes/kubernetes#141015</a> — start the shared factory with the policy source's own context, and make that branch's <code>cancelFunc</code> an explicit no-op, since a <code>SharedInformerFactory</code> can neither stop an individual informer nor restart one it has already started.
+Its regression test fails on master with two <code>informer started</code> log lines while resolution stays broken: the source logs a start the factory silently refuses to perform.
+The alternative offered there is to drop the shared-factory fast path entirely and always use a dynamic informer — uniform and genuinely stoppable, at the cost of losing informer sharing for the common ConfigMap case.</p>
+<p><strong>Q492 did not wait for it.</strong> As of 2026-07-28 that PR is unreviewed and untriaged, v1.37 is in code freeze, and it would still need a cherry-pick to reach a version anyone runs — so the fix that shipped is ours, not upstream's, and does not depend on this landing.
+See <a href="#still-open-upstream">Still open upstream</a>.</p>
+<p>Related but <strong>not</strong> the same bug: <a href="https://github.com/kubernetes/kubernetes/issues/122658">#122658</a> / <a href="https://github.com/kubernetes/kubernetes/pull/123003">PR #123003</a> — there a CRD <code>paramKind</code> fails because discovery has not caught up and an apiserver restart <em>causes</em> it; the fix merged for v1.30 in Jan 2024.
+Ours is a core type that is always discoverable, and a restart <em>fixes</em> it.</p>
 <h2 id="reproducing">Reproducing<a class="headerlink" href="#reproducing" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>
-  — the deterministic three-arm reproducer above. Self-contained (its own CRDs,
-  namespace and policies), no chart required. <strong>Run it only against a disposable
-  cluster</strong>: arm 2 permanently breaks ConfigMap param resolution for that
-  apiserver process. Not wired into CI — it deliberately destroys the cluster it
-  runs on, and it pins an <em>upstream</em> defect that our own code no longer depends
-  on. It is the evidence for the fix, re-runnable by hand on a new Kubernetes
-  minor to confirm arm 3 still holds.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-reinstall-check.sh"><code>scripts/e2e/chart-reinstall-check.sh</code></a>
-  (<code>make chart-reinstall-check</code>) — the product-level check, driving a real
-  uninstall/reinstall against an installed release. <strong>Wired into CI as of Q492</strong>,
-  now that the cycle it exercises is expected to pass.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a> — the deterministic three-arm reproducer above.
+  Self-contained (its own CRDs, namespace and policies), no chart required. <strong>Run it only against a disposable cluster</strong>: arm 2 permanently breaks ConfigMap param resolution for that apiserver process.
+  Not wired into CI — it deliberately destroys the cluster it runs on, and it pins an <em>upstream</em> defect that our own code no longer depends on.
+  It is the evidence for the fix, re-runnable by hand on a new Kubernetes minor to confirm arm 3 still holds.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-reinstall-check.sh"><code>scripts/e2e/chart-reinstall-check.sh</code></a> (<code>make chart-reinstall-check</code>) — the product-level check, driving a real uninstall/reinstall against an installed release. <strong>Wired into CI as of Q492</strong>, now that the cycle it exercises is expected to pass.</li>
 </ul>
 <h2 id="operator-impact">Operator impact<a class="headerlink" href="#operator-impact" title="Permanent link">&para;</a></h2>
-<p><strong>On releases from Q492 onward: none.</strong> The guard's <code>paramKind</code> is a CRD, so the
-binding-set transition is survivable and no apiserver restart is ever needed. Our
-GKE dogfood — which could not restart its apiserver — is no longer exposed.</p>
-<p><strong>On pre-Q492 releases</strong>, recovery is a kube-apiserver restart, which is <strong>not
-available on a managed control plane</strong> (GKE/EKS/AKS). Blast radius, symptoms and
-recovery for that case remain documented in
-<a href="../../../operations/troubleshooting/"><code>../operations/troubleshooting.md</code></a>; the
-migration off it is
-<a href="../../../operations/upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md § PriorityClass allowlist: ConfigMap to CR</a>.</p>
-<p><strong>The release notes need three upgrade caveats</strong>, all on the curated-notes path in
-<a href="../../../operations/release/"><code>../operations/release.md</code></a>, each linking the
-upgrade.md section above:</p>
+<p><strong>On releases from Q492 onward: none.</strong> The guard's <code>paramKind</code> is a CRD, so the binding-set transition is survivable and no apiserver restart is ever needed.
+Our GKE dogfood — which could not restart its apiserver — is no longer exposed.</p>
+<p><strong>On pre-Q492 releases</strong>, recovery is a kube-apiserver restart, which is <strong>not available on a managed control plane</strong> (GKE/EKS/AKS).
+Blast radius, symptoms and recovery for that case remain documented in <a href="../../../operations/troubleshooting/"><code>../operations/troubleshooting.md</code></a>; the migration off it is <a href="../../../operations/upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md § PriorityClass allowlist: ConfigMap to CR</a>.</p>
+<p><strong>The release notes need three upgrade caveats</strong>, all on the curated-notes path in <a href="../../../operations/release/"><code>../operations/release.md</code></a>, each linking the upgrade.md section above:</p>
 <ol>
-<li>A <strong>new pre-upgrade step for everyone</strong> — <code>helm show crds &lt;chart&gt; | kubectl
-   apply -f -</code>. Helm never installs the chart-root <code>crds/</code> dir on upgrade, so
-   unattended pipelines fail on the first upgrade across this change until they
-   add it.</li>
-<li>The <strong>breaking values change</strong>: <code>priorityClassAllowlist.configMapName</code> is
-   removed and a release that sets it fails the Helm render.</li>
-<li><strong>Rollback past this release is not safe on a running cluster.</strong> Measured: the
-   rollback recreates a ConfigMap-<code>paramKind</code> binding whose informer this very
-   upgrade killed, so it re-arms the Q444 outage and does not self-clear. Roll
-   forward, or upgrade down with <code>admissionPolicy.enabled=false</code>. This is the
-   caveat most likely to be discovered the hard way, because <code>helm rollback</code>
-   reports success.</li>
+<li>A <strong>new pre-upgrade step for everyone</strong> — <code>helm show crds &lt;chart&gt; | kubectl apply -f -</code>.
+   Helm never installs the chart-root <code>crds/</code> dir on upgrade, so unattended pipelines fail on the first upgrade across this change until they add it.</li>
+<li>The <strong>breaking values change</strong>: <code>priorityClassAllowlist.configMapName</code> is removed and a release that sets it fails the Helm render.</li>
+<li><strong>Rollback past this release is not safe on a running cluster.</strong> Measured: the rollback recreates a ConfigMap-<code>paramKind</code> binding whose informer this very upgrade killed, so it re-arms the Q444 outage and does not self-clear.
+   Roll forward, or upgrade down with <code>admissionPolicy.enabled=false</code>.
+   This is the caveat most likely to be discovered the hard way, because <code>helm rollback</code> reports success.</li>
 </ol>
 <h2 id="where-this-goes-next">Where this goes next<a class="headerlink" href="#where-this-goes-next" title="Permanent link">&para;</a></h2>
-<p>Q444 as scoped ("find what triggers it") is answered, and <strong>Q492 shipped the fix</strong>:
-option 1 below, the <code>paramKind</code> moved off a core type.</p>
+<p>Q444 as scoped ("find what triggers it") is answered, and <strong>Q492 shipped the fix</strong>: option 1 below, the <code>paramKind</code> moved off a core type.</p>
 <p>Two candidates were on the table, both entirely in our control:</p>
 <ol>
-<li><strong>Move the <code>paramKind</code> off a core type</strong> to a small CRD. Measurement 6 showed
-   the CRD path is structurally immune, because it allocates a fresh informer per
-   context; <a href="#arm-3--the-crd-paramkind-under-the-same-transition-q492">arm 3</a>
-   then confirmed it survives the actual failing transition. Cost: a CRD, its
-   RBAC, and a migration for the existing ConfigMap. <strong>This is what shipped.</strong></li>
-<li><strong>Keep the binding alive across <code>helm uninstall</code></strong> with
-   <code>helm.sh/resource-policy: keep</code> on the VAPB and its param ConfigMap, so the
-   binding set never empties. Much cheaper — but it collides with an existing
-   invariant: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/manifest-validate.sh"><code>scripts/manifest/manifest-validate.sh</code></a>
-   asserts that <strong>no VAPB carries <code>helm.sh/resource-policy: keep</code></strong>, because a
-   retained binding leaves the guard enforcing after the release is gone and makes
-   <code>admissionPolicy.enabled=false</code> a silent no-op. That reason still holds and is
-   worse than the defect it would paper over. It also only defends the Helm path;
-   anything else that deletes the binding still breaks the cluster. <strong>Rejected</strong>;
-   the invariant it would have overturned is still enforced.</li>
+<li><strong>Move the <code>paramKind</code> off a core type</strong> to a small CRD.
+   Measurement 6 showed the CRD path is structurally immune, because it allocates a fresh informer per context; <a href="#arm-3--the-crd-paramkind-under-the-same-transition-q492">arm 3</a> then confirmed it survives the actual failing transition.
+   Cost: a CRD, its RBAC, and a migration for the existing ConfigMap. <strong>This is what shipped.</strong></li>
+<li><strong>Keep the binding alive across <code>helm uninstall</code></strong> with <code>helm.sh/resource-policy: keep</code> on the VAPB and its param ConfigMap, so the binding set never empties.
+   Much cheaper — but it collides with an existing invariant: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/manifest-validate.sh"><code>scripts/manifest/manifest-validate.sh</code></a> asserts that <strong>no VAPB carries <code>helm.sh/resource-policy: keep</code></strong>, because a retained binding leaves the guard enforcing after the release is gone and makes <code>admissionPolicy.enabled=false</code> a silent no-op.
+   That reason still holds and is worse than the defect it would paper over.
+   It also only defends the Helm path; anything else that deletes the binding still breaks the cluster. <strong>Rejected</strong>; the invariant it would have overturned is still enforced.</li>
 </ol>
-<p>Note the historical irony: retaining the <em>policy</em> was tried and reverted
-(<code>07061175</code> / <code>70b4b351</code>), and the binding — the one object that would have
-worked — is precisely the one we forbid retaining.</p>
+<p>Note the historical irony: retaining the <em>policy</em> was tried and reverted (<code>07061175</code> / <code>70b4b351</code>), and the binding — the one object that would have worked — is precisely the one we forbid retaining.</p>
 <h3 id="what-shipped-in-q492">What shipped in Q492<a class="headerlink" href="#what-shipped-in-q492" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>PriorityClassAllowlist</code>, a cluster-scoped CRD in <code>api/v2beta1</code>, is the guard's
-  <code>paramKind</code> <strong>and</strong> the object the GMC watches for restart-free allowlist
-  additions (Q188). One object, two consumers, so the webhook and the policy
-  cannot drift — which also retires the superset discipline the admin-owned
-  ConfigMap needed.</li>
-<li><code>priorityClassAllowlist.configMapName</code> is removed; setting it fails the Helm
-  render with migration instructions rather than silently narrowing a security
-  allowlist.</li>
-<li>Its CRD ships in the chart-root <code>crds/</code> dir — the only one that does. Helm
-  resolves REST mappings for the whole manifest before applying any of it, so a CR
-  whose CRD is a template in the same release fails the install outright. The cost
-  is that <code>helm upgrade</code> does not carry schema changes to that CRD.</li>
+<li><code>PriorityClassAllowlist</code>, a cluster-scoped CRD in <code>api/v2beta1</code>, is the guard's <code>paramKind</code> <strong>and</strong> the object the GMC watches for restart-free allowlist additions (Q188).
+  One object, two consumers, so the webhook and the policy cannot drift — which also retires the superset discipline the admin-owned ConfigMap needed.</li>
+<li><code>priorityClassAllowlist.configMapName</code> is removed; setting it fails the Helm render with migration instructions rather than silently narrowing a security allowlist.</li>
+<li>Its CRD ships in the chart-root <code>crds/</code> dir — the only one that does.
+  Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install outright.
+  The cost is that <code>helm upgrade</code> does not carry schema changes to that CRD.</li>
 <li><code>scripts/e2e/chart-reinstall-check.sh</code> is now a CI gate.</li>
 </ul>
 <h3 id="still-open-upstream">Still open upstream<a class="headerlink" href="#still-open-upstream" title="Permanent link">&para;</a></h3>
 <p>The apiserver bug itself is unfixed.
-<a href="https://github.com/kubernetes/kubernetes/pull/141015">kubernetes/kubernetes#141015</a>
-remains unreviewed and untriaged, v1.37 is in code freeze, and it would still need
-a cherry-pick to reach a version anyone runs. Nothing about our fix depends on it
-landing — a CRD <code>paramKind</code> is immune either way — so this is now a "watch, don't
-block" item. Anyone adding a <strong>new</strong> VAP to this repo should still take the rule
-from it: <strong>never use a core type as a <code>paramKind</code>.</strong></p>
+<a href="https://github.com/kubernetes/kubernetes/pull/141015">kubernetes/kubernetes#141015</a> remains unreviewed and untriaged, v1.37 is in code freeze, and it would still need a cherry-pick to reach a version anyone runs.
+Nothing about our fix depends on it landing — a CRD <code>paramKind</code> is immune either way — so this is now a "watch, don't block" item.
+Anyone adding a <strong>new</strong> VAP to this repo should still take the rule from it: <strong>never use a core type as a <code>paramKind</code>.</strong></p>
 
 
 

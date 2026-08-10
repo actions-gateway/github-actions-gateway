@@ -2737,66 +2737,41 @@
 
 
 <h1 id="q583--an-agc-restart-replays-the-queue-and-provisions-workers-for-jobs-long-gone">Q583 — An AGC restart replays the queue and provisions workers for jobs long gone<a class="headerlink" href="#q583--an-agc-restart-replays-the-queue-and-provisions-workers-for-jobs-long-gone" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> done 2026-08-01. Measured, then fixed: the replay is real,
-<code>DeleteMessage</code> works, deleting prunes the queue, and the listener now issues the
-delete half of its ack once every job in a message has concluded. The rc.4
-dogfood gate was never needed. The residual — unpruned process-scoped guard sets
-— was filed as Q597 and closed 2026-08-03; see
-<a href="#what-shipped">What shipped</a>.</p>
-<p>Q583 was filed with an instruction to measure at the rc.4
-gate before building, because the row's mechanism was asserted rather than
-observed. That instruction is discharged here: the measurement was already in
-the repo, twice, and the residual unknown is about the <strong>fix</strong>, not the defect.</p>
+<p><strong>Status:</strong> done 2026-08-01.
+Measured, then fixed: the replay is real, <code>DeleteMessage</code> works, deleting prunes the queue, and the listener now issues the delete half of its ack once every job in a message has concluded.
+The rc.4 dogfood gate was never needed.
+The residual — unpruned process-scoped guard sets — was filed as Q597 and closed 2026-08-03; see <a href="#what-shipped">What shipped</a>.</p>
+<p>Q583 was filed with an instruction to measure at the rc.4 gate before building, because the row's mechanism was asserted rather than observed.
+That instruction is discharged here: the measurement was already in the repo, twice, and the residual unknown is about the <strong>fix</strong>, not the defect.</p>
 <h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
-<p>The scale-set listener acks by advancing a cursor and nothing else. <code>advanceCursor</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>) moves an
-in-memory <code>lastMessageID</code>; no code path in <code>scalesetlistener</code> calls
-<code>Client.DeleteMessage</code>. The queue log is scale-set-scoped, so it outlives both the
-session and the process, and a new session polls from cursor 0.</p>
-<p>What makes the replay harmful rather than merely redundant is that the guards
-against it are process-scoped maps — <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code>
-(the last one Q553's give-up guard). A restarted AGC has all three empty, so a
-replayed <code>JobAssigned</code> for a job that concluded days ago passes every check and
-provisions a worker.</p>
-<p>The listener's own comment states this consequence outright; what it does not say
-is that <strong>nothing ever prunes the queue</strong>. The replay is therefore not bounded to
-a recent window — it is every message the scale set still retains.</p>
+<p>The scale-set listener acks by advancing a cursor and nothing else. <code>advanceCursor</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>) moves an in-memory <code>lastMessageID</code>; no code path in <code>scalesetlistener</code> calls <code>Client.DeleteMessage</code>.
+The queue log is scale-set-scoped, so it outlives both the session and the process, and a new session polls from cursor 0.</p>
+<p>What makes the replay harmful rather than merely redundant is that the guards against it are process-scoped maps — <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> (the last one Q553's give-up guard).
+A restarted AGC has all three empty, so a replayed <code>JobAssigned</code> for a job that concluded days ago passes every check and provisions a worker.</p>
+<p>The listener's own comment states this consequence outright; what it does not say is that <strong>nothing ever prunes the queue</strong>.
+The replay is therefore not bounded to a recent window — it is every message the scale set still retains.</p>
 <h2 id="what-was-already-measured">What was already measured<a class="headerlink" href="#what-was-already-measured" title="Permanent link">&para;</a></h2>
 <h3 id="the-backend-half--live-on-dogfood-2026-07-05">The backend half — live on dogfood, 2026-07-05<a class="headerlink" href="#the-backend-half--live-on-dogfood-2026-07-05" title="Permanent link">&para;</a></h3>
-<p><a href="../gke-dogfood-turnup-findings/">gke-dogfood-turnup-findings.md</a>: during
-the Q264 P4 clean-green re-run, reconnecting a rebuilt AGC to the first pass's
-scale set <code>gag-scaleset2</code> (scaleSetID 4) replayed that pass's <code>JobAssigned</code>
-messages, "which briefly provisioned 7 pre-Q269 workers". The re-run moved to a
-fresh scale-set label — a new scale-set object, and so an empty queue — to avoid
-it.</p>
-<p>Those seven jobs had been provisioned <em>and</em> cursor-acked by the previous process
-before it went away. So the observation establishes the load-bearing fact: the
-cursor is session-scoped at the backend, the queue log is not, and a fresh
-session polling from 0 receives messages an earlier session already acked.</p>
-<p>It was written up as an aside to a different result, which is why it never became
-a bug row at the time.</p>
+<p><a href="../gke-dogfood-turnup-findings/">gke-dogfood-turnup-findings.md</a>: during the Q264 P4 clean-green re-run, reconnecting a rebuilt AGC to the first pass's scale set <code>gag-scaleset2</code> (scaleSetID 4) replayed that pass's <code>JobAssigned</code> messages, "which briefly provisioned 7 pre-Q269 workers".
+The re-run moved to a fresh scale-set label — a new scale-set object, and so an empty queue — to avoid it.</p>
+<p>Those seven jobs had been provisioned <em>and</em> cursor-acked by the previous process before it went away.
+So the observation establishes the load-bearing fact: the cursor is session-scoped at the backend, the queue log is not, and a fresh session polling from 0 receives messages an earlier session already acked.</p>
+<p>It was written up as an aside to a different result, which is why it never became a bug row at the time.</p>
 <h3 id="retention--2026-07-29">Retention — 2026-07-29<a class="headerlink" href="#retention--2026-07-29" title="Permanent link">&para;</a></h3>
-<p><a href="../q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a> measured
-an unacknowledged message surviving a <strong>13 h 3 m 40 s</strong> gap with no session in
-existence, redelivered to a session under a different owner name on its first
-poll. Read it as a lower bound only: <code>LOST</code> was never observed at any gap, so it
-says nothing about where retention ends.</p>
+<p><a href="../q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a> measured an unacknowledged message surviving a <strong>13 h 3 m 40 s</strong> gap with no session in existence, redelivered to a session under a different owner name on its first poll.
+Read it as a lower bound only: <code>LOST</code> was never observed at any gap, so it says nothing about where retention ends.</p>
 <h3 id="what-neither-one-settles">What neither one settles<a class="headerlink" href="#what-neither-one-settles" title="Permanent link">&para;</a></h3>
-<p>Both were measured for other reasons, and each leaves a hole the other does not
-fill:</p>
+<p>Both were measured for other reasons, and each leaves a hole the other does not fill:</p>
 <ul>
-<li>Q468 acknowledges its <code>JobAssigned</code> <strong>in full</strong> — cursor <em>and</em> <code>DeleteMessage</code>
-  — so its check cannot separate "gone because deleted" from "gone because
-  cursor-acked". Its result is about an undeleted, un-cursor-acked message.</li>
-<li>The dogfood observation is the right shape but is a side-observation in a
-  narrative, with no message ids and no controlled before/after.</li>
+<li>Q468 acknowledges its <code>JobAssigned</code> <strong>in full</strong> — cursor <em>and</em> <code>DeleteMessage</code> — so its check cannot separate "gone because deleted" from "gone because cursor-acked".
+  Its result is about an undeleted, un-cursor-acked message.</li>
+<li>The dogfood observation is the right shape but is a side-observation in a narrative, with no message ids and no controlled before/after.</li>
 </ul>
-<p>Neither is a reason to doubt the defect. Both are reasons the <em>fix</em> wants its own
-measurement before it is built.</p>
+<p>Neither is a reason to doubt the defect.
+Both are reasons the <em>fix</em> wants its own measurement before it is built.</p>
 <h2 id="investigation-g--the-measurement-the-fix-needs">Investigation G — the measurement the fix needs<a class="headerlink" href="#investigation-g--the-measurement-the-fix-needs" title="Permanent link">&para;</a></h2>
-<p>One probe run settles three things, in one process, with no multi-hour gap and no
-dogfood cluster. Selector <code>PROBE_REPLAY_TEST=true</code>; fixture
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q583-replay-probe.yml"><code>q583-replay-probe.yml</code></a>.</p>
+<p>One probe run settles three things, in one process, with no multi-hour gap and no dogfood cluster.
+Selector <code>PROBE_REPLAY_TEST=true</code>; fixture <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q583-replay-probe.yml"><code>q583-replay-probe.yml</code></a>.</p>
 <table>
 <thead>
 <tr>
@@ -2823,86 +2798,58 @@ dogfood cluster. Selector <code>PROBE_REPLAY_TEST=true</code>; fixture
 </tr>
 </tbody>
 </table>
-<p>Question 1 is Q583's premise under control. Questions 2 and 3 are the P4-era
-<code>DeleteMessage</code> unknown that Q264 left open — and together they are the proof
-that the proposed fix actually fixes the defect, taken <em>before</em> the fix is
-written rather than after.</p>
+<p>Question 1 is Q583's premise under control.
+Questions 2 and 3 are the P4-era <code>DeleteMessage</code> unknown that Q264 left open — and together they are the proof that the proposed fix actually fixes the defect, taken <em>before</em> the fix is written rather than after.</p>
 <p>Phases, all in one run:</p>
 <ol>
-<li>Ensure the durable scale set, open session <strong>gen 1</strong>, wait for a dispatched
-   job, receive its <code>JobAssigned</code> (message <em>M</em>).</li>
-<li>Advance the cursor past <em>M</em> without deleting it — exactly what the shipping
-   listener does.</li>
-<li>Cancel the run so the job goes terminal with no runner involved (the Q468
-   technique), then receive and cursor-ack its <code>JobCompleted</code> (message <em>C</em>),
-   again without deleting. The queue is now in the state a live AGC leaves
-   behind: every message acked by cursor, none deleted, the job provably over.</li>
-<li>Delete session gen 1. Open session <strong>gen 2</strong> under a different owner name and
-   poll from cursor 0 — <strong>measurement 1</strong>.</li>
+<li>Ensure the durable scale set, open session <strong>gen 1</strong>, wait for a dispatched job, receive its <code>JobAssigned</code> (message <em>M</em>).</li>
+<li>Advance the cursor past <em>M</em> without deleting it — exactly what the shipping listener does.</li>
+<li>Cancel the run so the job goes terminal with no runner involved (the Q468 technique), then receive and cursor-ack its <code>JobCompleted</code> (message <em>C</em>), again without deleting.
+   The queue is now in the state a live AGC leaves behind: every message acked by cursor, none deleted, the job provably over.</li>
+<li>Delete session gen 1.
+   Open session <strong>gen 2</strong> under a different owner name and poll from cursor 0 — <strong>measurement 1</strong>.</li>
 <li><code>DeleteMessage</code> on whatever came back — <strong>measurement 2</strong>.</li>
-<li>Delete session gen 2. Open session <strong>gen 3</strong>, poll from cursor 0 —
-   <strong>measurement 3</strong>.</li>
+<li>Delete session gen 2.
+   Open session <strong>gen 3</strong>, poll from cursor 0 — <strong>measurement 3</strong>.</li>
 <li>Delete the session and the scale set, which takes the queue log with it.</li>
 </ol>
-<p>A different owner name per generation is deliberate: it is what makes the backend
-see a new listener arriving rather than the same one resuming, which is what a
-restarted AGC is.</p>
+<p>A different owner name per generation is deliberate: it is what makes the backend see a new listener arriving rather than the same one resuming, which is what a restarted AGC is.</p>
 <h3 id="a-404-reads-as-success-so-the-verdict-comes-off-the-wire">A 404 reads as success, so the verdict comes off the wire<a class="headerlink" href="#a-404-reads-as-success-so-the-verdict-comes-off-the-wire" title="Permanent link">&para;</a></h3>
-<p>Building the probe surfaced something that would have invalidated its own headline
-result. <code>Client.DeleteMessage</code> reports a 404 or 410 as success — for a listener
-that is right, since a message already gone is a benign ack — but a backend that
-does not serve the endpoint <strong>also</strong> answers 404. The typed return says "acked"
-for the case the fix depends on and for the case that kills it.</p>
-<p>So measurement 2 is read from the response status via a <code>ResponseObserver</code>, not
-from the error. This is the rule Investigation E already states for its own
-reporting: the finding is what the wire did, not what the client made of it.</p>
-<p>It also constrains the fix. A listener that delete-acks and trusts
-<code>DeleteMessage</code>'s error would believe it had pruned a queue it had not touched,
-turning Q583 from a loud defect into a silent one. Whatever ships has to treat a
-404 as an ack only where that is genuinely safe, or check the status itself.</p>
+<p>Building the probe surfaced something that would have invalidated its own headline result. <code>Client.DeleteMessage</code> reports a 404 or 410 as success — for a listener that is right, since a message already gone is a benign ack — but a backend that does not serve the endpoint <strong>also</strong> answers 404.
+The typed return says "acked" for the case the fix depends on and for the case that kills it.</p>
+<p>So measurement 2 is read from the response status via a <code>ResponseObserver</code>, not from the error.
+This is the rule Investigation E already states for its own reporting: the finding is what the wire did, not what the client made of it.</p>
+<p>It also constrains the fix.
+A listener that delete-acks and trusts <code>DeleteMessage</code>'s error would believe it had pruned a queue it had not touched, turning Q583 from a loud defect into a silent one.
+Whatever ships has to treat a 404 as an ack only where that is genuinely safe, or check the status itself.</p>
 <h3 id="what-would-make-a-result-invalid">What would make a result invalid<a class="headerlink" href="#what-would-make-a-result-invalid" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>A <code>NOT-REPLAYED</code> verdict at step 4 must not be read as "no defect".</strong> It
-  would instead mean the backend prunes on session delete, and would contradict
-  the 2026-07-05 dogfood observation — in which case the contradiction is the
-  finding, and the next question is what differs (scale set age, job count,
-  backend change since July).</li>
-<li><strong>A <code>DELETE-FAILED</code> at step 5 says nothing about step 4's result.</strong> The two are
-  independent; record both.</li>
-<li><strong>Step 6 with no step 5</strong> is meaningless. If the delete failed, a <code>PRUNED</code> at
-  step 6 means something else pruned the queue, not that the delete worked.</li>
+<li><strong>A <code>NOT-REPLAYED</code> verdict at step 4 must not be read as "no defect".</strong> It would instead mean the backend prunes on session delete, and would contradict the 2026-07-05 dogfood observation — in which case the contradiction is the finding, and the next question is what differs (scale set age, job count, backend change since July).</li>
+<li><strong>A <code>DELETE-FAILED</code> at step 5 says nothing about step 4's result.</strong> The two are independent; record both.</li>
+<li><strong>Step 6 with no step 5</strong> is meaningless.
+  If the delete failed, a <code>PRUNED</code> at step 6 means something else pruned the queue, not that the delete worked.</li>
 </ul>
 <h2 id="the-fix-once-investigation-g-reports">The fix, once Investigation G reports<a class="headerlink" href="#the-fix-once-investigation-g-reports" title="Permanent link">&para;</a></h2>
-<p>Both candidate approaches were weighed against the code before the probe was
-written; the probe decides between them rather than confirming a choice already
-made. It has since reported — see <a href="#decision-delete-ack">Decision: delete-ack</a>.</p>
+<p>Both candidate approaches were weighed against the code before the probe was written; the probe decides between them rather than confirming a choice already made.
+It has since reported — see <a href="#decision-delete-ack">Decision: delete-ack</a>.</p>
 <p><strong>Delete-ack</strong> — issue <code>DeleteMessage</code> once every job in a message is concluded.
-This is the root-cause fix: it prunes the queue, so a replay carries only
-genuinely unfinished work, and it bounds the process-scoped sets, which the
-listener's own comment names as the intended endgame. It needs Investigation G's
-questions 2 and 3 to come back <code>DELETE-OK</code> / <code>PRUNED</code>.</p>
-<p>Its cost is that replay-from-0 is currently load-bearing in two places, and both
-need explicit handling rather than inheriting a backstop:</p>
+This is the root-cause fix: it prunes the queue, so a replay carries only genuinely unfinished work, and it bounds the process-scoped sets, which the listener's own comment names as the intended endgame.
+It needs Investigation G's questions 2 and 3 to come back <code>DELETE-OK</code> / <code>PRUNED</code>.</p>
+<p>Its cost is that replay-from-0 is currently load-bearing in two places, and both need explicit handling rather than inheriting a backstop:</p>
 <ul>
-<li>The Q373/Q575 Secret reclaim treats replay as a free retry for a completion
-  handled between the queue write and the Secret delete.</li>
-<li>Q551's deferred jobs are cursor-acked past and held only in memory, so today a
-  restart recovers them <em>because</em> the queue replays. Deleting a message whose job
-  is deferred would strand the run at GitHub forever — the exact failure Q551
-  shipped to fix. So the delete condition is "all jobs concluded", not "message
-  ackable".</li>
+<li>The Q373/Q575 Secret reclaim treats replay as a free retry for a completion handled between the queue write and the Secret delete.</li>
+<li>Q551's deferred jobs are cursor-acked past and held only in memory, so today a restart recovers them <em>because</em> the queue replays.
+  Deleting a message whose job is deferred would strand the run at GitHub forever — the exact failure Q551 shipped to fix.
+  So the delete condition is "all jobs concluded", not "message ackable".</li>
 </ul>
 <p><strong>Persist the cursor</strong> on <code>RunnerSet.status</code> and seed a fresh listener with it.
-Smaller, and independent of the wire shape — but the cursor is advanced past
-deferred jobs, so persisting it alone strands them at restart in exactly the way
-above, with no queue replay left to recover them. Making it safe means persisting
-the deferred set too, which is most of the delete-ack work relocated into the
-status subresource. Held as the fallback for a <code>DELETE-FAILED</code> verdict.</p>
+Smaller, and independent of the wire shape — but the cursor is advanced past deferred jobs, so persisting it alone strands them at restart in exactly the way above, with no queue replay left to recover them.
+Making it safe means persisting the deferred set too, which is most of the delete-ack work relocated into the status subresource.
+Held as the fallback for a <code>DELETE-FAILED</code> verdict.</p>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="the-answer-replayed-delete-ok-pruned-2026-08-01">The answer: REPLAYED, DELETE-OK, PRUNED (2026-08-01)<a class="headerlink" href="#the-answer-replayed-delete-ok-pruned-2026-08-01" title="Permanent link">&para;</a></h3>
-<p>One run against <code>actions-gateway/github-actions-gateway</code>, scale set
-<code>gag-q583-replay</code> (id 18), job <code>ee751b22-…</code>, run <code>30721627864</code>. No warnings, no
-errors, scale set torn down at the end.</p>
+<p>One run against <code>actions-gateway/github-actions-gateway</code>, scale set <code>gag-q583-replay</code> (id 18), job <code>ee751b22-…</code>, run <code>30721627864</code>.
+No warnings, no errors, scale set torn down at the end.</p>
 <table>
 <thead>
 <tr>
@@ -2929,67 +2876,32 @@ errors, scale set torn down at the end.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Q583 is real, and the mechanism is the one the row asserted.</strong> A message a
-previous session acked by cursor is redelivered to a session that never saw it:
-the cursor is session-scoped, the queue log is not. A restarted AGC — whose
-<code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> guards are all empty — reads that
-<code>JobAssigned</code> for a job cancelled minutes earlier and has nothing left that would
-stop it provisioning a worker.</p>
-<p><strong>The <code>DeleteMessage</code> wire shape is confirmed, closing Q264's P4 unknown.</strong> The
-source-derived construction is right, and the observed path is worth writing down
-because it is not what the client's own doc comment implies: the queue URL's path
-is <code>/scalesets/message</code> on <code>broker.actions.githubusercontent.com</code>, so the delete
-target is <code>/scalesets/message/{messageId}</code> — not per-scale-set in its path. The
-client already builds it correctly by appending to <code>MessageQueueURL</code>.</p>
-<p><strong>Delete-acking is a fix, not just a theory.</strong> Measurement 3 is the one that
-matters: the same poll that returned two messages 45 seconds earlier returned an
-empty log after the deletes. The contrast is what carries it — gen 2 got its
-first message ~350 ms after opening, so gen 3's empty 45 s window is not a
-too-short budget.</p>
-<p>What this does <strong>not</strong> establish, the same caveats Q468 records: one tenant, one
-region, one point in time, on backend behaviour GitHub does not document. The
-claim is "observed, 2026-08-01", not "GitHub guarantees". And nothing here bounds
-retention — Q468's ≥13 h remains the only number, still a lower bound.</p>
+<p><strong>Q583 is real, and the mechanism is the one the row asserted.</strong> A message a previous session acked by cursor is redelivered to a session that never saw it: the cursor is session-scoped, the queue log is not.
+A restarted AGC — whose <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> guards are all empty — reads that <code>JobAssigned</code> for a job cancelled minutes earlier and has nothing left that would stop it provisioning a worker.</p>
+<p><strong>The <code>DeleteMessage</code> wire shape is confirmed, closing Q264's P4 unknown.</strong> The source-derived construction is right, and the observed path is worth writing down because it is not what the client's own doc comment implies: the queue URL's path is <code>/scalesets/message</code> on <code>broker.actions.githubusercontent.com</code>, so the delete target is <code>/scalesets/message/{messageId}</code> — not per-scale-set in its path.
+The client already builds it correctly by appending to <code>MessageQueueURL</code>.</p>
+<p><strong>Delete-acking is a fix, not just a theory.</strong> Measurement 3 is the one that matters: the same poll that returned two messages 45 seconds earlier returned an empty log after the deletes.
+The contrast is what carries it — gen 2 got its first message ~350 ms after opening, so gen 3's empty 45 s window is not a too-short budget.</p>
+<p>What this does <strong>not</strong> establish, the same caveats Q468 records: one tenant, one region, one point in time, on backend behaviour GitHub does not document.
+The claim is "observed, 2026-08-01", not "GitHub guarantees".
+And nothing here bounds retention — Q468's ≥13 h remains the only number, still a lower bound.</p>
 <h3 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h3>
-<p>Acking is now cursor advance <strong>plus</strong> a delete, and the delete waits. A handled
-message is registered against the jobs it names that have not concluded; a job
-concludes by completing with its Secret reclaimed, or by being abandoned (Q553);
-and a message whose set empties is deleted on the next poll cycle. A failed
-delete keeps its entry and is retried on the following cycle, because the cursor
-has already moved past the message and nothing else would bring it back.</p>
-<p>The wait is the whole safety argument, and each of its three cases has a test
-that fails without it: a job provisioned but still running, a Q551 deferred job
-the previous process never provisioned, and a completion whose Secret reclaim
-failed all hold their message in the queue, so a restart still re-reads them.</p>
-<p>One trap worth recording, because it cost a wrong-green test before it was
-caught. <code>Client.DeleteMessage</code> reports a 404 as success, so a stub answering 404
-made the listener believe it had deleted a message it had not, and the retry test
-passed while testing nothing. Treating a 404 as an ack is nonetheless right <em>here</em>
-— Investigation G proved the endpoint is served, so a 404 means the message is
-genuinely gone — but it means a failure that must be retried has to be a 5xx. The
-stub's lever now takes the status rather than a bool, which forces each test to
-say which backend it is modelling.</p>
-<p>Left open deliberately: <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> are still
-never pruned, so they grow with the jobs a listener handles over its lifetime.
-Pruning them is now <em>possible</em> — an entry is dead once its message is deleted —
-but it is a separate change with its own way of going wrong (drop an entry too
-early and a replay double-provisions), so it was filed as Q597 rather than
-bundled here.</p>
-<p><strong>Q597 closed 2026-08-03.</strong> The bound is the delete, keyed on the jobs a message
-<em>assigned</em>: an entry is retired once every held message carrying a <code>JobAssigned</code>
-for its job has been deleted. The safety argument and the two rules that were
-tried and rejected are recorded in
-<a href="../../../design/02-architecture/">02-architecture.md</a> alongside this fix. One of
-them was caught by a test already in the repo — retiring on every job a deleted
-message <em>names</em> drops the guard when a completion's message goes, which
-<code>TestListener_DoesNotProvisionAnAssignmentReplayedAfterItsCompletion</code> (Q575)
-turns red.</p>
+<p>Acking is now cursor advance <strong>plus</strong> a delete, and the delete waits.
+A handled message is registered against the jobs it names that have not concluded; a job concludes by completing with its Secret reclaimed, or by being abandoned (Q553); and a message whose set empties is deleted on the next poll cycle.
+A failed delete keeps its entry and is retried on the following cycle, because the cursor has already moved past the message and nothing else would bring it back.</p>
+<p>The wait is the whole safety argument, and each of its three cases has a test that fails without it: a job provisioned but still running, a Q551 deferred job the previous process never provisioned, and a completion whose Secret reclaim failed all hold their message in the queue, so a restart still re-reads them.</p>
+<p>One trap worth recording, because it cost a wrong-green test before it was caught. <code>Client.DeleteMessage</code> reports a 404 as success, so a stub answering 404 made the listener believe it had deleted a message it had not, and the retry test passed while testing nothing.
+Treating a 404 as an ack is nonetheless right <em>here</em> — Investigation G proved the endpoint is served, so a 404 means the message is genuinely gone — but it means a failure that must be retried has to be a 5xx.
+The stub's lever now takes the status rather than a bool, which forces each test to say which backend it is modelling.</p>
+<p>Left open deliberately: <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> are still never pruned, so they grow with the jobs a listener handles over its lifetime.
+Pruning them is now <em>possible</em> — an entry is dead once its message is deleted — but it is a separate change with its own way of going wrong (drop an entry too early and a replay double-provisions), so it was filed as Q597 rather than bundled here.</p>
+<p><strong>Q597 closed 2026-08-03.</strong> The bound is the delete, keyed on the jobs a message <em>assigned</em>: an entry is retired once every held message carrying a <code>JobAssigned</code> for its job has been deleted.
+The safety argument and the two rules that were tried and rejected are recorded in <a href="../../../design/02-architecture/">02-architecture.md</a> alongside this fix.
+One of them was caught by a test already in the repo — retiring on every job a deleted message <em>names</em> drops the guard when a completion's message goes, which <code>TestListener_DoesNotProvisionAnAssignmentReplayedAfterItsCompletion</code> (Q575) turns red.</p>
 <h3 id="decision-delete-ack">Decision: delete-ack<a class="headerlink" href="#decision-delete-ack" title="Permanent link">&para;</a></h3>
-<p><code>DELETE-OK</code> plus <code>PRUNED</code> selects delete-acking over persisting the cursor. The
-fallback is not needed. The two costs named above stand and are what the
-implementation has to handle: a message is deleted only once <strong>every job in it is
-concluded</strong>, so Q551's deferred jobs keep the replay that recovers them, and the
-Q373/Q575 Secret reclaim keeps its backstop for anything still in flight.</p>
+<p><code>DELETE-OK</code> plus <code>PRUNED</code> selects delete-acking over persisting the cursor.
+The fallback is not needed.
+The two costs named above stand and are what the implementation has to handle: a message is deleted only once <strong>every job in it is concluded</strong>, so Q551's deferred jobs keep the replay that recovers them, and the Q373/Q575 Secret reclaim keeps its backstop for anything still in flight.</p>
 
 
 

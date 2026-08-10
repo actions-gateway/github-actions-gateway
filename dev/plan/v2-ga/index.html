@@ -2698,22 +2698,12 @@
 
 
 <h1 id="v2-ga-graduation-plan-v2beta1--v2">v2 GA graduation plan (<code>v2beta1</code> → <code>v2</code>)<a class="headerlink" href="#v2-ga-graduation-plan-v2beta1--v2" title="Permanent link">&para;</a></h1>
-<p>The last rung of the graduation ladder defined in
-<a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md § API maturity &amp; graduation</a>,
-and the release that executes the three coupled removals announced by
-<a href="../release-1.3/">release-1.3.md</a>.</p>
-<p>This plan starts <strong>after <code>v1.3.0</code> ships</strong>. It is deliberately unhurried: General
-Availability (GA) signs a permanent backward-compatibility contract on a five-kind
-API surface, and the contract cannot be walked back.</p>
+<p>The last rung of the graduation ladder defined in <a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md § API maturity &amp; graduation</a>, and the release that executes the three coupled removals announced by <a href="../release-1.3/">release-1.3.md</a>.</p>
+<p>This plan starts <strong>after <code>v1.3.0</code> ships</strong>.
+It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.</p>
 <blockquote>
-<p><strong>Status: parked — no active work, every phase carried by a Deferred trigger.</strong>
-Phases 1, 2 and 4 wait on <a href="../../STATUS/#Q413">Q413</a> (<strong>Event:</strong> <code>v1.3.0</code>
-ships, starting the Phase 1 soak); Phase 3's coupled removals wait on
-<a href="../../STATUS/#Q273">Q273</a> and <a href="../../STATUS/#Q264">Q264</a>; the Phase 2 alias
-decision is <a href="../../STATUS/#Q452">Q452</a>. The <code>✅</code> on this plan's
-<a href="../../STATUS/#progress">Progress</a> row means <em>no open Queue row remains</em>, not
-that the graduation has happened — deferred residuals
-<a href="../../development/maintaining-backlog/#-means-an-open-queue-row-remains--deferred-residuals-dont-count">don't count</a>.
+<p><strong>Status: parked — no active work, every phase carried by a Deferred trigger.</strong> Phases 1, 2 and 4 wait on <a href="../../STATUS/#Q413">Q413</a> (<strong>Event:</strong> <code>v1.3.0</code> ships, starting the Phase 1 soak); Phase 3's coupled removals wait on <a href="../../STATUS/#Q273">Q273</a> and <a href="../../STATUS/#Q264">Q264</a>; the Phase 2 alias decision is <a href="../../STATUS/#Q452">Q452</a>.
+The <code>✅</code> on this plan's <a href="../../STATUS/#progress">Progress</a> row means <em>no open Queue row remains</em>, not that the graduation has happened — deferred residuals <a href="../../development/maintaining-backlog/#-means-an-open-queue-row-remains--deferred-residuals-dont-count">don't count</a>.
 The phase table below is the real state.</p>
 </blockquote>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
@@ -2760,8 +2750,7 @@ The phase table below is the real state.</p>
 </tbody>
 </table>
 <h2 id="why-this-is-gated-on-a-soak-not-a-date">Why this is gated on a soak, not a date<a class="headerlink" href="#why-this-is-gated-on-a-soak-not-a-date" title="Permanent link">&para;</a></h2>
-<p>The graduation ladder in <a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md</a>
-sets the contract at each level:</p>
+<p>The graduation ladder in <a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md</a> sets the contract at each level:</p>
 <table>
 <thead>
 <tr>
@@ -2784,28 +2773,21 @@ sets the contract at each level:</p>
 </tr>
 </tbody>
 </table>
-<p>The jump that matters is beta to GA. Beta still permits a shape fix <em>with</em> a
-migration path; GA does not. So the question this plan answers is not "has enough
-time passed" but "do we have evidence the shape is right." Cutting GA early converts
-every remaining design mistake into a permanent one.</p>
+<p>The jump that matters is beta to GA.
+Beta still permits a shape fix <em>with</em> a migration path; GA does not.
+So the question this plan answers is not "has enough time passed" but "do we have evidence the shape is right."
+Cutting GA early converts every remaining design mistake into a permanent one.</p>
 <h2 id="phase-1--the-soak-what-well-validated-means">Phase 1 — the soak (what "well validated" means)<a class="headerlink" href="#phase-1--the-soak-what-well-validated-means" title="Permanent link">&para;</a></h2>
-<p>GA is blocked until <strong>all</strong> of the following hold. These are the evidence bar, and
-none of them is a calendar check.</p>
+<p>GA is blocked until <strong>all</strong> of the following hold.
+These are the evidence bar, and none of them is a calendar check.</p>
 <ol>
-<li><strong>No incompatible <code>v2beta1</code> shape change has been needed</strong> across at least two
-   minor releases of real use. A field addition is fine. A field whose meaning,
-   type, or defaulting had to change is a soak reset, because it is exactly the class
-   of change GA forbids.</li>
-<li><strong>Every kind has carried real traffic.</strong> All five kinds exercised on the dogfood
-   cluster, not just the two the CI path happens to use. An unexercised kind is an
-   unvalidated kind.</li>
-<li><strong>The conversion webhook has round-tripped every served version under real
-   objects</strong>, not only envtest fixtures, including objects created before the
-   <code>v2beta1</code> graduation.</li>
-<li><strong>The v2 GA Definition of Done in
-   <a href="../v2-api/#definition-of-done-v2-ga">v2-api.md</a> audits clean.</strong> That list predates
-   this plan and is authoritative; Phase 0 records the audit below rather than
-   restating the criteria.</li>
+<li><strong>No incompatible <code>v2beta1</code> shape change has been needed</strong> across at least two minor releases of real use.
+   A field addition is fine.
+   A field whose meaning, type, or defaulting had to change is a soak reset, because it is exactly the class of change GA forbids.</li>
+<li><strong>Every kind has carried real traffic.</strong> All five kinds exercised on the dogfood cluster, not just the two the CI path happens to use.
+   An unexercised kind is an unvalidated kind.</li>
+<li><strong>The conversion webhook has round-tripped every served version under real objects</strong>, not only envtest fixtures, including objects created before the <code>v2beta1</code> graduation.</li>
+<li><strong>The v2 GA Definition of Done in <a href="../v2-api/#definition-of-done-v2-ga">v2-api.md</a> audits clean.</strong> That list predates this plan and is authoritative; Phase 0 records the audit below rather than restating the criteria.</li>
 </ol>
 <h3 id="definition-of-done-audit-as-of-this-change">Definition of Done audit (as of this change)<a class="headerlink" href="#definition-of-done-audit-as-of-this-change" title="Permanent link">&para;</a></h3>
 <table>
@@ -2847,50 +2829,33 @@ none of them is a calendar check.</p>
 </tbody>
 </table>
 <h2 id="phase-2--the-graduation-hop">Phase 2 — the graduation hop<a class="headerlink" href="#phase-2--the-graduation-hop" title="Permanent link">&para;</a></h2>
-<p>Mechanically identical to the <code>v2alpha1</code> → <code>v2beta1</code> hop, which is the useful part:
-the machinery already exists and does not need redesigning. Per
-<a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md</a>, each hop is:</p>
+<p>Mechanically identical to the <code>v2alpha1</code> → <code>v2beta1</code> hop, which is the useful part: the machinery already exists and does not need redesigning.
+Per <a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md</a>, each hop is:</p>
 <ol>
-<li>Add the <code>v2</code> version to each of the five kinds and mark it
-   <code>+kubebuilder:storageversion</code>.</li>
-<li>Extend the existing <code>Hub</code>/<code>Convertible</code> conversion webhook to round-trip the new
-   served set. The hub moves to <code>v2</code>.</li>
+<li>Add the <code>v2</code> version to each of the five kinds and mark it <code>+kubebuilder:storageversion</code>.</li>
+<li>Extend the existing <code>Hub</code>/<code>Convertible</code> conversion webhook to round-trip the new served set.
+   The hub moves to <code>v2</code>.</li>
 <li>Storage-migrate stored objects, then drop the superseded served version.</li>
 </ol>
-<p>Two project-specific constraints carry over from the last hop and should be read
-before starting: shared version-neutral code lives in <code>api/apiconditions</code> with
-one-line re-exports per version, and <code>check-v2-api-sync.sh</code> gates every shared v2
-file. Getting this wrong is the most likely way to break the hop.</p>
-<p><strong>One shape decision the hop must make: does <code>v2</code> define <code>CiliumFQDN</code>/<code>CalicoFQDN</code>?</strong>
-The two deprecated <code>EgressProxy.spec.egressPolicyMode</code> aliases cannot be removed at
-<code>v2.0.0</code> — they are members of the served beta version <code>v2beta1</code>, so their floor is
-<code>v3.0.0</code> (<a href="../../operations/v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">Q428</a>).
-That leaves a live choice for <code>v2</code>: omit them (a clean GA surface, but the hub moves
-to <code>v2</code> and a <code>v2beta1</code> object naming an alias then needs a lossless carrier, since
-the conversion deliberately rides the values across verbatim rather than collapsing
-them to <code>FQDN</code>) or carry them deprecated (trivially lossless, but GA is effectively
-frozen and would be born owning two aliases). Either way the removal release is
-unchanged. Decide it here, not at the tag: <a href="../../STATUS/#Q452">Q452</a>.</p>
+<p>Two project-specific constraints carry over from the last hop and should be read before starting: shared version-neutral code lives in <code>api/apiconditions</code> with one-line re-exports per version, and <code>check-v2-api-sync.sh</code> gates every shared v2 file.
+Getting this wrong is the most likely way to break the hop.</p>
+<p><strong>One shape decision the hop must make: does <code>v2</code> define <code>CiliumFQDN</code>/<code>CalicoFQDN</code>?</strong> The two deprecated <code>EgressProxy.spec.egressPolicyMode</code> aliases cannot be removed at <code>v2.0.0</code> — they are members of the served beta version <code>v2beta1</code>, so their floor is <code>v3.0.0</code> (<a href="../../operations/v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">Q428</a>).
+That leaves a live choice for <code>v2</code>: omit them (a clean GA surface, but the hub moves to <code>v2</code> and a <code>v2beta1</code> object naming an alias then needs a lossless carrier, since the conversion deliberately rides the values across verbatim rather than collapsing them to <code>FQDN</code>) or carry them deprecated (trivially lossless, but GA is effectively frozen and would be born owning two aliases).
+Either way the removal release is unchanged.
+Decide it here, not at the tag: <a href="../../STATUS/#Q452">Q452</a>.</p>
 <h2 id="phase-3--the-coupled-removals">Phase 3 — the coupled removals<a class="headerlink" href="#phase-3--the-coupled-removals" title="Permanent link">&para;</a></h2>
-<p><code>v2.0.0</code> executes all three removals announced by
-<a href="../release-1.3/">release-1.3.md</a>:</p>
+<p><code>v2.0.0</code> executes all three removals announced by <a href="../release-1.3/">release-1.3.md</a>:</p>
 <ul>
 <li><code>v1alpha1</code> (the <code>actions-gateway.github.com</code> group) — <a href="../../STATUS/#Q273">Q273</a></li>
 <li><code>v2alpha1</code> — this plan</li>
-<li>classic acquisition machinery and the transitional <code>acquisitionProtocol</code> /
-  <code>maxListeners</code> fields — <a href="../../STATUS/#Q264">Q264</a></li>
+<li>classic acquisition machinery and the transitional <code>acquisitionProtocol</code> / <code>maxListeners</code> fields — <a href="../../STATUS/#Q264">Q264</a></li>
 </ul>
-<p>They are one bundle because <code>v2beta1</code> is already ScaleSet-only: classic acquisition
-exists solely to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects, so removing those versions
-removes classic's only consumer. Sequencing within the release still matters, since
-the Q147 dual-read window closes exactly when <code>v1alpha1</code> is removed. Order:
-storage-migrate first, drop served versions second, then strip the dual-read arms
-from the <code>ValidatingAdmissionPolicy</code> objects and the validating webhook.</p>
+<p>They are one bundle because <code>v2beta1</code> is already ScaleSet-only: classic acquisition exists solely to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects, so removing those versions removes classic's only consumer.
+Sequencing within the release still matters, since the Q147 dual-read window closes exactly when <code>v1alpha1</code> is removed.
+Order: storage-migrate first, drop served versions second, then strip the dual-read arms from the <code>ValidatingAdmissionPolicy</code> objects and the validating webhook.</p>
 <h3 id="capability-parity-is-a-precondition-of-the-removal">Capability parity is a precondition of the removal<a class="headerlink" href="#capability-parity-is-a-precondition-of-the-removal" title="Permanent link">&para;</a></h3>
-<p>Removing classic must not delete a capability along with it. Dropping a served API
-version is a contract change operators can plan for; silently losing a behaviour
-they rely on is not, and it is exactly what the deprecation policy exists to
-prevent.</p>
+<p>Removing classic must not delete a capability along with it.
+Dropping a served API version is a contract change operators can plan for; silently losing a behaviour they rely on is not, and it is exactly what the deprecation policy exists to prevent.</p>
 <table>
 <thead>
 <tr>
@@ -2928,81 +2893,42 @@ prevent.</p>
 </tbody>
 </table>
 <h3 id="what-this-audit-checked-and-found-already-covered">What this audit checked, and found already covered<a class="headerlink" href="#what-this-audit-checked-and-found-already-covered" title="Permanent link">&para;</a></h3>
-<p>Recorded so the cut does not re-derive it. Method: walk the tier seams — the
-<code>ScaleSet</code> early return in <code>runnerset_controller.go</code>, <code>provision()</code> versus
-<code>ProvisionScaleSetWorker</code>, and the <code>listener/</code> versus <code>scalesetlistener/</code>
-packages — then cross-check every capability the README, roadmap, and why-gag
-present as a property of the system.</p>
-<p><strong>Confirmed on both tiers</strong> (wired before the protocol route, or ported):
-worker-capacity conditions <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code>/
-<code>WorkersUnschedulable</code> (Q303, explicitly "identical to the classic path"), the
-opt-in scale-up rate limit <code>spec.scaleUp</code>, the measured sizing recommendation and
-<code>SizingDrift</code> condition (Q359), the worker-pod reaper including
-<code>orphaned_running</code> (Q420), and eviction recovery (Q417).</p>
-<p><strong>Correctly absent from the scale-set tier</strong> — artifacts of the many-acquirers
-and JIT-agent models that <code>ScaleSet</code> removes by construction, so they should
-disappear <em>with</em> classic rather than be ported:
-<code>jobs_duplicate_delivery_total</code>, <code>abandoned_delivery_completions_total</code>,
-<code>fanout_loser_recycle_deferred_total</code>, <code>agent_recycles_total</code>,
-<code>agent_recycle_errors_total</code>, <code>broker_token_propagation_retries_total</code>, and
-<code>broker_session_leaks_total</code>. Each measures a race or a repair that only exists
-because many sessions acquire against one pool.</p>
-<p><strong>Alerting already has its analog:</strong> <code>job_acquisition_errors_total</code> is
-classic-only, but <a href="../../operations/observability-alerting/">observability-alerting.md</a>
-ships <code>actions_gateway:scaleset_provision_success_rate:rate5m</code> alongside the
-classic <code>job_acquisition_success_rate</code>, so the shipped rules do not go silent at
-the cut. <code>active_sessions</code> is likewise classic-only with
-<code>scaleset_jobs_assigned_total</code> as the documented substitute.</p>
-<p>Both were genuine gates, not nice-to-haves: eviction recovery and the pre-claim quota
-gate are headline capabilities in <a href="../../design/01-executive-summary/">01-executive-summary.md</a>,
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md">README.md</a>, and <a href="../../why-gag/">why-gag.md</a>, all of which describe
-them as properties of the system rather than of one acquisition tier. Removing classic
-before Q417 and Q443 landed would have made those claims false at the same moment the
-only tier that satisfied them disappeared. With both ports in, the claims survive the cut.</p>
-<p>The two were found the same way and a day apart, which is the reusable lesson: a
-capability wired into a call site the default tier never reaches reads as shipped from
-every angle except the one that matters — the tier tenants actually run. A claim about
-what GAG does is not verified until it names the acquisition tier it was verified on.</p>
-<p>One residual is worth knowing about but does not gate the removal, because classic
-shares it: a worker pod force-deleted with no grace period (or lost with its node)
-leaves no <code>Failed</code>/<code>Evicted</code> object and no chance for the runner to report, so neither
-tier recovers it. Q435 measured the adjacent orphan-reclaim question and
-<a href="../archive/q438-worker-lifetime-deadline/">Q438</a> closed its residual with a
-provision-time worker lifetime cap.</p>
-<p>Any further capability found to be classic-only before the cut joins this table and
-gates the same removal.</p>
-<p><strong>Two joined it after the audit, which is the rule working rather than failing.</strong>
-The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped
-classic-only, Q766 ported them, and no tag ever published the asymmetry. Q713 is
-open, so the table's verdict is <strong>not</strong> currently cleared: the duration and latency
-series are the one capability with no scale-set analog and no port. Read the table,
-not this section's history, for the state of the gate.</p>
-<p>The audit's method has a known blind spot both instances share. It walked the tier
-seams once, in July, and a capability added to <code>provision()</code> afterwards is
-classic-only from birth without anything re-walking them. Q683, Q691 and Q713 all
-arrived that way. Until <a href="../../STATUS/#Q774">Q774</a> gates scope statements
-mechanically, adding a row here is a manual step in the change that creates the
-asymmetry, and the <a href="../../development/doc-update-matrix/">doc-update matrix</a> is where
-that obligation is written down.</p>
+<p>Recorded so the cut does not re-derive it.
+Method: walk the tier seams — the <code>ScaleSet</code> early return in <code>runnerset_controller.go</code>, <code>provision()</code> versus <code>ProvisionScaleSetWorker</code>, and the <code>listener/</code> versus <code>scalesetlistener/</code> packages — then cross-check every capability the README, roadmap, and why-gag present as a property of the system.</p>
+<p><strong>Confirmed on both tiers</strong> (wired before the protocol route, or ported): worker-capacity conditions <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code>/ <code>WorkersUnschedulable</code> (Q303, explicitly "identical to the classic path"), the opt-in scale-up rate limit <code>spec.scaleUp</code>, the measured sizing recommendation and <code>SizingDrift</code> condition (Q359), the worker-pod reaper including <code>orphaned_running</code> (Q420), and eviction recovery (Q417).</p>
+<p><strong>Correctly absent from the scale-set tier</strong> — artifacts of the many-acquirers and JIT-agent models that <code>ScaleSet</code> removes by construction, so they should disappear <em>with</em> classic rather than be ported: <code>jobs_duplicate_delivery_total</code>, <code>abandoned_delivery_completions_total</code>, <code>fanout_loser_recycle_deferred_total</code>, <code>agent_recycles_total</code>, <code>agent_recycle_errors_total</code>, <code>broker_token_propagation_retries_total</code>, and <code>broker_session_leaks_total</code>.
+Each measures a race or a repair that only exists because many sessions acquire against one pool.</p>
+<p><strong>Alerting already has its analog:</strong> <code>job_acquisition_errors_total</code> is classic-only, but <a href="../../operations/observability-alerting/">observability-alerting.md</a> ships <code>actions_gateway:scaleset_provision_success_rate:rate5m</code> alongside the classic <code>job_acquisition_success_rate</code>, so the shipped rules do not go silent at the cut. <code>active_sessions</code> is likewise classic-only with <code>scaleset_jobs_assigned_total</code> as the documented substitute.</p>
+<p>Both were genuine gates, not nice-to-haves: eviction recovery and the pre-claim quota gate are headline capabilities in <a href="../../design/01-executive-summary/">01-executive-summary.md</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md">README.md</a>, and <a href="../../why-gag/">why-gag.md</a>, all of which describe them as properties of the system rather than of one acquisition tier.
+Removing classic before Q417 and Q443 landed would have made those claims false at the same moment the only tier that satisfied them disappeared.
+With both ports in, the claims survive the cut.</p>
+<p>The two were found the same way and a day apart, which is the reusable lesson: a capability wired into a call site the default tier never reaches reads as shipped from every angle except the one that matters — the tier tenants actually run.
+A claim about what GAG does is not verified until it names the acquisition tier it was verified on.</p>
+<p>One residual is worth knowing about but does not gate the removal, because classic shares it: a worker pod force-deleted with no grace period (or lost with its node) leaves no <code>Failed</code>/<code>Evicted</code> object and no chance for the runner to report, so neither tier recovers it.
+Q435 measured the adjacent orphan-reclaim question and <a href="../archive/q438-worker-lifetime-deadline/">Q438</a> closed its residual with a provision-time worker lifetime cap.</p>
+<p>Any further capability found to be classic-only before the cut joins this table and gates the same removal.</p>
+<p><strong>Two joined it after the audit, which is the rule working rather than failing.</strong> The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped classic-only, Q766 ported them, and no tag ever published the asymmetry.
+Q713 is open, so the table's verdict is <strong>not</strong> currently cleared: the duration and latency series are the one capability with no scale-set analog and no port.
+Read the table, not this section's history, for the state of the gate.</p>
+<p>The audit's method has a known blind spot both instances share.
+It walked the tier seams once, in July, and a capability added to <code>provision()</code> afterwards is classic-only from birth without anything re-walking them.
+Q683, Q691 and Q713 all arrived that way.
+Until <a href="../../STATUS/#Q774">Q774</a> gates scope statements mechanically, adding a row here is a manual step in the change that creates the asymmetry, and the <a href="../../development/doc-update-matrix/">doc-update matrix</a> is where that obligation is written down.</p>
 <h2 id="phase-4--docs-and-the-cut">Phase 4 — docs and the cut<a class="headerlink" href="#phase-4--docs-and-the-cut" title="Permanent link">&para;</a></h2>
 <p>Operator-facing surface that must be current before the tag:</p>
 <ul>
-<li><a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a> — becomes a
-  historical record rather than an active notice.</li>
-<li><a href="../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a> — the pre-upgrade
-  migration becomes mandatory rather than at-your-convenience.</li>
+<li><a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a> — becomes a historical record rather than an active notice.</li>
+<li><a href="../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a> — the pre-upgrade migration becomes mandatory rather than at-your-convenience.</li>
 <li><a href="../../operations/upgrade/">upgrade.md</a> — the upgrade-past-removal path.</li>
 <li><a href="../../roadmap/">roadmap.md</a> — the graduation line stops being forward-looking.</li>
 </ul>
 <h2 id="guardrails">Guardrails<a class="headerlink" href="#guardrails" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>A soak reset is not a failure.</strong> If Phase 1 surfaces a shape problem, fixing it
-  in beta with a migration path is the system working. Shipping GA over a known
-  shape problem to hold a date is the failure.</li>
-<li><strong>Deprecation is not removal.</strong> <code>v2alpha1</code> stays fully served between <code>v1.3.0</code> and
-  <code>v2.0.0</code>. Nothing is forced on any operator before the major tag.</li>
-<li><strong><code>v2.0.0</code> is the only breaking release.</strong> Everything between it and <code>v1.3.0</code> stays
-  backward-compatible, so operators get exactly one migration event.</li>
+<li><strong>A soak reset is not a failure.</strong> If Phase 1 surfaces a shape problem, fixing it in beta with a migration path is the system working.
+  Shipping GA over a known shape problem to hold a date is the failure.</li>
+<li><strong>Deprecation is not removal.</strong> <code>v2alpha1</code> stays fully served between <code>v1.3.0</code> and <code>v2.0.0</code>.
+  Nothing is forced on any operator before the major tag.</li>
+<li><strong><code>v2.0.0</code> is the only breaking release.</strong> Everything between it and <code>v1.3.0</code> stays backward-compatible, so operators get exactly one migration event.</li>
 </ul>
 
 

@@ -2675,11 +2675,8 @@
 
 
 <h1 id="six-layer-documentation-audit">Six-Layer Documentation Audit<a class="headerlink" href="#six-layer-documentation-audit" title="Permanent link">&para;</a></h1>
-<p>Bring the <code>docs/</code> set into line with the six-layer model of technical documentation
-(terminology, cross-references, version/conditional logic, metadata/taxonomy,
-navigation/hierarchy, reusable blocks). This is a <strong>consistency audit plus small
-fixes</strong>, not a content-gap roadmap (that is <a href="../docs/"><code>docs.md</code></a>, Phases 1–3, done)
-and not a restructure.</p>
+<p>Bring the <code>docs/</code> set into line with the six-layer model of technical documentation (terminology, cross-references, version/conditional logic, metadata/taxonomy, navigation/hierarchy, reusable blocks).
+This is a <strong>consistency audit plus small fixes</strong>, not a content-gap roadmap (that is <a href="../docs/"><code>docs.md</code></a>, Phases 1–3, done) and not a restructure.</p>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2729,97 +2726,68 @@ and not a restructure.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>All findings resolved.</strong> The Layer 3 metrics gap was closed by Q51 (see
-<a href="../archive/q51-metrics-reconcile/">q51-metrics-reconcile.md</a>). The optional Layer 2
-link-check CI gate was subsequently delivered by Q52 (<code>scripts/docs/check-doc-links.sh</code>,
-slug-aware, wired into <code>make check</code>).</p>
+<p><strong>All findings resolved.</strong> The Layer 3 metrics gap was closed by Q51 (see <a href="../archive/q51-metrics-reconcile/">q51-metrics-reconcile.md</a>).
+The optional Layer 2 link-check CI gate was subsequently delivered by Q52 (<code>scripts/docs/check-doc-links.sh</code>, slug-aware, wired into <code>make check</code>).</p>
 <hr />
 <h2 id="context-this-is-a-framework-free-docset">Context: this is a framework-free docset<a class="headerlink" href="#context-this-is-a-framework-free-docset" title="Permanent link">&para;</a></h2>
-<p><code>docs/</code> is plain GitHub-native Markdown — no MkDocs/Sphinx/Docusaurus, no YAML front
-matter, no include/partial mechanism, no versioned-docs tree. That is a deliberate
-choice (renders natively on GitHub, single source of truth is git). It matters here
-because three of the six layers assume framework machinery this repo intentionally
-does not have.</p>
-<p><strong>Decisions — what this audit will <em>not</em> do</strong> (each would add an abstraction the repo
-deliberately avoids, against the CLAUDE.md "smallest change / no new patterns" rule):</p>
+<p><code>docs/</code> is plain GitHub-native Markdown — no MkDocs/Sphinx/Docusaurus, no YAML front matter, no include/partial mechanism, no versioned-docs tree.
+That is a deliberate choice (renders natively on GitHub, single source of truth is git).
+It matters here because three of the six layers assume framework machinery this repo intentionally does not have.</p>
+<p><strong>Decisions — what this audit will <em>not</em> do</strong> (each would add an abstraction the repo deliberately avoids, against the CLAUDE.md "smallest change / no new patterns" rule):</p>
 <ul>
-<li><strong>No YAML front matter</strong> (Layer 4). Nothing renders it; it would be dead metadata.
+<li><strong>No YAML front matter</strong> (Layer 4).
+  Nothing renders it; it would be dead metadata.
   The repo's real taxonomy is the per-directory <code>README.md</code> index tables.</li>
-<li><strong>No partials / transclusion mechanism</strong> (Layer 6). GitHub cannot transclude.
+<li><strong>No partials / transclusion mechanism</strong> (Layer 6).
+  GitHub cannot transclude.
   Framework-free reuse = one canonical home + a cross-link.</li>
-<li><strong>No versioned-docs tree or conditional markup</strong> (Layer 3). Docs describe <code>main</code>.
+<li><strong>No versioned-docs tree or conditional markup</strong> (Layer 3).
+  Docs describe <code>main</code>.
   The analogue of "version" here is implemented-vs-planned status.</li>
 </ul>
-<p>If any of these later becomes warranted (e.g. the docs move to a real site
-generator), that is its own decision to raise explicitly — not part of this audit.</p>
-<p>These decisions now live as standing rules in
-<a href="../../development/documentation-standards/">documentation-standards.md</a>, the canonical
-home for doc conventions; this section keeps the original rationale.</p>
+<p>If any of these later becomes warranted (e.g. the docs move to a real site generator), that is its own decision to raise explicitly — not part of this audit.</p>
+<p>These decisions now live as standing rules in <a href="../../development/documentation-standards/">documentation-standards.md</a>, the canonical home for doc conventions; this section keeps the original rationale.</p>
 <hr />
 <h2 id="layer-1--terminology-consistency--">Layer 1 — Terminology consistency · ⚠️<a class="headerlink" href="#layer-1--terminology-consistency--" title="Permanent link">&para;</a></h2>
-<p>Source of truth: <a href="../../design/08-glossary/"><code>docs/design/08-glossary.md</code></a> — solid,
-20+ terms, <code>GMC</code>/<code>AGC</code> used consistently across the set.</p>
+<p>Source of truth: <a href="../../design/08-glossary/"><code>docs/design/08-glossary.md</code></a> — solid, 20+ terms, <code>GMC</code>/<code>AGC</code> used consistently across the set.</p>
 <p>Tasks:</p>
 <ol>
-<li><strong>Per-page acronym first-use</strong> — ✅ scoped &amp; partially applied. The audit found
-   <code>GMC</code>/<code>AGC</code> used without an in-file expansion in the low-traffic appendices
-   (A, B, D, E, G) and in the core design docs (03–07, network-architecture,
-   appendices C/F), plus standard Kubernetes acronyms (<code>HPA</code>, <code>CRD</code>, <code>RBAC</code>, <code>PDB</code>,
-   <code>PSA</code>, <code>CNI</code>, <code>SLO</code>) across ~20 files.</li>
+<li><strong>Per-page acronym first-use</strong> — ✅ scoped &amp; partially applied.
+   The audit found <code>GMC</code>/<code>AGC</code> used without an in-file expansion in the low-traffic appendices (A, B, D, E, G) and in the core design docs (03–07, network-architecture, appendices C/F), plus standard Kubernetes acronyms (<code>HPA</code>, <code>CRD</code>, <code>RBAC</code>, <code>PDB</code>, <code>PSA</code>, <code>CNI</code>, <code>SLO</code>) across ~20 files.</li>
 <li><strong>Applied:</strong> expanded <code>GMC</code>/<code>AGC</code> at first use in appendices A, B, D, E, G.</li>
-<li><strong>Decision (do not pursue further):</strong> leave the core design docs and the
-     standard Kubernetes acronyms as-is. The design suite is read sequentially with
-     <code>GMC</code>/<code>AGC</code> expanded in 01/02, every term is defined in
-     <a href="../../design/08-glossary/"><code>08-glossary.md</code></a>, and the glossary is now linked from
-     every section README (task 2). Mass-expanding the flagship docs is high churn for
-     low marginal value to a Kubernetes-operator audience. Revisit only if the docs
-     move to a publishing system where pages are indexed/served individually.</li>
-<li><strong>Glossary discoverability</strong> — ✅ done. Linked from
-   <a href="../../development/"><code>docs/development/README.md</code></a> and
-   <a href="../../operations/"><code>docs/operations/README.md</code></a>.</li>
-<li><strong><code>AGC</code>-rename fallout</strong> — ✅ checked. The archived
-   <a href="../archive/rename-agc-to-controller/"><code>archive/rename-agc-to-controller.md</code></a> was an
-   on-cluster <em>resource-name</em> rename (<code>actions-gateway-agc</code> → <code>actions-gateway-controller</code>),
-   not a rename of the <code>AGC</code> acronym; the glossary definition still stands and docs use
-   <code>AGC</code> consistently.</li>
-<li><strong>Casing consistency</strong> for protocol terms (<code>Broker</code> vs <code>broker</code>, <code>Run Service</code>,
-   <code>sessionId</code>, <code>planId</code>) against the glossary's chosen forms — spot-checked, no
-   systematic drift found.</li>
+<li><strong>Decision (do not pursue further):</strong> leave the core design docs and the standard Kubernetes acronyms as-is.
+     The design suite is read sequentially with <code>GMC</code>/<code>AGC</code> expanded in 01/02, every term is defined in <a href="../../design/08-glossary/"><code>08-glossary.md</code></a>, and the glossary is now linked from every section README (task 2).
+     Mass-expanding the flagship docs is high churn for low marginal value to a Kubernetes-operator audience.
+     Revisit only if the docs move to a publishing system where pages are indexed/served individually.</li>
+<li><strong>Glossary discoverability</strong> — ✅ done.
+   Linked from <a href="../../development/"><code>docs/development/README.md</code></a> and <a href="../../operations/"><code>docs/operations/README.md</code></a>.</li>
+<li><strong><code>AGC</code>-rename fallout</strong> — ✅ checked.
+   The archived <a href="../archive/rename-agc-to-controller/"><code>archive/rename-agc-to-controller.md</code></a> was an on-cluster <em>resource-name</em> rename (<code>actions-gateway-agc</code> → <code>actions-gateway-controller</code>), not a rename of the <code>AGC</code> acronym; the glossary definition still stands and docs use <code>AGC</code> consistently.</li>
+<li><strong>Casing consistency</strong> for protocol terms (<code>Broker</code> vs <code>broker</code>, <code>Run Service</code>, <code>sessionId</code>, <code>planId</code>) against the glossary's chosen forms — spot-checked, no systematic drift found.</li>
 </ol>
 <hr />
 <h2 id="layer-2--cross-reference-architecture--">Layer 2 — Cross-reference architecture · ✅<a class="headerlink" href="#layer-2--cross-reference-architecture--" title="Permanent link">&para;</a></h2>
-<p>Cross-references use relative <code>.md</code> paths plus <code>§X.Y</code> anchors and breadcrumb prev/next
-nav in the design docs. After fixes: 0 broken file links and 0 broken in-page anchors
-across the doc set.</p>
+<p>Cross-references use relative <code>.md</code> paths plus <code>§X.Y</code> anchors and breadcrumb prev/next nav in the design docs.
+After fixes: 0 broken file links and 0 broken in-page anchors across the doc set.</p>
 <p>Tasks:</p>
 <ol>
-<li><strong>Fix the one broken link</strong> — ✅ done. <code>docs/plan/archive/milestone-2-tests.md</code>
-   linked to <code>milestone-2.md</code> (moved up a directory) → <code>../milestone-2.md</code>. Full
-   relative-<code>.md</code>-link scan: 0 broken project links.</li>
-<li><strong>Anchor spot-check</strong> — ✅ done (full check, not just spot). Validated all 127
-   in-page <code>#anchor</code> links against the GitHub heading-slug algorithm; found and fixed
-   5 pre-existing broken anchors: 3 in <code>design/README.md</code> (TOC pointed at richer text
-   than the actual <code>01-executive-summary.md</code> subheadings), 1 in <code>02-architecture.md</code>
-   (<code>§11.A</code> said <code>investigation</code>, heading is <code>protocol</code>), and 1 in <code>security.md</code> (the
-   <code>worker-egress-proxy.md</code> "Implementation status" heading carried a volatile
-   date+commit — stabilized the heading so the anchor is durable). Now 0 broken anchors.</li>
-<li><strong>Link-check CI gate — delivered (Q52).</strong> A slug-aware markdown link/anchor check (<code>scripts/docs/check-doc-links.sh</code>, run by <code>make doc-links</code> in <code>make check</code>). Originally framed as a lightweight markdown-link-check step in
-   <code>unit-test.yml</code> would fit the repo's recent CI-gate culture (the lint gate just
-   landed). Flagged as optional — decide separately; do not bundle.</li>
+<li><strong>Fix the one broken link</strong> — ✅ done. <code>docs/plan/archive/milestone-2-tests.md</code> linked to <code>milestone-2.md</code> (moved up a directory) → <code>../milestone-2.md</code>.
+   Full relative-<code>.md</code>-link scan: 0 broken project links.</li>
+<li><strong>Anchor spot-check</strong> — ✅ done (full check, not just spot).
+   Validated all 127 in-page <code>#anchor</code> links against the GitHub heading-slug algorithm; found and fixed 5 pre-existing broken anchors: 3 in <code>design/README.md</code> (TOC pointed at richer text than the actual <code>01-executive-summary.md</code> subheadings), 1 in <code>02-architecture.md</code> (<code>§11.A</code> said <code>investigation</code>, heading is <code>protocol</code>), and 1 in <code>security.md</code> (the <code>worker-egress-proxy.md</code> "Implementation status" heading carried a volatile date+commit — stabilized the heading so the anchor is durable).
+   Now 0 broken anchors.</li>
+<li><strong>Link-check CI gate — delivered (Q52).</strong> A slug-aware markdown link/anchor check (<code>scripts/docs/check-doc-links.sh</code>, run by <code>make doc-links</code> in <code>make check</code>).
+   Originally framed as a lightweight markdown-link-check step in <code>unit-test.yml</code> would fit the repo's recent CI-gate culture (the lint gate just landed).
+   Flagged as optional — decide separately; do not bundle.</li>
 </ol>
 <hr />
 <h2 id="layer-3--version--conditional-logic---na-by-design">Layer 3 — Version / conditional logic · ✅ N/A by design<a class="headerlink" href="#layer-3--version--conditional-logic---na-by-design" title="Permanent link">&para;</a></h2>
-<p>No product versioning; docs describe <code>main</code>. The repo's analogue is the
-implemented-vs-planned distinction, which CLAUDE.md explicitly warns about
-("investigation findings marked ✅ must be end-to-end verified, not source-read").</p>
+<p>No product versioning; docs describe <code>main</code>.
+The repo's analogue is the implemented-vs-planned distinction, which CLAUDE.md explicitly warns about ("investigation findings marked ✅ must be end-to-end verified, not source-read").</p>
 <p>Task:</p>
 <ol>
 <li><strong>Implemented-vs-planned prose audit</strong> — ✅ audited; one significant finding.
-   The highest-signal check was cross-referencing every documented Prometheus metric
-   name against the metric literals actually registered in non-test Go
-   (<code>cmd/proxy/proxy.go</code>, <code>cmd/agc/internal/listener/metrics.go</code>). <strong>15 metrics are
-   implemented; the docs reference 6 that have no code definition at all</strong> — operator
-   docs document telemetry an operator cannot scrape.</li>
+   The highest-signal check was cross-referencing every documented Prometheus metric name against the metric literals actually registered in non-test Go (<code>cmd/proxy/proxy.go</code>, <code>cmd/agc/internal/listener/metrics.go</code>). <strong>15 metrics are implemented; the docs reference 6 that have no code definition at all</strong> — operator docs document telemetry an operator cannot scrape.</li>
 </ol>
 <table>
 <thead>
@@ -2862,67 +2830,42 @@ implemented-vs-planned distinction, which CLAUDE.md explicitly warns about
 </tr>
 </tbody>
 </table>
-<p>(<code>_bucket</code>/<code>_sum</code> suffixes on histograms are Prometheus-derived, not separate
-   metrics — not counted as gaps.)</p>
-<p><strong>Resolved by Q51</strong> — see <a href="../archive/q51-metrics-reconcile/">q51-metrics-reconcile.md</a>
-   for the per-metric rationale. Docs and code now agree: every documented
-   non-<code>(planned)</code> metric is registered, and the re-pointed name matches what
-   controller-runtime actually emits.</p>
-<p>No other class of "described as shipped but not implemented" prose was found:
-   design docs describe intended behavior in present tense (conventional for a design
-   suite), and the milestone status lives in <code>docs/STATUS.md</code>.</p>
+<p>(<code>_bucket</code>/<code>_sum</code> suffixes on histograms are Prometheus-derived, not separate metrics — not counted as gaps.)</p>
+<p><strong>Resolved by Q51</strong> — see <a href="../archive/q51-metrics-reconcile/">q51-metrics-reconcile.md</a> for the per-metric rationale.
+   Docs and code now agree: every documented non-<code>(planned)</code> metric is registered, and the re-pointed name matches what controller-runtime actually emits.</p>
+<p>No other class of "described as shipped but not implemented" prose was found: design docs describe intended behavior in present tense (conventional for a design suite), and the milestone status lives in <code>docs/STATUS.md</code>.</p>
 <hr />
 <h2 id="layer-4--metadata--taxonomy---no-front-matter">Layer 4 — Metadata / taxonomy · ⚠️ (no front matter)<a class="headerlink" href="#layer-4--metadata--taxonomy---no-front-matter" title="Permanent link">&para;</a></h2>
-<p>The repo has no YAML front matter and will not gain any (see Decisions). The real
-metadata layer is the per-directory <code>README.md</code> index — one row per doc with a
-one-line description and (in design/ops) an audience.</p>
+<p>The repo has no YAML front matter and will not gain any (see Decisions).
+The real metadata layer is the per-directory <code>README.md</code> index — one row per doc with a one-line description and (in design/ops) an audience.</p>
 <p>Tasks:</p>
 <ol>
-<li><strong>Index completeness sweep.</strong> For each of <code>design/</code>, <code>development/</code>, <code>operations/</code>,
-   <code>plan/</code> (and the <code>cmd/</code>, <code>test/</code>, <code>scripts/</code>, <code>tools/</code> READMEs): every doc present
-   is listed, no listed doc is missing, and each one-line description still matches
-   the doc's content.</li>
-<li><strong>Resolve stragglers.</strong> <code>k8s-best-practices.md</code> appears only in <code>docs/STATUS.md</code>,
-   not in <code>plan/README.md</code>'s index — confirm intended and add a row if not.</li>
+<li><strong>Index completeness sweep.</strong> For each of <code>design/</code>, <code>development/</code>, <code>operations/</code>, <code>plan/</code> (and the <code>cmd/</code>, <code>test/</code>, <code>scripts/</code>, <code>tools/</code> READMEs): every doc present is listed, no listed doc is missing, and each one-line description still matches the doc's content.</li>
+<li><strong>Resolve stragglers.</strong> <code>k8s-best-practices.md</code> appears only in <code>docs/STATUS.md</code>, not in <code>plan/README.md</code>'s index — confirm intended and add a row if not.</li>
 </ol>
 <hr />
 <h2 id="layer-5--navigation--information-hierarchy---real-gap">Layer 5 — Navigation / information hierarchy · ⚠️ (real gap)<a class="headerlink" href="#layer-5--navigation--information-hierarchy---real-gap" title="Permanent link">&para;</a></h2>
-<p>Source of truth: per-directory <code>README.md</code> indexes, design-doc breadcrumbs, and the
-role-based reading paths in <code>design/README.md</code>.</p>
+<p>Source of truth: per-directory <code>README.md</code> indexes, design-doc breadcrumbs, and the role-based reading paths in <code>design/README.md</code>.</p>
 <p>Tasks:</p>
 <ol>
-<li><strong>Add <code>docs/README.md</code> landing page</strong> — the highest-value single fix. <code>docs/</code> root
-   holds <code>getting-started.md</code>, <code>STATUS.md</code>, and four subdirs with nothing tying them
-   together. Add a top-level index: one line per subdir + the two root docs, plus the
-   role-based entry points (mirror, don't duplicate, the <code>design/README.md</code> paths).</li>
-<li><strong>Orphan check.</strong> Confirm every doc is reachable from some index — appendices,
-   <code>network-architecture.md</code> (un-numbered, sits outside the breadcrumb sequence),
-   <code>k8s-best-practices.md</code>.</li>
-<li><strong>Heading hierarchy + case sweep.</strong> Confirm each design doc uses <code>#</code> title / <code>##</code>
-   sections consistently and heading case (sentence vs title) is uniform within the
-   set.</li>
+<li><strong>Add <code>docs/README.md</code> landing page</strong> — the highest-value single fix. <code>docs/</code> root holds <code>getting-started.md</code>, <code>STATUS.md</code>, and four subdirs with nothing tying them together.
+   Add a top-level index: one line per subdir + the two root docs, plus the role-based entry points (mirror, don't duplicate, the <code>design/README.md</code> paths).</li>
+<li><strong>Orphan check.</strong> Confirm every doc is reachable from some index — appendices, <code>network-architecture.md</code> (un-numbered, sits outside the breadcrumb sequence), <code>k8s-best-practices.md</code>.</li>
+<li><strong>Heading hierarchy + case sweep.</strong> Confirm each design doc uses <code>#</code> title / <code>##</code> sections consistently and heading case (sentence vs title) is uniform within the set.</li>
 </ol>
 <hr />
 <h2 id="layer-6--reusable-content-blocks---done">Layer 6 — Reusable content blocks · ✅ done<a class="headerlink" href="#layer-6--reusable-content-blocks---done" title="Permanent link">&para;</a></h2>
-<p>No include mechanism and none will be added (see Decisions). Framework-free reuse =
-pick one canonical location and cross-link to it; do not paste-and-drift.</p>
-<p><strong>Direction constraint (important):</strong> human-facing docs must never link to <code>CLAUDE.md</code>.
-<code>CLAUDE.md</code> (symlinked <code>AGENTS.md</code>) is the entrypoint <em>for Claude only</em>; humans start at
-<code>README.md</code>. So a shared block lives canonically in the <code>docs/</code> tree, and <code>CLAUDE.md</code>
-may hold its own self-contained copy or link <em>to</em> the human doc — never the reverse.</p>
+<p>No include mechanism and none will be added (see Decisions).
+Framework-free reuse = pick one canonical location and cross-link to it; do not paste-and-drift.</p>
+<p><strong>Direction constraint (important):</strong> human-facing docs must never link to <code>CLAUDE.md</code>. <code>CLAUDE.md</code> (symlinked <code>AGENTS.md</code>) is the entrypoint <em>for Claude only</em>; humans start at <code>README.md</code>.
+So a shared block lives canonically in the <code>docs/</code> tree, and <code>CLAUDE.md</code> may hold its own self-contained copy or link <em>to</em> the human doc — never the reverse.</p>
 <p>Outcome:</p>
 <ol>
-<li>The per-module <code>go test</code> command list appeared in both <code>CLAUDE.md</code> and
-   <a href="../../development/testing/"><code>docs/development/testing.md</code></a>. Resolved by moving the
-   command block into a new <strong>Running tests</strong> section in <code>testing.md</code> (the canonical
-   human home) and replacing the <code>CLAUDE.md</code> copy with a link <em>to</em> <code>testing.md</code> —
-   single source of truth, in the correct direction (<code>CLAUDE.md</code> → docs). (An earlier
-   pass had <code>testing.md</code> link <em>to</em> <code>CLAUDE.md</code>; reverted, as it inverted the direction.)</li>
-<li>Other human docs that linked to <code>CLAUDE.md</code> were redirected to human docs:
-   <code>docs/operations/README.md</code> (dropped the doc-update-checklist link) and
-   <code>CONTRIBUTING.md</code> (now points at <code>docs/design/05-security.md</code>).</li>
-<li>No other drift-prone duplicates worth factoring (the keychain command and AGC/GMC
-   definitions each have a single home).</li>
+<li>The per-module <code>go test</code> command list appeared in both <code>CLAUDE.md</code> and <a href="../../development/testing/"><code>docs/development/testing.md</code></a>.
+   Resolved by moving the command block into a new <strong>Running tests</strong> section in <code>testing.md</code> (the canonical human home) and replacing the <code>CLAUDE.md</code> copy with a link <em>to</em> <code>testing.md</code> — single source of truth, in the correct direction (<code>CLAUDE.md</code> → docs).
+   (An earlier pass had <code>testing.md</code> link <em>to</em> <code>CLAUDE.md</code>; reverted, as it inverted the direction.)</li>
+<li>Other human docs that linked to <code>CLAUDE.md</code> were redirected to human docs: <code>docs/operations/README.md</code> (dropped the doc-update-checklist link) and <code>CONTRIBUTING.md</code> (now points at <code>docs/design/05-security.md</code>).</li>
+<li>No other drift-prone duplicates worth factoring (the keychain command and AGC/GMC definitions each have a single home).</li>
 </ol>
 <hr />
 <h2 id="prioritized-delivery-order">Prioritized delivery order<a class="headerlink" href="#prioritized-delivery-order" title="Permanent link">&para;</a></h2>
@@ -2986,9 +2929,8 @@ may hold its own self-contained copy or link <em>to</em> the human doc — never
 </tr>
 </tbody>
 </table>
-<p>Terminology renames (task 3) go in their own commit, separate from prose edits, so
-the rename is reviewable as one diff. Navigation changes ship together with the page
-move that requires them.</p>
+<p>Terminology renames (task 3) go in their own commit, separate from prose edits, so the rename is reviewable as one diff.
+Navigation changes ship together with the page move that requires them.</p>
 
 
 

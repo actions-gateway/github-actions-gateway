@@ -2642,32 +2642,25 @@
 
 
 <h1 id="2026-08-06-a-paragraph-split-changed-what-a-sentence-referred-to">2026-08-06: a paragraph split changed what a sentence referred to<a class="headerlink" href="#2026-08-06-a-paragraph-split-changed-what-a-sentence-referred-to" title="Permanent link">&para;</a></h1>
-<p>A documentation change that was supposed to move paragraph boundaries moved a
-meaning instead. Two verification instruments were run and both came back clean,
-because neither could see the class of defect that had been introduced. A
-reviewer's question caught it, not a tool.</p>
-<p>Kept because the interesting part is not the wrong sentence. It is that the
-change was verified, the verification was sound, and the verification did not
-cover the claim it was cited for.</p>
+<p>A documentation change that was supposed to move paragraph boundaries moved a meaning instead.
+Two verification instruments were run and both came back clean, because neither could see the class of defect that had been introduced.
+A reviewer's question caught it, not a tool.</p>
+<p>Kept because the interesting part is not the wrong sentence.
+It is that the change was verified, the verification was sound, and the verification did not cover the claim it was cited for.</p>
 <h2 id="impact">Impact<a class="headerlink" href="#impact" title="Permanent link">&para;</a></h2>
 <ul>
-<li>One incorrect technical statement in <a href="../../design/01-executive-summary/"><code>docs/design/01-executive-summary.md</code></a>,
-  live on an open pull request for roughly an hour. It did not reach <code>main</code>.</li>
-<li>Three additional commits to correct it, plus two structural edits made on a
-  bad measurement and reverted.</li>
+<li>One incorrect technical statement in <a href="../../design/01-executive-summary/"><code>docs/design/01-executive-summary.md</code></a>, live on an open pull request for roughly an hour.
+  It did not reach <code>main</code>.</li>
+<li>Three additional commits to correct it, plus two structural edits made on a bad measurement and reverted.</li>
 <li>One round of reviewer attention that the tooling should have absorbed.</li>
 </ul>
 <h2 id="what-the-defect-was">What the defect was<a class="headerlink" href="#what-the-defect-was" title="Permanent link">&para;</a></h2>
-<p>The source paragraph ran: field → tier behaviour → concurrency cap → who owns
-the guardrails → what a platform team can therefore express. Its closing
-sentence began "<strong>This lets</strong> a platform team express 'GPU runners always get at
-least 5 slots, can burst to 20, and are capped at 30'", where "This" reached
-back across the whole paragraph to the <code>priorityTiers</code> field.</p>
-<p>The split moved the guardrail sentence into a paragraph of its own. That put a
-second candidate antecedent between the pronoun and its referent, and the
-reopened sentence was rewritten to "<strong>Together these</strong> let a platform team
-express…". As published, "these" reads as the two platform-owned settings named
-in the intervening paragraph. Those settings are not what expresses 5/20/30.</p>
+<p>The source paragraph ran: field → tier behaviour → concurrency cap → who owns the guardrails → what a platform team can therefore express.
+Its closing sentence began "<strong>This lets</strong> a platform team express 'GPU runners always get at least 5 slots, can burst to 20, and are capped at 30'", where "This" reached back across the whole paragraph to the <code>priorityTiers</code> field.</p>
+<p>The split moved the guardrail sentence into a paragraph of its own.
+That put a second candidate antecedent between the pronoun and its referent, and the reopened sentence was rewritten to "<strong>Together these</strong> let a platform team express…".
+As published, "these" reads as the two platform-owned settings named in the intervening paragraph.
+Those settings are not what expresses 5/20/30.</p>
 <h2 id="timeline">Timeline<a class="headerlink" href="#timeline" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2712,51 +2705,33 @@ in the intervening paragraph. Those settings are not what expresses 5/20/30.</p>
 </tbody>
 </table>
 <h2 id="contributing-factors">Contributing factors<a class="headerlink" href="#contributing-factors" title="Permanent link">&para;</a></h2>
-<p>All systemic. Each one is a thing the repository did not say, or said in a form
-that did not reach the moment it was needed.</p>
-<p><strong>Reconciliation was documented as sufficient.</strong> <a href="../../development/testing/#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query"><code>testing.md</code></a>
-presented before/after token reconciliation as the proof for a bulk change,
-without noting that it is one-directional. It detects removals. The defect was
-an addition, and additions are invisible to it. The check was correct and was
-cited for a claim it does not support.</p>
-<p><strong>A differential claim was measured with a point-in-time scan.</strong> The follow-up
-probe answered "which labels have unlabelled paragraphs after them" and the
-result was reported as "which of those this change caused". Those are different
-questions and the numbers differ by a factor of three. Nothing required a probe
-making a claim about a change to be run against the base tree as well.</p>
-<p><strong>No rule covered split-induced referent breakage.</strong> A pronoun whose antecedent
-moves is the characteristic failure of paragraph splitting, and it was
-undocumented, so nothing prompted a re-read of the reopened paragraphs.</p>
-<p><strong>The repair reflex was to write prose.</strong> Damage from a split was addressed by
-inventing connective text, which is how the second defect entered. Nothing said
-that a seam needing invented words is a signal the split was wrong.</p>
-<p><strong>The general principle existed and did not fire.</strong> <a href="../../development/testing/#the-status-you-report-is-a-claim-too"><code>testing.md</code></a>
-already closes with "name the signal the claim actually depends on, confirm it
-could have shown you the opposite, and read that one." Applied to either probe
-it gives the right answer. Every worked example under it was a <em>corrupted or
-absent</em> signal, so a sound instrument with a narrow scope did not pattern-match
-to the rule.</p>
+<p>All systemic.
+Each one is a thing the repository did not say, or said in a form that did not reach the moment it was needed.</p>
+<p><strong>Reconciliation was documented as sufficient.</strong> <a href="../../development/testing/#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query"><code>testing.md</code></a> presented before/after token reconciliation as the proof for a bulk change, without noting that it is one-directional.
+It detects removals.
+The defect was an addition, and additions are invisible to it.
+The check was correct and was cited for a claim it does not support.</p>
+<p><strong>A differential claim was measured with a point-in-time scan.</strong> The follow-up probe answered "which labels have unlabelled paragraphs after them" and the result was reported as "which of those this change caused".
+Those are different questions and the numbers differ by a factor of three.
+Nothing required a probe making a claim about a change to be run against the base tree as well.</p>
+<p><strong>No rule covered split-induced referent breakage.</strong> A pronoun whose antecedent moves is the characteristic failure of paragraph splitting, and it was undocumented, so nothing prompted a re-read of the reopened paragraphs.</p>
+<p><strong>The repair reflex was to write prose.</strong> Damage from a split was addressed by inventing connective text, which is how the second defect entered.
+Nothing said that a seam needing invented words is a signal the split was wrong.</p>
+<p><strong>The general principle existed and did not fire.</strong> <a href="../../development/testing/#the-status-you-report-is-a-claim-too"><code>testing.md</code></a> already closes with "name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one."
+Applied to either probe it gives the right answer.
+Every worked example under it was a <em>corrupted or absent</em> signal, so a sound instrument with a narrow scope did not pattern-match to the rule.</p>
 <h2 id="action-items">Action items<a class="headerlink" href="#action-items" title="Permanent link">&para;</a></h2>
-<p><strong>Mitigative</strong>, shipped in the change itself: the paragraph reverted, the
-correcting edits made, and nine split rules recorded in
-<a href="../../plan/q710-overlong-paragraphs/"><code>q710-overlong-paragraphs.md</code></a>, including
-reconciliation's blindness to additions and the requirement that a differential
-claim be measured differentially.</p>
+<p><strong>Mitigative</strong>, shipped in the change itself: the paragraph reverted, the correcting edits made, and nine split rules recorded in <a href="../../plan/q710-overlong-paragraphs/"><code>q710-overlong-paragraphs.md</code></a>, including reconciliation's blindness to additions and the requirement that a differential claim be measured differentially.</p>
 <p><strong>Preventative</strong>, the class rather than the instance:</p>
 <ul>
-<li>A worked example under
-  <a href="../../development/testing/#the-status-you-report-is-a-claim-too">The status you report is a claim too</a>
-  for a <em>sound</em> instrument whose question is narrower than the claim, so the
-  section's closing principle has an instance of this shape to match against.</li>
-<li>A statement in the reconciliation section that the check is one-directional,
-  and that a prose edit needs more than it.</li>
+<li>A worked example under <a href="../../development/testing/#the-status-you-report-is-a-claim-too">The status you report is a claim too</a> for a <em>sound</em> instrument whose question is narrower than the claim, so the section's closing principle has an instance of this shape to match against.</li>
+<li>A statement in the reconciliation section that the check is one-directional, and that a prose edit needs more than it.</li>
 </ul>
 <h2 id="what-this-is-not">What this is not<a class="headerlink" href="#what-this-is-not" title="Permanent link">&para;</a></h2>
-<p>Not a case of a missing gate. No repository gate reads prose: link checks
-resolve links, the punctuation gate counts punctuation. A gate that could have
-caught this would have to understand what a pronoun refers to. The realistic
-defence is the documented discipline, applied, which is why both action items
-are rules rather than tooling.</p>
+<p>Not a case of a missing gate.
+No repository gate reads prose: link checks resolve links, the punctuation gate counts punctuation.
+A gate that could have caught this would have to understand what a pronoun refers to.
+The realistic defence is the documented discipline, applied, which is why both action items are rules rather than tooling.</p>
 
 
 

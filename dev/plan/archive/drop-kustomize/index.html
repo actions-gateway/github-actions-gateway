@@ -2661,88 +2661,44 @@
 <h1 id="plan-helm-as-the-sole-cluster-install-path-q142">Plan: Helm as the sole cluster-install path (Q142)<a class="headerlink" href="#plan-helm-as-the-sole-cluster-install-path-q142" title="Permanent link">&para;</a></h1>
 <p>← <a href="../../../STATUS/">STATUS</a> · absorbs <a href="../../../STATUS/">Q73</a></p>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Make the <strong>Helm chart</strong> the single thing that installs the gateway to a cluster,
-and eliminate the duplicate, hand-maintained manifests that currently exist in
-both <code>cmd/*/config/</code> (kustomize) and <code>charts/actions-gateway/</code>. Today there are
-two parallel deploy systems and the chart's CRDs/RBAC are hand-copied from the
-generated <code>config/</code> output — a silent-drift liability (<a href="../../../STATUS/">Q73</a>).</p>
+<p>Make the <strong>Helm chart</strong> the single thing that installs the gateway to a cluster, and eliminate the duplicate, hand-maintained manifests that currently exist in both <code>cmd/*/config/</code> (kustomize) and <code>charts/actions-gateway/</code>.
+Today there are two parallel deploy systems and the chart's CRDs/RBAC are hand-copied from the generated <code>config/</code> output — a silent-drift liability (<a href="../../../STATUS/">Q73</a>).</p>
 <h2 id="what-stays-what-goes">What stays, what goes<a class="headerlink" href="#what-stays-what-goes" title="Permanent link">&para;</a></h2>
-<p><code>config/</code> is <strong>not</strong> purely an install vehicle — it is the code-generation and
-test substrate, and that role is irreplaceable:</p>
+<p><code>config/</code> is <strong>not</strong> purely an install vehicle — it is the code-generation and test substrate, and that role is irreplaceable:</p>
 <ul>
-<li><strong><code>controller-gen</code> output target.</strong> <code>make manifests</code> writes the CRD/RBAC
-  manifests as plain YAML into <code>config/crd</code>, <code>config/rbac</code>, <code>config/webhook</code>
-  (<code>cmd/gmc/Makefile</code>, <code>cmd/agc/Makefile</code>). controller-gen emits plain YAML; the
-  chart is downstream of it.</li>
-<li><strong>envtest CRD source.</strong> The integration suites load CRDs straight from disk
-  (<code>CRDDirectoryPaths: [".../config/crd/bases", ".../agc/config/crd"]</code>). envtest
-  needs plain YAML; it never invokes kustomize.</li>
+<li><strong><code>controller-gen</code> output target.</strong> <code>make manifests</code> writes the CRD/RBAC manifests as plain YAML into <code>config/crd</code>, <code>config/rbac</code>, <code>config/webhook</code> (<code>cmd/gmc/Makefile</code>, <code>cmd/agc/Makefile</code>). controller-gen emits plain YAML; the chart is downstream of it.</li>
+<li><strong>envtest CRD source.</strong> The integration suites load CRDs straight from disk (<code>CRDDirectoryPaths: [".../config/crd/bases", ".../agc/config/crd"]</code>). envtest needs plain YAML; it never invokes kustomize.</li>
 </ul>
-<p>So we keep the generated plain-YAML manifests under <code>config/</code>, but retire
-<strong>kustomize the overlay tool</strong> as a <em>deploy</em> path and stop hand-maintaining the
-chart copies.</p>
+<p>So we keep the generated plain-YAML manifests under <code>config/</code>, but retire <strong>kustomize the overlay tool</strong> as a <em>deploy</em> path and stop hand-maintaining the chart copies.</p>
 <h2 id="slices-each-its-own-pr">Slices (each its own PR)<a class="headerlink" href="#slices-each-its-own-pr" title="Permanent link">&para;</a></h2>
 <h3 id="a-single-source-crds--drift-gate--this-pr-absorbs-q73">A. Single-source CRDs + drift gate — <em>this PR</em> (absorbs Q73)<a class="headerlink" href="#a-single-source-crds--drift-gate--this-pr-absorbs-q73" title="Permanent link">&para;</a></h3>
-<p>The chart's <code>templates/crds/*.yaml</code> are hand-copies of the controller-gen
-sources plus a <code>helm.sh/resource-policy: keep</code> annotation. The GMC's bundled
-<code>config/crd/bases/...runnergroups.yaml</code> is controller-gen output of the
-<em>imported</em> RunnerGroup type, which can drift from the AGC-authoritative copy
-under k8s.io/api skew — the exact Q73 hazard.</p>
+<p>The chart's <code>templates/crds/*.yaml</code> are hand-copies of the controller-gen sources plus a <code>helm.sh/resource-policy: keep</code> annotation.
+The GMC's bundled <code>config/crd/bases/...runnergroups.yaml</code> is controller-gen output of the <em>imported</em> RunnerGroup type, which can drift from the AGC-authoritative copy under k8s.io/api skew — the exact Q73 hazard.</p>
 <ul>
 <li><strong>Authoritative sources</strong> (owned by each module's controller-gen):</li>
 <li><code>cmd/gmc/config/crd/bases/...actionsgateways.yaml</code> (GMC owns <code>ActionsGateway</code>)</li>
 <li><code>cmd/agc/config/crd/...runnergroups.yaml</code> (AGC owns <code>RunnerGroup</code>)</li>
-<li><strong><code>scripts/manifest/sync-chart-crds.sh</code></strong> generates the two chart CRD templates from
-  those sources, injecting the per-CRD <code>helm.sh/resource-policy: keep</code> annotation
-  block. <code>make chart-crds</code> writes them.</li>
-<li><strong><code>make chart-crds-check</code></strong> (vendor-check pattern) re-runs the sync and
-  <code>git diff --exit-code</code>s the chart copies, <strong>and</strong> asserts the GMC-bundled
-  RunnerGroup is byte-identical to the AGC-authoritative copy. Wired into
-  <code>make check</code> and <code>manifest-validate.yml</code>. A future field add that isn't
-  propagated, or an api-skew drift, fails CI.</li>
+<li><strong><code>scripts/manifest/sync-chart-crds.sh</code></strong> generates the two chart CRD templates from those sources, injecting the per-CRD <code>helm.sh/resource-policy: keep</code> annotation block. <code>make chart-crds</code> writes them.</li>
+<li><strong><code>make chart-crds-check</code></strong> (vendor-check pattern) re-runs the sync and <code>git diff --exit-code</code>s the chart copies, <strong>and</strong> asserts the GMC-bundled RunnerGroup is byte-identical to the AGC-authoritative copy.
+  Wired into <code>make check</code> and <code>manifest-validate.yml</code>.
+  A future field add that isn't propagated, or an api-skew drift, fails CI.</li>
 </ul>
-<p>This removes the chart-side hand-copy as a source of truth (it becomes
-generated) and gates the GMC-bundled copy against AGC.</p>
+<p>This removes the chart-side hand-copy as a source of truth (it becomes generated) and gates the GMC-bundled copy against AGC.</p>
 <h3 id="b-e2e-installs-via-helm--done">B. e2e installs via Helm — <em>DONE</em><a class="headerlink" href="#b-e2e-installs-via-helm--done" title="Permanent link">&para;</a></h3>
-<p><code>cmd/gmc/Makefile</code>'s <code>deploy</code>/<code>undeploy</code> now wrap <code>helm upgrade --install</code> /
-<code>helm uninstall</code> of <code>charts/actions-gateway</code> (the same chart we publish), and the
-kind e2e suite's <code>setupGMC()</code>/<code>teardownGMC()</code> drive them — so the chart install
-path is exercised on every e2e run. The chart sets <code>allowFloatingImageTags=true</code>
-and the gmc/agc/proxy image values from <code>GMC_IMG</code>/<code>AGC_IMG</code>/<code>PROXY_IMG</code>; the
-e2e-only <code>--allow-agc-extra-env</code> + <code>AGC_EXTRA_*</code> env injection stays as a
-post-install <code>kubectl patch</code>. An <code>azure/setup-helm</code> step was added to
-<code>e2e-test.yml</code>. The green e2e CI run on the PR is the proof.</p>
+<p><code>cmd/gmc/Makefile</code>'s <code>deploy</code>/<code>undeploy</code> now wrap <code>helm upgrade --install</code> / <code>helm uninstall</code> of <code>charts/actions-gateway</code> (the same chart we publish), and the kind e2e suite's <code>setupGMC()</code>/<code>teardownGMC()</code> drive them — so the chart install path is exercised on every e2e run.
+The chart sets <code>allowFloatingImageTags=true</code> and the gmc/agc/proxy image values from <code>GMC_IMG</code>/<code>AGC_IMG</code>/<code>PROXY_IMG</code>; the e2e-only <code>--allow-agc-extra-env</code> + <code>AGC_EXTRA_*</code> env injection stays as a post-install <code>kubectl patch</code>.
+An <code>azure/setup-helm</code> step was added to <code>e2e-test.yml</code>.
+The green e2e CI run on the PR is the proof.</p>
 <h3 id="c-delete-kustomize-overlays--done">C. Delete kustomize overlays — <em>DONE</em><a class="headerlink" href="#c-delete-kustomize-overlays--done" title="Permanent link">&para;</a></h3>
-<p>Removed the kustomize <em>deploy</em> path: <code>config/default</code>, <code>config/manager</code>,
-<code>config/certmanager</code>, <code>config/network-policy</code>, <code>config/prometheus</code>,
-<code>config/samples</code>, the <code>config/agc-tenant-role</code> copy, and the deploy-only
-<code>config/rbac</code> scaffolding (leader-election, metrics, editor/viewer/admin roles,
-service account, role binding, kustomizations), plus the <code>make deploy</code>/<code>install</code>
-kustomize wiring. The chart owns every one of those resources.</p>
-<p><strong>What stays</strong> under <code>cmd/*/config/</code> is the codegen + envtest substrate, NOT an
-install vehicle: the controller-gen CRD/RBAC/webhook outputs (also the
-single-source inputs to the chart generators, and what <code>rbac_test.go</code> + envtest
-load) and the two <code>admission-policy</code> ValidatingAdmissionPolicies the GMC
-integration suite applies in envtest. <code>make manifests</code> reproduces them.</p>
-<p><strong>RBAC seam — single-sourced now</strong> (user decision, this PR). <code>scripts/manifest/sync-chart-rbac.sh</code>
-generates <code>charts/actions-gateway/files/manager-role-rules.yaml</code> from
-<code>cmd/gmc/config/rbac/role.yaml</code>; the chart's <code>manager-role</code> template embeds it
-via <code>.Files.Get</code>, and <code>make chart-rbac-check</code> gates drift (wired into <code>make check</code>
-and <code>make manifest-validate</code>) — mirroring slice A's CRD gate. <code>manifest-validate</code>
-no longer renders any kustomize overlay; it schema-validates the retained
-controller-gen manifests + VAPs as standalone files plus the chart renders.</p>
+<p>Removed the kustomize <em>deploy</em> path: <code>config/default</code>, <code>config/manager</code>, <code>config/certmanager</code>, <code>config/network-policy</code>, <code>config/prometheus</code>, <code>config/samples</code>, the <code>config/agc-tenant-role</code> copy, and the deploy-only <code>config/rbac</code> scaffolding (leader-election, metrics, editor/viewer/admin roles, service account, role binding, kustomizations), plus the <code>make deploy</code>/<code>install</code> kustomize wiring.
+The chart owns every one of those resources.</p>
+<p><strong>What stays</strong> under <code>cmd/*/config/</code> is the codegen + envtest substrate, NOT an install vehicle: the controller-gen CRD/RBAC/webhook outputs (also the single-source inputs to the chart generators, and what <code>rbac_test.go</code> + envtest load) and the two <code>admission-policy</code> ValidatingAdmissionPolicies the GMC integration suite applies in envtest. <code>make manifests</code> reproduces them.</p>
+<p><strong>RBAC seam — single-sourced now</strong> (user decision, this PR). <code>scripts/manifest/sync-chart-rbac.sh</code> generates <code>charts/actions-gateway/files/manager-role-rules.yaml</code> from <code>cmd/gmc/config/rbac/role.yaml</code>; the chart's <code>manager-role</code> template embeds it via <code>.Files.Get</code>, and <code>make chart-rbac-check</code> gates drift (wired into <code>make check</code> and <code>make manifest-validate</code>) — mirroring slice A's CRD gate. <code>manifest-validate</code> no longer renders any kustomize overlay; it schema-validates the retained controller-gen manifests + VAPs as standalone files plus the chart renders.</p>
 <h2 id="out-of-scope-follow-ups">Out of scope (follow-ups)<a class="headerlink" href="#out-of-scope-follow-ups" title="Permanent link">&para;</a></h2>
 <ul>
-<li>~~Single-sourcing the chart's <strong>webhook</strong> config and the <strong>agc-tenant-role</strong> /
-  metrics / leader-election roles.~~ <strong>DONE in <a href="../q143-single-source-webhook-roles/">Q143</a>.</strong>
-  The webhook now generates from <code>cmd/gmc/config/webhook/manifests.yaml</code>
-  (<code>make chart-webhook</code> + <code>chart-webhook-check</code>); the agc-tenant-role rules are
-  single-sourced in a shared <code>files/</code> fragment read by both the chart and the GMC
-  integration suite. The metrics / leader-election roles needed no work: slice C
-  removed their <code>config/</code> copies, so the chart is already their sole copy and no
-  controller-gen generator exists for that standard scaffolding. (The original
-  note here assumed retained <code>config/</code> copies for all four; only the webhook
-  still had one.)</li>
+<li>~~Single-sourcing the chart's <strong>webhook</strong> config and the <strong>agc-tenant-role</strong> / metrics / leader-election roles.~~ <strong>DONE in <a href="../q143-single-source-webhook-roles/">Q143</a>.</strong> The webhook now generates from <code>cmd/gmc/config/webhook/manifests.yaml</code> (<code>make chart-webhook</code> + <code>chart-webhook-check</code>); the agc-tenant-role rules are single-sourced in a shared <code>files/</code> fragment read by both the chart and the GMC integration suite.
+  The metrics / leader-election roles needed no work: slice C removed their <code>config/</code> copies, so the chart is already their sole copy and no controller-gen generator exists for that standard scaffolding.
+  (The original note here assumed retained <code>config/</code> copies for all four; only the webhook still had one.)</li>
 <li>Removing the GMC's bundled RunnerGroup copy entirely (vs. gating it).</li>
 </ul>
 

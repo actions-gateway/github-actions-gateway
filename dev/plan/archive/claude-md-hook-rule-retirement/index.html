@@ -2588,11 +2588,16 @@
 
 <h1 id="claudemd-hook-rule-retirement-map">CLAUDE.md hook-rule retirement map<a class="headerlink" href="#claudemd-hook-rule-retirement-map" title="Permanent link">&para;</a></h1>
 <p><strong>Status (2026-07-20):</strong> ✅ Complete — every mapped upstream fix shipped in an installed plugin release (workspace-guard 1.7.1, branch-guard 1.4.0, prod-guard 2.4.0, foreground-guard 0.2.0), each retirement verified per the ground rules below, and all mapped <code>CLAUDE.md</code> rules retired (Q348).</p>
-<p>Q340 (PR #683) trimmed <code>CLAUDE.md</code>'s Hooks and Testing sections to must-act-on rules plus pointers. Several surviving rules exist only to route around gaps in the guard plugins; upstream asks for those gaps were filed 2026-07-18. As each ships, the mapped rule below can be deleted or shrunk further. Piecemeal retirement is fine — take whichever rows have landed.</p>
+<p>Q340 (PR #683) trimmed <code>CLAUDE.md</code>'s Hooks and Testing sections to must-act-on rules plus pointers.
+Several surviving rules exist only to route around gaps in the guard plugins; upstream asks for those gaps were filed 2026-07-18.
+As each ships, the mapped rule below can be deleted or shrunk further.
+Piecemeal retirement is fine — take whichever rows have landed.</p>
 <p>Two ground rules for the retirement session:</p>
 <ul>
-<li>A fix counts as landed only when it ships <strong>in a released plugin version that is actually installed</strong> — marketplace installs don't auto-update. Refresh with <code>claude plugin marketplace update</code>, then <code>claude plugin update &lt;plugin&gt;@&lt;marketplace&gt;</code>, and confirm with <code>claude plugin list</code>.</li>
-<li><strong>Verify before deleting:</strong> reproduce the previously-prompting command once with the updated plugin (a heredoc'd Bash call, a <code>$(git rev-parse …)</code> git chain, …) and confirm no prompt/block. Treat the upstream issue's "closed" state as unverified until exercised.</li>
+<li>A fix counts as landed only when it ships <strong>in a released plugin version that is actually installed</strong> — marketplace installs don't auto-update.
+  Refresh with <code>claude plugin marketplace update</code>, then <code>claude plugin update &lt;plugin&gt;@&lt;marketplace&gt;</code>, and confirm with <code>claude plugin list</code>.</li>
+<li><strong>Verify before deleting:</strong> reproduce the previously-prompting command once with the updated plugin (a heredoc'd Bash call, a <code>$(git rev-parse …)</code> git chain, …) and confirm no prompt/block.
+  Treat the upstream issue's "closed" state as unverified until exercised.</li>
 </ul>
 <h2 id="the-map">The map<a class="headerlink" href="#the-map" title="Permanent link">&para;</a></h2>
 <table>

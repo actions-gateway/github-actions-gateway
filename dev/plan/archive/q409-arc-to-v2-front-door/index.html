@@ -2683,34 +2683,22 @@
 
 <h1 id="q409--align-the-tenant-facing-v2-version-and-route-the-arc-migration-at-v2">Q409 — Align the tenant-facing v2 version, and route the ARC migration at v2<a class="headerlink" href="#q409--align-the-tenant-facing-v2-version-and-route-the-arc-migration-at-v2" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status:</strong> ✅ Done. Both slices shipped together; see <a href="#scope">Scope</a> for why they
-could not be split.</p>
+<p><strong>Status:</strong> ✅ Done.
+Both slices shipped together; see <a href="#scope">Scope</a> for why they could not be split.</p>
 </blockquote>
 <h2 id="why-this-exists">Why this exists<a class="headerlink" href="#why-this-exists" title="Permanent link">&para;</a></h2>
-<p>Two defects with one root cause: the v2 front-door work (Q273) routed the
-<em>onboarding</em> docs to v2 but left two tenant-facing surfaces behind.</p>
+<p>Two defects with one root cause: the v2 front-door work (Q273) routed the <em>onboarding</em> docs to v2 but left two tenant-facing surfaces behind.</p>
 <ol>
-<li><strong><a href="../../../operations/migration-from-arc/"><code>migration-from-arc.md</code></a> still teaches
-   the whole ARC migration on <code>v1alpha1</code></strong>, and asserts v1 is "the GA default".
-   Both halves are wrong: <code>v1alpha1</code> is alpha, is
-   <a href="../../../operations/v1alpha1-deprecation/">deprecated</a>, and is queued for removal
-   (<a href="../../../STATUS/#Q273">Q273</a> → <a href="../../../STATUS/#Q264">Q264</a>).</li>
-<li><strong>Every onboarding doc names <code>v2alpha1</code> while also claiming v2 "has reached its
-   first stability contract at <code>v2beta1</code>"</strong> — self-contradictory, and it points new
-   tenants at the coexistence version rather than the graduated one.</li>
+<li><strong><a href="../../../operations/migration-from-arc/"><code>migration-from-arc.md</code></a> still teaches the whole ARC migration on <code>v1alpha1</code></strong>, and asserts v1 is "the GA default".
+   Both halves are wrong: <code>v1alpha1</code> is alpha, is <a href="../../../operations/v1alpha1-deprecation/">deprecated</a>, and is queued for removal (<a href="../../../STATUS/#Q273">Q273</a> → <a href="../../../STATUS/#Q264">Q264</a>).</li>
+<li><strong>Every onboarding doc names <code>v2alpha1</code> while also claiming v2 "has reached its first stability contract at <code>v2beta1</code>"</strong> — self-contradictory, and it points new tenants at the coexistence version rather than the graduated one.</li>
 </ol>
-<p>The ARC guide is the worse of the two, because the version it names is not merely
-stale positioning — it changes the job-acquisition protocol the reader ends up on.</p>
+<p>The ARC guide is the worse of the two, because the version it names is not merely stale positioning — it changes the job-acquisition protocol the reader ends up on.</p>
 <h3 id="the-arc-guide-routed-scale-set-users-into-the-one-known-regression">The ARC guide routed scale-set users into the one known regression<a class="headerlink" href="#the-arc-guide-routed-scale-set-users-into-the-one-known-regression" title="Permanent link">&para;</a></h3>
-<p><code>v1alpha1</code> has no <code>acquisitionProtocol</code> field: it is <strong>Classic-only</strong>. The guide is
-explicitly scoped to ARC's <strong>scale-set mode</strong>, i.e. readers who are already on a
-single-acquirer protocol. Sending them to <code>v1alpha1</code> moved them onto the classic
-many-acquirers broker — the path measured at <strong>2/7 vs scale-set's 7/7</strong> under
-high-burst fan-out (<a href="../../q264-scale-set-protocol/">Q264 P4</a>), and the one the
-<a href="../../v1-classic-sunset-review/">sunset review</a> declared terminal.</p>
-<p>So the pre-existing guide told GAG's best-fit prospects to migrate into a known
-structural ceiling, then migrate twice more (v1 → v2, Classic → ScaleSet) to get
-back to where ARC already had them.</p>
+<p><code>v1alpha1</code> has no <code>acquisitionProtocol</code> field: it is <strong>Classic-only</strong>.
+The guide is explicitly scoped to ARC's <strong>scale-set mode</strong>, i.e. readers who are already on a single-acquirer protocol.
+Sending them to <code>v1alpha1</code> moved them onto the classic many-acquirers broker — the path measured at <strong>2/7 vs scale-set's 7/7</strong> under high-burst fan-out (<a href="../../q264-scale-set-protocol/">Q264 P4</a>), and the one the <a href="../../v1-classic-sunset-review/">sunset review</a> declared terminal.</p>
+<p>So the pre-existing guide told GAG's best-fit prospects to migrate into a known structural ceiling, then migrate twice more (v1 → v2, Classic → ScaleSet) to get back to where ARC already had them.</p>
 <p>Routing at v2 also makes the mapping <em>simpler</em>, not just more current:</p>
 <table>
 <thead>
@@ -2743,25 +2731,18 @@ back to where ARC already had them.</p>
 </tr>
 </tbody>
 </table>
-<p>The third row is the one that changes the guide's shape most: routing was its
-"the one that bites" section under v1, and under v2 it is a straight
-correspondence.</p>
+<p>The third row is the one that changes the guide's shape most: routing was its "the one that bites" section under v1, and under v2 it is a straight correspondence.</p>
 <h2 id="decision--new-tenants-onboard-on-v2beta1">Decision — new tenants onboard on <code>v2beta1</code><a class="headerlink" href="#decision--new-tenants-onboard-on-v2beta1" title="Permanent link">&para;</a></h2>
-<p>Recorded here because the version split is not self-evident from the CRD chart,
-which serves both.</p>
+<p>Recorded here because the version split is not self-evident from the CRD chart, which serves both.</p>
 <ul>
-<li><strong><code>v2beta1</code></strong> is the graduated storage/hub version and is <strong>ScaleSet-only</strong> (the
-  graduation strips <code>acquisitionProtocol</code>/<code>maxListeners</code>). It is the version every
-  tenant-facing onboarding path names.</li>
-<li><strong><code>v2alpha1</code></strong> stays served for exactly one job: the <code>gag-migrate</code> on-ramp. A
-  migrating v1 tenant lands there because its groups are multi-label Classic, which
-  <code>v2beta1</code> cannot express; it converts up once it no longer needs Classic.</li>
+<li><strong><code>v2beta1</code></strong> is the graduated storage/hub version and is <strong>ScaleSet-only</strong> (the graduation strips <code>acquisitionProtocol</code>/<code>maxListeners</code>).
+  It is the version every tenant-facing onboarding path names.</li>
+<li><strong><code>v2alpha1</code></strong> stays served for exactly one job: the <code>gag-migrate</code> on-ramp.
+  A migrating v1 tenant lands there because its groups are multi-label Classic, which <code>v2beta1</code> cannot express; it converts up once it no longer needs Classic.</li>
 </ul>
-<p>A <strong>new</strong> tenant never needs Classic, so it never needs <code>v2alpha1</code>. Onboarding docs
-that named <code>v2alpha1</code> were handing new tenants the migration on-ramp and its
-deprecated protocol selector.</p>
-<p>Corollary for the ARC guide: an ARC scale-set user is a new tenant, so it targets
-<code>v2beta1</code> with a single <code>runnerLabel</code> per set.</p>
+<p>A <strong>new</strong> tenant never needs Classic, so it never needs <code>v2alpha1</code>.
+Onboarding docs that named <code>v2alpha1</code> were handing new tenants the migration on-ramp and its deprecated protocol selector.</p>
+<p>Corollary for the ARC guide: an ARC scale-set user is a new tenant, so it targets <code>v2beta1</code> with a single <code>runnerLabel</code> per set.</p>
 <h3 id="what-deliberately-keeps-naming-v2alpha1">What deliberately keeps naming <code>v2alpha1</code><a class="headerlink" href="#what-deliberately-keeps-naming-v2alpha1" title="Permanent link">&para;</a></h3>
 <p>Not everything is a stale reference; these are load-bearing and were left alone:</p>
 <table>
@@ -2791,47 +2772,33 @@ deprecated protocol selector.</p>
 </tbody>
 </table>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
-<p>One PR, because the two slices are not separable: the ARC rewrite has to emit a
-version, and emitting <code>v2alpha1</code> would have re-introduced the contradiction Q409
-exists to remove.</p>
+<p>One PR, because the two slices are not separable: the ARC rewrite has to emit a version, and emitting <code>v2alpha1</code> would have re-introduced the contradiction Q409 exists to remove.</p>
 <h3 id="slice-a--q409-version-alignment">Slice A — Q409 version alignment<a class="headerlink" href="#slice-a--q409-version-alignment" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>README.md</code>, <code>docs/index.md</code>, <code>docs/roadmap.md</code>, <code>docs/why-gag.md</code> — positioning
-  prose + the v2 example blocks.</li>
+<li><code>README.md</code>, <code>docs/index.md</code>, <code>docs/roadmap.md</code>, <code>docs/why-gag.md</code> — positioning prose + the v2 example blocks.</li>
 <li><code>docs/getting-started.md</code> — the v2 walkthrough (§4).</li>
-<li><code>docs/operations/tenant-onboarding.md</code> — the v2 section; its heading drops
-  "(alpha)", and the <code>acquisitionProtocol</code> subsection is re-scoped as
-  <code>v2alpha1</code>-only rather than presented as a choice a new tenant makes.</li>
+<li><code>docs/operations/tenant-onboarding.md</code> — the v2 section; its heading drops "(alpha)", and the <code>acquisitionProtocol</code> subsection is re-scoped as <code>v2alpha1</code>-only rather than presented as a choice a new tenant makes.</li>
 <li><code>docs/operations/v1alpha1-deprecation.md</code> — the "start on v2" pointer.</li>
 </ul>
-<p><code>maxListeners</code> is removed from every flipped example: the field does not exist on
-<code>v2beta1</code>, so an example carrying it would be rejected at admission.</p>
+<p><code>maxListeners</code> is removed from every flipped example: the field does not exist on <code>v2beta1</code>, so an example carrying it would be rejected at admission.</p>
 <h3 id="slice-b--the-arc-guide">Slice B — the ARC guide<a class="headerlink" href="#slice-b--the-arc-guide" title="Permanent link">&para;</a></h3>
-<p>Rewrite <a href="../../../operations/migration-from-arc/"><code>migration-from-arc.md</code></a> onto
-<code>v2beta1</code> end to end:</p>
+<p>Rewrite <a href="../../../operations/migration-from-arc/"><code>migration-from-arc.md</code></a> onto <code>v2beta1</code> end to end:</p>
 <ul>
-<li>Concept-mapping table re-pointed at the v2 kinds (<code>RunnerSet</code>,
-  <code>RunnerTemplate</code>, <code>EgressProxy</code>), including the rows above that v1 mapped badly.</li>
-<li>The routing section reframed: ARC scale-set → GAG ScaleSet is a 1:1 name map, so
-  it stops being the guide's headline hazard. Legacy-ARC multi-label readers get
-  the split-into-one-set-per-target instruction instead.</li>
-<li>The worked migration re-cut against the v2 object set, with the ARC scale-set
-  name carried as the single <code>runnerLabel</code> so <code>runs-on</code> needs no workflow edit.</li>
-<li>The trailing "v2 differences worth knowing" section retired — its content is now
-  the body of the guide.</li>
+<li>Concept-mapping table re-pointed at the v2 kinds (<code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>EgressProxy</code>), including the rows above that v1 mapped badly.</li>
+<li>The routing section reframed: ARC scale-set → GAG ScaleSet is a 1:1 name map, so it stops being the guide's headline hazard.
+  Legacy-ARC multi-label readers get the split-into-one-set-per-target instruction instead.</li>
+<li>The worked migration re-cut against the v2 object set, with the ARC scale-set name carried as the single <code>runnerLabel</code> so <code>runs-on</code> needs no workflow edit.</li>
+<li>The trailing "v2 differences worth knowing" section retired — its content is now the body of the guide.</li>
 <li>v1 reduced to a single pointer at the deprecation notice.</li>
 </ul>
 <h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Removing <code>v1alpha1</code>.</strong> Still <a href="../../../STATUS/#Q273">Q273</a>, still gated on the
-  deprecation window elapsing. This PR changes where readers are <em>sent</em>, not what
-  is <em>served</em>.</li>
-<li><strong><code>v2alpha1</code> doc removal.</strong> It stays served and stays documented for the
-  migration on-ramp.</li>
-<li><strong>Q398</strong> (unqualified <code>kubectl</code> edits on a Classic <code>RunnerSet</code> hit the <code>v2beta1</code>
-  storage version). Orthogonal, and it only reaches migrated Classic sets — a new
-  tenant onboarded per this decision never hits it. Fixed separately by ratcheting
-  the single-label rule onto <code>runnerLabels</code> (<a href="../../v2beta1/#6-q74--the-graduation-cut">v2beta1.md</a>).</li>
+<li><strong>Removing <code>v1alpha1</code>.</strong> Still <a href="../../../STATUS/#Q273">Q273</a>, still gated on the deprecation window elapsing.
+  This PR changes where readers are <em>sent</em>, not what is <em>served</em>.</li>
+<li><strong><code>v2alpha1</code> doc removal.</strong> It stays served and stays documented for the migration on-ramp.</li>
+<li><strong>Q398</strong> (unqualified <code>kubectl</code> edits on a Classic <code>RunnerSet</code> hit the <code>v2beta1</code> storage version).
+  Orthogonal, and it only reaches migrated Classic sets — a new tenant onboarded per this decision never hits it.
+  Fixed separately by ratcheting the single-label rule onto <code>runnerLabels</code> (<a href="../../v2beta1/#6-q74--the-graduation-cut">v2beta1.md</a>).</li>
 </ul>
 
 

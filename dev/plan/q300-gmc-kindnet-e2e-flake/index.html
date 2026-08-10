@@ -2587,30 +2587,17 @@
 
 
 <h1 id="q300--systemic-kindnet-e2e--e2e-leg-flakiness-cross-spec-control-plane-starvation-suspected">Q300 — systemic kindnet <code>e2e / e2e</code> leg flakiness (cross-spec, control-plane starvation suspected)<a class="headerlink" href="#q300--systemic-kindnet-e2e--e2e-leg-flakiness-cross-spec-control-plane-starvation-suspected" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> watching — the PR #612 kindnetd-unthrottle fix <strong>did</strong> close the
-CFS-throttling mechanism (throttle counters are zero in every post-#612 failure
-dump), and the 2026-07-18 "recurrence" that briefly escalated this row was a
-<strong>misattribution</strong> (it was the Q349 flake on a commit that predated the Q349
-fix — see the triage below). One genuinely unexplained dataplane event remains
-(2026-07-15, <code>CrossTenantNetworkBlocked</code> fail-open), so the row sits in
-<a href="../../STATUS/#flake-watch">Flake watch</a> with the failure dump upgraded to
-attribute the next occurrence from CI artifacts alone.</p>
-<p>A second <code>CrossTenantNetworkBlocked</code> occurrence (2026-08-03, on a PR branch)
-points at the same spec from the opposite direction — enforcement flapping
-rather than leaking open — and turned up a test-harness defect that hides the
-probe's own diagnostic. See
-<a href="#2026-08-03-a-second-crosstenant-occurrence-and-what-its-phase-implies">2026-08-03</a>.</p>
-<p>The third occurrence (2026-08-08, Q747) <strong>is</strong> attributed, from the upgraded
-dump plus a local reproduction, and it is a fourth mechanism rather than any of
-the three hypotheses below: kindnetd crash-looped on the node hosting every pod
-in the spec, and kindnet's <code>queue flags bypass</code> rules accept every packet while
-nothing is bound to the nfqueue. See
-<a href="#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">2026-08-08</a>.</p>
+<p><strong>Status:</strong> watching — the PR #612 kindnetd-unthrottle fix <strong>did</strong> close the CFS-throttling mechanism (throttle counters are zero in every post-#612 failure dump), and the 2026-07-18 "recurrence" that briefly escalated this row was a <strong>misattribution</strong> (it was the Q349 flake on a commit that predated the Q349 fix — see the triage below).
+One genuinely unexplained dataplane event remains (2026-07-15, <code>CrossTenantNetworkBlocked</code> fail-open), so the row sits in <a href="../../STATUS/#flake-watch">Flake watch</a> with the failure dump upgraded to attribute the next occurrence from CI artifacts alone.</p>
+<p>A second <code>CrossTenantNetworkBlocked</code> occurrence (2026-08-03, on a PR branch) points at the same spec from the opposite direction — enforcement flapping rather than leaking open — and turned up a test-harness defect that hides the probe's own diagnostic.
+See <a href="#2026-08-03-a-second-crosstenant-occurrence-and-what-its-phase-implies">2026-08-03</a>.</p>
+<p>The third occurrence (2026-08-08, Q747) <strong>is</strong> attributed, from the upgraded dump plus a local reproduction, and it is a fourth mechanism rather than any of the three hypotheses below: kindnetd crash-looped on the node hosting every pod in the spec, and kindnet's <code>queue flags bypass</code> rules accept every packet while nothing is bound to the nfqueue.
+See <a href="#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">2026-08-08</a>.</p>
 <h2 id="post-612-soak-triage-corrected-2026-07-19">Post-#612 soak triage (corrected 2026-07-19)<a class="headerlink" href="#post-612-soak-triage-corrected-2026-07-19" title="Permanent link">&para;</a></h2>
-<h1 id="612-merged-2026-07-13-of-26-main-kindnet-runs-through-2026-07-19-three">612 merged 2026-07-13. Of ~26 <code>main</code> kindnet runs through 2026-07-19, three<a class="headerlink" href="#612-merged-2026-07-13-of-26-main-kindnet-runs-through-2026-07-19-three" title="Permanent link">&para;</a></h1>
-<p>were red (down from 3 of 5 pre-fix). All three dumps show kindnetd
-<code>nr_throttled 0</code> on every node — the CPU-limit starvation mechanism did not
-recur. Per-run attribution:</p>
+<h1 id="612-merged-2026-07-13">612 merged 2026-07-13.<a class="headerlink" href="#612-merged-2026-07-13" title="Permanent link">&para;</a></h1>
+<p>Of ~26 <code>main</code> kindnet runs through 2026-07-19, three were red (down from 3 of 5 pre-fix).
+All three dumps show kindnetd <code>nr_throttled 0</code> on every node — the CPU-limit starvation mechanism did not recur.
+Per-run attribution:</p>
 <table>
 <thead>
 <tr>
@@ -2638,84 +2625,36 @@ recur. Per-run attribution:</p>
 </tbody>
 </table>
 <h2 id="remaining-hypotheses-07-15-fail-open-event">Remaining hypotheses (07-15 fail-open event)<a class="headerlink" href="#remaining-hypotheses-07-15-fail-open-event" title="Permanent link">&para;</a></h2>
-<p>The CrossTenant sequence — blocked, blocked, blocked, then a new pod's
-connection accepted — is not <em>programming lag</em> (enforcement was already live).
+<p>The CrossTenant sequence — blocked, blocked, blocked, then a new pod's connection accepted — is not <em>programming lag</em> (enforcement was already live).
 Candidates, ordered by likelihood after the upstream source review below:</p>
 <ol>
-<li><strong>nfqueue overflow → bypass accept → conntrack latch.</strong> kindnetd runs
-   kube-network-policies with <strong><code>FailOpen: true</code> hardcoded</strong>
-   (<a href="https://github.com/kubernetes-sigs/kind/blob/v0.31.0/images/kindnetd/cmd/kindnetd/main.go">kindnetd <code>main.go</code>, kind v0.31.0</a>),
-   which sets <code>QueueFlagBypass</code> on the nftables queue rules with
-   <code>MaxQueueLen: 1024</code>: past 1024 in-flight verdicts the kernel <strong>accepts</strong>
-   packets unverdicted. Critically, the agent's chain has
-   <code>ct state established,related accept</code> <em>before</em> the queue rule, so one
-   bypassed SYN makes the whole connection conntrack-established and
-   permanently accepted — which is why 07-15 saw a complete HTTP
-   request/response, not a lone stray packet. The
-   <code>/proc/net/netfilter/nfnetlink_queue</code> <code>queue_dropped</code>/<code>user_dropped</code>
-   counters in the dump are <strong>cumulative since boot</strong>, so overflow evidence
-   survives even a late dump. (A packet the agent fails to parse is also
-   accepted under FailOpen — "Can not process packet, applying default
-   policy".)</li>
-<li><strong>Stale IP→pod mapping on pod-IP reuse.</strong> In v0.8.0's <code>evaluateIngress</code> an
-   <em>unknown</em> source IP fails <strong>closed</strong> (it can't match a selector peer), so an
-   informer race on the brand-new probe pod cannot produce an allow. But kind
-   reuses pod IPs aggressively and the suite churns short-lived probe pods; if
-   <code>getPodAssignedToIP</code> still maps the reused IP to a <strong>deleted pod from an
-   allowed namespace</strong>, the verdict is a genuine spurious allow. Discriminator:
-   no queue drops in the dump + full-window kindnet logs showing the stale pod
-   attribution.</li>
-<li><strong>Memory pressure in kindnetd.</strong> #612 removed the CPU limit but kept
-   <code>memory: 50Mi</code>. A GC-thrashing or reclaim-stalled enforcer delays verdicts,
-   and with FailOpen a stalled queue overflows into accepts (folds into #1).
-   <code>memory.events</code> (<code>high</code>/<code>max</code> counters) now captured.</li>
+<li><strong>nfqueue overflow → bypass accept → conntrack latch.</strong> kindnetd runs kube-network-policies with <strong><code>FailOpen: true</code> hardcoded</strong> (<a href="https://github.com/kubernetes-sigs/kind/blob/v0.31.0/images/kindnetd/cmd/kindnetd/main.go">kindnetd <code>main.go</code>, kind v0.31.0</a>), which sets <code>QueueFlagBypass</code> on the nftables queue rules with <code>MaxQueueLen: 1024</code>: past 1024 in-flight verdicts the kernel <strong>accepts</strong> packets unverdicted.
+   Critically, the agent's chain has <code>ct state established,related accept</code> <em>before</em> the queue rule, so one bypassed SYN makes the whole connection conntrack-established and permanently accepted — which is why 07-15 saw a complete HTTP request/response, not a lone stray packet.
+   The <code>/proc/net/netfilter/nfnetlink_queue</code> <code>queue_dropped</code>/<code>user_dropped</code> counters in the dump are <strong>cumulative since boot</strong>, so overflow evidence survives even a late dump.
+   (A packet the agent fails to parse is also accepted under FailOpen — "Can not process packet, applying default policy".)</li>
+<li><strong>Stale IP→pod mapping on pod-IP reuse.</strong> In v0.8.0's <code>evaluateIngress</code> an <em>unknown</em> source IP fails <strong>closed</strong> (it can't match a selector peer), so an informer race on the brand-new probe pod cannot produce an allow.
+   But kind reuses pod IPs aggressively and the suite churns short-lived probe pods; if <code>getPodAssignedToIP</code> still maps the reused IP to a <strong>deleted pod from an allowed namespace</strong>, the verdict is a genuine spurious allow.
+   Discriminator: no queue drops in the dump + full-window kindnet logs showing the stale pod attribution.</li>
+<li><strong>Memory pressure in kindnetd.</strong> #612 removed the CPU limit but kept <code>memory: 50Mi</code>.
+   A GC-thrashing or reclaim-stalled enforcer delays verdicts, and with FailOpen a stalled queue overflows into accepts (folds into #1). <code>memory.events</code> (<code>high</code>/<code>max</code> counters) now captured.</li>
 </ol>
-<p>The 07-15 dump could not discriminate these because the kindnet log capture
-(<code>--tail=100</code>) started ~2 minutes <strong>after</strong> the failure window ended, and no
-nfqueue/memory counters were collected. The failure dump in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a> now captures all
-three signals.</p>
+<p>The 07-15 dump could not discriminate these because the kindnet log capture (<code>--tail=100</code>) started ~2 minutes <strong>after</strong> the failure window ended, and no nfqueue/memory counters were collected.
+The failure dump in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a> now captures all three signals.</p>
 <h2 id="upstream-prior-art-researched-2026-07-19">Upstream prior art (researched 2026-07-19)<a class="headerlink" href="#upstream-prior-art-researched-2026-07-19" title="Permanent link">&para;</a></h2>
-<p>kind v0.31.0's kindnetd bundles <strong>kube-network-policies v0.8.0</strong> (2025-04);
-upstream is at <strong>v1.1.0</strong> (2026-06). Relevant upstream issues:</p>
+<p>kind v0.31.0's kindnetd bundles <strong>kube-network-policies v0.8.0</strong> (2025-04); upstream is at <strong>v1.1.0</strong> (2026-06).
+Relevant upstream issues:</p>
 <ul>
-<li><a href="https://github.com/kubernetes-sigs/kube-network-policies/issues/171">#171 NetworkPolicy enforcement delayed for newly created pods</a>
-  — short-lived pods could escape enforcement entirely; fixed May 2025,
-  <strong>after</strong> v0.8.0 cut, so our lane carries it (egress-side mechanism — the
-  new pod's IP missing from the <code>@podips</code> nftables set means its packets are
-  never queued).</li>
-<li><a href="https://github.com/kubernetes-sigs/kube-network-policies/issues/283">#283 same-node traffic always allowed</a>
-  (egress side, fixed 2026-04) and field report
-  <a href="https://github.com/kubernetes-sigs/kube-network-policies/issues/158">#158</a>
-  — same-node allow exceptions exist by design (kubelet probes; the
-  <code>meta skuid 0 accept</code> rule); worth remembering when a same-node placement
-  coincides with a spurious allow.</li>
-<li><a href="https://github.com/kubernetes-sigs/kube-network-policies/issues/366">#366 Scalability Improvements</a>
-  (open) — upstream acknowledges the userspace-verdict architecture struggles
-  under high pod churn, which also retroactively validates the #612
-  unthrottling: the verdict path is inherently CPU-hungry.</li>
+<li><a href="https://github.com/kubernetes-sigs/kube-network-policies/issues/171">#171 NetworkPolicy enforcement delayed for newly created pods</a> — short-lived pods could escape enforcement entirely; fixed May 2025, <strong>after</strong> v0.8.0 cut, so our lane carries it (egress-side mechanism — the new pod's IP missing from the <code>@podips</code> nftables set means its packets are never queued).</li>
+<li><a href="https://github.com/kubernetes-sigs/kube-network-policies/issues/283">#283 same-node traffic always allowed</a> (egress side, fixed 2026-04) and field report <a href="https://github.com/kubernetes-sigs/kube-network-policies/issues/158">#158</a> — same-node allow exceptions exist by design (kubelet probes; the <code>meta skuid 0 accept</code> rule); worth remembering when a same-node placement coincides with a spurious allow.</li>
+<li><a href="https://github.com/kubernetes-sigs/kube-network-policies/issues/366">#366 Scalability Improvements</a> (open) — upstream acknowledges the userspace-verdict architecture struggles under high pod churn, which also retroactively validates the #612 unthrottling: the verdict path is inherently CPU-hungry.</li>
 </ul>
-<p><strong>Extra lever if the flake recurs:</strong> upgrade kind (a newer bundled
-kube-network-policies reduces both queue pressure and known enforcement
-gaps) — alongside the runner-sizing lever (Q286).</p>
-<p><strong>Lever pulled (Q353, 2026-07-19):</strong> CI now pins kind v0.32.0 with the
-<code>kindest/node:v1.35.5</code> image, whose kindnetd (<code>v20260528-9350166c</code>, a 2026-05
-kube-network-policies snapshot) carries the #171 short-lived-pod and #283
-same-node fixes above. Verified against the image itself: the bundled kindnet
-DaemonSet still ships <code>limits: cpu=100m</code> on the <code>kindnet-cni</code> container, so
-the #612 unthrottle patch (<code>tune_kindnet_limits</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>kind-with-registry.sh</code></a>) still applies
-unchanged and is still needed.</p>
+<p><strong>Extra lever if the flake recurs:</strong> upgrade kind (a newer bundled kube-network-policies reduces both queue pressure and known enforcement gaps) — alongside the runner-sizing lever (Q286).</p>
+<p><strong>Lever pulled (Q353, 2026-07-19):</strong> CI now pins kind v0.32.0 with the <code>kindest/node:v1.35.5</code> image, whose kindnetd (<code>v20260528-9350166c</code>, a 2026-05 kube-network-policies snapshot) carries the #171 short-lived-pod and #283 same-node fixes above.
+Verified against the image itself: the bundled kindnet DaemonSet still ships <code>limits: cpu=100m</code> on the <code>kindnet-cni</code> container, so the #612 unthrottle patch (<code>tune_kindnet_limits</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>kind-with-registry.sh</code></a>) still applies unchanged and is still needed.</p>
 <h2 id="symptom">Symptom<a class="headerlink" href="#symptom" title="Permanent link">&para;</a></h2>
-<p>The GMC kindnet e2e leg (job <code>e2e / e2e</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml"><code>.github/workflows/e2e-test.yml</code></a>, suite
-at <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/gmc/test/e2e"><code>cmd/gmc/test/e2e/</code></a>) fails on <strong>different,
-unrelated specs from run to run</strong> — unlike Q291 (calico-only, one fixed spec
-set) or Q299 (one metrics spec). 3 of the last 5 <code>e2e-test.yml</code> runs on <code>main</code>
-are red, including the most recent merged commit at the time of filing
-(2026-07-13).</p>
-<p>Distinct failure modes observed across two PR #608 runs (whose own Q299 metrics
-spec passed every time):</p>
+<p>The GMC kindnet e2e leg (job <code>e2e / e2e</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml"><code>.github/workflows/e2e-test.yml</code></a>, suite at <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/gmc/test/e2e"><code>cmd/gmc/test/e2e/</code></a>) fails on <strong>different, unrelated specs from run to run</strong> — unlike Q291 (calico-only, one fixed spec set) or Q299 (one metrics spec).
+3 of the last 5 <code>e2e-test.yml</code> runs on <code>main</code> are red, including the most recent merged commit at the time of filing (2026-07-13).</p>
+<p>Distinct failure modes observed across two PR #608 runs (whose own Q299 metrics spec passed every time):</p>
 <table>
 <thead>
 <tr>
@@ -2742,119 +2681,58 @@ spec passed every time):</p>
 </tr>
 </tbody>
 </table>
-<p>Corroborating cluster-health signals in the same logs: HPA <code>shared-proxy</code>
-"no metrics returned from resource metrics API" (metrics-server not serving),
-and a worker pod in <code>phase: Failed</code>.</p>
+<p>Corroborating cluster-health signals in the same logs: HPA <code>shared-proxy</code> "no metrics returned from resource metrics API" (metrics-server not serving), and a worker pod in <code>phase: Failed</code>.</p>
 <h2 id="hypothesis">Hypothesis<a class="headerlink" href="#hypothesis" title="Permanent link">&para;</a></h2>
-<p>The GMC controller-manager (and/or the per-tenant AGC) becomes
-<strong>resource-starved or unresponsive partway through the run</strong>: the validating
-webhook times out, job delivery stalls (fakegithub long-poll windows are
-~35–50 s, so a starved AGC misses whole poll cycles), and egress proxying to
-GitHub times out. The immediately preceding <code>main</code> commit was an ENOSPC
-firefight ("free hosted-runner disk up front"), so hosted-runner resource
-pressure is an active, adjacent problem.</p>
+<p>The GMC controller-manager (and/or the per-tenant AGC) becomes <strong>resource-starved or unresponsive partway through the run</strong>: the validating webhook times out, job delivery stalls (fakegithub long-poll windows are ~35–50 s, so a starved AGC misses whole poll cycles), and egress proxying to GitHub times out.
+The immediately preceding <code>main</code> commit was an ENOSPC firefight ("free hosted-runner disk up front"), so hosted-runner resource pressure is an active, adjacent problem.</p>
 <p>Candidate root causes, in investigation order:</p>
 <ol>
-<li><strong>Runner disk/CPU/memory pressure</strong> — manager pod or kind node under
-   pressure, OOMKills, evictions during the run (check node/pod events in the
-   failure dumps).</li>
-<li><strong>GMC webhook server capacity</strong> — single replica; readiness vs. actual
-   serving; webhook <code>timeoutSeconds</code> too tight when the manager is
-   CPU-throttled.</li>
-<li><strong>metrics-server / kube-proxy / CNI readiness racing the specs</strong> (the HPA
-   "no metrics returned" error).</li>
-<li><strong>Spec-side gating</strong> — specs may need readiness gates or bounded
-   per-attempt timeouts (the Q299 pattern) so one hung connect doesn't burn the
-   whole retry budget.</li>
+<li><strong>Runner disk/CPU/memory pressure</strong> — manager pod or kind node under pressure, OOMKills, evictions during the run (check node/pod events in the failure dumps).</li>
+<li><strong>GMC webhook server capacity</strong> — single replica; readiness vs. actual serving; webhook <code>timeoutSeconds</code> too tight when the manager is CPU-throttled.</li>
+<li><strong>metrics-server / kube-proxy / CNI readiness racing the specs</strong> (the HPA "no metrics returned" error).</li>
+<li><strong>Spec-side gating</strong> — specs may need readiness gates or bounded per-attempt timeouts (the Q299 pattern) so one hung connect doesn't burn the whole retry budget.</li>
 </ol>
 <h2 id="investigation-plan">Investigation plan<a class="headerlink" href="#investigation-plan" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Pull the failure dumps/artifacts from the red runs (29217433954,
-   29218365545, and the red <code>main</code> runs) — node conditions, pod events,
-   OOMKills/evictions, kubelet pressure, manager pod restarts, CPU throttling
-   if captured.</li>
-<li>Check the GMC manager deployment: replicas, requests/limits, webhook
-   <code>timeoutSeconds</code>, whether admission has a CFS quota that can throttle it.</li>
-<li>Reproduce locally against a kindnet kind cluster
-   (<a href="../../development/kind-iteration/">kind-iteration.md</a>) — actually run the
-   affected specs; if it only manifests under CI load, constrain local
-   resources to simulate.</li>
-<li>Decide where the fix belongs: e2e harness (requests/limits, readiness
-   gates, bounded per-attempt timeouts) vs. workflow (runner sizing, disk),
-   and whether one fix covers all three failure modes or they split.</li>
+<li>Pull the failure dumps/artifacts from the red runs (29217433954, 29218365545, and the red <code>main</code> runs) — node conditions, pod events, OOMKills/evictions, kubelet pressure, manager pod restarts, CPU throttling if captured.</li>
+<li>Check the GMC manager deployment: replicas, requests/limits, webhook <code>timeoutSeconds</code>, whether admission has a CFS quota that can throttle it.</li>
+<li>Reproduce locally against a kindnet kind cluster (<a href="../../development/kind-iteration/">kind-iteration.md</a>) — actually run the affected specs; if it only manifests under CI load, constrain local resources to simulate.</li>
+<li>Decide where the fix belongs: e2e harness (requests/limits, readiness gates, bounded per-attempt timeouts) vs. workflow (runner sizing, disk), and whether one fix covers all three failure modes or they split.</li>
 </ol>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="evidence-from-the-red-runs-verified-in-logs">Evidence from the red runs (verified in logs)<a class="headerlink" href="#evidence-from-the-red-runs-verified-in-logs" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>No OOMKills, no evictions, no disk pressure</strong> in any failing run (disk at
-  34% at dump time; all <code>NodeHasNoDiskPressure</code>). Memory/disk are not the
-  starved resource; the GMC manager pods were Running/Ready, 0 restarts, the
-  whole time — the "Killing"/"FailedMount webhook-server-cert" events are
-  normal bring-up churn (helm install + two patches = 3 back-to-back rollouts
-  before cert-manager issues the cert).</li>
-<li>Run 29216254327 (<code>CrossTenantNetworkBlocked</code>): the probe pod connected
-  cross-tenant on <strong>every</strong> attempt for &gt;5 min (re-run 29218283916: &gt;15 min) —
-  a freshly created NetworkPolicy was never programmed into the dataplane.</li>
-<li>Run 29218283916: the AGC's listener goroutines died on
-  <code>Post http://fakegithub...:8080/token: context deadline exceeded</code> for ~2 min
-  (7 listeners), and at the end of the run <code>kubectl apply</code> of ActionsGateways
-  failed with webhook <code>context deadline exceeded</code> three times in a row — with
-  both GMC pods Running/Ready.</li>
-<li>Attempt 1 of 29218365545 (<code>MultipleJobsQueued</code>): same signature — 8 listener
-  goroutines died on token-refresh <code>context deadline exceeded</code>, one webhook
-  deadline; the job was enqueued onto a live session but no worker pod appeared
-  in 6 min. Attempt 2 passed with no code change (flake confirmed).</li>
-<li>So in the same window: traffic that <strong>should be blocked flowed</strong> (CrossTenant)
-  while traffic that <strong>should be allowed timed out</strong> (token refresh, webhook,
-  EgressProxy→GitHub).</li>
+<li><strong>No OOMKills, no evictions, no disk pressure</strong> in any failing run (disk at 34% at dump time; all <code>NodeHasNoDiskPressure</code>).
+  Memory/disk are not the starved resource; the GMC manager pods were Running/Ready, 0 restarts, the whole time — the "Killing"/"FailedMount webhook-server-cert" events are normal bring-up churn (helm install + two patches = 3 back-to-back rollouts before cert-manager issues the cert).</li>
+<li>Run 29216254327 (<code>CrossTenantNetworkBlocked</code>): the probe pod connected cross-tenant on <strong>every</strong> attempt for &gt;5 min (re-run 29218283916: &gt;15 min) — a freshly created NetworkPolicy was never programmed into the dataplane.</li>
+<li>Run 29218283916: the AGC's listener goroutines died on <code>Post http://fakegithub...:8080/token: context deadline exceeded</code> for ~2 min (7 listeners), and at the end of the run <code>kubectl apply</code> of ActionsGateways failed with webhook <code>context deadline exceeded</code> three times in a row — with both GMC pods Running/Ready.</li>
+<li>Attempt 1 of 29218365545 (<code>MultipleJobsQueued</code>): same signature — 8 listener goroutines died on token-refresh <code>context deadline exceeded</code>, one webhook deadline; the job was enqueued onto a live session but no worker pod appeared in 6 min.
+  Attempt 2 passed with no code change (flake confirmed).</li>
+<li>So in the same window: traffic that <strong>should be blocked flowed</strong> (CrossTenant) while traffic that <strong>should be allowed timed out</strong> (token refresh, webhook, EgressProxy→GitHub).</li>
 </ul>
 <h3 id="root-cause-mechanism">Root cause (mechanism)<a class="headerlink" href="#root-cause-mechanism" title="Permanent link">&para;</a></h3>
-<p>On the kindnet lane, NetworkPolicy is enforced by <strong><code>kube-network-policies</code>
-running inside the kindnetd DaemonSet</strong> (verified in kindnetd logs:
-<code>Starting controller name="kube-network-policies"</code>), and kind ships kindnetd
-with <strong><code>limits: cpu=100m, memory=50Mi</code></strong> (verified on a live
-<code>make e2e-cluster</code> cluster, kind v0.31.0). Three consequences:</p>
+<p>On the kindnet lane, NetworkPolicy is enforced by <strong><code>kube-network-policies</code> running inside the kindnetd DaemonSet</strong> (verified in kindnetd logs: <code>Starting controller name="kube-network-policies"</code>), and kind ships kindnetd with <strong><code>limits: cpu=100m, memory=50Mi</code></strong> (verified on a live <code>make e2e-cluster</code> cluster, kind v0.31.0).
+Three consequences:</p>
 <ol>
-<li><code>kube-network-policies</code> is nfqueue-based: the first packet(s) of every new
-   connection involving a policied pod are verdicted in <strong>userspace, inside
-   that 100m-capped container</strong>. The GMC chart ships NPs selecting the manager
-   (<code>allow-webhook-traffic</code>, <code>allow-metrics-traffic</code>) and every tenant
-   namespace carries per-tenant NPs — so apiserver→webhook, AGC→fakegithub,
-   proxy→GitHub, and metrics scrapes ALL go through the throttled verdict path.</li>
-<li>When the agent falls behind, new-connection verdicts stall → <strong>allowed
-   traffic times out</strong> (webhook 10 s deadline, token refresh, curl connects);
-   when its policy programming lags, <strong>new NetworkPolicies are not enforced</strong>
-   (CrossTenant) — the two contradictory-looking symptom classes are the same
-   starved component.</li>
-<li>kindnetd is also an NRI plugin handling <code>RunPodSandbox</code> — a throttled
-   kindnetd slows <strong>pod creation</strong> cluster-wide (worker pods appearing late).</li>
+<li><code>kube-network-policies</code> is nfqueue-based: the first packet(s) of every new connection involving a policied pod are verdicted in <strong>userspace, inside that 100m-capped container</strong>.
+   The GMC chart ships NPs selecting the manager (<code>allow-webhook-traffic</code>, <code>allow-metrics-traffic</code>) and every tenant namespace carries per-tenant NPs — so apiserver→webhook, AGC→fakegithub, proxy→GitHub, and metrics scrapes ALL go through the throttled verdict path.</li>
+<li>When the agent falls behind, new-connection verdicts stall → <strong>allowed traffic times out</strong> (webhook 10 s deadline, token refresh, curl connects); when its policy programming lags, <strong>new NetworkPolicies are not enforced</strong> (CrossTenant) — the two contradictory-looking symptom classes are the same starved component.</li>
+<li>kindnetd is also an NRI plugin handling <code>RunPodSandbox</code> — a throttled kindnetd slows <strong>pod creation</strong> cluster-wide (worker pods appearing late).</li>
 </ol>
-<p>Local measurement: kindnetd is CFS-throttled ~38% of periods <strong>at cluster
-bring-up idle</strong> (nr_throttled 33/86, 5.2 s throttled); the e2e suite at
-<code>--procs 6</code> multiplies connection churn while the 4-vCPU CI host multiplies
-contention. The 100m limit is absolute, so throttling reproduces locally on a
-larger host as well.</p>
+<p>Local measurement: kindnetd is CFS-throttled ~38% of periods <strong>at cluster bring-up idle</strong> (nr_throttled 33/86, 5.2 s throttled); the e2e suite at <code>--procs 6</code> multiplies connection churn while the 4-vCPU CI host multiplies contention.
+The 100m limit is absolute, so throttling reproduces locally on a larger host as well.</p>
 <h3 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h3>
-<p>Remove the kindnetd <strong>CPU limit</strong> at cluster bring-up
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>scripts/e2e/kind-with-registry.sh</code></a>,
-kindnet lane only) — the 100m CPU <em>request</em> keeps scheduling unchanged and the
-memory limit stays (no OOM was ever observed). Idempotent strategic-merge
-patch; re-running bring-up against an existing cluster is a no-op.</p>
-<p>Plus diagnosability: the e2e workflow's failure dump now includes per-node
-kindnetd <code>cpu.stat</code> (CFS throttle counters) and kindnet logs, so a recurrence
-is attributable from CI artifacts alone.</p>
+<p>Remove the kindnetd <strong>CPU limit</strong> at cluster bring-up (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>scripts/e2e/kind-with-registry.sh</code></a>, kindnet lane only) — the 100m CPU <em>request</em> keeps scheduling unchanged and the memory limit stays (no OOM was ever observed).
+Idempotent strategic-merge patch; re-running bring-up against an existing cluster is a no-op.</p>
+<p>Plus diagnosability: the e2e workflow's failure dump now includes per-node kindnetd <code>cpu.stat</code> (CFS throttle counters) and kindnet logs, so a recurrence is attributable from CI artifacts alone.</p>
 <p>Deliberately <strong>not</strong> done (single-concern scope):</p>
 <ul>
-<li><code>--procs 6 → 4</code>: would reduce contention but costs wall-clock and papers
-  over the real bottleneck; revisit only if the fix doesn't hold.</li>
-<li>GMC manager limits (500m/128Mi): never implicated — pods stayed
-  Running/Ready with 0 restarts through every failure window.</li>
-<li>Webhook <code>timeoutSeconds</code> 10→30: mitigation, not fix; the 10 s deadline only
-  fired because verdicts stalled.</li>
+<li><code>--procs 6 → 4</code>: would reduce contention but costs wall-clock and papers over the real bottleneck; revisit only if the fix doesn't hold.</li>
+<li>GMC manager limits (500m/128Mi): never implicated — pods stayed Running/Ready with 0 restarts through every failure window.</li>
+<li>Webhook <code>timeoutSeconds</code> 10→30: mitigation, not fix; the 10 s deadline only fired because verdicts stalled.</li>
 </ul>
 <h3 id="local-validation">Local validation<a class="headerlink" href="#local-validation" title="Permanent link">&para;</a></h3>
-<p>Full suite (<code>--procs 6</code>, 3-node kindnet cluster, 8-vCPU Docker VM), kindnetd
-CFS throttle deltas sampled every 10 s across the whole run:</p>
+<p>Full suite (<code>--procs 6</code>, 3-node kindnet cluster, 8-vCPU Docker VM), kindnetd CFS throttle deltas sampled every 10 s across the whole run:</p>
 <table>
 <thead>
 <tr>
@@ -2876,37 +2754,16 @@ CFS throttle deltas sampled every 10 s across the whole run:</p>
 </tr>
 </tbody>
 </table>
-<p>A local pass is expected either way (8 local vCPUs vs CI's 4 — CI adds the
-host contention that tips budgets over); the throttle counters are the
-mechanism measurement.</p>
-<p>Side-finding from a back-to-back local re-run on the same cluster (an invalid
-comparison run, discarded): the suite's AfterSuite <code>make undeploy</code> removes the
-GMC/AGC while tenant namespaces from failed/late specs are still Terminating,
-stranding <code>actions-gateway.com/agentpool-cleanup</code> finalizers with no
-controller left to clear them — the namespaces never finish deleting and the
-next run's BeforeAll <code>create namespace</code> collides. CI is unaffected (fresh
-cluster per run); filed as its own Queue item for the local iteration loop.</p>
-<p><strong>Resolved (Q301):</strong> the AfterSuite now drains tenant namespaces before
-<code>make undeploy</code>. <code>drainTenantNamespaces</code> (in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>cmd/gmc/test/e2e/e2e_suite_test.go</code></a>)
-deletes every namespace carrying the <code>actions-gateway.github.com/tenant</code> marker
-and waits (bounded, best-effort) for them to finish terminating while the
-GMC/AGC controllers are still up, so the finalizers clear before the controllers
-are torn down. A back-to-back local re-run's BeforeAll no longer collides on a
-pre-existing Terminating namespace.</p>
+<p>A local pass is expected either way (8 local vCPUs vs CI's 4 — CI adds the host contention that tips budgets over); the throttle counters are the mechanism measurement.</p>
+<p>Side-finding from a back-to-back local re-run on the same cluster (an invalid comparison run, discarded): the suite's AfterSuite <code>make undeploy</code> removes the GMC/AGC while tenant namespaces from failed/late specs are still Terminating, stranding <code>actions-gateway.com/agentpool-cleanup</code> finalizers with no controller left to clear them — the namespaces never finish deleting and the next run's BeforeAll <code>create namespace</code> collides.
+CI is unaffected (fresh cluster per run); filed as its own Queue item for the local iteration loop.</p>
+<p><strong>Resolved (Q301):</strong> the AfterSuite now drains tenant namespaces before <code>make undeploy</code>. <code>drainTenantNamespaces</code> (in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>cmd/gmc/test/e2e/e2e_suite_test.go</code></a>) deletes every namespace carrying the <code>actions-gateway.github.com/tenant</code> marker and waits (bounded, best-effort) for them to finish terminating while the GMC/AGC controllers are still up, so the finalizers clear before the controllers are torn down.
+A back-to-back local re-run's BeforeAll no longer collides on a pre-existing Terminating namespace.</p>
 <h2 id="2026-08-03-a-second-crosstenant-occurrence-and-what-its-phase-implies">2026-08-03: a second <code>CrossTenant</code> occurrence, and what its <em>phase</em> implies<a class="headerlink" href="#2026-08-03-a-second-crosstenant-occurrence-and-what-its-phase-implies" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30833071096">Run 30833071096</a>,
-on PR #1197's branch rather than <code>main</code>. <code>E2E_GMC_CrossTenantNetworkBlocked</code>
-failed at
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/isolation_test.go"><code>isolation_test.go:150</code></a> — the gate
-probe pod was <strong>still <code>Running</code></strong> when the 6-minute <code>Eventually</code> expired
-(<code>Timed out after 360.001s</code>, <code>probe pod still in phase "Running"</code>); 61 passed, 1
-failed, 11 skipped. It passed on a re-run of the same tree with no change to
-GMC, to any NetworkPolicy, or to the spec.</p>
-<p><strong>The phase narrows the cause more than the timeout does.</strong> The probe loops 150
-times over <code>curl --max-time 5 --connect-timeout 5</code> plus <code>sleep 2</code>, exiting 0 on
-3 consecutive blocks and 1 when the loop is exhausted. That gives three
-predictions, and only one of them ends with the pod still <code>Running</code> at 360 s:</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30833071096">Run 30833071096</a>, on PR #1197's branch rather than <code>main</code>. <code>E2E_GMC_CrossTenantNetworkBlocked</code> failed at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/isolation_test.go"><code>isolation_test.go:150</code></a> — the gate probe pod was <strong>still <code>Running</code></strong> when the 6-minute <code>Eventually</code> expired (<code>Timed out after 360.001s</code>, <code>probe pod still in phase "Running"</code>); 61 passed, 1 failed, 11 skipped.
+It passed on a re-run of the same tree with no change to GMC, to any NetworkPolicy, or to the spec.</p>
+<p><strong>The phase narrows the cause more than the timeout does.</strong> The probe loops 150 times over <code>curl --max-time 5 --connect-timeout 5</code> plus <code>sleep 2</code>, exiting 0 on 3 consecutive blocks and 1 when the loop is exhausted.
+That gives three predictions, and only one of them ends with the pod still <code>Running</code> at 360 s:</p>
 <table>
 <thead>
 <tr>
@@ -2933,43 +2790,24 @@ predictions, and only one of them ends with the pod still <code>Running</code> a
 </tr>
 </tbody>
 </table>
-<p>So this run is not "enforcement was slow to program". A never-enforced probe
-finishes and reports <code>Failed</code> with its own diagnostic; to still be looping at
-six minutes, some attempts must have paid the 5 s connect timeout — meaning the
-dataplane <em>was</em> dropping — while never sustaining three in a row. That is
-enforcement <strong>flapping</strong>, which is the 2026-07-15 fail-open signal seen from the
-other side: there enforcement was confirmed and then leaked, here it never held
-long enough to be confirmed. Both are consistent with hypothesis 1 (nfqueue
-bypass accepting under load).</p>
-<p><strong>The assumption this rests on</strong>, stated so it can be falsified: that a blocked
-attempt costs the full <code>--connect-timeout</code>, i.e. the packets are dropped rather
-than rejected. kindnetd's kube-network-policies issues nfqueue <em>drop</em> verdicts,
-so this holds — but a REJECT anywhere in the path would return fast and collapse
-the whole argument. <strong>No failure dump was read for this run</strong> (it is a
-PR-branch run, and the upgraded dump is wired for <code>main</code>), so the nfqueue
-counters that would confirm hypothesis 1 directly were not consulted. This is
-recorded as an occurrence plus an inference from the observed phase, not as
-proven attribution.</p>
+<p>So this run is not "enforcement was slow to program".
+A never-enforced probe finishes and reports <code>Failed</code> with its own diagnostic; to still be looping at six minutes, some attempts must have paid the 5 s connect timeout — meaning the dataplane <em>was</em> dropping — while never sustaining three in a row.
+That is enforcement <strong>flapping</strong>, which is the 2026-07-15 fail-open signal seen from the other side: there enforcement was confirmed and then leaked, here it never held long enough to be confirmed.
+Both are consistent with hypothesis 1 (nfqueue bypass accepting under load).</p>
+<p><strong>The assumption this rests on</strong>, stated so it can be falsified: that a blocked attempt costs the full <code>--connect-timeout</code>, i.e. the packets are dropped rather than rejected. kindnetd's kube-network-policies issues nfqueue <em>drop</em> verdicts, so this holds — but a REJECT anywhere in the path would return fast and collapse the whole argument. <strong>No failure dump was read for this run</strong> (it is a PR-branch run, and the upgraded dump is wired for <code>main</code>), so the nfqueue counters that would confirm hypothesis 1 directly were not consulted.
+This is recorded as an occurrence plus an inference from the observed phase, not as proven attribution.</p>
 <h3 id="the-probes-loop-budget-does-not-span-the-outer-window">The probe's loop budget does not span the outer window<a class="headerlink" href="#the-probes-loop-budget-does-not-span-the-outer-window" title="Permanent link">&para;</a></h3>
-<p>Separately, and repairable without settling the dataplane question: the comment
-at <code>isolation_test.go:95</code> says the 150-iteration budget is "sized to span the
-outer <code>Eventually</code> window below". That is true only while attempts <em>connect</em>
-(~2 s each → ~300 s, just under the 6-minute window). Once attempts block, each
-iteration costs ~7 s and 150 of them run ~17 minutes — so in exactly the case
-the budget was widened for (Q179, slow NP programming), the probe is still
-looping when the window closes and the spec fails on the outer timeout instead
-of on the probe's own verdict. The failure then reports a bare phase rather than
-the probe's log, which is why this run needed arithmetic to attribute at all.
-The window and the loop budget should be derived from one another, against the
-blocked-iteration cost rather than the connected one.</p>
+<p>Separately, and repairable without settling the dataplane question: the comment at <code>isolation_test.go:95</code> says the 150-iteration budget is "sized to span the outer <code>Eventually</code> window below".
+That is true only while attempts <em>connect</em> (~2 s each → ~300 s, just under the 6-minute window).
+Once attempts block, each iteration costs ~7 s and 150 of them run ~17 minutes — so in exactly the case the budget was widened for (Q179, slow NP programming), the probe is still looping when the window closes and the spec fails on the outer timeout instead of on the probe's own verdict.
+The failure then reports a bare phase rather than the probe's log, which is why this run needed arithmetic to attribute at all.
+The window and the loop budget should be derived from one another, against the blocked-iteration cost rather than the connected one.</p>
 <h2 id="2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">2026-08-08 (Q747): the enforcer was not starved, it was absent<a class="headerlink" href="#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31272058691">Run 31272058691</a>
-on <code>main</code> at <code>9480f29b</code>. Third <code>CrossTenantNetworkBlocked</code> occurrence, same
-shape as 2026-07-15: the gate pod observed enforcement on attempts 1, 2 and 3
-(never once allowed), then the asserting curl pod completed with
-<code>HTTP_CODE=400</code>. It passed unchanged on <code>7a531dff</code>.</p>
-<p>This one is attributable, and the answer is <strong>none of the three hypotheses
-above</strong>. It is a fourth mechanism, and the failure dump already carried it.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31272058691">Run 31272058691</a> on <code>main</code> at <code>9480f29b</code>.
+Third <code>CrossTenantNetworkBlocked</code> occurrence, same shape as 2026-07-15: the gate pod observed enforcement on attempts 1, 2 and 3 (never once allowed), then the asserting curl pod completed with <code>HTTP_CODE=400</code>.
+It passed unchanged on <code>7a531dff</code>.</p>
+<p>This one is attributable, and the answer is <strong>none of the three hypotheses above</strong>.
+It is a fourth mechanism, and the failure dump already carried it.</p>
 <h3 id="evidence-all-from-the-runs-own-artifact">Evidence, all from the run's own artifact<a class="headerlink" href="#evidence-all-from-the-runs-own-artifact" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3017,38 +2855,23 @@ above</strong>. It is a fourth mechanism, and the failure dump already carried i
 </tr>
 </tbody>
 </table>
-<p>The asserting curl ran <strong>inside a ~25 s window in which no kindnetd process was
-running on that node at all</strong>. kindnetd hardcodes <code>FailOpen: true</code>, which puts
-<code>queue flags bypass</code> on its nftables rules: with nothing bound to nfqueue 101
-the kernel skips the queue rule and the chain's <code>policy accept</code> takes every
-packet. NetworkPolicy was not being enforced on worker2, for any namespace, for
-that window.</p>
+<p>The asserting curl ran <strong>inside a ~25 s window in which no kindnetd process was running on that node at all</strong>. kindnetd hardcodes <code>FailOpen: true</code>, which puts <code>queue flags bypass</code> on its nftables rules: with nothing bound to nfqueue 101 the kernel skips the queue rule and the chain's <code>policy accept</code> takes every packet.
+NetworkPolicy was not being enforced on worker2, for any namespace, for that window.</p>
 <p>So the spec's observation was <em>correct</em>: the connection really was not blocked.
-The cause is the lane's enforcer being dead, not the GMC's policy. The
-policy objects were present and unchanged, and the same source namespace was
-demonstrably blocked from reaching the same destination pod 40 s earlier.</p>
-<p><code>HTTP_CODE=400</code> also identifies the responder rather than merely implying it:
-the proxy serves its CONNECT listener with <code>ServeTLS</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go"><code>cmd/proxy/proxy.go</code></a>), and Go's TLS server answers
-a plaintext request with <code>400 Bad Request: Client sent an HTTP request to an
-HTTPS server</code>. A plaintext listener would have returned <strong>405</strong> (the
-non-CONNECT branch of the same file). The connection reached nsB's proxy.</p>
+The cause is the lane's enforcer being dead, not the GMC's policy.
+The policy objects were present and unchanged, and the same source namespace was demonstrably blocked from reaching the same destination pod 40 s earlier.</p>
+<p><code>HTTP_CODE=400</code> also identifies the responder rather than merely implying it: the proxy serves its CONNECT listener with <code>ServeTLS</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go"><code>cmd/proxy/proxy.go</code></a>), and Go's TLS server answers a plaintext request with <code>400 Bad Request: Client sent an HTTP request to an HTTPS server</code>.
+A plaintext listener would have returned <strong>405</strong> (the non-CONNECT branch of the same file).
+The connection reached nsB's proxy.</p>
 <h3 id="hypotheses-1-and-2-are-ruled-out-for-this-occurrence">Hypotheses 1 and 2 are ruled out for this occurrence<a class="headerlink" href="#hypotheses-1-and-2-are-ruled-out-for-this-occurrence" title="Permanent link">&para;</a></h3>
-<p>Hypothesis 1 (nfqueue overflow) needs a <em>running</em> agent whose queue overflows;
-hypothesis 2 (stale IP→pod mapping) needs a running agent to emit a verdict at
-all. No agent was running.</p>
-<p><strong>Correction to hypothesis 1's supporting claim.</strong> It says the
-<code>queue_dropped</code>/<code>user_dropped</code> counters are "cumulative since boot, so overflow
-evidence survives even a late dump". They are not: they belong to the nfqueue
-<em>instance</em>, which is destroyed when the agent unbinds and recreated when it
-rebinds. Measured locally: after killing kindnetd, the same queue reappeared
-with a new <code>peer_portid</code> and <code>id_sequence</code> reset to 7. With 3-4 restarts on
-these nodes, the zeros in this dump describe only the window since 18:39:58.</p>
+<p>Hypothesis 1 (nfqueue overflow) needs a <em>running</em> agent whose queue overflows; hypothesis 2 (stale IP→pod mapping) needs a running agent to emit a verdict at all.
+No agent was running.</p>
+<p><strong>Correction to hypothesis 1's supporting claim.</strong> It says the <code>queue_dropped</code>/<code>user_dropped</code> counters are "cumulative since boot, so overflow evidence survives even a late dump".
+They are not: they belong to the nfqueue <em>instance</em>, which is destroyed when the agent unbinds and recreated when it rebinds.
+Measured locally: after killing kindnetd, the same queue reappeared with a new <code>peer_portid</code> and <code>id_sequence</code> reset to 7.
+With 3-4 restarts on these nodes, the zeros in this dump describe only the window since 18:39:58.</p>
 <h3 id="reproduced-deterministically">Reproduced deterministically<a class="headerlink" href="#reproduced-deterministically" title="Permanent link">&para;</a></h3>
-<p>kind v0.32.0, <code>kindest/node:v1.35.5</code>, kindnetd <code>v20260528-9350166c</code>, two
-workers, with a mirror of <code>buildProxyNetworkPolicy</code>'s ingress half (default-deny
-ingress to <code>app=actions-gateway-proxy</code>, admitting only same-namespace
-<code>actions-gateway/component: workload</code> on the proxy port):</p>
+<p>kind v0.32.0, <code>kindest/node:v1.35.5</code>, kindnetd <code>v20260528-9350166c</code>, two workers, with a mirror of <code>buildProxyNetworkPolicy</code>'s ingress half (default-deny ingress to <code>app=actions-gateway-proxy</code>, admitting only same-namespace <code>actions-gateway/component: workload</code> on the proxy port):</p>
 <table>
 <thead>
 <tr>
@@ -3071,58 +2894,33 @@ ingress to <code>app=actions-gateway-proxy</code>, admitting only same-namespace
 </tr>
 </tbody>
 </table>
-<p>Window forced open → red; closed → green. Forty rounds of NetworkPolicy churn
-in unrelated namespaces against a live enforcer produced <strong>zero</strong> leaks, which
-is the negative control: policy-set churn alone does not open the window.</p>
+<p>Window forced open → red; closed → green.
+Forty rounds of NetworkPolicy churn in unrelated namespaces against a live enforcer produced <strong>zero</strong> leaks, which is the negative control: policy-set churn alone does not open the window.</p>
 <h3 id="fix_1">Fix<a class="headerlink" href="#fix_1" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong><code>tune_kindnet_limits</code> now raises the memory limit too</strong>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>kind-with-registry.sh</code></a>),
-   default <code>256Mi</code> via <code>KINDNET_MEMORY_LIMIT</code>. #612 deliberately left the
-   <code>50Mi</code> limit alone on the grounds that "no OOM was ever observed"; this run
-   refutes that reading. Note the honest limit of this step: the crash-loop is
-   <em>measured</em>, and memory pressure at the ceiling is the leading cause of it,
-   but the terminating reason itself was never captured, which is why (2)
-   exists.</li>
-<li><strong>The dump now captures why the enforcer died</strong>, not just that it did:
-   <code>lastState.terminated.{reason,exitCode,finishedAt}</code> per enforcer pod, plus
-   previous-container logs, in
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a> and in
-   <code>DumpCNIEnforcerState</code>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/cni_enforcer.go"><code>cmd/gmc/test/utils/cni_enforcer.go</code></a>).
+<li><strong><code>tune_kindnet_limits</code> now raises the memory limit too</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>kind-with-registry.sh</code></a>), default <code>256Mi</code> via <code>KINDNET_MEMORY_LIMIT</code>. #612 deliberately left the <code>50Mi</code> limit alone on the grounds that "no OOM was ever observed"; this run refutes that reading.
+   Note the honest limit of this step: the crash-loop is <em>measured</em>, and memory pressure at the ceiling is the leading cause of it, but the terminating reason itself was never captured, which is why (2) exists.</li>
+<li><strong>The dump now captures why the enforcer died</strong>, not just that it did: <code>lastState.terminated.{reason,exitCode,finishedAt}</code> per enforcer pod, plus previous-container logs, in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a> and in <code>DumpCNIEnforcerState</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/cni_enforcer.go"><code>cmd/gmc/test/utils/cni_enforcer.go</code></a>).
    The next occurrence names its own cause.</li>
-<li><strong>The spec discriminates instead of guessing.</strong>
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/isolation_test.go"><code>isolation_test.go</code></a> fingerprints
-   the enforcer pods (name/restartCount/startedAt) around its probe. An allow
-   observed across a changed fingerprint is discarded and re-measured; an allow
-   observed with the fingerprint <em>unchanged</em> fails immediately and says in the
-   message that no restart explains it. That is the distinction the row could
-   not make: lane artifact versus isolation regression.</li>
+<li><strong>The spec discriminates instead of guessing.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/isolation_test.go"><code>isolation_test.go</code></a> fingerprints the enforcer pods (name/restartCount/startedAt) around its probe.
+   An allow observed across a changed fingerprint is discarded and re-measured; an allow observed with the fingerprint <em>unchanged</em> fails immediately and says in the message that no restart explains it.
+   That is the distinction the row could not make: lane artifact versus isolation regression.</li>
 </ol>
-<p>Deliberately not done: merging the gate and asserting pods into one pod to
-shrink the 40 s scheduling gap between them. The fingerprint check already
-makes that gap harmless, and folding two pods into one conflates their exit
-codes.</p>
+<p>Deliberately not done: merging the gate and asserting pods into one pod to shrink the 40 s scheduling gap between them.
+The fingerprint check already makes that gap harmless, and folding two pods into one conflates their exit codes.</p>
 <h2 id="recurrence-guard">Recurrence guard<a class="headerlink" href="#recurrence-guard" title="Permanent link">&para;</a></h2>
-<p>Same rule as Q291: this reproduces only under CI load, so <strong>one green run
-proves nothing</strong>. The row sits in Flake watch; on the next red kindnet run on
-<code>main</code>, attribute from the upgraded failure dump <strong>before</strong> touching code:</p>
+<p>Same rule as Q291: this reproduces only under CI load, so <strong>one green run proves nothing</strong>.
+The row sits in Flake watch; on the next red kindnet run on <code>main</code>, attribute from the upgraded failure dump <strong>before</strong> touching code:</p>
 <ul>
-<li>Check the failing spec against the triage table above first — <code>ProxyConnectWorks</code>
-  502s to real GitHub are the external-egress class, not the dataplane class.</li>
-<li>For a dataplane-class failure, read the dump's nfqueue counters, kindnetd
-  <code>memory.events</code>, and the full-window kindnet logs against the three
-  hypotheses above; fix whichever is proven.</li>
-<li>If the dump implicates none of them, the next lever is runner sizing (Q286's
-  dedicated pool), not more retry-budget widening.</li>
+<li>Check the failing spec against the triage table above first — <code>ProxyConnectWorks</code> 502s to real GitHub are the external-egress class, not the dataplane class.</li>
+<li>For a dataplane-class failure, read the dump's nfqueue counters, kindnetd <code>memory.events</code>, and the full-window kindnet logs against the three hypotheses above; fix whichever is proven.</li>
+<li>If the dump implicates none of them, the next lever is runner sizing (Q286's dedicated pool), not more retry-budget widening.</li>
 </ul>
 <h2 id="not-in-scope">Not in scope<a class="headerlink" href="#not-in-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Q291 (calico-only Felix ipBlock programming window) — separate mechanism,
-  separate lane.</li>
+<li>Q291 (calico-only Felix ipBlock programming window) — separate mechanism, separate lane.</li>
 <li>Q299 (manager-metrics curl pod, PR #608) — already fixed; do not touch.</li>
-<li>Fan-out delivery starvation (Q264 residual) — GitHub-side, unrelated to CI
-  host resources.</li>
+<li>Fan-out delivery starvation (Q264 residual) — GitHub-side, unrelated to CI host resources.</li>
 </ul>
 
 

@@ -2665,73 +2665,35 @@
 
 <h1 id="warn-on-reap-blocking-worker-sidecars">Warn on Reap-Blocking Worker Sidecars<a class="headerlink" href="#warn-on-reap-blocking-worker-sidecars" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: ✅ Done — shipped 2026-07-03 (Q249).</strong> Discovered
-during the GKE-dogfood privileged-DinD e2e validation (2026-06-30): a
-<code>docker:dind</code> sidecar declared as a <strong>regular</strong> container kept the worker pod
-at <code>1/2</code> after the runner exited, so the AGC counted it as an active session
-and <code>maxWorkers</code> saturated — the <a href="../gke-dogfood-turnup-findings/">Q247</a> stranding symptom,
-reproduced deterministically. This surfaces that misconfiguration at admission
+<p><strong>Status: ✅ Done — shipped 2026-07-03 (Q249).</strong> Discovered during the GKE-dogfood privileged-DinD e2e validation (2026-06-30): a <code>docker:dind</code> sidecar declared as a <strong>regular</strong> container kept the worker pod at <code>1/2</code> after the runner exited, so the AGC counted it as an active session and <code>maxWorkers</code> saturated — the <a href="../gke-dogfood-turnup-findings/">Q247</a> stranding symptom, reproduced deterministically.
+This surfaces that misconfiguration at admission
 + status + metrics and steers operators to native sidecars. <strong>No custom reaper.</strong></p>
-<p><strong>What shipped.</strong> Shared detection helper <code>ReapBlockingSidecars</code> +
-<code>SelfExitingSidecarsAnnotation</code> / <code>RunnerContainerName</code> constants in the neutral
-<code>api/v2alpha1</code> module (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/sidecar.go">sidecar.go</a>). Three
-non-blocking outlets, all gated by the name-list opt-out: (a) a GMC validating-
-webhook admission <strong>Warning</strong> on RunnerTemplate/ClusterRunnerTemplate create+update
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/runnertemplate_webhook.go">runnertemplate_webhook.go</a>);
-(b) the advisory <code>PossibleReapBlockingSidecar</code> RunnerSet condition, set/cleared from
-the resolved template by the AGC reconciler
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go">runnerset_controller.go</a>);
-(c) the <code>actions_gateway_reap_blocking_sidecar_templates</code> gauge. Tested at the tier
-that observes each: unit (helper, condition+metric), GMC webhook unit (warning
-emitted/suppressed, never blocks), and AGC envtest integration (condition True/False
-end-to-end + set still reaches Ready). Docs: operator how-to in
-<a href="../../../operations/in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">in-runner-image-builds.md</a>,
-troubleshooting + observability + kata cross-ref, design note in
-<a href="../../../design/appendix-b-worker-isolation/">appendix-b §B.5</a>.</p>
-<p><strong>Prerequisite (§ below) — verified not in scope to fix:</strong> the Q235 wrapper
-injection appends to <code>initContainers</code> and never touches an operator's
-<code>restartPolicy: Always</code> init container, so a native sidecar an operator authors is
-preserved. No fix needed; kept as the load-bearing assumption.</p>
+<p><strong>What shipped.</strong> Shared detection helper <code>ReapBlockingSidecars</code> + <code>SelfExitingSidecarsAnnotation</code> / <code>RunnerContainerName</code> constants in the neutral <code>api/v2alpha1</code> module (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/sidecar.go">sidecar.go</a>).
+Three non-blocking outlets, all gated by the name-list opt-out: (a) a GMC validating- webhook admission <strong>Warning</strong> on RunnerTemplate/ClusterRunnerTemplate create+update (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/runnertemplate_webhook.go">runnertemplate_webhook.go</a>); (b) the advisory <code>PossibleReapBlockingSidecar</code> RunnerSet condition, set/cleared from the resolved template by the AGC reconciler (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go">runnerset_controller.go</a>); (c) the <code>actions_gateway_reap_blocking_sidecar_templates</code> gauge.
+Tested at the tier that observes each: unit (helper, condition+metric), GMC webhook unit (warning emitted/suppressed, never blocks), and AGC envtest integration (condition True/False end-to-end + set still reaches Ready).
+Docs: operator how-to in <a href="../../../operations/in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">in-runner-image-builds.md</a>, troubleshooting + observability + kata cross-ref, design note in <a href="../../../design/appendix-b-worker-isolation/">appendix-b §B.5</a>.</p>
+<p><strong>Prerequisite (§ below) — verified not in scope to fix:</strong> the Q235 wrapper injection appends to <code>initContainers</code> and never touches an operator's <code>restartPolicy: Always</code> init container, so a native sidecar an operator authors is preserved.
+No fix needed; kept as the load-bearing assumption.</p>
 </blockquote>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Detect when a worker <code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code> carries a
-<strong>regular (non-native) sidecar</strong> that can prevent the worker pod from completing
-— and surface it as a <strong>non-blocking warning</strong>, a <strong>status condition</strong>, and a
-<strong>metric</strong>, with a per-sidecar opt-out. The intent is to <em>train operators toward
-native sidecars</em>, not to enforce or to build a reaper.</p>
+<p>Detect when a worker <code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code> carries a <strong>regular (non-native) sidecar</strong> that can prevent the worker pod from completing — and surface it as a <strong>non-blocking warning</strong>, a <strong>status condition</strong>, and a <strong>metric</strong>, with a per-sidecar opt-out.
+The intent is to <em>train operators toward native sidecars</em>, not to enforce or to build a reaper.</p>
 <h2 id="background--why-this-not-a-reaper">Background — why this, not a reaper<a class="headerlink" href="#background--why-this-not-a-reaper" title="Permanent link">&para;</a></h2>
-<p>A GAG worker pod is one "main" runner container plus, optionally, sidecars. If a
-sidecar is a <strong>regular</strong> <code>spec.containers[]</code> entry that runs forever (e.g.
-<code>dockerd</code> for DinD), the pod never reaches <code>Completed</code> — a pod terminates only
-when <strong>all</strong> its regular containers exit. The pod lingers <code>1/2</code>, the AGC keeps
-counting it active, and the runner pool strands.</p>
-<p><strong>The upstream fix already exists — we rely on it, not on a reaper.</strong> Native
-sidecars (<a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>):
-a <code>restartPolicy: Always</code> <strong>init container</strong> that Kubernetes tears down when the
-main container exits, so the pod completes on its own. Beta / on-by-default in
-<strong>1.29</strong>, GA in <strong>1.33</strong>. GAG should adopt this (in its own injected wrapper) and
-steer operators to it; a bespoke pod-reaper would be solving upstream's problem
-the hard way.</p>
-<p><strong>Why static detection can't be precise.</strong> Nothing in a pod spec says a container
-"runs forever" (<code>dockerd</code> never exits; <code>busybox true</code> exits at once). So the
-check is necessarily a <strong>heuristic policy</strong> — "a regular, non-runner container may
-block reaping" — which is why it must be a <strong>warning</strong>, not an error, with an
-opt-out.</p>
+<p>A GAG worker pod is one "main" runner container plus, optionally, sidecars.
+If a sidecar is a <strong>regular</strong> <code>spec.containers[]</code> entry that runs forever (e.g. <code>dockerd</code> for DinD), the pod never reaches <code>Completed</code> — a pod terminates only when <strong>all</strong> its regular containers exit.
+The pod lingers <code>1/2</code>, the AGC keeps counting it active, and the runner pool strands.</p>
+<p><strong>The upstream fix already exists — we rely on it, not on a reaper.</strong> Native sidecars (<a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>): a <code>restartPolicy: Always</code> <strong>init container</strong> that Kubernetes tears down when the main container exits, so the pod completes on its own.
+Beta / on-by-default in <strong>1.29</strong>, GA in <strong>1.33</strong>.
+GAG should adopt this (in its own injected wrapper) and steer operators to it; a bespoke pod-reaper would be solving upstream's problem the hard way.</p>
+<p><strong>Why static detection can't be precise.</strong> Nothing in a pod spec says a container "runs forever" (<code>dockerd</code> never exits; <code>busybox true</code> exits at once).
+So the check is necessarily a <strong>heuristic policy</strong> — "a regular, non-runner container may block reaping" — which is why it must be a <strong>warning</strong>, not an error, with an opt-out.</p>
 <h2 id="prerequisite-verify-may-split-out">Prerequisite (verify; may split out)<a class="headerlink" href="#prerequisite-verify-may-split-out" title="Permanent link">&para;</a></h2>
-<p>The upstream mechanism only works if GAG doesn't break it: the AGC must
-(a) inject its own long-running wrapper/sidecars as <strong>native</strong> sidecars, and
-(b) <strong>preserve</strong> a <code>restartPolicy: Always</code> init container an operator authored,
-through the Q235 wrapper injection (which already manipulates
-<code>initContainers</code> / OCI image volumes — see
-<a href="../q235-worker-wrapper-injection/">q235-worker-wrapper-injection.md</a>).
-Confirm both; if the AGC reorders or strips the field, fix that first — it is the
-load-bearing part.</p>
+<p>The upstream mechanism only works if GAG doesn't break it: the AGC must (a) inject its own long-running wrapper/sidecars as <strong>native</strong> sidecars, and (b) <strong>preserve</strong> a <code>restartPolicy: Always</code> init container an operator authored, through the Q235 wrapper injection (which already manipulates <code>initContainers</code> / OCI image volumes — see <a href="../q235-worker-wrapper-injection/">q235-worker-wrapper-injection.md</a>).
+Confirm both; if the AGC reorders or strips the field, fix that first — it is the load-bearing part.</p>
 <h2 id="design--one-detection-three-outlets-one-opt-out">Design — one detection, three outlets, one opt-out<a class="headerlink" href="#design--one-detection-three-outlets-one-opt-out" title="Permanent link">&para;</a></h2>
-<p><strong>Detection (shared helper):</strong> a template has a regular container besides the
-runner whose name is <strong>not</strong> in the acknowledgment list. Reused by the webhook
-and the reconciler so the verdict is identical everywhere.</p>
-<p><strong>Outlets — all gated by the same opt-out</strong>, so an alert never fires on a
-sidecar the operator has declared self-exiting:</p>
+<p><strong>Detection (shared helper):</strong> a template has a regular container besides the runner whose name is <strong>not</strong> in the acknowledgment list.
+Reused by the webhook and the reconciler so the verdict is identical everywhere.</p>
+<p><strong>Outlets — all gated by the same opt-out</strong>, so an alert never fires on a sidecar the operator has declared self-exiting:</p>
 <table>
 <thead>
 <tr>
@@ -2758,70 +2720,47 @@ sidecar the operator has declared self-exiting:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Opt-out = the training lever.</strong> A per-template annotation naming the
-sidecars the operator asserts exit cleanly:</p>
+<p><strong>Opt-out = the training lever.</strong> A per-template annotation naming the sidecars the operator asserts exit cleanly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">actions-gateway.com/self-exiting-sidecars</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;metrics-agent,log-shipper&quot;</span>
 </code></pre></div>
 <ul>
-<li><strong>Name-list, not a boolean</strong> — a <em>newly added</em> unacknowledged sidecar still
-  warns; a blanket <code>true</code> would let the next footgun through silently.</li>
+<li><strong>Name-list, not a boolean</strong> — a <em>newly added</em> unacknowledged sidecar still warns; a blanket <code>true</code> would let the next footgun through silently.</li>
 <li>Silences <strong>all three</strong> outlets for the named sidecars.</li>
-<li>Forces an <strong>acknowledge-or-fix</strong> decision: the warning can't be silenced
-  without either converting to a native sidecar or consciously asserting "this
-  one exits." Either way the operator has engaged with the concept — that is the
-  training. Same shape as the existing <code>allow-profile-downgrade</code> /
-  <code>privileged-profile</code> acknowledgment pattern.</li>
+<li>Forces an <strong>acknowledge-or-fix</strong> decision: the warning can't be silenced without either converting to a native sidecar or consciously asserting "this one exits."
+  Either way the operator has engaged with the concept — that is the training.
+  Same shape as the existing <code>allow-profile-downgrade</code> / <code>privileged-profile</code> acknowledgment pattern.</li>
 </ul>
-<p><strong>Warning, not error.</strong> The heuristic is undecidable, so a hard block would
-punish legitimate self-exiting sidecars. Admission <em>warnings</em> (<code>kubectl</code> prints
-<code>Warning:</code> and proceeds) are the idiomatic non-blocking nudge.</p>
+<p><strong>Warning, not error.</strong> The heuristic is undecidable, so a hard block would punish legitimate self-exiting sidecars.
+Admission <em>warnings</em> (<code>kubectl</code> prints <code>Warning:</code> and proceeds) are the idiomatic non-blocking nudge.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Detection helper (<code>identify regular non-runner containers not in the
-   acknowledgment annotation</code>) + the annotation constant + godoc.</li>
-<li>Validating webhook: emit an admission <strong>Warning</strong> on <code>RunnerTemplate</code> /
-   <code>ClusterRunnerTemplate</code> create/update (extend the existing validators).</li>
-<li>RunnerSet <strong>status condition</strong> <code>PossibleReapBlockingSidecar</code>, set/cleared by
-   the reconciler from the <em>resolved</em> template.</li>
+<li>Detection helper (<code>identify regular non-runner containers not in the acknowledgment annotation</code>) + the annotation constant + godoc.</li>
+<li>Validating webhook: emit an admission <strong>Warning</strong> on <code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code> create/update (extend the existing validators).</li>
+<li>RunnerSet <strong>status condition</strong> <code>PossibleReapBlockingSidecar</code>, set/cleared by the reconciler from the <em>resolved</em> template.</li>
 <li><strong>Metric</strong> (gauge; e.g. <code>actions_gateway_reap_blocking_sidecar_templates</code>).</li>
-<li>Docs: operator guidance in
-   <a href="../../../operations/in-runner-image-builds/">in-runner-image-builds.md</a> /
-   <a href="../../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> — the
-   native-sidecar requirement (K8s ≥1.29) + the acknowledgment annotation; a
-   design note in <a href="../../../design/appendix-b-worker-isolation/">appendix-b-worker-isolation.md</a>.</li>
-<li>Tests: webhook warning emitted / suppressed by the annotation; condition
-   set + cleared; metric; a native sidecar (<code>restartPolicy: Always</code> init
-   container) is <strong>not</strong> flagged; the runner-only case is not flagged.</li>
+<li>Docs: operator guidance in <a href="../../../operations/in-runner-image-builds/">in-runner-image-builds.md</a> / <a href="../../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> — the native-sidecar requirement (K8s ≥1.29) + the acknowledgment annotation; a design note in <a href="../../../design/appendix-b-worker-isolation/">appendix-b-worker-isolation.md</a>.</li>
+<li>Tests: webhook warning emitted / suppressed by the annotation; condition set + cleared; metric; a native sidecar (<code>restartPolicy: Always</code> init container) is <strong>not</strong> flagged; the runner-only case is not flagged.</li>
 </ol>
 <h2 id="scope--in--out">Scope — in / out<a class="headerlink" href="#scope--in--out" title="Permanent link">&para;</a></h2>
-<p><strong>In:</strong> detection + warning + condition + metric + annotation opt-out + docs +
-tests.</p>
+<p><strong>In:</strong> detection + warning + condition + metric + annotation opt-out + docs + tests.</p>
 <p><strong>Out (separate items):</strong>
-- <strong>AGC native-sidecar preservation</strong> (the prerequisite above) — verify; fix in
-  its own change if broken.
-- <strong>Un-clean-session GC backstop</strong> — a pod left behind by a <em>crash</em> or a
-  <em>superseded/orphaned</em> job (not a misconfig) strands regardless of sidecar
-  shape. That belongs to <strong><a href="../gke-dogfood-turnup-findings/">Q247</a></strong>; the fix there is light
-  GC (owner-reference / TTL / reconcile-time cleanup of pods whose session is
-  gone), still <strong>not</strong> a bespoke reaper.</p>
+- <strong>AGC native-sidecar preservation</strong> (the prerequisite above) — verify; fix in its own change if broken.
+- <strong>Un-clean-session GC backstop</strong> — a pod left behind by a <em>crash</em> or a <em>superseded/orphaned</em> job (not a misconfig) strands regardless of sidecar shape.
+  That belongs to <strong><a href="../gke-dogfood-turnup-findings/">Q247</a></strong>; the fix there is light GC (owner-reference / TTL / reconcile-time cleanup of pods whose session is gone), still <strong>not</strong> a bespoke reaper.</p>
 <h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Condition home: RunnerSet (operational, references the resolved template) vs
-  <code>RunnerTemplate.status</code>. Lean RunnerSet.</li>
-<li>Metric shape: a gauge of templates-with-unacknowledged-sidecars vs a counter
-  of pods observed lingering. The gauge is cheaper and config-oriented; start
-  there.</li>
-<li>Should the runner container be identified by name/convention or by "the one
-  the AGC gap-fills"? Reuse whatever the injection path already uses so the
-  webhook and AGC agree on which container is the runner.</li>
+<li>Condition home: RunnerSet (operational, references the resolved template) vs <code>RunnerTemplate.status</code>.
+  Lean RunnerSet.</li>
+<li>Metric shape: a gauge of templates-with-unacknowledged-sidecars vs a counter of pods observed lingering.
+  The gauge is cheaper and config-oriented; start there.</li>
+<li>Should the runner container be identified by name/convention or by "the one the AGC gap-fills"?
+  Reuse whatever the injection path already uses so the webhook and AGC agree on which container is the runner.</li>
 </ul>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
-<p><code>make check</code> + GMC envtest (webhook warning emission + annotation gating,
-condition set/cleared, metric) — no live cluster needed; the behavior is
-admission- and reconcile-level. The end-to-end reaping itself is a Kubernetes
-guarantee (native sidecars) and is exercised incidentally by the dogfood e2e.</p>
+<p><code>make check</code> + GMC envtest (webhook warning emission + annotation gating, condition set/cleared, metric) — no live cluster needed; the behavior is admission- and reconcile-level.
+The end-to-end reaping itself is a Kubernetes guarantee (native sidecars) and is exercised incidentally by the dogfood e2e.</p>
 
 
 

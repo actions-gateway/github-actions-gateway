@@ -2748,74 +2748,43 @@
 
 
 <h1 id="q459-close-or-accept-the-drained-worker-recovery-gap">Q459: Close or Accept the Drained-Worker Recovery Gap<a class="headerlink" href="#q459-close-or-accept-the-drained-worker-recovery-gap" title="Permanent link">&para;</a></h1>
-<p>Q421 measured that a graceful worker-pod removal — a <code>kubectl drain</code>, or a bare
-<code>kubectl delete pod</code> — reaches no eviction recovery on either acquisition tier, so
-a <em>graceful</em> disruption recovers strictly worse than an <em>ungraceful</em> one. The
-result and the reasoning are in
-<a href="../../eviction-oversubscription-validation/#result-measured-2026-07-27">eviction-oversubscription-validation.md § Result</a>.</p>
-<p>This plan carries the decision Q421 deliberately did not make: close the gap, or
-accept it.</p>
+<p>Q421 measured that a graceful worker-pod removal — a <code>kubectl drain</code>, or a bare <code>kubectl delete pod</code> — reaches no eviction recovery on either acquisition tier, so a <em>graceful</em> disruption recovers strictly worse than an <em>ungraceful</em> one.
+The result and the reasoning are in <a href="../../eviction-oversubscription-validation/#result-measured-2026-07-27">eviction-oversubscription-validation.md § Result</a>.</p>
+<p>This plan carries the decision Q421 deliberately did not make: close the gap, or accept it.</p>
 <h2 id="why-the-decision-was-deferred-rather-than-taken">Why the decision was deferred rather than taken<a class="headerlink" href="#why-the-decision-was-deferred-rather-than-taken" title="Permanent link">&para;</a></h2>
-<p>Extending both tiers to treat a graceful deletion as recoverable is a small code
-change. What made it unsafe to write in Q421 was that its premise was unmeasured.
+<p>Extending both tiers to treat a graceful deletion as recoverable is a small code change.
+What made it unsafe to write in Q421 was that its premise was unmeasured.
 Two things had to be known first:</p>
 <ol>
-<li><strong>Does the relayed report leave the run re-runnable at all?</strong> The AGC recovers a
-   run by <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs</code>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>eviction.go</code></a>). If the runner's
-   own SIGTERM-relayed report puts the run in a state that endpoint declines, there
-   is no gap to close on this path — only a different endpoint, or nothing.</li>
-<li><strong>Can the AGC tell this disruption from a deliberate one?</strong> A run cancelled by a
-   human is the case an automatic re-run must never fight. Q421 recorded the concern
-   as "deliberate cancels share the path"; whether they actually do is a claim about
-   the pod's observed shape, and it was never checked.</li>
+<li><strong>Does the relayed report leave the run re-runnable at all?</strong> The AGC recovers a run by <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>eviction.go</code></a>).
+   If the runner's own SIGTERM-relayed report puts the run in a state that endpoint declines, there is no gap to close on this path — only a different endpoint, or nothing.</li>
+<li><strong>Can the AGC tell this disruption from a deliberate one?</strong> A run cancelled by a human is the case an automatic re-run must never fight.
+   Q421 recorded the concern as "deliberate cancels share the path"; whether they actually do is a claim about the pod's observed shape, and it was never checked.</li>
 </ol>
-<p>Both are live-GitHub questions: they need a real runner executing a real job, reported to
-real GitHub. Neither the envtest pair nor the fake-GitHub drain spec can ask them —
-the fake-GitHub tier's drained worker is deliberately held <code>Pending</code>, so there is no live container
-to signal and no report to follow.</p>
+<p>Both are live-GitHub questions: they need a real runner executing a real job, reported to real GitHub.
+Neither the envtest pair nor the fake-GitHub drain spec can ask them — the fake-GitHub tier's drained worker is deliberately held <code>Pending</code>, so there is no live container to signal and no report to follow.</p>
 <h2 id="the-measurement">The measurement<a class="headerlink" href="#the-measurement" title="Permanent link">&para;</a></h2>
-<p><strong>Venue.</strong> live-GitHub on the local kind cluster, the same footing as
-<code>E2E_GitHub_RealDispatch</code>: the GMC's fakegithub overrides are swapped for the real
-org URL, the tenant carries the live <code>actions-gateway-test</code> App credential, and the
-workflow is dispatched against <code>actions-gateway/gateway-test</code>.</p>
-<p><strong>Why a <code>kubectl delete pod</code> rather than a <code>kubectl drain</code>.</strong> The drain-versus-delete
-distinction is already settled: Q421 measured at fake-GitHub that an admitted eviction <em>is</em>
-a graceful delete and publishes no <code>Failed</code>/<code>Evicted</code> shape. What is open here is
-everything downstream of the delete — the relay, the report, and what GitHub does with
-it — and a bare delete reaches that identically while removing the cordon, the
-node-scoping, and the <code>--force</code> from a measurement none of them are about. The spec
-asserts the pod's <code>deletionTimestamp</code>/grace period so the deletion it performs is on
-the record as the graceful kind.</p>
+<p><strong>Venue.</strong> live-GitHub on the local kind cluster, the same footing as <code>E2E_GitHub_RealDispatch</code>: the GMC's fakegithub overrides are swapped for the real org URL, the tenant carries the live <code>actions-gateway-test</code> App credential, and the workflow is dispatched against <code>actions-gateway/gateway-test</code>.</p>
+<p><strong>Why a <code>kubectl delete pod</code> rather than a <code>kubectl drain</code>.</strong> The drain-versus-delete distinction is already settled: Q421 measured at fake-GitHub that an admitted eviction <em>is</em> a graceful delete and publishes no <code>Failed</code>/<code>Evicted</code> shape.
+What is open here is everything downstream of the delete — the relay, the report, and what GitHub does with it — and a bare delete reaches that identically while removing the cordon, the node-scoping, and the <code>--force</code> from a measurement none of them are about.
+The spec asserts the pod's <code>deletionTimestamp</code>/grace period so the deletion it performs is on the record as the graceful kind.</p>
 <p><strong>Steps.</strong></p>
 <ol>
-<li>Dispatch a workflow whose job runs long enough to be interrupted mid-step, and wait
-   until GitHub reports that job <code>in_progress</code> — not merely that a worker pod exists.
-   A pod that has not yet reached the runner's job loop has nothing to report, which
-   would make the measurement about startup rather than about the relay.</li>
+<li>Dispatch a workflow whose job runs long enough to be interrupted mid-step, and wait until GitHub reports that job <code>in_progress</code> — not merely that a worker pod exists.
+   A pod that has not yet reached the runner's job loop has nothing to report, which would make the measurement about startup rather than about the relay.</li>
 <li>Delete the worker pod with the default grace period.</li>
 <li>Record, in order:</li>
-<li><strong>The relay.</strong> The wrapper's <code>forwarding termination signal</code> line, and whether
-     the child outlived the grace budget.</li>
-<li><strong>The pod.</strong> Its phase/reason across the deletion window, and its container exit
-     code — this is what decides whether the AGC's waiter sees a terminal phase or a
-     vanished object, and therefore whether a discriminator is even available.</li>
-<li><strong>GitHub.</strong> Time from deletion to the job leaving <code>in_progress</code>, and the
-     <code>conclusion</code> it lands on.</li>
-<li><strong>Re-runnability.</strong> Whether <code>rerun-failed-jobs</code> is accepted for that run, and
-     whether the attempt it creates actually runs to completion on the gateway.</li>
+<li><strong>The relay.</strong> The wrapper's <code>forwarding termination signal</code> line, and whether the child outlived the grace budget.</li>
+<li><strong>The pod.</strong> Its phase/reason across the deletion window, and its container exit code — this is what decides whether the AGC's waiter sees a terminal phase or a vanished object, and therefore whether a discriminator is even available.</li>
+<li><strong>GitHub.</strong> Time from deletion to the job leaving <code>in_progress</code>, and the <code>conclusion</code> it lands on.</li>
+<li><strong>Re-runnability.</strong> Whether <code>rerun-failed-jobs</code> is accepted for that run, and whether the attempt it creates actually runs to completion on the gateway.</li>
 </ol>
-<p>Step 3's last item is the load-bearing one: it is the call the AGC would make if the
-gap were closed, so GitHub's answer to it decides whether there is anything to close.</p>
-<p><strong>What it does not establish</strong> — recorded here because the original wording of this
-line ("the exact call the AGC would make, so its answer is the answer") was later shown
-to overreach. The harness issues this call with <code>gh api</code>, after waiting for GitHub to
-conclude the job. The AGC issues it from <code>rerunFailedJobs</code>, against whatever host
-<code>Provisioner.GitHubAPIURL</code> names, <code>evictionRetryDelay</code> after the disruption. Both of
-those differences turned out to hide defects the <code>201</code> here could not see — Q504 (the
-call ignored <code>GITHUB_API_BASE_URL</code>) and Q503 (it fired ~9.5 minutes too early and was
-refused <code>403</code>; both since fixed). Read this measurement as <em>GitHub will re-run a run in
-this state</em>, and nothing more.</p>
+<p>Step 3's last item is the load-bearing one: it is the call the AGC would make if the gap were closed, so GitHub's answer to it decides whether there is anything to close.</p>
+<p><strong>What it does not establish</strong> — recorded here because the original wording of this line ("the exact call the AGC would make, so its answer is the answer") was later shown to overreach.
+The harness issues this call with <code>gh api</code>, after waiting for GitHub to conclude the job.
+The AGC issues it from <code>rerunFailedJobs</code>, against whatever host <code>Provisioner.GitHubAPIURL</code> names, <code>evictionRetryDelay</code> after the disruption.
+Both of those differences turned out to hide defects the <code>201</code> here could not see — Q504 (the call ignored <code>GITHUB_API_BASE_URL</code>) and Q503 (it fired ~9.5 minutes too early and was refused <code>403</code>; both since fixed).
+Read this measurement as <em>GitHub will re-run a run in this state</em>, and nothing more.</p>
 <h2 id="the-decision-this-produces">The decision this produces<a class="headerlink" href="#the-decision-this-produces" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2839,15 +2808,10 @@ this state</em>, and nothing more.</p>
 </tr>
 </tbody>
 </table>
-<p>Whichever branch is taken, the operator-facing consequence is already documented in
-<a href="../../../operations/troubleshooting/#draining-a-worker-auto-re-runs-the-jobs-it-interrupts">troubleshooting.md</a>
-(retitled when Q502 shipped the close) and must be brought into line with the outcome.</p>
+<p>Whichever branch is taken, the operator-facing consequence is already documented in <a href="../../../operations/troubleshooting/#draining-a-worker-auto-re-runs-the-jobs-it-interrupts">troubleshooting.md</a> (retitled when Q502 shipped the close) and must be brought into line with the outcome.</p>
 <h2 id="result-the-graceful-deletion-path-measured-2026-07-28">Result: the graceful-deletion path, measured 2026-07-28<a class="headerlink" href="#result-the-graceful-deletion-path-measured-2026-07-28" title="Permanent link">&para;</a></h2>
-<p>Live-GitHub tier on kind, against <code>actions-gateway/gateway-test</code>
-(<a href="https://github.com/actions-gateway/gateway-test/actions/runs/30410156445">run 30410156445</a>),
-by <code>E2E_GitHub_GracefullyDeletedWorkerReportsAndIsRerunnable</code>. A real runner was
-executing a real job — GitHub reported it <code>in_progress</code> before anything was touched —
-and the worker pod was deleted with the default grace period.</p>
+<p>Live-GitHub tier on kind, against <code>actions-gateway/gateway-test</code> (<a href="https://github.com/actions-gateway/gateway-test/actions/runs/30410156445">run 30410156445</a>), by <code>E2E_GitHub_GracefullyDeletedWorkerReportsAndIsRerunnable</code>.
+A real runner was executing a real job — GitHub reported it <code>in_progress</code> before anything was touched — and the worker pod was deleted with the default grace period.</p>
 <table>
 <thead>
 <tr>
@@ -2886,114 +2850,59 @@ and the worker pod was deleted with the default grace period.</p>
 </tr>
 </tbody>
 </table>
-<p>Reproduced on four further runs (2026-07-28): conclusion <code>failure</code> every time, <code>201</code>
-every time, second attempt reaching a runner every time. The <em>shape</em> is stable; the
-latency varies more than one observation suggested — 15s, 16s, 17s, 26s across five
-runs. Quote it as "well under a minute", not as a point estimate: the spread is
-GitHub's own conclusion latency, which this experiment does not control for and which
-a published figure should not imply it does.</p>
-<p><strong>Question 1 is answered, and the answer is yes.</strong> The relay gets the runner's own
-report out well inside the grace period, GitHub concludes the job promptly rather than
-waiting out the lock, and the run is re-runnable by the endpoint <code>handleEviction</code>
-calls. The premise Q417 shipped on holds, and closing the gap is mechanically
-available — at the endpoint. Whether the AGC's own call reaches it correctly and at the
-right moment is a separate question this measurement did not ask; Q504 and Q503 are the
-answers, and both were defects.</p>
-<p><strong>But the measurement also found the hazard that decides how.</strong> Q421 predicted, from
-its fake-GitHub run, that a disrupted worker is <em>deleted without ever publishing a terminal
-phase</em> — and at fake-GitHub that was true, because the pod was deliberately held <code>Pending</code>.
-A <strong>running</strong> worker behaves differently: the kubelet's terminal-phase update wins the
-race against the object's removal, so the pod lands in <code>PodFailed</code> with an <strong>empty
-reason</strong> and the informer's <code>onPodEvent</code> resolves the waiter before <code>onPodDelete</code> ever
-fires.</p>
-<p><code>PodFailed</code> with an empty reason is also exactly what a worker whose job <em>genuinely
-failed</em> lands in. So the shape alone cannot carry recovery: keying re-runs off
-<code>PodFailed</code>-with-empty-reason would re-run every legitimately failing job in the
-cluster, which is far worse than the gap being closed. Whatever closes this must key
-off something else.</p>
-<p><strong>The candidate discriminator is <code>metadata.deletionTimestamp</code></strong> — set on a worker taken
-away by a drain or a delete at the moment its terminal phase publishes, absent on one
-whose job ended by itself. The first half is measured above. The second half is
-question 2, and it is what
-<code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> measures.</p>
-<p>Worth noting for the eventual implementation: the AGC already <em>has</em> this information
-and discards it. <code>InformerPodWaiter.onPodDelete</code> resolves waiters with
-<code>phase: PodSucceeded</code> and an empty reason
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/podwaiter.go"><code>podwaiter.go</code></a>), identical to a
-genuine success, matching the older poll loop's "deleted externally → treat as
-completion". Closing the gap needs no new watch, annotation or pod bookkeeping — it
-needs the waiter to stop flattening a distinction it can already see.</p>
+<p>Reproduced on four further runs (2026-07-28): conclusion <code>failure</code> every time, <code>201</code> every time, second attempt reaching a runner every time.
+The <em>shape</em> is stable; the latency varies more than one observation suggested — 15s, 16s, 17s, 26s across five runs.
+Quote it as "well under a minute", not as a point estimate: the spread is GitHub's own conclusion latency, which this experiment does not control for and which a published figure should not imply it does.</p>
+<p><strong>Question 1 is answered, and the answer is yes.</strong> The relay gets the runner's own report out well inside the grace period, GitHub concludes the job promptly rather than waiting out the lock, and the run is re-runnable by the endpoint <code>handleEviction</code> calls.
+The premise Q417 shipped on holds, and closing the gap is mechanically available — at the endpoint.
+Whether the AGC's own call reaches it correctly and at the right moment is a separate question this measurement did not ask; Q504 and Q503 are the answers, and both were defects.</p>
+<p><strong>But the measurement also found the hazard that decides how.</strong> Q421 predicted, from its fake-GitHub run, that a disrupted worker is <em>deleted without ever publishing a terminal phase</em> — and at fake-GitHub that was true, because the pod was deliberately held <code>Pending</code>.
+A <strong>running</strong> worker behaves differently: the kubelet's terminal-phase update wins the race against the object's removal, so the pod lands in <code>PodFailed</code> with an <strong>empty reason</strong> and the informer's <code>onPodEvent</code> resolves the waiter before <code>onPodDelete</code> ever fires.</p>
+<p><code>PodFailed</code> with an empty reason is also exactly what a worker whose job <em>genuinely failed</em> lands in.
+So the shape alone cannot carry recovery: keying re-runs off <code>PodFailed</code>-with-empty-reason would re-run every legitimately failing job in the cluster, which is far worse than the gap being closed.
+Whatever closes this must key off something else.</p>
+<p><strong>The candidate discriminator is <code>metadata.deletionTimestamp</code></strong> — set on a worker taken away by a drain or a delete at the moment its terminal phase publishes, absent on one whose job ended by itself.
+The first half is measured above.
+The second half is question 2, and it is what <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> measures.</p>
+<p>Worth noting for the eventual implementation: the AGC already <em>has</em> this information and discards it. <code>InformerPodWaiter.onPodDelete</code> resolves waiters with <code>phase: PodSucceeded</code> and an empty reason (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/podwaiter.go"><code>podwaiter.go</code></a>), identical to a genuine success, matching the older poll loop's "deleted externally → treat as completion".
+Closing the gap needs no new watch, annotation or pod bookkeeping — it needs the waiter to stop flattening a distinction it can already see.</p>
 <h2 id="findings-so-far">Findings so far<a class="headerlink" href="#findings-so-far" title="Permanent link">&para;</a></h2>
-<p><strong><code>rerun-failed-jobs</code> has a one-month retention window</strong> — measured 2026-07-28, while
-attempting to answer the re-runnability question cheaply against an already-cancelled
-historical run rather than a freshly interrupted one:</p>
+<p><strong><code>rerun-failed-jobs</code> has a one-month retention window</strong> — measured 2026-07-28, while attempting to answer the re-runnability question cheaply against an already-cancelled historical run rather than a freshly interrupted one:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>POST /repos/actions-gateway/gateway-test/actions/runs/27386814795/rerun-failed-jobs
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>HTTP/2.0 403 Forbidden
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>{&quot;message&quot;:&quot;Unable to retry this workflow run because it was created over a month ago&quot;}
 </code></pre></div>
-<p>Two things follow. The shortcut does not work — every cancelled run in the fixture
-repo predates the window, and the 403 is about the run's <em>age</em>, not about its
-<code>cancelled</code> conclusion, so it says nothing about the question Q459 asks. And the
-constraint is real for the design: whatever the AGC recovers, it recovers only inside
-that window. That is comfortably wide for eviction recovery, which fires seconds after
-the disruption, but it does bound any future backstop that retries from a persisted
-record after a long AGC outage — the 12h <code>maxWorkerLifetime</code> cap sits inside it, a
-restart-time sweep of much older runs would not.</p>
+<p>Two things follow.
+The shortcut does not work — every cancelled run in the fixture repo predates the window, and the 403 is about the run's <em>age</em>, not about its <code>cancelled</code> conclusion, so it says nothing about the question Q459 asks.
+And the constraint is real for the design: whatever the AGC recovers, it recovers only inside that window.
+That is comfortably wide for eviction recovery, which fires seconds after the disruption, but it does bound any future backstop that retries from a persisted record after a long AGC outage — the 12h <code>maxWorkerLifetime</code> cap sits inside it, a restart-time sweep of much older runs would not.</p>
 <h2 id="the-measurement-found-something-it-was-not-looking-for-q495">The measurement found something it was not looking for (Q495)<a class="headerlink" href="#the-measurement-found-something-it-was-not-looking-for-q495" title="Permanent link">&para;</a></h2>
-<p>Worker pods provisioned for <strong>real</strong> GitHub jobs on the classic tier carry <strong>no</strong>
-<code>actions-gateway.com/run-id</code> annotation. Observed 2026-07-28 while scoping the spec's
-worker lookup to its own run; the jsonpath was verified against a control pod carrying
-a known annotation, so the empty value is the pod's, not the query's.</p>
+<p>Worker pods provisioned for <strong>real</strong> GitHub jobs on the classic tier carry <strong>no</strong> <code>actions-gateway.com/run-id</code> annotation.
+Observed 2026-07-28 while scoping the spec's worker lookup to its own run; the jsonpath was verified against a control pod carrying a known annotation, so the empty value is the pod's, not the query's.</p>
 <p>That matters well beyond this plan.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/payload.go"><code>repoInfo()</code></a> — which supplies the
-<code>runID</code> that eviction recovery re-runs — and <code>jobMetaFrom()</code> — which supplies the
-annotation — read the <em>same two sources</em>: <code>Variables["system.github.run_id"]</code>, falling
-back to <code>ap.RunID</code>. An absent annotation therefore means both were empty, so <code>runID</code> is
-<code>"0"</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>handleEviction</code></a> opens with
-<code>if runID == "0" || runID == ""</code> → log and return.</p>
-<p><strong>Inference, not yet a direct observation:</strong> classic-tier eviction recovery cannot name
-the run to re-run against real GitHub, so it cannot fire. Every test that exercises it
-uses a fakegithub payload carrying the identity explicitly — Q421's own fake-GitHub drain
-spec had to <em>inject</em> it, recording that "the default fakegithub response carries no run
-identity, and handleEviction returns early without one". The fake was adjusted to make
-the test pass; the real payload was never checked. Confirming it looked like it needed
-one run that evicts a real job and looks for the skip; Q495 carried that, and the
-section below records what confirming it actually took.</p>
-<p>It also bears on this plan's decision: closing the drained-worker gap by calling
-<code>rerun-failed-jobs</code> buys nothing on classic if the run ID is unavailable in the first
-place. Q495 is therefore a prerequisite for the "close" branch, not a side finding.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/payload.go"><code>repoInfo()</code></a> — which supplies the <code>runID</code> that eviction recovery re-runs — and <code>jobMetaFrom()</code> — which supplies the annotation — read the <em>same two sources</em>: <code>Variables["system.github.run_id"]</code>, falling back to <code>ap.RunID</code>.
+An absent annotation therefore means both were empty, so <code>runID</code> is <code>"0"</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>handleEviction</code></a> opens with <code>if runID == "0" || runID == ""</code> → log and return.</p>
+<p><strong>Inference, not yet a direct observation:</strong> classic-tier eviction recovery cannot name the run to re-run against real GitHub, so it cannot fire.
+Every test that exercises it uses a fakegithub payload carrying the identity explicitly — Q421's own fake-GitHub drain spec had to <em>inject</em> it, recording that "the default fakegithub response carries no run identity, and handleEviction returns early without one".
+The fake was adjusted to make the test pass; the real payload was never checked.
+Confirming it looked like it needed one run that evicts a real job and looks for the skip; Q495 carried that, and the section below records what confirming it actually took.</p>
+<p>It also bears on this plan's decision: closing the drained-worker gap by calling <code>rerun-failed-jobs</code> buys nothing on classic if the run ID is unavailable in the first place.
+Q495 is therefore a prerequisite for the "close" branch, not a side finding.</p>
 <h3 id="confirmed-and-fixed-2026-07-29-q495">Confirmed and fixed, 2026-07-29 (Q495)<a class="headerlink" href="#confirmed-and-fixed-2026-07-29-q495" title="Permanent link">&para;</a></h3>
-<p>The inference held, and confirming it needed no live-GitHub run after all. The repo
-already contained the answer: <code>testdata/job_payload.json</code> is a redacted capture of a
-<strong>live</strong> <code>acquirejob</code> response, taken by <code>cmd/probe</code> and committed as ground truth for
-Milestone 3's handoff — and nothing had ever read it back. Parsed, it carries no
-top-level <code>run_id</code>, no <code>system.github.run_id</code>, and no <code>system.github.repository</code>. Its
-run identity is in <code>contextData.github</code>, as <code>run_id</code> and <code>repository</code> entries of the
-serialised <code>github</code> context. Milestone 3's own plan doc had said so all along:
-"<code>contextData.github.run_id</code> (a string)".</p>
-<p>So both readers were looking somewhere the identity has never been, and the two
-symptoms are one cause: <code>repoInfo()</code> returned <code>("", "", 0)</code> and <code>jobMetaFrom()</code>
-returned an empty <code>jobMeta</code>.</p>
-<p>The fix reads the <code>github</code> context, keeps the variables and top-level <code>run_id</code> as
-tolerated fallbacks, and routes both readers through one <code>runIdentity()</code> so they
-cannot diverge again. <code>payload_groundtruth_test.go</code> asserts against the capture —
-against the unfixed parser it fails with exactly the observed symptom (owner <code>""</code>,
-repo <code>""</code>, run <code>0</code>), which is what makes it a guard rather than a restatement. The
-synthetic payloads in the provisioner unit tests, the envtest eviction and drain
-specs, and Q421's fake-GitHub drain spec were all moved onto the real shape, since a fake
-carrying a field GitHub does not send is what kept this invisible.</p>
-<p>Two consequences for this plan. The "close" branch's prerequisite is met at the level
-it was blocked on — classic can name the run it would re-run. And the exact-worker
-lookup question 2 wanted should now be available, since the annotation is stamped from
-the same resolved identity; that it lands on a real worker pod is the one thing here
-still owed a live-GitHub observation, and un-pending
-<code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is where it gets one.</p>
+<p>The inference held, and confirming it needed no live-GitHub run after all.
+The repo already contained the answer: <code>testdata/job_payload.json</code> is a redacted capture of a <strong>live</strong> <code>acquirejob</code> response, taken by <code>cmd/probe</code> and committed as ground truth for Milestone 3's handoff — and nothing had ever read it back.
+Parsed, it carries no top-level <code>run_id</code>, no <code>system.github.run_id</code>, and no <code>system.github.repository</code>.
+Its run identity is in <code>contextData.github</code>, as <code>run_id</code> and <code>repository</code> entries of the serialised <code>github</code> context.
+Milestone 3's own plan doc had said so all along: "<code>contextData.github.run_id</code> (a string)".</p>
+<p>So both readers were looking somewhere the identity has never been, and the two symptoms are one cause: <code>repoInfo()</code> returned <code>("", "", 0)</code> and <code>jobMetaFrom()</code> returned an empty <code>jobMeta</code>.</p>
+<p>The fix reads the <code>github</code> context, keeps the variables and top-level <code>run_id</code> as tolerated fallbacks, and routes both readers through one <code>runIdentity()</code> so they cannot diverge again. <code>payload_groundtruth_test.go</code> asserts against the capture — against the unfixed parser it fails with exactly the observed symptom (owner <code>""</code>, repo <code>""</code>, run <code>0</code>), which is what makes it a guard rather than a restatement.
+The synthetic payloads in the provisioner unit tests, the envtest eviction and drain specs, and Q421's fake-GitHub drain spec were all moved onto the real shape, since a fake carrying a field GitHub does not send is what kept this invisible.</p>
+<p>Two consequences for this plan.
+The "close" branch's prerequisite is met at the level it was blocked on — classic can name the run it would re-run.
+And the exact-worker lookup question 2 wanted should now be available, since the annotation is stamped from the same resolved identity; that it lands on a real worker pod is the one thing here still owed a live-GitHub observation, and un-pending <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is where it gets one.</p>
 <h2 id="result-the-cancellation-path-measured-2026-07-29">Result: the cancellation path, measured 2026-07-29<a class="headerlink" href="#result-the-cancellation-path-measured-2026-07-29" title="Permanent link">&para;</a></h2>
-<p>Live-GitHub tier on a dedicated kind cluster, against <code>actions-gateway/gateway-test</code>
-(<a href="https://github.com/actions-gateway/gateway-test/actions/runs/30455540731">run 30455540731</a>),
-by <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> — now un-pended, and passing. A real
-runner was executing a real job, and the run was cancelled from GitHub the way a human
-would cancel it.</p>
+<p>Live-GitHub tier on a dedicated kind cluster, against <code>actions-gateway/gateway-test</code> (<a href="https://github.com/actions-gateway/gateway-test/actions/runs/30455540731">run 30455540731</a>), by <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> — now un-pended, and passing.
+A real runner was executing a real job, and the run was cancelled from GitHub the way a human would cancel it.</p>
 <table>
 <thead>
 <tr>
@@ -3020,18 +2929,9 @@ would cancel it.</p>
 </tr>
 </tbody>
 </table>
-<p>Reproduced the same day on a second cluster, with the whole live-GitHub container running
-in order rather than this spec alone
-(<a href="https://github.com/actions-gateway/gateway-test/actions/runs/30459264313">run 30459264313</a>):
-the identical <code>Running//deleting=</code> → <code>Failed//deleting=</code> sequence, GitHub concluding at
-<strong>5m01s</strong>, the pod at <strong>10m04s</strong>. That run also re-measured the graceful-deletion half
-independently — <code>deletionGracePeriodSeconds</code> 30 with the mark set, <code>Running/</code> →
-<code>Failed/</code>, conclusion <code>failure</code> in <strong>16s</strong>, <code>rerun-failed-jobs</code> <strong>201</strong>, second attempt
-reaching a runner — so both halves of the discriminator come from two runs each, not
-one.</p>
-<p><strong>Question 2 is answered, and the discriminator holds.</strong> Put beside the
-graceful-deletion result above, the three cases separate exactly where the candidate
-said they would:</p>
+<p>Reproduced the same day on a second cluster, with the whole live-GitHub container running in order rather than this spec alone (<a href="https://github.com/actions-gateway/gateway-test/actions/runs/30459264313">run 30459264313</a>): the identical <code>Running//deleting=</code> → <code>Failed//deleting=</code> sequence, GitHub concluding at <strong>5m01s</strong>, the pod at <strong>10m04s</strong>.
+That run also re-measured the graceful-deletion half independently — <code>deletionGracePeriodSeconds</code> 30 with the mark set, <code>Running/</code> → <code>Failed/</code>, conclusion <code>failure</code> in <strong>16s</strong>, <code>rerun-failed-jobs</code> <strong>201</strong>, second attempt reaching a runner — so both halves of the discriminator come from two runs each, not one.</p>
+<p><strong>Question 2 is answered, and the discriminator holds.</strong> Put beside the graceful-deletion result above, the three cases separate exactly where the candidate said they would:</p>
 <table>
 <thead>
 <tr>
@@ -3066,251 +2966,115 @@ said they would:</p>
 </tr>
 </tbody>
 </table>
-<p>Phase and reason are identical across all three, so neither can carry recovery. The
-deletion mark separates the first from the other two, which is precisely what an
-automatic re-run needs: it fires on the disruption and never on a cancel or a real
-failure.</p>
-<p>The third row is the one that did not need its own live-GitHub run: <code>deletionTimestamp</code> is
-set by the apiserver only when something issues a delete, so a worker whose job simply
-exited non-zero cannot carry one. What <em>did</em> need measuring is the cancel row — the
-case where a human's intent reaches the system through GitHub rather than through
-Kubernetes, and where it was genuinely open whether some part of the gateway responds
-by deleting the pod. Nothing does.</p>
+<p>Phase and reason are identical across all three, so neither can carry recovery.
+The deletion mark separates the first from the other two, which is precisely what an automatic re-run needs: it fires on the disruption and never on a cancel or a real failure.</p>
+<p>The third row is the one that did not need its own live-GitHub run: <code>deletionTimestamp</code> is set by the apiserver only when something issues a delete, so a worker whose job simply exited non-zero cannot carry one.
+What <em>did</em> need measuring is the cancel row — the case where a human's intent reaches the system through GitHub rather than through Kubernetes, and where it was genuinely open whether some part of the gateway responds by deleting the pod.
+Nothing does.</p>
 <h3 id="the-measurement-also-found-that-a-cancel-never-reaches-the-worker-q501">The measurement also found that a cancel never reaches the worker (Q501)<a class="headerlink" href="#the-measurement-also-found-that-a-cancel-never-reaches-the-worker-q501" title="Permanent link">&para;</a></h3>
-<p>The 10m02s figure is not incidental. The job's own step — <code>sleep 600</code>, started at
-13:21:00Z — ran to completion at 13:31:04Z, ten minutes after the run was cancelled and
-five minutes after GitHub had already concluded it. The runner was never told.</p>
-<p>That is consistent with the architecture rather than a fluke: the AGC owns the broker
-session, a cancellation arrives on that session, and nothing in
-<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/agc/internal/listener"><code>listener/</code></a> relays it to the worker pod. The 5m02s
-to conclusion is GitHub's own cancellation grace lapsing, not the runner acknowledging
-anything — the same figure, 5m01s, was measured on the first attempt at this spec.</p>
+<p>The 10m02s figure is not incidental.
+The job's own step — <code>sleep 600</code>, started at 13:21:00Z — ran to completion at 13:31:04Z, ten minutes after the run was cancelled and five minutes after GitHub had already concluded it.
+The runner was never told.</p>
+<p>That is consistent with the architecture rather than a fluke: the AGC owns the broker session, a cancellation arrives on that session, and nothing in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/agc/internal/listener"><code>listener/</code></a> relays it to the worker pod.
+The 5m02s to conclusion is GitHub's own cancellation grace lapsing, not the runner acknowledging anything — the same figure, 5m01s, was measured on the first attempt at this spec.</p>
 <p>Two consequences, both real:</p>
 <ul>
-<li><strong>A cancelled job keeps burning a worker</strong> for the remainder of its steps, up to
-  <code>maxWorkerLifetime</code>. Cancelling a runaway job does not reclaim its capacity.</li>
-<li><strong><a href="../../../design/04-operational-flows/">04-operational-flows.md</a> §4.2 step 7 overstates
-  the Q385 relay.</strong> It lists "cancelled run" among the terminations the wrapper's
-  SIGTERM relay reaches. The relay does reach the engine whenever the <em>pod</em> is
-  terminated — but on the cancel path nothing terminates the pod, so the relay never
-  runs. <a href="../../../STATUS/#Q501">Q501</a> carries the gap; the doc is corrected as part of
-  this change.</li>
+<li><strong>A cancelled job keeps burning a worker</strong> for the remainder of its steps, up to <code>maxWorkerLifetime</code>.
+  Cancelling a runaway job does not reclaim its capacity.</li>
+<li><strong><a href="../../../design/04-operational-flows/">04-operational-flows.md</a> §4.2 step 7 overstates the Q385 relay.</strong> It lists "cancelled run" among the terminations the wrapper's SIGTERM relay reaches.
+  The relay does reach the engine whenever the <em>pod</em> is terminated — but on the cancel path nothing terminates the pod, so the relay never runs.
+  <a href="../../../STATUS/#Q501">Q501</a> carries the gap; the doc is corrected as part of this change.</li>
 </ul>
 <h3 id="what-the-spec-needed-in-order-to-run-at-all">What the spec needed in order to run at all<a class="headerlink" href="#what-the-spec-needed-in-order-to-run-at-all" title="Permanent link">&para;</a></h3>
-<p>It was pending because it could not tell its own worker from the one the
-graceful-deletion spec leaves behind, and the run-id annotation that would have
-disambiguated them is the one Q495 found missing. Q495 turned out <strong>not</strong> to be the
-only way through: both specs now snapshot the Running worker pods immediately before
-dispatching, and take the worker that was not there before. Identity, not count —
-the same trick <code>dispatchAndResolveRun</code> already uses for the run itself. A lingering
-worker from an earlier spec is no longer ambiguous, so no waiting for the namespace
-to fall quiet is needed either.</p>
-<p>Q495 was still a prerequisite for the <strong>implementation</strong>, for the separate reason
-recorded above — without a run ID, classic-tier <code>handleEviction</code> returns early and has
-nothing to re-run — and it has since been fixed.</p>
+<p>It was pending because it could not tell its own worker from the one the graceful-deletion spec leaves behind, and the run-id annotation that would have disambiguated them is the one Q495 found missing.
+Q495 turned out <strong>not</strong> to be the only way through: both specs now snapshot the Running worker pods immediately before dispatching, and take the worker that was not there before.
+Identity, not count — the same trick <code>dispatchAndResolveRun</code> already uses for the run itself.
+A lingering worker from an earlier spec is no longer ambiguous, so no waiting for the namespace to fall quiet is needed either.</p>
+<p>Q495 was still a prerequisite for the <strong>implementation</strong>, for the separate reason recorded above — without a run ID, classic-tier <code>handleEviction</code> returns early and has nothing to re-run — and it has since been fixed.</p>
 <h3 id="operational-notes-for-the-next-live-github-run">Operational notes for the next live-GitHub run<a class="headerlink" href="#operational-notes-for-the-next-live-github-run" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Do not use the shared <code>actions-gateway-e2e</code> cluster.</strong> This spec swaps the GMC's
-  GitHub env vars cluster-wide and holds them for ~12 minutes. Mid-run on 2026-07-29
-  another session reinstalled the chart on that cluster six times (helm revisions 2–7),
-  and the <code>kubectl set env</code> this suite performs is itself what makes the next
-  <code>helm upgrade</code> conflict on server-side-apply field ownership. Create a throwaway
-  cluster: <code>make e2e-cluster KIND_CLUSTER=&lt;name&gt;</code>, and point the run at it with a
-  private <code>KUBECONFIG</code> rather than the ambient context.</li>
-<li><strong>Read the spec summary, not the wall clock.</strong> This run's four specs finished in
-  19m04s inside a <code>ginkgo</code> process that lived 94 minutes, because the host slept
-  mid-run. Both false "it's wedged" diagnoses this session came from host-side clocks,
-  and the rule that came out of it is now in
-  <a href="../../../development/testing/#end-to-end-tests">testing.md</a>.</li>
-<li><strong>Two concurrent live-GitHub sessions collide on the fixture repo.</strong> Both dispatch the
-  same <code>drain-probe.yml</code> in <code>actions-gateway/gateway-test</code> and both register a runner
-  named <code>real-ag-e2e-6d8749c-0</code>. Two such runs were in flight simultaneously on
-  2026-07-29. <code>dispatchAndResolveRun</code>'s snapshot keeps each spec on its own run, and
-  this measurement's binding was confirmed directly (the pod's job began at 13:21:00Z,
-  matching its run's 13:20:55Z job start, and the namespace did not exist when the
-  other run started) — but the runner-name collision was not defended against.
-  <a href="../../q511-live-github-run-isolation/">q511-live-github-run-isolation.md</a> settled it:
-  the suite's <code>BeforeAll</code> now refuses to start while the fixture repo is not idle.</li>
+<li><strong>Do not use the shared <code>actions-gateway-e2e</code> cluster.</strong> This spec swaps the GMC's GitHub env vars cluster-wide and holds them for ~12 minutes.
+  Mid-run on 2026-07-29 another session reinstalled the chart on that cluster six times (helm revisions 2–7), and the <code>kubectl set env</code> this suite performs is itself what makes the next <code>helm upgrade</code> conflict on server-side-apply field ownership.
+  Create a throwaway cluster: <code>make e2e-cluster KIND_CLUSTER=&lt;name&gt;</code>, and point the run at it with a private <code>KUBECONFIG</code> rather than the ambient context.</li>
+<li><strong>Read the spec summary, not the wall clock.</strong> This run's four specs finished in 19m04s inside a <code>ginkgo</code> process that lived 94 minutes, because the host slept mid-run.
+  Both false "it's wedged" diagnoses this session came from host-side clocks, and the rule that came out of it is now in <a href="../../../development/testing/#end-to-end-tests">testing.md</a>.</li>
+<li><strong>Two concurrent live-GitHub sessions collide on the fixture repo.</strong> Both dispatch the same <code>drain-probe.yml</code> in <code>actions-gateway/gateway-test</code> and both register a runner named <code>real-ag-e2e-6d8749c-0</code>.
+  Two such runs were in flight simultaneously on 2026-07-29. <code>dispatchAndResolveRun</code>'s snapshot keeps each spec on its own run, and this measurement's binding was confirmed directly (the pod's job began at 13:21:00Z, matching its run's 13:20:55Z job start, and the namespace did not exist when the other run started) — but the runner-name collision was not defended against.
+  <a href="../../q511-live-github-run-isolation/">q511-live-github-run-isolation.md</a> settled it: the suite's <code>BeforeAll</code> now refuses to start while the fixture repo is not idle.</li>
 </ul>
-<p>Earlier attempts were blocked before even reaching it, by the
-PriorityClass VAP param-resolution failure that
-<a href="../q444-vap-param-resolution/">q444-vap-param-resolution.md</a> investigates and
-Q492 has since fixed, by moving the guard's <code>paramKind</code> off a core type.</p>
-<p>The e2e cluster's kube-apiserver entered that broken state between the run that
-produced the result above and the next one, and every run since fails in <code>BeforeAll</code>
-with the RunnerGroup create denied:</p>
+<p>Earlier attempts were blocked before even reaching it, by the PriorityClass VAP param-resolution failure that <a href="../q444-vap-param-resolution/">q444-vap-param-resolution.md</a> investigates and Q492 has since fixed, by moving the guard's <code>paramKind</code> off a core type.</p>
+<p>The e2e cluster's kube-apiserver entered that broken state between the run that produced the result above and the next one, and every run since fails in <code>BeforeAll</code> with the RunnerGroup create denied:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ValidatingAdmissionPolicy &#39;gmc-priorityclass-allowlist-guard&#39; … denied request:
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>failed to configure binding: no params found for policy binding with `Deny` parameterNotFoundAction
 </code></pre></div>
-<p>with <code>gmc-priorityclass-allowlist</code> present in <code>gmc-system</code> and the binding pointing
-exactly at it — the shape
-<a href="../q444-vap-param-resolution/">q444-vap-param-resolution.md</a> § Established by
-measurement records as findings 1 and 2. Nothing here adds to that investigation: it
-has since established the trigger — deleting the <code>ValidatingAdmissionPolicyBinding</code>
-empties the paramKind's binding set and the apiserver never restarts the shared
-informer — which is consistent with what happened here, since the suite's
-<code>helm uninstall</code> teardown deletes exactly that object.</p>
-<p>Recovery was confirmed on 2026-07-28: <code>crictl stop</code> on the kube-apiserver container
-cleared it, verified by the container ID changing and its <code>ATTEMPT</code> going 0 → 1. A
-<code>kubectl delete pod</code> of the static-pod <em>mirror</em> does <strong>not</strong> restart it and must not
-be mistaken for a restart — that plan records a conclusion drawn from exactly that
-non-restart and later withdrawn.</p>
-<p>That blockage is historical. Q492 fixed the trigger, and the 2026-07-29 run above
-completed on a freshly created cluster without going near it.</p>
+<p>with <code>gmc-priorityclass-allowlist</code> present in <code>gmc-system</code> and the binding pointing exactly at it — the shape <a href="../q444-vap-param-resolution/">q444-vap-param-resolution.md</a> § Established by measurement records as findings 1 and 2.
+Nothing here adds to that investigation: it has since established the trigger — deleting the <code>ValidatingAdmissionPolicyBinding</code> empties the paramKind's binding set and the apiserver never restarts the shared informer — which is consistent with what happened here, since the suite's <code>helm uninstall</code> teardown deletes exactly that object.</p>
+<p>Recovery was confirmed on 2026-07-28: <code>crictl stop</code> on the kube-apiserver container cleared it, verified by the container ID changing and its <code>ATTEMPT</code> going 0 → 1.
+A <code>kubectl delete pod</code> of the static-pod <em>mirror</em> does <strong>not</strong> restart it and must not be mistaken for a restart — that plan records a conclusion drawn from exactly that non-restart and later withdrawn.</p>
+<p>That blockage is historical.
+Q492 fixed the trigger, and the 2026-07-29 run above completed on a freshly created cluster without going near it.</p>
 <h2 id="the-decision-close-gated-on-the-deletion-mark">The decision: close, gated on the deletion mark<a class="headerlink" href="#the-decision-close-gated-on-the-deletion-mark" title="Permanent link">&para;</a></h2>
 <p>Both questions are answered, and they select the decision table's <strong>first row</strong>.</p>
 <blockquote>
-<p><strong>Close.</strong> Extend both tiers' detection to the graceful-deletion shape, gated on
-<code>metadata.deletionTimestamp</code> being set at the moment the worker's terminal phase
-publishes.</p>
+<p><strong>Close.</strong> Extend both tiers' detection to the graceful-deletion shape, gated on <code>metadata.deletionTimestamp</code> being set at the moment the worker's terminal phase publishes.</p>
 </blockquote>
-<p>The premise is measured on both halves: the relayed report leaves the run re-runnable
-(<code>rerun-failed-jobs</code> → <code>201</code>, second attempt reaches a runner), and a deliberate cancel
-is distinguishable at the pod (no deletion mark). Neither is inferred from reading code.</p>
-<p><strong>The residual ambiguity is an operator's bare <code>kubectl delete pod</code>.</strong> It is
-indistinguishable from a drain, and it would re-run. That is the right behaviour rather
-than a defect to design around: someone deleting a worker mid-job has interrupted a job
-they did not intend to fail, which is the same thing a drain does.</p>
+<p>The premise is measured on both halves: the relayed report leaves the run re-runnable (<code>rerun-failed-jobs</code> → <code>201</code>, second attempt reaches a runner), and a deliberate cancel is distinguishable at the pod (no deletion mark).
+Neither is inferred from reading code.</p>
+<p><strong>The residual ambiguity is an operator's bare <code>kubectl delete pod</code>.</strong> It is indistinguishable from a drain, and it would re-run.
+That is the right behaviour rather than a defect to design around: someone deleting a worker mid-job has interrupted a job they did not intend to fail, which is the same thing a drain does.</p>
 <h3 id="what-the-implementation-has-to-get-right">What the implementation has to get right<a class="headerlink" href="#what-the-implementation-has-to-get-right" title="Permanent link">&para;</a></h3>
-<p>Recorded here because each was established while measuring, not while coding, and none
-of it is visible from the eviction path alone:</p>
+<p>Recorded here because each was established while measuring, not while coding, and none of it is visible from the eviction path alone:</p>
 <ol>
-<li><strong>The waiter already sees the mark and throws it away.</strong> <code>InformerPodWaiter.onPodEvent</code>
-   holds the whole pod when it resolves, so <code>deletionTimestamp</code> is readable at exactly
-   the instant the terminal phase publishes. What blocks it is the contract:
-   <code>PodWaiter.WaitForCompletion</code> returns only <code>(phase, reason, error)</code>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/podwaiter.go"><code>podwaiter.go</code></a>), so the interface
-   has to widen for the signal to reach <code>provision()</code>. No new watch, annotation, or pod
-   bookkeeping is needed.</li>
-<li><strong>Exclude the AGC's own deletions, or the reaper becomes a re-run trigger.</strong>
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_reaper.go"><code>reapWorkerPods</code></a> deletes
-   worker pods on three arms; <code>pending_deadline</code> applies to both tiers and
-   <code>orphaned_running</code> to scale-set. Each sets a <code>deletionTimestamp</code> on a pod the AGC
-   itself gave up on, which under a naive deletion-keyed rule would re-run it.
-   <code>lifetime_exceeded</code> is already safe by a different route — the kubelet publishes
-   <code>DeadlineExceeded</code> <em>before</em> the reaper deletes, so that terminal phase carries no
-   deletion mark and the existing reason check still separates it.</li>
-<li><strong>The classic half needs Q495's fix to be real on a live worker.</strong> Without a run ID,
-   <code>handleEviction</code> returns early, so closing the gap on classic would buy an interface
-   change and no recovery. Q495 has since been fixed — the identity is read from the
-   payload's <code>github</code> context — but that fix has not yet been seen on a real worker pod
-   at live-GitHub, so confirm the annotation before relying on the recovery it enables. The
-   scale-set tier reads its identity from the pod annotations and is unaffected.</li>
-<li><strong>Do not fold in the cancel path.</strong> <a href="../../../STATUS/#Q501">Q501</a> is a separate defect
-   with a separate fix. A cancelled run's worker is <em>not</em> deleted, so it never reaches
-   this recovery path — but if Q501 is later fixed by having the AGC delete the worker
-   on cancellation, that deletion becomes indistinguishable from a drain and must be
-   excluded exactly as the reaper's are.</li>
+<li><strong>The waiter already sees the mark and throws it away.</strong> <code>InformerPodWaiter.onPodEvent</code> holds the whole pod when it resolves, so <code>deletionTimestamp</code> is readable at exactly the instant the terminal phase publishes.
+   What blocks it is the contract: <code>PodWaiter.WaitForCompletion</code> returns only <code>(phase, reason, error)</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/podwaiter.go"><code>podwaiter.go</code></a>), so the interface has to widen for the signal to reach <code>provision()</code>.
+   No new watch, annotation, or pod bookkeeping is needed.</li>
+<li><strong>Exclude the AGC's own deletions, or the reaper becomes a re-run trigger.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_reaper.go"><code>reapWorkerPods</code></a> deletes worker pods on three arms; <code>pending_deadline</code> applies to both tiers and <code>orphaned_running</code> to scale-set.
+   Each sets a <code>deletionTimestamp</code> on a pod the AGC itself gave up on, which under a naive deletion-keyed rule would re-run it. <code>lifetime_exceeded</code> is already safe by a different route — the kubelet publishes <code>DeadlineExceeded</code> <em>before</em> the reaper deletes, so that terminal phase carries no deletion mark and the existing reason check still separates it.</li>
+<li><strong>The classic half needs Q495's fix to be real on a live worker.</strong> Without a run ID, <code>handleEviction</code> returns early, so closing the gap on classic would buy an interface change and no recovery.
+   Q495 has since been fixed — the identity is read from the payload's <code>github</code> context — but that fix has not yet been seen on a real worker pod at live-GitHub, so confirm the annotation before relying on the recovery it enables.
+   The scale-set tier reads its identity from the pod annotations and is unaffected.</li>
+<li><strong>Do not fold in the cancel path.</strong> <a href="../../../STATUS/#Q501">Q501</a> is a separate defect with a separate fix.
+   A cancelled run's worker is <em>not</em> deleted, so it never reaches this recovery path — but if Q501 is later fixed by having the AGC delete the worker on cancellation, that deletion becomes indistinguishable from a drain and must be excluded exactly as the reaper's are.</li>
 </ol>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>Decided and implemented.</strong> Both questions are answered and recorded above, the
-close-or-accept decision is taken (close, gated on the deletion mark), and Q502 shipped
-the implementation. What landed, against the four constraints:</p>
+<p><strong>Decided and implemented.</strong> Both questions are answered and recorded above, the close-or-accept decision is taken (close, gated on the deletion mark), and Q502 shipped the implementation.
+What landed, against the four constraints:</p>
 <ol>
-<li><em>Widen the waiter.</em> <code>PodOutcome</code> gained <code>ExternallyDeleted</code> — set when the terminal
-   phase publishes with a <code>deletionTimestamp</code> that is not the AGC's own — and
-   <code>provision()</code> recovers on <code>PodFailed</code> + that mark (<code>cause="deletion"</code>), through the
-   same <code>handleEviction</code> and shared budget as eviction and preemption.</li>
-<li><em>Exclude the AGC's own deletions.</em> The reaper stamps
-   <code>actions-gateway.com/deletion-reason</code> on every pod before deleting it — which
-   needed a <code>pods:patch</code> grant the AGC role never had; adding it also un-broke the
-   shipped scale-set claim and completed-at stamps, silently 403'd on real clusters
-   until now. Both tiers additionally order the mark against the container's
-   recorded <code>finishedAt</code>: that excludes an operator's cleanup delete of an
-   already-failed pod, and a deleted worker that never ran — a real kubelet
-   publishes a transient <code>Failed</code>-with-mark even for a drained still-<code>Pending</code> pod,
-   which CI's fake-GitHub drain spec caught a mark-only rule recovering.</li>
-<li><em>Classic needs Q495.</em> Fixed previously, and <strong>confirmed at live-GitHub on
-   2026-08-03</strong> against the published <code>v1.3.0</code> images (Q544): a real worker running a
-   real job carried both <code>run-id</code> and <code>repository</code>. The specs no longer accept their
-   absence — worker lookup matches on the annotation and nothing else, so resolving at
-   all proves <code>run-id</code>, and <code>repository</code> is asserted beside it because <code>handleEviction</code>
-   needs owner/repo too. Detail:
-   <a href="../../eviction-oversubscription-validation/#the-scale-set-half-how-it-was-measured">eviction-oversubscription-validation.md</a>.</li>
-<li><em>Do not fold in the cancel path.</em> Untouched — a cancelled run's worker is not
-   deleted, so it never enters this path; Q501 remains its own item, and any future
-   cancel-relay deletion must stamp the same annotation.</li>
+<li><em>Widen the waiter.</em> <code>PodOutcome</code> gained <code>ExternallyDeleted</code> — set when the terminal phase publishes with a <code>deletionTimestamp</code> that is not the AGC's own — and <code>provision()</code> recovers on <code>PodFailed</code> + that mark (<code>cause="deletion"</code>), through the same <code>handleEviction</code> and shared budget as eviction and preemption.</li>
+<li><em>Exclude the AGC's own deletions.</em> The reaper stamps <code>actions-gateway.com/deletion-reason</code> on every pod before deleting it — which needed a <code>pods:patch</code> grant the AGC role never had; adding it also un-broke the shipped scale-set claim and completed-at stamps, silently 403'd on real clusters until now.
+   Both tiers additionally order the mark against the container's recorded <code>finishedAt</code>: that excludes an operator's cleanup delete of an already-failed pod, and a deleted worker that never ran — a real kubelet publishes a transient <code>Failed</code>-with-mark even for a drained still-<code>Pending</code> pod, which CI's fake-GitHub drain spec caught a mark-only rule recovering.</li>
+<li><em>Classic needs Q495.</em> Fixed previously, and <strong>confirmed at live-GitHub on 2026-08-03</strong> against the published <code>v1.3.0</code> images (Q544): a real worker running a real job carried both <code>run-id</code> and <code>repository</code>.
+   The specs no longer accept their absence — worker lookup matches on the annotation and nothing else, so resolving at all proves <code>run-id</code>, and <code>repository</code> is asserted beside it because <code>handleEviction</code> needs owner/repo too.
+   Detail: <a href="../../eviction-oversubscription-validation/#the-scale-set-half-how-it-was-measured">eviction-oversubscription-validation.md</a>.</li>
+<li><em>Do not fold in the cancel path.</em> Untouched — a cancelled run's worker is not deleted, so it never enters this path; Q501 remains its own item, and any future cancel-relay deletion must stamp the same annotation.</li>
 </ol>
-<p>The scale-set arm shares preemption's non-restart-safety, with a shorter window: the
-Failed-with-mark pod is readable only between terminal publish and the kubelet's final
-removal. Design boundary: 04-operational-flows.md §4.2; operator behaviour:
-troubleshooting.md "Draining a Worker Auto-Re-Runs the Jobs It Interrupts". Pinned by
-<code>TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns</code> /
-<code>TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers</code> (recovered side) and the
-retained <code>DoesNotRerun</code>/<code>DoesNotRecover</code> pair (no-terminal-phase side), plus the
-podwaiter/scan/reaper unit tests.</p>
-<p><strong>Q519's first run caught the deletion arm inert on real clusters — a timestamp-shape
-bug, fixed with the gate.</strong> The spec's field sampler recorded the disrupted worker as
-<code>Running/2026-07-31T07:02:00Z/</code> → <code>Failed/2026-07-31T07:02:00Z/</code> against a delete
-issued at 07:01:32: the apiserver stamps <code>deletionTimestamp</code> as request time <strong>plus
-the grace period</strong>, so on a real kubelet the mark sits ~28s in the <em>future</em> of the
-exit a SIGTERM-honouring runner records seconds after the request.
-<code>externallyDeletedBeforeTerminal</code> compared the raw mark and read every real drain as
-"deleted after terminal" — the cleanup shape — so no recovery fired; the shipped form
-could only ever recover a worker that ignored SIGTERM to its SIGKILL (exit at
-mark == grace expiry). Both tiers shared the predicate, so classic drain recovery was
-equally inert. Every prior gate missed it for venue reasons: envtest pods are
-unscheduled, so their deletion collapses grace to zero and the mark <em>equals</em> the
-request time (the <code>TerminalWithMark</code> pair passes against that artifact shape), and the
-unit fixture restated the same wrong ordering (<code>finishedAt = deletionTimestamp + 5s</code>).
-The fix orders the deletion <em>request</em> — <code>deletionTimestamp</code> minus
-<code>deletionGracePeriodSeconds</code>, the two fields the apiserver stamps together — against
-the termination record, and makes the never-ran exclusion explicit (no termination
-record → nothing reportable to re-run) rather than an accident of the creation-time
-fallback. The unit fixtures now model the real stamp shape.</p>
-<p><strong>The RBAC gate this shipped without now exists (Q519).</strong> The claim and completed-at
-patches ran 403-broken on real clusters because every local tier's client is admin —
-envtest does not enforce RBAC, and the fake-GitHub disruption specs were classic-tier.
-<code>E2E_AGC_ScaleSetRecovery</code>
-(<code>cmd/gmc/test/e2e/worker_scaleset_recovery_test.go</code>) closes that class at the
-fake-GitHub kind tier: a ScaleSet-protocol RunnerSet whose AGC runs under the chart's
-shipped <code>agc-tenant-role</code>, a running scale-set-shaped worker deleted gracefully, and
-the assertion that exactly one rerun lands — which, by the reconciler's ordering, is
-also the assertion that the claim patch landed (recovery calls GitHub only after the
-claim succeeds). Two scope limits, stated plainly: the spec stages the worker pod
-itself rather than provisioning it from an assignment, and the deliberately-failing
-listener bootstrap — the gateway's <code>githubURL</code> names fakegithub's plaintext port over
-https — is what keeps the reconcile loop fast enough to win the real teardown window.</p>
-<p>Both limits were originally forced by the venue: the e2e fakegithub spoke only the
-classic protocol, so no scale-set session could open there at all. That is no longer
-true — Q528 taught it the scale-set protocol, and
-<a href="../q528-scaleset-acquisition-e2e/"><code>E2E_AGC_ScaleSetAcquisition</code></a> drives the
-acquisition half through it end to end. The limits above are now this spec's
-deliberate scope: a recovery scan running on a set whose listener is <em>not</em> up is the
-harder case, and the staged pod is a faithful subject for it because recovery selects
-by label and reads annotations, never caring who created the pod.</p>
+<p>The scale-set arm shares preemption's non-restart-safety, with a shorter window: the Failed-with-mark pod is readable only between terminal publish and the kubelet's final removal.
+Design boundary: 04-operational-flows.md §4.2; operator behaviour: troubleshooting.md "Draining a Worker Auto-Re-Runs the Jobs It Interrupts".
+Pinned by <code>TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns</code> / <code>TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers</code> (recovered side) and the retained <code>DoesNotRerun</code>/<code>DoesNotRecover</code> pair (no-terminal-phase side), plus the podwaiter/scan/reaper unit tests.</p>
+<p><strong>Q519's first run caught the deletion arm inert on real clusters — a timestamp-shape bug, fixed with the gate.</strong> The spec's field sampler recorded the disrupted worker as <code>Running/2026-07-31T07:02:00Z/</code> → <code>Failed/2026-07-31T07:02:00Z/</code> against a delete issued at 07:01:32: the apiserver stamps <code>deletionTimestamp</code> as request time <strong>plus the grace period</strong>, so on a real kubelet the mark sits ~28s in the <em>future</em> of the exit a SIGTERM-honouring runner records seconds after the request. <code>externallyDeletedBeforeTerminal</code> compared the raw mark and read every real drain as "deleted after terminal" — the cleanup shape — so no recovery fired; the shipped form could only ever recover a worker that ignored SIGTERM to its SIGKILL (exit at mark == grace expiry).
+Both tiers shared the predicate, so classic drain recovery was equally inert.
+Every prior gate missed it for venue reasons: envtest pods are unscheduled, so their deletion collapses grace to zero and the mark <em>equals</em> the request time (the <code>TerminalWithMark</code> pair passes against that artifact shape), and the unit fixture restated the same wrong ordering (<code>finishedAt = deletionTimestamp + 5s</code>).
+The fix orders the deletion <em>request</em> — <code>deletionTimestamp</code> minus <code>deletionGracePeriodSeconds</code>, the two fields the apiserver stamps together — against the termination record, and makes the never-ran exclusion explicit (no termination record → nothing reportable to re-run) rather than an accident of the creation-time fallback.
+The unit fixtures now model the real stamp shape.</p>
+<p><strong>The RBAC gate this shipped without now exists (Q519).</strong> The claim and completed-at patches ran 403-broken on real clusters because every local tier's client is admin — envtest does not enforce RBAC, and the fake-GitHub disruption specs were classic-tier. <code>E2E_AGC_ScaleSetRecovery</code> (<code>cmd/gmc/test/e2e/worker_scaleset_recovery_test.go</code>) closes that class at the fake-GitHub kind tier: a ScaleSet-protocol RunnerSet whose AGC runs under the chart's shipped <code>agc-tenant-role</code>, a running scale-set-shaped worker deleted gracefully, and the assertion that exactly one rerun lands — which, by the reconciler's ordering, is also the assertion that the claim patch landed (recovery calls GitHub only after the claim succeeds).
+Two scope limits, stated plainly: the spec stages the worker pod itself rather than provisioning it from an assignment, and the deliberately-failing listener bootstrap — the gateway's <code>githubURL</code> names fakegithub's plaintext port over https — is what keeps the reconcile loop fast enough to win the real teardown window.</p>
+<p>Both limits were originally forced by the venue: the e2e fakegithub spoke only the classic protocol, so no scale-set session could open there at all.
+That is no longer true — Q528 taught it the scale-set protocol, and <a href="../q528-scaleset-acquisition-e2e/"><code>E2E_AGC_ScaleSetAcquisition</code></a> drives the acquisition half through it end to end.
+The limits above are now this spec's deliberate scope: a recovery scan running on a set whose listener is <em>not</em> up is the harder case, and the staged pod is a faithful subject for it because recovery selects by label and reads annotations, never caring who created the pod.</p>
 <p>The remaining work was carried by these Queue rows:</p>
 <ol>
-<li>~~<strong>Q495 first.</strong>~~ Done — the run identity is read from the payload's <code>github</code>
-   context, so the worker lookup can be made exact. <strong>Still owed a live-GitHub
-   confirmation</strong>: the 2026-07-29 runs below predate that fix (their images were built
-   from <code>719e67f1</code>), so what they observed — every worker matched by the
-   snapshot fallback, none by the annotation — is the <em>unfixed</em> build's behaviour, and
-   is evidence for the defect rather than for the fix. The next credentialed live-GitHub run
-   should check that <code>actions-gateway.com/run-id</code> now appears on a real worker pod.</li>
-<li>~~Un-pend <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> and run it.~~ Done — it no
-   longer needed the annotation to become runnable (see above), and it passes.</li>
+<li>~~<strong>Q495 first.</strong>~~ Done — the run identity is read from the payload's <code>github</code> context, so the worker lookup can be made exact. <strong>Still owed a live-GitHub confirmation</strong>: the 2026-07-29 runs below predate that fix (their images were built from <code>719e67f1</code>), so what they observed — every worker matched by the snapshot fallback, none by the annotation — is the <em>unfixed</em> build's behaviour, and is evidence for the defect rather than for the fix.
+   The next credentialed live-GitHub run should check that <code>actions-gateway.com/run-id</code> now appears on a real worker pod.</li>
+<li>~~Un-pend <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> and run it.~~ Done — it no longer needed the annotation to become runnable (see above), and it passes.</li>
 <li>~~Take the decision.~~ Done — the decision table's first row, recorded above.</li>
 <li>~~Q502 — implement the close, per the four constraints above.~~ Done — see Status.</li>
-<li><strong><a href="../../../STATUS/#Q501">Q501</a></strong> — relay a run cancellation to the worker pod. Found by
-   this measurement, independent of the gap. Split into a trigger and an actuator by
-   <a href="../../q501-cancel-relay/">q501-cancel-relay.md</a>: the actuator shipped (a worker whose
-   job the gateway abandons is now deleted, stamped <code>deletion-reason: job_abandoned</code>
-   exactly as the constraint above requires), the trigger is still open.</li>
+<li><strong><a href="../../../STATUS/#Q501">Q501</a></strong> — relay a run cancellation to the worker pod.
+   Found by this measurement, independent of the gap.
+   Split into a trigger and an actuator by <a href="../../q501-cancel-relay/">q501-cancel-relay.md</a>: the actuator shipped (a worker whose job the gateway abandons is now deleted, stamped <code>deletion-reason: job_abandoned</code> exactly as the constraint above requires), the trigger is still open.</li>
 </ol>
-<p>Operational note for whoever runs live-GitHub next, learned the expensive way: the suite
-teardown's <code>helm uninstall</code> deletes the <code>ValidatingAdmissionPolicyBinding</code>, which
-was exactly the trigger — so each run poisoned the next one's apiserver. <strong>Q492 has
-since fixed this</strong>: the guard's <code>paramKind</code> is now a CRD, for which the apiserver
-allocates a fresh dynamic informer per context, so emptying the binding set no
-longer breaks param resolution. The workaround below is retained for anyone
-reproducing this investigation on a pre-Q492 build: restart the kube-apiserver
-(<code>crictl stop</code>, verified by <code>ATTEMPT</code> incrementing) <em>before</em> a run, not after a
-failure. Running with
-<code>E2E_SKIP_TEARDOWN=true</code> avoids the uninstall, but then a subsequent <code>helm upgrade</code>
-conflicts on server-side-apply field ownership (<code>kubectl-patch</code>/<code>kubectl-set</code> claim
-fields helm owns); deleting just the <code>gmc-controller-manager</code> Deployment beforehand
-clears that without touching the binding.</p>
+<p>Operational note for whoever runs live-GitHub next, learned the expensive way: the suite teardown's <code>helm uninstall</code> deletes the <code>ValidatingAdmissionPolicyBinding</code>, which was exactly the trigger — so each run poisoned the next one's apiserver. <strong>Q492 has since fixed this</strong>: the guard's <code>paramKind</code> is now a CRD, for which the apiserver allocates a fresh dynamic informer per context, so emptying the binding set no longer breaks param resolution.
+The workaround below is retained for anyone reproducing this investigation on a pre-Q492 build: restart the kube-apiserver (<code>crictl stop</code>, verified by <code>ATTEMPT</code> incrementing) <em>before</em> a run, not after a failure.
+Running with <code>E2E_SKIP_TEARDOWN=true</code> avoids the uninstall, but then a subsequent <code>helm upgrade</code> conflicts on server-side-apply field ownership (<code>kubectl-patch</code>/<code>kubectl-set</code> claim fields helm owns); deleting just the <code>gmc-controller-manager</code> Deployment beforehand clears that without touching the binding.</p>
 
 
 

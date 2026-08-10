@@ -2631,129 +2631,65 @@
 
 
 <h1 id="q74--v2alpha1--v2beta1-graduation-conversion-webhook">Q74 — v2alpha1 → v2beta1 graduation: conversion webhook<a class="headerlink" href="#q74--v2alpha1--v2beta1-graduation-conversion-webhook" title="Permanent link">&para;</a></h1>
-<p><strong>Strategic context:</strong> <a href="../../v2beta1/">v2beta1.md</a> (the graduation plan; this is its
-§6 "graduation cut" in mechanical detail), <a href="../../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md § API maturity &amp; graduation</a>
-(the ladder), and <a href="../q264-scale-set-protocol-phases/#u8--support-matrix-policy">q264-scale-set-protocol.md §5a-U7/U8</a>
-(the protocol-field strip + the P5-first sequencing). This doc is the implementation
-blueprint for the conversion-webhook step, to execute once its dependency clears.</p>
-<p><strong>Status:</strong> ✅ Done (2026-07-06). v2beta1 shipped as served + storage/hub alongside
-v2alpha1, GMC-hosted conversion webhook wired, <code>acquisitionProtocol</code>/<code>maxListeners</code>
-stripped from the v2beta1 RunnerSet (annotation round-trip preserves them), chart +
-e2e install the conversion stanza, unit + envtest round-trip tests green. The classic
-machinery / v1alpha1 removal (dropping v2alpha1, the destructive storage sweep) is the
-separate deprecation-window step tracked under Q264's residual — deliberately <strong>not</strong>
-part of this change (§Scope "Machinery + coexist").</p>
+<p><strong>Strategic context:</strong> <a href="../../v2beta1/">v2beta1.md</a> (the graduation plan; this is its §6 "graduation cut" in mechanical detail), <a href="../../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md § API maturity &amp; graduation</a> (the ladder), and <a href="../q264-scale-set-protocol-phases/#u8--support-matrix-policy">q264-scale-set-protocol.md §5a-U7/U8</a> (the protocol-field strip + the P5-first sequencing).
+This doc is the implementation blueprint for the conversion-webhook step, to execute once its dependency clears.</p>
+<p><strong>Status:</strong> ✅ Done (2026-07-06). v2beta1 shipped as served + storage/hub alongside v2alpha1, GMC-hosted conversion webhook wired, <code>acquisitionProtocol</code>/<code>maxListeners</code> stripped from the v2beta1 RunnerSet (annotation round-trip preserves them), chart + e2e install the conversion stanza, unit + envtest round-trip tests green.
+The classic machinery / v1alpha1 removal (dropping v2alpha1, the destructive storage sweep) is the separate deprecation-window step tracked under Q264's residual — deliberately <strong>not</strong> part of this change (§Scope "Machinery + coexist").</p>
 <h2 id="blocked-on-q264-p5-the-load-bearing-finding">Blocked on Q264 P5 (the load-bearing finding)<a class="headerlink" href="#blocked-on-q264-p5-the-load-bearing-finding" title="Permanent link">&para;</a></h2>
-<p>Q74 is the <strong>last rung</strong> of the <a href="../q264-scale-set-protocol-phases/#u8--support-matrix-policy">U8 ladder</a>,
-not an independent task:</p>
+<p>Q74 is the <strong>last rung</strong> of the <a href="../q264-scale-set-protocol-phases/#u8--support-matrix-policy">U8 ladder</a>, not an independent task:</p>
 <blockquote>
-<p>P5 default flip → one-minor Classic deprecation (= v1alpha1 deprecation) →
-v2beta1 graduation ships ScaleSet-only</p>
+<p>P5 default flip → one-minor Classic deprecation (= v1alpha1 deprecation) → v2beta1 graduation ships ScaleSet-only</p>
 </blockquote>
-<p>So the ScaleSet-only v2beta1 cut must <strong>follow</strong> Q264 P5 (flip the default
-<code>acquisitionProtocol</code> to <code>ScaleSet</code> + the positioning rewrite) and a one-minor
-Classic deprecation window. Two reasons it is ordered this way:</p>
+<p>So the ScaleSet-only v2beta1 cut must <strong>follow</strong> Q264 P5 (flip the default <code>acquisitionProtocol</code> to <code>ScaleSet</code> + the positioning rewrite) and a one-minor Classic deprecation window.
+Two reasons it is ordered this way:</p>
 <ol>
-<li><strong>Positioning coherence.</strong> A ScaleSet-only <code>v2beta1</code> while <code>v2alpha1</code> still
-   <em>defaults to Classic</em> inverts the signal — the "more stable" version would force
-   ScaleSet while the alpha hands you Classic. P5 makes ScaleSet the default +
-   recommended protocol before the beta hard-commits to it.</li>
-<li><strong>The graduation gate.</strong> The <a href="../../v1-classic-sunset-review/">sunset review §6.4</a>
-   gates the cut on <em>clean-green + a stability soak of the scale-set path</em>. P4
-   clean-green landed (PR #545); the soak + the P5 flip have not — and P5's dogfood
-   migration <strong>is</strong> that soak.</li>
+<li><strong>Positioning coherence.</strong> A ScaleSet-only <code>v2beta1</code> while <code>v2alpha1</code> still <em>defaults to Classic</em> inverts the signal — the "more stable" version would force ScaleSet while the alpha hands you Classic.
+   P5 makes ScaleSet the default + recommended protocol before the beta hard-commits to it.</li>
+<li><strong>The graduation gate.</strong> The <a href="../../v1-classic-sunset-review/">sunset review §6.4</a> gates the cut on <em>clean-green + a stability soak of the scale-set path</em>.
+   P4 clean-green landed (PR #545); the soak + the P5 flip have not — and P5's dogfood migration <strong>is</strong> that soak.</li>
 </ol>
-<p><strong>Backlog-drift note (why this wasn't obvious).</strong> <a href="../../v2beta1/">v2beta1.md §6</a> predates
-the <code>acquisitionProtocol</code> field (added later by Q264 P3a, #534) and describes Q74 as a
-near-identity graduation; <a href="../q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">Q264 §5a-U7/U8</a>
-then assigned Q74 the "strip the field + follow P5" requirement, but neither v2beta1.md
-§6 nor the Q74 Queue note tracked it. Reconciled 2026-07-06 (this doc + the v2beta1.md §6
-cross-ref + the Q74 STATUS note).</p>
+<p><strong>Backlog-drift note (why this wasn't obvious).</strong> <a href="../../v2beta1/">v2beta1.md §6</a> predates the <code>acquisitionProtocol</code> field (added later by Q264 P3a, #534) and describes Q74 as a near-identity graduation; <a href="../q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">Q264 §5a-U7/U8</a> then assigned Q74 the "strip the field + follow P5" requirement, but neither v2beta1.md §6 nor the Q74 Queue note tracked it.
+Reconciled 2026-07-06 (this doc + the v2beta1.md §6 cross-ref + the Q74 STATUS note).</p>
 <h2 id="scope-once-unblocked">Scope (once unblocked)<a class="headerlink" href="#scope-once-unblocked" title="Permanent link">&para;</a></h2>
-<p>Everything <strong>except</strong> the RunnerSet protocol fields is a clean <strong>identity</strong>
-conversion: every shape/quality blocker the beta shape needed — Q191 broker-compat,
-Q196 credentials discriminated union, Q197 workload identity, Q205 well-known labels,
-Q218 disruption-safety — already shipped into <code>v2alpha1</code> (Q15 gVisor is demoted, not a
-hard gate). The two exceptions, per <a href="../q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">U7</a>:</p>
+<p>Everything <strong>except</strong> the RunnerSet protocol fields is a clean <strong>identity</strong> conversion: every shape/quality blocker the beta shape needed — Q191 broker-compat, Q196 credentials discriminated union, Q197 workload identity, Q205 well-known labels, Q218 disruption-safety — already shipped into <code>v2alpha1</code> (Q15 gVisor is demoted, not a hard gate).
+The two exceptions, per <a href="../q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">U7</a>:</p>
 <ul>
-<li><strong><code>RunnerSet.spec.acquisitionProtocol</code></strong> — v2alpha1-only; <code>v2beta1</code> never serves
-  <code>Classic</code>, so the field is <strong>dropped</strong> at the graduation.</li>
-<li><strong><code>RunnerSet.spec.maxListeners</code></strong> — meaningless under ScaleSet (one session per set;
-  concurrency is <code>maxWorkers</code>/<code>priorityTiers</code> via the capacity header), so it is
-  <strong>removed</strong> from <code>v2beta1.RunnerSet</code> at the same hop.</li>
+<li><strong><code>RunnerSet.spec.acquisitionProtocol</code></strong> — v2alpha1-only; <code>v2beta1</code> never serves <code>Classic</code>, so the field is <strong>dropped</strong> at the graduation.</li>
+<li><strong><code>RunnerSet.spec.maxListeners</code></strong> — meaningless under ScaleSet (one session per set; concurrency is <code>maxWorkers</code>/<code>priorityTiers</code> via the capacity header), so it is <strong>removed</strong> from <code>v2beta1.RunnerSet</code> at the same hop.</li>
 </ul>
-<p><strong>Storage/served strategy (maintainer decision, 2026-07-06): "Machinery + coexist."</strong>
-Add <code>v2beta1</code> as served <strong>and</strong> storage; keep <code>v2alpha1</code> served (coexistence /
-rollback — and the Classic on-ramp: <code>gag-migrate</code> maps v1 groups to <code>v2alpha1</code> Classic
-RunnerSets, tenants opt into ScaleSet by editing the set, then move to <code>v2beta1</code>). Do
-<strong>not</strong> run the destructive storage-migration sweep or drop <code>v2alpha1</code> in this change.</p>
+<p><strong>Storage/served strategy (maintainer decision, 2026-07-06): "Machinery + coexist."</strong> Add <code>v2beta1</code> as served <strong>and</strong> storage; keep <code>v2alpha1</code> served (coexistence / rollback — and the Classic on-ramp: <code>gag-migrate</code> maps v1 groups to <code>v2alpha1</code> Classic RunnerSets, tenants opt into ScaleSet by editing the set, then move to <code>v2beta1</code>).
+Do <strong>not</strong> run the destructive storage-migration sweep or drop <code>v2alpha1</code> in this change.</p>
 <h2 id="design-decisions-settled-during-the-2026-07-06-spike">Design decisions (settled during the 2026-07-06 spike)<a class="headerlink" href="#design-decisions-settled-during-the-2026-07-06-spike" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Hub = <code>v2beta1</code></strong> (the storage version); <code>v2alpha1</code> is the Convertible spoke. Only
-  the spoke carries <code>ConvertTo</code>/<code>ConvertFrom</code>.</li>
-<li><strong>Conversion webhook is GMC-hosted.</strong> All five v2 <em>admission</em> webhooks are already
-  GMC-hosted (even the AGC-reconciled kinds), served off the GMC webhook server. The
-  conversion webhook follows the same topology — one <code>/convert</code> endpoint for all five
-  kinds. controller-runtime's <code>NewWebhookManagedBy(mgr, &amp;v2beta1.Kind{}).Complete()</code>
-  registers <code>/convert</code> for a Hub with no validator/defaulter.</li>
-<li><strong>Identity fields convert via a JSON round-trip.</strong> <code>ObjectMeta</code> is the shared
-  <code>metav1</code> type (direct assign); <code>Spec</code>/<code>Status</code> marshal from the spoke and unmarshal
-  into the hub — lossless for identical shapes, self-maintaining, and far less
-  error-prone than hand-writing field assignments through the embedded
-  <code>PodTemplateSpec</code>.</li>
-<li><strong>RunnerSet protocol fields need an annotation round-trip</strong> (the one non-identity
-  case). <code>ConvertTo</code> (spoke→hub) stashes <code>acquisitionProtocol</code> (and <code>maxListeners</code>) in
-  an annotation on the <code>v2beta1</code> object; <code>ConvertFrom</code> (hub→spoke) restores them so a
-  coexistence-era <code>v2alpha1</code> set (Classic <em>or</em> ScaleSet) round-trips losslessly and is
-  never silently re-protocol'd. A <code>v2beta1</code>-native set (no annotation) restores to the
-  ScaleSet default.</li>
-<li><strong>Admission validation is not regressed.</strong> The v2alpha1 validating webhooks stay in
-  force; the generated config uses the apiserver default <code>matchPolicy=Equivalent</code>, so a
-  <code>v2beta1</code> create/update is converted to <code>v2alpha1</code> and run through those validators —
-  no need to duplicate them on the hub.</li>
-<li><strong>envtest auto-wires conversion.</strong> <code>envtest</code>'s <code>modifyConversionWebhooks</code>
-  (controller-runtime <code>pkg/envtest/crd.go</code>) auto-enables the conversion webhook on any
-  CRD whose kind is convertible in the test scheme and redirects it to the local
-  serving host + CA. So the integration suite needs only: register <code>v2beta1</code> in the
-  test scheme + serve <code>/convert</code> on the test webhook manager. No CRD-file conversion
-  stanza is required for tests.</li>
-<li><strong>Production CRD conversion stanza is a chart-sync-layer injection.</strong> The
-  deployment-specific <code>spec.conversion</code> (strategy <code>Webhook</code>, <code>clientConfig</code> → the GMC
-  webhook service, cert-manager CA annotation) is Helm-templated, injected by
-  <code>scripts/manifest/sync-chart-crds.sh</code> — the authoritative <code>api/config/crd</code> output stays
-  conversion-free (controller-gen emits none, and envtest overrides it anyway). Mirrors
-  how <code>sync-chart-webhook.sh</code> re-injects Helm wiring.</li>
+<li><strong>Hub = <code>v2beta1</code></strong> (the storage version); <code>v2alpha1</code> is the Convertible spoke.
+  Only the spoke carries <code>ConvertTo</code>/<code>ConvertFrom</code>.</li>
+<li><strong>Conversion webhook is GMC-hosted.</strong> All five v2 <em>admission</em> webhooks are already GMC-hosted (even the AGC-reconciled kinds), served off the GMC webhook server.
+  The conversion webhook follows the same topology — one <code>/convert</code> endpoint for all five kinds. controller-runtime's <code>NewWebhookManagedBy(mgr, &amp;v2beta1.Kind{}).Complete()</code> registers <code>/convert</code> for a Hub with no validator/defaulter.</li>
+<li><strong>Identity fields convert via a JSON round-trip.</strong> <code>ObjectMeta</code> is the shared <code>metav1</code> type (direct assign); <code>Spec</code>/<code>Status</code> marshal from the spoke and unmarshal into the hub — lossless for identical shapes, self-maintaining, and far less error-prone than hand-writing field assignments through the embedded <code>PodTemplateSpec</code>.</li>
+<li><strong>RunnerSet protocol fields need an annotation round-trip</strong> (the one non-identity case). <code>ConvertTo</code> (spoke→hub) stashes <code>acquisitionProtocol</code> (and <code>maxListeners</code>) in an annotation on the <code>v2beta1</code> object; <code>ConvertFrom</code> (hub→spoke) restores them so a coexistence-era <code>v2alpha1</code> set (Classic <em>or</em> ScaleSet) round-trips losslessly and is never silently re-protocol'd.
+  A <code>v2beta1</code>-native set (no annotation) restores to the ScaleSet default.</li>
+<li><strong>Admission validation is not regressed.</strong> The v2alpha1 validating webhooks stay in force; the generated config uses the apiserver default <code>matchPolicy=Equivalent</code>, so a <code>v2beta1</code> create/update is converted to <code>v2alpha1</code> and run through those validators — no need to duplicate them on the hub.</li>
+<li><strong>envtest auto-wires conversion.</strong> <code>envtest</code>'s <code>modifyConversionWebhooks</code> (controller-runtime <code>pkg/envtest/crd.go</code>) auto-enables the conversion webhook on any CRD whose kind is convertible in the test scheme and redirects it to the local serving host + CA.
+  So the integration suite needs only: register <code>v2beta1</code> in the test scheme + serve <code>/convert</code> on the test webhook manager.
+  No CRD-file conversion stanza is required for tests.</li>
+<li><strong>Production CRD conversion stanza is a chart-sync-layer injection.</strong> The deployment-specific <code>spec.conversion</code> (strategy <code>Webhook</code>, <code>clientConfig</code> → the GMC webhook service, cert-manager CA annotation) is Helm-templated, injected by <code>scripts/manifest/sync-chart-crds.sh</code> — the authoritative <code>api/config/crd</code> output stays conversion-free (controller-gen emits none, and envtest overrides it anyway).
+  Mirrors how <code>sync-chart-webhook.sh</code> re-injects Helm wiring.</li>
 </ul>
 <h2 id="work-breakdown-when-unblocked">Work breakdown (when unblocked)<a class="headerlink" href="#work-breakdown-when-unblocked" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong><code>api/v2beta1/</code> package</strong> — copy the five kinds + shared types (<code>groupversion_info</code>,
-   the four <code>*_types</code>, <code>shared_types</code>, <code>conditions</code>, <code>sidecar</code>); package + version →
-   <code>v2beta1</code>; <code>+kubebuilder:storageversion</code> on the five root kinds; <strong>drop
-   <code>acquisitionProtocol</code> + <code>maxListeners</code> from <code>RunnerSetSpec</code></strong>; <code>Hub()</code> markers.</li>
-<li><strong><code>api/v2alpha1/conversion.go</code></strong> — <code>ConvertTo</code>/<code>ConvertFrom</code> for all five kinds
-   (identity via JSON round-trip) + the RunnerSet annotation round-trip for the two
-   dropped fields.</li>
-<li><strong>Codegen</strong> — <code>make -C api generate</code> (deepcopy + CRDs; each CRD gains <code>v2beta1</code>,
-   storage flips to it).</li>
-<li><strong>GMC wiring</strong> — <code>v2beta1.AddToScheme</code>; <code>SetupConversionWebhooksWithManager</code>
-   (<code>/convert</code> for the five Hub kinds), registered in <code>cmd/gmc/cmd/main.go</code>.</li>
+<li><strong><code>api/v2beta1/</code> package</strong> — copy the five kinds + shared types (<code>groupversion_info</code>, the four <code>*_types</code>, <code>shared_types</code>, <code>conditions</code>, <code>sidecar</code>); package + version → <code>v2beta1</code>; <code>+kubebuilder:storageversion</code> on the five root kinds; <strong>drop <code>acquisitionProtocol</code> + <code>maxListeners</code> from <code>RunnerSetSpec</code></strong>; <code>Hub()</code> markers.</li>
+<li><strong><code>api/v2alpha1/conversion.go</code></strong> — <code>ConvertTo</code>/<code>ConvertFrom</code> for all five kinds (identity via JSON round-trip) + the RunnerSet annotation round-trip for the two dropped fields.</li>
+<li><strong>Codegen</strong> — <code>make -C api generate</code> (deepcopy + CRDs; each CRD gains <code>v2beta1</code>, storage flips to it).</li>
+<li><strong>GMC wiring</strong> — <code>v2beta1.AddToScheme</code>; <code>SetupConversionWebhooksWithManager</code> (<code>/convert</code> for the five Hub kinds), registered in <code>cmd/gmc/cmd/main.go</code>.</li>
 <li><strong>Tests</strong> — unit round-trip in <code>api/</code> (exhaustive fields incl. the annotation path)</li>
-<li>envtest round-trip in the GMC integration suite (real apiserver → <code>/convert</code>,
-   register <code>v2beta1</code> in the test scheme + serve <code>/convert</code>).</li>
-<li><strong>Chart</strong> — inject <code>spec.conversion</code> in <code>sync-chart-crds.sh</code>; <code>make chart-crds</code> +
-   <code>make chart-crds-check chart-webhook-check</code> green.</li>
-<li><strong>Operator docs</strong> — v2 install / CRD reference (a conversion webhook changes what an
-   operator installs + adds a served version), per the
-   <a href="../../../development/doc-update-matrix/">doc-update matrix</a>.</li>
-<li><strong>STATUS + PR</strong> — remove the Q74 Queue row (isolated <code>docs/STATUS.md</code> commit);
-   <code>make check</code> + chart drift + GMC integration green; PR referencing Q74.</li>
+<li>envtest round-trip in the GMC integration suite (real apiserver → <code>/convert</code>, register <code>v2beta1</code> in the test scheme + serve <code>/convert</code>).</li>
+<li><strong>Chart</strong> — inject <code>spec.conversion</code> in <code>sync-chart-crds.sh</code>; <code>make chart-crds</code> + <code>make chart-crds-check chart-webhook-check</code> green.</li>
+<li><strong>Operator docs</strong> — v2 install / CRD reference (a conversion webhook changes what an operator installs + adds a served version), per the <a href="../../../development/doc-update-matrix/">doc-update matrix</a>.</li>
+<li><strong>STATUS + PR</strong> — remove the Q74 Queue row (isolated <code>docs/STATUS.md</code> commit); <code>make check</code> + chart drift + GMC integration green; PR referencing Q74.</li>
 </ol>
 <h2 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h2>
-<p>Identity conversion preserves every field (credentials union discriminator,
-immutability CEL, PSA/egress wiring); nothing is defaulted away or relaxed. The
-RunnerSet field strip is a <em>protocol</em> narrowing (ScaleSet-only), reviewed as part of
-the Q264 sunset — no security-property regression (egress isolation, no-token-to-worker,
-JIT-credential surface all unchanged; §7 of the sunset review).</p>
+<p>Identity conversion preserves every field (credentials union discriminator, immutability CEL, PSA/egress wiring); nothing is defaulted away or relaxed.
+The RunnerSet field strip is a <em>protocol</em> narrowing (ScaleSet-only), reviewed as part of the Q264 sunset — no security-property regression (egress isolation, no-token-to-worker, JIT-credential surface all unchanged; §7 of the sunset review).</p>
 
 
 

@@ -3228,12 +3228,7 @@
 <li><a href="#12-live-multi-tenant-validation-evidence-2026-06-1112">12. Live multi-tenant validation evidence (2026-06-11/12)</a></li>
 </ul>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
-<p>Last refreshed 2026-06-12. <strong>All success criteria are now live-validated.</strong>
-The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were
-proven on a real kind cluster with real GitHub App credentials on
-2026-06-11/12 — see <a href="#12-live-multi-tenant-validation-evidence-2026-06-1112">§12 Live multi-tenant validation evidence</a>
-for the full session record, including the four product bugs it surfaced
-(tracked as Q114–Q117 in <a href="../../STATUS/">STATUS.md</a>).</p>
+<p>Last refreshed 2026-06-12. <strong>All success criteria are now live-validated.</strong> The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see <a href="#12-live-multi-tenant-validation-evidence-2026-06-1112">§12 Live multi-tenant validation evidence</a> for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in <a href="../../STATUS/">STATUS.md</a>).</p>
 <table>
 <thead>
 <tr>
@@ -3306,12 +3301,12 @@ for the full session record, including the four product bugs it surfaced
 </tbody>
 </table>
 <h3 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h3>
-<p>~~The only milestone gate is end-to-end validation in <code>kind</code>.~~ Closed
-2026-06-12 by the live validation session in §12. The milestone is
-complete.</p>
+<p>~~The only milestone gate is end-to-end validation in <code>kind</code>.~~ Closed 2026-06-12 by the live validation session in §12.
+The milestone is complete.</p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><strong>Goal:</strong> Introduce the Gateway Manager Controller (GMC), a cluster-level operator that reconciles <code>ActionsGateway</code> CRs into the full per-tenant resource set — RBAC, network guardrails, egress proxy, and AGC deployment — and deliver a minimal stateless CONNECT proxy binary. The result is a self-contained, multi-tenant system: platform teams apply one CR per tenant and the GMC handles everything else.</p>
+<p><strong>Goal:</strong> Introduce the Gateway Manager Controller (GMC), a cluster-level operator that reconciles <code>ActionsGateway</code> CRs into the full per-tenant resource set — RBAC, network guardrails, egress proxy, and AGC deployment — and deliver a minimal stateless CONNECT proxy binary.
+The result is a self-contained, multi-tenant system: platform teams apply one CR per tenant and the GMC handles everything else.</p>
 <p><strong>Duration:</strong> Days 17–22</p>
 <p><strong>Foundation:</strong> All packages from Milestones 1–3 are consumed unchanged except for targeted additions to the AGC provisioner (proxy env injection, §4.1).</p>
 <p><strong>Two new modules are introduced:</strong>
@@ -3349,7 +3344,8 @@ complete.</p>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>replace github.com/actions-gateway/github-actions-gateway =&gt; ./
 </code></pre></div>
 <p>The <code>replace</code> directive already in <code>go.work</code> prevents the longest-prefix routing bug (see <code>CLAUDE.md</code>); no additional replace directives are needed for the new modules.</p>
-<p>The <code>cmd/gmc/go.mod</code> requires <code>github.com/actions-gateway/github-actions-gateway/agc</code> to import the RunnerGroup API types. The workspace resolver handles this via the <code>use ./cmd/agc</code> entry without a replace directive.</p>
+<p>The <code>cmd/gmc/go.mod</code> requires <code>github.com/actions-gateway/github-actions-gateway/agc</code> to import the RunnerGroup API types.
+The workspace resolver handles this via the <code>use ./cmd/agc</code> entry without a replace directive.</p>
 <h3 id="12-kubebuilder-bootstrapping-for-gmc">1.2 Kubebuilder bootstrapping for GMC<a class="headerlink" href="#12-kubebuilder-bootstrapping-for-gmc" title="Permanent link">&para;</a></h3>
 <p>Scaffold the GMC inside <code>cmd/gmc/</code> using <code>kubebuilder</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">cd</span><span class="w"> </span>cmd/gmc
@@ -3359,7 +3355,9 @@ complete.</p>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>kubebuilder<span class="w"> </span>create<span class="w"> </span>webhook<span class="w"> </span>--group<span class="w"> </span>actions-gateway.github.com<span class="w"> </span>--version<span class="w"> </span>v1alpha1<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--kind<span class="w"> </span>ActionsGateway<span class="w"> </span>--validating
 </code></pre></div>
-<p>Commit the scaffolded layout. Replace the generated controller stub and webhook stub with the implementations in §2 and §3. Keep the generated deep-copy and scheme registration.</p>
+<p>Commit the scaffolded layout.
+Replace the generated controller stub and webhook stub with the implementations in §2 and §3.
+Keep the generated deep-copy and scheme registration.</p>
 <h3 id="13-directory-layout">1.3 Directory layout<a class="headerlink" href="#13-directory-layout" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cmd/
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>├── agc/                           # Milestone 2–3 (unchanged)
@@ -3401,7 +3399,8 @@ complete.</p>
 <hr />
 <h2 id="2-actionsgateway-crd-cmdgmcapiv1alpha1">2. ActionsGateway CRD (<code>cmd/gmc/api/v1alpha1/</code>)<a class="headerlink" href="#2-actionsgateway-crd-cmdgmcapiv1alpha1" title="Permanent link">&para;</a></h2>
 <h3 id="21-type-definitions-actionsgateway_typesgo">2.1 Type definitions (<code>actionsgateway_types.go</code>)<a class="headerlink" href="#21-type-definitions-actionsgateway_typesgo" title="Permanent link">&para;</a></h3>
-<p>The structs mirror the design spec in <code>docs/design/03-api-contracts.md</code>. Key types:</p>
+<p>The structs mirror the design spec in <code>docs/design/03-api-contracts.md</code>.
+Key types:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">// SecretReference is a pointer to a Kubernetes Secret with optional namespace override.</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kd">type</span><span class="w"> </span><span class="nx">SecretReference</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">Name</span><span class="w">      </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;name&quot;`</span>
@@ -3470,10 +3469,13 @@ complete.</p>
 <a id="__codelineno-4-66" name="__codelineno-4-66" href="#__codelineno-4-66"></a><span class="w">    </span><span class="nx">Status</span><span class="w"> </span><span class="nx">ActionsGatewayStatus</span><span class="w"> </span><span class="s">`json:&quot;status,omitempty&quot;`</span>
 <a id="__codelineno-4-67" name="__codelineno-4-67" href="#__codelineno-4-67"></a><span class="p">}</span>
 </code></pre></div>
-<p><code>RunnerGroups []agcv1alpha1.RunnerGroupSpec</code> reuses the type from the AGC API package (<code>github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1</code>). This is the only external dependency between the two modules and flows in one direction (GMC → AGC).</p>
+<p><code>RunnerGroups []agcv1alpha1.RunnerGroupSpec</code> reuses the type from the AGC API package (<code>github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1</code>).
+This is the only external dependency between the two modules and flows in one direction (GMC → AGC).</p>
 <p>Note: the <code>ActionsGatewaySpec.RunnerGroups</code> field uses <code>agcv1alpha1.RunnerGroupSpec</code>, not the full <code>RunnerGroup</code> CR type, because the GMC bootstraps RunnerGroup CRs from a spec — it constructs the CR name itself as <code>{actionsgateway-name}-{runnergroup.name}</code>.</p>
 <h3 id="22-crd-generation">2.2 CRD generation<a class="headerlink" href="#22-crd-generation" title="Permanent link">&para;</a></h3>
-<p>Run <code>make manifests</code> inside <code>cmd/gmc/</code> to regenerate <code>config/crd/</code> and <code>config/rbac/role.yaml</code> from the kubebuilder markers. Commit the generated files. The Makefile target follows the same pattern as <code>cmd/agc/Makefile</code>.</p>
+<p>Run <code>make manifests</code> inside <code>cmd/gmc/</code> to regenerate <code>config/crd/</code> and <code>config/rbac/role.yaml</code> from the kubebuilder markers.
+Commit the generated files.
+The Makefile target follows the same pattern as <code>cmd/agc/Makefile</code>.</p>
 <hr />
 <h2 id="3-gmc-reconciler-cmdgmcinternalcontroller">3. GMC Reconciler (<code>cmd/gmc/internal/controller/</code>)<a class="headerlink" href="#3-gmc-reconciler-cmdgmcinternalcontroller" title="Permanent link">&para;</a></h2>
 <h3 id="31-resource-creation-order">3.1 Resource creation order<a class="headerlink" href="#31-resource-creation-order" title="Permanent link">&para;</a></h3>
@@ -3492,7 +3494,8 @@ complete.</p>
 <li>AGC <code>Deployment</code> — runs the AGC binary with credentials and proxy env injected</li>
 <li><code>RunnerGroup</code> CRs — one per entry in <code>spec.runnerGroups</code></li>
 </ol>
-<p>On each reconcile, existing resources are patched via <code>CreateOrUpdate</code> (server-side apply semantics). This makes the reconciler idempotent and safe under concurrent reconciles with leader election.</p>
+<p>On each reconcile, existing resources are patched via <code>CreateOrUpdate</code> (server-side apply semantics).
+This makes the reconciler idempotent and safe under concurrent reconciles with leader election.</p>
 <h3 id="32-reconciler-struct">3.2 Reconciler struct<a class="headerlink" href="#32-reconciler-struct" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">// ActionsGatewayReconciler reconciles ActionsGateway objects.</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1">//</span>
@@ -3518,9 +3521,12 @@ complete.</p>
 <a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">    </span><span class="nx">Log</span><span class="w">        </span><span class="o">*</span><span class="nx">slog</span><span class="p">.</span><span class="nx">Logger</span>
 <a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="p">}</span>
 </code></pre></div>
-<p>Note the absence of <code>secrets</code> in the RBAC markers: the GMC never reads Secret contents. It only references the Secret by name (from <code>spec.gitHubAppRef</code>) when constructing the AGC Deployment's volume mounts. No <code>get</code> on <code>secrets</code> is required — the Secret name passes through as a string.</p>
+<p>Note the absence of <code>secrets</code> in the RBAC markers: the GMC never reads Secret contents.
+It only references the Secret by name (from <code>spec.gitHubAppRef</code>) when constructing the AGC Deployment's volume mounts.
+No <code>get</code> on <code>secrets</code> is required — the Secret name passes through as a string.</p>
 <h3 id="33-role-generated-for-the-agc-serviceaccount">3.3 Role generated for the AGC ServiceAccount<a class="headerlink" href="#33-role-generated-for-the-agc-serviceaccount" title="Permanent link">&para;</a></h3>
-<p>The GMC creates a <code>Role</code> (not ClusterRole) in the tenant namespace that the AGC SA is bound to. This role is the AGC's namespace-scoped permission set:</p>
+<p>The GMC creates a <code>Role</code> (not ClusterRole) in the tenant namespace that the AGC SA is bound to.
+This role is the AGC's namespace-scoped permission set:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">rules</span><span class="p">:</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">apiGroups</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;&quot;</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">pods</span><span class="p p-Indicator">]</span>
@@ -3538,9 +3544,12 @@ complete.</p>
 <a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">runnergroups/status</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">runnergroups/finalizers</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span><span class="nt">verbs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">get</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">update</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">patch</span><span class="p p-Indicator">]</span>
 </code></pre></div>
-<p>This is the correct RBAC posture for the AGC. Unlike the AGC's own current <code>config/rbac/role.yaml</code> (which is a ClusterRole generated by kubebuilder for development), the GMC-generated Role is namespace-scoped and replaces the ClusterRole binding in production. In M4 the AGC's own ClusterRole/ClusterRoleBinding manifests are deprecated for production use; the GMC-generated Role is the authoritative binding.</p>
+<p>This is the correct RBAC posture for the AGC.
+Unlike the AGC's own current <code>config/rbac/role.yaml</code> (which is a ClusterRole generated by kubebuilder for development), the GMC-generated Role is namespace-scoped and replaces the ClusterRole binding in production.
+In M4 the AGC's own ClusterRole/ClusterRoleBinding manifests are deprecated for production use; the GMC-generated Role is the authoritative binding.</p>
 <h3 id="34-networkpolicy-template">3.4 NetworkPolicy template<a class="headerlink" href="#34-networkpolicy-template" title="Permanent link">&para;</a></h3>
-<p>The GMC creates a single <code>NetworkPolicy</code> in the tenant namespace enforcing the two-tier egress model. GitHub IP ranges (fetched at provisioning time; see §3.7) populate the egress rules for proxy pods.</p>
+<p>The GMC creates a single <code>NetworkPolicy</code> in the tenant namespace enforcing the two-tier egress model.
+GitHub IP ranges (fetched at provisioning time; see §3.7) populate the egress rules for proxy pods.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// buildNetworkPolicy constructs the tenant NetworkPolicy.</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1">// proxyEgress contains the IP blocks for GitHub&#39;s current IP ranges.</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kd">func</span><span class="w"> </span><span class="nx">buildNetworkPolicy</span><span class="p">(</span><span class="nx">ag</span><span class="w"> </span><span class="o">*</span><span class="nx">v1alpha1</span><span class="p">.</span><span class="nx">ActionsGateway</span><span class="p">,</span><span class="w"> </span><span class="nx">proxyServiceClusterIP</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">githubCIDRs</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">networkingv1</span><span class="p">.</span><span class="nx">NetworkPolicy</span>
@@ -3583,9 +3592,11 @@ complete.</p>
 </tr>
 </tbody>
 </table>
-<p>When <code>spec.proxy.managedNetworkPolicy</code> is <code>false</code>, the GMC creates the NetworkPolicy without IP-range egress rules (just the within-namespace rules). The tenant's FQDN-based CNI policy handles GitHub egress.</p>
+<p>When <code>spec.proxy.managedNetworkPolicy</code> is <code>false</code>, the GMC creates the NetworkPolicy without IP-range egress rules (just the within-namespace rules).
+The tenant's FQDN-based CNI policy handles GitHub egress.</p>
 <h3 id="35-agc-deployment-template">3.5 AGC Deployment template<a class="headerlink" href="#35-agc-deployment-template" title="Permanent link">&para;</a></h3>
-<p>The GMC creates the AGC Deployment in the tenant namespace. Key fields:</p>
+<p>The GMC creates the AGC Deployment in the tenant namespace.
+Key fields:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">buildAGCDeployment</span><span class="p">(</span><span class="nx">ag</span><span class="w"> </span><span class="o">*</span><span class="nx">v1alpha1</span><span class="p">.</span><span class="nx">ActionsGateway</span><span class="p">,</span><span class="w"> </span><span class="nx">agcImage</span><span class="p">,</span><span class="w"> </span><span class="nx">proxyServiceAddr</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">appsv1</span><span class="p">.</span><span class="nx">Deployment</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">appsv1</span><span class="p">.</span><span class="nx">Deployment</span><span class="p">{</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">        </span><span class="nx">Spec</span><span class="p">:</span><span class="w"> </span><span class="nx">appsv1</span><span class="p">.</span><span class="nx">DeploymentSpec</span><span class="p">{</span>
@@ -3614,7 +3625,8 @@ complete.</p>
 <a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="p">}</span>
 </code></pre></div>
 <p><code>proxyServiceAddr</code> is <code>http://actions-gateway-proxy.{namespace}.svc.cluster.local:8080</code>.</p>
-<p><code>buildNoProxy</code> merges the user-provided <code>spec.proxy.noProxyCIDRs</code> (or the default list if empty) with the cluster-internal exclusions: <code>kubernetes.default.svc.cluster.local</code>, <code>localhost</code>, <code>127.0.0.1</code>, and the service CIDR. The default list is:</p>
+<p><code>buildNoProxy</code> merges the user-provided <code>spec.proxy.noProxyCIDRs</code> (or the default list if empty) with the cluster-internal exclusions: <code>kubernetes.default.svc.cluster.local</code>, <code>localhost</code>, <code>127.0.0.1</code>, and the service CIDR.
+The default list is:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubernetes.default.svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12
 </code></pre></div>
 <p>The <code>Secret</code> referenced by <code>gitHubAppRef</code> is referenced <strong>by name only</strong> in the <code>secretKeyRef</code> — the GMC never reads its contents.</p>
@@ -3629,9 +3641,11 @@ complete.</p>
 - Readiness probe: <code>GET /readyz</code> on port 8081 (CONNECT listener bound — gates Service EndpointSlice membership; see Q42 fix)
 - Security context: <code>runAsNonRoot: true</code>, <code>readOnlyRootFilesystem: true</code>, <code>allowPrivilegeEscalation: false</code>
 - Labels: <code>app: actions-gateway-proxy</code>, <code>app.kubernetes.io/managed-by: actions-gateway-gmc</code></p>
-<p>The <code>HorizontalPodAutoscaler</code> targets this Deployment with <code>minReplicas</code>/<code>maxReplicas</code> from the spec and <code>targetCPUUtilizationPercentage</code> (default 60). The <code>PodDisruptionBudget</code> sets <code>minAvailable: 1</code>.</p>
+<p>The <code>HorizontalPodAutoscaler</code> targets this Deployment with <code>minReplicas</code>/<code>maxReplicas</code> from the spec and <code>targetCPUUtilizationPercentage</code> (default 60).
+The <code>PodDisruptionBudget</code> sets <code>minAvailable: 1</code>.</p>
 <h3 id="37-finalizer-and-deletion">3.7 Finalizer and deletion<a class="headerlink" href="#37-finalizer-and-deletion" title="Permanent link">&para;</a></h3>
-<p>The GMC uses a finalizer (<code>actions-gateway.github.com/gmc-cleanup</code>) on the <code>ActionsGateway</code> CR. On delete reconcile:</p>
+<p>The GMC uses a finalizer (<code>actions-gateway.github.com/gmc-cleanup</code>) on the <code>ActionsGateway</code> CR.
+On delete reconcile:</p>
 <ol>
 <li>Delete all <code>RunnerGroup</code> CRs in the namespace owned by this CR (wait for deletion — this allows the AGC to deregister sessions and clean up agent Secrets before its Deployment is removed).</li>
 <li>Delete the AGC <code>Deployment</code>.</li>
@@ -3642,7 +3656,8 @@ complete.</p>
 <li>Remove the finalizer.</li>
 </ol>
 <p>The namespace itself is never deleted — the tenant owns it.</p>
-<p>RunnerGroup deletion wait: after issuing the delete call, the reconciler re-queues with a short delay until no RunnerGroup CRs with this gateway's owner label remain. Use <code>ctrl.Result{RequeueAfter: 5 * time.Second}</code> until the list is empty.</p>
+<p>RunnerGroup deletion wait: after issuing the delete call, the reconciler re-queues with a short delay until no RunnerGroup CRs with this gateway's owner label remain.
+Use <code>ctrl.Result{RequeueAfter: 5 * time.Second}</code> until the list is empty.</p>
 <h3 id="38-status-reporting">3.8 Status reporting<a class="headerlink" href="#38-status-reporting" title="Permanent link">&para;</a></h3>
 <p>After reconciling owned resources, the reconciler reads:
 - Proxy Deployment <code>status.readyReplicas</code> → <code>status.proxyReadyReplicas</code>
@@ -3697,7 +3712,8 @@ complete.</p>
 <a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="c1">// Start implements manager.Runnable. It runs until ctx is cancelled.</span>
 <a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">IPRangeReconciler</span><span class="p">)</span><span class="w"> </span><span class="nx">Start</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
 </code></pre></div>
-<p>On each tick: fetch IP ranges, list all <code>ActionsGateway</code> CRs cluster-wide, and for each CR where <code>spec.proxy.managedNetworkPolicy</code> is true, patch the <code>NetworkPolicy</code>'s egress rules to reflect the current GitHub CIDR set. Emit <code>actions_gateway_ip_range_updates_total</code> on each successful patch.</p>
+<p>On each tick: fetch IP ranges, list all <code>ActionsGateway</code> CRs cluster-wide, and for each CR where <code>spec.proxy.managedNetworkPolicy</code> is true, patch the <code>NetworkPolicy</code>'s egress rules to reflect the current GitHub CIDR set.
+Emit <code>actions_gateway_ip_range_updates_total</code> on each successful patch.</p>
 <p>The <code>IPRangeReconciler</code> is registered with the manager via <code>mgr.Add(ipRangeReconciler)</code> in <code>main.go</code>.</p>
 <hr />
 <h2 id="4-admission-webhook-cmdgmcinternalwebhook">4. Admission Webhook (<code>cmd/gmc/internal/webhook/</code>)<a class="headerlink" href="#4-admission-webhook-cmdgmcinternalwebhook" title="Permanent link">&para;</a></h2>
@@ -3714,14 +3730,19 @@ complete.</p>
 <a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="c1">// ValidateDelete is a no-op.</span>
 <a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">v</span><span class="w"> </span><span class="o">*</span><span class="nx">ActionsGatewayValidator</span><span class="p">)</span><span class="w"> </span><span class="nx">ValidateDelete</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">obj</span><span class="w"> </span><span class="nx">runtime</span><span class="p">.</span><span class="nx">Object</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">admission</span><span class="p">.</span><span class="nx">Warnings</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
-<p>Reserved namespaces (default static set): <code>kube-system</code>, <code>kube-public</code>, <code>gmc-system</code>. The GMC's actual install namespace is also added at setup time via the <code>POD_NAMESPACE</code> downward-API env var, so custom installs are protected without code changes.</p>
-<p><code>ValidateCreate</code> checks <code>obj.(*v1alpha1.ActionsGateway).Namespace</code> against the reserved list. If matched, returns a <code>field.Invalid</code> error with a human-readable message.</p>
+<p>Reserved namespaces (default static set): <code>kube-system</code>, <code>kube-public</code>, <code>gmc-system</code>.
+The GMC's actual install namespace is also added at setup time via the <code>POD_NAMESPACE</code> downward-API env var, so custom installs are protected without code changes.</p>
+<p><code>ValidateCreate</code> checks <code>obj.(*v1alpha1.ActionsGateway).Namespace</code> against the reserved list.
+If matched, returns a <code>field.Invalid</code> error with a human-readable message.</p>
 <p><strong>Webhook configuration fields:</strong>
 - <code>failurePolicy: Fail</code> — requests are rejected if the webhook pod is unhealthy
 - <code>matchPolicy: Equivalent</code>
 - <code>rules</code>: CREATE, UPDATE on <code>actionsgateways.actions-gateway.github.com</code>
 - <code>sideEffects: None</code></p>
-<p><strong>TLS:</strong> cert-manager manages the serving certificate. A <code>Certificate</code> and self-signed <code>Issuer</code> are committed under <code>cmd/gmc/config/webhook/</code>. The <code>caBundle</code> in the <code>ValidatingWebhookConfiguration</code> is injected via cert-manager's <code>cert-manager.io/inject-ca-from</code> annotation. For <code>kind</code> cluster testing, use a self-signed issuer.</p>
+<p><strong>TLS:</strong> cert-manager manages the serving certificate.
+A <code>Certificate</code> and self-signed <code>Issuer</code> are committed under <code>cmd/gmc/config/webhook/</code>.
+The <code>caBundle</code> in the <code>ValidatingWebhookConfiguration</code> is injected via cert-manager's <code>cert-manager.io/inject-ca-from</code> annotation.
+For <code>kind</code> cluster testing, use a self-signed issuer.</p>
 <p>Register with the manager in <code>main.go</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="p">(</span><span class="o">&amp;</span><span class="nx">webhook</span><span class="p">.</span><span class="nx">ActionsGatewayValidator</span><span class="p">{}).</span><span class="nx">SetupWebhookWithManager</span><span class="p">(</span><span class="nx">mgr</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Errorf</span><span class="p">(</span><span class="s">&quot;setup webhook: %w&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
@@ -3787,7 +3808,8 @@ complete.</p>
 <a id="__codelineno-16-38" name="__codelineno-16-38" href="#__codelineno-16-38"></a><span class="w">    </span><span class="o">&lt;-</span><span class="nx">done</span>
 <a id="__codelineno-16-39" name="__codelineno-16-39" href="#__codelineno-16-39"></a><span class="p">}</span>
 </code></pre></div>
-<p>The health server listens on <code>HealthAddr</code> and serves two endpoints: <code>GET /healthz</code> always returns <code>200 OK</code> (liveness — process is up); <code>GET /readyz</code> returns <code>200 OK</code> only after the CONNECT listener has bound (readiness — gates Service EndpointSlice membership, see Q42 fix). Both share the port so the existing single <code>containerPort: 8081</code> keeps working.</p>
+<p>The health server listens on <code>HealthAddr</code> and serves two endpoints: <code>GET /healthz</code> always returns <code>200 OK</code> (liveness — process is up); <code>GET /readyz</code> returns <code>200 OK</code> only after the CONNECT listener has bound (readiness — gates Service EndpointSlice membership, see Q42 fix).
+Both share the port so the existing single <code>containerPort: 8081</code> keeps working.</p>
 <h3 id="52-metrics">5.2 Metrics<a class="headerlink" href="#52-metrics" title="Permanent link">&para;</a></h3>
 <p>The proxy exposes Prometheus metrics on the health port at <code>/metrics</code>:</p>
 <table>
@@ -3858,7 +3880,8 @@ complete.</p>
 <a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>builder<span class="w"> </span>/bin/proxy<span class="w"> </span>/proxy
 <a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="k">ENTRYPOINT</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;/proxy&quot;</span><span class="p">]</span>
 </code></pre></div>
-<p>The distroless base provides a minimal attack surface with no shell. The binary is statically linked (<code>CGO_ENABLED=0</code>).</p>
+<p>The distroless base provides a minimal attack surface with no shell.
+The binary is statically linked (<code>CGO_ENABLED=0</code>).</p>
 <hr />
 <h2 id="6-changes-to-the-agc-cmdagc">6. Changes to the AGC (<code>cmd/agc/</code>)<a class="headerlink" href="#6-changes-to-the-agc-cmdagc" title="Permanent link">&para;</a></h2>
 <h3 id="61-proxy-env-injection-into-worker-pods-internalprovisionerprovisionergo">6.1 Proxy env injection into worker pods (<code>internal/provisioner/provisioner.go</code>)<a class="headerlink" href="#61-proxy-env-injection-into-worker-pods-internalprovisionerprovisionergo" title="Permanent link">&para;</a></h3>
@@ -3896,7 +3919,8 @@ complete.</p>
 </code></pre></div>
 <p>These env vars are injected by the GMC into the AGC Deployment (§3.5); when running the AGC directly (development/CI), they default to empty strings, which causes the proxy env vars to be injected as empty — acceptable for local testing without a proxy.</p>
 <h3 id="63-no-new-rbac-markers-needed">6.3 No new RBAC markers needed<a class="headerlink" href="#63-no-new-rbac-markers-needed" title="Permanent link">&para;</a></h3>
-<p>The AGC already has the pod and secret RBAC markers from M3. The GMC-created Role (§3.3) is the production RBAC; the AGC's own ClusterRole is retained for standalone development use.</p>
+<p>The AGC already has the pod and secret RBAC markers from M3.
+The GMC-created Role (§3.3) is the production RBAC; the AGC's own ClusterRole is retained for standalone development use.</p>
 <hr />
 <h2 id="7-gmc-maingo">7. GMC <code>main.go</code><a class="headerlink" href="#7-gmc-maingo" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1">// cmd/gmc/main.go</span>
@@ -4113,7 +4137,8 @@ complete.</p>
 <a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a><span class="p">}</span>
 </code></pre></div>
 <h3 id="82-controller-tests-controller">8.2 Controller tests (<code>controller/</code>)<a class="headerlink" href="#82-controller-tests-controller" title="Permanent link">&para;</a></h3>
-<p>The kubebuilder-scaffolded envtest suite (<code>suite_test.go</code>, <code>actionsgateway_controller_test.go</code>) was intentionally replaced with fake-client unit tests. envtest requires etcd binaries (<code>make setup-envtest</code>) and is not appropriate for a pure unit test run. The reconciler behaviours below are covered by the existing unit tests in <code>builder_test.go</code> and <code>ipranges_test.go</code> using <code>sigs.k8s.io/controller-runtime/pkg/client/fake</code>.</p>
+<p>The kubebuilder-scaffolded envtest suite (<code>suite_test.go</code>, <code>actionsgateway_controller_test.go</code>) was intentionally replaced with fake-client unit tests. envtest requires etcd binaries (<code>make setup-envtest</code>) and is not appropriate for a pure unit test run.
+The reconciler behaviours below are covered by the existing unit tests in <code>builder_test.go</code> and <code>ipranges_test.go</code> using <code>sigs.k8s.io/controller-runtime/pkg/client/fake</code>.</p>
 <table>
 <thead>
 <tr>
@@ -4232,26 +4257,25 @@ complete.</p>
 <hr />
 <h2 id="11-deferred-to-milestone-5">11. Deferred to Milestone 5<a class="headerlink" href="#11-deferred-to-milestone-5" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Hardened GMC pod spec</strong> — read-only root filesystem, <code>seccompProfile: RuntimeDefault</code>, non-root user, no host mounts. The GMC pod in M4 uses a basic security context; full hardening is M5.</li>
+<li><strong>Hardened GMC pod spec</strong> — read-only root filesystem, <code>seccompProfile: RuntimeDefault</code>, non-root user, no host mounts.
+  The GMC pod in M4 uses a basic security context; full hardening is M5.</li>
 <li><strong>Hardened proxy pod spec</strong> — <code>seccomp</code>, dropped capabilities, <code>allowPrivilegeEscalation: false</code> beyond the basics set in M4.</li>
-<li><strong>Production Helm chart or Kustomize overlays</strong> — M4 ships raw manifests under <code>cmd/gmc/config/</code>. Packaging is M5.</li>
+<li><strong>Production Helm chart or Kustomize overlays</strong> — M4 ships raw manifests under <code>cmd/gmc/config/</code>.
+  Packaging is M5.</li>
 <li><strong>Multi-tenant load test</strong> — the <code>test/load/</code> harness that simulates 10 tenants is M5.</li>
 <li><strong><code>gVisor</code>/Kata <code>RuntimeClass</code></strong> — optional worker isolation hardening is M5.</li>
-<li><strong>CRD CEL admission rules for reserved worker pod fields</strong> — the webhook in M4 only rejects reserved namespaces. Rejecting reserved PodTemplate fields (<code>hostPID</code>, <code>HTTP_PROXY</code> in env, etc.) via CEL rules is M5. In M4 the provisioner silently overwrites them.</li>
+<li><strong>CRD CEL admission rules for reserved worker pod fields</strong> — the webhook in M4 only rejects reserved namespaces.
+  Rejecting reserved PodTemplate fields (<code>hostPID</code>, <code>HTTP_PROXY</code> in env, etc.) via CEL rules is M5.
+  In M4 the provisioner silently overwrites them.</li>
 <li><strong><code>kube-bench</code>/<code>polaris</code> scan</strong> — cluster posture audit is M5.</li>
 </ul>
 <hr />
 <h2 id="12-live-multi-tenant-validation-evidence-2026-06-1112">12. Live multi-tenant validation evidence (2026-06-11/12)<a class="headerlink" href="#12-live-multi-tenant-validation-evidence-2026-06-1112" title="Permanent link">&para;</a></h2>
-<p>One session on a 3-node kind cluster (<code>make e2e-cluster</code>, kindnet CNI,
-cert-manager installed) with the real GitHub App <code>actions-gateway-test</code>
-(App ID 3752347, installation 135739122) against the repo
-<code>actions-gateway/gateway-test</code> (workflow <code>test-job.yml</code>, <code>runs-on: e2e</code>).
-This session also served as the <a href="../archive/q12-helm-chart/#live-validation-track-a--2026-06-12">Q12 track-A live <code>helm install</code> proof</a>
-and closed Q71.</p>
+<p>One session on a 3-node kind cluster (<code>make e2e-cluster</code>, kindnet CNI, cert-manager installed) with the real GitHub App <code>actions-gateway-test</code> (App ID 3752347, installation 135739122) against the repo <code>actions-gateway/gateway-test</code> (workflow <code>test-job.yml</code>, <code>runs-on: e2e</code>).
+This session also served as the <a href="../archive/q12-helm-chart/#live-validation-track-a--2026-06-12">Q12 track-A live <code>helm install</code> proof</a> and closed Q71.</p>
 <h3 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Images built and pushed by <code>make e2e-images</code> at commit <code>042a4f5</code>; all
-  refs below are pinned by registry digest (no <code>--allow-floating-image-tags</code>).</li>
+<li>Images built and pushed by <code>make e2e-images</code> at commit <code>042a4f5</code>; all refs below are pinned by registry digest (no <code>--allow-floating-image-tags</code>).</li>
 <li>GMC installed <strong>via the Helm chart only</strong> (no kustomize <code>make deploy</code>):</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>helm install actions-gateway charts/actions-gateway -n gmc-system --create-namespace \
@@ -4261,121 +4285,42 @@ and closed Q71.</p>
 <a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a># deployment 2/2 Available in ~10 s; AGC_IMAGE/PROXY_IMAGE env digest-pinned
 </code></pre></div>
 <ul>
-<li><strong>Deviation from pure production posture (at the time of this run):</strong> the
-  AGC's org URL had no CR field, so the GMC was patched with the testing-gated
-  <code>--allow-agc-extra-env=true</code> + <code>AGC_EXTRA_GITHUB_ORG_URL=https://github.com/actions-gateway/gateway-test</code>
-  (same mechanism the live-GitHub suite uses). <strong>Resolved by Q116:</strong> the org URL is
-  now a first-class required <code>spec.gitHubURL</code> field threaded to the AGC as
-  <code>GITHUB_ORG_URL</code>, so this workaround is no longer needed — set
-  <code>spec.gitHubURL</code> (or chart value <code>sampleGateway.gitHubURL</code>) on the CR instead.</li>
+<li><strong>Deviation from pure production posture (at the time of this run):</strong> the AGC's org URL had no CR field, so the GMC was patched with the testing-gated <code>--allow-agc-extra-env=true</code> + <code>AGC_EXTRA_GITHUB_ORG_URL=https://github.com/actions-gateway/gateway-test</code> (same mechanism the live-GitHub suite uses). <strong>Resolved by Q116:</strong> the org URL is now a first-class required <code>spec.gitHubURL</code> field threaded to the AGC as <code>GITHUB_ORG_URL</code>, so this workaround is no longer needed — set <code>spec.gitHubURL</code> (or chart value <code>sampleGateway.gitHubURL</code>) on the CR instead.</li>
 </ul>
 <h3 id="multi-tenant-dod-row-1">Multi-tenant (DoD row 1)<a class="headerlink" href="#multi-tenant-dod-row-1" title="Permanent link">&para;</a></h3>
-<p>Two namespaces (<code>tenant-a</code>, <code>tenant-b</code>, both labelled
-<code>actions-gateway.github.com/tenant=true</code>), each with a real-credential
-<code>github-app-creds</code> Secret and an <code>ActionsGateway</code> CR (proxy
-<code>minReplicas: 2</code>; runner labels <code>e2e</code> / <code>e2e-b</code> respectively). Within
-~60 s both CRs reported <code>Ready=True</code>, <code>PROXYREADY 2</code>; each namespace
-held its own AGC Deployment (1/1), proxy Deployment (2/2), Service,
-HPA, 3 NetworkPolicies, Role/RoleBinding, both ServiceAccounts, and a
-RunnerGroup with <code>ActiveSessions ≥ 1</code>. All four virtual runners
-appeared in the repo's runner list (<code>gh api …/actions/runners</code>), one
-listener per tenant <code>online</code>. The AGC's installation-token fetch
-demonstrably routed through the tenant proxy (first attempt while the
-proxy was still starting logged
-<code>proxyconnect tcp: dial tcp 10.96.129.62:8080: connect: connection refused</code>,
-then succeeded).</p>
+<p>Two namespaces (<code>tenant-a</code>, <code>tenant-b</code>, both labelled <code>actions-gateway.github.com/tenant=true</code>), each with a real-credential <code>github-app-creds</code> Secret and an <code>ActionsGateway</code> CR (proxy <code>minReplicas: 2</code>; runner labels <code>e2e</code> / <code>e2e-b</code> respectively).
+Within ~60 s both CRs reported <code>Ready=True</code>, <code>PROXYREADY 2</code>; each namespace held its own AGC Deployment (1/1), proxy Deployment (2/2), Service, HPA, 3 NetworkPolicies, Role/RoleBinding, both ServiceAccounts, and a RunnerGroup with <code>ActiveSessions ≥ 1</code>.
+All four virtual runners appeared in the repo's runner list (<code>gh api …/actions/runners</code>), one listener per tenant <code>online</code>.
+The AGC's installation-token fetch demonstrably routed through the tenant proxy (first attempt while the proxy was still starting logged <code>proxyconnect tcp: dial tcp 10.96.129.62:8080: connect: connection refused</code>, then succeeded).</p>
 <h3 id="end-to-end-job-through-the-proxy-dod-row-5--q71">End-to-end job through the proxy (DoD row 5) + Q71<a class="headerlink" href="#end-to-end-job-through-the-proxy-dod-row-5--q71" title="Permanent link">&para;</a></h3>
-<p><code>gh workflow run test-job.yml</code> → job acquired by <code>tenant-a</code>, worker pod
-<code>Running</code>, GitHub-side runs concluded <strong>success</strong> twice:
-<a href="https://github.com/actions-gateway/gateway-test/actions/runs/27386891757">27386891757</a>
-(before the delete-isolation step) and
-<a href="https://github.com/actions-gateway/gateway-test/actions/runs/27395702908">27395702908</a>
-(after it). Worker pod env (observed live):</p>
+<p><code>gh workflow run test-job.yml</code> → job acquired by <code>tenant-a</code>, worker pod <code>Running</code>, GitHub-side runs concluded <strong>success</strong> twice: <a href="https://github.com/actions-gateway/gateway-test/actions/runs/27386891757">27386891757</a> (before the delete-isolation step) and <a href="https://github.com/actions-gateway/gateway-test/actions/runs/27395702908">27395702908</a> (after it).
+Worker pod env (observed live):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>HTTP_PROXY=https://actions-gateway-proxy.tenant-a.svc.cluster.local:8080
 <a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>HTTPS_PROXY=https://actions-gateway-proxy.tenant-a.svc.cluster.local:8080
 <a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>NO_PROXY=svc.cluster.local,svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12
 <a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>PROXY_CA_CERT_PATH=/etc/actions-gateway/proxy-ca/tls.crt
 </code></pre></div>
-<p>Worker logs showed step/job log uploads to the results service at 3/3
-success rate (all via the proxy tunnel; the Q5h proxy-CA trust chain
-held).</p>
-<p><strong>Q71 (runner-version contract):</strong> session creation against real GitHub
-succeeded — but the live truth is subtler than the Queue row assumed:
-the GMC-provisioned AGC never sets <code>GITHUB_RUNNER_VERSION</code>, so
-<code>CreateSession</code> sends an <strong>empty</strong> <code>agent.version</code> (and <code>GetMessage</code>
-omits <code>runnerVersion</code>), which GitHub accepts. The 2.334.0/2.335.x pin
-exists only in the worker image. Recorded as Q118 (set the env in the
-GMC + fix the Dockerfile-vs-<code>DefaultWorkerImage</code> drift Dependabot
-introduced in #197). <strong>Resolved (Q118):</strong> the runner version now lives in
-one place — <code>RunnerVersion</code> in <code>cmd/agc/names</code> — which drives
-<code>DefaultWorkerImage</code> (digest-pinned to 2.335.1) and the
-<code>GITHUB_RUNNER_VERSION</code> the GMC injects, so <code>agent.version</code> is non-empty
-and matches the worker binary; a lockstep unit test guards against future
-Dockerfile/constant drift.</p>
+<p>Worker logs showed step/job log uploads to the results service at 3/3 success rate (all via the proxy tunnel; the Q5h proxy-CA trust chain held).</p>
+<p><strong>Q71 (runner-version contract):</strong> session creation against real GitHub succeeded — but the live truth is subtler than the Queue row assumed: the GMC-provisioned AGC never sets <code>GITHUB_RUNNER_VERSION</code>, so <code>CreateSession</code> sends an <strong>empty</strong> <code>agent.version</code> (and <code>GetMessage</code> omits <code>runnerVersion</code>), which GitHub accepts.
+The 2.334.0/2.335.x pin exists only in the worker image.
+Recorded as Q118 (set the env in the GMC + fix the Dockerfile-vs-<code>DefaultWorkerImage</code> drift Dependabot introduced in #197). <strong>Resolved (Q118):</strong> the runner version now lives in one place — <code>RunnerVersion</code> in <code>cmd/agc/names</code> — which drives <code>DefaultWorkerImage</code> (digest-pinned to 2.335.1) and the <code>GITHUB_RUNNER_VERSION</code> the GMC injects, so <code>agent.version</code> is non-empty and matches the worker binary; a lockstep unit test guards against future Dockerfile/constant drift.</p>
 <h3 id="delete-isolation-dod-row-2">Delete isolation (DoD row 2)<a class="headerlink" href="#delete-isolation-dod-row-2" title="Permanent link">&para;</a></h3>
-<p><code>kubectl delete actionsgateway gateway-b -n tenant-b</code> returned after the
-finalizer drained; afterwards <code>tenant-b</code> contained only the namespace
-itself, the <code>default</code> ServiceAccount, and the operator-created
-<code>github-app-creds</code> Secret (the namespace is never deleted by design).
-<code>tenant-a</code> was untouched (<code>Ready=True</code>, AGC + 2/2 proxy pods running,
-RunnerGroup intact) and subsequently ran run 27395702908 to green.
-Deleting <code>gateway-a</code> at the end, with a healthy session, also
-<strong>deregistered its runners from GitHub</strong> — the repo runner list went
-empty.</p>
+<p><code>kubectl delete actionsgateway gateway-b -n tenant-b</code> returned after the finalizer drained; afterwards <code>tenant-b</code> contained only the namespace itself, the <code>default</code> ServiceAccount, and the operator-created <code>github-app-creds</code> Secret (the namespace is never deleted by design). <code>tenant-a</code> was untouched (<code>Ready=True</code>, AGC + 2/2 proxy pods running, RunnerGroup intact) and subsequently ran run 27395702908 to green.
+Deleting <code>gateway-a</code> at the end, with a healthy session, also <strong>deregistered its runners from GitHub</strong> — the repo runner list went empty.</p>
 <h3 id="product-bugs-surfaced-all-filed-in-statusmd">Product bugs surfaced (all filed in <a href="../../STATUS/">STATUS.md</a>)<a class="headerlink" href="#product-bugs-surfaced-all-filed-in-statusmd" title="Permanent link">&para;</a></h3>
-<p>The live run worked <strong>only after</strong> working around these; none are
-caught by unit/cluster-only/fake-GitHub tiers:</p>
+<p>The live run worked <strong>only after</strong> working around these; none are caught by unit/cluster-only/fake-GitHub tiers:</p>
 <ol>
-<li><strong>Q115 — default worker SecurityContext breaks the runner image.</strong>
-   Q31's <code>applySecurityDefaults</code> stamps pod-level <code>runAsNonRoot: true</code>;
-   the <code>actions-runner</code> image uses non-numeric <code>USER runner</code>, so kubelet
-   fails every default-path worker pod with
-   <code>CreateContainerConfigError: container has runAsNonRoot and image has
-   non-numeric user</code>. Worked around per-tenant with
-   <code>podTemplate.spec.securityContext.runAsUser: 1001</code>. fake-GitHub masked
-   this by using the <strong>agc image</strong> as its worker placeholder.
-   <strong>Fixed (Q115):</strong> <code>applySecurityDefaults</code> now gap-fills
-   <code>runAsUser: 1001</code> (the runner image's UID) alongside
-   <code>runAsNonRoot: true</code> whenever non-root is enforced, so the default
-   path is kubelet-admissible; the gap-fill is skipped when a tenant sets
-   <code>runAsNonRoot: false</code> and an explicit <code>runAsUser</code> still wins. A new
-   fake-GitHub spec (<code>E2E_AGC_WorkerSecurityContext</code>) provisions a worker pod
-   from the <strong>real</strong> worker image and asserts kubelet admits it, so a
-   regression of the default is caught in CI rather than only live.</li>
-<li><strong>Q114 — JIT agents are single-use and the AGC cannot self-heal.</strong>
-   GitHub removed each JIT runner after it completed (or had acquired a
-   then-cancelled) job; the never-used agent survived. The AGC kept
-   polling with the stale agent/session — <code>GetMessage</code> looped on
-   <code>200</code>-with-empty-body (<code>decode response: EOF</code>) and later
-   <code>401 unauthorized</code> for hours with no re-registration; recovery
-   required deleting the agentpool Secrets + restarting the AGC, and
-   re-registration of a <em>surviving</em> name then failed <code>409 Already
-   exists</code> (no deregister-then-retry). This breaks the
-   multiplex-many-jobs-per-agent assumption at its root.
-   <strong>Fixed (Q114):</strong> the listener now re-registers its agent after every
-   job (and heals 401/EOF-stale sessions found after a restart,
-   resolving the surviving-name 409 by ID lookup); fakegithub can
-   simulate the single-use behaviour for fake-GitHub regression coverage —
-   see <a href="../archive/q114-jit-agent-selfheal/">q114-jit-agent-selfheal.md</a>.</li>
-<li><strong>Q117 — RunnerGroup <code>podTemplate</code> changes don't reach running
-   listeners.</strong> After patching the CR (observedGeneration advanced),
-   newly provisioned worker pods still used the old template until the
-   AGC pod was restarted.
-   <strong>Fixed (Q117):</strong> the provisioner re-reads the RunnerGroup from the
-   shared (cache-backed) client at pod-build time instead of using the
-   listener-start snapshot, so a <code>podTemplate</code> (and any other spec) edit
-   takes effect on the next acquired job with no AGC restart. The
-   start-time snapshot is kept only as a fallback when the cached read
-   fails (e.g. the group was deleted mid-shutdown).</li>
-<li><strong>Q116 — no production path for the GitHub org URL</strong> (see Setup
-   deviation above). <strong>Fixed (Q116):</strong> added the required first-class
-   <code>ActionsGateway.spec.gitHubURL</code> field, threaded to the AGC Deployment as
-   <code>GITHUB_ORG_URL</code> and validated (https scheme + org/owner path) by the GMC
-   webhook; the testing-only <code>--allow-agc-extra-env</code> flag is retained for
-   genuinely-extra env but is no longer required for the org URL.</li>
+<li><strong>Q115 — default worker SecurityContext breaks the runner image.</strong> Q31's <code>applySecurityDefaults</code> stamps pod-level <code>runAsNonRoot: true</code>; the <code>actions-runner</code> image uses non-numeric <code>USER runner</code>, so kubelet fails every default-path worker pod with <code>CreateContainerConfigError: container has runAsNonRoot and image has non-numeric user</code>.
+   Worked around per-tenant with <code>podTemplate.spec.securityContext.runAsUser: 1001</code>. fake-GitHub masked this by using the <strong>agc image</strong> as its worker placeholder. <strong>Fixed (Q115):</strong> <code>applySecurityDefaults</code> now gap-fills <code>runAsUser: 1001</code> (the runner image's UID) alongside <code>runAsNonRoot: true</code> whenever non-root is enforced, so the default path is kubelet-admissible; the gap-fill is skipped when a tenant sets <code>runAsNonRoot: false</code> and an explicit <code>runAsUser</code> still wins.
+   A new fake-GitHub spec (<code>E2E_AGC_WorkerSecurityContext</code>) provisions a worker pod from the <strong>real</strong> worker image and asserts kubelet admits it, so a regression of the default is caught in CI rather than only live.</li>
+<li><strong>Q114 — JIT agents are single-use and the AGC cannot self-heal.</strong> GitHub removed each JIT runner after it completed (or had acquired a then-cancelled) job; the never-used agent survived.
+   The AGC kept polling with the stale agent/session — <code>GetMessage</code> looped on <code>200</code>-with-empty-body (<code>decode response: EOF</code>) and later <code>401 unauthorized</code> for hours with no re-registration; recovery required deleting the agentpool Secrets + restarting the AGC, and re-registration of a <em>surviving</em> name then failed <code>409 Already exists</code> (no deregister-then-retry).
+   This breaks the multiplex-many-jobs-per-agent assumption at its root. <strong>Fixed (Q114):</strong> the listener now re-registers its agent after every job (and heals 401/EOF-stale sessions found after a restart, resolving the surviving-name 409 by ID lookup); fakegithub can simulate the single-use behaviour for fake-GitHub regression coverage — see <a href="../archive/q114-jit-agent-selfheal/">q114-jit-agent-selfheal.md</a>.</li>
+<li><strong>Q117 — RunnerGroup <code>podTemplate</code> changes don't reach running listeners.</strong> After patching the CR (observedGeneration advanced), newly provisioned worker pods still used the old template until the AGC pod was restarted. <strong>Fixed (Q117):</strong> the provisioner re-reads the RunnerGroup from the shared (cache-backed) client at pod-build time instead of using the listener-start snapshot, so a <code>podTemplate</code> (and any other spec) edit takes effect on the next acquired job with no AGC restart.
+   The start-time snapshot is kept only as a fallback when the cached read fails (e.g. the group was deleted mid-shutdown).</li>
+<li><strong>Q116 — no production path for the GitHub org URL</strong> (see Setup deviation above). <strong>Fixed (Q116):</strong> added the required first-class <code>ActionsGateway.spec.gitHubURL</code> field, threaded to the AGC Deployment as <code>GITHUB_ORG_URL</code> and validated (https scheme + org/owner path) by the GMC webhook; the testing-only <code>--allow-agc-extra-env</code> flag is retained for genuinely-extra env but is no longer required for the org URL.</li>
 </ol>
-<p>Operator-facing runbook entry for (1):
-<a href="../../operations/troubleshooting/#worker-pod-fails-to-start-after-secure-by-default-securitycontext">troubleshooting.md</a>.</p>
+<p>Operator-facing runbook entry for (1): <a href="../../operations/troubleshooting/#worker-pod-fails-to-start-after-secure-by-default-securitycontext">troubleshooting.md</a>.</p>
 
 
 

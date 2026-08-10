@@ -2645,35 +2645,56 @@
 <p>Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in <a href="../../STATUS/"><code>docs/STATUS.md</code></a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>queue-id<span class="w"> </span><span class="nv">TITLE</span><span class="o">=</span><span class="s1">&#39;GMC CRD manifest drifts from the AGC types it embeds&#39;</span>
 </code></pre></div>
-<p>That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (<code>Q423</code>). <code>TARGET=&lt;link&gt;</code> sharpens the search when the Item cell's link is already decided. The script is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id.sh"><code>scripts/docs/alloc-queue-id.sh</code></a>, which takes one title argument per ID — several titles claim several IDs, each searched on its own.</p>
-<p>Claim an ID when you file the row, use it, and move on. There is nothing to release and nothing to clean up.</p>
-<p><strong>Every path through the target claims, and an ID you did not claim will not lint.</strong> Those are the two halves of the same rule: the only way to learn an ID is to hold it, and a row carrying an ID nobody holds fails <a href="../maintaining-backlog/"><code>lint-backlog</code></a> rule 12 at the commit that files it. Both are below, under <a href="#reserving-not-reporting">Reserving, not reporting</a>.</p>
-<p><strong>The title is mandatory, and there is no untitled batch form.</strong> This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through. <code>-n &lt;count&gt;</code> used to claim IDs without naming a row; it is gone, because a door beside the gate is the same as no gate. Why the search keys on what it does, and what it costs in false positives: <a href="../maintaining-backlog/#search-before-you-file">maintaining-backlog.md § Search before you file</a>.</p>
+<p>That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (<code>Q423</code>). <code>TARGET=&lt;link&gt;</code> sharpens the search when the Item cell's link is already decided.
+The script is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id.sh"><code>scripts/docs/alloc-queue-id.sh</code></a>, which takes one title argument per ID — several titles claim several IDs, each searched on its own.</p>
+<p>Claim an ID when you file the row, use it, and move on.
+There is nothing to release and nothing to clean up.</p>
+<p><strong>Every path through the target claims, and an ID you did not claim will not lint.</strong> Those are the two halves of the same rule: the only way to learn an ID is to hold it, and a row carrying an ID nobody holds fails <a href="../maintaining-backlog/"><code>lint-backlog</code></a> rule 12 at the commit that files it.
+Both are below, under <a href="#reserving-not-reporting">Reserving, not reporting</a>.</p>
+<p><strong>The title is mandatory, and there is no untitled batch form.</strong> This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through. <code>-n &lt;count&gt;</code> used to claim IDs without naming a row; it is gone, because a door beside the gate is the same as no gate.
+Why the search keys on what it does, and what it costs in false positives: <a href="../maintaining-backlog/#search-before-you-file">maintaining-backlog.md § Search before you file</a>.</p>
 <h2 id="why-a-ref">Why a ref<a class="headerlink" href="#why-a-ref" title="Permanent link">&para;</a></h2>
-<p>Creating a ref that already exists fails server-side, atomically. That makes a ref name a compare-and-swap register, so two sessions asking for an ID at the same instant get different ones without any lock, lease, or coordination.</p>
+<p>Creating a ref that already exists fails server-side, atomically.
+That makes a ref name a compare-and-swap register, so two sessions asking for an ID at the same instant get different ones without any lock, lease, or coordination.</p>
 <p>The mechanism is a single API call:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">&quot;repos/</span><span class="nv">$REPO</span><span class="s2">/git/refs&quot;</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">ref</span><span class="o">=</span>refs/queue-ids/Q423<span class="w"> </span>-f<span class="w"> </span><span class="nv">sha</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$SENTINEL</span><span class="s2">&quot;</span>
 </code></pre></div>
 <p><code>201</code> means you won. <code>422 Reference already exists</code> means someone beat you, so advance and retry.</p>
 <h2 id="reserving-not-reporting">Reserving, not reporting<a class="headerlink" href="#reserving-not-reporting" title="Permanent link">&para;</a></h2>
-<p>A ref claim is only a reservation for the sessions that make one. Q656 measured what the rest costs.</p>
-<p>On 2026-08-03 a row carrying Q644 was committed at 09:30:59. Another session allocated at 10:14:06, was handed Q643 and Q644, and therefore saw a floor of 642. <strong>No Q644 claim existed 43 minutes after a row was already using it.</strong> Two sessions running the allocator cannot both be handed Q644; the create-ref call fails for the second, atomically. The collision proves one of them never made the call. The one that did held the ID legitimately, merged second, and paid the renumber across a commit message, a PR body and a plan doc.</p>
+<p>A ref claim is only a reservation for the sessions that make one.
+Q656 measured what the rest costs.</p>
+<p>On 2026-08-03 a row carrying Q644 was committed at 09:30:59.
+Another session allocated at 10:14:06, was handed Q643 and Q644, and therefore saw a floor of 642. <strong>No Q644 claim existed 43 minutes after a row was already using it.</strong> Two sessions running the allocator cannot both be handed Q644; the create-ref call fails for the second, atomically.
+The collision proves one of them never made the call.
+The one that did held the ID legitimately, merged second, and paid the renumber across a commit message, a PR body and a plan doc.</p>
 <p>There were two ways to hold an ID without reserving it, and both are closed:</p>
 <ul>
-<li><strong><code>--peek</code> / <code>PEEK=1</code></strong> printed the next free ID and claimed nothing. That is the <code>**Next ID:** QN</code> counter this mechanism replaced, behind a flag: two sessions reading it concurrently read the same answer. <strong>Removed.</strong> Knowing the next ID without taking it has no use that survives the session, and IDs are free: if you want to know, claim it.</li>
-<li><strong>Reading the file's highest ID and adding one.</strong> No tool can prevent that, so it fails loudly instead. <code>lint-backlog</code> rule 12 requires every Q-ID a branch <em>adds</em> to hold a <code>refs/queue-ids/QN</code> claim, and it runs in the pre-commit hook, <code>make check</code>, and CI — so an unreserved ID is caught at the commit that files it rather than at the rebase that collides. The message names the fix, and <code>BACKLOG_ALLOW_UNCLAIMED_ID="Q1 Q2"</code> is there for an ID claimed from another clone.</li>
+<li><strong><code>--peek</code> / <code>PEEK=1</code></strong> printed the next free ID and claimed nothing.
+  That is the <code>**Next ID:** QN</code> counter this mechanism replaced, behind a flag: two sessions reading it concurrently read the same answer. <strong>Removed.</strong> Knowing the next ID without taking it has no use that survives the session, and IDs are free: if you want to know, claim it.</li>
+<li><strong>Reading the file's highest ID and adding one.</strong> No tool can prevent that, so it fails loudly instead. <code>lint-backlog</code> rule 12 requires every Q-ID a branch <em>adds</em> to hold a <code>refs/queue-ids/QN</code> claim, and it runs in the pre-commit hook, <code>make check</code>, and CI — so an unreserved ID is caught at the commit that files it rather than at the rebase that collides.
+  The message names the fix, and <code>BACKLOG_ALLOW_UNCLAIMED_ID="Q1 Q2"</code> is there for an ID claimed from another clone.</li>
 </ul>
 <p>What rule 12 costs and what it still misses:</p>
 <ul>
-<li>It checks only IDs that are new against the git baseline, so a branch that files no row makes no network call at all. That baseline is the merge base with <code>origin/main</code>, not its tip: against the tip a row <code>main</code> deleted while your branch was behind read as one you had filed, and the rule demanded an ID for finished work (Q684).</li>
+<li>It checks only IDs that are new against the git baseline, so a branch that files no row makes no network call at all.
+  That baseline is the merge base with <code>origin/main</code>, not its tip: against the tip a row <code>main</code> deleted while your branch was behind read as one you had filed, and the rule demanded an ID for finished work (Q684).</li>
 <li>IDs below the namespace's lowest claim (Q421) predate the allocator and hold no ref, so they are skipped.</li>
-<li>When <code>git ls-remote</code> cannot reach the remote it skips rather than fails, so an offline clone still lints. CI re-runs it with a network.</li>
-<li><strong>It cannot catch a hand-picked ID that another session has already claimed but not yet filed.</strong> That is the narrow residual: the ref exists, so the row looks reserved. Closing it needs the claim to record <em>who</em> holds it, which no one has needed yet.</li>
+<li>When <code>git ls-remote</code> cannot reach the remote it skips rather than fails, so an offline clone still lints.
+  CI re-runs it with a network.</li>
+<li><strong>It cannot catch a hand-picked ID that another session has already claimed but not yet filed.</strong> That is the narrow residual: the ref exists, so the row looks reserved.
+  Closing it needs the claim to record <em>who</em> holds it, which no one has needed yet.</li>
 </ul>
-<p>The concurrency the claim exists for is asserted in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id-test.sh"><code>scripts/docs/alloc-queue-id-test.sh</code></a>: eight allocators released at the same instant, against a bare fixture origin and a <code>gh</code> stub, each writing its own result. They take eight distinct IDs. The last case deletes the mechanism, running the identical fleet against a stub whose create-ref reports success and reserves nothing. All eight then take the same ID, which is what makes the first assertion mean anything.</p>
+<p>The concurrency the claim exists for is asserted in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id-test.sh"><code>scripts/docs/alloc-queue-id-test.sh</code></a>: eight allocators released at the same instant, against a bare fixture origin and a <code>gh</code> stub, each writing its own result.
+They take eight distinct IDs.
+The last case deletes the mechanism, running the identical fleet against a stub whose create-ref reports success and reserves nothing.
+All eight then take the same ID, which is what makes the first assertion mean anything.</p>
 <h2 id="why-the-counter-had-to-go">Why the counter had to go<a class="headerlink" href="#why-the-counter-had-to-go" title="Permanent link">&para;</a></h2>
-<p><code>**Next ID:** QN</code> was one mutable line. Two sessions filing a row concurrently always read the same value, always took the same ID, and always conflicted on the same line. Not occasionally: by construction.</p>
-<p>The conflict itself was cheap. The resolution was not, because it meant renumbering: the row, its <code>&lt;a id="QN"&gt;&lt;/a&gt;</code> anchor, every <code>(#QN)</code> cross-reference in sibling rows, the plan doc, the PR body, and the commit subject. Q382 recorded three such renumberings across a single PR's rebases.</p>
+<p><code>**Next ID:** QN</code> was one mutable line.
+Two sessions filing a row concurrently always read the same value, always took the same ID, and always conflicted on the same line.
+Not occasionally: by construction.</p>
+<p>The conflict itself was cheap.
+The resolution was not, because it meant renumbering: the row, its <code>&lt;a id="QN"&gt;&lt;/a&gt;</code> anchor, every <code>(#QN)</code> cross-reference in sibling rows, the plan doc, the PR body, and the commit subject.
+Q382 recorded three such renumberings across a single PR's rebases.</p>
 <h2 id="what-this-fixes-and-what-it-does-not">What this fixes, and what it does not<a class="headerlink" href="#what-this-fixes-and-what-it-does-not" title="Permanent link">&para;</a></h2>
 <p>Measured on a 10-row table, resolving two branches against a common base:</p>
 <table>
@@ -2715,21 +2736,47 @@
 </tbody>
 </table>
 <p>Adjacency is the whole story: one untouched row of separation is enough to merge cleanly.</p>
-<p><strong>Row conflicts are unchanged by this.</strong> They are also concentrated where the process puts them, because picking from the top means deletions cluster at the top, and priority-on-entry plus flakes-first means insertions cluster there too. A four-worker dispatch batch takes rows 1 through 4 and every pair is adjacent.</p>
-<p>What the ref allocator removes is the <em>expensive</em> class (duplicate IDs and the renumbering cascade) and the one conflict that was guaranteed rather than incidental. Row conflicts remain, are two lines, and resolve obviously. Their real danger is a botched resolution — a done row silently restored — not the conflict itself; <code>lint-backlog</code> rule 10 now catches that (<a href="../maintaining-backlog/#a-moved-row-defeats-conflict-detection">why</a>).</p>
-<p>Every row in the table above is a <em>line-position</em> verdict. The <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a> re-decides the same cases by row ID, which makes all of them clean, and leaves conflict markers only where the two sides genuinely disagree about one row. It is opt-in per clone (<code>make merge-driver</code>) and applies to local merges and rebases only, so the numbers above are still what an uninstalled clone — and GitHub's squash-merge — will do.</p>
+<p><strong>Row conflicts are unchanged by this.</strong> They are also concentrated where the process puts them, because picking from the top means deletions cluster at the top, and priority-on-entry plus flakes-first means insertions cluster there too.
+A four-worker dispatch batch takes rows 1 through 4 and every pair is adjacent.</p>
+<p>What the ref allocator removes is the <em>expensive</em> class (duplicate IDs and the renumbering cascade) and the one conflict that was guaranteed rather than incidental.
+Row conflicts remain, are two lines, and resolve obviously.
+Their real danger is a botched resolution — a done row silently restored — not the conflict itself; <code>lint-backlog</code> rule 10 now catches that (<a href="../maintaining-backlog/#a-moved-row-defeats-conflict-detection">why</a>).</p>
+<p>Every row in the table above is a <em>line-position</em> verdict.
+The <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a> re-decides the same cases by row ID, which makes all of them clean, and leaves conflict markers only where the two sides genuinely disagree about one row.
+It is opt-in per clone (<code>make merge-driver</code>) and applies to local merges and rebases only, so the numbers above are still what an uninstalled clone — and GitHub's squash-merge — will do.</p>
 <h2 id="alternatives-considered">Alternatives considered<a class="headerlink" href="#alternatives-considered" title="Permanent link">&para;</a></h2>
-<p><strong>Move the backlog to GitHub issues.</strong> Rejected. Issues would give free IDs, no backlog conflicts, and a native in-flight signal, but they cannot express <em>position is priority</em>: a single total ordering, readable in one file read and changeable in one reviewable diff. Projects v2 has a position field, but it lives outside the repo and cannot be diffed. Issues would also cost the lintable write path that keeps Notes under the cap and pushes rationale into a doc, and the atomicity of deleting the row in the same diff as the work. Revisit if outside contributors need to see and claim work; that is the one thing issues clearly win.</p>
-<p><strong>A custom merge driver for <code>STATUS.md</code>.</strong> Shipped — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>scripts/docs/git-merge-status.sh</code></a>, documented in <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">maintaining-backlog.md</a>. It resolves the Queue table by ID set-semantics during merge and rebase, which is where the pain is, and keeps the whole existing tooling stack. It needs a one-time <code>git config</code> per clone (<code>make merge-driver</code>; git will not let <code>.gitattributes</code> configure a driver, since that would be remote code execution on clone) and degrades to ordinary conflict markers both when unconfigured and whenever the resolution is not certain. It does not help GitHub's server-side squash-merge. The same <code>make merge-driver</code> installs a <a href="../maintaining-backlog/#the-same-treatment-for-docsplanreadmemd">sibling for <code>docs/plan/README.md</code></a>, which has the same contention keyed on the plan path (Q611).</p>
-<p><strong>One file per item</strong> (<code>docs/queue/Q423.md</code>). The permanent answer to row conflicts, since adds and removes become file creates and deletes, which cannot conflict. Held in reserve: it rewrites <code>lint-backlog.sh</code>, this process, the shared backlog skill, and costs the single-file read of the prioritized queue.</p>
-<p><strong>Dispatcher-owned row removal.</strong> Rejected. It only works when a dispatcher session exists, and items are also spawned by ID directly or as "start the next one", which have no serialization point.</p>
+<p><strong>Move the backlog to GitHub issues.</strong> Rejected.
+Issues would give free IDs, no backlog conflicts, and a native in-flight signal, but they cannot express <em>position is priority</em>: a single total ordering, readable in one file read and changeable in one reviewable diff.
+Projects v2 has a position field, but it lives outside the repo and cannot be diffed.
+Issues would also cost the lintable write path that keeps Notes under the cap and pushes rationale into a doc, and the atomicity of deleting the row in the same diff as the work.
+Revisit if outside contributors need to see and claim work; that is the one thing issues clearly win.</p>
+<p><strong>A custom merge driver for <code>STATUS.md</code>.</strong> Shipped — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>scripts/docs/git-merge-status.sh</code></a>, documented in <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">maintaining-backlog.md</a>.
+It resolves the Queue table by ID set-semantics during merge and rebase, which is where the pain is, and keeps the whole existing tooling stack.
+It needs a one-time <code>git config</code> per clone (<code>make merge-driver</code>; git will not let <code>.gitattributes</code> configure a driver, since that would be remote code execution on clone) and degrades to ordinary conflict markers both when unconfigured and whenever the resolution is not certain.
+It does not help GitHub's server-side squash-merge.
+The same <code>make merge-driver</code> installs a <a href="../maintaining-backlog/#the-same-treatment-for-docsplanreadmemd">sibling for <code>docs/plan/README.md</code></a>, which has the same contention keyed on the plan path (Q611).</p>
+<p><strong>One file per item</strong> (<code>docs/queue/Q423.md</code>).
+The permanent answer to row conflicts, since adds and removes become file creates and deletes, which cannot conflict.
+Held in reserve: it rewrites <code>lint-backlog.sh</code>, this process, the shared backlog skill, and costs the single-file read of the prioritized queue.</p>
+<p><strong>Dispatcher-owned row removal.</strong> Rejected.
+It only works when a dispatcher session exists, and items are also spawned by ID directly or as "start the next one", which have no serialization point.</p>
 <h2 id="operational-notes">Operational notes<a class="headerlink" href="#operational-notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Claims point at the repository's root commit</strong>, never at a branch tip. A ref is a GC root, so claims anchored to <code>claude/*</code> tips would pin every squash-orphaned branch history forever. Anchored to one already-permanent object, they retain nothing new.</li>
-<li><strong>No garbage collection.</strong> Each ref is ~64 bytes in <code>packed-refs</code>. The remote already carries ~800 <code>refs/pull/*</code> refs that GitHub never prunes, so the namespace is noise against what is already there. Deleting a claim would also let a retired ID be reissued, which the "IDs are never reused" rule forbids.</li>
-<li><strong>Clones never fetch them.</strong> The default refspec is <code>+refs/heads/*:refs/remotes/origin/*</code>, and GitHub serves git protocol v2, which filters refs server-side. There is no fetch or clone cost.</li>
-<li><strong>IDs are sparse, and a claimed-but-unused ID is never reclaimed.</strong> A session that claims an ID and dies, or files nothing, strands it — the ref stays, the number is never reissued, and the gap is permanent. That is the intended behaviour, not a leak to fix: reclaiming would mean deciding that a claim is stale, and the session holding it is exactly the one that cannot be asked. Measured 2026-08-03: 10 of 240 claims (Q432, Q442, Q470, Q473, Q487, Q494, Q496, Q504, Q608, Q655) never became a row, so the space is consumed about 4% faster than rows are filed. Against a 64-byte ref and an unbounded integer, that buys nothing worth the risk of reissuing a retired ID. Removing <code>--peek</code> raises the rate slightly, since a session that would have peeked now holds one.</li>
-<li><strong>Never claim with <code>git push &lt;sha&gt;:&lt;ref&gt;</code>.</strong> When the ref already exists and points at the same object, push reports <code>Everything up-to-date</code> and exits 0, so the caller concludes it won a race it lost. Every claim shares one sentinel object, so this failure mode is the default, not an edge case.</li>
+<li><strong>Claims point at the repository's root commit</strong>, never at a branch tip.
+  A ref is a GC root, so claims anchored to <code>claude/*</code> tips would pin every squash-orphaned branch history forever.
+  Anchored to one already-permanent object, they retain nothing new.</li>
+<li><strong>No garbage collection.</strong> Each ref is ~64 bytes in <code>packed-refs</code>.
+  The remote already carries ~800 <code>refs/pull/*</code> refs that GitHub never prunes, so the namespace is noise against what is already there.
+  Deleting a claim would also let a retired ID be reissued, which the "IDs are never reused" rule forbids.</li>
+<li><strong>Clones never fetch them.</strong> The default refspec is <code>+refs/heads/*:refs/remotes/origin/*</code>, and GitHub serves git protocol v2, which filters refs server-side.
+  There is no fetch or clone cost.</li>
+<li><strong>IDs are sparse, and a claimed-but-unused ID is never reclaimed.</strong> A session that claims an ID and dies, or files nothing, strands it — the ref stays, the number is never reissued, and the gap is permanent.
+  That is the intended behaviour, not a leak to fix: reclaiming would mean deciding that a claim is stale, and the session holding it is exactly the one that cannot be asked.
+  Measured 2026-08-03: 10 of 240 claims (Q432, Q442, Q470, Q473, Q487, Q494, Q496, Q504, Q608, Q655) never became a row, so the space is consumed about 4% faster than rows are filed.
+  Against a 64-byte ref and an unbounded integer, that buys nothing worth the risk of reissuing a retired ID.
+  Removing <code>--peek</code> raises the rate slightly, since a session that would have peeked now holds one.</li>
+<li><strong>Never claim with <code>git push &lt;sha&gt;:&lt;ref&gt;</code>.</strong> When the ref already exists and points at the same object, push reports <code>Everything up-to-date</code> and exits 0, so the caller concludes it won a race it lost.
+  Every claim shares one sentinel object, so this failure mode is the default, not an edge case.</li>
 </ul>
 <p>To see what has been allocated:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>ls-remote<span class="w"> </span>origin<span class="w"> </span><span class="s1">&#39;refs/queue-ids/*&#39;</span>

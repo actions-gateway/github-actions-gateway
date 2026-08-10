@@ -2976,47 +2976,28 @@
 
 
 <h1 id="documentation-website">Documentation website<a class="headerlink" href="#documentation-website" title="Permanent link">&para;</a></h1>
-<p>The public documentation + marketing site, served at the custom apex domain
-<a href="https://actions-gateway.com/"><code>actions-gateway.com</code></a> and built from the <code>docs/</code>
-tree with <a href="https://squidfunk.github.io/mkdocs-material/">MkDocs Material</a>.</p>
+<p>The public documentation + marketing site, served at the custom apex domain <a href="https://actions-gateway.com/"><code>actions-gateway.com</code></a> and built from the <code>docs/</code> tree with <a href="https://squidfunk.github.io/mkdocs-material/">MkDocs Material</a>.</p>
 <ul>
-<li>Config: <code>mkdocs.yml</code> · theme overrides: <code>overrides/</code> · styles + scripts:
-  <code>docs/stylesheets/extra.css</code>, <code>docs/javascripts/extra.js</code></li>
-<li>Deployed by <code>.github/workflows/pages.yml</code> as a <strong>versioned tree</strong> (see
-  <a href="#versioned-deploy-mike">§ Versioned deploy</a>): the site tracks the latest
-  <strong>stable release</strong>, with the unreleased <code>main</code> docs available as an opt-in <code>dev</code>
-  version. Pull requests only build/validate (never publish).</li>
+<li>Config: <code>mkdocs.yml</code> · theme overrides: <code>overrides/</code> · styles + scripts: <code>docs/stylesheets/extra.css</code>, <code>docs/javascripts/extra.js</code></li>
+<li>Deployed by <code>.github/workflows/pages.yml</code> as a <strong>versioned tree</strong> (see <a href="#versioned-deploy-mike">§ Versioned deploy</a>): the site tracks the latest <strong>stable release</strong>, with the unreleased <code>main</code> docs available as an opt-in <code>dev</code> version.
+  Pull requests only build/validate (never publish).</li>
 </ul>
 <h2 id="custom-domain">Custom domain<a class="headerlink" href="#custom-domain" title="Permanent link">&para;</a></h2>
-<p>The site is served from the apex domain <strong><code>actions-gateway.com</code></strong> (purchased
-2026-06; replaced the original <code>actions-gateway.github.io/github-actions-gateway/</code>
-project-page subpath). Two pieces keep the domain bound to the Actions-based
-Pages deploy:</p>
+<p>The site is served from the apex domain <strong><code>actions-gateway.com</code></strong> (purchased 2026-06; replaced the original <code>actions-gateway.github.io/github-actions-gateway/</code> project-page subpath).
+Two pieces keep the domain bound to the Actions-based Pages deploy:</p>
 <ul>
-<li><strong><code>docs/CNAME</code></strong> — contains the bare domain <code>actions-gateway.com</code>. MkDocs copies
-  <code>docs_dir</code> root files verbatim into each built version, and the <code>pages.yml</code>
-  <code>publish</code> job <strong>re-asserts it at the artifact root</strong> (<code>mike</code> does not keep a root
-  <code>CNAME</code>). Without a root CNAME, an Actions deploy would clear the custom domain.
+<li><strong><code>docs/CNAME</code></strong> — contains the bare domain <code>actions-gateway.com</code>.
+  MkDocs copies <code>docs_dir</code> root files verbatim into each built version, and the <code>pages.yml</code> <code>publish</code> job <strong>re-asserts it at the artifact root</strong> (<code>mike</code> does not keep a root <code>CNAME</code>).
+  Without a root CNAME, an Actions deploy would clear the custom domain.
   Don't delete or rename it.</li>
-<li><strong><code>site_url: https://actions-gateway.com/</code></strong> in <code>mkdocs.yml</code> — drives canonical
-  URLs, <code>sitemap.xml</code>, and Open Graph / social meta, and roots the site at <code>/</code>
-  (no more <code>/github-actions-gateway/</code> base path).</li>
+<li><strong><code>site_url: https://actions-gateway.com/</code></strong> in <code>mkdocs.yml</code> — drives canonical URLs, <code>sitemap.xml</code>, and Open Graph / social meta, and roots the site at <code>/</code> (no more <code>/github-actions-gateway/</code> base path).</li>
 </ul>
-<p>DNS (managed at the registrar): four apex <code>A</code> records → GitHub Pages
-<code>185.199.108–111.153</code>, matching <code>AAAA</code> records, and a <code>www</code> <code>CNAME</code> →
-<code>actions-gateway.github.io</code>. The repo Pages custom domain is set server-side
-(<code>gh api -X PUT repos/{owner}/{repo}/pages -f cname=actions-gateway.com</code>), which
-provisions a Let's Encrypt cert; "Enforce HTTPS" is enabled once the cert reads
-<code>approved</code>. <strong>DNSSEC and org-level domain verification remain optional future
-hardening — not yet done.</strong></p>
-<p>(The original build plan and decision log is <code>docs/plan/website.md</code>; this doc is
-the durable how-to-maintain reference.)</p>
+<p>DNS (managed at the registrar): four apex <code>A</code> records → GitHub Pages <code>185.199.108–111.153</code>, matching <code>AAAA</code> records, and a <code>www</code> <code>CNAME</code> → <code>actions-gateway.github.io</code>.
+The repo Pages custom domain is set server-side (<code>gh api -X PUT repos/{owner}/{repo}/pages -f cname=actions-gateway.com</code>), which provisions a Let's Encrypt cert; "Enforce HTTPS" is enabled once the cert reads <code>approved</code>. <strong>DNSSEC and org-level domain verification remain optional future hardening — not yet done.</strong></p>
+<p>(The original build plan and decision log is <code>docs/plan/website.md</code>; this doc is the durable how-to-maintain reference.)</p>
 <h2 id="the-announce-bar">The announce bar<a class="headerlink" href="#the-announce-bar" title="Permanent link">&para;</a></h2>
-<p>The strip at the top of every page ("vX.Y.Z is here…") is the <code>announce</code> block in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a>. Its <strong>version is derived, not
-hand-written</strong>: the MkDocs hook
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/release_version.py"><code>hooks/release_version.py</code></a> resolves it at build
-time and exposes it to the template as <code>config.extra.release.version</code>.</p>
+<p>The strip at the top of every page ("vX.Y.Z is here…") is the <code>announce</code> block in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a>.
+Its <strong>version is derived, not hand-written</strong>: the MkDocs hook <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/release_version.py"><code>hooks/release_version.py</code></a> resolves it at build time and exposes it to the template as <code>config.extra.release.version</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3039,39 +3020,22 @@ time and exposes it to the template as <code>config.extra.release.version</code>
 </tr>
 </tbody>
 </table>
-<p>It names the <strong>newest</strong> release, not the version being built, because the bar is
-site chrome: a visitor reading older docs wants to know what the current release
-is. That is also why <code>pages.yml</code> pins <code>overrides/</code> to the current checkout when
-seeding (see <a href="#seeding-already-released-versions">§ Seeding</a>).</p>
-<p>The one hand-written part is the optional per-release <strong>highlight</strong> prose, and it
-is guarded by a <code>highlight_for</code> version in the same template. The highlight renders
-only while <code>highlight_for</code> names the resolved release, so forgetting to refresh it
-degrades the bar to a release-notes link instead of pairing a new version with the
-previous release's headline. Refreshing it is an optional pre-flight step in
-<a href="../../operations/release/#1-pre-flight">release.md</a>.</p>
-<p>Why this is derived at all: a stable tag deploys that tag's docs wholesale, so a
-banner that is wrong at tag time is published permanently under that version and no
-later fix to <code>main</code> reaches it. Every stable tag missed the manual bump: <code>v1.0.0</code>
-shipped saying <em>"Alpha, pre-1.0"</em>, and <code>v1.1.0</code> and <code>v1.2.0</code> both said <em>"v1.0.0 is
-here"</em> (Q393). <code>publish.yml</code>'s <code>announce-bar</code> gate now builds the site at the tag
-and asserts the <strong>rendered</strong> bar names it, so a broken hook or template fails the
-release before any image is pushed.</p>
-<p>Both workflows check out with <code>fetch-depth: 0</code> for this reason: a default depth-1
-checkout fetches no tags, and the bar would render the version-free fallback.
-Locally, <code>make docs-serve</code> and <code>make docs-build</code> resolve tags from your checkout, so
-run <code>git fetch --tags</code> if the bar looks stale. To see what the bar will name
-without building the site:</p>
+<p>It names the <strong>newest</strong> release, not the version being built, because the bar is site chrome: a visitor reading older docs wants to know what the current release is.
+That is also why <code>pages.yml</code> pins <code>overrides/</code> to the current checkout when seeding (see <a href="#seeding-already-released-versions">§ Seeding</a>).</p>
+<p>The one hand-written part is the optional per-release <strong>highlight</strong> prose, and it is guarded by a <code>highlight_for</code> version in the same template.
+The highlight renders only while <code>highlight_for</code> names the resolved release, so forgetting to refresh it degrades the bar to a release-notes link instead of pairing a new version with the previous release's headline.
+Refreshing it is an optional pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.</p>
+<p>Why this is derived at all: a stable tag deploys that tag's docs wholesale, so a banner that is wrong at tag time is published permanently under that version and no later fix to <code>main</code> reaches it.
+Every stable tag missed the manual bump: <code>v1.0.0</code> shipped saying <em>"Alpha, pre-1.0"</em>, and <code>v1.1.0</code> and <code>v1.2.0</code> both said <em>"v1.0.0 is here"</em> (Q393). <code>publish.yml</code>'s <code>announce-bar</code> gate now builds the site at the tag and asserts the <strong>rendered</strong> bar names it, so a broken hook or template fails the release before any image is pushed.</p>
+<p>Both workflows check out with <code>fetch-depth: 0</code> for this reason: a default depth-1 checkout fetches no tags, and the bar would render the version-free fallback.
+Locally, <code>make docs-serve</code> and <code>make docs-build</code> resolve tags from your checkout, so run <code>git fetch --tags</code> if the bar looks stale.
+To see what the bar will name without building the site:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python3<span class="w"> </span>hooks/release_version.py
 </code></pre></div>
-<p>The tag-selection rules (numeric ordering, prerelease exclusion, the
-<code>$GAG_DOCS_RELEASE</code> override, degrading to <code>""</code> outside a repository) are asserted
-by <code>scripts/docs/release-version-hook-test.sh</code>, which <code>make check</code> runs via
-<code>make scripts-test</code>.</p>
+<p>The tag-selection rules (numeric ordering, prerelease exclusion, the <code>$GAG_DOCS_RELEASE</code> override, degrading to <code>""</code> outside a repository) are asserted by <code>scripts/docs/release-version-hook-test.sh</code>, which <code>make check</code> runs via <code>make scripts-test</code>.</p>
 <h2 id="marketing-badges">Marketing badges<a class="headerlink" href="#marketing-badges" title="Permanent link">&para;</a></h2>
-<p>Five small pills annotate the capability index and the roadmap. They share one
-geometry rule in <a href="../../stylesheets/extra.css"><code>extra.css</code></a> and differ only by hue,
-because each answers a different question about a capability and a reader has to
-tell them apart at a glance.</p>
+<p>Five small pills annotate the capability index and the roadmap.
+They share one geometry rule in <a href="../../stylesheets/extra.css"><code>extra.css</code></a> and differ only by hue, because each answers a different question about a capability and a reader has to tell them apart at a glance.</p>
 <table>
 <thead>
 <tr>
@@ -3108,57 +3072,36 @@ tell them apart at a glance.</p>
 </tr>
 </tbody>
 </table>
-<p>Two of them expire on their own, which is what makes them safe to write. Rules
-9-11 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/roadmapcheck/badges.go"><code>devtools/docs/roadmapcheck</code></a>
-enforce it, and <code>scripts/docs/check-roadmap-test.sh</code> pins every removal case.</p>
+<p>Two of them expire on their own, which is what makes them safe to write.
+Rules 9-11 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/roadmapcheck/badges.go"><code>devtools/docs/roadmapcheck</code></a> enforce it, and <code>scripts/docs/check-roadmap-test.sh</code> pins every removal case.</p>
 <h3 id="the-release-chip">The release chip<a class="headerlink" href="#the-release-chip" title="Permanent link">&para;</a></h3>
 <p>A roadmap bullet's release commitment is <strong>derived, never typed</strong>.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/release_gates.py"><code>hooks/release_gates.py</code></a> reads the <code>X.Y-gate</code>
-labels out of <code>docs/STATUS.md</code>, follows each bullet's existing <code>&lt;!-- q:QN --&gt;</code>
-annotation, and injects the pill:</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/release_gates.py"><code>hooks/release_gates.py</code></a> reads the <code>X.Y-gate</code> labels out of <code>docs/STATUS.md</code>, follows each bullet's existing <code>&lt;!-- q:QN --&gt;</code> annotation, and injects the pill:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">-</span><span class="w"> </span><span class="gs">**[Bind each runner set to a GitHub runner group](plan/release-1.5.md)**</span> &lt;!-- q:Q712 --&gt;
 </code></pre></div>
-<p>renders with a <code>1.5</code> pill beside the title, and loses it the day the label comes
-off. The page states no version anywhere, so no version on it can be stale. That
-was the failure of the prose form, where three of twenty-three bullets said
-<em>"Gating the 1.5 release"</em> and a punt that dropped the label left the promise
-standing (Q770).</p>
+<p>renders with a <code>1.5</code> pill beside the title, and loses it the day the label comes off.
+The page states no version anywhere, so no version on it can be stale.
+That was the failure of the prose form, where three of twenty-three bullets said <em>"Gating the 1.5 release"</em> and a punt that dropped the label left the promise standing (Q770).</p>
 <p>To see what the chips will read without building the site:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python3<span class="w"> </span>hooks/release_gates.py<span class="w"> </span>docs
 </code></pre></div>
 <h3 id="the-tier-badge">The tier badge<a class="headerlink" href="#the-tier-badge" title="Permanent link">&para;</a></h3>
-<p>A shipped capability that reaches only one acquisition tier carries
-<code>gag-tier-badge</code> plus a <code>&lt;!-- tier:QN --&gt;</code> annotation naming the backlog row
-tracking the port. The gate then removes it on parity, by the same signal the
-roadmap uses: this repo deletes a row when its work ships, so a badge naming a
-row that no longer exists is a caveat the code outgrew.</p>
-<p>The badged bullet must also link a page under <code>operations/</code>. A tier limitation
-an operator cannot read about anywhere else is a marketing claim with nothing
-behind it.</p>
-<p><strong>No badge means both tiers.</strong> That is why the badge is written only where the
-gap is real: adding <em>"both acquisition tiers"</em> to every other bullet is the
-prose version of the same fact, and it is the one that goes stale.</p>
+<p>A shipped capability that reaches only one acquisition tier carries <code>gag-tier-badge</code> plus a <code>&lt;!-- tier:QN --&gt;</code> annotation naming the backlog row tracking the port.
+The gate then removes it on parity, by the same signal the roadmap uses: this repo deletes a row when its work ships, so a badge naming a row that no longer exists is a caveat the code outgrew.</p>
+<p>The badged bullet must also link a page under <code>operations/</code>.
+A tier limitation an operator cannot read about anywhere else is a marketing claim with nothing behind it.</p>
+<p><strong>No badge means both tiers.</strong> That is why the badge is written only where the gap is real: adding <em>"both acquisition tiers"</em> to every other bullet is the prose version of the same fact, and it is the one that goes stale.</p>
 <h3 id="the-new-in-release-chip">The new-in-release chip<a class="headerlink" href="#the-new-in-release-chip" title="Permanent link">&para;</a></h3>
-<p><code>gag-new-badge</code> reads <code>new in X.Y</code>, and is <strong>declared by the pull request that
-ships the capability</strong>. It is never backfilled: absence means "not new", the only
-reading that works on a page written after 1.0-1.2 already shipped.</p>
-<p>What makes it safe to add is that nobody has to remember to remove it: the gate
-expires a chip once it trails the current release by more than <code>-max-chip-age</code>
-(one, so a chip survives the release it names and the one after). A chip naming
-a release that has not shipped yet is fine, since the declaring PR lands before
-the tag. A chip from a previous major goes with
-the major.</p>
-<p>The current release is resolved by <code>resolve_release_tag</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), shared with
-<code>check-release-pins.sh</code> so both gates mean the same thing by "the current
-release". Without a tag, as on a fresh fork, the checker reports that it skipped
-the rule rather than passing quietly.</p>
+<p><code>gag-new-badge</code> reads <code>new in X.Y</code>, and is <strong>declared by the pull request that ships the capability</strong>.
+It is never backfilled: absence means "not new", the only reading that works on a page written after 1.0-1.2 already shipped.</p>
+<p>What makes it safe to add is that nobody has to remember to remove it: the gate expires a chip once it trails the current release by more than <code>-max-chip-age</code> (one, so a chip survives the release it names and the one after).
+A chip naming a release that has not shipped yet is fine, since the declaring PR lands before the tag.
+A chip from a previous major goes with the major.</p>
+<p>The current release is resolved by <code>resolve_release_tag</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), shared with <code>check-release-pins.sh</code> so both gates mean the same thing by "the current release".
+Without a tag, as on a fresh fork, the checker reports that it skipped the rule rather than passing quietly.</p>
 <h2 id="versioned-deploy-mike">Versioned deploy (mike)<a class="headerlink" href="#versioned-deploy-mike" title="Permanent link">&para;</a></h2>
-<p>The published site is a <strong>versioned tree</strong> managed by
-<a href="https://github.com/jimporter/mike"><code>mike</code></a> (Q238), not a single copy of <code>main</code>.
-Each version is a full built copy under its own path on the <code>gh-pages</code> branch, and
-Material renders a <strong>version selector</strong> from <code>mike</code>'s <code>versions.json</code>
-(<code>extra.version.provider: mike</code> in <code>mkdocs.yml</code>):</p>
+<p>The published site is a <strong>versioned tree</strong> managed by <a href="https://github.com/jimporter/mike"><code>mike</code></a> (Q238), not a single copy of <code>main</code>.
+Each version is a full built copy under its own path on the <code>gh-pages</code> branch, and Material renders a <strong>version selector</strong> from <code>mike</code>'s <code>versions.json</code> (<code>extra.version.provider: mike</code> in <code>mkdocs.yml</code>):</p>
 <table>
 <thead>
 <tr>
@@ -3189,45 +3132,24 @@ Material renders a <strong>version selector</strong> from <code>mike</code>'s <c
 </tr>
 </tbody>
 </table>
-<p><code>stable</code> is the default, so a visitor lands on the latest <strong>released</strong> docs — a
-feature merged to <code>main</code> but not yet in a tagged/released chart appears only under
-the opt-in <code>dev</code> version, never as "Available now" on the released site.</p>
+<p><code>stable</code> is the default, so a visitor lands on the latest <strong>released</strong> docs — a feature merged to <code>main</code> but not yet in a tagged/released chart appears only under the opt-in <code>dev</code> version, never as "Available now" on the released site.</p>
 <p><strong>What deploys when</strong> (<code>.github/workflows/pages.yml</code>):</p>
 <ul>
 <li><strong>push to <code>main</code></strong> → <code>mike deploy dev</code> (refreshes the unreleased <code>dev</code> docs).</li>
-<li><strong>stable <code>v*</code> tag push</strong> → deploys that release's docs, and <strong>only if it is the
-  highest released version</strong> also moves the <code>stable</code> alias + the default root
-  redirect to it (<code>mike set-default stable</code>). This is the same tag push that runs
-  <code>publish.yml</code>.</li>
-<li><strong>prerelease tag</strong> (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) → <strong>no deploy</strong> (the same
-  prerelease test <code>publish.yml</code> uses, Q293).</li>
-<li><strong><code>workflow_dispatch</code></strong> → deploys the <code>version</code>/<code>alias</code> inputs verbatim (or
-  derives from the ref when blank) — used for <strong>seeding</strong> already-released versions
-  and manual redeploys. The <code>docs_ref</code> input picks which ref the docs <em>content</em> is
-  built from, independently of the ref the workflow logic runs from (see § Seeding
-  below).</li>
+<li><strong>stable <code>v*</code> tag push</strong> → deploys that release's docs, and <strong>only if it is the highest released version</strong> also moves the <code>stable</code> alias + the default root redirect to it (<code>mike set-default stable</code>).
+  This is the same tag push that runs <code>publish.yml</code>.</li>
+<li><strong>prerelease tag</strong> (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) → <strong>no deploy</strong> (the same prerelease test <code>publish.yml</code> uses, Q293).</li>
+<li><strong><code>workflow_dispatch</code></strong> → deploys the <code>version</code>/<code>alias</code> inputs verbatim (or derives from the ref when blank) — used for <strong>seeding</strong> already-released versions and manual redeploys.
+  The <code>docs_ref</code> input picks which ref the docs <em>content</em> is built from, independently of the ref the workflow logic runs from (see § Seeding below).</li>
 </ul>
-<p><strong>Backports don't demote the site.</strong> A patch cut for an older supported line (e.g.
-<code>v1.2.5</code> released <em>after</em> <code>v1.3.0</code>) publishes/updates its own <code>1.2.5</code> version but
-leaves <code>stable</code> on <code>1.3.0</code> — the deploy claims <code>stable</code> only when the pushed tag is
-the highest released version. That backport must be tagged off the release line,
-not off feature-ahead <code>main</code>; see
-<a href="../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a>.</p>
-<p>Pages source stays <strong>"GitHub Actions"</strong>: <code>mike</code> maintains the tree on <code>gh-pages</code>,
-and the <code>publish</code> job serves that whole tree as the Pages artifact.
-<code>--alias-type=copy</code> makes <code>stable/</code> a real directory — GitHub Pages artifact
-deploys don't follow symlinks, so a symlinked alias would 404 on deep links.</p>
+<p><strong>Backports don't demote the site.</strong> A patch cut for an older supported line (e.g. <code>v1.2.5</code> released <em>after</em> <code>v1.3.0</code>) publishes/updates its own <code>1.2.5</code> version but leaves <code>stable</code> on <code>1.3.0</code> — the deploy claims <code>stable</code> only when the pushed tag is the highest released version.
+That backport must be tagged off the release line, not off feature-ahead <code>main</code>; see <a href="../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a>.</p>
+<p>Pages source stays <strong>"GitHub Actions"</strong>: <code>mike</code> maintains the tree on <code>gh-pages</code>, and the <code>publish</code> job serves that whole tree as the Pages artifact. <code>--alias-type=copy</code> makes <code>stable/</code> a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.</p>
 <h3 id="seeding-already-released-versions">Seeding already-released versions<a class="headerlink" href="#seeding-already-released-versions" title="Permanent link">&para;</a></h3>
-<p><code>mike</code> only knows the versions it has deployed, so releases cut <strong>before</strong> this
-workflow landed aren't in the tree yet, and <strong>the site root has nothing to redirect
-to until some version claims the default</strong>: the apex domain 404s while every push
-still reports success. That was the state from the Q238 cutover until the first
-seed, because <code>mike set-default</code> runs only for a stable tag push or an explicit
-dispatch, and the last release predated the cutover by four days. The
-<em>Verify the artifact serves a reachable root</em> step now fails the deploy rather than
-publishing a 404 silently.</p>
-<p>Seed the existing releases once via <code>workflow_dispatch</code>, <strong>oldest first, newest
-last</strong> so <code>stable</code> ends on the latest:</p>
+<p><code>mike</code> only knows the versions it has deployed, so releases cut <strong>before</strong> this workflow landed aren't in the tree yet, and <strong>the site root has nothing to redirect to until some version claims the default</strong>: the apex domain 404s while every push still reports success.
+That was the state from the Q238 cutover until the first seed, because <code>mike set-default</code> runs only for a stable tag push or an explicit dispatch, and the last release predated the cutover by four days.
+The <em>Verify the artifact serves a reachable root</em> step now fails the deploy rather than publishing a 404 silently.</p>
+<p>Seed the existing releases once via <code>workflow_dispatch</code>, <strong>oldest first, newest last</strong> so <code>stable</code> ends on the latest:</p>
 <table>
 <thead>
 <tr>
@@ -3258,30 +3180,20 @@ last</strong> so <code>stable</code> ends on the latest:</p>
 </tr>
 </tbody>
 </table>
-<p>Run each from <code>main</code>, waiting for one to finish before starting the next (they
-serialise on the shared <code>pages-deploy</code> concurrency group):</p>
+<p>Run each from <code>main</code>, waiting for one to finish before starting the next (they serialise on the shared <code>pages-deploy</code> concurrency group):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>pages.yml<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span>-f<span class="w"> </span><span class="nv">version</span><span class="o">=</span><span class="m">1</span>.0.0<span class="w"> </span>-f<span class="w"> </span><span class="nv">docs_ref</span><span class="o">=</span>v1.0.0<span class="w"> </span>-f<span class="w"> </span><span class="nv">set_default</span><span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
-<p><code>set_default=true</code> on <strong>every</strong> seed, not just the last, is deliberate. Each run
-re-points the root redirect at the version it just deployed, so the root is
-serviceable from the first seed onward and the final row leaves it on <code>stable</code>. With
-<code>set_default</code> left off, the first two runs would produce a tree with no root
-redirect at all, which the <em>Verify the artifact serves a reachable root</em> step
-correctly rejects: their content would reach <code>gh-pages</code> but never get published.</p>
-<p><strong>Always dispatch from <code>main</code>, and always set <code>docs_ref</code>.</strong> The two are easy to get
-backwards:</p>
+<p><code>set_default=true</code> on <strong>every</strong> seed, not just the last, is deliberate.
+Each run re-points the root redirect at the version it just deployed, so the root is serviceable from the first seed onward and the final row leaves it on <code>stable</code>.
+With <code>set_default</code> left off, the first two runs would produce a tree with no root redirect at all, which the <em>Verify the artifact serves a reachable root</em> step correctly rejects: their content would reach <code>gh-pages</code> but never get published.</p>
+<p><strong>Always dispatch from <code>main</code>, and always set <code>docs_ref</code>.</strong> The two are easy to get backwards:</p>
 <ul>
-<li><em>Dispatching from the tag doesn't work.</em> <code>workflow_dispatch</code> reads the workflow
-  file <strong>at the ref you dispatch on</strong>, and a pre-versioning tag's <code>pages.yml</code> has
-  neither these inputs nor <code>mike</code>. The run would reject the inputs, and its flat
-  single-copy deploy would clobber the whole version tree.</li>
-<li><em>Omitting <code>docs_ref</code> publishes the wrong content.</em> <code>mike</code> builds the <strong>current
-  checkout</strong>, so a seed dispatched from <code>main</code> without it would publish
-  feature-ahead <code>main</code> as the released docs, reintroducing the "Available now"
-  drift that Q387 and versioning exist to prevent.</li>
+<li><em>Dispatching from the tag doesn't work.</em> <code>workflow_dispatch</code> reads the workflow file <strong>at the ref you dispatch on</strong>, and a pre-versioning tag's <code>pages.yml</code> has neither these inputs nor <code>mike</code>.
+  The run would reject the inputs, and its flat single-copy deploy would clobber the whole version tree.</li>
+<li><em>Omitting <code>docs_ref</code> publishes the wrong content.</em> <code>mike</code> builds the <strong>current checkout</strong>, so a seed dispatched from <code>main</code> without it would publish feature-ahead <code>main</code> as the released docs, reintroducing the "Available now" drift that Q387 and versioning exist to prevent.</li>
 </ul>
-<p><code>docs_ref</code> restores that ref's <code>docs/</code> and <code>mkdocs.yml</code> over the working tree. Four
-things are deliberately <strong>not</strong> taken from the tag:</p>
+<p><code>docs_ref</code> restores that ref's <code>docs/</code> and <code>mkdocs.yml</code> over the working tree.
+Four things are deliberately <strong>not</strong> taken from the tag:</p>
 <table>
 <thead>
 <tr>
@@ -3312,164 +3224,97 @@ things are deliberately <strong>not</strong> taken from the tag:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>That safety net covers seeds only.</strong> A stable tag push has a blank <code>docs_ref</code> and
-builds the tag wholesale, <code>overrides/</code> included. That is safe for the announce
-bar's <em>version</em>, which the hook derives from the tag list at build time rather than
-from a string in the checkout; only the optional highlight prose is pinned to the
-tag. Refreshing it is an optional pre-flight step in
-<a href="../../operations/release/#1-pre-flight">release.md</a>.</p>
-<p>The <code>mkdocs.yml</code> overrides ride in an
-<a href="https://www.mkdocs.org/user-guide/configuration/#inheritance"><code>INHERIT</code></a> overlay
-(<code>mkdocs.versioned.yml</code>) rather than a YAML rewrite, so the tag's own nav and config
-stay byte-for-byte intact: MkDocs deep-merges the inherited mapping, and scalars
-such as <code>site_url</code> are replaced.</p>
-<p>A subsequent <code>main</code> push adds the <code>dev</code> entry. From then on the workflow maintains
-everything automatically.</p>
+<p><strong>That safety net covers seeds only.</strong> A stable tag push has a blank <code>docs_ref</code> and builds the tag wholesale, <code>overrides/</code> included.
+That is safe for the announce bar's <em>version</em>, which the hook derives from the tag list at build time rather than from a string in the checkout; only the optional highlight prose is pinned to the tag.
+Refreshing it is an optional pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.</p>
+<p>The <code>mkdocs.yml</code> overrides ride in an <a href="https://www.mkdocs.org/user-guide/configuration/#inheritance"><code>INHERIT</code></a> overlay (<code>mkdocs.versioned.yml</code>) rather than a YAML rewrite, so the tag's own nav and config stay byte-for-byte intact: MkDocs deep-merges the inherited mapping, and scalars such as <code>site_url</code> are replaced.</p>
+<p>A subsequent <code>main</code> push adds the <code>dev</code> entry.
+From then on the workflow maintains everything automatically.</p>
 <h3 id="local-preview-of-the-versioned-site">Local preview of the versioned site<a class="headerlink" href="#local-preview-of-the-versioned-site" title="Permanent link">&para;</a></h3>
-<p><code>make docs-serve</code> previews the <strong>current working tree</strong> only (no selector) — the
-right tool for writing content. To preview the full versioned tree with the
-selector, run <code>mike</code> from the docs venv against a local <code>gh-pages</code>:
-<code>.venv-docs/bin/mike serve</code>.</p>
+<p><code>make docs-serve</code> previews the <strong>current working tree</strong> only (no selector) — the right tool for writing content.
+To preview the full versioned tree with the selector, run <code>mike</code> from the docs venv against a local <code>gh-pages</code>: <code>.venv-docs/bin/mike serve</code>.</p>
 <h2 id="seo--analytics">SEO &amp; analytics<a class="headerlink" href="#seo--analytics" title="Permanent link">&para;</a></h2>
-<p>Three pieces of machine-readable/operational metadata are wired centrally so they
-apply site-wide, not per page:</p>
+<p>Three pieces of machine-readable/operational metadata are wired centrally so they apply site-wide, not per page:</p>
 <ul>
-<li><strong>JSON-LD structured data</strong> — <code>overrides/main.html</code>'s <code>extrahead</code> block emits
-  <code>SoftwareSourceCode</code> and <code>Organization</code> schema on every page, populated from
-  <code>mkdocs.yml</code> (<code>site_name</code>, <code>site_description</code>, <code>site_url</code>, <code>repo_url</code>). Editing
-  those config values updates the structured data automatically; don't hand-paste
-  schema into individual pages. Validate built output at
-  <a href="https://validator.schema.org/">validator.schema.org</a>.</li>
-<li><strong><code>robots.txt</code></strong> — <code>docs/robots.txt</code> lands inside each built version; the
-  <code>pages.yml</code> <code>publish</code> job writes the <strong>root</strong> <code>robots.txt</code> that points crawlers
-  at the default (stable) <code>sitemap.xml</code> and <code>Disallow</code>s <code>/dev/</code> so the unreleased
-  version stays out of the index (avoiding duplicate content across versions).</li>
-<li><strong><code>sitemap.xml</code></strong> — generated automatically by MkDocs Material because
-  <code>site_url</code> is set; no extra config. <code>robots.txt</code> points crawlers at it.</li>
+<li><strong>JSON-LD structured data</strong> — <code>overrides/main.html</code>'s <code>extrahead</code> block emits <code>SoftwareSourceCode</code> and <code>Organization</code> schema on every page, populated from <code>mkdocs.yml</code> (<code>site_name</code>, <code>site_description</code>, <code>site_url</code>, <code>repo_url</code>).
+  Editing those config values updates the structured data automatically; don't hand-paste schema into individual pages.
+  Validate built output at <a href="https://validator.schema.org/">validator.schema.org</a>.</li>
+<li><strong><code>robots.txt</code></strong> — <code>docs/robots.txt</code> lands inside each built version; the <code>pages.yml</code> <code>publish</code> job writes the <strong>root</strong> <code>robots.txt</code> that points crawlers at the default (stable) <code>sitemap.xml</code> and <code>Disallow</code>s <code>/dev/</code> so the unreleased version stays out of the index (avoiding duplicate content across versions).</li>
+<li><strong><code>sitemap.xml</code></strong> — generated automatically by MkDocs Material because <code>site_url</code> is set; no extra config. <code>robots.txt</code> points crawlers at it.</li>
 </ul>
 <h3 id="analytics-plausible--opt-in">Analytics (Plausible — opt-in)<a class="headerlink" href="#analytics-plausible--opt-in" title="Permanent link">&para;</a></h3>
-<p>Privacy-respecting analytics (Plausible: no cookies, no Google Analytics) are
-wired via config in <code>mkdocs.yml</code> under <code>extra.analytics</code> and rendered by
-<code>overrides/main.html</code>. <strong>Disabled by default</strong> — the script is only emitted when
-<code>plausible_domain</code> is non-empty:</p>
+<p>Privacy-respecting analytics (Plausible: no cookies, no Google Analytics) are wired via config in <code>mkdocs.yml</code> under <code>extra.analytics</code> and rendered by <code>overrides/main.html</code>. <strong>Disabled by default</strong> — the script is only emitted when <code>plausible_domain</code> is non-empty:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">extra</span><span class="p">:</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">analytics</span><span class="p">:</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">plausible_domain</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w">                              </span><span class="c1"># set to enable, e.g. actions-gateway.com</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">plausible_src</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://plausible.io/js/script.js</span><span class="w">  </span><span class="c1"># override for a self-hosted instance</span>
 </code></pre></div>
-<p>To turn analytics on, a maintainer sets <code>plausible_domain</code> to the public site
-domain (this is <strong>not</strong> a secret — it is the same <code>actions-gateway.com</code> already
-in <code>site_url</code>) and registers that domain in their Plausible dashboard. Point
-<code>plausible_src</code> at a self-hosted Plausible to avoid the hosted <code>plausible.io</code>.</p>
+<p>To turn analytics on, a maintainer sets <code>plausible_domain</code> to the public site domain (this is <strong>not</strong> a secret — it is the same <code>actions-gateway.com</code> already in <code>site_url</code>) and registers that domain in their Plausible dashboard.
+Point <code>plausible_src</code> at a self-hosted Plausible to avoid the hosted <code>plausible.io</code>.</p>
 <h2 id="fonts">Fonts<a class="headerlink" href="#fonts" title="Permanent link">&para;</a></h2>
-<p>The site's typefaces are <strong>self-hosted</strong> — no font CDN is contacted. Material's
-built-in Google Fonts loader would otherwise fetch Roboto from
-<code>fonts.gstatic.com</code> on every page view, leaking each visitor's IP and
-User-Agent to Google (the one Google request an otherwise Google-free site
-would still make). We disable it and serve our own woff2 instead:</p>
+<p>The site's typefaces are <strong>self-hosted</strong> — no font CDN is contacted.
+Material's built-in Google Fonts loader would otherwise fetch Roboto from <code>fonts.gstatic.com</code> on every page view, leaking each visitor's IP and User-Agent to Google (the one Google request an otherwise Google-free site would still make).
+We disable it and serve our own woff2 instead:</p>
 <ul>
 <li><strong><code>theme.font: false</code></strong> in <code>mkdocs.yml</code> turns off the loader.</li>
-<li><strong><code>@font-face</code> declarations + the <code>--md-text-font</code> / <code>--md-code-font</code> mapping</strong>
-  in <code>docs/stylesheets/extra.css</code> point Material at the vendored files. Material
-  appends its own system fallback stack, so a face that fails to load degrades to
-  the OS font rather than a serif.</li>
-<li><strong>woff2 files</strong> live in <code>docs/assets/fonts/</code> (latin subset, SIL OFL 1.1). See
-  that directory's <code>README.md</code> for the file→role table, licensing, and the
-  re-fetch commands.</li>
+<li><strong><code>@font-face</code> declarations + the <code>--md-text-font</code> / <code>--md-code-font</code> mapping</strong> in <code>docs/stylesheets/extra.css</code> point Material at the vendored files.
+  Material appends its own system fallback stack, so a face that fails to load degrades to the OS font rather than a serif.</li>
+<li><strong>woff2 files</strong> live in <code>docs/assets/fonts/</code> (latin subset, SIL OFL 1.1).
+  See that directory's <code>README.md</code> for the file→role table, licensing, and the re-fetch commands.</li>
 </ul>
-<p>The pairing is "GitHub-native": <strong>Monaspace Neon</strong> (GitHub's own superfamily) as
-the display face on the landing hero and each page's <code>h1</code>, <strong>IBM Plex Sans</strong> for
-body copy and headings <code>h2</code>–<code>h6</code>, and <strong>Monaspace Argon</strong> for code. To change a
-face, add its weights to <code>docs/assets/fonts/</code>, add matching <code>@font-face</code> rules,
-and update the <code>--md-*-font</code> variables (and the <code>h1</code> override for the display
-face). Keep every face self-hosted — never reintroduce a <code>theme.font</code> mapping or
-an external font <code>&lt;link&gt;</code>, which would restore the Google request.</p>
+<p>The pairing is "GitHub-native": <strong>Monaspace Neon</strong> (GitHub's own superfamily) as the display face on the landing hero and each page's <code>h1</code>, <strong>IBM Plex Sans</strong> for body copy and headings <code>h2</code>–<code>h6</code>, and <strong>Monaspace Argon</strong> for code.
+To change a face, add its weights to <code>docs/assets/fonts/</code>, add matching <code>@font-face</code> rules, and update the <code>--md-*-font</code> variables (and the <code>h1</code> override for the display face).
+Keep every face self-hosted — never reintroduce a <code>theme.font</code> mapping or an external font <code>&lt;link&gt;</code>, which would restore the Google request.</p>
 <h3 id="no-flash-of-unstyled-text-fout">No flash-of-unstyled-text (FOUT)<a class="headerlink" href="#no-flash-of-unstyled-text-fout" title="Permanent link">&para;</a></h3>
-<p>Self-hosting alone would still "pop" — the browser only requests a font after
-parsing CSS, so it paints fallback text, then swaps and reflows once the real
-face arrives. Two coordinated pieces stop that:</p>
+<p>Self-hosting alone would still "pop" — the browser only requests a font after parsing CSS, so it paints fallback text, then swaps and reflows once the real face arrives.
+Two coordinated pieces stop that:</p>
 <ul>
-<li><strong><code>font-display: optional</code></strong> on the text and display faces (<code>extra.css</code>). Unlike
-  <code>swap</code> (zero block period → always paints fallback first), <code>optional</code> gives the
-  font a brief window to arrive before first paint and never swaps <em>late</em> — so
-  there's no reflow either way. The code face (Monaspace Argon) stays <code>swap</code>: it's
-  below the fold and we'd rather it always end up in real Monaspace than be dropped
-  to the system monospace on a slow first load.</li>
+<li><strong><code>font-display: optional</code></strong> on the text and display faces (<code>extra.css</code>).
+  Unlike <code>swap</code> (zero block period → always paints fallback first), <code>optional</code> gives the font a brief window to arrive before first paint and never swaps <em>late</em> — so there's no reflow either way.
+  The code face (Monaspace Argon) stays <code>swap</code>: it's below the fold and we'd rather it always end up in real Monaspace than be dropped to the system monospace on a slow first load.</li>
 <li><strong><code>&lt;link rel="preload"&gt;</code></strong> for the three above-the-fold faces (Plex Sans Regular</li>
-<li>Bold and Monaspace Neon Medium) in <code>overrides/main.html</code>, using the <code>| url</code>
-  filter so the path is correct in both local serve and production, and
-  <code>crossorigin</code> because fonts are always fetched in CORS mode. This starts the
-  fetch during head parse, so those faces are in memory before first paint.</li>
+<li>Bold and Monaspace Neon Medium) in <code>overrides/main.html</code>, using the <code>| url</code> filter so the path is correct in both local serve and production, and <code>crossorigin</code> because fonts are always fetched in CORS mode.
+    This starts the fetch during head parse, so those faces are in memory before first paint.</li>
 </ul>
-<p>Net effect (verified in the preview via the Performance API): the preloaded faces
-finish loading ~30 ms in, well before first contentful paint, so text renders in
-the correct font on the first frame — no pop. If you add a weight that appears
-above the fold, preload it too, or it may briefly render in the fallback.</p>
+<p>Net effect (verified in the preview via the Performance API): the preloaded faces finish loading ~30 ms in, well before first contentful paint, so text renders in the correct font on the first frame — no pop.
+If you add a weight that appears above the fold, preload it too, or it may briefly render in the fallback.</p>
 <h2 id="the-stylesheet-docsstylesheetsextracss">The stylesheet (<code>docs/stylesheets/extra.css</code>)<a class="headerlink" href="#the-stylesheet-docsstylesheetsextracss" title="Permanent link">&para;</a></h2>
 <p>Every custom class is namespaced <code>gag-</code>, in two families:</p>
 <ul>
-<li><strong>Components</strong> use BEM — <code>gag-hero</code>, <code>gag-hero__logo</code>, <code>gag-hero__phrase</code>. The
-  block name matches the wrapper <code>&lt;div&gt;</code> in the Markdown.</li>
-<li><strong>Utilities</strong> are bare and reusable — <code>gag-nowrap</code> (keeps a short code chip on
-  one line inside a narrow table column), <code>gag-cont</code>.</li>
+<li><strong>Components</strong> use BEM — <code>gag-hero</code>, <code>gag-hero__logo</code>, <code>gag-hero__phrase</code>.
+  The block name matches the wrapper <code>&lt;div&gt;</code> in the Markdown.</li>
+<li><strong>Utilities</strong> are bare and reusable — <code>gag-nowrap</code> (keeps a short code chip on one line inside a narrow table column), <code>gag-cont</code>.</li>
 </ul>
-<p><strong>Grep the name before adding a class.</strong> A collision does not error — it resolves
-by specificity, silently. <code>.md-typeset .gag-nowrap</code> (0,2,0) beats a plain
-<code>.gag-nowrap</code> (0,1,0), so a new rule reusing that name has no effect and the
-symptom is "my CSS does nothing," with nothing in the build to explain it. A
-utility that must never change behaviour and a component that must change it at a
-breakpoint are different classes, even when the declaration is identical.</p>
+<p><strong>Grep the name before adding a class.</strong> A collision does not error — it resolves by specificity, silently. <code>.md-typeset .gag-nowrap</code> (0,2,0) beats a plain <code>.gag-nowrap</code> (0,1,0), so a new rule reusing that name has no effect and the symptom is "my CSS does nothing," with nothing in the build to explain it.
+A utility that must never change behaviour and a component that must change it at a breakpoint are different classes, even when the declaration is identical.</p>
 <h3 id="page-scoped-table-rules">Page-scoped table rules<a class="headerlink" href="#page-scoped-table-rules" title="Permanent link">&para;</a></h3>
-<p>Two pages pin their own table columns, each selected by an element only that page
-has: <code>.md-content__inner:has(.gag-vs-hero)</code> for the why-GAG comparison, and
-<code>.md-typeset:has(&gt; h1#api-reference)</code> for the generated
-<a href="../../reference/api/">API reference</a>. Both are there for the same reason. <code>auto</code>
-table layout splits width by each column's max-content demand, so a column of
-paragraphs takes width from the columns that carry the row's identity, and the
-split moves as the container does. Pin the columns with <code>table-layout: fixed</code>
-rather than tuning the prose.</p>
-<p>The comparison table's scope also owns the <strong>last-column accent</strong> (the tinted
-<code>td:last-child</code> and accent-coloured header), and it has to. "Last column" means
-GAG on that one table; everywhere else it is whatever the author put rightmost.
-The accent was global once, which put it on all ~660 tables in the tree, tinting
-Validation on the API reference and Fix on the troubleshooting page. Nothing in
-the build catches that, because the reveal JS classes every plain table
-(see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>),
-so the rule reaches far past the "marketing tables" its comment claimed. <strong>A new
-table rule that means something about a specific column belongs in a page scope,
-not in the global block.</strong></p>
+<p>Two pages pin their own table columns, each selected by an element only that page has: <code>.md-content__inner:has(.gag-vs-hero)</code> for the why-GAG comparison, and <code>.md-typeset:has(&gt; h1#api-reference)</code> for the generated <a href="../../reference/api/">API reference</a>.
+Both are there for the same reason. <code>auto</code> table layout splits width by each column's max-content demand, so a column of paragraphs takes width from the columns that carry the row's identity, and the split moves as the container does.
+Pin the columns with <code>table-layout: fixed</code> rather than tuning the prose.</p>
+<p>The comparison table's scope also owns the <strong>last-column accent</strong> (the tinted <code>td:last-child</code> and accent-coloured header), and it has to.
+"Last column" means GAG on that one table; everywhere else it is whatever the author put rightmost.
+The accent was global once, which put it on all ~660 tables in the tree, tinting Validation on the API reference and Fix on the troubleshooting page.
+Nothing in the build catches that, because the reveal JS classes every plain table (see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>), so the rule reaches far past the "marketing tables" its comment claimed. <strong>A new table rule that means something about a specific column belongs in a page scope, not in the global block.</strong></p>
 <h3 id="changing-the-hero-headline">Changing the hero headline<a class="headerlink" href="#changing-the-hero-headline" title="Permanent link">&para;</a></h3>
-<p>The headline's type size and its two breakpoints are <strong>derived from the longest
-unbreakable phrase</strong>, not chosen for looks. The display face is monospace, so a
-phrase's width is arithmetic: <code>characters × 0.61em</code>. <code>Self-hosted GitHub Actions</code>
-is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at,
-against a headline column of only 718px. That is why the cap is 2.2rem, why the
-logomark stacks above the headline below 56rem instead of eating 162px of the
-column, and why <code>gag-hero__phrase</code>'s <code>nowrap</code> releases below 44rem.</p>
-<p>Measure before changing any of the three. Serve the site, then in the browser
-console read the column against the phrase:</p>
+<p>The headline's type size and its two breakpoints are <strong>derived from the longest unbreakable phrase</strong>, not chosen for looks.
+The display face is monospace, so a phrase's width is arithmetic: <code>characters × 0.61em</code>. <code>Self-hosted GitHub Actions</code> is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at, against a headline column of only 718px.
+That is why the cap is 2.2rem, why the logomark stacks above the headline below 56rem instead of eating 162px of the column, and why <code>gag-hero__phrase</code>'s <code>nowrap</code> releases below 44rem.</p>
+<p>Measure before changing any of the three.
+Serve the site, then in the browser console read the column against the phrase:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;.gag-hero h1&#39;</span><span class="p">);</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nx">h</span><span class="p">.</span><span class="nx">clientWidth</span><span class="p">;</span><span class="w">                                    </span><span class="c1">// column available</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nx">h</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;.gag-hero__phrase&#39;</span><span class="p">).</span><span class="nx">getBoundingClientRect</span><span class="p">().</span><span class="nx">width</span><span class="p">;</span><span class="w">  </span><span class="c1">// phrase needed</span>
 </code></pre></div>
-<p>Sweep the viewport widths, not just your own — the binding case is ~1200px, where
-the logomark hits its 132px size cap while the hero is already at its 44rem max.
-Editing the headline <strong>text</strong> is subject to the same arithmetic: a phrase longer
-than 26 characters needs the cap lowered again, or it will overrun the column.</p>
+<p>Sweep the viewport widths, not just your own — the binding case is ~1200px, where the logomark hits its 132px size cap while the hero is already at its 44rem max.
+Editing the headline <strong>text</strong> is subject to the same arithmetic: a phrase longer than 26 characters needs the cap lowered again, or it will overrun the column.</p>
 <h3 id="measure-the-render-the-source-cannot-answer-these-questions">Measure the render; the source cannot answer these questions<a class="headerlink" href="#measure-the-render-the-source-cannot-answer-these-questions" title="Permanent link">&para;</a></h3>
-<p>Every layout defect found in the 2026-08 marketing review was invisible in the
-Markdown and the CSS, and obvious in one measurement: tile heights, bullet
-wrapping, separator size, an alignment axis, a <code>display: flex</code> that turned prose
-into non-wrapping flex items, and 24px of horizontal scroll. <strong><code>make check</code> does
-not build the site</strong>, so nothing gates any of it. Run <code>make docs-serve</code> and
-measure.</p>
-<p><strong>Sweep the defect class, not the reported instance.</strong> This is the expensive
-lesson. One tile was reported as too tall; measuring only that tile missed a
-duplicated component on a second page, a wall of six admonitions, and two
-overflow bugs, which then arrived as separate rounds of feedback. When a visual
-problem is reported, probe every instance of its class on every page that uses
-the component.</p>
-<p>Four probes cover most of it. Each returns <code>[]</code> or <code>0</code> when the page is clean:</p>
+<p>Every layout defect found in the 2026-08 marketing review was invisible in the Markdown and the CSS, and obvious in one measurement: tile heights, bullet wrapping, separator size, an alignment axis, a <code>display: flex</code> that turned prose into non-wrapping flex items, and 24px of horizontal scroll. <strong><code>make check</code> does not build the site</strong>, so nothing gates any of it.
+Run <code>make docs-serve</code> and measure.</p>
+<p><strong>Sweep the defect class, not the reported instance.</strong> This is the expensive lesson.
+One tile was reported as too tall; measuring only that tile missed a duplicated component on a second page, a wall of six admonitions, and two overflow bugs, which then arrived as separate rounds of feedback.
+When a visual problem is reported, probe every instance of its class on every page that uses the component.</p>
+<p>Four probes cover most of it.
+Each returns <code>[]</code> or <code>0</code> when the page is clean:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">// make docs-serve, then at 1440px on the page under review</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1">// 1. bullets that wrap (see the budgets below)</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">&#39;.gag-pillars li li&#39;</span><span class="p">)]</span>
@@ -3494,23 +3339,16 @@ the component.</p>
 <a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">document</span><span class="p">.</span><span class="nx">createRange</span><span class="p">();</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">selectNodeContents</span><span class="p">(</span><span class="nx">s</span><span class="p">);</span>
 <a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">              </span><span class="k">return</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">getClientRects</span><span class="p">().</span><span class="nx">length</span><span class="p">;</span><span class="w"> </span><span class="p">});</span>
 </code></pre></div>
-<p>Two cautions learned the hard way. Measuring a string's width by building a
-probe span from <code>getComputedStyle(...).font</code> under-reported by 40% against the
-real render; use a <code>Range</code> over the actual node instead. And resizing the
-<em>parent</em> proves nothing about an element sized in <code>vw</code> units, which only a real
-viewport resize will change.</p>
-<p><strong>A shared component must not carry near-identical content on two pages.</strong> The
-landing page and <code>why-gag.md</code> both ran a <code>.gag-stats</code> band whose first and third
-tiles matched verbatim, number and lead text alike, so the comparison page read
-as a repeat of the landing page. The band was removed from <code>why-gag.md</code> rather
-than reworded, because the diagram above it and the table below it already
-carried that argument. Only <code>docs/index.md</code> and <code>docs/why-gag.md</code> use these
-components, so the check is a diff of two files.</p>
+<p>Two cautions learned the hard way.
+Measuring a string's width by building a probe span from <code>getComputedStyle(...).font</code> under-reported by 40% against the real render; use a <code>Range</code> over the actual node instead.
+And resizing the <em>parent</em> proves nothing about an element sized in <code>vw</code> units, which only a real viewport resize will change.</p>
+<p><strong>A shared component must not carry near-identical content on two pages.</strong> The landing page and <code>why-gag.md</code> both ran a <code>.gag-stats</code> band whose first and third tiles matched verbatim, number and lead text alike, so the comparison page read as a repeat of the landing page.
+The band was removed from <code>why-gag.md</code> rather than reworded, because the diagram above it and the table below it already carried that argument.
+Only <code>docs/index.md</code> and <code>docs/why-gag.md</code> use these components, so the check is a diff of two files.</p>
 <h3 id="card-bullets-fit-on-one-line">Card bullets fit on one line<a class="headerlink" href="#card-bullets-fit-on-one-line" title="Permanent link">&para;</a></h3>
-<p>Every bullet inside a <code>.gag-pillars</code> card renders on a single line. The grid is a
-scanning surface: one wrapped bullet reads as prose among labels, so the copy is
-written to the column rather than the column widened to the copy. Two column
-widths exist, both measured at 1440px with mixed-case prose:</p>
+<p>Every bullet inside a <code>.gag-pillars</code> card renders on a single line.
+The grid is a scanning surface: one wrapped bullet reads as prose among labels, so the copy is written to the column rather than the column widened to the copy.
+Two column widths exist, both measured at 1440px with mixed-case prose:</p>
 <table>
 <thead>
 <tr>
@@ -3535,31 +3373,25 @@ widths exist, both measured at 1440px with mixed-case prose:</p>
 </tr>
 </tbody>
 </table>
-<p>Count the <strong>rendered</strong> text: link text without its URL, code spans without their
-backticks. The budget is a proxy rather than arithmetic, because the body face is
-proportional: the same column takes 90 narrow characters, 25 wide ones, and 42
-inside a code span. Treat a bullet within a few characters of its budget as
-unverified.</p>
-<p>An expansion that does not fit is the wrong fix, not the bullet's fault. Prefer
-the plain term over <code>Term (ACR)</code> in a card, and bind the acronym in prose
-elsewhere on the page, where the layout imposes no budget. Where no such prose
-exists, let the linked detail page carry the definition.</p>
-<p>Verify by rendering. Reading the Markdown cannot answer this question, and
-neither can counting characters:</p>
+<p>Count the <strong>rendered</strong> text: link text without its URL, code spans without their backticks.
+The budget is a proxy rather than arithmetic, because the body face is proportional: the same column takes 90 narrow characters, 25 wide ones, and 42 inside a code span.
+Treat a bullet within a few characters of its budget as unverified.</p>
+<p>An expansion that does not fit is the wrong fix, not the bullet's fault.
+Prefer the plain term over <code>Term (ACR)</code> in a card, and bind the acronym in prose elsewhere on the page, where the layout imposes no budget.
+Where no such prose exists, let the linked detail page carry the definition.</p>
+<p>Verify by rendering.
+Reading the Markdown cannot answer this question, and neither can counting characters:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// make docs-serve, then on / or /why-gag/</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">&#39;.gag-pillars li li&#39;</span><span class="p">)]</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">b</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">round</span><span class="p">(</span><span class="nx">b</span><span class="p">.</span><span class="nx">getBoundingClientRect</span><span class="p">().</span><span class="nx">height</span><span class="w"> </span><span class="o">/</span>
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">                          </span><span class="nb">parseFloat</span><span class="p">(</span><span class="nx">getComputedStyle</span><span class="p">(</span><span class="nx">b</span><span class="p">).</span><span class="nx">lineHeight</span><span class="p">))</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">1</span><span class="p">)</span>
 <a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">b</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">b</span><span class="p">.</span><span class="nx">innerText</span><span class="p">.</span><span class="nx">trim</span><span class="p">());</span><span class="w">   </span><span class="c1">// must be []</span>
 </code></pre></div>
-<p>Below roughly 1440px the cards narrow and bullets wrap whatever the copy says, so
-the invariant is defined at full width on a laptop, where the grid is three
-across. Only <code>docs/index.md</code> and <code>docs/why-gag.md</code> use these cards.</p>
+<p>Below roughly 1440px the cards narrow and bullets wrap whatever the copy says, so the invariant is defined at full width on a laptop, where the grid is three across.
+Only <code>docs/index.md</code> and <code>docs/why-gag.md</code> use these cards.</p>
 <h3 id="stat-tile-labels-are-budgeted-by-the-longest-one-in-the-row">Stat-tile labels are budgeted by the longest one in the row<a class="headerlink" href="#stat-tile-labels-are-budgeted-by-the-longest-one-in-the-row" title="Permanent link">&para;</a></h3>
-<p><code>.gag-stats</code> is a four-across grid of height-equalised tiles, so <strong>the longest
-label sets the height of every tile in the row</strong> and the short ones pay for it in
-whitespace. This is the failure the tile author never sees: their own tile looks
-fine, and the damage lands on their neighbours.</p>
+<p><code>.gag-stats</code> is a four-across grid of height-equalised tiles, so <strong>the longest label sets the height of every tile in the row</strong> and the short ones pay for it in whitespace.
+This is the failure the tile author never sees: their own tile looks fine, and the damage lands on their neighbours.</p>
 <p>Measured at 1440px, where each tile is ~306px wide:</p>
 <table>
 <thead>
@@ -3585,10 +3417,8 @@ fine, and the damage lands on their neighbours.</p>
 </tr>
 </tbody>
 </table>
-<p>Keep every label in the row within roughly <strong>86 to 120 characters</strong> and within
-about 35 characters of each other. A label that needs more than that is making an
-argument, and an argument belongs in prose or a table rather than in a tile whose
-whole job is to be glanced at.</p>
+<p>Keep every label in the row within roughly <strong>86 to 120 characters</strong> and within about 35 characters of each other.
+A label that needs more than that is making an argument, and an argument belongs in prose or a table rather than in a tile whose whole job is to be glanced at.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// make docs-serve, then on /</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">&#39;.gag-stat&#39;</span><span class="p">)];</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">max</span><span class="p">(...</span><span class="nx">t</span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">x</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">x</span><span class="p">.</span><span class="nx">getBoundingClientRect</span><span class="p">().</span><span class="nx">height</span><span class="p">));</span>
@@ -3598,17 +3428,12 @@ whole job is to be glanced at.</p>
 <a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">                         </span><span class="o">+</span><span class="w"> </span><span class="nx">x</span><span class="p">.</span><span class="nx">getBoundingClientRect</span><span class="p">().</span><span class="nx">top</span><span class="p">)]);</span>
 <a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1">// third column is dead space in px; a large spread means the row is unbalanced</span>
 </code></pre></div>
-<p><strong>Two pages must not carry near-identical bands.</strong> <code>index.md</code> and <code>why-gag.md</code>
-both used one, and two of the four tiles matched verbatim, number and lead text
-alike, so the comparison page read as a repeat of the landing page. The band was
-removed from <code>why-gag.md</code> rather than reworded: the outcome flow diagram above it
-and the capability table below it already carried the same argument twice.</p>
+<p><strong>Two pages must not carry near-identical bands.</strong> <code>index.md</code> and <code>why-gag.md</code> both used one, and two of the four tiles matched verbatim, number and lead text alike, so the comparison page read as a repeat of the landing page.
+The band was removed from <code>why-gag.md</code> rather than reworded: the outcome flow diagram above it and the capability table below it already carried the same argument twice.</p>
 <h3 id="interface-rules-the-custom-layer-must-satisfy">Interface rules the custom layer must satisfy<a class="headerlink" href="#interface-rules-the-custom-layer-must-satisfy" title="Permanent link">&para;</a></h3>
-<p>Material owns the page chrome and handles its own controls. The <code>gag-</code>,
-<code>persona-</code> and <code>backlog-</code> components are hand-built on top of it, so nothing
-checks their hit targets, contrast, or animation properties but this page. Each
-rule below was measured against the render on 2026-08-08, and each has a probe
-because none of them can be answered by reading the source.</p>
+<p>Material owns the page chrome and handles its own controls.
+The <code>gag-</code>, <code>persona-</code> and <code>backlog-</code> components are hand-built on top of it, so nothing checks their hit targets, contrast, or animation properties but this page.
+Each rule below was measured against the render on 2026-08-08, and each has a probe because none of them can be answered by reading the source.</p>
 <table>
 <thead>
 <tr>
@@ -3640,17 +3465,9 @@ because none of them can be answered by reading the source.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Check the dark palette separately, and expect it to be the worse one.</strong>
-Material's muted-text token is near-symmetric in alpha and not in perceived
-contrast: <code>--md-default-fg-color--light</code> is <code>rgba(0, 0, 0, 0.54)</code> over white,
-which composites to <code>#757575</code> for <code>Lc 72</code>, and <code>rgba(226, 228, 233, 0.56)</code> over
-slate's <code>#1e2129</code>, which composites to <code>#8c8e95</code> for <code>Lc 39.4</code>. A component
-inheriting it loses 32.6 points when the reader flips the palette, with nothing
-in the source to show it.</p>
-<p>That is why secondary text and accent labels take <code>--gag-muted</code> and
-<code>--gag-accent-ink</code> rather than the Material tokens, on the same ink/fill split
-as <code>--gag-win-ink</code>. <strong>Use them for any custom rule setting <code>color</code></strong>; a new rule
-reaching for <code>--md-default-fg-color--light</code> reintroduces the asymmetry silently.</p>
+<p><strong>Check the dark palette separately, and expect it to be the worse one.</strong> Material's muted-text token is near-symmetric in alpha and not in perceived contrast: <code>--md-default-fg-color--light</code> is <code>rgba(0, 0, 0, 0.54)</code> over white, which composites to <code>#757575</code> for <code>Lc 72</code>, and <code>rgba(226, 228, 233, 0.56)</code> over slate's <code>#1e2129</code>, which composites to <code>#8c8e95</code> for <code>Lc 39.4</code>.
+A component inheriting it loses 32.6 points when the reader flips the palette, with nothing in the source to show it.</p>
+<p>That is why secondary text and accent labels take <code>--gag-muted</code> and <code>--gag-accent-ink</code> rather than the Material tokens, on the same ink/fill split as <code>--gag-win-ink</code>. <strong>Use them for any custom rule setting <code>color</code></strong>; a new rule reaching for <code>--md-default-fg-color--light</code> reintroduces the asymmetry silently.</p>
 <table>
 <thead>
 <tr>
@@ -3672,31 +3489,17 @@ reaching for <code>--md-default-fg-color--light</code> reintroduces the asymmetr
 </tr>
 </tbody>
 </table>
-<p><strong>The dark values are capped, not chosen.</strong> Slate's own body text is only
-<code>Lc 66.9</code>, so muted prose that reached 75 would out-contrast the body copy it is
-meant to sit beneath. 55.6 and 61.5 are the most those tokens can carry while
-the hierarchy holds; raising the ceiling means raising Material's palette, which
-is Q734. Dark therefore still reads below the body-text floor, by design and on
-the record.</p>
-<p>Two things the rule does <strong>not</strong> cover. A short badge label (the five
-<a href="#marketing-badges">marketing badges</a>, measured Lc 64.2 to 71.1 on their own
-chip backgrounds) is spot text a reader recognises rather than reads, so the
-body-text floor is the wrong bar for it. And an icon carries the non-text bar,
-not this one.</p>
-<p><strong>A new badge is measured into that band, not chosen to look like it.</strong> The
-three added in 2026-08 (<code>.gag-release-chip</code> 69.4/64.6, <code>.gag-new-badge</code>
-70.3/64.2, <code>.gag-tier-badge</code> 70.9/64.3, light/dark) were computed by
-compositing each chip's <code>rgba</code> fill over the page background and running the
-APCA formula below over the pair: the same arithmetic the in-page probe does,
-which is why the reimplementation was first checked against every published
-anchor on this page (106, 63.1, 0, 75.2, 81.4, 39.4) before any of its verdicts
-were believed. The tier badge's first dark ink landed at 57.8 and was lightened
-until it cleared the band; nothing about the source said so.</p>
-<p><strong>Known residue, so the sweep is not read as a pass/fail gate.</strong> APCA asks
-<code>Lc</code> 90 of 16px regular-weight prose, and muted text that reached 90 on white
-would be <code>#4a4a4a</code>: no longer muted, and no longer distinguishable from body
-copy. The tokens above deliberately stop short. What that leaves, measured on
-<code>/why-gag/</code>:</p>
+<p><strong>The dark values are capped, not chosen.</strong> Slate's own body text is only <code>Lc 66.9</code>, so muted prose that reached 75 would out-contrast the body copy it is meant to sit beneath.
+55.6 and 61.5 are the most those tokens can carry while the hierarchy holds; raising the ceiling means raising Material's palette, which is Q734.
+Dark therefore still reads below the body-text floor, by design and on the record.</p>
+<p>Two things the rule does <strong>not</strong> cover.
+A short badge label (the five <a href="#marketing-badges">marketing badges</a>, measured Lc 64.2 to 71.1 on their own chip backgrounds) is spot text a reader recognises rather than reads, so the body-text floor is the wrong bar for it.
+And an icon carries the non-text bar, not this one.</p>
+<p><strong>A new badge is measured into that band, not chosen to look like it.</strong> The three added in 2026-08 (<code>.gag-release-chip</code> 69.4/64.6, <code>.gag-new-badge</code> 70.3/64.2, <code>.gag-tier-badge</code> 70.9/64.3, light/dark) were computed by compositing each chip's <code>rgba</code> fill over the page background and running the APCA formula below over the pair: the same arithmetic the in-page probe does, which is why the reimplementation was first checked against every published anchor on this page (106, 63.1, 0, 75.2, 81.4, 39.4) before any of its verdicts were believed.
+The tier badge's first dark ink landed at 57.8 and was lightened until it cleared the band; nothing about the source said so.</p>
+<p><strong>Known residue, so the sweep is not read as a pass/fail gate.</strong> APCA asks <code>Lc</code> 90 of 16px regular-weight prose, and muted text that reached 90 on white would be <code>#4a4a4a</code>: no longer muted, and no longer distinguishable from body copy.
+The tokens above deliberately stop short.
+What that leaves, measured on <code>/why-gag/</code>:</p>
 <table>
 <thead>
 <tr>
@@ -3718,10 +3521,9 @@ copy. The tokens above deliberately stop short. What that leaves, measured on
 </tr>
 </tbody>
 </table>
-<p>Treat the sweep as a <strong>comparison against these numbers</strong>, not as a list that
-must be empty. A new entry, or an existing one that drops, is the finding.</p>
-<p><code>getComputedStyle</code> returns the token unresolved, so the alpha has to be
-composited against the real ancestor background before it means anything:</p>
+<p>Treat the sweep as a <strong>comparison against these numbers</strong>, not as a list that must be empty.
+A new entry, or an existing one that drops, is the finding.</p>
+<p><code>getComputedStyle</code> returns the token unresolved, so the alpha has to be composited against the real ancestor background before it means anything:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1">// make docs-serve, then on any page. Returns [] when the page is clean.</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">apca</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">                       </span><span class="c1">// APCA 0.98G-4g</span>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">Y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">c</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">v</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">(</span><span class="nx">v</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">255</span><span class="p">)</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mf">2.4</span><span class="p">;</span>
@@ -3758,13 +3560,9 @@ composited against the real ancestor background before it means anything:</p>
 <a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="w">    </span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">Lc</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">need</span><span class="p">);</span>
 <a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a><span class="p">});</span>
 </code></pre></div>
-<p>Sanity-check any reimplementation against the published anchors before trusting
-a verdict: black on white is <code>Lc 106</code>, <code>#888</code> on white is <code>Lc 63.1</code>, and white on
-white is <code>0</code>.</p>
-<p>The animation rule needs its own gate, because <code>transitionProperty</code> computes to
-<code>all</code> on <strong>every</strong> element that has no transition at all. Reading it directly
-reports the entire DOM as a violation, which is indistinguishable from a real
-finding until you notice the count:</p>
+<p>Sanity-check any reimplementation against the published anchors before trusting a verdict: black on white is <code>Lc 106</code>, <code>#888</code> on white is <code>Lc 63.1</code>, and white on white is <code>0</code>.</p>
+<p>The animation rule needs its own gate, because <code>transitionProperty</code> computes to <code>all</code> on <strong>every</strong> element that has no transition at all.
+Reading it directly reports the entire DOM as a violation, which is indistinguishable from a real finding until you notice the count:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">&#39;[class*=&quot;gag-&quot;], [class*=&quot;persona-&quot;]&#39;</span><span class="p">)].</span><span class="nx">flatMap</span><span class="p">(</span><span class="nx">el</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">cs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">getComputedStyle</span><span class="p">(</span><span class="nx">el</span><span class="p">);</span>
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">durs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">cs</span><span class="p">.</span><span class="nx">transitionDuration</span><span class="p">.</span><span class="nx">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">).</span><span class="nx">map</span><span class="p">(</span><span class="nb">parseFloat</span><span class="p">);</span>
@@ -3775,31 +3573,20 @@ finding until you notice the count:</p>
 <a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">el</span><span class="p">.</span><span class="nx">className</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot; → &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">p</span><span class="p">);</span>
 <a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="p">});</span><span class="w">                                                            </span><span class="c1">// must be []</span>
 </code></pre></div>
-<p><strong><code>rem</code> is 20px here, not 16px.</strong> Material sets the root to 125%, so a source
-read of <code>font-size: 0.95rem</code> on the calculator inputs suggests 15.2px and a
-mobile Safari zoom-on-focus, and the render is 19px with no zoom. Convert
-against 20px, or measure, before filing a size finding.</p>
+<p><strong><code>rem</code> is 20px here, not 16px.</strong> Material sets the root to 125%, so a source read of <code>font-size: 0.95rem</code> on the calculator inputs suggests 15.2px and a mobile Safari zoom-on-focus, and the render is 19px with no zoom.
+Convert against 20px, or measure, before filing a size finding.</p>
 <h2 id="local-preview">Local preview<a class="headerlink" href="#local-preview" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
 </code></pre></div>
-<p>Both targets provision an <strong>isolated venv</strong> (<code>.venv-docs/</code>, gitignored) from the
-pinned <code>requirements-docs.txt</code> and reuse it across runs, so the docs toolchain
-never touches the host Python — <code>python3</code> is the only host prerequisite
-(<code>scripts/ci/check-tools.sh</code>, extended tier). On Debian/Ubuntu the stdlib venv
-module ships separately: <code>apt-get install python3-venv</code> if <code>python3 -m venv</code>
-fails.</p>
-<p>The toolchain is pinned <strong>exactly</strong> — MkDocs 2.0 is incompatible with Material 9.x,
-so don't float the versions in <code>requirements-docs.txt</code>.</p>
-<p><strong><code>make check</code> does not run <code>make docs-build</code>.</strong> The fast gate covers <code>doc-links</code>,
-which resolves links and anchors against the Markdown; MkDocs' own strict
-validation runs in CI (<code>pages.yml</code>) and locally only when you invoke it. A change
-that alters rendering is therefore not verified by a green <code>make check</code> alone.
-Run <code>make docs-build</code> too, and for the card grids or a wide table, serve the site
-and look.</p>
+<p>Both targets provision an <strong>isolated venv</strong> (<code>.venv-docs/</code>, gitignored) from the pinned <code>requirements-docs.txt</code> and reuse it across runs, so the docs toolchain never touches the host Python — <code>python3</code> is the only host prerequisite (<code>scripts/ci/check-tools.sh</code>, extended tier).
+On Debian/Ubuntu the stdlib venv module ships separately: <code>apt-get install python3-venv</code> if <code>python3 -m venv</code> fails.</p>
+<p>The toolchain is pinned <strong>exactly</strong> — MkDocs 2.0 is incompatible with Material 9.x, so don't float the versions in <code>requirements-docs.txt</code>.</p>
+<p><strong><code>make check</code> does not run <code>make docs-build</code>.</strong> The fast gate covers <code>doc-links</code>, which resolves links and anchors against the Markdown; MkDocs' own strict validation runs in CI (<code>pages.yml</code>) and locally only when you invoke it.
+A change that alters rendering is therefore not verified by a green <code>make check</code> alone.
+Run <code>make docs-build</code> too, and for the card grids or a wide table, serve the site and look.</p>
 <h2 id="the-two-link-gates">The two link gates<a class="headerlink" href="#the-two-link-gates" title="Permanent link">&para;</a></h2>
-<p><code>docs/</code> is rendered by two engines with different link semantics, so <strong>one gate
-cannot cover both</strong> (Q560):</p>
+<p><code>docs/</code> is rendered by two engines with different link semantics, so <strong>one gate cannot cover both</strong> (Q560):</p>
 <table>
 <thead>
 <tr>
@@ -3821,43 +3608,25 @@ cannot cover both</strong> (Q560):</p>
 </tr>
 </tbody>
 </table>
-<p>The first gate reads the MkDocs dialect even though it answers for GitHub: its
-parser handles <code>!!!</code> admonition bodies and <code>markdown="1"</code> HTML, so a link inside
-one is checked rather than silently skipped as an indented code block (Q612).</p>
-<p>Two engines, two gates. <code>docs/releases/</code> is the exception that needs a third:
-those files publish to neither, and their links are all absolute into the
-versioned site, so <code>make release-links-check</code> resolves them against a local
-<code>site/</code> build (<a href="../testing/#the-release-link-gate">testing.md § The release-link gate</a>).</p>
-<p>A link can pass one and 404 on the other. Three divergences have actually shipped
-broken:</p>
+<p>The first gate reads the MkDocs dialect even though it answers for GitHub: its parser handles <code>!!!</code> admonition bodies and <code>markdown="1"</code> HTML, so a link inside one is checked rather than silently skipped as an indented code block (Q612).</p>
+<p>Two engines, two gates. <code>docs/releases/</code> is the exception that needs a third: those files publish to neither, and their links are all absolute into the versioned site, so <code>make release-links-check</code> resolves them against a local <code>site/</code> build (<a href="../testing/#the-release-link-gate">testing.md § The release-link gate</a>).</p>
+<p>A link can pass one and 404 on the other.
+Three divergences have actually shipped broken:</p>
 <ul>
-<li><strong>Duplicate headings.</strong> Both engines de-duplicate repeated heading slugs, with
-  different suffixes: GitHub writes <code>#rollback-1</code>, Python-Markdown writes
-  <code>#rollback_1</code>. Neither suffix is configurable, so <strong>make the headings unique</strong>
-  rather than linking a generated suffix — four <code>### Rollback</code> sections became
-  <code>### GMC rollback</code>, <code>### AGC rollback</code>, and so on. A duplicate heading is also
-  how a repo-local TOC silently lies: two entries resolve to the same anchor and
-  both gates pass.</li>
-<li><strong>Bare <code>dir/</code> targets.</strong> GitHub renders <code>[x](examples/policies/)</code> as that
-  directory's <code>README.md</code>; MkDocs has no directory to serve, leaves the link
-  alone, and it resolves under the <em>page</em> URL. Link the <code>README.md</code> explicitly —
-  MkDocs maps it to the section index, so both renderings work.</li>
-<li><strong>Angle brackets in a heading.</strong> Python-Markdown strips <code>&lt;field&gt;</code> as an HTML
-  tag before slugging; GitHub keeps the word and drops only the brackets. Spell
-  placeholders without <code>&lt;&gt;</code>.</li>
+<li><strong>Duplicate headings.</strong> Both engines de-duplicate repeated heading slugs, with different suffixes: GitHub writes <code>#rollback-1</code>, Python-Markdown writes <code>#rollback_1</code>.
+  Neither suffix is configurable, so <strong>make the headings unique</strong> rather than linking a generated suffix — four <code>### Rollback</code> sections became <code>### GMC rollback</code>, <code>### AGC rollback</code>, and so on.
+  A duplicate heading is also how a repo-local TOC silently lies: two entries resolve to the same anchor and both gates pass.</li>
+<li><strong>Bare <code>dir/</code> targets.</strong> GitHub renders <code>[x](examples/policies/)</code> as that directory's <code>README.md</code>; MkDocs has no directory to serve, leaves the link alone, and it resolves under the <em>page</em> URL.
+  Link the <code>README.md</code> explicitly — MkDocs maps it to the section index, so both renderings work.</li>
+<li><strong>Angle brackets in a heading.</strong> Python-Markdown strips <code>&lt;field&gt;</code> as an HTML tag before slugging; GitHub keeps the word and drops only the brackets.
+  Spell placeholders without <code>&lt;&gt;</code>.</li>
 </ul>
-<p>Only the PR gate is strict. The deploy job builds a tag's own docs, and a release
-cut before this gate existed must stay publishable.</p>
-<p><code>mkdocs.yml</code>'s <code>validation</code> block is what makes this fail at all: MkDocs reports
-these as INFO by default, invisible under a green build. The same block raises
-<code>nav.omitted_files</code> for the nav-coverage gate
-(<a href="#what-belongs-in-nav">§ What belongs in <code>nav</code></a>); <code>absolute_links</code> and
-<code>nav.not_found</code> keep their defaults deliberately, the latter because it already
-defaults to <code>warn</code>.</p>
-<p>Neither gate covers a link to a page the build's own scope excludes — MkDocs
-clamps that one below warning level whatever <code>validation</code> says. That is
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a>'s job instead; see
-<a href="#unpublished-is-per-build-not-per-path-q561">§ Unpublished is per build, not per path</a>.</p>
+<p>Only the PR gate is strict.
+The deploy job builds a tag's own docs, and a release cut before this gate existed must stay publishable.</p>
+<p><code>mkdocs.yml</code>'s <code>validation</code> block is what makes this fail at all: MkDocs reports these as INFO by default, invisible under a green build.
+The same block raises <code>nav.omitted_files</code> for the nav-coverage gate (<a href="#what-belongs-in-nav">§ What belongs in <code>nav</code></a>); <code>absolute_links</code> and <code>nav.not_found</code> keep their defaults deliberately, the latter because it already defaults to <code>warn</code>.</p>
+<p>Neither gate covers a link to a page the build's own scope excludes — MkDocs clamps that one below warning level whatever <code>validation</code> says.
+That is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a>'s job instead; see <a href="#unpublished-is-per-build-not-per-path-q561">§ Unpublished is per build, not per path</a>.</p>
 <h2 id="publication-scope">Publication scope<a class="headerlink" href="#publication-scope" title="Permanent link">&para;</a></h2>
 <p>Scope is <strong>per version</strong>, not per site (Q558):</p>
 <table>
@@ -3882,88 +3651,46 @@ clamps that one below warning level whatever <code>validation</code> says. That 
 </tr>
 </tbody>
 </table>
-<p>A release is a frozen build, so a backlog published in one would be a snapshot
-stale from tag day. <code>dev</code> redeploys on every push to <code>main</code>, which is the only
-place a live backlog is honest.</p>
-<p>One env var carries the difference. <code>mkdocs.yml</code>'s <code>exclude_docs</code> is an
-<a href="https://www.mkdocs.org/user-guide/configuration/#environment-variables"><code>!ENV</code> tag</a>
-whose <strong>default</strong> is the full repo-internal exclusion list; the <code>dev</code> deploy step
-in <code>pages.yml</code> overrides <code>MKDOCS_EXCLUDE_DOCS</code> with a shorter one. Release
-deploys never set it, so no release version — existing or future — can gain a
-repo-internal page.</p>
+<p>A release is a frozen build, so a backlog published in one would be a snapshot stale from tag day. <code>dev</code> redeploys on every push to <code>main</code>, which is the only place a live backlog is honest.</p>
+<p>One env var carries the difference. <code>mkdocs.yml</code>'s <code>exclude_docs</code> is an <a href="https://www.mkdocs.org/user-guide/configuration/#environment-variables"><code>!ENV</code> tag</a> whose <strong>default</strong> is the full repo-internal exclusion list; the <code>dev</code> deploy step in <code>pages.yml</code> overrides <code>MKDOCS_EXCLUDE_DOCS</code> with a shorter one.
+Release deploys never set it, so no release version — existing or future — can gain a repo-internal page.</p>
 <p>Two traps worth keeping in mind when editing that wiring:</p>
 <ul>
-<li><strong>Unset and empty mean opposite things.</strong> The <code>!ENV</code> default applies only when
-  the variable is <em>absent</em>. <code>pages.yml</code> therefore <code>export</code>s it inside a
-  conditional rather than using a step-level <code>env:</code> with a
-  <code>${{ … &amp;&amp; … || '' }}</code> expression, which would set it to <code>''</code> on every release
-  and publish the internal docs everywhere.</li>
-<li><strong><code>docs/README.md</code> stays excluded on every version</strong>, including <code>dev</code>. MkDocs
-  drops it anyway as a conflict with the <code>index.md</code> landing page; leaving it in
-  the list keeps that from surfacing as a build warning. Because it is never a
-  site page, a doc that links to it must use the absolute <code>github.com</code> URL — a
-  relative <code>../README.md</code> fails <code>mkdocs build --strict</code>.</li>
-<li><strong><code>docs/releases/</code> is excluded on every version too</strong>, and it is the one entry
-  that is not a repo-internal-vs-operator split: those files are GitHub Release
-  bodies, authored for github.com's comment-flavour renderer. Their GFM alerts
-  (<code>&gt; [!WARNING]</code>) have no MkDocs equivalent and would publish as literal text,
-  and their links already point into the versioned site. The exclusion is spelled
-  out in <strong>four</strong> places that must agree — <code>mkdocs.yml</code>'s default, the two <code>env:</code>
-  blocks and the one <code>export</code> in <code>pages.yml</code>, and <code>scripts/docs/docs-preview.sh</code>.
+<li><strong>Unset and empty mean opposite things.</strong> The <code>!ENV</code> default applies only when the variable is <em>absent</em>. <code>pages.yml</code> therefore <code>export</code>s it inside a conditional rather than using a step-level <code>env:</code> with a <code>${{ … &amp;&amp; … || '' }}</code> expression, which would set it to <code>''</code> on every release and publish the internal docs everywhere.</li>
+<li><strong><code>docs/README.md</code> stays excluded on every version</strong>, including <code>dev</code>.
+  MkDocs drops it anyway as a conflict with the <code>index.md</code> landing page; leaving it in the list keeps that from surfacing as a build warning.
+  Because it is never a site page, a doc that links to it must use the absolute <code>github.com</code> URL — a relative <code>../README.md</code> fails <code>mkdocs build --strict</code>.</li>
+<li><strong><code>docs/releases/</code> is excluded on every version too</strong>, and it is the one entry that is not a repo-internal-vs-operator split: those files are GitHub Release bodies, authored for github.com's comment-flavour renderer.
+  Their GFM alerts (<code>&gt; [!WARNING]</code>) have no MkDocs equivalent and would publish as literal text, and their links already point into the versioned site.
+  The exclusion is spelled out in <strong>four</strong> places that must agree — <code>mkdocs.yml</code>'s default, the two <code>env:</code> blocks and the one <code>export</code> in <code>pages.yml</code>, and <code>scripts/docs/docs-preview.sh</code>.
   Miss the last and <code>make docs-build</code> disagrees with CI.</li>
 </ul>
-<p>PR builds validate <strong>both</strong> scopes (<code>pages.yml</code>'s <code>build</code> job runs <code>mkdocs build</code>
-twice), so a PR that breaks a plan or development page fails there rather than on
-<code>main</code>. <code>make docs-build</code> does the same locally — see
-<a href="#the-two-link-gates">§ The two link gates</a>.</p>
-<p>A push to <code>main</code> re-runs that gate (<code>pages.yml</code>'s <code>validate</code> job), because a PR
-gate only ever sees its own base. Two PRs open at once can each pass and still
-merge into a red <code>main</code> — Q560 raised the link validation to warnings while Q558
-added a link that trips it, and the breakage surfaced two hours later on an
-unrelated docs PR (Q562). <code>validate</code> runs beside the deploy rather than gating
-it: the point is a red status on <code>main</code>, not a stalled <code>dev</code> version.</p>
+<p>PR builds validate <strong>both</strong> scopes (<code>pages.yml</code>'s <code>build</code> job runs <code>mkdocs build</code> twice), so a PR that breaks a plan or development page fails there rather than on <code>main</code>. <code>make docs-build</code> does the same locally — see <a href="#the-two-link-gates">§ The two link gates</a>.</p>
+<p>A push to <code>main</code> re-runs that gate (<code>pages.yml</code>'s <code>validate</code> job), because a PR gate only ever sees its own base.
+Two PRs open at once can each pass and still merge into a red <code>main</code> — Q560 raised the link validation to warnings while Q558 added a link that trips it, and the breakage surfaced two hours later on an unrelated docs PR (Q562). <code>validate</code> runs beside the deploy rather than gating it: the point is a red status on <code>main</code>, not a stalled <code>dev</code> version.</p>
 <h3 id="what-belongs-in-nav">What belongs in <code>nav</code><a class="headerlink" href="#what-belongs-in-nav" title="Permanent link">&para;</a></h3>
-<p>The <code>nav</code> is the operator-facing table of contents, so a published page is
-either in it or declared in <code>not_in_nav</code>. Two kinds are declared:</p>
+<p>The <code>nav</code> is the operator-facing table of contents, so a published page is either in it or declared in <code>not_in_nav</code>.
+Two kinds are declared:</p>
 <ul>
-<li>the repo-internal tree the <code>dev</code> version publishes (<code>STATUS.md</code>, <code>plan/</code>,
-  <code>development/</code>), reachable by URL, by search, and from the roadmap's backlog
-  link;</li>
-<li><code>operations/examples/</code>, sample manifests reached from the page that explains
-  them (<a href="../../operations/admission-policies/">admission-policies.md</a>) rather
-  than browsed from the TOC.</li>
+<li>the repo-internal tree the <code>dev</code> version publishes (<code>STATUS.md</code>, <code>plan/</code>, <code>development/</code>), reachable by URL, by search, and from the roadmap's backlog link;</li>
+<li><code>operations/examples/</code>, sample manifests reached from the page that explains them (<a href="../../operations/admission-policies/">admission-policies.md</a>) rather than browsed from the TOC.</li>
 </ul>
-<p>Everything else in <code>nav</code>. That makes MkDocs' "pages exist in the docs directory,
-but are not included in the <code>nav</code> configuration" list the accidental omissions
-only, and <strong>the list must be empty</strong> — an entry is a page a reader can now reach
-only by search or URL. Q562 was three such pages (the admission-policy matrix,
-Appendix H, the protocol-dependency register) sitting unnoticed in it.</p>
-<p><strong>That is a gate, not a habit</strong> (Q563). MkDocs reports the list at INFO, which
-never fails a build, so <code>mkdocs.yml</code> raises <code>validation.nav.omitted_files</code> to
-<code>warn</code> and <code>--strict</code> turns it into an error — the same INFO-to-warning move
-<a href="#the-two-link-gates">§ The two link gates</a> makes for links. Add a page and
-<code>make docs-build</code> fails until it is either in <code>nav</code> or declared in <code>not_in_nav</code>:</p>
+<p>Everything else in <code>nav</code>.
+That makes MkDocs' "pages exist in the docs directory, but are not included in the <code>nav</code> configuration" list the accidental omissions only, and <strong>the list must be empty</strong> — an entry is a page a reader can now reach only by search or URL.
+Q562 was three such pages (the admission-policy matrix, Appendix H, the protocol-dependency register) sitting unnoticed in it.</p>
+<p><strong>That is a gate, not a habit</strong> (Q563).
+MkDocs reports the list at INFO, which never fails a build, so <code>mkdocs.yml</code> raises <code>validation.nav.omitted_files</code> to <code>warn</code> and <code>--strict</code> turns it into an error — the same INFO-to-warning move <a href="#the-two-link-gates">§ The two link gates</a> makes for links.
+Add a page and <code>make docs-build</code> fails until it is either in <code>nav</code> or declared in <code>not_in_nav</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>The following pages exist in the docs directory, but are not included in the &quot;nav&quot; configuration:
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>  - operations/your-new-page.md
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>Aborted with 1 warnings in strict mode!
 </code></pre></div>
-<p>Both scopes are checked, because nav coverage is decided per build: a
-<code>development/</code> page is a page only on <code>dev</code>, so the release-scope build cannot
-see it. <code>not_in_nav</code> is what suppresses the report for a deliberate omission, so
-it stays populated — the empty list is MkDocs' <em>reported</em> one, never this key.
-The one inert entry is <code>/README.md</code>: MkDocs drops <code>docs/README.md</code> as an
-<code>index.md</code> conflict before nav is evaluated, so it reaches no scope's list and is
-kept only to mirror <code>exclude_docs</code>.</p>
+<p>Both scopes are checked, because nav coverage is decided per build: a <code>development/</code> page is a page only on <code>dev</code>, so the release-scope build cannot see it. <code>not_in_nav</code> is what suppresses the report for a deliberate omission, so it stays populated — the empty list is MkDocs' <em>reported</em> one, never this key.
+The one inert entry is <code>/README.md</code>: MkDocs drops <code>docs/README.md</code> as an <code>index.md</code> conflict before nav is evaluated, so it reaches no scope's list and is kept only to mirror <code>exclude_docs</code>.</p>
 <h3 id="the-backlog-page">The backlog page<a class="headerlink" href="#the-backlog-page" title="Permanent link">&para;</a></h3>
-<p><code>docs/STATUS.md</code> renders at
-<a href="https://actions-gateway.com/dev/STATUS/"><code>/dev/STATUS/</code></a> with filter chips over
-its tables — see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>.
-The markdown file stays the single source of truth: the lint gate, the
-isolated-commit merge discipline, the <code>&lt;a id="QN"&gt;</code> anchors, and the
-<a href="../maintaining-backlog/">backlog workflow</a> all operate on the table, and the site
-is a read-only view of it.</p>
-<p><strong>How a reader reaches it.</strong> The page is deliberately absent from the <code>nav</code> (see
-<a href="#publication-scope">§ Publication scope</a>), so three routes carry the traffic:</p>
+<p><code>docs/STATUS.md</code> renders at <a href="https://actions-gateway.com/dev/STATUS/"><code>/dev/STATUS/</code></a> with filter chips over its tables — see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>.
+The markdown file stays the single source of truth: the lint gate, the isolated-commit merge discipline, the <code>&lt;a id="QN"&gt;</code> anchors, and the <a href="../maintaining-backlog/">backlog workflow</a> all operate on the table, and the site is a read-only view of it.</p>
+<p><strong>How a reader reaches it.</strong> The page is deliberately absent from the <code>nav</code> (see <a href="#publication-scope">§ Publication scope</a>), so three routes carry the traffic:</p>
 <table>
 <thead>
 <tr>
@@ -3986,43 +3713,27 @@ is a read-only view of it.</p>
 </tr>
 </tbody>
 </table>
-<p>Site search finds it too, but only <em>within</em> the <code>dev</code> version — Material's search
-index is per-version, so a search run from <code>stable</code> will never surface it.</p>
-<p><strong>Accepted wart:</strong> mike's version switcher keeps the current path, so switching
-from the backlog page to <code>stable</code> lands on a 404. That is inherent to any
-per-version page.</p>
+<p>Site search finds it too, but only <em>within</em> the <code>dev</code> version — Material's search index is per-version, so a search run from <code>stable</code> will never surface it.</p>
+<p><strong>Accepted wart:</strong> mike's version switcher keeps the current path, so switching from the backlog page to <code>stable</code> lands on a 404.
+That is inherent to any per-version page.</p>
 <h3 id="the-version-banner">The version banner<a class="headerlink" href="#the-version-banner" title="Permanent link">&para;</a></h3>
-<p>The yellow bar reading <em>"You're not viewing the latest release"</em> is the
-<code>outdated</code> block in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a>. Material
-renders that bar <strong>only when a theme override fills the block</strong> — the stock one
-is empty — so before this existed no version carried the not-canonical framing at
-all, <code>dev</code> included, despite <code>extra.version.default: stable</code> being set. Do not
-assume the version selector implies a banner; it does not.</p>
-<p><code>stable</code> is the default, so every other version shows it: the unreleased <code>dev</code>
-docs and any older release. The backlog link inside it is gated on
-<code>config.extra.backlog_page</code>, which
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> derives from the build's
-own file set rather than from a second flag that could drift out of step with
-<code>exclude_docs</code> — the link renders exactly where the page exists. An older release
-therefore gets the warning without a link that would 404.</p>
+<p>The yellow bar reading <em>"You're not viewing the latest release"</em> is the <code>outdated</code> block in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a>.
+Material renders that bar <strong>only when a theme override fills the block</strong> — the stock one is empty — so before this existed no version carried the not-canonical framing at all, <code>dev</code> included, despite <code>extra.version.default: stable</code> being set.
+Do not assume the version selector implies a banner; it does not.</p>
+<p><code>stable</code> is the default, so every other version shows it: the unreleased <code>dev</code> docs and any older release.
+The backlog link inside it is gated on <code>config.extra.backlog_page</code>, which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> derives from the build's own file set rather than from a second flag that could drift out of step with <code>exclude_docs</code> — the link renders exactly where the page exists.
+An older release therefore gets the warning without a link that would 404.</p>
 <p>Two traps if you edit that block:</p>
 <ul>
-<li><strong><code>exclude_docs</code> does not remove a file.</strong> MkDocs keeps it and marks it
-  <code>InclusionLevel.EXCLUDED</code>, so presence in <code>files</code> proves nothing — the hook has
-  to read <code>file.inclusion.is_included()</code>. Testing only the former puts the link
-  on every release.</li>
-<li><strong><code>404.html</code> renders this block with no <code>page</code> in context.</strong> Anything reading
-  <code>page.url</code> there fails the whole build (and hand-building <code>{{ base_url }}/…</code>
-  yields a protocol-relative <code>//STATUS/</code>). Hence the absolute <code>site_url</code> for the
-  release link and the <code>| url</code> filter for the per-page one.</li>
+<li><strong><code>exclude_docs</code> does not remove a file.</strong> MkDocs keeps it and marks it <code>InclusionLevel.EXCLUDED</code>, so presence in <code>files</code> proves nothing — the hook has to read <code>file.inclusion.is_included()</code>.
+  Testing only the former puts the link on every release.</li>
+<li><strong><code>404.html</code> renders this block with no <code>page</code> in context.</strong> Anything reading <code>page.url</code> there fails the whole build (and hand-building <code>{{ base_url }}/…</code> yields a protocol-relative <code>//STATUS/</code>).
+  Hence the absolute <code>site_url</code> for the release link and the <code>| url</code> filter for the per-page one.</li>
 </ul>
 <h2 id="links-into-the-source-tree">Links into the source tree<a class="headerlink" href="#links-into-the-source-tree" title="Permanent link">&para;</a></h2>
-<p><code>docs/</code> doubles as in-repo documentation browsed on github.com, where a relative
-link like <code>../cmd/agc/main.go</code> resolves to the source file. MkDocs has no such
-file to serve, so it leaves the link alone and the published page 404s.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a> rewrites every relative
-target <strong>this build does not publish</strong> into an absolute URL under <code>repo_url</code>, so
-one markdown link works in both places:</p>
+<p><code>docs/</code> doubles as in-repo documentation browsed on github.com, where a relative link like <code>../cmd/agc/main.go</code> resolves to the source file.
+MkDocs has no such file to serve, so it leaves the link alone and the published page 404s.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a> rewrites every relative target <strong>this build does not publish</strong> into an absolute URL under <code>repo_url</code>, so one markdown link works in both places:</p>
 <table>
 <thead>
 <tr>
@@ -4045,30 +3756,19 @@ one markdown link works in both places:</p>
 </tr>
 </tbody>
 </table>
-<p><code>{ref}</code> is <code>$GAG_DOCS_SOURCE_REF</code>, defaulting to <code>main</code>; <code>pages.yml</code> sets it to
-the tag when deploying a release, so each version links to the source it
-documents. A target that <strong>doesn't exist in the working tree is left alone</strong> —
-a typo should keep failing MkDocs' link check rather than become a
-plausible-looking 404. So is a <strong>directory under <code>docs/</code></strong>, which resolves to
-that directory's page rather than to the tree (<a href="#the-two-link-gates">§ The two link
-gates</a> owns that case).</p>
+<p><code>{ref}</code> is <code>$GAG_DOCS_SOURCE_REF</code>, defaulting to <code>main</code>; <code>pages.yml</code> sets it to the tag when deploying a release, so each version links to the source it documents.
+A target that <strong>doesn't exist in the working tree is left alone</strong> — a typo should keep failing MkDocs' link check rather than become a plausible-looking 404.
+So is a <strong>directory under <code>docs/</code></strong>, which resolves to that directory's page rather than to the tree (<a href="#the-two-link-gates">§ The two link gates</a> owns that case).</p>
 <p>Both link syntaxes are rewritten — inline <code>](target)</code> and the reference-style
 <code>[label]: target</code> definition. Python-Markdown resolves the two into the same
 link, so covering only the first would leave the rarer form silently dead.</p>
-<p>This was already needed before the backlog page: <code>design/</code> and <code>operations/</code>
-shipped such links dead. Publishing the repo-internal docs made it load-bearing
-— 724 links across the tree, 34 on <code>STATUS.md</code> alone.
-<code>scripts/docs/source-links-hook-test.sh</code> asserts the rewrite in both directions under
-<code>make check</code>.</p>
+<p>This was already needed before the backlog page: <code>design/</code> and <code>operations/</code> shipped such links dead.
+Publishing the repo-internal docs made it load-bearing — 724 links across the tree, 34 on <code>STATUS.md</code> alone. <code>scripts/docs/source-links-hook-test.sh</code> asserts the rewrite in both directions under <code>make check</code>.</p>
 <h3 id="unpublished-is-per-build-not-per-path-q561">Unpublished is per build, not per path (Q561)<a class="headerlink" href="#unpublished-is-per-build-not-per-path-q561" title="Permanent link">&para;</a></h3>
-<p>"Does not publish" is decided <strong>per build, from its own file set</strong> — <code>on_files</code>
-records the src_uris whose <code>inclusion.is_included()</code>, the same derivation
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> uses for the banner link.
-Escaping <code>docs/</code> is only one way to qualify. The other is
-<a href="#publication-scope">publication scope</a>: <code>plan/</code>, <code>development/</code> and <code>STATUS.md</code>
-are pages on <code>dev</code> and absent from every release, so a <code>design/</code> page citing
-<code>../plan/milestone-4.md</code> must resolve <strong>in-site on <code>dev</code></strong> and <strong>on github.com
-from a release</strong>. One markdown source, both renderings, no per-version editing:</p>
+<p>"Does not publish" is decided <strong>per build, from its own file set</strong> — <code>on_files</code> records the src_uris whose <code>inclusion.is_included()</code>, the same derivation <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> uses for the banner link.
+Escaping <code>docs/</code> is only one way to qualify.
+The other is <a href="#publication-scope">publication scope</a>: <code>plan/</code>, <code>development/</code> and <code>STATUS.md</code> are pages on <code>dev</code> and absent from every release, so a <code>design/</code> page citing <code>../plan/milestone-4.md</code> must resolve <strong>in-site on <code>dev</code></strong> and <strong>on github.com from a release</strong>.
+One markdown source, both renderings, no per-version editing:</p>
 <table>
 <thead>
 <tr>
@@ -4087,36 +3787,19 @@ from a release</strong>. One markdown source, both renderings, no per-version ed
 </tr>
 </tbody>
 </table>
-<p>Fragments ride along verbatim (<code>#12-live-multi-tenant-validation-evidence…</code>),
-which is why the two gates still get the last word on anchors: <code>make doc-links</code>
-already validates them with GitHub's slugger, and GitHub's blob view is exactly
-where a release now sends the reader.</p>
-<p><strong>Why this can't be a gate instead.</strong> MkDocs reports a link to an excluded page
-as <code>Doc file 'X' contains a link to 'Y' which is excluded from the built site</code> —
-and clamps it with <code>min(logging.INFO, validation.links.not_found)</code>, so
-<strong>no <code>validation</code> setting can raise it to a warning</strong> and <code>--strict</code> will never
-fail on one. It also still emits the relative URL, so the page ships a
-live-looking link that 404s. Before this rewrite existed that was 120 links
-across 22 operator pages on every numbered version. Handling it in the hook, per
-build, is what makes the class of bug unreachable rather than merely fixed:
-there is no link left to write incorrectly.</p>
-<p><strong><code>docs/README.md</code> is unpublished on every version, <code>dev</code> included</strong> — MkDocs
-drops it outright where an <code>index.md</code> shares the directory, so it never reaches
-<code>files</code> at all (<code>exclude_docs</code> listing it only keeps that from surfacing as a
-build warning). The hook absolutizes it to github.com, which is where that link
-means to go anyway.</p>
+<p>Fragments ride along verbatim (<code>#12-live-multi-tenant-validation-evidence…</code>), which is why the two gates still get the last word on anchors: <code>make doc-links</code> already validates them with GitHub's slugger, and GitHub's blob view is exactly where a release now sends the reader.</p>
+<p><strong>Why this can't be a gate instead.</strong> MkDocs reports a link to an excluded page as <code>Doc file 'X' contains a link to 'Y' which is excluded from the built site</code> — and clamps it with <code>min(logging.INFO, validation.links.not_found)</code>, so <strong>no <code>validation</code> setting can raise it to a warning</strong> and <code>--strict</code> will never fail on one.
+It also still emits the relative URL, so the page ships a live-looking link that 404s.
+Before this rewrite existed that was 120 links across 22 operator pages on every numbered version.
+Handling it in the hook, per build, is what makes the class of bug unreachable rather than merely fixed: there is no link left to write incorrectly.</p>
+<p><strong><code>docs/README.md</code> is unpublished on every version, <code>dev</code> included</strong> — MkDocs drops it outright where an <code>index.md</code> shares the directory, so it never reaches <code>files</code> at all (<code>exclude_docs</code> listing it only keeps that from surfacing as a build warning).
+The hook absolutizes it to github.com, which is where that link means to go anyway.</p>
 <h2 id="brand-assets">Brand assets<a class="headerlink" href="#brand-assets" title="Permanent link">&para;</a></h2>
-<p>The logomark and icon set are <strong>generated, not hand-edited</strong>. Edit
-<code>docs/assets/generate-logomark.py</code> (the parametric faceted-ring mark) and
-re-render the rasters with resvg — full procedure in
-<a href="../../assets/"><code>docs/assets/README.md</code></a>. The same README also covers the
-animated wormhole logomark (<code>generate-wormhole-animation.py</code> +
-<code>render-wormhole-animation.sh</code>); the light looping WebP is committed (README
-footer + 404 page) and the full-fidelity MP4 is generated on demand into the
-gitignored <code>tmp/</code>.</p>
+<p>The logomark and icon set are <strong>generated, not hand-edited</strong>.
+Edit <code>docs/assets/generate-logomark.py</code> (the parametric faceted-ring mark) and re-render the rasters with resvg — full procedure in <a href="../../assets/"><code>docs/assets/README.md</code></a>.
+The same README also covers the animated wormhole logomark (<code>generate-wormhole-animation.py</code> + <code>render-wormhole-animation.sh</code>); the light looping WebP is committed (README footer + 404 page) and the full-fidelity MP4 is generated on demand into the gitignored <code>tmp/</code>.</p>
 <h2 id="progressive-enhancement-docsjavascriptsextrajs">Progressive enhancement (<code>docs/javascripts/extra.js</code>)<a class="headerlink" href="#progressive-enhancement-docsjavascriptsextrajs" title="Permanent link">&para;</a></h2>
-<p>The interactive features layer on top of plain markdown that already renders on
-github.com, so they must degrade to readable content without JS:</p>
+<p>The interactive features layer on top of plain markdown that already renders on github.com, so they must degrade to readable content without JS:</p>
 <table>
 <thead>
 <tr>
@@ -4147,23 +3830,17 @@ github.com, so they must degrade to readable content without JS:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Keep those source markers intact</strong> when editing — deleting the table column, a
-blockquote, or a bold role lead silently breaks the matching site feature.</p>
+<p><strong>Keep those source markers intact</strong> when editing — deleting the table column, a blockquote, or a bold role lead silently breaks the matching site feature.</p>
 <h3 id="chip-selection-lives-in-the-query-string">Chip selection lives in the query string<a class="headerlink" href="#chip-selection-lives-in-the-query-string" title="Permanent link">&para;</a></h3>
-<p>Every chip bar owns a query key, so a filtered view is a link a reader can copy:
-<code>persona</code> on the operations index, <code>role</code> on the design index, and <code>label</code>,
-<code>status</code> and <code>size</code> on the backlog. Selecting the default (<code>All</code>) drops the key
-rather than writing it, keeping an unfiltered URL clean.</p>
+<p>Every chip bar owns a query key, so a filtered view is a link a reader can copy: <code>persona</code> on the operations index, <code>role</code> on the design index, and <code>label</code>, <code>status</code> and <code>size</code> on the backlog.
+Selecting the default (<code>All</code>) drops the key rather than writing it, keeping an unfiltered URL clean.</p>
 <p>Two properties are load-bearing, and both are easy to break by accident:</p>
 <ul>
-<li><strong><code>replaceState</code>, never <code>pushState</code>.</strong> Filtering is not navigation. Pushing
-  would make the back button walk every chip the reader tried.</li>
-<li><strong>A click and a reload must produce the same page.</strong> The backlog renders one
-  bar per dimension <em>per table</em>, and all four tables share the <code>label</code> key, so
-  restoring <code>?label=ci</code> filters all four. A click therefore applies to every bar
-  owning that key, not just the one clicked. A bar whose table has no such chip
-  falls back to <code>All</code> rather than emptying itself, which is also what makes an
-  unrecognised value in a hand-edited URL harmless.</li>
+<li><strong><code>replaceState</code>, never <code>pushState</code>.</strong> Filtering is not navigation.
+  Pushing would make the back button walk every chip the reader tried.</li>
+<li><strong>A click and a reload must produce the same page.</strong> The backlog renders one bar per dimension <em>per table</em>, and all four tables share the <code>label</code> key, so restoring <code>?label=ci</code> filters all four.
+  A click therefore applies to every bar owning that key, not just the one clicked.
+  A bar whose table has no such chip falls back to <code>All</code> rather than emptying itself, which is also what makes an unrecognised value in a hand-edited URL harmless.</li>
 </ul>
 <p>Verify both paths agree, rather than either one alone:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">// make docs-serve with the dev scope, then on /STATUS/</span>
@@ -4172,38 +3849,26 @@ rather than writing it, keeping an unfiltered URL clean.</p>
 <a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;.backlog-filter .persona-chip[data-persona=&quot;ci&quot;]&#39;</span><span class="p">).</span><span class="nx">click</span><span class="p">();</span>
 <a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">counts</span><span class="p">());</span><span class="w">        </span><span class="c1">// compare against a reload of the URL it just wrote</span>
 </code></pre></div>
-<p>The backlog page is <code>dev</code>-scope only, so the default <code>make docs-serve</code> serves a
-404 for it. Preview it with the dev exclusion list:</p>
+<p>The backlog page is <code>dev</code>-scope only, so the default <code>make docs-serve</code> serves a 404 for it.
+Preview it with the dev exclusion list:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nv">MKDOCS_EXCLUDE_DOCS</span><span class="o">=</span><span class="s1">$&#39;/README.md\n/releases/\n&#39;</span><span class="w"> </span><span class="nv">PORT</span><span class="o">=</span><span class="m">8043</span><span class="w"> </span>make<span class="w"> </span>docs-serve
 </code></pre></div>
-<p>The backlog chips read the <strong>rendered cells</strong>, so they follow the backlog format
-rather than duplicating it: labels are the backticked values in the <code>Labels</code>
-column (each renders as its own <code>&lt;code&gt;</code>), status comes from the <code>St</code> emoji
-(🔲 → Ready, 🚫 → Blocked; the Progress table's ✅/⚠️ → Done/Open), and size from
-<code>Sz</code>. Adding a label to the
-<a href="../maintaining-backlog/">legend</a> needs no site change — a new value simply gets
-its own chip. The tables are matched <strong>by shape</strong>: a <code>Labels</code> column <em>and</em> an
-<code>ID</code>/<code>Item</code> first column. Both halves matter — the metric tables in
-<code>design/02-architecture.md</code> and <code>operations/observability-metrics.md</code> also head a
-column <code>Labels</code>, and the first-column test is what keeps chips off them.</p>
-<p>A dimension every row shares is dropped rather than rendered, since selecting it
-could only ever show the whole table: the Progress table's <code>Status</code> column is all
-✅ today, so it gets no Status bar — and grows one automatically the moment a plan
-goes ⚠️. The same rule means Deferred and Flake watch, which have no <code>St</code> column
-at all, show only Label and Size.</p>
+<p>The backlog chips read the <strong>rendered cells</strong>, so they follow the backlog format rather than duplicating it: labels are the backticked values in the <code>Labels</code> column (each renders as its own <code>&lt;code&gt;</code>), status comes from the <code>St</code> emoji (🔲 → Ready, 🚫 → Blocked; the Progress table's ✅/⚠️ → Done/Open), and size from <code>Sz</code>.
+Adding a label to the <a href="../maintaining-backlog/">legend</a> needs no site change — a new value simply gets its own chip.
+The tables are matched <strong>by shape</strong>: a <code>Labels</code> column <em>and</em> an <code>ID</code>/<code>Item</code> first column.
+Both halves matter — the metric tables in <code>design/02-architecture.md</code> and <code>operations/observability-metrics.md</code> also head a column <code>Labels</code>, and the first-column test is what keeps chips off them.</p>
+<p>A dimension every row shares is dropped rather than rendered, since selecting it could only ever show the whole table: the Progress table's <code>Status</code> column is all ✅ today, so it gets no Status bar — and grows one automatically the moment a plan goes ⚠️.
+The same rule means Deferred and Flake watch, which have no <code>St</code> column at all, show only Label and Size.</p>
 <h2 id="persona--audience-tags-live-in-two-places">Persona / audience tags live in two places<a class="headerlink" href="#persona--audience-tags-live-in-two-places" title="Permanent link">&para;</a></h2>
 <p>A doc's audience is recorded twice, by design:</p>
 <ol>
-<li>the operations index <code>Personas</code> column (<code>docs/operations/README.md</code>) — drives
-   the filter chips, and</li>
+<li>the operations index <code>Personas</code> column (<code>docs/operations/README.md</code>) — drives the filter chips, and</li>
 <li>that doc's own <code>&gt; **Audience:** …</code> blockquote — drives the per-doc pill.</li>
 </ol>
-<p>When you retag a doc, <strong>update both</strong>; they should agree. There is no CI check —
-it's two lines kept in sync by hand (deliberately not worth automating).</p>
-<p>The per-doc pills also <strong>deep-link</strong> to <code>operations/?persona=&lt;persona&gt;</code>, and the
-index reads that query param on load to pre-apply the matching chip. The link is
-generated from the blockquote, so keeping (1) and (2) in agreement is enough —
-just don't rename a persona in only one place.</p>
+<p>When you retag a doc, <strong>update both</strong>; they should agree.
+There is no CI check — it's two lines kept in sync by hand (deliberately not worth automating).</p>
+<p>The per-doc pills also <strong>deep-link</strong> to <code>operations/?persona=&lt;persona&gt;</code>, and the index reads that query param on load to pre-apply the matching chip.
+The link is generated from the blockquote, so keeping (1) and (2) in agreement is enough — just don't rename a persona in only one place.</p>
 
 
 

@@ -2850,62 +2850,36 @@
 <blockquote>
 <p><strong>Audience:</strong> Tenant operator, Platform engineer</p>
 </blockquote>
-<p>Every worker pod's CPU/memory <code>requests</code>/<code>limits</code> start as a guess in the
-tenant's <code>RunnerTemplate</code>. This guide turns the gateway's built-in usage
-metrics into measured values, so the guess is revisited with data instead of
-<code>kubectl top</code> scraping. Actions Runner Controller (ARC) has no equivalent
-feedback loop.</p>
-<p><strong>Scope:</strong> v2 <code>RunnerSet</code> worker pods. The Actions Gateway Controller (AGC)
-samples usage per RunnerSet × container; v1 <code>RunnerGroup</code> workers are not
-sampled (v1 is <a href="../v1alpha1-deprecation/">deprecated</a>).</p>
+<p>Every worker pod's CPU/memory <code>requests</code>/<code>limits</code> start as a guess in the tenant's <code>RunnerTemplate</code>.
+This guide turns the gateway's built-in usage metrics into measured values, so the guess is revisited with data instead of <code>kubectl top</code> scraping.
+Actions Runner Controller (ARC) has no equivalent feedback loop.</p>
+<p><strong>Scope:</strong> v2 <code>RunnerSet</code> worker pods.
+The Actions Gateway Controller (AGC) samples usage per RunnerSet × container; v1 <code>RunnerGroup</code> workers are not sampled (v1 is <a href="../v1alpha1-deprecation/">deprecated</a>).</p>
 <h2 id="how-the-sampling-works">How the sampling works<a class="headerlink" href="#how-the-sampling-works" title="Permanent link">&para;</a></h2>
-<p>The AGC polls the <code>metrics.k8s.io</code> API (metrics-server) every 15 seconds
-(<code>WORKER_USAGE_SAMPLE_INTERVAL</code>; <code>0</code>/<code>off</code> disables) and keeps the running
-CPU/memory peak per worker pod × container. When the pod finishes, its peaks
-are folded into per-<code>RunnerSet</code> Prometheus series — one worker pod runs exactly
-one job, so a per-pod peak is a per-job peak. See the
-<a href="../observability-metrics/#worker-usage--right-sizing-metrics-q359">metrics reference</a>
-for the full series list.</p>
+<p>The AGC polls the <code>metrics.k8s.io</code> API (metrics-server) every 15 seconds (<code>WORKER_USAGE_SAMPLE_INTERVAL</code>; <code>0</code>/<code>off</code> disables) and keeps the running CPU/memory peak per worker pod × container.
+When the pod finishes, its peaks are folded into per-<code>RunnerSet</code> Prometheus series — one worker pod runs exactly one job, so a per-pod peak is a per-job peak.
+See the <a href="../observability-metrics/#worker-usage--right-sizing-metrics-q359">metrics reference</a> for the full series list.</p>
 <p>Two caveats to hold in mind when reading the numbers:</p>
 <ul>
-<li><strong>Short jobs are under-sampled.</strong> metrics-server resolves at ~15s; a job
-  shorter than one interval finishes with no sample and is counted in
-  <code>actions_gateway_worker_usage_jobs_unsampled_total</code> instead. Check the
-  unsampled:sampled ratio before trusting the distribution — short jobs are
-  rarely the sizing constraint, but a mostly-unsampled RunnerSet has no signal.</li>
-<li><strong>Peaks are point-in-time reads.</strong> A sub-second CPU burst between reads is
-  smoothed by metrics-server's window. Treat CPU figures as sustained-peak, not
-  instantaneous-max; memory (a level, not a rate) reads accurately.</li>
+<li><strong>Short jobs are under-sampled.</strong> metrics-server resolves at ~15s; a job shorter than one interval finishes with no sample and is counted in <code>actions_gateway_worker_usage_jobs_unsampled_total</code> instead.
+  Check the unsampled:sampled ratio before trusting the distribution — short jobs are rarely the sizing constraint, but a mostly-unsampled RunnerSet has no signal.</li>
+<li><strong>Peaks are point-in-time reads.</strong> A sub-second CPU burst between reads is smoothed by metrics-server's window.
+  Treat CPU figures as sustained-peak, not instantaneous-max; memory (a level, not a rate) reads accurately.</li>
 </ul>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>metrics-server</strong> (the <code>metrics.k8s.io</code> aggregated API) — present by default
-  on GKE/EKS/AKS; on kind/bare clusters install it explicitly. Without it the
-  AGC runs normally but emits
-  <code>actions_gateway_worker_usage_poll_errors_total</code> instead of usage data (see
-  <a href="#troubleshooting">Troubleshooting</a>).</li>
-<li>The AGC tenant role ships the required <code>pods.metrics.k8s.io</code> read grant since
-  this feature landed; no manual RBAC step.</li>
-<li>A Prometheus scraping the AGC (see
-  <a href="../observability-metrics-access/">metrics access</a>).</li>
+<li><strong>metrics-server</strong> (the <code>metrics.k8s.io</code> aggregated API) — present by default on GKE/EKS/AKS; on kind/bare clusters install it explicitly.
+  Without it the AGC runs normally but emits <code>actions_gateway_worker_usage_poll_errors_total</code> instead of usage data (see <a href="#troubleshooting">Troubleshooting</a>).</li>
+<li>The AGC tenant role ships the required <code>pods.metrics.k8s.io</code> read grant since this feature landed; no manual RBAC step.</li>
+<li>A Prometheus scraping the AGC (see <a href="../observability-metrics-access/">metrics access</a>).</li>
 </ul>
 <h2 id="step-0--read-the-built-in-recommendation-first">Step 0 — read the built-in recommendation first<a class="headerlink" href="#step-0--read-the-built-in-recommendation-first" title="Permanent link">&para;</a></h2>
-<p>Since Q359 Phase 2 the gateway derives the recommendation for you and publishes
-it on the <code>RunnerSet</code> itself — check there before reaching for PromQL:</p>
+<p>Since Q359 Phase 2 the gateway derives the recommendation for you and publishes it on the <code>RunnerSet</code> itself — check there before reaching for PromQL:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.sizingRecommendation}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </code></pre></div>
-<p>Each entry carries, per container: recommended <code>requests</code> (p95 of per-job
-peaks), a recommended memory <code>limit</code> (observed max × 1.4 headroom; no CPU limit
-is ever recommended), the raw <code>observedPeak</code>/<code>observedP95</code>, and — the
-confidence signal — <code>sampleCount</code> plus <code>windowStartTime</code>. Treat a recommendation
-with a low <code>sampleCount</code> as a hint, not a target; it appears from 5 sampled
-jobs and survives AGC restarts (the status field is also the store the sampler
-re-seeds from).</p>
-<p>The gateway also judges your current ask: the advisory <strong><code>SizingDrift</code>
-condition</strong> turns <code>True</code> (with the offending containers named in the message)
-when, after at least 20 sampled jobs, a template request is ≥2× the
-recommendation (waste) or a memory limit sits below the highest observed
-per-job peak (OOM risk):</p>
+<p>Each entry carries, per container: recommended <code>requests</code> (p95 of per-job peaks), a recommended memory <code>limit</code> (observed max × 1.4 headroom; no CPU limit is ever recommended), the raw <code>observedPeak</code>/<code>observedP95</code>, and — the confidence signal — <code>sampleCount</code> plus <code>windowStartTime</code>.
+Treat a recommendation with a low <code>sampleCount</code> as a hint, not a target; it appears from 5 sampled jobs and survives AGC restarts (the status field is also the store the sampler re-seeds from).</p>
+<p>The gateway also judges your current ask: the advisory <strong><code>SizingDrift</code> condition</strong> turns <code>True</code> (with the offending containers named in the message) when, after at least 20 sampled jobs, a template request is ≥2× the recommendation (waste) or a memory limit sits below the highest observed per-job peak (OOM risk):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;SizingDrift&quot;)]}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </code></pre></div>
 <table>
@@ -2934,21 +2908,14 @@ per-job peak (OOM risk):</p>
 </tr>
 </tbody>
 </table>
-<p><strong>No <code>SizingDrift</code> condition at all</strong> means there was nothing to judge: no
-<code>status.sizingRecommendation</code> (metrics-server absent, sampling off, or the
-sampler still warming up) or no resolved <code>RunnerTemplate</code>. That silence is
-deliberate — otherwise every set in a cluster without metrics-server would carry
-<code>InsufficientSamples</code> forever. Read a missing condition as "not measured", not
-as "no drift"; if you expected data, start at <a href="#troubleshooting">Troubleshooting</a>.</p>
-<p>The condition never gates <code>Ready</code>, and by default nothing is auto-applied: apply the
-values to the <code>RunnerTemplate</code> yourself (Step 2's validation still applies), or
-opt into a <a href="#sizing-profiles-opt-in-auto-apply">sizing profile</a> to have the
-gateway apply them at pod-build time. Use the PromQL below when you want the
-full distribution behind the recommendation or a different window/percentile.</p>
+<p><strong>No <code>SizingDrift</code> condition at all</strong> means there was nothing to judge: no <code>status.sizingRecommendation</code> (metrics-server absent, sampling off, or the sampler still warming up) or no resolved <code>RunnerTemplate</code>.
+That silence is deliberate — otherwise every set in a cluster without metrics-server would carry <code>InsufficientSamples</code> forever.
+Read a missing condition as "not measured", not as "no drift"; if you expected data, start at <a href="#troubleshooting">Troubleshooting</a>.</p>
+<p>The condition never gates <code>Ready</code>, and by default nothing is auto-applied: apply the values to the <code>RunnerTemplate</code> yourself (Step 2's validation still applies), or opt into a <a href="#sizing-profiles-opt-in-auto-apply">sizing profile</a> to have the gateway apply them at pod-build time.
+Use the PromQL below when you want the full distribution behind the recommendation or a different window/percentile.</p>
 <h2 id="step-1--read-the-distribution">Step 1 — read the distribution<a class="headerlink" href="#step-1--read-the-distribution" title="Permanent link">&para;</a></h2>
-<p>Let jobs run until <code>actions_gateway_worker_usage_jobs_sampled_total</code> for the
-RunnerSet is meaningful (a few dozen jobs of the workload mix you are sizing
-for). Then, per container (the runner container is named <code>runner</code>):</p>
+<p>Let jobs run until <code>actions_gateway_worker_usage_jobs_sampled_total</code> for the RunnerSet is meaningful (a few dozen jobs of the workload mix you are sizing for).
+Then, per container (the runner container is named <code>runner</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># p95 of per-job CPU peaks (cores), by RunnerSet and container, over 7 days</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kr">histogram_quantile</span><span class="o">(</span><span class="mf">0.95</span><span class="p">,</span><span class="w"> </span><span class="k">sum</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="o">(</span><span class="nv">le</span><span class="p">,</span><span class="w"> </span><span class="nv">runner_set</span><span class="p">,</span><span class="w"> </span><span class="nv">container</span><span class="o">)</span><span class="w"> </span><span class="o">(</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="kr">rate</span><span class="o">(</span><span class="nv">actions_gateway_worker_usage_job_cpu_peak_cores_bucket</span><span class="p">[</span><span class="s">7d</span><span class="p">]</span><span class="o">)))</span>
@@ -2966,12 +2933,9 @@ for). Then, per container (the runner container is named <code>runner</code>):</
 <a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="o">/</span>
 <a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">sum</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="o">(</span><span class="nv">runner_set</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="kr">rate</span><span class="o">(</span><span class="nv">actions_gateway_worker_usage_jobs_unsampled_total</span><span class="p">[</span><span class="s">7d</span><span class="p">]</span><span class="o">))</span>
 </code></pre></div>
-<p>The histogram quantiles are bucket-interpolated — read them as the bucket
-range, not an exact figure, and cross-check against the max-peak gauges.</p>
+<p>The histogram quantiles are bucket-interpolated — read them as the bucket range, not an exact figure, and cross-check against the max-peak gauges.</p>
 <h2 id="step-2--derive-requestslimits">Step 2 — derive <code>requests</code>/<code>limits</code><a class="headerlink" href="#step-2--derive-requestslimits" title="Permanent link">&para;</a></h2>
-<p>Apply the resource-model rules (proven in the
-<a href="../../plan/dogfood-runner-rightsizing/#resource-model-principles">dogfood right-sizing exercise</a>
-that this feature automates the measurement half of):</p>
+<p>Apply the resource-model rules (proven in the <a href="../../plan/dogfood-runner-rightsizing/#resource-model-principles">dogfood right-sizing exercise</a> that this feature automates the measurement half of):</p>
 <table>
 <thead>
 <tr>
@@ -3003,23 +2967,13 @@ that this feature automates the measurement half of):</p>
 </tr>
 </tbody>
 </table>
-<p>Update the tenant's <code>RunnerTemplate.spec.podTemplate</code> container resources with
-the derived values, then validate: watch for <code>OOMKilled</code> events in the tenant
-namespace over the next few days, and confirm the derived requests still fit
-the node shape and namespace <code>ResourceQuota</code>
-(see <a href="../../design/appendix-e-capacity-planning/">capacity planning</a>).</p>
-<p><strong>Sizing the trade deliberately:</strong> packing tighter (requests ≈ p95) maximizes
-workers per node — the right call on expensive nodes (GPUs, large VMs) where
-worker count per node is the cost driver. Sizing up (requests ≈ max) buys
-burst headroom so jobs finish faster. The
-<a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a> tracks automating
-this choice; today it is a per-<code>RunnerTemplate</code> decision.</p>
+<p>Update the tenant's <code>RunnerTemplate.spec.podTemplate</code> container resources with the derived values, then validate: watch for <code>OOMKilled</code> events in the tenant namespace over the next few days, and confirm the derived requests still fit the node shape and namespace <code>ResourceQuota</code> (see <a href="../../design/appendix-e-capacity-planning/">capacity planning</a>).</p>
+<p><strong>Sizing the trade deliberately:</strong> packing tighter (requests ≈ p95) maximizes workers per node — the right call on expensive nodes (GPUs, large VMs) where worker count per node is the cost driver.
+Sizing up (requests ≈ max) buys burst headroom so jobs finish faster.
+The <a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a> tracks automating this choice; today it is a per-<code>RunnerTemplate</code> decision.</p>
 <h2 id="sizing-profiles-opt-in-auto-apply">Sizing profiles (opt-in auto-apply)<a class="headerlink" href="#sizing-profiles-opt-in-auto-apply" title="Permanent link">&para;</a></h2>
-<p>Instead of copying the recommendation into the <code>RunnerTemplate</code> by hand, a
-<code>RunnerSet</code> can opt into a <strong>sizing profile</strong> (Q359 Phase 3): the AGC derives
-the worker containers' CPU/memory at pod-build time, per acquired job, so a
-spec edit or newly confident history takes effect on the next job with no
-restart. The template stays authoritative unless you opt in.</p>
+<p>Instead of copying the recommendation into the <code>RunnerTemplate</code> by hand, a <code>RunnerSet</code> can opt into a <strong>sizing profile</strong> (Q359 Phase 3): the AGC derives the worker containers' CPU/memory at pod-build time, per acquired job, so a spec edit or newly confident history takes effect on the next job with no restart.
+The template stays authoritative unless you opt in.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">sizing</span><span class="p">:</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Binpack</span><span class="w">          </span><span class="c1"># Static (default) | Binpack | Throughput | NodeShare</span>
@@ -3060,92 +3014,48 @@ restart. The template stays authoritative unless you opt in.</p>
 </table>
 <p>Safety rails, in all profiles:</p>
 <ul>
-<li><strong>Extended resources (GPUs) are never modified</strong> — only the cpu/memory keys
-  are ever derived; the shape's job-selected identity passes through
-  byte-identical. This is also why <code>nodeShare.allocatable</code> must declare <code>cpu</code>,
-  <code>memory</code>, or both: an envelope naming only extended resources divides nothing,
-  so the apiserver rejects it at admission rather than letting the profile report
-  <code>Active</code> over untouched template values
-  (<a href="../troubleshooting/#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory">runbook</a>).
+<li><strong>Extended resources (GPUs) are never modified</strong> — only the cpu/memory keys are ever derived; the shape's job-selected identity passes through byte-identical.
+  This is also why <code>nodeShare.allocatable</code> must declare <code>cpu</code>, <code>memory</code>, or both: an envelope naming only extended resources divides nothing, so the apiserver rejects it at admission rather than letting the profile report <code>Active</code> over untouched template values (<a href="../troubleshooting/#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory">runbook</a>).
   Declaring just one of the two is fine — the other keeps the template's ask.</li>
-<li><strong>History-based profiles fall back to <code>Static</code> until confident</strong> — <code>Binpack</code>
-  and <code>Throughput</code> apply only once <em>every</em> template container has a
-  recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable).
-  <code>status.sizingProfileState</code> reports which side you're on: <code>Active</code> (derived
-  values applied) or <code>AwaitingSamples</code> (template values, history accumulating).</li>
-<li><strong>Clamps</strong> — <code>minRequests</code>/<code>maxRequests</code> bound every derived request, so a
-  skewed history (one pathological job) cannot push pods beyond an
-  operator-set envelope. Size the ceiling against the namespace
-  <code>ResourceQuota</code> and any <code>LimitRange</code>: derived values are still subject to
-  both at admission, and the existing <code>WorkerQuota*</code> conditions and quota
-  retries surface a conflict at runtime. An admission mutation that cancels
-  <code>Throughput</code> rejects nothing, so it gets its own condition —
-  <a href="#when-something-re-injects-the-cpu-limit-throughput-removes"><code>SizingProfileOverridden</code></a>.</li>
+<li><strong>History-based profiles fall back to <code>Static</code> until confident</strong> — <code>Binpack</code> and <code>Throughput</code> apply only once <em>every</em> template container has a recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable). <code>status.sizingProfileState</code> reports which side you're on: <code>Active</code> (derived values applied) or <code>AwaitingSamples</code> (template values, history accumulating).</li>
+<li><strong>Clamps</strong> — <code>minRequests</code>/<code>maxRequests</code> bound every derived request, so a skewed history (one pathological job) cannot push pods beyond an operator-set envelope.
+  Size the ceiling against the namespace <code>ResourceQuota</code> and any <code>LimitRange</code>: derived values are still subject to both at admission, and the existing <code>WorkerQuota*</code> conditions and quota retries surface a conflict at runtime.
+  An admission mutation that cancels <code>Throughput</code> rejects nothing, so it gets its own condition — <a href="#when-something-re-injects-the-cpu-limit-throughput-removes"><code>SizingProfileOverridden</code></a>.</li>
 </ul>
 <blockquote>
-<p><strong>Set <code>maxRequests</code> before enabling <code>Binpack</code> <em>or</em> <code>Throughput</code> on a shape
-whose measured peak approaches node allocatable.</strong> Both derive <code>requests</code>
-from the observed history, and a derived request above a node's allocatable
-CPU is simply unschedulable: every worker pod sits <code>Pending</code> and no job runs.
-This is not hypothetical — on the project's own dogfood tenant a measured CPU
-peak of ~3750m derived a <strong>request of 3800m</strong> against an <code>e2-standard-4</code>'s
-~3.4 vCPU allocatable, so either profile without <code>maxRequests: {cpu: "3"}</code>
-would have wedged the pool. <strong><code>Throughput</code> is not exempt because it drops the
-CPU <em>limit</em>:</strong> scheduling is decided by the <em>request</em>, so the clamp matters
-exactly as much — and it is the derived request, not the peak, you size
-against allocatable, since the request is the p95 rounded up and can land
-above the peak. The failure is silent until pods stop scheduling, so clamp
-first, then enable.
-<code>WorkersUnschedulable</code> is the condition that fires if you get it wrong.
-- <strong>Drift reporting steps aside</strong> — while a profile is <code>Active</code>, the
-  <code>SizingDrift</code> condition reports <code>False/SizingProfileActive</code> (pods no longer
-  run the template ask, so judging it would mislead).</p>
+<p><strong>Set <code>maxRequests</code> before enabling <code>Binpack</code> <em>or</em> <code>Throughput</code> on a shape whose measured peak approaches node allocatable.</strong> Both derive <code>requests</code> from the observed history, and a derived request above a node's allocatable CPU is simply unschedulable: every worker pod sits <code>Pending</code> and no job runs.
+This is not hypothetical — on the project's own dogfood tenant a measured CPU peak of ~3750m derived a <strong>request of 3800m</strong> against an <code>e2-standard-4</code>'s ~3.4 vCPU allocatable, so either profile without <code>maxRequests: {cpu: "3"}</code> would have wedged the pool. <strong><code>Throughput</code> is not exempt because it drops the CPU <em>limit</em>:</strong> scheduling is decided by the <em>request</em>, so the clamp matters exactly as much — and it is the derived request, not the peak, you size against allocatable, since the request is the p95 rounded up and can land above the peak.
+The failure is silent until pods stop scheduling, so clamp first, then enable. <code>WorkersUnschedulable</code> is the condition that fires if you get it wrong.
+- <strong>Drift reporting steps aside</strong> — while a profile is <code>Active</code>, the <code>SizingDrift</code> condition reports <code>False/SizingProfileActive</code> (pods no longer run the template ask, so judging it would mislead).</p>
 </blockquote>
 <h3 id="getting-guaranteed-qos-out-of-nodeshare">Getting Guaranteed QoS out of <code>NodeShare</code><a class="headerlink" href="#getting-guaranteed-qos-out-of-nodeshare" title="Permanent link">&para;</a></h3>
-<p><code>Binpack</code> is the profile that sets <code>requests == limits</code> for you. <code>NodeShare</code>
-does not — it derives the runner container's <em>requests</em> and leaves limits to the
-template — so a GPU pool that wants both an even node split <strong>and</strong> Guaranteed
-QoS has to arrange the second part itself. It can:</p>
-<p>Set the runner container's template CPU <strong>and</strong> memory limits at or below the
-share you expect (<code>allocatable ÷ workersPerNode</code>). Each is then raised to the
-derived request by the same rule that stops a too-low template limit being
-rejected at admission, and the container comes out with <code>requests == limits</code>.</p>
+<p><code>Binpack</code> is the profile that sets <code>requests == limits</code> for you. <code>NodeShare</code> does not — it derives the runner container's <em>requests</em> and leaves limits to the template — so a GPU pool that wants both an even node split <strong>and</strong> Guaranteed QoS has to arrange the second part itself.
+It can:</p>
+<p>Set the runner container's template CPU <strong>and</strong> memory limits at or below the share you expect (<code>allocatable ÷ workersPerNode</code>).
+Each is then raised to the derived request by the same rule that stops a too-low template limit being rejected at admission, and the container comes out with <code>requests == limits</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># runner container in the RunnerTemplate; envelope 15 CPU / 60Gi ÷ 4 workers</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">resources</span><span class="p">:</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">limits</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="nv">2Gi</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># both below the 3750m / 15Gi share</span>
 </code></pre></div>
 <p>Two caveats, both easy to trip over:</p>
 <ul>
-<li><strong>A limit <em>above</em> the share is left alone</strong>, and the pod is Burstable. This is
-  the ordinary case — a template CPU limit of <code>4</code> against a <code>3750m</code> share stays
-  <code>4</code>. The values above are deliberately far under the envelope so the outcome
-  does not depend on getting the arithmetic exactly right.</li>
-<li><strong>Pod QoS is Guaranteed only if every container qualifies.</strong> <code>NodeShare</code>
-  touches the runner container only; a <code>dind</code> sidecar keeps its template ask, so
-  give it explicit equal requests and limits or the pod lands Burstable however
-  the runner is sized.</li>
+<li><strong>A limit <em>above</em> the share is left alone</strong>, and the pod is Burstable.
+  This is the ordinary case — a template CPU limit of <code>4</code> against a <code>3750m</code> share stays <code>4</code>.
+  The values above are deliberately far under the envelope so the outcome does not depend on getting the arithmetic exactly right.</li>
+<li><strong>Pod QoS is Guaranteed only if every container qualifies.</strong> <code>NodeShare</code> touches the runner container only; a <code>dind</code> sidecar keeps its template ask, so give it explicit equal requests and limits or the pod lands Burstable however the runner is sized.</li>
 </ul>
-<p>This works, but it is a side effect of the limit-lift guard rather than a knob
-that names the intent. If you want it, say so on the issue tracker — the clean
-form is an explicit field under <code>sizing.nodeShare</code>, an additive change we held
-back from 1.3 for want of a concrete asker
-(<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>).</p>
+<p>This works, but it is a side effect of the limit-lift guard rather than a knob that names the intent.
+If you want it, say so on the issue tracker — the clean form is an explicit field under <code>sizing.nodeShare</code>, an additive change we held back from 1.3 for want of a concrete asker (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>).</p>
 <h3 id="when-something-re-injects-the-cpu-limit-throughput-removes">When something re-injects the CPU limit <code>Throughput</code> removes<a class="headerlink" href="#when-something-re-injects-the-cpu-limit-throughput-removes" title="Permanent link">&para;</a></h3>
-<p><code>Throughput</code> bursts by <strong>removing</strong> the runner container's CPU limit — that is
-its mechanism, not a side effect. Anything that puts the limit back at admission
-cancels the profile, and cancels it <em>silently</em>: the pod is <strong>not rejected</strong>, it
-is admitted with a CPU limit, <code>sizingProfileState</code> still reports <code>Active</code>, and
-every other signal looks correct. Jobs simply stop bursting.</p>
-<p>The usual cause is a <code>LimitRange</code> entry of type <code>Container</code> carrying a <code>default</code>
-for <code>limits.cpu</code> — or a <code>max</code> with no <code>default</code>, which Kubernetes then uses as
-the default. It applies to any container that does not declare one, and the
-container <code>Throughput</code> just built declares none. A mutating admission webhook or
-a policy engine's mutate rule does the same thing just as quietly.</p>
-<p>So the gateway reports the <strong>effect</strong> rather than any one cause. It knows which
-worker pods it built without a CPU limit (they carry
-<code>actions-gateway.com/sizing-profile: Throughput</code>), and it can see what the
-apiserver admitted. When those disagree, the <code>RunnerSet</code> raises the advisory
-<strong><code>SizingProfileOverridden</code></strong> condition:</p>
+<p><code>Throughput</code> bursts by <strong>removing</strong> the runner container's CPU limit — that is its mechanism, not a side effect.
+Anything that puts the limit back at admission cancels the profile, and cancels it <em>silently</em>: the pod is <strong>not rejected</strong>, it is admitted with a CPU limit, <code>sizingProfileState</code> still reports <code>Active</code>, and every other signal looks correct.
+Jobs simply stop bursting.</p>
+<p>The usual cause is a <code>LimitRange</code> entry of type <code>Container</code> carrying a <code>default</code> for <code>limits.cpu</code> — or a <code>max</code> with no <code>default</code>, which Kubernetes then uses as the default.
+It applies to any container that does not declare one, and the container <code>Throughput</code> just built declares none.
+A mutating admission webhook or a policy engine's mutate rule does the same thing just as quietly.</p>
+<p>So the gateway reports the <strong>effect</strong> rather than any one cause.
+It knows which worker pods it built without a CPU limit (they carry <code>actions-gateway.com/sizing-profile: Throughput</code>), and it can see what the apiserver admitted.
+When those disagree, the <code>RunnerSet</code> raises the advisory <strong><code>SizingProfileOverridden</code></strong> condition:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;SizingProfileOverridden&quot;)]}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </code></pre></div>
 <table>
@@ -3170,62 +3080,36 @@ apiserver admitted. When those disagree, the <code>RunnerSet</code> raises the a
 </tr>
 </tbody>
 </table>
-<p>The condition is advisory: it never gates <code>Ready</code>, and jobs keep running. It
-appears only under <code>Throughput</code> and is removed under any other profile. Because
-it reads the admitted pods rather than a policy object, it catches whatever did
-the injecting — and it needs no extra cluster access to do so.</p>
-<p>To check a namespace <em>before</em> enabling the profile, read the <code>LimitRange</code>
-directly:</p>
+<p>The condition is advisory: it never gates <code>Ready</code>, and jobs keep running.
+It appears only under <code>Throughput</code> and is removed under any other profile.
+Because it reads the admitted pods rather than a policy object, it catches whatever did the injecting — and it needs no extra cluster access to do so.</p>
+<p>To check a namespace <em>before</em> enabling the profile, read the <code>LimitRange</code> directly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>limitrange<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[*].spec.limits[*]}{.type}{&quot;\t&quot;}{.default}{&quot;\t&quot;}{.max}{&quot;\n&quot;}{end}&#39;</span>
 </code></pre></div>
-<p>If a <code>Container</code> row carries a <code>cpu</code> <code>default</code> or <code>max</code>, <code>Throughput</code> will not
-burst in that namespace. Three ways out, in order of preference:</p>
+<p>If a <code>Container</code> row carries a <code>cpu</code> <code>default</code> or <code>max</code>, <code>Throughput</code> will not burst in that namespace.
+Three ways out, in order of preference:</p>
 <ol>
-<li><strong>Drop the <code>cpu</code> default from the <code>LimitRange</code></strong> — the namespace stops
-   dictating a limit and the profile works as designed. Keep <code>maxRequests</code> set,
-   since that is the clamp actually bounding a skewed derivation.</li>
-<li><strong>Use <code>Binpack</code></strong> — it always sets its own limit, so the <code>LimitRange</code> default
-   never applies. You trade burst for predictable packing, which is the choice
-   between the two profiles anyway.</li>
-<li><strong>Stay on <code>Static</code></strong> and apply <code>status.sizingRecommendation</code> by hand, keeping
-   whatever limit the <code>LimitRange</code> requires.</li>
+<li><strong>Drop the <code>cpu</code> default from the <code>LimitRange</code></strong> — the namespace stops dictating a limit and the profile works as designed.
+   Keep <code>maxRequests</code> set, since that is the clamp actually bounding a skewed derivation.</li>
+<li><strong>Use <code>Binpack</code></strong> — it always sets its own limit, so the <code>LimitRange</code> default never applies.
+   You trade burst for predictable packing, which is the choice between the two profiles anyway.</li>
+<li><strong>Stay on <code>Static</code></strong> and apply <code>status.sizingRecommendation</code> by hand, keeping whatever limit the <code>LimitRange</code> requires.</li>
 </ol>
-<p>This is the one profile whose contract an admission mutation can quietly void —
-which is why it is the one that gets a condition. It is also why the check is
-<code>Throughput</code>-only: every other profile <em>sets</em> a CPU limit, leaving a defaulting
-policy nothing to inject. The memory side is unaffected for the same reason:
-<code>Throughput</code> sets a memory limit explicitly, so a <code>LimitRange</code> default never
-reaches it.</p>
-<p>The signal arrives with the first worker pod the profile builds, not when the
-policy is written — it reports what was admitted, so it needs something to have
-been admitted. Use the <code>kubectl get limitrange</code> check above if you want an answer
-before the first job runs.</p>
+<p>This is the one profile whose contract an admission mutation can quietly void — which is why it is the one that gets a condition.
+It is also why the check is <code>Throughput</code>-only: every other profile <em>sets</em> a CPU limit, leaving a defaulting policy nothing to inject.
+The memory side is unaffected for the same reason: <code>Throughput</code> sets a memory limit explicitly, so a <code>LimitRange</code> default never reaches it.</p>
+<p>The signal arrives with the first worker pod the profile builds, not when the policy is written — it reports what was admitted, so it needs something to have been admitted.
+Use the <code>kubectl get limitrange</code> check above if you want an answer before the first job runs.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p><strong><code>actions_gateway_worker_usage_poll_errors_total</code> rising steadily</strong> — the AGC
-cannot list <code>PodMetrics</code>. Either metrics-server is not installed (the
-<a href="../install/#preflight-the-cluster-required-first-step">install pre-flight</a> warns about this) or the
-AGC's RoleBinding predates the <code>pods.metrics.k8s.io</code> grant (re-render from the
-current chart: the <code>agc-tenant-role</code> ClusterRole must contain a
-<code>metrics.k8s.io</code> rule). The AGC log line <code>list PodMetrics (is metrics-server
-installed?)</code> carries the underlying error, throttled to roughly one line per
-ten minutes.</p>
-<p><strong>All jobs land in <code>…_jobs_unsampled_total</code></strong> — the workload's jobs finish
-faster than the sampling interval. There is no per-job signal to size from at
-15s resolution; size such a RunnerSet by its node-shape share instead (see the
-<code>NodeShare</code> idea in the <a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a>).</p>
-<p><strong><code>Throughput</code> is <code>Active</code> but jobs still run at the old CPU ceiling</strong> — read
-<code>SizingProfileOverridden</code> on the <code>RunnerSet</code>. <code>True/CPULimitInjected</code> means a pod
-the profile built without a CPU limit was admitted with one; the message names
-the pod and the limit, and
-<a href="#when-something-re-injects-the-cpu-limit-throughput-removes">the three ways out</a>
-start with the namespace <code>LimitRange</code>. If that comes back clean, the injector is
-a mutating webhook or policy engine — <code>kubectl get mutatingwebhookconfiguration</code>
-and your policy engine's rules are the next stop.</p>
-<p><strong>Gauges reset after an AGC rollout</strong> — the <code>…_usage_cpu_peak_cores</code> /
-<code>…_usage_memory_peak_bytes</code> gauges are peaks <em>since AGC start</em> by design.
-Use <code>max_over_time(...[30d])</code> in Prometheus to bridge restarts; the histograms
-and counters are cumulative series that Prometheus rate/window queries already
-handle across restarts.</p>
+<p><strong><code>actions_gateway_worker_usage_poll_errors_total</code> rising steadily</strong> — the AGC cannot list <code>PodMetrics</code>.
+Either metrics-server is not installed (the <a href="../install/#preflight-the-cluster-required-first-step">install pre-flight</a> warns about this) or the AGC's RoleBinding predates the <code>pods.metrics.k8s.io</code> grant (re-render from the current chart: the <code>agc-tenant-role</code> ClusterRole must contain a <code>metrics.k8s.io</code> rule).
+The AGC log line <code>list PodMetrics (is metrics-server installed?)</code> carries the underlying error, throttled to roughly one line per ten minutes.</p>
+<p><strong>All jobs land in <code>…_jobs_unsampled_total</code></strong> — the workload's jobs finish faster than the sampling interval.
+There is no per-job signal to size from at 15s resolution; size such a RunnerSet by its node-shape share instead (see the <code>NodeShare</code> idea in the <a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a>).</p>
+<p><strong><code>Throughput</code> is <code>Active</code> but jobs still run at the old CPU ceiling</strong> — read <code>SizingProfileOverridden</code> on the <code>RunnerSet</code>. <code>True/CPULimitInjected</code> means a pod the profile built without a CPU limit was admitted with one; the message names the pod and the limit, and <a href="#when-something-re-injects-the-cpu-limit-throughput-removes">the three ways out</a> start with the namespace <code>LimitRange</code>.
+If that comes back clean, the injector is a mutating webhook or policy engine — <code>kubectl get mutatingwebhookconfiguration</code> and your policy engine's rules are the next stop.</p>
+<p><strong>Gauges reset after an AGC rollout</strong> — the <code>…_usage_cpu_peak_cores</code> / <code>…_usage_memory_peak_bytes</code> gauges are peaks <em>since AGC start</em> by design.
+Use <code>max_over_time(...[30d])</code> in Prometheus to bridge restarts; the histograms and counters are cumulative series that Prometheus rate/window queries already handle across restarts.</p>
 
 
 

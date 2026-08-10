@@ -2681,16 +2681,11 @@
 
 
 <h1 id="q222--agc-sigterm-teardown-race-testagc_sigterm_deletesallsessions">Q222 — AGC SIGTERM teardown race (<code>TestAGC_SIGTERM_DeletesAllSessions</code>)<a class="headerlink" href="#q222--agc-sigterm-teardown-race-testagc_sigterm_deletesallsessions" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> fixed. Two defects found in the shutdown path, one reproduced at the
-unit tier and one structural; both fixed, and the test's timeout ceiling is no
-longer load-bearing. See <a href="#findings">Findings</a> for what was measured and
-<a href="#what-was-not-established">What was not established</a> for the limits of the
-evidence.</p>
+<p><strong>Status:</strong> fixed.
+Two defects found in the shutdown path, one reproduced at the unit tier and one structural; both fixed, and the test's timeout ceiling is no longer load-bearing.
+See <a href="#findings">Findings</a> for what was measured and <a href="#what-was-not-established">What was not established</a> for the limits of the evidence.</p>
 <h2 id="symptom">Symptom<a class="headerlink" href="#symptom" title="Permanent link">&para;</a></h2>
-<p><code>TestAGC_SIGTERM_DeletesAllSessions</code> fails at the <code>WaitForSessionDelete</code>
-assertion: after the manager context is cancelled and <code>mgr.Start</code> has returned,
-one or more registered sessions never produce a <code>DELETE /session</code> to the broker
-stub within the ceiling.</p>
+<p><code>TestAGC_SIGTERM_DeletesAllSessions</code> fails at the <code>WaitForSessionDelete</code> assertion: after the manager context is cancelled and <code>mgr.Start</code> has returned, one or more registered sessions never produce a <code>DELETE /session</code> to the broker stub within the ceiling.</p>
 <h2 id="mitigation-history">Mitigation history<a class="headerlink" href="#mitigation-history" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2719,12 +2714,9 @@ stub within the ceiling.</p>
 </tbody>
 </table>
 <h2 id="recurrence--2026-07-20">Recurrence — 2026-07-20<a class="headerlink" href="#recurrence--2026-07-20" title="Permanent link">&para;</a></h2>
-<p>Observed on <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/29760328242">run 29760328242</a>
-(PR #723). The PR's diff deletes a stale per-module golangci-lint config and
-reflows a comment — <strong>no runtime code</strong>, so the branch is behaviourally
-identical to <code>main</code> at <code>72fc519</code>. Treat this as a <code>main</code> recurrence for the
-purposes of the <a href="../../../development/maintaining-backlog/#flake-fixes-go-first">Flake watch</a>
-revive trigger.</p>
+<p>Observed on <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/29760328242">run 29760328242</a> (PR #723).
+The PR's diff deletes a stale per-module golangci-lint config and reflows a comment — <strong>no runtime code</strong>, so the branch is behaviourally identical to <code>main</code> at <code>72fc519</code>.
+Treat this as a <code>main</code> recurrence for the purposes of the <a href="../../../development/maintaining-backlog/#flake-fixes-go-first">Flake watch</a> revive trigger.</p>
 <p>The failure dump (both assertions, ~60s apart):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sigterm_test.go:132: SIGTERM teardown timeout: session &quot;session-58&quot; not deleted after 60s;
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  still-active for owner &quot;sigterm-rg&quot;=[session-58 session-60];
@@ -2732,84 +2724,49 @@ revive trigger.</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>sigterm_test.go:132: SIGTERM teardown timeout: session &quot;session-60&quot; not deleted after 60s;
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  still-active for owner &quot;sigterm-rg&quot;=[session-58 session-60]; global ActiveSessionCount=11
 </code></pre></div>
-<p>Total test wall time 120.29s — i.e. <strong>both</strong> per-session waits burned their full
-60s ceiling.</p>
+<p>Total test wall time 120.29s — i.e. <strong>both</strong> per-session waits burned their full 60s ceiling.</p>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="1-nothing-waited-for-listener-goroutines-at-shutdown-structural">1. Nothing waited for listener goroutines at shutdown (structural)<a class="headerlink" href="#1-nothing-waited-for-listener-goroutines-at-shutdown-structural" title="Permanent link">&para;</a></h3>
-<p><code>cmd/agc/main.go</code> ends in <code>return mgr.Start(ctx)</code>. Listener goroutines are
-spawned from <code>Reconcile</code> onto the manager's context, so SIGTERM cancels them —
-but the manager does not track them. <code>Multiplexer.Stop</code>, which cancels <em>and</em>
-waits on each goroutine's <code>done</code> channel, was called only from
-<code>reconcileDelete</code>/<code>cleanupLocalState</code> (RunnerGroup deletion), never on manager
-shutdown.</p>
-<p>So <code>mgr.Start</code> returned as soon as the controllers stopped, <code>run()</code> returned, and
-the process exited out from under every goroutine still unwinding its poll loop
-and running its exit-defer <code>DELETE</code>. <strong>In production this leaks a GitHub-side
-session per in-flight listener on every rollout.</strong> In the integration test the
-process does not exit, which is why the test only ever saw it as a race against a
-timeout: <code>&lt;-mgrDone</code> carried no information about the goroutines at all, so the
-assertion was polling a 60s ceiling with nothing guaranteeing the work had even
-started.</p>
-<p><strong>Fix:</strong> a <code>listenerShutdown</code> manager <code>Runnable</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/listener_shutdown.go">listener_shutdown.go</a>)
-registered by both reconcilers. It blocks on the manager context and then drains
-the reconciler's multiplexers, so <code>mgr.Start</code> returns only after every listener
-goroutine has exited. Multiplexers are drained concurrently (done channel per the
-repo's async convention) so shutdown costs the slowest one, not their sum.</p>
+<p><code>cmd/agc/main.go</code> ends in <code>return mgr.Start(ctx)</code>.
+Listener goroutines are spawned from <code>Reconcile</code> onto the manager's context, so SIGTERM cancels them — but the manager does not track them. <code>Multiplexer.Stop</code>, which cancels <em>and</em> waits on each goroutine's <code>done</code> channel, was called only from <code>reconcileDelete</code>/<code>cleanupLocalState</code> (RunnerGroup deletion), never on manager shutdown.</p>
+<p>So <code>mgr.Start</code> returned as soon as the controllers stopped, <code>run()</code> returned, and the process exited out from under every goroutine still unwinding its poll loop and running its exit-defer <code>DELETE</code>. <strong>In production this leaks a GitHub-side session per in-flight listener on every rollout.</strong> In the integration test the process does not exit, which is why the test only ever saw it as a race against a timeout: <code>&lt;-mgrDone</code> carried no information about the goroutines at all, so the assertion was polling a 60s ceiling with nothing guaranteeing the work had even started.</p>
+<p><strong>Fix:</strong> a <code>listenerShutdown</code> manager <code>Runnable</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/listener_shutdown.go">listener_shutdown.go</a>) registered by both reconcilers.
+It blocks on the manager context and then drains the reconciler's multiplexers, so <code>mgr.Start</code> returns only after every listener goroutine has exited.
+Multiplexers are drained concurrently (done channel per the repo's async convention) so shutdown costs the slowest one, not their sum.</p>
 <h3 id="2-the-recycleheal-handoff-dropped-the-delete-outright-on-cancellation">2. The recycle/heal handoff dropped the DELETE outright on cancellation<a class="headerlink" href="#2-the-recycleheal-handoff-dropped-the-delete-outright-on-cancellation" title="Permanent link">&para;</a></h3>
-<p>Reproduced at the unit tier, red → green:
-<code>TestListener_SIGTERMDuringPostJobRecycleDeletesSession</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine_q222_test.go">goroutine_q222_test.go</a>.
+<p>Reproduced at the unit tier, red → green: <code>TestListener_SIGTERMDuringPostJobRecycleDeletesSession</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine_q222_test.go">goroutine_q222_test.go</a>.
 Against the unfixed code it recorded <strong>zero</strong> DELETEs.</p>
 <p>The sequence, in <code>Run</code>'s post-job recycle (and identically in the poll-loop heal):</p>
 <ol>
-<li><code>oldSession := sessionID; sessionID = ""</code> — ownership is handed to the
-   recycle so the exit defer will not double-DELETE. (In the v2 flow DELETE is
-   keyed by bearer token, so a re-delete could tear down the session the heal
-   just created — the handoff is correct in itself.)</li>
-<li><code>recycleAndRestart</code> opens with <code>cfg.Broker.DeleteSession(ctx, oldSessionID)</code>
-   on the <strong>caller's</strong> context. Under SIGTERM that context is already cancelled,
-   so the call fails instantly and its error is discarded as best-effort.</li>
-<li><code>cfg.RecycleAgent(ctx)</code> then fails for the same reason; <code>Run</code> takes
-   <code>if ctx.Err() != nil { return nil }</code>.</li>
+<li><code>oldSession := sessionID; sessionID = ""</code> — ownership is handed to the recycle so the exit defer will not double-DELETE.
+   (In the v2 flow DELETE is keyed by bearer token, so a re-delete could tear down the session the heal just created — the handoff is correct in itself.)</li>
+<li><code>recycleAndRestart</code> opens with <code>cfg.Broker.DeleteSession(ctx, oldSessionID)</code> on the <strong>caller's</strong> context.
+   Under SIGTERM that context is already cancelled, so the call fails instantly and its error is discarded as best-effort.</li>
+<li><code>cfg.RecycleAgent(ctx)</code> then fails for the same reason; <code>Run</code> takes <code>if ctx.Err() != nil { return nil }</code>.</li>
 <li>The exit defer sees <code>sessionID == ""</code> and skips the DELETE.</li>
 </ol>
-<p>Nothing downstream ever deletes that session. It is a permanent leak, not a slow
-one — the shape the plan predicted for a total (not partial) teardown failure.</p>
-<p><strong>Fix:</strong> <code>deleteSessionDetached</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go">session.go</a> — one helper now used by
-the heal, the recycle, and the exit defer. It runs on a context detached from the
-caller's, bounded by a 10s total budget.</p>
+<p>Nothing downstream ever deletes that session.
+It is a permanent leak, not a slow one — the shape the plan predicted for a total (not partial) teardown failure.</p>
+<p><strong>Fix:</strong> <code>deleteSessionDetached</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go">session.go</a> — one helper now used by the heal, the recycle, and the exit defer.
+It runs on a context detached from the caller's, bounded by a 10s total budget.</p>
 <h3 id="3-a-single-transient-delete-failure-was-also-a-permanent-leak">3. A single transient DELETE failure was also a permanent leak<a class="headerlink" href="#3-a-single-transient-delete-failure-was-also-a-permanent-leak" title="Permanent link">&para;</a></h3>
-<p>Found while fixing 2. The exit defer's DELETE was the only one a session would
-ever get; any error was logged at Warn and dropped. A connection reset as the
-fleet tears down, or a connection pool exhausted by sibling long-polls unwinding
-at once, leaked the session exactly as permanently as no attempt at all.</p>
-<p><strong>Fix:</strong> <code>deleteSessionDetached</code> retries within its budget (3 attempts, 3s per
-round trip, 250ms backoff) and logs a Warn naming the leak only after giving up.
+<p>Found while fixing 2.
+The exit defer's DELETE was the only one a session would ever get; any error was logged at Warn and dropped.
+A connection reset as the fleet tears down, or a connection pool exhausted by sibling long-polls unwinding at once, leaked the session exactly as permanently as no attempt at all.</p>
+<p><strong>Fix:</strong> <code>deleteSessionDetached</code> retries within its budget (3 attempts, 3s per round trip, 250ms backoff) and logs a Warn naming the leak only after giving up.
 Covered by <code>TestListener_ExitDeleteRetriesTransientFailure</code>.</p>
 <h2 id="what-was-not-established">What was not established<a class="headerlink" href="#what-was-not-established" title="Permanent link">&para;</a></h2>
-<p>The unit reproduction of defect 2 does <strong>not</strong> explain the CI failure above. The
-SIGTERM integration test starts the reconciler with no provisioner
-(<code>provisionerOptions{}</code> → nil <code>JobHandler</code>), so its job-bearing goroutines run
-their post-job recycle to completion seconds <em>before</em> SIGTERM, and none is in the
-recycle window when the context is cancelled. Reverting only the defect-2 fix and
-re-running the integration test locally still passes.</p>
-<p>Defect 1 is the one that governs the CI symptom: pre-fix, <code>&lt;-mgrDone</code> guaranteed
-nothing, so the assertion was a 60s race against goroutine scheduling on a 2-vCPU
-runner. Post-fix it is settled before the assertion is reached. The original
-CI failure was <strong>not</strong> reproduced locally, so the causal claim for that specific
-run rests on the structural argument, not on a local repro.</p>
-<p>Defect 2 stands on its own regardless: it is a real production session leak on
-every rollout that catches a listener in its post-job recycle, and it is proven
-by a test that fails without the fix.</p>
+<p>The unit reproduction of defect 2 does <strong>not</strong> explain the CI failure above.
+The SIGTERM integration test starts the reconciler with no provisioner (<code>provisionerOptions{}</code> → nil <code>JobHandler</code>), so its job-bearing goroutines run their post-job recycle to completion seconds <em>before</em> SIGTERM, and none is in the recycle window when the context is cancelled.
+Reverting only the defect-2 fix and re-running the integration test locally still passes.</p>
+<p>Defect 1 is the one that governs the CI symptom: pre-fix, <code>&lt;-mgrDone</code> guaranteed nothing, so the assertion was a 60s race against goroutine scheduling on a 2-vCPU runner.
+Post-fix it is settled before the assertion is reached.
+The original CI failure was <strong>not</strong> reproduced locally, so the causal claim for that specific run rests on the structural argument, not on a local repro.</p>
+<p>Defect 2 stands on its own regardless: it is a real production session leak on every rollout that catches a listener in its post-job recycle, and it is proven by a test that fails without the fix.</p>
 <h2 id="test-side-consequence">Test-side consequence<a class="headerlink" href="#test-side-consequence" title="Permanent link">&para;</a></h2>
-<p>With the drain in place, <code>mgr.Start</code> returning means every session DELETE has
-already been issued and answered. The ceiling in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/sigterm_test.go">sigterm_test.go</a>
-drops from 60s to 10s and no longer scales with runner load — it now only absorbs
-the broker stub's own signal-delivery hop. A recurrence there is a real teardown
-regression and must be investigated, not bumped.</p>
+<p>With the drain in place, <code>mgr.Start</code> returning means every session DELETE has already been issued and answered.
+The ceiling in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/sigterm_test.go">sigterm_test.go</a> drops from 60s to 10s and no longer scales with runner load — it now only absorbs the broker stub's own signal-delivery hop.
+A recurrence there is a real teardown regression and must be investigated, not bumped.</p>
 
 
 

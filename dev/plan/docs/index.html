@@ -2865,7 +2865,8 @@
 
 <h1 id="documentation-plan">Documentation Plan<a class="headerlink" href="#documentation-plan" title="Permanent link">&para;</a></h1>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
-<p>Last refreshed 2026-08-01. All Phase 1, Phase 2, and Phase 3 items shipped except the Grafana dashboards half of 3.2 (<a href="../../STATUS/#Q568">Q568</a>).</p>
+<p>Last refreshed 2026-08-01.
+All Phase 1, Phase 2, and Phase 3 items shipped except the Grafana dashboards half of 3.2 (<a href="../../STATUS/#Q568">Q568</a>).</p>
 <table>
 <thead>
 <tr>
@@ -2994,11 +2995,15 @@
 </table>
 <h3 id="open-work">Open work<a class="headerlink" href="#open-work" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>3.2</strong> — Alerting/dashboards reference. Deferred until a real Prometheus setup exists (💤 in STATUS.md queue).</li>
+<li><strong>3.2</strong> — Alerting/dashboards reference.
+   Deferred until a real Prometheus setup exists (💤 in STATUS.md queue).</li>
 </ol>
 <hr />
 <h2 id="current-state">Current state<a class="headerlink" href="#current-state" title="Permanent link">&para;</a></h2>
-<p>The design doc suite (16 files) covers architecture, API contracts, security, testing, and implementation planning well. Critical gaps are in production operations: there is no troubleshooting guide, no production runbook, and no upgrade/disaster recovery procedures. Several existing docs have incomplete failure-path coverage and lack worked examples. A handful of cross-reference and API contract inconsistencies need to be resolved before the system goes into production use.</p>
+<p>The design doc suite (16 files) covers architecture, API contracts, security, testing, and implementation planning well.
+Critical gaps are in production operations: there is no troubleshooting guide, no production runbook, and no upgrade/disaster recovery procedures.
+Several existing docs have incomplete failure-path coverage and lack worked examples.
+A handful of cross-reference and API contract inconsistencies need to be resolved before the system goes into production use.</p>
 <hr />
 <h2 id="audience-map">Audience map<a class="headerlink" href="#audience-map" title="Permanent link">&para;</a></h2>
 <p>Understanding who reads what determines scope and priority.</p>
@@ -3045,7 +3050,8 @@
 </table>
 <hr />
 <h2 id="phase-1--fill-critical-operational-gaps">Phase 1 — Fill critical operational gaps<a class="headerlink" href="#phase-1--fill-critical-operational-gaps" title="Permanent link">&para;</a></h2>
-<p>These are blocking for production readiness. None of this content exists anywhere.</p>
+<p>These are blocking for production readiness.
+None of this content exists anywhere.</p>
 <h3 id="11-troubleshooting-guide--docsoperationstroubleshootingmd">1.1 Troubleshooting guide — <code>docs/operations/troubleshooting.md</code><a class="headerlink" href="#11-troubleshooting-guide--docsoperationstroubleshootingmd" title="Permanent link">&para;</a></h3>
 <p>Audience: platform engineer (on call).</p>
 <p>Cover the following failure modes as named sections, each with: symptoms, likely cause, diagnostic steps (commands), resolution:</p>
@@ -3075,7 +3081,8 @@
 <p>Reference <code>docs/operations/observability.md</code> and <code>docs/design/appendix-a-capacity-slos.md</code> rather than duplicating tables.</p>
 <h3 id="13-upgrade-and-rollback-procedures--docsoperationsupgrademd">1.3 Upgrade and rollback procedures — <code>docs/operations/upgrade.md</code><a class="headerlink" href="#13-upgrade-and-rollback-procedures--docsoperationsupgrademd" title="Permanent link">&para;</a></h3>
 <p>Audience: platform engineer.</p>
-<p>The upgrade strategy is described in <code>docs/design/02-architecture.md §2.6</code> but only as intent. This doc translates that into steps:</p>
+<p>The upgrade strategy is described in <code>docs/design/02-architecture.md §2.6</code> but only as intent.
+This doc translates that into steps:</p>
 <ul>
 <li>Pre-upgrade validation checklist</li>
 <li>Step-by-step: GMC upgrade (CRD migration, operator rollout)</li>
@@ -3089,13 +3096,16 @@
 <h2 id="phase-2--improve-existing-docs">Phase 2 — Improve existing docs<a class="headerlink" href="#phase-2--improve-existing-docs" title="Permanent link">&para;</a></h2>
 <p>These are not blocking but reduce clarity and correctness of what already exists.</p>
 <h3 id="21-fix-the-maxevictionretries-inconsistency">2.1 Fix the <code>maxEvictionRetries</code> inconsistency<a class="headerlink" href="#21-fix-the-maxevictionretries-inconsistency" title="Permanent link">&para;</a></h3>
-<p><code>docs/design/02-architecture.md §2.2</code> describes <code>maxEvictionRetries</code> per RunnerGroup. <code>docs/design/03-api-contracts.md §3.1</code> RunnerGroupSpec does not include this field. One of these is wrong. Resolve it:</p>
+<p><code>docs/design/02-architecture.md §2.2</code> describes <code>maxEvictionRetries</code> per RunnerGroup. <code>docs/design/03-api-contracts.md §3.1</code> RunnerGroupSpec does not include this field.
+One of these is wrong.
+Resolve it:</p>
 <ul>
 <li>If the field exists in code: add it to the CRD spec in §3.1 with type, default, and semantics.</li>
 <li>If it doesn't exist yet: remove the reference from §2.2 or mark it as planned.</li>
 </ul>
 <h3 id="22-add-failure-paths-to-docsdesign04-operational-flowsmd">2.2 Add failure paths to <code>docs/design/04-operational-flows.md</code><a class="headerlink" href="#22-add-failure-paths-to-docsdesign04-operational-flowsmd" title="Permanent link">&para;</a></h3>
-<p>The two sequence diagrams cover only the happy path. Add a third diagram or annotated variants covering:</p>
+<p>The two sequence diagrams cover only the happy path.
+Add a third diagram or annotated variants covering:</p>
 <ul>
 <li>Provisioning failure (GMC cannot create RBAC → condition set, retry behavior)</li>
 <li>Job acquisition failure (broker returns error → session loop behavior)</li>
@@ -3103,14 +3113,16 @@
 <li>AGC crash mid-job (GitHub redelivery window, what the tenant observes)</li>
 </ul>
 <h3 id="23-add-worked-examples-to-docsdesignappendix-e-capacity-planningmd">2.3 Add worked examples to <code>docs/design/appendix-e-capacity-planning.md</code><a class="headerlink" href="#23-add-worked-examples-to-docsdesignappendix-e-capacity-planningmd" title="Permanent link">&para;</a></h3>
-<p>The decision tree and formulas are good but abstract. Add two or three concrete scenarios:</p>
+<p>The decision tree and formulas are good but abstract.
+Add two or three concrete scenarios:</p>
 <ul>
 <li>"Team with 3 RunnerGroups, 20 concurrent GPU jobs at peak" — what to set for <code>maxListeners</code>, <code>maxWorkers</code>, <code>namespaceQuota</code>, and when to shard</li>
 <li>"CPU-only team, 100 jobs/day, bursty (10 concurrent max)" — minimal configuration</li>
 <li>"Large tenant hitting 250-session ceiling" — sharding walkthrough</li>
 </ul>
 <h3 id="24-expand-docsoperationsobservabilitymd">2.4 Expand <code>docs/operations/observability.md</code><a class="headerlink" href="#24-expand-docsoperationsobservabilitymd" title="Permanent link">&para;</a></h3>
-<p>Current state is a one-page metrics list. Add:</p>
+<p>Current state is a one-page metrics list.
+Add:</p>
 <ul>
 <li><strong>Alert rules</strong> — recommended Prometheus alerting rules for the key metrics (threshold, <code>for</code> duration, severity)</li>
 <li><strong>Symptom → metric mapping</strong> — "jobs are slow": check <code>pod_creation_latency_seconds</code>; "jobs randomly cancelled": check <code>renewjob_errors_total</code>; etc.</li>
@@ -3118,16 +3130,21 @@
 <li><strong>How to access metrics</strong> — port (<code>:8080/metrics</code> default), whether auth is required, how to scrape in common setups (Prometheus operator <code>ServiceMonitor</code>)</li>
 </ul>
 <h3 id="25-add-credential-rotation-to-docsgetting-startedmd">2.5 Add credential rotation to <code>docs/getting-started.md</code><a class="headerlink" href="#25-add-credential-rotation-to-docsgetting-startedmd" title="Permanent link">&para;</a></h3>
-<p>Currently the getting-started doc only covers initial setup. Add a section: "Rotating GitHub App credentials" — update the Secret in-place and describe what the AGC does (detects Secret change, refreshes token on next interval vs. requires restart).</p>
+<p>Currently the getting-started doc only covers initial setup.
+Add a section: "Rotating GitHub App credentials" — update the Secret in-place and describe what the AGC does (detects Secret change, refreshes token on next interval vs. requires restart).</p>
 <h3 id="26-note-the-defaultworkerimage-constant-in-docsdesign03-api-contractsmd">2.6 Note the <code>DefaultWorkerImage</code> constant in <code>docs/design/03-api-contracts.md</code><a class="headerlink" href="#26-note-the-defaultworkerimage-constant-in-docsdesign03-api-contractsmd" title="Permanent link">&para;</a></h3>
-<p>§3.1 mentions it is a compile-time constant but gives no way to discover or override it. Add: the name of the constant, where it is defined, and how to override it (build flag or env var, whichever applies).</p>
+<p>§3.1 mentions it is a compile-time constant but gives no way to discover or override it.
+Add: the name of the constant, where it is defined, and how to override it (build flag or env var, whichever applies).</p>
 <h3 id="27-fix-the-hpa-silent-failure-note-in-docsdesign03-api-contractsmd">2.7 Fix the HPA silent-failure note in <code>docs/design/03-api-contracts.md</code><a class="headerlink" href="#27-fix-the-hpa-silent-failure-note-in-docsdesign03-api-contractsmd" title="Permanent link">&para;</a></h3>
-<p>Add a callout in ProxyConfig: if <code>resources.requests.cpu</code> is unset or zero, the HPA cannot compute utilization and will silently stop scaling. This is the most dangerous misconfiguration and currently undocumented.</p>
+<p>Add a callout in ProxyConfig: if <code>resources.requests.cpu</code> is unset or zero, the HPA cannot compute utilization and will silently stop scaling.
+This is the most dangerous misconfiguration and currently undocumented.</p>
 <h3 id="28-add-a-reading-path-guide-to-docsdesignreadmemd">2.8 Add a reading-path guide to <code>docs/design/README.md</code><a class="headerlink" href="#28-add-a-reading-path-guide-to-docsdesignreadmemd" title="Permanent link">&para;</a></h3>
-<p>Below the TOC, add: "Reading paths by role" — four bullet points mapping architect / operator / security engineer / developer to the recommended reading order for their concerns. Also add Appendices A–E to the main TOC (currently only B and D appear there).</p>
+<p>Below the TOC, add: "Reading paths by role" — four bullet points mapping architect / operator / security engineer / developer to the recommended reading order for their concerns.
+Also add Appendices A–E to the main TOC (currently only B and D appear there).</p>
 <hr />
 <h2 id="phase-3--new-reference-material">Phase 3 — New reference material<a class="headerlink" href="#phase-3--new-reference-material" title="Permanent link">&para;</a></h2>
-<p>These expand coverage for production and compliance use. Lower urgency but high value once the system is in active use.</p>
+<p>These expand coverage for production and compliance use.
+Lower urgency but high value once the system is in active use.</p>
 <h3 id="31-network-architecture--docsdesignnetwork-architecturemd">3.1 Network architecture — <code>docs/design/network-architecture.md</code><a class="headerlink" href="#31-network-architecture--docsdesignnetwork-architecturemd" title="Permanent link">&para;</a></h3>
 <p>A topology diagram and narrative covering:</p>
 <ul>

@@ -2642,18 +2642,18 @@
 
 
 <h1 id="q291--e2e-calico-egress-to-github-reachability-flake">Q291 — e2e-calico egress-to-GitHub reachability flake<a class="headerlink" href="#q291--e2e-calico-egress-to-github-reachability-flake" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> open. Mitigation (retry-budget widening) shipped; a clean soak on <code>main</code> is still required before closing.</p>
+<p><strong>Status:</strong> open.
+Mitigation (retry-budget widening) shipped; a clean soak on <code>main</code> is still required before closing.</p>
 <h2 id="symptom">Symptom<a class="headerlink" href="#symptom" title="Permanent link">&para;</a></h2>
-<p>Three <code>cmd/gmc/test/e2e</code> specs — all of which reach <strong>real</strong> api.github.com /
-github.com — red the whole <code>e2e-calico</code> leg together, in an identical set, while
-the cluster and Calico bring-up come up clean (49 Passed | 3 Failed | 6 Skipped):</p>
+<p>Three <code>cmd/gmc/test/e2e</code> specs — all of which reach <strong>real</strong> api.github.com / github.com — red the whole <code>e2e-calico</code> leg together, in an identical set, while the cluster and Calico bring-up come up clean (49 Passed | 3 Failed | 6 Skipped):</p>
 <ul>
 <li><code>E2E_V2_MultiGateway_ProxyConnectWorks</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">v2_multigateway_test.go</a>) — <code>curl: (56) CONNECT tunnel failed, response 502</code>, <code>HTTP_CODE=000</code>.</li>
 <li><code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/provisioning_test.go">provisioning_test.go</a>) — same 502.</li>
 <li><code>E2E_V2_DirectEgress_ReachesGitHub</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/direct_egress_test.go">direct_egress_test.go</a>) — <code>curl: (28) Connection timed out after 30002 milliseconds</code> ×3.</li>
 </ul>
 <h2 id="recurrence">Recurrence<a class="headerlink" href="#recurrence" title="Permanent link">&para;</a></h2>
-<p>Not a one-off. Identical failure set on two <code>main</code> runs a week apart:</p>
+<p>Not a one-off.
+Identical failure set on two <code>main</code> runs a week apart:</p>
 <table>
 <thead>
 <tr>
@@ -2678,40 +2678,23 @@ the cluster and Calico bring-up come up clean (49 Passed | 3 Failed | 6 Skipped)
 </tr>
 </tbody>
 </table>
-<p>(Two other <code>e2e-calico</code> reds in the same window were unrelated infra: run
-28956589306 = "No space left on device"; run 28497797865 = "runner lost
-communication" — both CI-host-resource symptoms, see <em>Open question</em> below.)</p>
-<p>This flake was never filed before: the Q256 Flake-watch row noted "the one red
-run failed only on unrelated egress-to-GitHub specs" but did not track it.</p>
+<p>(Two other <code>e2e-calico</code> reds in the same window were unrelated infra: run 28956589306 = "No space left on device"; run 28497797865 = "runner lost communication" — both CI-host-resource symptoms, see <em>Open question</em> below.)</p>
+<p>This flake was never filed before: the Q256 Flake-watch row noted "the one red run failed only on unrelated egress-to-GitHub specs" but did not track it.</p>
 <h2 id="mechanism-verified-against-source-not-just-logs">Mechanism (verified against source, not just logs)<a class="headerlink" href="#mechanism-verified-against-source-not-just-logs" title="Permanent link">&para;</a></h2>
-<p>All three failures are the <strong>same leg</strong>: the workload's <em>outbound</em> hop to
-GitHub, not proxy readiness.</p>
+<p>All three failures are the <strong>same leg</strong>: the workload's <em>outbound</em> hop to GitHub, not proxy readiness.</p>
 <ul>
-<li>The proxy's <code>/readyz</code> closes as soon as the <strong>CONNECT listener binds</strong>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go">cmd/proxy/proxy.go</a>); it does <strong>not</strong> gate on
-  egress-to-GitHub working. So a <code>WaitForDeploymentReady</code> gate would not help —
-  the proxy was already serving.</li>
-<li>The proxy emits <strong>502 only when its own <code>net.DialTimeout</code> to
-  api.github.com:443 fails</strong> (<code>cmd/proxy</code>: <code>TestProxy_DialFailure</code>; never 504).
-  A 502 therefore means the proxy is up but its upstream dial was dropped — a
-  brief egress-dataplane window on the Calico lane <strong>before Felix programs the
-  new ipBlock rules</strong>, or a genuine transient to GitHub.</li>
-<li>The direct-egress <code>(28)</code> timeout is the same window on the workload NP path
-  (no proxy): three 30 s attempts = exactly the 90 s <code>--retry-max-time</code> budget,
-  i.e. the budget was fully exhausted before the dataplane settled.</li>
+<li>The proxy's <code>/readyz</code> closes as soon as the <strong>CONNECT listener binds</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go">cmd/proxy/proxy.go</a>); it does <strong>not</strong> gate on egress-to-GitHub working.
+  So a <code>WaitForDeploymentReady</code> gate would not help — the proxy was already serving.</li>
+<li>The proxy emits <strong>502 only when its own <code>net.DialTimeout</code> to api.github.com:443 fails</strong> (<code>cmd/proxy</code>: <code>TestProxy_DialFailure</code>; never 504).
+  A 502 therefore means the proxy is up but its upstream dial was dropped — a brief egress-dataplane window on the Calico lane <strong>before Felix programs the new ipBlock rules</strong>, or a genuine transient to GitHub.</li>
+<li>The direct-egress <code>(28)</code> timeout is the same window on the workload NP path (no proxy): three 30 s attempts = exactly the 90 s <code>--retry-max-time</code> budget, i.e. the budget was fully exhausted before the dataplane settled.</li>
 </ul>
-<p>Both proxy-connect specs gate only on the NetworkPolicy <strong>object</strong> gaining
-GitHub <code>ipBlock</code> peers (populated by the IPRangeReconciler) — which does not
-imply Felix has <strong>programmed</strong> those rules into the dataplane. Under CI load the
-programming/transient window outlasts the existing curl retry budget (60 s
-proxy-connect / 90 s direct), so the specs fire and give up too early.</p>
+<p>Both proxy-connect specs gate only on the NetworkPolicy <strong>object</strong> gaining GitHub <code>ipBlock</code> peers (populated by the IPRangeReconciler) — which does not imply Felix has <strong>programmed</strong> those rules into the dataplane.
+Under CI load the programming/transient window outlasts the existing curl retry budget (60 s proxy-connect / 90 s direct), so the specs fire and give up too early.</p>
 <h2 id="mitigation-shipped">Mitigation (shipped)<a class="headerlink" href="#mitigation-shipped" title="Permanent link">&para;</a></h2>
-<p>Widen the <strong>bounded</strong> outbound-GitHub retry budget on all three specs, and the
-pod-phase ceiling to match. This does <strong>not</strong> weaken any assertion: a genuine
-persistent proxy / NP / TLS regression still fails on every retry and still reds
-the spec (<code>--retry-all-errors</code> only adds bounded retries; it cannot turn a
-deterministic failure green). It only gives a transient Felix-programming /
-external blip more room to self-heal.</p>
+<p>Widen the <strong>bounded</strong> outbound-GitHub retry budget on all three specs, and the pod-phase ceiling to match.
+This does <strong>not</strong> weaken any assertion: a genuine persistent proxy / NP / TLS regression still fails on every retry and still reds the spec (<code>--retry-all-errors</code> only adds bounded retries; it cannot turn a deterministic failure green).
+It only gives a transient Felix-programming / external blip more room to self-heal.</p>
 <table>
 <thead>
 <tr>
@@ -2733,27 +2716,16 @@ external blip more room to self-heal.</p>
 </tr>
 </tbody>
 </table>
-<p><code>--retry-max-time 150</code> + one final <code>--max-time 30</code> attempt ≤ 180 s worst case,
-comfortably inside the 4 min (240 s) pod-phase ceiling, so a real persistent
-failure still terminates well before the wait times out.</p>
+<p><code>--retry-max-time 150</code> + one final <code>--max-time 30</code> attempt ≤ 180 s worst case, comfortably inside the 4 min (240 s) pod-phase ceiling, so a real persistent failure still terminates well before the wait times out.</p>
 <h2 id="open-question--is-a-retry-budget-bump-the-root-fix-or-just-a-mitigation">Open question — is a retry-budget bump the root fix, or just a mitigation?<a class="headerlink" href="#open-question--is-a-retry-budget-bump-the-root-fix-or-just-a-mitigation" title="Permanent link">&para;</a></h2>
-<p>The two same-window infra reds (disk-full, runner-lost-comms) and the
-<code>FailedMount … failed to sync secret cache: timed out waiting for the condition</code>
-warnings on the proxy pod in run 29162764494 all point to <strong>CI-host resource
-pressure</strong> on the e2e-calico runner. If the true cause is an overloaded runner
-(kubelet/apiserver cache-sync stalls that also slow Felix), widening the retry
-budget is a mitigation that papers over it rather than a root-cause fix. Because
-the flake reproduces only intermittently (~2 sightings), <strong>a single green CI run
-does not prove the fix</strong> — keep this item open until <code>e2e-calico</code> soaks clean on
-<code>main</code> across several runs. If it recurs after the budget bump, investigate
-runner resource headroom (Q286 Kata/dedicated-pool work may be the real lever)
-rather than widening the budget again.</p>
+<p>The two same-window infra reds (disk-full, runner-lost-comms) and the <code>FailedMount … failed to sync secret cache: timed out waiting for the condition</code> warnings on the proxy pod in run 29162764494 all point to <strong>CI-host resource pressure</strong> on the e2e-calico runner.
+If the true cause is an overloaded runner (kubelet/apiserver cache-sync stalls that also slow Felix), widening the retry budget is a mitigation that papers over it rather than a root-cause fix.
+Because the flake reproduces only intermittently (~2 sightings), <strong>a single green CI run does not prove the fix</strong> — keep this item open until <code>e2e-calico</code> soaks clean on <code>main</code> across several runs.
+If it recurs after the budget bump, investigate runner resource headroom (Q286 Kata/dedicated-pool work may be the real lever) rather than widening the budget again.</p>
 <h2 id="not-in-scope">Not in scope<a class="headerlink" href="#not-in-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Q256 (Calico BIRD/nodename bring-up) is a <strong>separate</strong> concern, fixed in
-  PR #590; do not touch the bring-up script for this.</li>
-<li>Do not weaken what the specs assert (200/403-only, non-empty body, pod
-  <code>Succeeded</code>).</li>
+<li>Q256 (Calico BIRD/nodename bring-up) is a <strong>separate</strong> concern, fixed in PR #590; do not touch the bring-up script for this.</li>
+<li>Do not weaken what the specs assert (200/403-only, non-empty body, pod <code>Succeeded</code>).</li>
 </ul>
 
 

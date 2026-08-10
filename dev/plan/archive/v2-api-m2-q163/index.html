@@ -2631,18 +2631,15 @@
 
 
 <h1 id="v2-api-m2-q163--egressproxy-reconciler--runnertemplate-webhook">v2 API M2 (Q163) — EgressProxy reconciler + RunnerTemplate webhook<a class="headerlink" href="#v2-api-m2-q163--egressproxy-reconciler--runnertemplate-webhook" title="Permanent link">&para;</a></h1>
-<p>Session-scoped implementation plan for <strong>Q163 — v2 API M2: data-kind ("noun")
-reconcilers</strong>. Parent plan: <a href="../../v2-api/">v2-api.md</a> § "M2 — Data kinds (nouns)".
-Design source of truth: <a href="../../../design/appendix-h-v2-api-decomposition/">appendix-h</a>
-§H.4, §H.7, §H.8.</p>
-<p><strong>Scope:</strong> M2 nouns only — same-namespace, no control kinds (<code>ActionsGateway</code> /
-<code>RunnerSet</code> reconcilers are M3a). Builds on M1 (Q149, #352): the <code>v2alpha1</code>
-(<code>actions-gateway.com</code>) types, CRDs, CEL, and status contract already exist.</p>
+<p>Session-scoped implementation plan for <strong>Q163 — v2 API M2: data-kind ("noun") reconcilers</strong>.
+Parent plan: <a href="../../v2-api/">v2-api.md</a> § "M2 — Data kinds (nouns)".
+Design source of truth: <a href="../../../design/appendix-h-v2-api-decomposition/">appendix-h</a> §H.4, §H.7, §H.8.</p>
+<p><strong>Scope:</strong> M2 nouns only — same-namespace, no control kinds (<code>ActionsGateway</code> / <code>RunnerSet</code> reconcilers are M3a).
+Builds on M1 (Q149, #352): the <code>v2alpha1</code> (<code>actions-gateway.com</code>) types, CRDs, CEL, and status contract already exist.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong><code>EgressProxy</code> reconciler (GMC).</strong> Reconciles a standalone <code>EgressProxy</code> into
-   a working proxy pool, owning each child via a controller owner-reference on the
-   <code>EgressProxy</code> (clean cascade GC, §H.8). Same-namespace only.</li>
+<li><strong><code>EgressProxy</code> reconciler (GMC).</strong> Reconciles a standalone <code>EgressProxy</code> into a working proxy pool, owning each child via a controller owner-reference on the <code>EgressProxy</code> (clean cascade GC, §H.8).
+   Same-namespace only.</li>
 <li>Owned children, all named <code>&lt;ep&gt;-proxy</code>:<ul>
 <li><strong>Deployment</strong> — mirrors v1 <code>buildProxyDeployment</code> (hardened SecurityContext,
    required pod anti-affinity, proxy TLS cert mount, proxy container, probes).</li>
@@ -2656,8 +2653,8 @@ Design source of truth: <a href="../../../design/appendix-h-v2-api-decomposition
    <code>&lt;ep&gt;-proxy</code> Service DNS names ("cert/CA wiring").</li>
 </ul>
 </li>
-<li><strong>Per-EgressProxy identity label</strong> <code>actions-gateway.com/egress-proxy: &lt;name&gt;</code>
-     on every child + the pod template. This is load-bearing two ways:<ol>
+<li><strong>Per-EgressProxy identity label</strong> <code>actions-gateway.com/egress-proxy: &lt;name&gt;</code> on every child + the pod template.
+     This is load-bearing two ways:<ol>
 <li><strong>Selector isolation</strong> — multiple <code>EgressProxy</code>s per namespace must not
     collide on a shared <code>app: proxy</code> selector (v1 could assume one proxy/ns).
     Every Deployment/Service/PDB/HPA/NetworkPolicy selector and the pod
@@ -2667,69 +2664,44 @@ Design source of truth: <a href="../../../design/appendix-h-v2-api-decomposition
 </ol>
 </li>
 <li>
-<p><strong>Status</strong> — uniform contract (§H.7): <code>Ready</code> + <code>observedGeneration</code> +
-     <code>readyReplicas</code>, using the M1 <code>conditions.go</code> vocabulary.</p>
+<p><strong>Status</strong> — uniform contract (§H.7): <code>Ready</code> + <code>observedGeneration</code> + <code>readyReplicas</code>, using the M1 <code>conditions.go</code> vocabulary.</p>
 </li>
 <li>
-<p><strong><code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code> validating webhook (GMC).</strong> Pure
-   data kinds; the reserved-pod-field rejection that v1 did by <em>silent override</em> at
-   pod-build time (<code>provisioner.go</code>) becomes <em>author-time rejection</em> (§H.4, §H.7).
-   M1 CEL already rejects the scalar pod-level fields (<code>serviceAccountName</code>,
-   <code>host{PID,Network,IPC}</code>, <code>automountServiceAccountToken</code>). The webhook adds the
-   per-container checks that exceed the CEL cost budget:</p>
+<p><strong><code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code> validating webhook (GMC).</strong> Pure data kinds; the reserved-pod-field rejection that v1 did by <em>silent override</em> at pod-build time (<code>provisioner.go</code>) becomes <em>author-time rejection</em> (§H.4, §H.7).
+   M1 CEL already rejects the scalar pod-level fields (<code>serviceAccountName</code>, <code>host{PID,Network,IPC}</code>, <code>automountServiceAccountToken</code>).
+   The webhook adds the per-container checks that exceed the CEL cost budget:</p>
 </li>
-<li><strong>Reserved proxy env vars</strong> — reject <code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code>
-     (case-insensitive) and <code>PROXY_CA_CERT_PATH</code> on any container/initContainer of
-     <strong>both</strong> kinds. These are unconditionally controller-injected on the worker
-     container in v1; a template that sets them would be silently overwritten.</li>
-<li><strong>Privileged containers</strong> — reject on the <strong>namespaced <code>RunnerTemplate</code></strong>
-     (a tenant must not self-author a privileged worker shape); <strong>allow on
-     <code>ClusterRunnerTemplate</code></strong> (cluster-scoped ⇒ platform-authored golden
-     privileged templates — DinD/sysbox — the documented purpose of the
-     cluster-scoped kind, §H.4/§H.6).</li>
+<li><strong>Reserved proxy env vars</strong> — reject <code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code> (case-insensitive) and <code>PROXY_CA_CERT_PATH</code> on any container/initContainer of <strong>both</strong> kinds.
+     These are unconditionally controller-injected on the worker container in v1; a template that sets them would be silently overwritten.</li>
+<li><strong>Privileged containers</strong> — reject on the <strong>namespaced <code>RunnerTemplate</code></strong> (a tenant must not self-author a privileged worker shape); <strong>allow on <code>ClusterRunnerTemplate</code></strong> (cluster-scoped ⇒ platform-authored golden privileged templates — DinD/sysbox — the documented purpose of the cluster-scoped kind, §H.4/§H.6).</li>
 </ol>
 <h2 id="key-scope-decision--privileged-containers-flag-for-review">Key scope decision — privileged containers (FLAG for review)<a class="headerlink" href="#key-scope-decision--privileged-containers-flag-for-review" title="Permanent link">&para;</a></h2>
 <p>There is a documented tension the dispatcher should confirm:</p>
 <ul>
-<li><strong>§H.4's reserved-field list omits <code>privileged</code></strong> (lists serviceAccountName,
-  host*, automountServiceAccountToken, proxy env vars only).</li>
-<li><strong>M1's own note</strong> (<a href="../../v2-api/">v2-api.md</a> M1 task list) says the M2 webhook
-  rejects "privileged containers and proxy env vars".</li>
+<li><strong>§H.4's reserved-field list omits <code>privileged</code></strong> (lists serviceAccountName, host*, automountServiceAccountToken, proxy env vars only).</li>
+<li><strong>M1's own note</strong> (<a href="../../v2-api/">v2-api.md</a> M1 task list) says the M2 webhook rejects "privileged containers and proxy env vars".</li>
 </ul>
-<p>These conflict. Resolution chosen here, erring toward the <strong>secure-by-default</strong>
-side (a missing security control is worse than a present one):</p>
+<p>These conflict.
+Resolution chosen here, erring toward the <strong>secure-by-default</strong> side (a missing security control is worse than a present one):</p>
 <blockquote>
-<p>Reject privileged on the <strong>namespaced</strong> <code>RunnerTemplate</code>; <strong>allow</strong> on
-<code>ClusterRunnerTemplate</code>. Reject proxy env vars on <strong>both</strong>.</p>
+<p>Reject privileged on the <strong>namespaced</strong> <code>RunnerTemplate</code>; <strong>allow</strong> on <code>ClusterRunnerTemplate</code>.
+Reject proxy env vars on <strong>both</strong>.</p>
 </blockquote>
 <p>Rationale:
-- A template webhook <strong>cannot</strong> make v1's <em>profile-aware</em> privileged decision: the
-  <code>RunnerTemplate</code> references no <code>ActionsGateway</code>, so it cannot read
-  <code>securityProfile</code>. An <em>unconditional</em> privileged rejection would break the
-  cluster-scoped kind's documented golden-privileged-template purpose.
-- The kind split is decidable at the template layer (no profile needed), mirrors
-  the existing "privileged is a platform decision, not tenant-settable" stance
-  (<code>validatePrivilegedEligibility</code>), and is <strong>no weaker than v1</strong>: Pod Security
-  Admission (stamped per the gateway's <code>securityProfile</code>, unchanged in v2) remains
-  the runtime enforcement backstop for both kinds, exactly as v1's webhook comment
-  already calls it.</p>
-<p>If the dispatcher prefers PSA-only (no webhook privileged check, matching §H.4
-literally), removing the namespaced-kind check is a one-line deletion.</p>
+- A template webhook <strong>cannot</strong> make v1's <em>profile-aware</em> privileged decision: the <code>RunnerTemplate</code> references no <code>ActionsGateway</code>, so it cannot read <code>securityProfile</code>.
+  An <em>unconditional</em> privileged rejection would break the cluster-scoped kind's documented golden-privileged-template purpose.
+- The kind split is decidable at the template layer (no profile needed), mirrors the existing "privileged is a platform decision, not tenant-settable" stance (<code>validatePrivilegedEligibility</code>), and is <strong>no weaker than v1</strong>: Pod Security Admission (stamped per the gateway's <code>securityProfile</code>, unchanged in v2) remains the runtime enforcement backstop for both kinds, exactly as v1's webhook comment already calls it.</p>
+<p>If the dispatcher prefers PSA-only (no webhook privileged check, matching §H.4 literally), removing the namespaced-kind check is a one-line deletion.</p>
 <h2 id="metrics-mtls--deferred-to-m3a-not-a-regression">Metrics mTLS — deferred to M3a (not a regression)<a class="headerlink" href="#metrics-mtls--deferred-to-m3a-not-a-regression" title="Permanent link">&para;</a></h2>
-<p>v1's proxy Deployment also mounts a per-tenant metrics-mTLS bundle and a
-ServiceMonitor, under a metrics CA <strong>jointly owned with the AGC</strong>. That joint CA
-arrives with the <code>ActionsGateway</code> reconciler in M3a. For the standalone M2
-<code>EgressProxy</code>, exposing a metrics listener with no cert would either serve
-plaintext (a security regression) or nothing — so M2 omits the metrics port/listener
-entirely. The proxy still tunnels; the identity label (already stamped) makes the
-series carry the proxy identity once the M3a listener is wired. The proxy binary
-boots fine without the metrics-mTLS env (<code>cmd/proxy/main.go</code> treats it as optional).</p>
+<p>v1's proxy Deployment also mounts a per-tenant metrics-mTLS bundle and a ServiceMonitor, under a metrics CA <strong>jointly owned with the AGC</strong>.
+That joint CA arrives with the <code>ActionsGateway</code> reconciler in M3a.
+For the standalone M2 <code>EgressProxy</code>, exposing a metrics listener with no cert would either serve plaintext (a security regression) or nothing — so M2 omits the metrics port/listener entirely.
+The proxy still tunnels; the identity label (already stamped) makes the series carry the proxy identity once the M3a listener is wired.
+The proxy binary boots fine without the metrics-mTLS env (<code>cmd/proxy/main.go</code> treats it as optional).</p>
 <h2 id="where-the-code-lives--gmc-not-agc">Where the code lives — GMC, not AGC<a class="headerlink" href="#where-the-code-lives--gmc-not-agc" title="Permanent link">&para;</a></h2>
-<p>The webhook and the EgressProxy reconciler both live in the <strong>GMC</strong> (the
-cluster-singleton). The AGC is deployed per-tenant, so it cannot host a
-cluster-wide admission webhook; the GMC already serves the v1 ActionsGateway
-webhook and already imports the AGC api module. The GMC imports
-<code>agc/api/v2alpha1</code> for the <code>RunnerTemplate</code> types.</p>
+<p>The webhook and the EgressProxy reconciler both live in the <strong>GMC</strong> (the cluster-singleton).
+The AGC is deployed per-tenant, so it cannot host a cluster-wide admission webhook; the GMC already serves the v1 ActionsGateway webhook and already imports the AGC api module.
+The GMC imports <code>agc/api/v2alpha1</code> for the <code>RunnerTemplate</code> types.</p>
 <h2 id="task-checklist">Task checklist<a class="headerlink" href="#task-checklist" title="Permanent link">&para;</a></h2>
 <ul>
 <li>[ ] Register <code>agcv2alpha1</code> in the GMC scheme (<code>main.go</code> + integration suite).</li>

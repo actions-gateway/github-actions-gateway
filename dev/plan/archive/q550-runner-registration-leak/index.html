@@ -2731,25 +2731,15 @@
 
 
 <h1 id="q550-reaping-a-worker-pod-leaks-its-scale-set-runner-registration">Q550: reaping a worker pod leaks its scale-set runner registration<a class="headerlink" href="#q550-reaping-a-worker-pod-leaks-its-scale-set-runner-registration" title="Permanent link">&para;</a></h1>
-<p>Close the runner-registration leak in the scale-set acquisition tier: every
-<code>generatejitconfig</code> pre-registers a runner record at GitHub, and nothing in the
-provision→reap lifecycle removes it. Because the runner name is derived from the
-job ID, a job's own leftovers collide with its retries — the failure mode that
-wedged the <code>v1.3.0-rc.2</code> validation window with 22 stale <code>gag-ci-e2e</code> records.</p>
-<p>Closed 2026-07-31 (Q550, <code>bug</code> <code>1.3-gate</code>). Sibling row Q551 covered what the
-listener does <em>after</em> the collisions become unrecoverable — it kept the skip that
-stops one stuck assignment wedging the batch, but now holds the job and re-offers
-it on a backoff, surfacing the stall as <code>JobProvisionStalled</code>. The two shipped
-separately the same day: this fix removes most of what <em>causes</em> the collisions,
-Q551 makes what remains recoverable and visible.</p>
+<p>Close the runner-registration leak in the scale-set acquisition tier: every <code>generatejitconfig</code> pre-registers a runner record at GitHub, and nothing in the provision→reap lifecycle removes it.
+Because the runner name is derived from the job ID, a job's own leftovers collide with its retries — the failure mode that wedged the <code>v1.3.0-rc.2</code> validation window with 22 stale <code>gag-ci-e2e</code> records.</p>
+<p>Closed 2026-07-31 (Q550, <code>bug</code> <code>1.3-gate</code>).
+Sibling row Q551 covered what the listener does <em>after</em> the collisions become unrecoverable — it kept the skip that stops one stuck assignment wedging the batch, but now holds the job and re-offers it on a backoff, surfacing the stall as <code>JobProvisionStalled</code>.
+The two shipped separately the same day: this fix removes most of what <em>causes</em> the collisions, Q551 makes what remains recoverable and visible.</p>
 <blockquote>
-<p><strong>Verified at unit and integration; not yet re-verified live.</strong> The defect was
-found in the <code>v1.3.0-rc.2</code> dogfood window, and no tier below a live-GitHub run
-can confirm that the REST listing behaves as the fake models it. The release
-gate's own dogfood validation is where that confirmation lands — it is part of
-the <a href="../../release-1.3/">Release 1.3</a> Definition of Done rather than a Queue row.
-The <code>Warn</code> line added to the unresolvable-reclaim branch is what will name the
-live mechanism if it is still the one suspected here.</p>
+<p><strong>Verified at unit and integration; not yet re-verified live.</strong> The defect was found in the <code>v1.3.0-rc.2</code> dogfood window, and no tier below a live-GitHub run can confirm that the REST listing behaves as the fake models it.
+The release gate's own dogfood validation is where that confirmation lands — it is part of the <a href="../../release-1.3/">Release 1.3</a> Definition of Done rather than a Queue row.
+The <code>Warn</code> line added to the unresolvable-reclaim branch is what will name the live mechanism if it is still the one suspected here.</p>
 </blockquote>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
@@ -2789,193 +2779,108 @@ live mechanism if it is still the one suspected here.</p>
 </tbody>
 </table>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
-<p><strong>The stub could not express the bug.</strong> <code>handleGenerateJIT</code> never recorded the name it
-minted, so no test at any tier could observe a leaked registration — the leak was
-invisible to the whole suite by construction. Teaching the fake to register on mint (and
-to <code>409</code> a re-mint of a live name, as the real endpoint does) is a finding about the real
-interface, not test scaffolding: it is what made the two cases below distinguishable.</p>
-<p><strong>Q334's reclaim already covers the self-collision — when the record resolves.</strong> With the
-faithful stub, a job that fails to provision three times and retries ends with exactly one
-record: each attempt's <code>409</code> triggers the by-name delete and re-registers under the same
-base name. <code>TestListener_RetryReclaimsItsOwnLeftoverRegistration</code> pins that, and it is why
-the original framing of "retries 409 against their own leftovers" is not by itself the
-accumulation mechanism.</p>
-<p><strong>The accumulation needs the reclaim to resolve nothing.</strong> When a record holds the name at
-<code>generatejitconfig</code> but the REST name filter does not return it,
-<code>DeregisterRunnerByName</code> reports <code>(false, nil)</code> — which the code ignored silently, with no
-log at any level — and every retry escalates to a suffixed name that no later attempt ever
-revisits. Each of those registers a record nothing will collect.
-<code>TestListener_UnresolvableLeftoverAccumulatesSuffixedRecords</code> pins it. This is
-hypothesis (2) below, now demonstrated as <em>a</em> sufficient mechanism against the fake;
-whether it is what the live API did on 2026-07-31 is still unconfirmed, which is why
-the <code>(false, nil)</code> branch now logs at <code>Warn</code> — an operator hitting it will see it named.</p>
+<p><strong>The stub could not express the bug.</strong> <code>handleGenerateJIT</code> never recorded the name it minted, so no test at any tier could observe a leaked registration — the leak was invisible to the whole suite by construction.
+Teaching the fake to register on mint (and to <code>409</code> a re-mint of a live name, as the real endpoint does) is a finding about the real interface, not test scaffolding: it is what made the two cases below distinguishable.</p>
+<p><strong>Q334's reclaim already covers the self-collision — when the record resolves.</strong> With the faithful stub, a job that fails to provision three times and retries ends with exactly one record: each attempt's <code>409</code> triggers the by-name delete and re-registers under the same base name. <code>TestListener_RetryReclaimsItsOwnLeftoverRegistration</code> pins that, and it is why the original framing of "retries 409 against their own leftovers" is not by itself the accumulation mechanism.</p>
+<p><strong>The accumulation needs the reclaim to resolve nothing.</strong> When a record holds the name at <code>generatejitconfig</code> but the REST name filter does not return it, <code>DeregisterRunnerByName</code> reports <code>(false, nil)</code> — which the code ignored silently, with no log at any level — and every retry escalates to a suffixed name that no later attempt ever revisits.
+Each of those registers a record nothing will collect. <code>TestListener_UnresolvableLeftoverAccumulatesSuffixedRecords</code> pins it.
+This is hypothesis (2) below, now demonstrated as <em>a</em> sufficient mechanism against the fake; whether it is what the live API did on 2026-07-31 is still unconfirmed, which is why the <code>(false, nil)</code> branch now logs at <code>Warn</code> — an operator hitting it will see it named.</p>
 <p>The fix closes the leak under either mechanism, so nothing here blocked implementation.</p>
 <h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
 <h3 id="what-is-established">What is established<a class="headerlink" href="#what-is-established" title="Permanent link">&para;</a></h3>
 <p>These come from reading the code and from the incident, not from a live probe:</p>
 <ul>
-<li><code>Client.GenerateJITConfig</code> pre-registers a runner record server-side
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go">client.go:512</a>). The listener mints one per assigned
-  job before provisioning.</li>
-<li>The runner name is <code>{scaleSetName}-{jobID}</code>, deterministic per job
-  (<code>Listener.runnerName</code>), with <code>-1</code>/<code>-2</code>/<code>-3</code> suffixes on the conflict-retry path.</li>
-<li>Nothing in the reap path deregisters anything. <code>reapWorkerPodsByLabel</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go">runner_shared.go:232</a>)
-  patches a deletion reason and deletes the pod. It has no GitHub client and no
-  runner name to act on.</li>
-<li><strong>The minted runner name never leaves the listener.</strong> <code>scalesetlistener.Job</code>
-  carries <code>RunnerName</code>, but <code>ensureScaleSetListener</code>'s <code>Provision</code> closure
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go">runnerset_scaleset.go:165</a>)
-  copies <code>JobID</code>, <code>JITConfig</code>, and the run identity into <code>provisioner.ScaleSetJob</code>
-  and drops <code>RunnerName</code> on the floor. <code>ScaleSetJob</code> has no such field. So no
-  downstream component <em>could</em> deregister the right record today.</li>
-<li>A record is removed only by the ephemeral runner deregistering itself after it
-  completes a job, or by Q334's opportunistic reclaim on a 409
-  (<code>generateJITConfig</code>'s base-name branch).</li>
+<li><code>Client.GenerateJITConfig</code> pre-registers a runner record server-side (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go">client.go:512</a>).
+  The listener mints one per assigned job before provisioning.</li>
+<li>The runner name is <code>{scaleSetName}-{jobID}</code>, deterministic per job (<code>Listener.runnerName</code>), with <code>-1</code>/<code>-2</code>/<code>-3</code> suffixes on the conflict-retry path.</li>
+<li>Nothing in the reap path deregisters anything. <code>reapWorkerPodsByLabel</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go">runner_shared.go:232</a>) patches a deletion reason and deletes the pod.
+  It has no GitHub client and no runner name to act on.</li>
+<li><strong>The minted runner name never leaves the listener.</strong> <code>scalesetlistener.Job</code> carries <code>RunnerName</code>, but <code>ensureScaleSetListener</code>'s <code>Provision</code> closure (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go">runnerset_scaleset.go:165</a>) copies <code>JobID</code>, <code>JITConfig</code>, and the run identity into <code>provisioner.ScaleSetJob</code> and drops <code>RunnerName</code> on the floor. <code>ScaleSetJob</code> has no such field.
+  So no downstream component <em>could</em> deregister the right record today.</li>
+<li>A record is removed only by the ephemeral runner deregistering itself after it completes a job, or by Q334's opportunistic reclaim on a 409 (<code>generateJITConfig</code>'s base-name branch).</li>
 </ul>
-<p>Every path that kills a worker before its runner runs a job therefore leaks:
-pending-deadline reap (unschedulable — quota, stockout), orphaned-running reap,
-lifetime-cap reap, and terminal-pod reap of a pod that failed before the runner
-connected (image pull, crash).</p>
+<p>Every path that kills a worker before its runner runs a job therefore leaks: pending-deadline reap (unschedulable — quota, stockout), orphaned-running reap, lifetime-cap reap, and terminal-pod reap of a pod that failed before the runner connected (image pull, crash).</p>
 <h3 id="what-is-inferred-and-must-be-checked-in-phase-0">What is inferred, and must be checked in Phase 0<a class="headerlink" href="#what-is-inferred-and-must-be-checked-in-phase-0" title="Permanent link">&para;</a></h3>
-<p>Q334's reclaim already deletes a colliding <em>base</em> name, so a job retrying against
-its own base-name leftover should self-heal. Two things it does not cover, either
-of which produces the observed accumulation:</p>
+<p>Q334's reclaim already deletes a colliding <em>base</em> name, so a job retrying against its own base-name leftover should self-heal.
+Two things it does not cover, either of which produces the observed accumulation:</p>
 <ol>
-<li><strong>The suffixed names are never reclaimed.</strong> The fresh-name loop in
-   <code>generateJITConfig</code> tries <code>-1</code>, <code>-2</code>, <code>-3</code> and calls <code>DeregisterRunnerByName</code>
-   on none of them. A job that once took the fallback path leaks up to three
-   records that no later attempt can clear, and the next cycle collides on all
-   four names and hits Q551's permanent skip.</li>
-<li><strong><code>DeregisterRunnerByName</code> may not resolve the record.</strong> It finds the id via
-   the REST <code>list-runners?name=</code> filter; a <code>(false, nil)</code> return — no match — is
-   silently ignored (the <code>else if deleted</code> branch simply is not taken, with no
-   log at any level), and the code falls into the suffixed-name loop. If
-   scale-set JIT records are not visible under the REST prefix the client derives,
-   <em>no</em> reclaim ever works and every retry leaks a fresh name.</li>
+<li><strong>The suffixed names are never reclaimed.</strong> The fresh-name loop in <code>generateJITConfig</code> tries <code>-1</code>, <code>-2</code>, <code>-3</code> and calls <code>DeregisterRunnerByName</code> on none of them.
+   A job that once took the fallback path leaks up to three records that no later attempt can clear, and the next cycle collides on all four names and hits Q551's permanent skip.</li>
+<li><strong><code>DeregisterRunnerByName</code> may not resolve the record.</strong> It finds the id via the REST <code>list-runners?name=</code> filter; a <code>(false, nil)</code> return — no match — is silently ignored (the <code>else if deleted</code> branch simply is not taken, with no log at any level), and the code falls into the suffixed-name loop.
+   If scale-set JIT records are not visible under the REST prefix the client derives, <em>no</em> reclaim ever works and every retry leaks a fresh name.</li>
 </ol>
-<p>(1) is certain from the code. (2) is a hypothesis about the live API; Phase 0
-records which one the 22 records are consistent with. <strong>The fix below closes the
-leak under either</strong>, so implementation does not block on the answer — but a
-<code>(false, nil)</code> from a name we believe is registered is worth a log line, and
-Phase 0 adds one either way.</p>
+<p>(1) is certain from the code.
+(2) is a hypothesis about the live API; Phase 0 records which one the 22 records are consistent with. <strong>The fix below closes the leak under either</strong>, so implementation does not block on the answer — but a <code>(false, nil)</code> from a name we believe is registered is worth a log line, and Phase 0 adds one either way.</p>
 <h2 id="design-the-worker-pod-is-the-registry">Design: the worker pod is the registry<a class="headerlink" href="#design-the-worker-pod-is-the-registry" title="Permanent link">&para;</a></h2>
-<p>The AGC keeps no process state about a scale-set job — that is the tier's design
-(fire-and-forget provisioning, §2.4), and it is why Q417 put the run identity and
-Q420 put the reap deadline on the pod rather than in memory. The runner name
-belongs there for the same reason: the component that must deregister it (the
-reaper) runs long after the listener goroutine that minted it, and possibly in a
-different AGC process.</p>
+<p>The AGC keeps no process state about a scale-set job — that is the tier's design (fire-and-forget provisioning, §2.4), and it is why Q417 put the run identity and Q420 put the reap deadline on the pod rather than in memory.
+The runner name belongs there for the same reason: the component that must deregister it (the reaper) runs long after the listener goroutine that minted it, and possibly in a different AGC process.</p>
 <p>That single decision gives both halves of the fix:</p>
 <ul>
-<li><strong>Deregister on reap</strong> — the reaper reads the name off the pod it is about to
-  delete and removes the record. Closes the leak at its source.</li>
-<li><strong>Sweep at start</strong> — a record whose name is not claimed by a live worker pod is
-  by definition unclaimed, so the listener can delete it safely. Clears whatever
-  accumulated before the fix (and anything a crashed AGC misses afterwards),
-  which is what lets a wedged scale set self-heal.</li>
+<li><strong>Deregister on reap</strong> — the reaper reads the name off the pod it is about to delete and removes the record.
+  Closes the leak at its source.</li>
+<li><strong>Sweep at start</strong> — a record whose name is not claimed by a live worker pod is by definition unclaimed, so the listener can delete it safely.
+  Clears whatever accumulated before the fix (and anything a crashed AGC misses afterwards), which is what lets a wedged scale set self-heal.</li>
 </ul>
-<p>The pod cross-check is what makes the sweep safe. A worker that is still <code>Pending</code>
-has a legitimately <em>offline</em> record — its runner has not connected yet — so
-"offline" alone is not a sweepable signal, and the REST runner object carries no
-timestamp to age records by. Excluding every name stamped on a non-terminal worker
-pod is the available sound guard.</p>
+<p>The pod cross-check is what makes the sweep safe.
+A worker that is still <code>Pending</code> has a legitimately <em>offline</em> record — its runner has not connected yet — so "offline" alone is not a sweepable signal, and the REST runner object carries no timestamp to age records by.
+Excluding every name stamped on a non-terminal worker pod is the available sound guard.</p>
 <h2 id="phases">Phases<a class="headerlink" href="#phases" title="Permanent link">&para;</a></h2>
 <h3 id="phase-0--confirm-the-mechanism">Phase 0 — confirm the mechanism<a class="headerlink" href="#phase-0--confirm-the-mechanism" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Add a <code>Debug</code> log to the <code>(false, nil)</code> branch of <code>generateJITConfig</code>'s reclaim
-  so an unresolvable record is distinguishable from a resolvable one in AGC logs.</li>
-<li>Extend <code>scalesetstub</code> to model the leak: a <code>generatejitconfig</code> that registers
-  the name (it already tracks <code>runnerIDs</code>), and a knob for "registered but not
-  resolvable by the name filter" so hypothesis (2) can be exercised as a test
-  case rather than a guess.</li>
-<li>Write a failing unit test that drives the observed cycle: provision fails
-  repeatedly for one job, and assert the count of records left registered at the
-  stub. This is the regression test the fix has to flip.</li>
+<li>Add a <code>Debug</code> log to the <code>(false, nil)</code> branch of <code>generateJITConfig</code>'s reclaim so an unresolvable record is distinguishable from a resolvable one in AGC logs.</li>
+<li>Extend <code>scalesetstub</code> to model the leak: a <code>generatejitconfig</code> that registers the name (it already tracks <code>runnerIDs</code>), and a knob for "registered but not resolvable by the name filter" so hypothesis (2) can be exercised as a test case rather than a guess.</li>
+<li>Write a failing unit test that drives the observed cycle: provision fails repeatedly for one job, and assert the count of records left registered at the stub.
+  This is the regression test the fix has to flip.</li>
 </ul>
 <h3 id="phase-1--carry-the-runner-name-to-the-pod">Phase 1 — carry the runner name to the pod<a class="headerlink" href="#phase-1--carry-the-runner-name-to-the-pod" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Add <code>RunnerName</code> to <code>provisioner.ScaleSetJob</code> and stamp it as
-  <code>actions-gateway.com/runner-name</code> in <code>ProvisionScaleSetWorker</code>, alongside the
-  existing <code>jobMeta</code> annotations.</li>
-<li>Wire <code>job.RunnerName</code> through the <code>Provision</code> closure in
-  <code>ensureScaleSetListener</code> — the one-line drop that makes the rest possible.</li>
-<li>An unstamped pod (pre-upgrade, or a classic-tier pod) must degrade to today's
-  behaviour: no deregister attempt, no error. The reap itself never depends on it.</li>
+<li>Add <code>RunnerName</code> to <code>provisioner.ScaleSetJob</code> and stamp it as <code>actions-gateway.com/runner-name</code> in <code>ProvisionScaleSetWorker</code>, alongside the existing <code>jobMeta</code> annotations.</li>
+<li>Wire <code>job.RunnerName</code> through the <code>Provision</code> closure in <code>ensureScaleSetListener</code> — the one-line drop that makes the rest possible.</li>
+<li>An unstamped pod (pre-upgrade, or a classic-tier pod) must degrade to today's behaviour: no deregister attempt, no error.
+  The reap itself never depends on it.</li>
 </ul>
 <h3 id="phase-2--deregister-on-reap">Phase 2 — deregister on reap<a class="headerlink" href="#phase-2--deregister-on-reap" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Give <code>reapWorkerPodsByLabel</code> a deregister hook. Its signature already carries
-  three nil-able Event closures and is at twelve parameters; bundle those plus the
-  new hook into a small <code>reapHooks</code> struct in the same change rather than adding a
-  thirteenth positional argument.</li>
-<li>The hook is wired only by the RunnerSet reconciler and only for pods labelled
-  <code>AcquisitionProtocolScaleSet</code>; the classic tier's agent-pool JIT agents have
-  their own re-registration lifecycle (Q114) and are out of scope.</li>
-<li>Deregister <strong>before</strong> deleting the pod, so a delete that fails still leaves the
-  record clean. Best-effort throughout: an error or a <code>RunnerBusyError</code> logs and
-  proceeds with the reap — the reap policy has already condemned the pod, and a
-  busy record is one the AGC must not remove.</li>
-<li>All four reap reasons deregister. A record the ephemeral runner already removed
-  costs one <code>(false, nil)</code> lookup, which is the common case for a healthy
-  <code>completed_ttl</code> reap.</li>
+<li>Give <code>reapWorkerPodsByLabel</code> a deregister hook.
+  Its signature already carries three nil-able Event closures and is at twelve parameters; bundle those plus the new hook into a small <code>reapHooks</code> struct in the same change rather than adding a thirteenth positional argument.</li>
+<li>The hook is wired only by the RunnerSet reconciler and only for pods labelled <code>AcquisitionProtocolScaleSet</code>; the classic tier's agent-pool JIT agents have their own re-registration lifecycle (Q114) and are out of scope.</li>
+<li>Deregister <strong>before</strong> deleting the pod, so a delete that fails still leaves the record clean.
+  Best-effort throughout: an error or a <code>RunnerBusyError</code> logs and proceeds with the reap — the reap policy has already condemned the pod, and a busy record is one the AGC must not remove.</li>
+<li>All four reap reasons deregister.
+  A record the ephemeral runner already removed costs one <code>(false, nil)</code> lookup, which is the common case for a healthy <code>completed_ttl</code> reap.</li>
 </ul>
-<p>Cost: one REST list plus at most one delete per reaped pod. Reaps are not a hot
-path, but this is new per-pod GitHub API traffic and should be named as such in
-the operator docs.</p>
+<p>Cost: one REST list plus at most one delete per reaped pod.
+Reaps are not a hot path, but this is new per-pod GitHub API traffic and should be named as such in the operator docs.</p>
 <h3 id="phase-3--sweep-unclaimed-records-at-start">Phase 3 — sweep unclaimed records at start<a class="headerlink" href="#phase-3--sweep-unclaimed-records-at-start" title="Permanent link">&para;</a></h3>
 <ul>
-<li>New client method to list runners under a name prefix (the existing helper only
-  resolves one exact name), returning id, name, status, and <code>busy</code>, with
-  pagination.</li>
-<li>New <code>Listener</code> config hook returning the runner names currently claimed by live
-  worker pods; the reconciler wires it to a pod list filtered on
-  <code>LabelRunnerSet</code> + the runner-name annotation.</li>
-<li>On <code>Start</code>, after <code>ensureScaleSet</code>: list records prefixed <code>{scaleSetName}-</code>,
-  drop any that are claimed, busy, or online, delete the rest. Failures are
-  logged and non-fatal — a sweep that cannot run must not stop a listener from
-  starting.</li>
+<li>New client method to list runners under a name prefix (the existing helper only resolves one exact name), returning id, name, status, and <code>busy</code>, with pagination.</li>
+<li>New <code>Listener</code> config hook returning the runner names currently claimed by live worker pods; the reconciler wires it to a pod list filtered on <code>LabelRunnerSet</code> + the runner-name annotation.</li>
+<li>On <code>Start</code>, after <code>ensureScaleSet</code>: list records prefixed <code>{scaleSetName}-</code>, drop any that are claimed, busy, or online, delete the rest.
+  Failures are logged and non-fatal — a sweep that cannot run must not stop a listener from starting.</li>
 <li>The sweep is bounded and runs once per listener start, not per poll.</li>
 </ul>
 <h3 id="phase-4--tests-docs-operator-surface">Phase 4 — tests, docs, operator surface<a class="headerlink" href="#phase-4--tests-docs-operator-surface" title="Permanent link">&para;</a></h3>
 <p>Tests:</p>
 <ul>
-<li>Unit: the Phase 0 regression test flips; sweep selection (claimed / busy /
-  online / unclaimed); deregister-on-reap per reap reason; busy and error paths
-  leave the reap unaffected; an unstamped pod is a no-op.</li>
-<li>Integration (<code>cmd/agc/internal/controller/integration/</code>): a reaped scale-set
-  worker's record is gone at the stub — the envtest tier is the one that can
-  observe reconciler wiring, which is where the name is dropped today.</li>
+<li>Unit: the Phase 0 regression test flips; sweep selection (claimed / busy / online / unclaimed); deregister-on-reap per reap reason; busy and error paths leave the reap unaffected; an unstamped pod is a no-op.</li>
+<li>Integration (<code>cmd/agc/internal/controller/integration/</code>): a reaped scale-set worker's record is gone at the stub — the envtest tier is the one that can observe reconciler wiring, which is where the name is dropped today.</li>
 <li>e2e: assert the stub holds no leftover records after a scale-set run completes.</li>
 </ul>
-<p>Docs (per the change-type mapping in
-<a href="../../../development/doc-update-matrix/">doc-update-matrix.md</a>) — this change adds a
-pod annotation, changes a failure mode, and adds GitHub API traffic, so the
-operator half is required, not optional:</p>
+<p>Docs (per the change-type mapping in <a href="../../../development/doc-update-matrix/">doc-update-matrix.md</a>) — this change adds a pod annotation, changes a failure mode, and adds GitHub API traffic, so the operator half is required, not optional:</p>
 <ul>
-<li><code>docs/operations/</code> — the new annotation, the deregister-on-reap behaviour, the
-  start-up sweep and what it will and will not delete, and the added API calls.</li>
-<li><code>docs/design/</code> — the "pod is the registry" rationale, extending the Q417/Q420
-  precedent.</li>
-<li>A metric for swept and deregistered records, if it fits the existing scale-set
-  counter vocabulary without inventing a new one.</li>
+<li><code>docs/operations/</code> — the new annotation, the deregister-on-reap behaviour, the start-up sweep and what it will and will not delete, and the added API calls.</li>
+<li><code>docs/design/</code> — the "pod is the registry" rationale, extending the Q417/Q420 precedent.</li>
+<li>A metric for swept and deregistered records, if it fits the existing scale-set counter vocabulary without inventing a new one.</li>
 </ul>
 <h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Q551's permanent skip.</strong> This fix removes most of what <em>causes</em> the collisions,
-  but a job that still exhausts its attempts must not be dropped silently. Separate
-  row, separate PR.</li>
-<li><strong>The classic tier.</strong> Its JIT agents re-register per job (Q114) and do not use
-  <code>generatejitconfig</code>.</li>
-<li><strong>Delete-acking the message queue.</strong> Unrelated open P4 question
-  (<code>advanceCursor</code>'s note), even though it also concerns cleanup on replay.</li>
-<li><strong>A dedicated metric for swept/deregistered records.</strong> Considered in Phase 4 and
-  dropped: the deregistration rides an existing reap, which
-  <code>actions_gateway_worker_pods_reaped_total</code> already counts, and the sweep runs once per
-  listener start with its result on one log line. A counter would add a series to every
-  AGC to report a number that should be zero, and no alert would key off it. If a
-  standing rate of sweeps ever turns out to be the signal that a tenant is leaking, that
-  is the point to add one.</li>
+<li><strong>Q551's permanent skip.</strong> This fix removes most of what <em>causes</em> the collisions, but a job that still exhausts its attempts must not be dropped silently.
+  Separate row, separate PR.</li>
+<li><strong>The classic tier.</strong> Its JIT agents re-register per job (Q114) and do not use <code>generatejitconfig</code>.</li>
+<li><strong>Delete-acking the message queue.</strong> Unrelated open P4 question (<code>advanceCursor</code>'s note), even though it also concerns cleanup on replay.</li>
+<li><strong>A dedicated metric for swept/deregistered records.</strong> Considered in Phase 4 and dropped: the deregistration rides an existing reap, which <code>actions_gateway_worker_pods_reaped_total</code> already counts, and the sweep runs once per listener start with its result on one log line.
+  A counter would add a series to every AGC to report a number that should be zero, and no alert would key off it.
+  If a standing rate of sweeps ever turns out to be the signal that a tenant is leaking, that is the point to add one.</li>
 </ul>
 
 

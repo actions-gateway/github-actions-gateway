@@ -2820,10 +2820,9 @@
 
 
 <h1 id="technical-debt-policy-and-strategy">Technical debt: policy and strategy<a class="headerlink" href="#technical-debt-policy-and-strategy" title="Permanent link">&para;</a></h1>
-<p>How this project classifies technical debt, decides what to do about each piece,
-and keeps it from accumulating. This is the <strong>policy</strong> (the rules) and the
-<strong>strategy</strong> (the lifecycle that enforces them). The mechanics live in adjacent
-docs and are linked rather than repeated:</p>
+<p>How this project classifies technical debt, decides what to do about each piece, and keeps it from accumulating.
+This is the <strong>policy</strong> (the rules) and the <strong>strategy</strong> (the lifecycle that enforces them).
+The mechanics live in adjacent docs and are linked rather than repeated:</p>
 <ul>
 <li><a href="../maintaining-backlog/">maintaining-backlog.md</a> — how to record and prioritize a debt item in <a href="../../STATUS/">docs/STATUS.md</a>.</li>
 <li><a href="../backpressure/">backpressure.md</a>: the automated feedback loops that stop debt at authoring time.</li>
@@ -2831,19 +2830,13 @@ docs and are linked rather than repeated:</p>
 <li><a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a> — long-horizon non-commitments.</li>
 </ul>
 <h2 id="what-we-mean-by-technical-debt">What we mean by technical debt<a class="headerlink" href="#what-we-mean-by-technical-debt" title="Permanent link">&para;</a></h2>
-<p>Technical debt is work we <strong>knowingly defer</strong> that trades short-term progress for
-a long-term carrying cost — a shortcut taken on purpose, or erosion we have
-noticed but not yet paid down. It is distinct from a plain bug: a bug is
-incorrect behavior we want fixed; debt is a <em>known</em> gap between what exists and
-what we would build with unlimited time. A debt item may <em>cause</em> bugs (the
-<a href="../../STATUS/">Q76</a> agent-pool claim race is debt that can corrupt sessions), but
-the defining trait is that we are choosing — explicitly — when to pay it.</p>
-<p>The policy below exists so that choice is always <strong>explicit and recorded</strong>, never
-an accident of an unreviewed shortcut.</p>
+<p>Technical debt is work we <strong>knowingly defer</strong> that trades short-term progress for a long-term carrying cost — a shortcut taken on purpose, or erosion we have noticed but not yet paid down.
+It is distinct from a plain bug: a bug is incorrect behavior we want fixed; debt is a <em>known</em> gap between what exists and what we would build with unlimited time.
+A debt item may <em>cause</em> bugs (the <a href="../../STATUS/">Q76</a> agent-pool claim race is debt that can corrupt sessions), but the defining trait is that we are choosing — explicitly — when to pay it.</p>
+<p>The policy below exists so that choice is always <strong>explicit and recorded</strong>, never an accident of an unreviewed shortcut.</p>
 <h2 id="classification">Classification<a class="headerlink" href="#classification" title="Permanent link">&para;</a></h2>
-<p>We classify each item so its severity and owner are obvious. The taxonomy is the
-common one (architectural, code, infrastructure, test, documentation, security),
-mapped to where it shows up here:</p>
+<p>We classify each item so its severity and owner are obvious.
+The taxonomy is the common one (architectural, code, infrastructure, test, documentation, security), mapped to where it shows up here:</p>
 <table>
 <thead>
 <tr>
@@ -2878,65 +2871,45 @@ mapped to where it shows up here:</p>
 </tr>
 </tbody>
 </table>
-<p>There is no <strong>design / user-experience (UX)</strong> category: this is a backend
-operator system with no user interface. Its analogue — operator and Custom
-Resource Definition (CRD) ergonomics — is covered by the <code>docs/operations/</code> tree
-and CRD validation, not tracked as UX debt.</p>
+<p>There is no <strong>design / user-experience (UX)</strong> category: this is a backend operator system with no user interface.
+Its analogue — operator and Custom Resource Definition (CRD) ergonomics — is covered by the <code>docs/operations/</code> tree and CRD validation, not tracked as UX debt.</p>
 <h2 id="policy">Policy<a class="headerlink" href="#policy" title="Permanent link">&para;</a></h2>
 <h3 id="make-the-smallest-change-then-choose-fix-flag-defer-or-decline">Make the smallest change, then choose: fix, flag, defer, or decline<a class="headerlink" href="#make-the-smallest-change-then-choose-fix-flag-defer-or-decline" title="Permanent link">&para;</a></h3>
-<p>When you touch the code and notice debt outside the current task's scope, do
-<strong>not</strong> silently expand the change to fix it. Decide deliberately:</p>
+<p>When you touch the code and notice debt outside the current task's scope, do <strong>not</strong> silently expand the change to fix it.
+Decide deliberately:</p>
 <ol>
-<li><strong>Fix now</strong> — only if it is <em>in scope</em>, <em>quick</em>, and <em>low-risk</em>. A
-   behavior-preserving cleanup that the current change naturally touches (e.g.
-   extracting a duplicated security context while editing the builder it lives
-   in) qualifies. Verify it changes no behavior.</li>
-<li><strong>Flag to the Queue</strong> — near- or long-term work that someone should do but not
-   now. Add a row to the Queue in <a href="../../STATUS/">docs/STATUS.md</a> <strong>at the
-   priority it deserves</strong>, with the <em>why</em> of any decision it depends on. Follow
-   <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</li>
-<li><strong>Defer</strong> — a real commitment with no near-term intent, waiting on an explicit
-   trigger (a tool, a cluster, a dependency that does not exist yet). It goes in
-   the <strong>Deferred</strong> section of <a href="../../STATUS/">docs/STATUS.md</a>, out of the
-   priority ordering, and returns to the Queue when its trigger fires.</li>
-<li><strong>Decline</strong> — a long-horizon idea we are explicitly <em>not</em> committing to. It
-   belongs in <a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a>,
-   not the backlog.</li>
+<li><strong>Fix now</strong> — only if it is <em>in scope</em>, <em>quick</em>, and <em>low-risk</em>.
+   A behavior-preserving cleanup that the current change naturally touches (e.g. extracting a duplicated security context while editing the builder it lives in) qualifies.
+   Verify it changes no behavior.</li>
+<li><strong>Flag to the Queue</strong> — near- or long-term work that someone should do but not now.
+   Add a row to the Queue in <a href="../../STATUS/">docs/STATUS.md</a> <strong>at the priority it deserves</strong>, with the <em>why</em> of any decision it depends on.
+   Follow <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</li>
+<li><strong>Defer</strong> — a real commitment with no near-term intent, waiting on an explicit trigger (a tool, a cluster, a dependency that does not exist yet).
+   It goes in the <strong>Deferred</strong> section of <a href="../../STATUS/">docs/STATUS.md</a>, out of the priority ordering, and returns to the Queue when its trigger fires.</li>
+<li><strong>Decline</strong> — a long-horizon idea we are explicitly <em>not</em> committing to.
+   It belongs in <a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a>, not the backlog.</li>
 </ol>
-<p>The bias is toward (2): <strong>flag rather than fix out of scope.</strong> A bundled
-"while I was here" fix inflates a diff, hides the real change from review, and
-couples unrelated risk.</p>
-<p><strong>Measure before you flag, not only before you fix.</strong> A flag is a claim: it goes
-into a Queue row or a PR description, and the next reader treats it as a finding
-someone verified. "Measure before asserting a root cause" applies to the aside as
-much as to the change in front of you — a plausible-by-analogy flag ("X probably
-has the same shape as Y") is a hypothesis, and filing one costs someone else the
-measurement you skipped. If measuring it now is out of scope, flag <em>the question</em>
-rather than the answer: "does X have Y's failure mode? unmeasured" is honest and
-still actionable, where a confident wrong flag is neither.</p>
-<p>Worked example: Q492 flagged "<code>helm rollback</code> past a chart version that added a
-values key fails the way <code>--reuse-values</code> does" in a PR description, reasoning
-from shape alone. Measuring it disproved the claim — <code>helm rollback</code> replays the
-target revision's stored manifest instead of re-rendering, so the failure cannot
-arise — while turning up a <em>different</em>, real hazard the analogy had hidden
-(<a href="../../operations/upgrade/#rolling-back-past-this-change-re-arms-the-outage-it-fixes">Q492's rollback caveat</a>).
+<p>The bias is toward (2): <strong>flag rather than fix out of scope.</strong> A bundled "while I was here" fix inflates a diff, hides the real change from review, and couples unrelated risk.</p>
+<p><strong>Measure before you flag, not only before you fix.</strong> A flag is a claim: it goes into a Queue row or a PR description, and the next reader treats it as a finding someone verified.
+"Measure before asserting a root cause" applies to the aside as much as to the change in front of you — a plausible-by-analogy flag ("X probably has the same shape as Y") is a hypothesis, and filing one costs someone else the measurement you skipped.
+If measuring it now is out of scope, flag <em>the question</em> rather than the answer: "does X have Y's failure mode? unmeasured" is honest and still actionable, where a confident wrong flag is neither.</p>
+<p>Worked example: Q492 flagged "<code>helm rollback</code> past a chart version that added a values key fails the way <code>--reuse-values</code> does" in a PR description, reasoning from shape alone.
+Measuring it disproved the claim — <code>helm rollback</code> replays the target revision's stored manifest instead of re-rendering, so the failure cannot arise — while turning up a <em>different</em>, real hazard the analogy had hidden (<a href="../../operations/upgrade/#rolling-back-past-this-change-re-arms-the-outage-it-fixes">Q492's rollback caveat</a>).
 The wrong flag had already merged into the record by then.</p>
 <h3 id="capture-knowledge-durably-not-in-chat">Capture knowledge durably, not in chat<a class="headerlink" href="#capture-knowledge-durably-not-in-chat" title="Permanent link">&para;</a></h3>
-<p>A debt item that exists only in a conversation is lost. The moment you decide an
-item is worth doing later, it must land in the repo — a Queue row, a plan doc, or
-this policy. The same applies to the <em>reason</em> behind a decision: record the <em>why</em>
-on the item, because the next person (or session) acting on it starts cold.</p>
+<p>A debt item that exists only in a conversation is lost.
+The moment you decide an item is worth doing later, it must land in the repo — a Queue row, a plan doc, or this policy.
+The same applies to the <em>reason</em> behind a decision: record the <em>why</em> on the item, because the next person (or session) acting on it starts cold.</p>
 <h4 id="a-finding-has-no-row-to-live-on">A finding has no row to live on<a class="headerlink" href="#a-finding-has-no-row-to-live-on" title="Permanent link">&para;</a></h4>
-<p>An <em>item</em> is work to do, and a Queue row carries it. A <em>finding</em> is a fact about how
-the work goes wrong, and nothing in the backlog is shaped to hold one. Left alone it
-stays in the session that produced it, and the next session repeats the mistake.</p>
+<p>An <em>item</em> is work to do, and a Queue row carries it.
+A <em>finding</em> is a fact about how the work goes wrong, and nothing in the backlog is shaped to hold one.
+Left alone it stays in the session that produced it, and the next session repeats the mistake.</p>
 <p>Findings surface most often at review time, when a claim is checked and does not hold.
-That is late: the approach is already chosen and the code already written, so the
-finding arrives after its cheapest use has passed. Lifting it out of the session is
-what recovers the value.</p>
+That is late: the approach is already chosen and the code already written, so the finding arrives after its cheapest use has passed.
+Lifting it out of the session is what recovers the value.</p>
 <h4 id="the-ladder">The ladder<a class="headerlink" href="#the-ladder" title="Permanent link">&para;</a></h4>
-<p>Escalate a finding only as far as its failure mode justifies. Each rung costs more to
-maintain and buys a stronger guarantee.</p>
+<p>Escalate a finding only as far as its failure mode justifies.
+Each rung costs more to maintain and buys a stronger guarantee.</p>
 <table>
 <thead>
 <tr>
@@ -2967,8 +2940,8 @@ maintain and buys a stronger guarantee.</p>
 </tr>
 </tbody>
 </table>
-<p>Do not skip to a gate. A gate that cannot first be stated as a rule is one whose
-failure mode is not yet understood, and it will fire on the wrong condition.</p>
+<p>Do not skip to a gate.
+A gate that cannot first be stated as a rule is one whose failure mode is not yet understood, and it will fire on the wrong condition.</p>
 <h4 id="where-a-rule-goes">Where a rule goes<a class="headerlink" href="#where-a-rule-goes" title="Permanent link">&para;</a></h4>
 <table>
 <thead>
@@ -2997,17 +2970,13 @@ failure mode is not yet understood, and it will fire on the wrong condition.</p>
 </tbody>
 </table>
 <h4 id="a-plan-doc-is-not-a-destination">A plan doc is not a destination<a class="headerlink" href="#a-plan-doc-is-not-a-destination" title="Permanent link">&para;</a></h4>
-<p>Plan docs are archived when their plan completes, so a finding recorded only in one is
-scheduled for deletion along with it. <code>make plan-index-check</code> enforces the archival,
-not the rescue. Lift the finding into its owning page in the same change that archives
-the plan.</p>
+<p>Plan docs are archived when their plan completes, so a finding recorded only in one is scheduled for deletion along with it. <code>make plan-index-check</code> enforces the archival, not the rescue.
+Lift the finding into its owning page in the same change that archives the plan.</p>
 <h4 id="co-location-is-the-mechanism">Co-location is the mechanism<a class="headerlink" href="#co-location-is-the-mechanism" title="Permanent link">&para;</a></h4>
-<p>A rule works because it is read at the moment of the action, not because anything
-detected that the moment had arrived. "A state change you observe is not necessarily
-one you caused" needs no trigger: it lives in <a href="../kind-iteration/">kind-iteration.md</a>,
-which is what you open before touching a cluster. This is why the rung ordering above
-is a ladder and not a menu. A warning that has to recognise its own occasion fires on
-the wrong ones, and a warning nobody reads is worse than none.</p>
+<p>A rule works because it is read at the moment of the action, not because anything detected that the moment had arrived.
+"A state change you observe is not necessarily one you caused" needs no trigger: it lives in <a href="../kind-iteration/">kind-iteration.md</a>, which is what you open before touching a cluster.
+This is why the rung ordering above is a ladder and not a menu.
+A warning that has to recognise its own occasion fires on the wrong ones, and a warning nobody reads is worse than none.</p>
 <p>Worked examples, each of which began as a single session's finding:</p>
 <table>
 <thead>
@@ -3036,71 +3005,47 @@ the wrong ones, and a warning nobody reads is worse than none.</p>
 </tbody>
 </table>
 <h3 id="secure-by-default-is-not-negotiable">Secure-by-default is not negotiable<a class="headerlink" href="#secure-by-default-is-not-negotiable" title="Permanent link">&para;</a></h3>
-<p>Security debt has one extra rule: <strong>a security regression may never become a
-default to buy convenience.</strong> If an option would weaken any security property —
-removing a validation, relaxing a pod profile, switching to a weaker key type —
-the secure choice stays the default. The weaker option may exist only as a
-documented, explicit opt-in. Such a trade-off is raised and signed off <em>before</em>
-shipping, never deferred silently as ordinary debt.</p>
+<p>Security debt has one extra rule: <strong>a security regression may never become a default to buy convenience.</strong> If an option would weaken any security property — removing a validation, relaxing a pod profile, switching to a weaker key type — the secure choice stays the default.
+The weaker option may exist only as a documented, explicit opt-in.
+Such a trade-off is raised and signed off <em>before</em> shipping, never deferred silently as ordinary debt.</p>
 <h3 id="distinguish-a-fixable-defect-from-an-external-structural-ceiling">Distinguish a fixable defect from an external structural ceiling<a class="headerlink" href="#distinguish-a-fixable-defect-from-an-external-structural-ceiling" title="Permanent link">&para;</a></h3>
-<p>Not every repeatedly-failing symptom is debt you can pay down. Some failures are a
-<strong>structural ceiling in a system we do not control</strong> — a server-side behaviour, a
-protocol constraint, a third-party rate limit — where each fix on our side is motion
-without progress. Misclassifying one as ordinary debt funds an open-ended loop of
-fixes that cannot converge.</p>
-<p>The signal to stop and re-triage: after the obvious on-our-side causes are fixed and
-the symptom <strong>still reproduces on a clean setup with those causes provably quiet</strong>,
-do not fund another fix round yet. Ask whether the residual is on our side of the
-boundary at all. The cheap way to force the question is to build the minimal case
-that isolates the external actor — a probe, a clean namespace — and read what <em>it</em>
-does, rather than iterating on our code.</p>
-<p>Worked example — the fan-out saga (Q260 → Q224 → Q264). Eight live re-routes fixed
-AGC-side seam after seam (completion accounting, planID dedup, recycle churn,
-slot-stranding, capacity) before a clean-namespace run with every seam provably quiet
-<em>still</em> wedged: the residual was GitHub's server-side fan-out dispatch, structurally
-unfixable on our side — the <a href="../../plan/q224-fanout-dispatch-lever-spike/">Q224 lever spike</a>
-confirmed no AGC-side lever exists. The lesson is not "fix faster"; it is to run the
-<em>is-this-a-structural-ceiling?</em> check <strong>earlier</strong>, so the boundary is found before the
-Nth fix round, not after. When the answer is "external," the disposition is usually
-<strong>defer + a watch trigger</strong> (the external condition changing — tracked with the
-<a href="../../design/github-protocol-dependencies/">protocol dependency register</a> when the
-ceiling is a GitHub protocol) or an architecture change that removes the dependency —
-not another patch. This complements the standing rule that source-reading is unverified
-until exercised end-to-end.</p>
+<p>Not every repeatedly-failing symptom is debt you can pay down.
+Some failures are a <strong>structural ceiling in a system we do not control</strong> — a server-side behaviour, a protocol constraint, a third-party rate limit — where each fix on our side is motion without progress.
+Misclassifying one as ordinary debt funds an open-ended loop of fixes that cannot converge.</p>
+<p>The signal to stop and re-triage: after the obvious on-our-side causes are fixed and the symptom <strong>still reproduces on a clean setup with those causes provably quiet</strong>, do not fund another fix round yet.
+Ask whether the residual is on our side of the boundary at all.
+The cheap way to force the question is to build the minimal case that isolates the external actor — a probe, a clean namespace — and read what <em>it</em> does, rather than iterating on our code.</p>
+<p>Worked example — the fan-out saga (Q260 → Q224 → Q264).
+Eight live re-routes fixed AGC-side seam after seam (completion accounting, planID dedup, recycle churn, slot-stranding, capacity) before a clean-namespace run with every seam provably quiet <em>still</em> wedged: the residual was GitHub's server-side fan-out dispatch, structurally unfixable on our side — the <a href="../../plan/q224-fanout-dispatch-lever-spike/">Q224 lever spike</a> confirmed no AGC-side lever exists.
+The lesson is not "fix faster"; it is to run the <em>is-this-a-structural-ceiling?</em> check <strong>earlier</strong>, so the boundary is found before the Nth fix round, not after.
+When the answer is "external," the disposition is usually <strong>defer + a watch trigger</strong> (the external condition changing — tracked with the <a href="../../design/github-protocol-dependencies/">protocol dependency register</a> when the ceiling is a GitHub protocol) or an architecture change that removes the dependency — not another patch.
+This complements the standing rule that source-reading is unverified until exercised end-to-end.</p>
 <h3 id="a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length">A shell gate becomes a Go devtool on parsing density, not length<a class="headerlink" href="#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length" title="Permanent link">&para;</a></h3>
-<p>A long shell script is not debt. A shell script standing in for a parser is. The two
-look alike from the outside, so the decision needs a test that reads the script rather
-than its line count.</p>
+<p>A long shell script is not debt.
+A shell script standing in for a parser is.
+The two look alike from the outside, so the decision needs a test that reads the script rather than its line count.</p>
 <p>Ask what the script does with <strong>text it did not produce</strong>:</p>
 <ul>
-<li><strong>It parses a structured format into fields and reasons over them</strong> (Markdown, a
-  GitHub Flavored Markdown table, YAML, JSON), so it has to track nesting, escaping,
-  and matched delimiters. Regular expressions cannot count brackets. Rewrite it in Go
-  against a real parser.</li>
-<li><strong>It sequences external command-line interfaces</strong> (<code>kubectl</code>, <code>helm</code>, <code>gcloud</code>,
-  <code>docker</code>) and branches on their exit codes. Length here comes from the number of
-  steps, not from the difficulty of any one of them. Shell is the right language, and
-  Go would be <code>exec.Command</code> soup.</li>
+<li><strong>It parses a structured format into fields and reasons over them</strong> (Markdown, a GitHub Flavored Markdown table, YAML, JSON), so it has to track nesting, escaping, and matched delimiters.
+  Regular expressions cannot count brackets.
+  Rewrite it in Go against a real parser.</li>
+<li><strong>It sequences external command-line interfaces</strong> (<code>kubectl</code>, <code>helm</code>, <code>gcloud</code>, <code>docker</code>) and branches on their exit codes.
+  Length here comes from the number of steps, not from the difficulty of any one of them.
+  Shell is the right language, and Go would be <code>exec.Command</code> soup.</li>
 </ul>
 <p>Two corroborating signals when the first read is ambiguous:</p>
 <ul>
-<li><strong>How does it fail?</strong> A parser-dense gate fails <em>silently wrong</em>: a link never
-  collected, a table cell read from the wrong index, and the gate stays green by not
-  seeing. An orchestrator fails loudly, because the CLI it called exits non-zero.</li>
-<li><strong>What would a test look like?</strong> A parse routine takes a string and returns fields,
-  which is a table test. An orchestrator needs a live cluster, and moving it to Go buys
-  no testability it did not already have.</li>
+<li><strong>How does it fail?</strong> A parser-dense gate fails <em>silently wrong</em>: a link never collected, a table cell read from the wrong index, and the gate stays green by not seeing.
+  An orchestrator fails loudly, because the CLI it called exits non-zero.</li>
+<li><strong>What would a test look like?</strong> A parse routine takes a string and returns fields, which is a table test.
+  An orchestrator needs a live cluster, and moving it to Go buys no testability it did not already have.</li>
 </ul>
-<p>Parsing structured text is necessary but not sufficient. A script that must reproduce
-its input <strong>byte for byte</strong> is worse off with an abstract syntax tree, which discards
-exactly the fidelity it depends on. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a>
-and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-table-rows.awk"><code>merge-table-rows.awk</code></a> parse Markdown
-tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for
-line, conflict-marker fallback included.</p>
+<p>Parsing structured text is necessary but not sufficient.
+A script that must reproduce its input <strong>byte for byte</strong> is worse off with an abstract syntax tree, which discards exactly the fidelity it depends on.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-table-rows.awk"><code>merge-table-rows.awk</code></a> parse Markdown tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for line, conflict-marker fallback included.</p>
 <h4 id="worked-examples">Worked examples<a class="headerlink" href="#worked-examples" title="Permanent link">&para;</a></h4>
-<p>Line counts measured 2026-08-03 with <code>wc -l</code>. The <a href="../../plan/markdown-gates-parser/">Q612 survey</a>
-and the Queue row that asked for this section cited 235, 601, and 790; all three scripts
-have drifted since.</p>
+<p>Line counts measured 2026-08-03 with <code>wc -l</code>.
+The <a href="../../plan/markdown-gates-parser/">Q612 survey</a> and the Queue row that asked for this section cited 235, 601, and 790; all three scripts have drifted since.</p>
 <table>
 <thead>
 <tr>
@@ -3143,70 +3088,43 @@ have drifted since.</p>
 </tr>
 </tbody>
 </table>
-<p>Sorted by length, the verdicts run backwards: the three shortest are the rewrites and the
-two longest stay shell. That is why length is not the signal.</p>
+<p>Sorted by length, the verdicts run backwards: the three shortest are the rewrites and the two longest stay shell.
+That is why length is not the signal.</p>
 <h4 id="what-the-rewrite-costs">What the rewrite costs<a class="headerlink" href="#what-the-rewrite-costs" title="Permanent link">&para;</a></h4>
-<p>Moving a gate to Go buys a parser that handles nesting and escaping correctly, rune
-counting that does not vary with the host <code>awk</code>, and a test suite over functions with
-inputs and outputs. It costs a module in the Go workspace, a vendored dependency to
-sync and check (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>vendor-sync.sh</code></a>,
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-check.sh"><code>vendor-check.sh</code></a>), a compile before the gate runs,
-and a continuous integration (CI) path filter that has to include the new tree.</p>
-<p>Most of that is a one-time cost per module, not per gate: <code>devtools/</code> already exists
-with its vendor tree and CI wiring, so the second and third gates onto the same parse
-layer are cheap where the first was not. The gate keeps its <code>scripts/</code> entry point
-either way, so the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">script map</a> stays in one place.</p>
-<p><strong>A Claude Code <code>PreToolUse</code> hook is in scope, and fail-open survives the move.</strong> The
-objection that keeps a hook in shell is that it runs on every Bash call and must never be
-the reason one fails, so it cannot depend on a binary someone remembered to build. The
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh"><code>claude-piped-gate-hook.sh</code></a> shim answers
-that and is the pattern to copy: build on demand, cache in <code>.build/</code>, decide staleness with
-one <code>find</code> against the sources, write PID-suffixed and <code>mv</code> into place so concurrent
-sessions exec a whole binary, and exit 0 with no output on every failure — no toolchain, a
-build error, a missing registry. It is also <em>faster</em> than the shell it replaced (18 ms per
-Bash call against 33 ms), because two <code>jq</code> spawns and bash startup cost more than the
-decision does.</p>
-<p>None of this argues for rewriting shell in general. Almost every script under
-<code>scripts/</code> sits on the orchestration side of the line and should stay there; the
-criterion exists to find the few that do not.</p>
+<p>Moving a gate to Go buys a parser that handles nesting and escaping correctly, rune counting that does not vary with the host <code>awk</code>, and a test suite over functions with inputs and outputs.
+It costs a module in the Go workspace, a vendored dependency to sync and check (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>vendor-sync.sh</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-check.sh"><code>vendor-check.sh</code></a>), a compile before the gate runs, and a continuous integration (CI) path filter that has to include the new tree.</p>
+<p>Most of that is a one-time cost per module, not per gate: <code>devtools/</code> already exists with its vendor tree and CI wiring, so the second and third gates onto the same parse layer are cheap where the first was not.
+The gate keeps its <code>scripts/</code> entry point either way, so the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">script map</a> stays in one place.</p>
+<p><strong>A Claude Code <code>PreToolUse</code> hook is in scope, and fail-open survives the move.</strong> The objection that keeps a hook in shell is that it runs on every Bash call and must never be the reason one fails, so it cannot depend on a binary someone remembered to build.
+The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh"><code>claude-piped-gate-hook.sh</code></a> shim answers that and is the pattern to copy: build on demand, cache in <code>.build/</code>, decide staleness with one <code>find</code> against the sources, write PID-suffixed and <code>mv</code> into place so concurrent sessions exec a whole binary, and exit 0 with no output on every failure — no toolchain, a build error, a missing registry.
+It is also <em>faster</em> than the shell it replaced (18 ms per Bash call against 33 ms), because two <code>jq</code> spawns and bash startup cost more than the decision does.</p>
+<p>None of this argues for rewriting shell in general.
+Almost every script under <code>scripts/</code> sits on the orchestration side of the line and should stay there; the criterion exists to find the few that do not.</p>
 <h2 id="strategy-the-debt-lifecycle">Strategy: the debt lifecycle<a class="headerlink" href="#strategy-the-debt-lifecycle" title="Permanent link">&para;</a></h2>
-<p>Policy decides what to do with one item. Strategy is the loop that keeps the
-whole codebase from accumulating debt faster than we pay it down.</p>
+<p>Policy decides what to do with one item.
+Strategy is the loop that keeps the whole codebase from accumulating debt faster than we pay it down.</p>
 <ol>
-<li><strong>Prevent.</strong> The cheapest debt is the kind that never lands. Layered
-   <a href="../backpressure/">backpressure</a> — the pre-commit hook, <code>make check</code>, and CI —
-   rejects whole classes of debt at authoring time. The guiding habit is
-   <strong>correct it twice, then automate it</strong>: a mistake worth catching once is worth
-   a gate (this is why <code>scripts/docs/lint-backlog.sh</code> and the <a href="#quality-gates-as-debt-brakes">bucket-F gates</a> exist).</li>
-<li><strong>Detect.</strong> What prevention misses, a periodic <strong>review pass</strong> finds: read the
-   code for the taxonomy above, scan for stale markers, and check whether new
-   work re-introduced a class a gate was supposed to hold. Flaky CI is itself a
-   detection signal (see below).</li>
-<li><strong>Triage and track.</strong> Classify the item, decide its disposition with the
-   <a href="#policy">policy</a> above, and record it. Prioritize <strong>on entry</strong> — position in
-   the Queue <em>is</em> the priority, so a new row is placed where it belongs, not
-   appended to the bottom by default.</li>
-<li><strong>Pay down.</strong> Work the Queue from the top. Two ordering rules override raw
-   position: <strong>flake fixes go first</strong> (a flake's cost compounds across every
-   future pull request), and a <code>1.0-gate</code>-labeled item blocks the release
-   regardless of where it sits. Blocked items sort below their blocker with a
-   machine-readable <code>Blocked by [QN]</code> note.</li>
-<li><strong>Keep it paid.</strong> Once a class of debt is paid down, a gate keeps it from
-   returning. Paying down duplication is worth little if the next session
-   re-introduces it; the <code>dupl</code> gate is what makes the cleanup durable.</li>
+<li><strong>Prevent.</strong> The cheapest debt is the kind that never lands.
+   Layered <a href="../backpressure/">backpressure</a> — the pre-commit hook, <code>make check</code>, and CI — rejects whole classes of debt at authoring time.
+   The guiding habit is <strong>correct it twice, then automate it</strong>: a mistake worth catching once is worth a gate (this is why <code>scripts/docs/lint-backlog.sh</code> and the <a href="#quality-gates-as-debt-brakes">bucket-F gates</a> exist).</li>
+<li><strong>Detect.</strong> What prevention misses, a periodic <strong>review pass</strong> finds: read the code for the taxonomy above, scan for stale markers, and check whether new work re-introduced a class a gate was supposed to hold.
+   Flaky CI is itself a detection signal (see below).</li>
+<li><strong>Triage and track.</strong> Classify the item, decide its disposition with the <a href="#policy">policy</a> above, and record it.
+   Prioritize <strong>on entry</strong> — position in the Queue <em>is</em> the priority, so a new row is placed where it belongs, not appended to the bottom by default.</li>
+<li><strong>Pay down.</strong> Work the Queue from the top.
+   Two ordering rules override raw position: <strong>flake fixes go first</strong> (a flake's cost compounds across every future pull request), and a <code>1.0-gate</code>-labeled item blocks the release regardless of where it sits.
+   Blocked items sort below their blocker with a machine-readable <code>Blocked by [QN]</code> note.</li>
+<li><strong>Keep it paid.</strong> Once a class of debt is paid down, a gate keeps it from returning.
+   Paying down duplication is worth little if the next session re-introduces it; the <code>dupl</code> gate is what makes the cleanup durable.</li>
 </ol>
 <h3 id="flake-fixes-go-first">Flake fixes go first<a class="headerlink" href="#flake-fixes-go-first" title="Permanent link">&para;</a></h3>
-<p>If a test passes on rerun with no code change, that flake is debt with a
-compounding cost — every future pull request can hit it, burning CI time and
-attention. File it and move it to the <strong>top</strong> of the Queue before continuing
-other work. The full rule is in
-<a href="../maintaining-backlog/#flake-fixes-go-first">maintaining-backlog.md</a>.</p>
+<p>If a test passes on rerun with no code change, that flake is debt with a compounding cost — every future pull request can hit it, burning CI time and attention.
+File it and move it to the <strong>top</strong> of the Queue before continuing other work.
+The full rule is in <a href="../maintaining-backlog/#flake-fixes-go-first">maintaining-backlog.md</a>.</p>
 <h2 id="what-we-measure--and-deliberately-dont">What we measure — and deliberately don't<a class="headerlink" href="#what-we-measure--and-deliberately-dont" title="Permanent link">&para;</a></h2>
-<p>Most published technical-debt metrics assume a team, an issue tracker with
-timestamps, and a production deployment cadence. This project is a pre-1.0
-codebase with a Markdown backlog and no shipped deployments, so those metrics
-would be ceremony without signal. We track the ones that are cheap, automatable,
-and catch real regressions — and we are explicit about the rest.</p>
+<p>Most published technical-debt metrics assume a team, an issue tracker with timestamps, and a production deployment cadence.
+This project is a pre-1.0 codebase with a Markdown backlog and no shipped deployments, so those metrics would be ceremony without signal.
+We track the ones that are cheap, automatable, and catch real regressions — and we are explicit about the rest.</p>
 <table>
 <thead>
 <tr>
@@ -3253,19 +3171,12 @@ and catch real regressions — and we are explicit about the rest.</p>
 </tr>
 </tbody>
 </table>
-<p>The principle: <strong>a metric earns a place only when it changes a decision.</strong> A
-number nobody acts on is itself a small piece of debt.</p>
+<p>The principle: <strong>a metric earns a place only when it changes a decision.</strong> A number nobody acts on is itself a small piece of debt.</p>
 <h2 id="quality-gates-as-debt-brakes">Quality gates as debt brakes<a class="headerlink" href="#quality-gates-as-debt-brakes" title="Permanent link">&para;</a></h2>
-<p>A quality gate turns "do not let this class of debt accumulate" into machine
-enforcement. The release-1.0 plan groups them as
-<a href="../../plan/release-1.0/">bucket F — engineering quality gates</a>: coverage,
-duplication, <code>-race</code>, <code>gosec</code>, <code>errcheck</code>, and install-artifact validation, on
-top of the formatting, lint, <code>govulncheck</code>, and <code>trivy</code> gates that already run
-(<a href="../backpressure/">backpressure.md</a>). Each gate is the durable form of a
-detect-and-pay-down cycle: once paid, it does not regress.</p>
-<p>Where a gate is threshold-shaped (coverage, <code>dupl</code>, <code>funlen</code>), it gates by <strong>not
-getting worse</strong> — a ratchet or tuned threshold — rather than an arbitrary
-absolute bar, so it raises quality without manufacturing low-value work.</p>
+<p>A quality gate turns "do not let this class of debt accumulate" into machine enforcement.
+The release-1.0 plan groups them as <a href="../../plan/release-1.0/">bucket F — engineering quality gates</a>: coverage, duplication, <code>-race</code>, <code>gosec</code>, <code>errcheck</code>, and install-artifact validation, on top of the formatting, lint, <code>govulncheck</code>, and <code>trivy</code> gates that already run (<a href="../backpressure/">backpressure.md</a>).
+Each gate is the durable form of a detect-and-pay-down cycle: once paid, it does not regress.</p>
+<p>Where a gate is threshold-shaped (coverage, <code>dupl</code>, <code>funlen</code>), it gates by <strong>not getting worse</strong> — a ratchet or tuned threshold — rather than an arbitrary absolute bar, so it raises quality without manufacturing low-value work.</p>
 <h2 id="where-it-all-lives">Where it all lives<a class="headerlink" href="#where-it-all-lives" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

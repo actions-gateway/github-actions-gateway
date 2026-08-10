@@ -2620,11 +2620,13 @@
 
 
 <h1 id="go-best-practices-cleanup">Go best-practices cleanup<a class="headerlink" href="#go-best-practices-cleanup" title="Permanent link">&para;</a></h1>
-<p>Backlog items tracked in <code>docs/STATUS.md</code> Queue rows #38, #39, #40, #41. Each
-item is independently shippable. None block any milestone. Pick them up
-opportunistically when touching the affected packages.</p>
+<p>Backlog items tracked in <code>docs/STATUS.md</code> Queue rows #38, #39, #40, #41.
+Each item is independently shippable.
+None block any milestone.
+Pick them up opportunistically when touching the affected packages.</p>
 <h2 id="1-unify-go-versions--done">1. Unify Go versions ✅ DONE<a class="headerlink" href="#1-unify-go-versions--done" title="Permanent link">&para;</a></h2>
-<p><strong>Queue row:</strong> #38 · <strong>Size:</strong> S · <strong>Label:</strong> <code>infra</code> · <strong>Status:</strong> shipped — all 9 <code>go.mod</code> files pinned to a single version (matches <code>go.work</code> and CI's <code>go-version-file: go.work</code>). Subsequently bumped <code>1.26.3</code> → <code>1.26.4</code> repo-wide as part of the Q23 govulncheck remediation (stdlib CVE fix for GO-2026-5037/5038/5039); the single-version invariant held through that bump.</p>
+<p><strong>Queue row:</strong> #38 · <strong>Size:</strong> S · <strong>Label:</strong> <code>infra</code> · <strong>Status:</strong> shipped — all 9 <code>go.mod</code> files pinned to a single version (matches <code>go.work</code> and CI's <code>go-version-file: go.work</code>).
+Subsequently bumped <code>1.26.3</code> → <code>1.26.4</code> repo-wide as part of the Q23 govulncheck remediation (stdlib CVE fix for GO-2026-5037/5038/5039); the single-version invariant held through that bump.</p>
 <p>Three distinct <code>go</code> directives were in use across 9 <code>go.mod</code> files:</p>
 <table>
 <thead>
@@ -2648,72 +2650,45 @@ opportunistically when touching the affected packages.</p>
 </tr>
 </tbody>
 </table>
-<p>CLAUDE.md is explicit: <em>"All go modules in the repo must use the same Go
-version."</em> Every <code>go.mod</code> was first unified on <code>1.26.3</code> (the highest previously
-in use and the version <code>go.work</code> then targeted); the Q23 remediation later moved
-the whole set to <code>1.26.4</code> in lockstep.</p>
-<p>The per-module <code>replace</code> directives in <code>broker/</code>, <code>cmd/agc/</code>, <code>cmd/gmc/</code>,
-<code>cmd/probe/</code> were <strong>kept</strong>, not dropped. They are not redundant under this
-vendored workspace: the cross-module <code>require</code>s use the
-<code>v0.0.0-00010101000000-000000000000</code> placeholder, and <code>go work vendor</code>
-cannot resolve those to local paths from the <code>use</code> directives alone — it
-needs the <code>replace</code>s. Removing them breaks <code>go work vendor</code> and the
-vendored Docker builds.</p>
-<p><strong>Acceptance:</strong> <code>grep -h '^go ' **/go.mod | sort -u</code> returns a single line
-(<code>go 1.26.4</code>). Build + vet + unit tests green across all modules.</p>
+<p>CLAUDE.md is explicit: <em>"All go modules in the repo must use the same Go version."</em> Every <code>go.mod</code> was first unified on <code>1.26.3</code> (the highest previously in use and the version <code>go.work</code> then targeted); the Q23 remediation later moved the whole set to <code>1.26.4</code> in lockstep.</p>
+<p>The per-module <code>replace</code> directives in <code>broker/</code>, <code>cmd/agc/</code>, <code>cmd/gmc/</code>, <code>cmd/probe/</code> were <strong>kept</strong>, not dropped.
+They are not redundant under this vendored workspace: the cross-module <code>require</code>s use the <code>v0.0.0-00010101000000-000000000000</code> placeholder, and <code>go work vendor</code> cannot resolve those to local paths from the <code>use</code> directives alone — it needs the <code>replace</code>s.
+Removing them breaks <code>go work vendor</code> and the vendored Docker builds.</p>
+<p><strong>Acceptance:</strong> <code>grep -h '^go ' **/go.mod | sort -u</code> returns a single line (<code>go 1.26.4</code>).
+Build + vet + unit tests green across all modules.</p>
 <h2 id="2-async-channel-violation-startrenewloop--done">2. Async-channel violation: <code>StartRenewLoop</code> ✅ DONE<a class="headerlink" href="#2-async-channel-violation-startrenewloop--done" title="Permanent link">&para;</a></h2>
 <p><strong>Queue row:</strong> #39 · <strong>Size:</strong> S · <strong>Label:</strong> <code>bug</code> · <strong>Status:</strong> shipped — <code>StartRenewLoop</code> now returns <code>(stop func(), done &lt;-chan struct{})</code>; <code>handleJob</code> waits on <code>done</code>; test asserts <code>done</code> closes after <code>stop()</code>.</p>
-<p><code>cmd/agc/internal/listener/goroutine.go:121</code> <code>StartRenewLoop</code> currently
-returns <code>stop func()</code> and hides the done-channel inside the returned
-closure. This violates the explicit CLAUDE.md rule:</p>
+<p><code>cmd/agc/internal/listener/goroutine.go:121</code> <code>StartRenewLoop</code> currently returns <code>stop func()</code> and hides the done-channel inside the returned closure.
+This violates the explicit CLAUDE.md rule:</p>
 <blockquote>
-<p>When a function starts something asynchronous, return a <code>&lt;-chan struct{}</code>
-done channel so the caller controls whether and how to wait (block,
-select with timeout, ignore). Do not hide the channel inside a closure
-or call site.</p>
+<p>When a function starts something asynchronous, return a <code>&lt;-chan struct{}</code> done channel so the caller controls whether and how to wait (block, select with timeout, ignore).
+Do not hide the channel inside a closure or call site.</p>
 </blockquote>
-<p><strong>Fix:</strong> Change the signature to return <code>(stop func(), done &lt;-chan struct{})</code>
-and update every caller to receive the channel (callers may then choose to
-wait, ignore, or <code>select</code> against it).</p>
-<p><strong>Acceptance:</strong> Signature updated; existing tests pass; new test asserts
-<code>done</code> closes after <code>stop()</code> returns.</p>
+<p><strong>Fix:</strong> Change the signature to return <code>(stop func(), done &lt;-chan struct{})</code> and update every caller to receive the channel (callers may then choose to wait, ignore, or <code>select</code> against it).</p>
+<p><strong>Acceptance:</strong> Signature updated; existing tests pass; new test asserts <code>done</code> closes after <code>stop()</code> returns.</p>
 <h2 id="3-extend-goleak-coverage--done">3. Extend <code>goleak</code> coverage ✅ DONE<a class="headerlink" href="#3-extend-goleak-coverage--done" title="Permanent link">&para;</a></h2>
-<p><strong>Queue row:</strong> #41 · <strong>Size:</strong> S · <strong>Label:</strong> <code>tests</code> · <strong>Status:</strong> shipped — <code>cmd/worker</code> now runs <code>goleak.VerifyTestMain(m)</code> (its <code>run()</code> spawns a payload-writer and an output-drain goroutine, both joined before return). <code>broker/</code> was already covered by the <code>TestMain</code> in <code>broker/client_test.go</code>, so no change was needed there; its only sub-package, <code>broker/brokertest/</code>, is a test helper with no test files. Both modules' tests are green under goleak and <code>make check</code> passes.</p>
-<p><code>broker/</code> and <code>cmd/worker/</code> both spawn goroutines but their test suites
-don't apply <code>goleak.VerifyNone</code> in <code>TestMain</code>. The pattern is already
-established in <code>cmd/proxy/proxy_test.go</code> and the
-<code>cmd/agc/internal/{listener,token}/*_test.go</code> files. <code>goleak</code> is already a
-<code>broker/</code> dependency — it's just unused.</p>
-<p><strong>Fix:</strong> Add a <code>TestMain</code> in each module's package root that calls
-<code>goleak.VerifyTestMain(m)</code>. Where intentional long-lived goroutines exist
-(e.g. test-server background loops), add the precise <code>goleak.IgnoreCurrent()</code>
-option rather than disabling the check.</p>
+<p><strong>Queue row:</strong> #41 · <strong>Size:</strong> S · <strong>Label:</strong> <code>tests</code> · <strong>Status:</strong> shipped — <code>cmd/worker</code> now runs <code>goleak.VerifyTestMain(m)</code> (its <code>run()</code> spawns a payload-writer and an output-drain goroutine, both joined before return). <code>broker/</code> was already covered by the <code>TestMain</code> in <code>broker/client_test.go</code>, so no change was needed there; its only sub-package, <code>broker/brokertest/</code>, is a test helper with no test files.
+Both modules' tests are green under goleak and <code>make check</code> passes.</p>
+<p><code>broker/</code> and <code>cmd/worker/</code> both spawn goroutines but their test suites don't apply <code>goleak.VerifyNone</code> in <code>TestMain</code>.
+The pattern is already established in <code>cmd/proxy/proxy_test.go</code> and the <code>cmd/agc/internal/{listener,token}/*_test.go</code> files. <code>goleak</code> is already a <code>broker/</code> dependency — it's just unused.</p>
+<p><strong>Fix:</strong> Add a <code>TestMain</code> in each module's package root that calls <code>goleak.VerifyTestMain(m)</code>.
+Where intentional long-lived goroutines exist (e.g. test-server background loops), add the precise <code>goleak.IgnoreCurrent()</code> option rather than disabling the check.</p>
 <p><strong>Acceptance:</strong> Both modules' tests run goleak; CI green.</p>
 <h2 id="4-misc-idiom-cleanup">4. Misc idiom cleanup<a class="headerlink" href="#4-misc-idiom-cleanup" title="Permanent link">&para;</a></h2>
 <p><strong>Queue row:</strong> #40 · <strong>Size:</strong> S · <strong>Label:</strong> <code>bug</code></p>
 <p>Independent small fixes, all touching idiomatic Go usage:</p>
-<p><strong>(a) Silent <code>json.Unmarshal</code> error.</strong>
-<code>cmd/agc/internal/provisioner/provisioner.go:210</code> does
-<code>_ = json.Unmarshal(payload, &amp;ap)</code> then uses the parsed struct. Silent
-payload corruption risk — at minimum log at WARN and return, ideally
-surface as a metric.</p>
-<p><strong>(b) <code>max</code> builtin shadow.</strong>
-<code>cmd/agc/internal/listener/multiplexer.go:66</code>
-<code>SetMaxListeners(max int32)</code> shadows the Go 1.21+ builtin <code>max</code>. Rename
-the parameter to <code>maxListeners</code> (or similar).</p>
-<p><strong>(c) Package-name stutter.</strong>
-Rename <code>broker.BrokerClient</code> → <code>broker.Client</code>. Update every callsite.</p>
-<p><strong>(d) <code>interface{}</code> → <code>any</code>.</strong>
-Replace the 8 remaining <code>interface{}</code> occurrences in non-test code with
-<code>any</code>. Known sites: <code>test/fakegithub/main.go:67</code>,
-<code>broker/brokertest/server.go:31,169</code>. The rest can be found with
-<code>grep -rn 'interface{}' --include='*.go'</code> filtered to non-<code>_test.go</code>.</p>
-<p><strong>(e) Dead code.</strong>
-Remove <code>_ = name // used for label selector above</code> at
-<code>cmd/agc/internal/controller/actionsgateway_controller.go:246</code>. The
-comment is wrong (the variable is no longer used at all).</p>
-<p><strong>Acceptance:</strong> Each sub-item is a clean independent diff; tests green;
-<code>go vet</code> and <code>golangci-lint</code> clean.</p>
+<p><strong>(a) Silent <code>json.Unmarshal</code> error.</strong> <code>cmd/agc/internal/provisioner/provisioner.go:210</code> does <code>_ = json.Unmarshal(payload, &amp;ap)</code> then uses the parsed struct.
+Silent payload corruption risk — at minimum log at WARN and return, ideally surface as a metric.</p>
+<p><strong>(b) <code>max</code> builtin shadow.</strong> <code>cmd/agc/internal/listener/multiplexer.go:66</code> <code>SetMaxListeners(max int32)</code> shadows the Go 1.21+ builtin <code>max</code>.
+Rename the parameter to <code>maxListeners</code> (or similar).</p>
+<p><strong>(c) Package-name stutter.</strong> Rename <code>broker.BrokerClient</code> → <code>broker.Client</code>.
+Update every callsite.</p>
+<p><strong>(d) <code>interface{}</code> → <code>any</code>.</strong> Replace the 8 remaining <code>interface{}</code> occurrences in non-test code with <code>any</code>.
+Known sites: <code>test/fakegithub/main.go:67</code>, <code>broker/brokertest/server.go:31,169</code>.
+The rest can be found with <code>grep -rn 'interface{}' --include='*.go'</code> filtered to non-<code>_test.go</code>.</p>
+<p><strong>(e) Dead code.</strong> Remove <code>_ = name // used for label selector above</code> at <code>cmd/agc/internal/controller/actionsgateway_controller.go:246</code>.
+The comment is wrong (the variable is no longer used at all).</p>
+<p><strong>Acceptance:</strong> Each sub-item is a clean independent diff; tests green; <code>go vet</code> and <code>golangci-lint</code> clean.</p>
 
 
 

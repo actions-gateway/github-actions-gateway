@@ -2764,47 +2764,27 @@
 
 
 <h1 id="runner-template-library-q554">Runner template library (Q554)<a class="headerlink" href="#runner-template-library-q554" title="Permanent link">&para;</a></h1>
-<p>Ship a small curated library of golden <code>ClusterRunnerTemplate</code> instances so a
-new operator starts from a validated template instead of hand-authoring one,
-and later forks to a custom template via the normal <code>templateRef</code> path. Filed
-2026-07-31 from a design discussion on Kata onboarding; this doc records the
-decisions so the implementing session doesn't re-litigate them.</p>
+<p>Ship a small curated library of golden <code>ClusterRunnerTemplate</code> instances so a new operator starts from a validated template instead of hand-authoring one, and later forks to a custom template via the normal <code>templateRef</code> path.
+Filed 2026-07-31 from a design discussion on Kata onboarding; this doc records the decisions so the implementing session doesn't re-litigate them.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>Done, 2026-08-08.</strong> Shipped as <code>deploy/templates/{plain,kata-dind,privileged-dind}</code>
-with <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/README.md"><code>deploy/templates/README.md</code></a> as the map
-and <a href="../../../operations/runner-template-library/">runner-template-library.md</a> as
-the operator entry point. Every acceptance criterion below is met. Two things
-the implementing session learned that the plan did not anticipate are recorded
-under <a href="#what-implementation-changed">What implementation changed</a>.</p>
+<p><strong>Done, 2026-08-08.</strong> Shipped as <code>deploy/templates/{plain,kata-dind,privileged-dind}</code> with <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/README.md"><code>deploy/templates/README.md</code></a> as the map and <a href="../../../operations/runner-template-library/">runner-template-library.md</a> as the operator entry point.
+Every acceptance criterion below is met.
+Two things the implementing session learned that the plan did not anticipate are recorded under <a href="#what-implementation-changed">What implementation changed</a>.</p>
 <h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../../getting-started/">getting-started.md</a> makes every operator hand-author
-  a <code>RunnerTemplate</code> before anything runs: the single biggest onboarding
-  cliff.</li>
-<li>The Kata DinD shape's hard-won details (raw block volume for
-  <code>/var/lib/docker</code>, <code>/dev/kmsg</code>, cgroup/<code>/proc/sys</code> remounts, the validated
-  18-capability set) live only in the 493-line
-  <a href="../../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>; operators
-  must transcribe them by hand.</li>
-<li>The charts ship zero template instances today, yet two live-validated ones
-  already exist as dogfood e2e fixtures.</li>
+<li><a href="../../../getting-started/">getting-started.md</a> makes every operator hand-author a <code>RunnerTemplate</code> before anything runs: the single biggest onboarding cliff.</li>
+<li>The Kata DinD shape's hard-won details (raw block volume for <code>/var/lib/docker</code>, <code>/dev/kmsg</code>, cgroup/<code>/proc/sys</code> remounts, the validated 18-capability set) live only in the 493-line <a href="../../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>; operators must transcribe them by hand.</li>
+<li>The charts ship zero template instances today, yet two live-validated ones already exist as dogfood e2e fixtures.</li>
 </ul>
 <h2 id="decisions">Decisions<a class="headerlink" href="#decisions" title="Permanent link">&para;</a></h2>
 <h3 id="no-new-crd">No new CRD<a class="headerlink" href="#no-new-crd" title="Permanent link">&para;</a></h3>
-<p><code>ClusterRunnerTemplate</code> already exists for exactly this. Its godoc names
-"golden privileged templates (DinD, sysbox)" as its purpose
-(<code>api/v2beta1/runnertemplate_types.go</code>). A new PodTemplate-bearing CRD would
-re-pay the ~1.21 MB OpenAPI cost that already forced the v2 CRDs into their
-own opt-in chart (<code>api/v2beta1/scheduling_types.go</code> quantifies it), and the
-Q172 default ladder (<code>templateRef</code> → gateway default → cluster-default
-annotation) already provides the start-simple-then-customize migration path.
+<p><code>ClusterRunnerTemplate</code> already exists for exactly this.
+Its godoc names "golden privileged templates (DinD, sysbox)" as its purpose (<code>api/v2beta1/runnertemplate_types.go</code>).
+A new PodTemplate-bearing CRD would re-pay the ~1.21 MB OpenAPI cost that already forced the v2 CRDs into their own opt-in chart (<code>api/v2beta1/scheduling_types.go</code> quantifies it), and the Q172 default ladder (<code>templateRef</code> → gateway default → cluster-default annotation) already provides the start-simple-then-customize migration path.
 Library entries are CRs, not CRDs, and free at the apiserver.</p>
 <h3 id="library-admission-rule-only-what-ci-exercises">Library admission rule: only what CI exercises<a class="headerlink" href="#library-admission-rule-only-what-ci-exercises" title="Permanent link">&para;</a></h3>
-<p>A shipped golden template is an implicit validation claim. The gate for
-membership: <strong>GAG's own e2e runs it, or it is trivially inert.</strong> This is why
-gVisor and sysbox are excluded from v1 (see Later, below): shipping them
-would claim a validation the repo explicitly does not have
-(<a href="../../../design/appendix-b-worker-isolation/">appendix-b-worker-isolation.md</a>).</p>
+<p>A shipped golden template is an implicit validation claim.
+The gate for membership: <strong>GAG's own e2e runs it, or it is trivially inert.</strong> This is why gVisor and sysbox are excluded from v1 (see Later, below): shipping them would claim a validation the repo explicitly does not have (<a href="../../../design/appendix-b-worker-isolation/">appendix-b-worker-isolation.md</a>).</p>
 <h3 id="v1-contents">v1 contents<a class="headerlink" href="#v1-contents" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2833,112 +2813,64 @@ would claim a validation the repo explicitly does not have
 </tbody>
 </table>
 <h3 id="name-by-mechanism-map-by-workload">Name by mechanism, map by workload<a class="headerlink" href="#name-by-mechanism-map-by-workload" title="Permanent link">&para;</a></h3>
-<p>Workload names ("unit tests", "kind e2e") are rows in a mapping table, not
-template names. kind e2e <em>is</em> the DinD shape, delivered as <code>kata-dind</code> or
-<code>privileged-dind</code> depending on cluster capability. The library README carries
-the workload → template decision table, following the pattern
-<a href="../../../operations/in-runner-image-builds/">in-runner-image-builds.md</a>
-established.</p>
+<p>Workload names ("unit tests", "kind e2e") are rows in a mapping table, not template names. kind e2e <em>is</em> the DinD shape, delivered as <code>kata-dind</code> or <code>privileged-dind</code> depending on cluster capability.
+The library README carries the workload → template decision table, following the pattern <a href="../../../operations/in-runner-image-builds/">in-runner-image-builds.md</a> established.</p>
 <h3 id="invert-the-dogfood-relationship">Invert the dogfood relationship<a class="headerlink" href="#invert-the-dogfood-relationship" title="Permanent link">&para;</a></h3>
-<p>The library (e.g. <code>deploy/templates/</code>) becomes the kustomize <strong>base</strong>; the
-dogfood e2e overlays patch e2e-specifics (worker image tag, sizing, GKE
-Workload Identity annotations) on top. The shipped artifact is then
-byte-for-byte the thing CI validates, minus declared patches, so the library
-cannot silently drift from its validation. The main genericizing decision is
-what the shipped <code>workerImage</code> reference is; the GKE-specific bits get marked
-as such (the reference architecture claims provider-agnostic).</p>
+<p>The library (e.g. <code>deploy/templates/</code>) becomes the kustomize <strong>base</strong>; the dogfood e2e overlays patch e2e-specifics (worker image tag, sizing, GKE Workload Identity annotations) on top.
+The shipped artifact is then byte-for-byte the thing CI validates, minus declared patches, so the library cannot silently drift from its validation.
+The main genericizing decision is what the shipped <code>workerImage</code> reference is; the GKE-specific bits get marked as such (the reference architecture claims provider-agnostic).</p>
 <h3 id="packaging-and-security-posture">Packaging and security posture<a class="headerlink" href="#packaging-and-security-posture" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Every entry is <strong>opt-in</strong> (kustomize base and/or values-gated chart
-  instances, each off by default). None ships carrying the
-  <code>is-default-template</code> annotation, because choosing a cluster default stays an
-  operator decision.</li>
-<li>The Kata/DinD entries require namespace PSA <code>privileged</code>, which turns
-  <code>applySecurityDefaults</code> into a no-op, so the template carries the whole
-  security burden. Opt-in artifacts improve security (operators get the
-  vetted capability set instead of hand-rolling worse); a shipped <em>default</em>
-  would silently disable the gap-fill and is out.</li>
-<li><code>privileged-dind</code> is framed everywhere as the fallback ("almost never the
-  approach you actually need"), never the starting point.</li>
+<li>Every entry is <strong>opt-in</strong> (kustomize base and/or values-gated chart instances, each off by default).
+  None ships carrying the <code>is-default-template</code> annotation, because choosing a cluster default stays an operator decision.</li>
+<li>The Kata/DinD entries require namespace PSA <code>privileged</code>, which turns <code>applySecurityDefaults</code> into a no-op, so the template carries the whole security burden.
+  Opt-in artifacts improve security (operators get the vetted capability set instead of hand-rolling worse); a shipped <em>default</em> would silently disable the gap-fill and is out.</li>
+<li><code>privileged-dind</code> is framed everywhere as the fallback ("almost never the approach you actually need"), never the starting point.</li>
 </ul>
 <h3 id="fold-in-stale-enforcement-claim-in-05-securitymd">Fold in: stale enforcement claim in 05-security.md<a class="headerlink" href="#fold-in-stale-enforcement-claim-in-05-securitymd" title="Permanent link">&para;</a></h3>
-<p><a href="../../../design/05-security/">05-security.md</a> § "Pairing <code>privileged</code> with a
-sandbox runtime" still says the platform "cannot enforce" the pairing from
-the GMC. That predates the Q172 ladder, and a cluster-default
-<code>ClusterRunnerTemplate</code> <em>is</em> platform enforcement now. Fix alongside the
-library docs.</p>
+<p><a href="../../../design/05-security/">05-security.md</a> § "Pairing <code>privileged</code> with a sandbox runtime" still says the platform "cannot enforce" the pairing from the GMC.
+That predates the Q172 ladder, and a cluster-default <code>ClusterRunnerTemplate</code> <em>is</em> platform enforcement now.
+Fix alongside the library docs.</p>
 <h2 id="what-implementation-changed">What implementation changed<a class="headerlink" href="#what-implementation-changed" title="Permanent link">&para;</a></h2>
 <p>Two findings the plan did not anticipate, both load-bearing.</p>
 <h3 id="a-strategic-merge-patch-against-a-crd-destroys-lists-silently">A strategic-merge patch against a CRD destroys lists, silently<a class="headerlink" href="#a-strategic-merge-patch-against-a-crd-destroys-lists-silently" title="Permanent link">&para;</a></h3>
-<p>kustomize resolves strategic-merge semantics from the OpenAPI schema. It has
-none for a custom resource, so it falls back to an RFC 7386 JSON merge patch,
-where a list is <strong>replaced wholesale</strong> rather than merged by key. Measured on
-kustomize v5.8.1 (kubectl 1.36): an overlay patch naming only
-<code>initContainers[0].resources</code> produced an init container with <em>just</em> that field,
-having dropped its <code>image</code>, <code>restartPolicy</code> and capability set, and rendered at
-exit 0.</p>
-<p>This is directly in the path of "the overlay patches the base", which is the
-whole inversion. Every overlay patch that reaches into a list is therefore JSON
-6902 (<code>target:</code> + op list), verified lossless by the same probe. The rule is
-stated in the library README, the operator doc, both entry kustomizations and
-both overlays, and <code>make template-library-check</code> fails a strategic merge against
-a <code>ClusterRunnerTemplate</code>.</p>
-<p>The parser for that rule needed one non-obvious property: an overlay's RunnerSet
-patch carries <code>templateRef.kind: ClusterRunnerTemplate</code> as a nested <em>value</em>, and
-a naive string search reads it as the patch's own kind. The first draft did
-exactly that and flagged the correct overlays. The false positive is pinned in
-<code>check-template-library-test.sh</code>.</p>
+<p>kustomize resolves strategic-merge semantics from the OpenAPI schema.
+It has none for a custom resource, so it falls back to an RFC 7386 JSON merge patch, where a list is <strong>replaced wholesale</strong> rather than merged by key.
+Measured on kustomize v5.8.1 (kubectl 1.36): an overlay patch naming only <code>initContainers[0].resources</code> produced an init container with <em>just</em> that field, having dropped its <code>image</code>, <code>restartPolicy</code> and capability set, and rendered at exit 0.</p>
+<p>This is directly in the path of "the overlay patches the base", which is the whole inversion.
+Every overlay patch that reaches into a list is therefore JSON 6902 (<code>target:</code> + op list), verified lossless by the same probe.
+The rule is stated in the library README, the operator doc, both entry kustomizations and both overlays, and <code>make template-library-check</code> fails a strategic merge against a <code>ClusterRunnerTemplate</code>.</p>
+<p>The parser for that rule needed one non-obvious property: an overlay's RunnerSet patch carries <code>templateRef.kind: ClusterRunnerTemplate</code> as a nested <em>value</em>, and a naive string search reads it as the patch's own kind.
+The first draft did exactly that and flagged the correct overlays.
+The false positive is pinned in <code>check-template-library-test.sh</code>.</p>
 <h3 id="the-shipped-dind-entries-cannot-carry-a-working-default-image">The shipped DinD entries cannot carry a working default image<a class="headerlink" href="#the-shipped-dind-entries-cannot-carry-a-working-default-image" title="Permanent link">&para;</a></h3>
-<p>The runner container needs a Docker CLI on <code>PATH</code>; the sidecar supplies only the
-daemon. Neither <code>ghcr.io/actions/actions-runner</code> nor GAG's own <code>worker</code> image
-ships one (<code>scripts/dogfood/e2e-runner/Dockerfile</code> exists precisely to add it).
-Omitting the image would let the AGC gap-fill the stock runner, producing a pod
-that starts, takes a job, and fails on <code>docker: not found</code> mid-run.</p>
-<p>Both DinD entries therefore ship <code>spec.workerImage:
-example.invalid/build-capable-runner:replace-me</code>. <code>.invalid</code> is RFC 2606
-reserved, so an unreplaced value fails at image pull with the fix in the string.
-It also makes the e2e overlays' <code>workerImage</code> patch mandatory rather than
-incidental, which is a second attachment between the shipped artifact and the
-exercised one.</p>
+<p>The runner container needs a Docker CLI on <code>PATH</code>; the sidecar supplies only the daemon.
+Neither <code>ghcr.io/actions/actions-runner</code> nor GAG's own <code>worker</code> image ships one (<code>scripts/dogfood/e2e-runner/Dockerfile</code> exists precisely to add it).
+Omitting the image would let the AGC gap-fill the stock runner, producing a pod that starts, takes a job, and fails on <code>docker: not found</code> mid-run.</p>
+<p>Both DinD entries therefore ship <code>spec.workerImage: example.invalid/build-capable-runner:replace-me</code>. <code>.invalid</code> is RFC 2606 reserved, so an unreplaced value fails at image pull with the fix in the string.
+It also makes the e2e overlays' <code>workerImage</code> patch mandatory rather than incidental, which is a second attachment between the shipped artifact and the exercised one.</p>
 <h2 id="later-demand-gated-not-v1">Later: demand-gated, not v1<a class="headerlink" href="#later-demand-gated-not-v1" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>gvisor</code>: only after <a href="../../../STATUS/#Q15">Q15</a> fires <em>and</em> the template gets
-  e2e coverage.</li>
-<li><code>sysbox</code>, rootless-BuildKit: same admission rule; BuildKit-rootless is the
-  decision table's recommended build path but has no template-level CI
-  coverage today.</li>
+<li><code>gvisor</code>: only after <a href="../../../STATUS/#Q15">Q15</a> fires <em>and</em> the template gets e2e coverage.</li>
+<li><code>sysbox</code>, rootless-BuildKit: same admission rule; BuildKit-rootless is the decision table's recommended build path but has no template-level CI coverage today.</li>
 <li>GPU: <a href="../../../STATUS/#Q216">Q216</a> already scopes RuntimeClass conventions.</li>
 </ul>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <ol>
-<li>✅ <code>deploy/templates/</code> ships <code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code> with a
-   README carrying the workload → template mapping and the fallback framing.</li>
-<li>✅ Dogfood e2e overlays consume the library base via kustomize patches. The
-   render is reconciled against the pre-change one: both overlays produce
-   byte-identical output apart from the object rename, the runner image moving
-   to <code>spec.workerImage</code>, and the <code>templateRef</code> following the rename.</li>
-<li>✅ <code>getting-started.md</code> and <code>tenant-onboarding.md</code> point at the library as the
-   starting path; <code>kata-dind-workloads.md</code> leads with <code>kubectl apply -k
-   deploy/templates/kata-dind</code> and keeps its inline spec as annotation.</li>
+<li>✅ <code>deploy/templates/</code> ships <code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code> with a README carrying the workload → template mapping and the fallback framing.</li>
+<li>✅ Dogfood e2e overlays consume the library base via kustomize patches.
+   The render is reconciled against the pre-change one: both overlays produce byte-identical output apart from the object rename, the runner image moving to <code>spec.workerImage</code>, and the <code>templateRef</code> following the rename.</li>
+<li>✅ <code>getting-started.md</code> and <code>tenant-onboarding.md</code> point at the library as the starting path; <code>kata-dind-workloads.md</code> leads with <code>kubectl apply -k deploy/templates/kata-dind</code> and keeps its inline spec as annotation.</li>
 <li>✅ The 05-security.md enforcement claim is corrected.</li>
-<li>✅ No template ships as a cluster default; each is individually opt-in, and
-   <code>check-template-library.sh</code> fails on an entry that so much as mentions the
-   annotation.</li>
+<li>✅ No template ships as a cluster default; each is individually opt-in, and <code>check-template-library.sh</code> fails on an entry that so much as mentions the annotation.</li>
 </ol>
-<p>Beyond the criteria: the admission rule is now mechanical rather than
-aspirational. <code>make template-library-check</code> reconciles the shipped set against
-the exercised set in both directions, and <code>TestTemplateLibrary_Admitted</code> applies
-every entry to a real apiserver on each integration run, which is what upgrades
-<code>plain</code> from "trivially inert, trust us" to a template CI actually admits.</p>
+<p>Beyond the criteria: the admission rule is now mechanical rather than aspirational. <code>make template-library-check</code> reconciles the shipped set against the exercised set in both directions, and <code>TestTemplateLibrary_Admitted</code> applies every entry to a real apiserver on each integration run, which is what upgrades <code>plain</code> from "trivially inert, trust us" to a template CI actually admits.</p>
 <h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Installing runtime handlers or <code>RuntimeClass</code> objects. The controllers
-  deliberately never do this (<a href="../../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>
-  § "What GAG does and does not manage"); node pools, kata-deploy, and
-  RuntimeClass registration remain cluster-admin prerequisites.</li>
-<li>An isolation-profile enum modeled on <code>sizing.profile</code>. A profile can
-  inject one field, but the Kata DinD shape is a whole pod spec
-  (template-shaped, not transform-shaped).</li>
+<li>Installing runtime handlers or <code>RuntimeClass</code> objects.
+  The controllers deliberately never do this (<a href="../../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> § "What GAG does and does not manage"); node pools, kata-deploy, and RuntimeClass registration remain cluster-admin prerequisites.</li>
+<li>An isolation-profile enum modeled on <code>sizing.profile</code>.
+  A profile can inject one field, but the Kata DinD shape is a whole pod spec (template-shaped, not transform-shaped).</li>
 <li>Workload-named template aliases.</li>
 </ul>
 

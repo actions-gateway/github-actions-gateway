@@ -2903,31 +2903,16 @@
 
 
 <h1 id="q260--reconcile-githubs-per-delivery-fan-out-with-agcs-one-runner-per-session-model">Q260 — reconcile GitHub's per-delivery fan-out with AGC's one-runner-per-session model<a class="headerlink" href="#q260--reconcile-githubs-per-delivery-fan-out-with-agcs-one-runner-per-session-model" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> <strong>Option A live-confirmed by re-route #5 (2026-07-04) and flipped ON by
-default (<code>AGC_FANOUT_COMPLETION</code>, opt out with <code>=false</code>). Q260 DONE; Q224's fan-out
-blocker cleared (a pristine full-matrix green is now gated only on <code>maxWorkers</code>
-worker-capacity tuning, Q248 — not the accounting gap).</strong> The winner
-of a fanned-out job tracks every deduped sibling delivery and, on completion, fans a
-<code>completejob</code> out to each (keyed on the sibling's own <code>RunnerRequestID</code>, with the
-winner's pod-phase-proxy result); a late redelivery within the linger window is
-resolved with the recorded terminal result. The one load-bearing assumption — does
-GitHub honour a non-running delivery's completion, and does resolving <em>all</em> siblings
-conclude the job? — is <strong>confirmed YES</strong>: re-route #5 observed <code>completejob</code> on a live
-sibling's own job ID return <strong>OK</strong> (not "already resolved"), the winner's own delivery
-carry the real workflow result, previously-wedged concurrent jobs conclude <strong>green</strong>,
-the Q259 recycle 422 clear per job on winner completion, and <strong>no</strong> job cancel at the
-~15-minute timeout. Completion is <strong>per-delivery, not planID-scoped</strong>, so the
-secure-by-default concern (a green sibling proxy masking a red workflow) does not
-arise — the flag is on by default. <code>TestAGC_Q260_FanoutCompletionReconciles</code> (the
-gate) passes; the companion <code>…AccountingGap</code> (flag off) still asserts the pre-fix wedge.</p>
-<p>This closed the last blocker for Q224 "route production CI green," after the earlier
-Q260 work closed capacity (Q248), Secret/Pod collisions (#512), and the planID
-dedup key (<a href="../q260-planid-dedup-refix/"><code>q260-planid-dedup-refix.md</code></a>). Full live
-evidence: <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #4 (fails-today control) +
-re-route #5 (Option A confirmed).</p>
+<p><strong>Status:</strong> <strong>Option A live-confirmed by re-route #5 (2026-07-04) and flipped ON by default (<code>AGC_FANOUT_COMPLETION</code>, opt out with <code>=false</code>).
+Q260 DONE; Q224's fan-out blocker cleared (a pristine full-matrix green is now gated only on <code>maxWorkers</code> worker-capacity tuning, Q248 — not the accounting gap).</strong> The winner of a fanned-out job tracks every deduped sibling delivery and, on completion, fans a <code>completejob</code> out to each (keyed on the sibling's own <code>RunnerRequestID</code>, with the winner's pod-phase-proxy result); a late redelivery within the linger window is resolved with the recorded terminal result.
+The one load-bearing assumption — does GitHub honour a non-running delivery's completion, and does resolving <em>all</em> siblings conclude the job? — is <strong>confirmed YES</strong>: re-route #5 observed <code>completejob</code> on a live sibling's own job ID return <strong>OK</strong> (not "already resolved"), the winner's own delivery carry the real workflow result, previously-wedged concurrent jobs conclude <strong>green</strong>, the Q259 recycle 422 clear per job on winner completion, and <strong>no</strong> job cancel at the ~15-minute timeout.
+Completion is <strong>per-delivery, not planID-scoped</strong>, so the secure-by-default concern (a green sibling proxy masking a red workflow) does not arise — the flag is on by default. <code>TestAGC_Q260_FanoutCompletionReconciles</code> (the gate) passes; the companion <code>…AccountingGap</code> (flag off) still asserts the pre-fix wedge.</p>
+<p>This closed the last blocker for Q224 "route production CI green," after the earlier Q260 work closed capacity (Q248), Secret/Pod collisions (#512), and the planID dedup key (<a href="../q260-planid-dedup-refix/"><code>q260-planid-dedup-refix.md</code></a>).
+Full live evidence: <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #4 (fails-today control) + re-route #5 (Option A confirmed).</p>
 <hr />
 <h2 id="1-the-protocol-from-the-code-and-the-live-evidence">1. The protocol, from the code and the live evidence<a class="headerlink" href="#1-the-protocol-from-the-code-and-the-live-evidence" title="Permanent link">&para;</a></h2>
-<p>Three id spaces are involved. Keeping them distinct is the whole game:</p>
+<p>Three id spaces are involved.
+Keeping them distinct is the whole game:</p>
 <table>
 <thead>
 <tr>
@@ -2959,70 +2944,36 @@ re-route #5 (Option A confirmed).</p>
 </tbody>
 </table>
 <h3 id="what-github-does-server-behaviour--confirmed-live">What GitHub does (server behaviour — confirmed live)<a class="headerlink" href="#what-github-does-server-behaviour--confirmed-live" title="Permanent link">&para;</a></h3>
-<p>Under a concurrent burst, GitHub's broker <strong>fans one logical job (one <code>planID</code>) out
-to N sibling sessions</strong> as N separate <code>RunnerJobRequest</code> messages with <strong>distinct
-<code>RunnerRequestID</code>s</strong>. Each sibling's <code>POST /acquirejob</code> <strong>succeeds</strong> and returns the
-<strong>same <code>planID</code></strong> (re-route #2/#4: 5 sessions all provisioning <code>job-&lt;samePlanID&gt;</code>).
-So GitHub does <strong>not</strong> enforce single-acquisition per job — <code>acquirejob</code> is the
-atomic claim of a <strong>delivery</strong>, not of the job (consistent with Investigation A,
-<a href="../../../design/03-api-contracts/#33-re-implemented-broker-api-endpoints"><code>03-api-contracts.md</code></a>:
-"<code>acquirejob</code> alone is the atomic claim", and <code>POST /acknowledge</code> is <strong>not required</strong>
-for correct delivery — so the missing message-ack is <em>not</em> the bug).</p>
-<p>Each delivery is an independent <strong>assignment</strong> on GitHub's side. GitHub expects each
-acquired assignment to either be renewed + completed, or it reclaims it: an
-assignment acquired but not started/renewed is <strong>cancelled at the ~15-minute
-unstarted-job timeout</strong>, and a stale assignment triggers <strong>redelivery</strong> to another
-session (the Q247 mechanism: "outlived the lock TTL → GitHub redelivered to a sibling").</p>
+<p>Under a concurrent burst, GitHub's broker <strong>fans one logical job (one <code>planID</code>) out to N sibling sessions</strong> as N separate <code>RunnerJobRequest</code> messages with <strong>distinct <code>RunnerRequestID</code>s</strong>.
+Each sibling's <code>POST /acquirejob</code> <strong>succeeds</strong> and returns the <strong>same <code>planID</code></strong> (re-route #2/#4: 5 sessions all provisioning <code>job-&lt;samePlanID&gt;</code>).
+So GitHub does <strong>not</strong> enforce single-acquisition per job — <code>acquirejob</code> is the atomic claim of a <strong>delivery</strong>, not of the job (consistent with Investigation A, <a href="../../../design/03-api-contracts/#33-re-implemented-broker-api-endpoints"><code>03-api-contracts.md</code></a>: "<code>acquirejob</code> alone is the atomic claim", and <code>POST /acknowledge</code> is <strong>not required</strong> for correct delivery — so the missing message-ack is <em>not</em> the bug).</p>
+<p>Each delivery is an independent <strong>assignment</strong> on GitHub's side.
+GitHub expects each acquired assignment to either be renewed + completed, or it reclaims it: an assignment acquired but not started/renewed is <strong>cancelled at the ~15-minute unstarted-job timeout</strong>, and a stale assignment triggers <strong>redelivery</strong> to another session (the Q247 mechanism: "outlived the lock TTL → GitHub redelivered to a sibling").</p>
 <p>Two more server facts, confirmed live in re-route #4:</p>
 <ul>
-<li>Completing <strong>one</strong> sibling delivery does <strong>not</strong> conclude the logical job. The
-  winner's worker pod completes its own delivery with a real result, yet GitHub held
-  the job <code>in_progress</code> / cancelled it.</li>
-<li><code>completejob(result=skipped)</code> on a sibling returns <strong>HTTP-OK but does not conclude
-  the job</strong> (14/15 OK; 1× <code>401 "Not authorized for this job"</code>). It merely acks that
-  one delivery.</li>
-<li>The Q259 <code>422 "runner … is currently running a job and cannot be deleted"</code> on
-  recycle is the same accounting seam from the runner side: GitHub still considers a
-  deduped-away runner <strong>assigned to the job</strong>.</li>
+<li>Completing <strong>one</strong> sibling delivery does <strong>not</strong> conclude the logical job.
+  The winner's worker pod completes its own delivery with a real result, yet GitHub held the job <code>in_progress</code> / cancelled it.</li>
+<li><code>completejob(result=skipped)</code> on a sibling returns <strong>HTTP-OK but does not conclude the job</strong> (14/15 OK; 1× <code>401 "Not authorized for this job"</code>).
+  It merely acks that one delivery.</li>
+<li>The Q259 <code>422 "runner … is currently running a job and cannot be deleted"</code> on recycle is the same accounting seam from the runner side: GitHub still considers a deduped-away runner <strong>assigned to the job</strong>.</li>
 </ul>
 <h3 id="what-the-agc-does-our-behaviour--from-the-code">What the AGC does (our behaviour — from the code)<a class="headerlink" href="#what-the-agc-does-our-behaviour--from-the-code" title="Permanent link">&para;</a></h3>
 <p><code>handleJob</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>) per delivery:</p>
 <ol>
-<li><code>AcquireJob(jobMessageId = RunnerRequestID)</code> → learns <code>planID</code> + a per-delivery
-   job token (<code>AcquireJobResponse.JobAuthToken</code>).</li>
-<li><strong>Dedup gate</strong> <code>ClaimJob(planID)</code> (post-acquire, #512): the <strong>first</strong> sibling to
-   claim the <code>planID</code> <strong>wins</strong> and provisions; the <strong>losers</strong> skip provisioning and
-   <code>return acquired=true</code> so their runner recycles. The claim lingers for
-   <code>completedPodTTL</code> past completion so a late redelivery is deduped too.</li>
-<li>Winner only: <code>SpawnReplacement</code> → <code>StartRenewLoop(jobId = RunnerRequestID)</code> →
-   <code>JobHandler</code> (provisions the worker Pod; the worker's runner binary makes the
-   winner delivery's <code>completejob</code>).</li>
+<li><code>AcquireJob(jobMessageId = RunnerRequestID)</code> → learns <code>planID</code> + a per-delivery job token (<code>AcquireJobResponse.JobAuthToken</code>).</li>
+<li><strong>Dedup gate</strong> <code>ClaimJob(planID)</code> (post-acquire, #512): the <strong>first</strong> sibling to claim the <code>planID</code> <strong>wins</strong> and provisions; the <strong>losers</strong> skip provisioning and <code>return acquired=true</code> so their runner recycles.
+   The claim lingers for <code>completedPodTTL</code> past completion so a late redelivery is deduped too.</li>
+<li>Winner only: <code>SpawnReplacement</code> → <code>StartRenewLoop(jobId = RunnerRequestID)</code> → <code>JobHandler</code> (provisions the worker Pod; the worker's runner binary makes the winner delivery's <code>completejob</code>).</li>
 </ol>
-<p>Critically: the loser path does <strong>nothing</strong> to its acquired delivery (default), and
-the <strong>JobHandler never learns the job's real succeeded/failed result</strong> — the
-provisioner returns <code>nil</code> even on <code>PodFailed</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a>, step 5–7); only
-the worker's runner binary reports the real result, and only for the winner delivery.</p>
+<p>Critically: the loser path does <strong>nothing</strong> to its acquired delivery (default), and the <strong>JobHandler never learns the job's real succeeded/failed result</strong> — the provisioner returns <code>nil</code> even on <code>PodFailed</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a>, step 5–7); only the worker's runner binary reports the real result, and only for the winner delivery.</p>
 <h3 id="why-this-is-gag-specific--arc-has-one-acquirer">Why this is GAG-specific — ARC has one acquirer<a class="headerlink" href="#why-this-is-gag-specific--arc-has-one-acquirer" title="Permanent link">&para;</a></h3>
 <p>The gap is a consequence of GAG's <strong>topology</strong>, not a defect in GitHub's protocol.
-The offer-to-many / redeliver-on-stale dispatch is an inherent, by-design race:
-GitHub offers a queued job to any eligible idle session and treats <code>acquirejob</code> as
-the claim, assuming each acquired delivery is either run-to-completion or reclaimed.</p>
-<p>Modern ARC (<code>gha-runner-scale-set</code>) never surfaces it because it runs <strong>one</strong>
-<code>Runner.Listener</code> per scale set
-(<a href="../../../design/01-executive-summary/"><code>01-executive-summary.md</code></a>,
-<a href="../../../design/appendix-f-cost-model/"><code>appendix-f-cost-model.md</code></a>): that single listener
-acquires each job <strong>once</strong>, then spins a dedicated ephemeral pod to run it — a strict
-1:1 acquire-to-run with <strong>no sibling deliveries to reconcile</strong>. ARC separates
-<em>acquire</em> (one listener) from <em>run</em> (a fresh pod).</p>
-<p>GAG instead runs a permanent baseline plus up to <code>maxListeners</code> concurrent
-long-polling sessions per RunnerGroup, <strong>each independently able to <code>acquirejob</code></strong>
-(<a href="../../../design/02-architecture/"><code>02-architecture.md</code></a>). That is the ~60 KiB/session
-virtual-runner model GAG is built on — and it is exactly what lets GitHub hand one
-job to several sessions, all acquire it (shared planID), and leave N assignments for
-one logical job. <strong>The fan-out is intrinsic to the many-acquirers topology</strong>; the
-dedup and this completion reconciliation are the tax that topology pays. Option E
-treats the cause instead of the symptom.</p>
+The offer-to-many / redeliver-on-stale dispatch is an inherent, by-design race: GitHub offers a queued job to any eligible idle session and treats <code>acquirejob</code> as the claim, assuming each acquired delivery is either run-to-completion or reclaimed.</p>
+<p>Modern ARC (<code>gha-runner-scale-set</code>) never surfaces it because it runs <strong>one</strong> <code>Runner.Listener</code> per scale set (<a href="../../../design/01-executive-summary/"><code>01-executive-summary.md</code></a>, <a href="../../../design/appendix-f-cost-model/"><code>appendix-f-cost-model.md</code></a>): that single listener acquires each job <strong>once</strong>, then spins a dedicated ephemeral pod to run it — a strict 1:1 acquire-to-run with <strong>no sibling deliveries to reconcile</strong>.
+ARC separates <em>acquire</em> (one listener) from <em>run</em> (a fresh pod).</p>
+<p>GAG instead runs a permanent baseline plus up to <code>maxListeners</code> concurrent long-polling sessions per RunnerGroup, <strong>each independently able to <code>acquirejob</code></strong> (<a href="../../../design/02-architecture/"><code>02-architecture.md</code></a>).
+That is the ~60 KiB/session virtual-runner model GAG is built on — and it is exactly what lets GitHub hand one job to several sessions, all acquire it (shared planID), and leave N assignments for one logical job. <strong>The fan-out is intrinsic to the many-acquirers topology</strong>; the dedup and this completion reconciliation are the tax that topology pays.
+Option E treats the cause instead of the symptom.</p>
 <hr />
 <h2 id="2-the-accounting-gap-exact">2. The accounting gap (exact)<a class="headerlink" href="#2-the-accounting-gap-exact" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>        one logical job = planID P
@@ -3047,271 +2998,143 @@ treats the cause instead of the symptom.</p>
 <a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>  unstarted-job timeout on a dangling sibling  →  JOB CANCELLED
 <a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>                                                  (even though req-1 completed it)
 </code></pre></div>
-<p><strong>The gap:</strong> the AGC collapses N deliveries to one <em>runner</em>, but does nothing to
-collapse them on <em>GitHub's</em> books. The winner resolves exactly <strong>one</strong> of N
-assignments; the other N−1 are acquired-then-silently-abandoned, and each is a live
-assignment GitHub is still waiting on. At the unstarted-job timeout the dangling
-assignments cancel the whole job — the winner's completion of its own delivery does
-not save it, because GitHub tracks completion <strong>per delivery</strong>, and N−1 deliveries
-never reported anything.</p>
-<p>This is <strong>distinct from and beyond</strong> the dedup (which is correct and done) and
-distinct from Q259 (the recycle 422 is the same seam observed from the runner side).</p>
+<p><strong>The gap:</strong> the AGC collapses N deliveries to one <em>runner</em>, but does nothing to collapse them on <em>GitHub's</em> books.
+The winner resolves exactly <strong>one</strong> of N assignments; the other N−1 are acquired-then-silently-abandoned, and each is a live assignment GitHub is still waiting on.
+At the unstarted-job timeout the dangling assignments cancel the whole job — the winner's completion of its own delivery does not save it, because GitHub tracks completion <strong>per delivery</strong>, and N−1 deliveries never reported anything.</p>
+<p>This is <strong>distinct from and beyond</strong> the dedup (which is correct and done) and distinct from Q259 (the recycle 422 is the same seam observed from the runner side).</p>
 <hr />
 <h2 id="3-why-envtest-passed-while-production-wedged--and-the-repro-that-fixes-that">3. Why envtest passed while production wedged — and the repro that fixes that<a class="headerlink" href="#3-why-envtest-passed-while-production-wedged--and-the-repro-that-fixes-that" title="Permanent link">&para;</a></h2>
-<p>The default <code>brokertest.Server</code> modeled <strong>neither</strong> the fan-out <strong>nor</strong> per-delivery
-completion: every <code>acquirejob</code> returned a fresh <code>test-plan-N</code>, and <code>completejob</code> was
-just a counter. The Q260 envtest
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/q260_duplicate_delivery_test.go"><code>q260_duplicate_delivery_test.go</code></a>)
-forced a constant planID and asserted the <strong>dedup</strong> — then had the winner <strong>block
-forever</strong> in <code>waitForCompletion</code>. It never modeled a job <em>concluding</em>, so the
-accounting gap was invisible. That is exactly why the dedup looked green offline yet
-wedged live.</p>
+<p>The default <code>brokertest.Server</code> modeled <strong>neither</strong> the fan-out <strong>nor</strong> per-delivery completion: every <code>acquirejob</code> returned a fresh <code>test-plan-N</code>, and <code>completejob</code> was just a counter.
+The Q260 envtest (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/q260_duplicate_delivery_test.go"><code>q260_duplicate_delivery_test.go</code></a>) forced a constant planID and asserted the <strong>dedup</strong> — then had the winner <strong>block forever</strong> in <code>waitForCompletion</code>.
+It never modeled a job <em>concluding</em>, so the accounting gap was invisible.
+That is exactly why the dedup looked green offline yet wedged live.</p>
 <p><strong>Repro landed in this PR</strong> (opt-in, so existing tests are unaffected):</p>
 <ul>
-<li><code>broker/brokertest/server.go</code> gains a <strong>fan-out job-accounting model</strong>
-  (<code>EnableFanoutAccounting</code>, <code>EnqueueFanoutJob</code>, <code>JobState</code>,
-  <code>ExpireUnstartedDeliveries</code>). It tracks a logical job per planID with one
-  assignment per delivery, and encodes the invariant observed live: <strong>a job
-  concludes only when every acquired delivery is resolved with a consistent real
-  (non-<code>skipped</code>) result; any acquired-but-unresolved delivery cancels the job at the
-  unstarted timeout; a <code>skipped</code>-only job never goes green</strong> (matching the #513
-  flag-ON result).</li>
+<li><code>broker/brokertest/server.go</code> gains a <strong>fan-out job-accounting model</strong> (<code>EnableFanoutAccounting</code>, <code>EnqueueFanoutJob</code>, <code>JobState</code>, <code>ExpireUnstartedDeliveries</code>).
+  It tracks a logical job per planID with one assignment per delivery, and encodes the invariant observed live: <strong>a job concludes only when every acquired delivery is resolved with a consistent real (non-<code>skipped</code>) result; any acquired-but-unresolved delivery cancels the job at the unstarted timeout; a <code>skipped</code>-only job never goes green</strong> (matching the #513 flag-ON result).</li>
 <li><code>cmd/agc/internal/listener/q260_fanout_accounting_test.go</code>:</li>
-<li><code>TestAGC_Q260_FanoutCompletionAccountingGap</code> (<strong>green today</strong>) drives the real
-    dedup path against the model — winner completes its own delivery, siblings dedup
-    — and asserts the job ends up <strong><code>cancelled</code></strong> at the timeout. This locks the
-    wedge in as a deterministic, offline regression.</li>
-<li><code>TestAGC_Q260_FanoutCompletionReconciles</code> (the fix gate, <strong>now un-skipped and
-    green</strong> with the flag on) asserts the job concludes <strong><code>completed</code></strong>. It failed
-    against pre-fix code (<code>completed</code> vs <code>cancelled</code>) and passes now that Option A
-    lands — validating the fix with no turn-up.</li>
+<li><code>TestAGC_Q260_FanoutCompletionAccountingGap</code> (<strong>green today</strong>) drives the real dedup path against the model — winner completes its own delivery, siblings dedup — and asserts the job ends up <strong><code>cancelled</code></strong> at the timeout.
+    This locks the wedge in as a deterministic, offline regression.</li>
+<li><code>TestAGC_Q260_FanoutCompletionReconciles</code> (the fix gate, <strong>now un-skipped and green</strong> with the flag on) asserts the job concludes <strong><code>completed</code></strong>.
+    It failed against pre-fix code (<code>completed</code> vs <code>cancelled</code>) and passes now that Option A lands — validating the fix with no turn-up.</li>
 </ul>
-<p>Model assumptions and their grounding are documented inline in <code>server.go</code>; the one
-assumption the model <em>cannot</em> prove is §5's live-only unknown.</p>
+<p>Model assumptions and their grounding are documented inline in <code>server.go</code>; the one assumption the model <em>cannot</em> prove is §5's live-only unknown.</p>
 <hr />
 <h2 id="4-design-options">4. Design options<a class="headerlink" href="#4-design-options" title="Permanent link">&para;</a></h2>
-<p>The AGC can only reach GitHub through the calls it already has (<code>acquirejob</code>,
-<code>renewjob</code>, <code>completejob</code>, <code>deletesession</code>) — there is <strong>no</strong> "reject/un-acquire"
-call. Once a loser has acquired, its assignment exists; the only levers are <em>how</em> and
-<em>when</em> to resolve it.</p>
+<p>The AGC can only reach GitHub through the calls it already has (<code>acquirejob</code>, <code>renewjob</code>, <code>completejob</code>, <code>deletesession</code>) — there is <strong>no</strong> "reject/un-acquire" call.
+Once a loser has acquired, its assignment exists; the only levers are <em>how</em> and <em>when</em> to resolve it.</p>
 <h3 id="option-a--winner-fans-completion-out-to-all-sibling-deliveries-recommended">Option A — Winner fans completion out to all sibling deliveries (recommended)<a class="headerlink" href="#option-a--winner-fans-completion-out-to-all-sibling-deliveries-recommended" title="Permanent link">&para;</a></h3>
-<p>Track, per <code>planID</code> claim, every deduped sibling delivery
-<code>(RunnerRequestID, runServiceURL, jobToken)</code>. When the winner's job <strong>finishes</strong>,
-the AGC issues <code>completejob</code> for <strong>each</strong> sibling delivery (and any late redelivery
-that arrives during the linger window) so <strong>no</strong> assignment dangles. Losers do
-<strong>not</strong> complete early.</p>
+<p>Track, per <code>planID</code> claim, every deduped sibling delivery <code>(RunnerRequestID, runServiceURL, jobToken)</code>.
+When the winner's job <strong>finishes</strong>, the AGC issues <code>completejob</code> for <strong>each</strong> sibling delivery (and any late redelivery that arrives during the linger window) so <strong>no</strong> assignment dangles.
+Losers do <strong>not</strong> complete early.</p>
 <ul>
-<li><strong>Why it's not #513:</strong> #513 completed the loser <strong>immediately</strong> on dedup, with
-  <code>skipped</code>, <strong>before</strong> the job ran. That (a) acked the assignment with a non-result
-  and (b) raced the winner. Option A completes siblings <strong>after</strong> the winner's real
-  completion, so whichever delivery GitHub treats as authoritative gets resolved at
-  the right time, and a planID-scoped completion (if that is how GitHub works) is
-  harmless because the job is already done.</li>
-<li><strong>The result to report:</strong> the AGC does <strong>not</strong> know the workflow's real
-  succeeded/failed (§1). Options, in order of preference pending §5:</li>
-<li><strong><code>skipped</code></strong> for the siblings — honest (they ran nothing) and lowest blast
-     radius if completion is planID-scoped, but re-route #4 showed <code>skipped</code> does not
-     <em>conclude</em> a delivery GitHub is waiting on. Likely insufficient alone.</li>
-<li>Report the <strong>winner's pod phase</strong> proxied to <code>succeeded</code>/<code>failed</code>
-     (<code>PodFailed</code>→<code>failed</code>, else <code>succeeded</code>) — richer, but risks greening a red job
-     <strong>iff</strong> completion is planID-scoped (a red workflow whose worker exited 0). Gate
-     behind the flag; secure-by-default keeps it off until §5 clears it.</li>
-<li><strong>Cost:</strong> N−1 extra <code>completejob</code> calls per fanned-out job, bounded by fan-out
-  width; negligible against the hourly budget.</li>
-<li><strong>Late redelivery:</strong> the linger claim (#512) already dedups a redelivery arriving
-  after completion; extend the claim registry to remember the planID's terminal
-  outcome for the linger window so the late delivery is resolved with the same result
-  rather than left dangling.</li>
+<li><strong>Why it's not #513:</strong> #513 completed the loser <strong>immediately</strong> on dedup, with <code>skipped</code>, <strong>before</strong> the job ran.
+  That (a) acked the assignment with a non-result and (b) raced the winner.
+  Option A completes siblings <strong>after</strong> the winner's real completion, so whichever delivery GitHub treats as authoritative gets resolved at the right time, and a planID-scoped completion (if that is how GitHub works) is harmless because the job is already done.</li>
+<li><strong>The result to report:</strong> the AGC does <strong>not</strong> know the workflow's real succeeded/failed (§1).
+  Options, in order of preference pending §5:</li>
+<li><strong><code>skipped</code></strong> for the siblings — honest (they ran nothing) and lowest blast radius if completion is planID-scoped, but re-route #4 showed <code>skipped</code> does not <em>conclude</em> a delivery GitHub is waiting on.
+     Likely insufficient alone.</li>
+<li>Report the <strong>winner's pod phase</strong> proxied to <code>succeeded</code>/<code>failed</code> (<code>PodFailed</code>→<code>failed</code>, else <code>succeeded</code>) — richer, but risks greening a red job <strong>iff</strong> completion is planID-scoped (a red workflow whose worker exited 0).
+     Gate behind the flag; secure-by-default keeps it off until §5 clears it.</li>
+<li><strong>Cost:</strong> N−1 extra <code>completejob</code> calls per fanned-out job, bounded by fan-out width; negligible against the hourly budget.</li>
+<li><strong>Late redelivery:</strong> the linger claim (#512) already dedups a redelivery arriving after completion; extend the claim registry to remember the planID's terminal outcome for the linger window so the late delivery is resolved with the same result rather than left dangling.</li>
 </ul>
 <h3 id="option-b--loser-abandons-its-own-delivery-immediately-the-513-path">Option B — Loser abandons its own delivery immediately (the #513 path)<a class="headerlink" href="#option-b--loser-abandons-its-own-delivery-immediately-the-513-path" title="Permanent link">&para;</a></h3>
-<p><strong>Rejected — settled dead-end.</strong> Live-tested in re-route #4: <code>completejob(skipped)</code>
-immediately returns OK but does <strong>not</strong> conclude the job; worse, by acking the
-delivery it <strong>suppresses</strong> the unstarted-timeout that would otherwise resolve it, so
-a late redelivery re-assigns the already-run job and GitHub holds it <strong>indefinitely
-<code>in_progress</code></strong> — strictly worse than a terminal cancel. The per-loser-immediate
-path is therefore <strong>removed/unreachable</strong>: Option A reuses the same
-<code>broker.CompleteJob</code> plumbing but fires it from the <strong>winner</strong>, deferred to job
-completion and fanned to all siblings, under the rescoped <code>AGC_FANOUT_COMPLETION</code>
-flag — never per-loser at dedup time.</p>
+<p><strong>Rejected — settled dead-end.</strong> Live-tested in re-route #4: <code>completejob(skipped)</code> immediately returns OK but does <strong>not</strong> conclude the job; worse, by acking the delivery it <strong>suppresses</strong> the unstarted-timeout that would otherwise resolve it, so a late redelivery re-assigns the already-run job and GitHub holds it <strong>indefinitely <code>in_progress</code></strong> — strictly worse than a terminal cancel.
+The per-loser-immediate path is therefore <strong>removed/unreachable</strong>: Option A reuses the same <code>broker.CompleteJob</code> plumbing but fires it from the <strong>winner</strong>, deferred to job completion and fanned to all siblings, under the rescoped <code>AGC_FANOUT_COMPLETION</code> flag — never per-loser at dedup time.</p>
 <h3 id="option-c--reduce-fan-out-width">Option C — Reduce fan-out width<a class="headerlink" href="#option-c--reduce-fan-out-width" title="Permanent link">&para;</a></h3>
-<p><strong>Rejected.</strong> Fan-out is GitHub minting multiple messages for one job; it is inherent
-to a multi-session pool and cannot be eliminated without serialising the pool (kills
-throughput, the Q248 regression). Narrowing <code>maxListeners</code> only narrows, never
-closes, the window.</p>
+<p><strong>Rejected.</strong> Fan-out is GitHub minting multiple messages for one job; it is inherent to a multi-session pool and cannot be eliminated without serialising the pool (kills throughput, the Q248 regression).
+Narrowing <code>maxListeners</code> only narrows, never closes, the window.</p>
 <h3 id="option-d--another-dedup-key--pre-acquire-dedup">Option D — Another dedup key / pre-acquire dedup<a class="headerlink" href="#option-d--another-dedup-key--pre-acquire-dedup" title="Permanent link">&para;</a></h3>
-<p><strong>Rejected — settled.</strong> planID is the correct key (#512, live-validated 0
-collisions). The problem is completion accounting, not acquisition dedup. No new key
-helps.</p>
+<p><strong>Rejected — settled.</strong> planID is the correct key (#512, live-validated 0 collisions).
+The problem is completion accounting, not acquisition dedup.
+No new key helps.</p>
 <h3 id="option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause">Option E — single-acquirer topology / adopt the runner-scale-set protocol (treat the cause)<a class="headerlink" href="#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause" title="Permanent link">&para;</a></h3>
-<p><strong>Deferred — a v-next architectural pivot; the fallback if Option A proves infeasible
-(§5).</strong> The fan-out exists only because GAG runs <em>many</em> acquiring sessions per group on
-the classic per-runner broker protocol, where <strong>concurrency = number of registered
-runners = number of acquirers</strong>. So "one acquirer" and "N concurrent jobs" are mutually
-exclusive on this protocol: a single classic session is a single runner and would
-<strong>serialize the whole group to one job at a time</strong> (and there is no pre-acquire
-single-flight key — planID is post-acquire and the message's <code>RunnerRequestID</code> differs
-per sibling; the entire Q260 history). Getting one acquirer <em>with</em> concurrency requires
-GitHub's <strong>runner-scale-set message-queue protocol</strong> (what ARC uses): one listener
-long-polls a single job stream, <code>acquireJobs</code> claims a <strong>batch</strong>, and GAG creates one
-worker pod per acquired job. One authoritative stream ⇒ no sibling deliveries ⇒ the
-Q260 / Q247-completion / Q259-recycle class is eliminated <strong>by construction</strong>, not
-reconciled. GAG would still beat ARC on footprint (a Go listener goroutine vs a
-~256 MiB .NET process) and keep egress isolation + on-demand workers — "ARC's protocol,
-GAG's efficiency."</p>
-<p><strong>Cost:</strong> a large rewrite of the acquisition tier and a partial redefinition of GAG. It
-discards most of the classic-protocol machinery (per-agent JIT session model, agent
-pool + single-use recycle Q114, the Multiplexer, the Q260 dedup, the Q247
-renew-by-<code>RunnerRequestID</code> path); it means reverse-engineering and depending on a
-<strong>second</strong> GitHub-internal protocol; it reworks registration/auth (register a scale
-set, not N agents) and re-expresses the admission gate (Q59) + <code>priorityTiers</code> against a
-dispatch model; and it collapses each group's acquisition to a <strong>single point of
-failure</strong> (vs today's N independent sessions, each with its own Q137 revival). It also
-retires the "thousands of goroutine-backed virtual runners" identity — density at rest
-actually <em>improves</em> (one listener/group, not N), but the story becomes "a
-lighter-weight ARC listener" rather than "cheap virtual runners." Revisit only if §5
-rules Option A out.</p>
-<p><strong>Recommendation: Option A</strong> — <strong>implemented</strong>, behind the flag renamed/rescoped from
-the per-loser <code>AGC_COMPLETE_ABANDONED_DELIVERIES</code> to the winner-driven
-<code>AGC_FANOUT_COMPLETION</code>, <strong>off by default</strong> until re-route #5 confirms §5.</p>
+<p><strong>Deferred — a v-next architectural pivot; the fallback if Option A proves infeasible (§5).</strong> The fan-out exists only because GAG runs <em>many</em> acquiring sessions per group on the classic per-runner broker protocol, where <strong>concurrency = number of registered runners = number of acquirers</strong>.
+So "one acquirer" and "N concurrent jobs" are mutually exclusive on this protocol: a single classic session is a single runner and would <strong>serialize the whole group to one job at a time</strong> (and there is no pre-acquire single-flight key — planID is post-acquire and the message's <code>RunnerRequestID</code> differs per sibling; the entire Q260 history).
+Getting one acquirer <em>with</em> concurrency requires GitHub's <strong>runner-scale-set message-queue protocol</strong> (what ARC uses): one listener long-polls a single job stream, <code>acquireJobs</code> claims a <strong>batch</strong>, and GAG creates one worker pod per acquired job.
+One authoritative stream ⇒ no sibling deliveries ⇒ the Q260 / Q247-completion / Q259-recycle class is eliminated <strong>by construction</strong>, not reconciled.
+GAG would still beat ARC on footprint (a Go listener goroutine vs a ~256 MiB .NET process) and keep egress isolation + on-demand workers — "ARC's protocol, GAG's efficiency."</p>
+<p><strong>Cost:</strong> a large rewrite of the acquisition tier and a partial redefinition of GAG.
+It discards most of the classic-protocol machinery (per-agent JIT session model, agent pool + single-use recycle Q114, the Multiplexer, the Q260 dedup, the Q247 renew-by-<code>RunnerRequestID</code> path); it means reverse-engineering and depending on a <strong>second</strong> GitHub-internal protocol; it reworks registration/auth (register a scale set, not N agents) and re-expresses the admission gate (Q59) + <code>priorityTiers</code> against a dispatch model; and it collapses each group's acquisition to a <strong>single point of failure</strong> (vs today's N independent sessions, each with its own Q137 revival).
+It also retires the "thousands of goroutine-backed virtual runners" identity — density at rest actually <em>improves</em> (one listener/group, not N), but the story becomes "a lighter-weight ARC listener" rather than "cheap virtual runners."
+Revisit only if §5 rules Option A out.</p>
+<p><strong>Recommendation: Option A</strong> — <strong>implemented</strong>, behind the flag renamed/rescoped from the per-loser <code>AGC_COMPLETE_ABANDONED_DELIVERIES</code> to the winner-driven <code>AGC_FANOUT_COMPLETION</code>, <strong>off by default</strong> until re-route #5 confirms §5.</p>
 <hr />
 <h2 id="5-the-one-live-only-unknown-and-the-feasibility-caveat">5. The one live-only unknown, and the feasibility caveat<a class="headerlink" href="#5-the-one-live-only-unknown-and-the-feasibility-caveat" title="Permanent link">&para;</a></h2>
 <p>Option A rests on a single unproven assumption:</p>
 <blockquote>
-<p><strong>Does <code>completejob</code> on a sibling delivery that never ran the job cause GitHub to
-stop waiting on that assignment — and does resolving <em>all</em> assignments let the job
-conclude green?</strong></p>
+<p><strong>Does <code>completejob</code> on a sibling delivery that never ran the job cause GitHub to stop waiting on that assignment — and does resolving <em>all</em> assignments let the job conclude green?</strong></p>
 </blockquote>
-<p>Re-route #4 proved <code>skipped</code> <strong>acks</strong> a delivery (HTTP-OK) but does <strong>not conclude</strong>
-the logical job. It did <strong>not</strong> test (a) resolving <strong>every</strong> sibling, nor (b) a
-<strong>real</strong> result (<code>succeeded</code>/<code>failed</code>) on a sibling. Those are the open questions.</p>
-<p><strong>Feasibility honesty (per the task's stop-condition):</strong> there is a real chance this
-is <strong>not</strong> fully reconcilable AGC-side. If GitHub always treats the <strong>most-recent</strong>
-delivery as the job's authoritative assignment and <strong>ignores older deliveries'
-completions</strong>, then new redeliveries keep arriving faster than the AGC can resolve
-them, and no amount of sibling-completion converges — the fix would then require a
-GitHub-server behaviour we cannot influence. The re-route #4 evidence (a late
-redelivery re-assigning an already-run job) is <em>consistent with</em> that worst case, but
-does not prove it, because #4 only ever completed siblings with <code>skipped</code>. This is
-why the design ships behind a flag with a decisive live experiment rather than as a
-default: <strong>one re-route #5 settles feasibility.</strong></p>
+<p>Re-route #4 proved <code>skipped</code> <strong>acks</strong> a delivery (HTTP-OK) but does <strong>not conclude</strong> the logical job.
+It did <strong>not</strong> test (a) resolving <strong>every</strong> sibling, nor (b) a <strong>real</strong> result (<code>succeeded</code>/<code>failed</code>) on a sibling.
+Those are the open questions.</p>
+<p><strong>Feasibility honesty (per the task's stop-condition):</strong> there is a real chance this is <strong>not</strong> fully reconcilable AGC-side.
+If GitHub always treats the <strong>most-recent</strong> delivery as the job's authoritative assignment and <strong>ignores older deliveries' completions</strong>, then new redeliveries keep arriving faster than the AGC can resolve them, and no amount of sibling-completion converges — the fix would then require a GitHub-server behaviour we cannot influence.
+The re-route #4 evidence (a late redelivery re-assigning an already-run job) is <em>consistent with</em> that worst case, but does not prove it, because #4 only ever completed siblings with <code>skipped</code>.
+This is why the design ships behind a flag with a decisive live experiment rather than as a default: <strong>one re-route #5 settles feasibility.</strong></p>
 <h3 id="re-route-5-confirmed-2026-07-04--go">Re-route #5 confirmed (2026-07-04) — GO<a class="headerlink" href="#re-route-5-confirmed-2026-07-04--go" title="Permanent link">&para;</a></h3>
-<p>Enabled Option A by setting <code>AGC_EXTRA_AGC_FANOUT_COMPLETION=true</code> on the GMC pod (which
-forwards <code>AGC_FANOUT_COMPLETION=true</code> to the AGC Deployments — no GMC code change), on a
-fresh <code>agc:e2e-238b8df</code> (includes #521), on the re-route #4 stable capacity (non-preemptible
-<code>workers-od</code> ×3 + default-pool 2), <code>spec.logLevel: debug</code>. Fired the same ~7-job concurrent
-matrix (unit-test + integration reruns on sha 238b8df, green on GitHub-hosted). Observations:</p>
+<p>Enabled Option A by setting <code>AGC_EXTRA_AGC_FANOUT_COMPLETION=true</code> on the GMC pod (which forwards <code>AGC_FANOUT_COMPLETION=true</code> to the AGC Deployments — no GMC code change), on a fresh <code>agc:e2e-238b8df</code> (includes #521), on the re-route #4 stable capacity (non-preemptible <code>workers-od</code> ×3 + default-pool 2), <code>spec.logLevel: debug</code>.
+Fired the same ~7-job concurrent matrix (unit-test + integration reruns on sha 238b8df, green on GitHub-hosted).
+Observations:</p>
 <ol>
-<li><strong><code>completejob</code> on a live sibling returns OK</strong> — at 16:37:07 a fanned-out job (planID
-   <code>357b6d9e</code>, winner on ci-0) whose winner completed <em>naturally</em> fanned <code>completejob</code> out
-   to <strong>both</strong> deduped siblings (jobIDs <code>34ad8db4</code> on ci-2, <code>f968c752</code> on ci-4) → <strong>both
-   <code>completed a deduped sibling delivery via completejob</code></strong> (HTTP OK), <strong>not</strong> "already
-   resolved". So GitHub <strong>accepts</strong> the completion of a sibling delivery that never ran the
-   job. (A sibling whose winner had been <em>concurrency-cancelled</em> by an unrelated Dependabot
-   rebase returned "already resolved server-side" — GitHub had already torn that delivery
-   down — which is why the winner must complete naturally for the clean signal.)</li>
-<li><strong>Previously-wedged concurrent jobs conclude green</strong> — <code>coverage</code> and <code>integration-test</code>
-   (fanned-out) concluded <strong>success</strong>; all 6 unit jobs eventually ran (none stranded at the
-   unstarted timeout once the pool recovered).</li>
-<li><strong>Durability</strong> — <code>coverage</code> stayed <code>success</code> past 16:47, i.e. beyond the ~15-minute
-   unstarted-timeout of its siblings (acquired ~16:31) — the exact point re-route #4's
-   winner-completed jobs were cancelled. Option A prevented the cancel.</li>
-<li><strong>Q259 recycle 422 clears per job</strong> — the "runner … is still running a job and cannot be
-   deleted" churn dropped ~12× once winners began completing and fanning <code>completejob</code>; the
-   pool recovered from a collapsed 2 sessions back toward <code>maxListeners</code>, draining the
-   backlog. (The 422 is a <em>rolling</em> transient per job's in-flight siblings, cleared on that
-   job's winner completion — not a permanent wedge.)</li>
+<li><strong><code>completejob</code> on a live sibling returns OK</strong> — at 16:37:07 a fanned-out job (planID <code>357b6d9e</code>, winner on ci-0) whose winner completed <em>naturally</em> fanned <code>completejob</code> out to <strong>both</strong> deduped siblings (jobIDs <code>34ad8db4</code> on ci-2, <code>f968c752</code> on ci-4) → <strong>both <code>completed a deduped sibling delivery via completejob</code></strong> (HTTP OK), <strong>not</strong> "already resolved".
+   So GitHub <strong>accepts</strong> the completion of a sibling delivery that never ran the job.
+   (A sibling whose winner had been <em>concurrency-cancelled</em> by an unrelated Dependabot rebase returned "already resolved server-side" — GitHub had already torn that delivery down — which is why the winner must complete naturally for the clean signal.)</li>
+<li><strong>Previously-wedged concurrent jobs conclude green</strong> — <code>coverage</code> and <code>integration-test</code> (fanned-out) concluded <strong>success</strong>; all 6 unit jobs eventually ran (none stranded at the unstarted timeout once the pool recovered).</li>
+<li><strong>Durability</strong> — <code>coverage</code> stayed <code>success</code> past 16:47, i.e. beyond the ~15-minute unstarted-timeout of its siblings (acquired ~16:31) — the exact point re-route #4's winner-completed jobs were cancelled.
+   Option A prevented the cancel.</li>
+<li><strong>Q259 recycle 422 clears per job</strong> — the "runner … is still running a job and cannot be deleted" churn dropped ~12× once winners began completing and fanning <code>completejob</code>; the pool recovered from a collapsed 2 sessions back toward <code>maxListeners</code>, draining the backlog.
+   (The 422 is a <em>rolling</em> transient per job's in-flight siblings, cleared on that job's winner completion — not a permanent wedge.)</li>
 </ol>
-<p><strong>Verdict: GO (design point 4).</strong> Completion is <strong>per-delivery, not planID-scoped</strong>:
-<code>completejob</code> on a sibling's own job ID resolves only that assignment, and the winner's own
-delivery still carries the real workflow result reported by its runner binary — so the
-pod-phase proxy on siblings cannot green a red workflow. The secure-by-default gate is
-therefore cleared and the flag is flipped <strong>on by default</strong> (opt out <code>AGC_FANOUT_COMPLETION=false</code>).
+<p><strong>Verdict: GO (design point 4).</strong> Completion is <strong>per-delivery, not planID-scoped</strong>: <code>completejob</code> on a sibling's own job ID resolves only that assignment, and the winner's own delivery still carries the real workflow result reported by its runner binary — so the pod-phase proxy on siblings cannot green a red workflow.
+The secure-by-default gate is therefore cleared and the flag is flipped <strong>on by default</strong> (opt out <code>AGC_FANOUT_COMPLETION=false</code>).
 Option E (Q264) is <strong>not needed</strong> — the many-acquirers topology is reconcilable AGC-side.</p>
-<p>Confound handled: a Dependabot rebase merge-train briefly polluted the shared runner pool
-with pull_request runs that concurrency-cancelled on each force-push (cancels in ~4 min,
-distinct from the 15-min accounting timeout). The clean signal came from the <strong>push</strong>-event
-238b8df reruns, which are concurrency-immune. Full evidence: <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a>
-re-route #5.</p>
+<p>Confound handled: a Dependabot rebase merge-train briefly polluted the shared runner pool with pull_request runs that concurrency-cancelled on each force-push (cancels in ~4 min, distinct from the 15-min accounting timeout).
+The clean signal came from the <strong>push</strong>-event 238b8df reruns, which are concurrency-immune.
+Full evidence: <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #5.</p>
 <p>The alternative outcomes the experiment was designed to distinguish, for the record:
-- <strong><code>skipped</code> acks but a real result concludes</strong> → wire the pod-phase proxy (already the
-  default in #521). Confirmed: the winner's real result concludes the job; siblings only
-  need releasing.
-- <strong>Even resolving all siblings does not conclude the job</strong> (most-recent-delivery authority)
-  → would have been a <strong>NO-GO</strong>: gap GitHub-server-side, Q224 infeasible via many-acquirers,
-  <strong>Option E (single-acquirer topology)</strong> the path. <strong>This did not occur</strong> — resolving all
-  siblings concludes the job.</p>
-<p>Also fix the orthogonal Q239 regression before #5 (the dogfood <code>RunnerTemplate</code>
-reverted to the toolchain-less upstream image — <code>make: command not found</code>), so a
-non-green result is attributable to accounting, not the runner image
-(<a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #4 secondary observation).</p>
+- <strong><code>skipped</code> acks but a real result concludes</strong> → wire the pod-phase proxy (already the default in #521).
+  Confirmed: the winner's real result concludes the job; siblings only need releasing.
+- <strong>Even resolving all siblings does not conclude the job</strong> (most-recent-delivery authority) → would have been a <strong>NO-GO</strong>: gap GitHub-server-side, Q224 infeasible via many-acquirers, <strong>Option E (single-acquirer topology)</strong> the path. <strong>This did not occur</strong> — resolving all siblings concludes the job.</p>
+<p>Also fix the orthogonal Q239 regression before #5 (the dogfood <code>RunnerTemplate</code> reverted to the toolchain-less upstream image — <code>make: command not found</code>), so a non-green result is attributable to accounting, not the runner image (<a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #4 secondary observation).</p>
 <hr />
 <h2 id="6-test-strategy">6. Test strategy<a class="headerlink" href="#6-test-strategy" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Offline gate — ✅ green.</strong> The fan-out accounting model + the two listener tests
-  in §3. <code>TestAGC_Q260_FanoutCompletionReconciles</code> (the acceptance gate, <code>t.Skip</code>
-  removed) now passes with the flag on; <code>…AccountingGap</code> (flag off) still asserts the
-  cancelled wedge. No turn-up needed.</li>
+<li><strong>Offline gate — ✅ green.</strong> The fan-out accounting model + the two listener tests in §3. <code>TestAGC_Q260_FanoutCompletionReconciles</code> (the acceptance gate, <code>t.Skip</code> removed) now passes with the flag on; <code>…AccountingGap</code> (flag off) still asserts the cancelled wedge.
+  No turn-up needed.</li>
 <li><strong>Option A unit/envtest coverage — ✅ landed.</strong></li>
-<li><code>TestAGC_Q260_WinnerCompletesEachSibling</code> (listener): the winner issues exactly
-    one <code>completejob</code> per deduped sibling, keyed on the sibling's own
-    <code>RunnerRequestID</code>, with the pod-phase-proxy result.</li>
-<li><code>TestMultiplexer_FanoutClaim_TracksSiblingsAndLateRedelivery</code> (claim registry):
-    siblings are registered and returned to the winner on <code>Complete</code>; a late
-    redelivery within the linger window is handed the recorded terminal result.</li>
-<li><code>TestAGC_Q260_WinnerCompletesDedupedSiblingDelivery</code> (envtest): the deduped
-    sibling's delivery is <em>resolved</em> by the winner on completion (keyed on its own
-    <code>jobId</code>, result <code>succeeded</code> from the winner's Succeeded pod), not
-    skipped-and-forgotten; it is <strong>not</strong> completed while the winner is still running.</li>
-<li><code>TestProvisioner_ResultPodPhaseProxy</code> (provisioner): <code>PodFailed</code>→<code>failed</code>, else
-    <code>succeeded</code>.</li>
-<li><strong>Live (re-route #5) — ✅ GO (2026-07-04).</strong> §5. The only step that could not be done
-  offline, and the go/no-go for Q224. Confirmed: <code>completejob</code> on a live sibling returns
-  OK (9/9, 0 failures across 13 fan-outs), fanned-out jobs conclude green, the job
-  survives past the 15-minute sibling timeout, and the Q259 recycle 422 clears per job.
-  Completion is per-delivery, not planID-scoped. Flag flipped on by default.</li>
+<li><code>TestAGC_Q260_WinnerCompletesEachSibling</code> (listener): the winner issues exactly one <code>completejob</code> per deduped sibling, keyed on the sibling's own <code>RunnerRequestID</code>, with the pod-phase-proxy result.</li>
+<li><code>TestMultiplexer_FanoutClaim_TracksSiblingsAndLateRedelivery</code> (claim registry): siblings are registered and returned to the winner on <code>Complete</code>; a late redelivery within the linger window is handed the recorded terminal result.</li>
+<li><code>TestAGC_Q260_WinnerCompletesDedupedSiblingDelivery</code> (envtest): the deduped sibling's delivery is <em>resolved</em> by the winner on completion (keyed on its own <code>jobId</code>, result <code>succeeded</code> from the winner's Succeeded pod), not skipped-and-forgotten; it is <strong>not</strong> completed while the winner is still running.</li>
+<li><code>TestProvisioner_ResultPodPhaseProxy</code> (provisioner): <code>PodFailed</code>→<code>failed</code>, else <code>succeeded</code>.</li>
+<li><strong>Live (re-route #5) — ✅ GO (2026-07-04).</strong> §5.
+  The only step that could not be done offline, and the go/no-go for Q224.
+  Confirmed: <code>completejob</code> on a live sibling returns OK (9/9, 0 failures across 13 fan-outs), fanned-out jobs conclude green, the job survives past the 15-minute sibling timeout, and the Q259 recycle 422 clears per job.
+  Completion is per-delivery, not planID-scoped.
+  Flag flipped on by default.</li>
 </ul>
 <hr />
 <h2 id="7-q265--fan-out-throughput-benchmark-2026-07-05-tax-wall-or-tuning">7. Q265 — fan-out throughput benchmark (2026-07-05): tax wall or tuning?<a class="headerlink" href="#7-q265--fan-out-throughput-benchmark-2026-07-05-tax-wall-or-tuning" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Superseded by §10 (2026-07-06):</strong> this section records the first (confounded)
-benchmark, re-route #6. The clean wide-pool run and the final Q265 verdict — classic
-<strong>2/7</strong> vs ScaleSet <strong>7/7</strong>, comparison closed, Q265 DONE — are in §10.</p>
+<p><strong>Superseded by §10 (2026-07-06):</strong> this section records the first (confounded) benchmark, re-route #6.
+The clean wide-pool run and the final Q265 verdict — classic <strong>2/7</strong> vs ScaleSet <strong>7/7</strong>, comparison closed, Q265 DONE — are in §10.</p>
 </blockquote>
-<p>Q260 proved Option A's <em>accounting</em> is correct (§5, re-route #5). Q265 asks the
-<em>throughput</em> question that gates <a href="../gke-dogfood-turnup-findings/">Q224</a> and the Option A-vs-Option E
-(<a href="../../q264-scale-set-protocol/">Q264</a>) fork: on a warm, right-sized pool with
-<code>maxListeners ≫ maxWorkers × fan-out-width</code> (so listener supply is not the bottleneck),
-does the busy-worker pool <strong>hold near <code>maxWorkers</code></strong> under sustained fan-out burst
-(→ Option A sufficient; re-route #5's "2/8" was tuning), or does the completion tax
-<strong>serialize throughput and collapse the pool</strong> (→ hard wall; revive Q264)?</p>
-<p><strong>Verdict up front: the completion tax is NOT the wall — but a <em>clean</em> "holds at
-maxWorkers" measurement could not be obtained on the dogfood cluster, so this is a
-bounded result, not a full clearance.</strong> Across two sustained bursts
-(<code>maxListeners</code> = 48 and 16, <code>maxWorkers</code> = 4, non-preemptible <code>workers-od</code> ×3) the
-active-session pool collapsed to ~1 busy worker <strong>both</strong> times — but the collapse was
-driven by the <strong>agent-recycle registration-conflict seam</strong> (Q259/Q114), <strong>not</strong> the
-<code>completejob</code> tax: the worker-capacity ceiling (<code>job admission rejected: worker capacity
-full</code>) was <strong>never reached</strong> (0 admission rejections in either run), so the completion
-tax was <strong>never the binding constraint</strong>. There is therefore <strong>no evidence of an Option A
-completion-tax throughput wall</strong>, and <strong>Q264 revival is not triggered by the tax</strong>. The
-residual throughput blocker is a <strong>fixable AGC recycle-robustness gap</strong>, not an
-architectural wall.</p>
+<p>Q260 proved Option A's <em>accounting</em> is correct (§5, re-route #5).
+Q265 asks the <em>throughput</em> question that gates <a href="../gke-dogfood-turnup-findings/">Q224</a> and the Option A-vs-Option E (<a href="../../q264-scale-set-protocol/">Q264</a>) fork: on a warm, right-sized pool with <code>maxListeners ≫ maxWorkers × fan-out-width</code> (so listener supply is not the bottleneck), does the busy-worker pool <strong>hold near <code>maxWorkers</code></strong> under sustained fan-out burst (→ Option A sufficient; re-route #5's "2/8" was tuning), or does the completion tax <strong>serialize throughput and collapse the pool</strong> (→ hard wall; revive Q264)?</p>
+<p><strong>Verdict up front: the completion tax is NOT the wall — but a <em>clean</em> "holds at maxWorkers" measurement could not be obtained on the dogfood cluster, so this is a bounded result, not a full clearance.</strong> Across two sustained bursts (<code>maxListeners</code> = 48 and 16, <code>maxWorkers</code> = 4, non-preemptible <code>workers-od</code> ×3) the active-session pool collapsed to ~1 busy worker <strong>both</strong> times — but the collapse was driven by the <strong>agent-recycle registration-conflict seam</strong> (Q259/Q114), <strong>not</strong> the <code>completejob</code> tax: the worker-capacity ceiling (<code>job admission rejected: worker capacity full</code>) was <strong>never reached</strong> (0 admission rejections in either run), so the completion tax was <strong>never the binding constraint</strong>.
+There is therefore <strong>no evidence of an Option A completion-tax throughput wall</strong>, and <strong>Q264 revival is not triggered by the tax</strong>.
+The residual throughput blocker is a <strong>fixable AGC recycle-robustness gap</strong>, not an architectural wall.</p>
 <h3 id="method">Method<a class="headerlink" href="#method" title="Permanent link">&para;</a></h3>
 <ul>
-<li>HEAD <code>cacd4c6</code> (#523, Option A default-on). Built <code>agc:e2e-cacd4c6</code> (amd64,
-  <code>sha256:ec25509…</code>), deployed via the GMC <code>AGC_IMAGE</code> patch with the explicit
-  <code>AGC_FANOUT_COMPLETION</code> env <strong>removed</strong> — verifying the <em>shipped</em> default-on (confirmed
-  live: warm-up 5×, run 2 2× <code>completed a deduped sibling delivery via completejob</code>).</li>
-<li>Capacity = the re-route #4/#5 stable pool: non-preemptible <code>workers-od</code>
-  (<code>e2-standard-4</code> ×3, on-demand), default-pool 2, spot <code>workers</code> pinned to 0/0 (no
-  preemption confound). SSD <code>3×100 + 2×50 + 20 = 420 &lt; 500</code>.</li>
-<li>The Q265 lever: <code>maxListeners</code> set <strong>far above</strong> <code>maxWorkers × fan-out-width</code> (48, then
-  16; fan-out width ≈ 6 per re-route #4) so listener supply could not bottleneck.
-  <code>maxWorkers = 4</code> (SSD-bounded — see caveat).</li>
-<li>Load: the same ~7-job concurrent matrix as re-route #5 (<code>unit-test.yml</code> 6 jobs +
-  <code>integration-test.yml</code>), push-event reruns (concurrency-immune).</li>
-<li>Sampled every 15 s: online runners (≈ active listener sessions), busy runners,
-  worker-pod occupancy (<code>actions-gateway/plan-id</code>), + AGC debug-log marker counts.</li>
+<li>HEAD <code>cacd4c6</code> (#523, Option A default-on).
+  Built <code>agc:e2e-cacd4c6</code> (amd64, <code>sha256:ec25509…</code>), deployed via the GMC <code>AGC_IMAGE</code> patch with the explicit <code>AGC_FANOUT_COMPLETION</code> env <strong>removed</strong> — verifying the <em>shipped</em> default-on (confirmed live: warm-up 5×, run 2 2× <code>completed a deduped sibling delivery via completejob</code>).</li>
+<li>Capacity = the re-route #4/#5 stable pool: non-preemptible <code>workers-od</code> (<code>e2-standard-4</code> ×3, on-demand), default-pool 2, spot <code>workers</code> pinned to 0/0 (no preemption confound).
+  SSD <code>3×100 + 2×50 + 20 = 420 &lt; 500</code>.</li>
+<li>The Q265 lever: <code>maxListeners</code> set <strong>far above</strong> <code>maxWorkers × fan-out-width</code> (48, then 16; fan-out width ≈ 6 per re-route #4) so listener supply could not bottleneck. <code>maxWorkers = 4</code> (SSD-bounded — see caveat).</li>
+<li>Load: the same ~7-job concurrent matrix as re-route #5 (<code>unit-test.yml</code> 6 jobs + <code>integration-test.yml</code>), push-event reruns (concurrency-immune).</li>
+<li>Sampled every 15 s: online runners (≈ active listener sessions), busy runners, worker-pod occupancy (<code>actions-gateway/plan-id</code>), + AGC debug-log marker counts.</li>
 </ul>
 <h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
 <table>
@@ -3347,186 +3170,82 @@ architectural wall.</p>
 </tr>
 </tbody>
 </table>
-<p>Both bursts collapsed the active-session pool to 0 within ~1–2 min and never provisioned
-more than 1 concurrent worker; <strong>neither</strong> reached the <code>maxWorkers = 4</code> ceiling. The
-dominant signal was recycle churn: <code>recycle blocked by still-running consumed runner;
-backing off and retrying</code> (the Q259 bounded-backoff path) followed by
-<code>deregister conflicting runner record "ci-N": runner is still running a job and cannot be
-deleted</code> → <strong>fatal listener exit</strong>.</p>
+<p>Both bursts collapsed the active-session pool to 0 within ~1–2 min and never provisioned more than 1 concurrent worker; <strong>neither</strong> reached the <code>maxWorkers = 4</code> ceiling.
+The dominant signal was recycle churn: <code>recycle blocked by still-running consumed runner; backing off and retrying</code> (the Q259 bounded-backoff path) followed by <code>deregister conflicting runner record "ci-N": runner is still running a job and cannot be deleted</code> → <strong>fatal listener exit</strong>.</p>
 <h3 id="mechanism-attributed--fan-out-slot-stranding-not-completejob-cost">Mechanism (attributed) — fan-out <em>slot-stranding</em>, not <code>completejob</code> cost<a class="headerlink" href="#mechanism-attributed--fan-out-slot-stranding-not-completejob-cost" title="Permanent link">&para;</a></h3>
 <ol>
-<li>GitHub fans one job to F ≈ 6 sibling deliveries; 1 wins and provisions a worker (job
-   runs for <strong>minutes</strong>), F−1 are deduped losers.</li>
-<li>A deduped loser immediately tries to <strong>recycle</strong> its single-use slot, but GitHub still
-   considers that runner <strong>assigned to the job</strong> (the Q259 422) until the winner completes
-   <strong>and</strong> Option A fans <code>completejob</code> to release the sibling.</li>
-<li>So each loser slot is 422-blocked for the <strong>winner's entire job runtime</strong>, which
-   <strong>exceeds</strong> the bounded recycle backoff (<code>registerAgentWithBusyRetry</code>, tens of seconds,
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:382</code></a>). The backoff <strong>exhausts</strong>,
-   the recycle fails, and the listener goroutine <strong>exits</strong>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:344</code></a>).</li>
-<li>Each fanned-out job thus strands and eventually loses F−1 listener slots; under
-   sustained burst this collapses the pool faster than winners complete.</li>
+<li>GitHub fans one job to F ≈ 6 sibling deliveries; 1 wins and provisions a worker (job runs for <strong>minutes</strong>), F−1 are deduped losers.</li>
+<li>A deduped loser immediately tries to <strong>recycle</strong> its single-use slot, but GitHub still considers that runner <strong>assigned to the job</strong> (the Q259 422) until the winner completes <strong>and</strong> Option A fans <code>completejob</code> to release the sibling.</li>
+<li>So each loser slot is 422-blocked for the <strong>winner's entire job runtime</strong>, which <strong>exceeds</strong> the bounded recycle backoff (<code>registerAgentWithBusyRetry</code>, tens of seconds, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:382</code></a>).
+   The backoff <strong>exhausts</strong>, the recycle fails, and the listener goroutine <strong>exits</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:344</code></a>).</li>
+<li>Each fanned-out job thus strands and eventually loses F−1 listener slots; under sustained burst this collapses the pool faster than winners complete.</li>
 </ol>
-<p>This is a <strong>classic-protocol topology cost</strong> (single-use recycle Q114 + many-acquirers
-fan-out) that Option A's <em>accounting</em> fix does not touch. It is <strong>fixable AGC-side</strong> (do
-not eagerly recycle a deduped loser until its winner completes; or hold the slot across
-the winner's runtime instead of exiting on backoff exhaustion) — a bounded fix, tracked as
-a new Queue item. It is <strong>not</strong> a <code>completejob</code>-tax wall and does <strong>not</strong> force Option E —
-though Option E (scale-set, one acquirer, <strong>no</strong> agent recycle) would eliminate this seam
-<em>and</em> the completion tax by construction (a modest long-term point in E's favour, not a
-forcing one).</p>
+<p>This is a <strong>classic-protocol topology cost</strong> (single-use recycle Q114 + many-acquirers fan-out) that Option A's <em>accounting</em> fix does not touch.
+It is <strong>fixable AGC-side</strong> (do not eagerly recycle a deduped loser until its winner completes; or hold the slot across the winner's runtime instead of exiting on backoff exhaustion) — a bounded fix, tracked as a new Queue item.
+It is <strong>not</strong> a <code>completejob</code>-tax wall and does <strong>not</strong> force Option E — though Option E (scale-set, one acquirer, <strong>no</strong> agent recycle) would eliminate this seam <em>and</em> the completion tax by construction (a modest long-term point in E's favour, not a forcing one).</p>
 <h3 id="honest-bounds--the-measurement-is-confounded--capacity-bounded">Honest bounds — the measurement is confounded + capacity-bounded<a class="headerlink" href="#honest-bounds--the-measurement-is-confounded--capacity-bounded" title="Permanent link">&para;</a></h3>
 <p>A clean "pool holds at maxWorkers" measurement was <strong>not</strong> achieved:</p>
 <ul>
-<li><strong>SSD quota caps <code>maxWorkers</code> ≈ 4</strong> (500 GB <code>SSD_TOTAL_GB</code>; <code>pd-balanced</code> disks count
-  against it). A 4-worker pool cannot prove no-wall at a <em>wide</em> pool; the tax, even shown
-  non-binding here, is untested at <code>maxWorkers ≫ 4</code>.</li>
-<li><strong>Stale runner-record clutter</strong> (47 offline <code>ci-*</code> records — prior re-routes + this
-  session's <code>maxListeners</code> changes) inflates the 409/422 recycle-conflict rate. Cleaning
-  it (mass runner-record delete) was <strong>denied by the write-safety guard</strong> on the shared
-  repo, so a clean-namespace run was impossible in-session. re-route #5 (which <em>recovered</em>
-  to 5 sessions) ran on a cleaner namespace, <code>maxListeners = 8</code>, longer jobs — consistent
-  with the collapse being <em>provoked</em> (not purely inherent) by clutter + over-cranked
-  <code>maxListeners</code> + short/failing jobs.</li>
-<li>So the two live possibilities — (a) clutter-only artifact, Option A sufficient with
-  namespace hygiene; (b) a fundamental slot-stranding gap needing the recycle fix —
-  <strong>cannot be distinguished without a clean run</strong>. <strong>Both</strong> agree the tax is not the wall.</li>
+<li><strong>SSD quota caps <code>maxWorkers</code> ≈ 4</strong> (500 GB <code>SSD_TOTAL_GB</code>; <code>pd-balanced</code> disks count against it).
+  A 4-worker pool cannot prove no-wall at a <em>wide</em> pool; the tax, even shown non-binding here, is untested at <code>maxWorkers ≫ 4</code>.</li>
+<li><strong>Stale runner-record clutter</strong> (47 offline <code>ci-*</code> records — prior re-routes + this session's <code>maxListeners</code> changes) inflates the 409/422 recycle-conflict rate.
+  Cleaning it (mass runner-record delete) was <strong>denied by the write-safety guard</strong> on the shared repo, so a clean-namespace run was impossible in-session. re-route #5 (which <em>recovered</em> to 5 sessions) ran on a cleaner namespace, <code>maxListeners = 8</code>, longer jobs — consistent with the collapse being <em>provoked</em> (not purely inherent) by clutter + over-cranked <code>maxListeners</code> + short/failing jobs.</li>
+<li>So the two live possibilities — (a) clutter-only artifact, Option A sufficient with namespace hygiene; (b) a fundamental slot-stranding gap needing the recycle fix — <strong>cannot be distinguished without a clean run</strong>. <strong>Both</strong> agree the tax is not the wall.</li>
 </ul>
 <h3 id="recommendation">Recommendation<a class="headerlink" href="#recommendation" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Q264 stays DEFERRED.</strong> No completion-tax wall observed; the tax is never the binding
-  constraint. Do not start the Option E rewrite on this evidence.</li>
-<li><strong>Fix the recycle slot-stranding seam</strong> (new Queue item, Q259/Q114 family), then
-  <strong>re-benchmark on a fresh, clean dogfood namespace</strong> at moderate <code>maxListeners</code> (≈ 8–16),
-  with <code>maxWorkers</code> widened, to obtain the clean "holds at maxWorkers" measurement Q265 set
-  out to get. <strong>Update (re-route #7, 2026-07-05):</strong> the <code>maxWorkers</code> widening needs <strong>no
-  SSD-quota bump</strong> — right-sizing the worker boot disk <code>pd-balanced → pd-standard</code> takes it
-  off the SSD quota (Q248, done). The re-benchmark then confirmed Q266's seam is gone but
-  surfaced the <em>real</em> residual: the online-session / broker-credential recycle churn keeps
-  the online idle pool near 0 (see §8 and re-route #7), so the clean measurement is still
-  gated on that seam + a clean namespace.</li>
-<li><strong>Q224's throughput residual</strong> stays open, now attributed to (a) the recycle seam above
-  and (b) worker capacity (<a href="../../../STATUS/">Q248</a>) — both tuning/fix, not architectural.</li>
+<li><strong>Q264 stays DEFERRED.</strong> No completion-tax wall observed; the tax is never the binding constraint.
+  Do not start the Option E rewrite on this evidence.</li>
+<li><strong>Fix the recycle slot-stranding seam</strong> (new Queue item, Q259/Q114 family), then <strong>re-benchmark on a fresh, clean dogfood namespace</strong> at moderate <code>maxListeners</code> (≈ 8–16), with <code>maxWorkers</code> widened, to obtain the clean "holds at maxWorkers" measurement Q265 set out to get. <strong>Update (re-route #7, 2026-07-05):</strong> the <code>maxWorkers</code> widening needs <strong>no SSD-quota bump</strong> — right-sizing the worker boot disk <code>pd-balanced → pd-standard</code> takes it off the SSD quota (Q248, done).
+  The re-benchmark then confirmed Q266's seam is gone but surfaced the <em>real</em> residual: the online-session / broker-credential recycle churn keeps the online idle pool near 0 (see §8 and re-route #7), so the clean measurement is still gated on that seam + a clean namespace.</li>
+<li><strong>Q224's throughput residual</strong> stays open, now attributed to (a) the recycle seam above and (b) worker capacity (<a href="../../../STATUS/">Q248</a>) — both tuning/fix, not architectural.</li>
 </ul>
 <p>Full live evidence: <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #6.</p>
 <h2 id="8-q266--the-slot-stranding-recycle-fix-2026-07-04">8. Q266 — the slot-stranding recycle fix (2026-07-04)<a class="headerlink" href="#8-q266--the-slot-stranding-recycle-fix-2026-07-04" title="Permanent link">&para;</a></h2>
-<p>The seam attributed in §7 is now fixed AGC-side (Q266), offline-tested, awaiting a live
-re-benchmark.</p>
-<p><strong>The fix — defer the loser's recycle until its winner completes.</strong> The loser's <code>422</code>
-cannot clear until the winner fans <code>completejob</code> out to that delivery (§5, Option A) — so
-recycling <em>before</em> the winner concludes is guaranteed to fail. Instead of recycling
-eagerly into that <code>422</code>, blowing the bounded backoff, and exiting the listener, a deduped
-loser now <strong>holds its slot</strong> and waits for the winner's conclusion signal, then recycles
-in place and resumes polling. The wait reuses the #512 claim registry: when a loser loses
-the <code>planID</code> claim to a still-running winner, <code>claimJob</code> hands back the claim's
-<code>WinnerConcluded</code> channel (closed exactly once when the winner's <code>Complete</code> runs), and the
-loser blocks on it before returning to the recycle path
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go</code></a>,
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>).</p>
+<p>The seam attributed in §7 is now fixed AGC-side (Q266), offline-tested, awaiting a live re-benchmark.</p>
+<p><strong>The fix — defer the loser's recycle until its winner completes.</strong> The loser's <code>422</code> cannot clear until the winner fans <code>completejob</code> out to that delivery (§5, Option A) — so recycling <em>before</em> the winner concludes is guaranteed to fail.
+Instead of recycling eagerly into that <code>422</code>, blowing the bounded backoff, and exiting the listener, a deduped loser now <strong>holds its slot</strong> and waits for the winner's conclusion signal, then recycles in place and resumes polling.
+The wait reuses the #512 claim registry: when a loser loses the <code>planID</code> claim to a still-running winner, <code>claimJob</code> hands back the claim's <code>WinnerConcluded</code> channel (closed exactly once when the winner's <code>Complete</code> runs), and the loser blocks on it before returning to the recycle path (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>).</p>
 <p>Key properties:</p>
 <ul>
-<li><strong>No net capacity regression.</strong> The deduped-loser goroutines were <em>already</em> occupying
-  their listener slots as pollers; holding them blocked (rather than exiting) keeps the
-  slots they had. It counts as a poller = <strong>false</strong> while parked (<code>SetPolling(false)</code> is set
-  before the job), so a parked loser is never mistaken for available polling capacity.</li>
-<li><strong>Worker capacity is freed.</strong> A loser provisions no pod, so it <strong>releases its <code>Admit</code>
-  worker-capacity reservation before parking</strong> — otherwise F−1 losers would pin the tight
-  <code>maxWorkers</code> ceiling (<a href="../../../STATUS/">Q248</a>) with runners that do nothing.</li>
-<li><strong>Bounded fallback for a stuck winner.</strong> If the winner never concludes (crash/hang), the
-  wait is capped at <code>defaultLoserRecycleDeferTimeout</code> (16 min, just past GitHub's ~15-minute
-  unstarted-job timeout that force-releases the assignment), so a loser slot can never leak.</li>
-<li><strong>Only under Option A.</strong> The defer applies only when <code>AGC_FANOUT_COMPLETION</code> is enabled
-  (the default) — that is what clears the loser's <code>422</code>. With it off, losers fall back to the
-  eager-recycle path (documented as the worse opt-out).</li>
-<li><strong>Observability.</strong> Each defer increments
-  <code>actions_gateway_fanout_loser_recycle_deferred_total{outcome}</code> — <code>winner_concluded</code>
-  (normal), <code>fallback_timeout</code> (alert-worthy: stuck winners), <code>context_cancelled</code> (shutdown).</li>
+<li><strong>No net capacity regression.</strong> The deduped-loser goroutines were <em>already</em> occupying their listener slots as pollers; holding them blocked (rather than exiting) keeps the slots they had.
+  It counts as a poller = <strong>false</strong> while parked (<code>SetPolling(false)</code> is set before the job), so a parked loser is never mistaken for available polling capacity.</li>
+<li><strong>Worker capacity is freed.</strong> A loser provisions no pod, so it <strong>releases its <code>Admit</code> worker-capacity reservation before parking</strong> — otherwise F−1 losers would pin the tight <code>maxWorkers</code> ceiling (<a href="../../../STATUS/">Q248</a>) with runners that do nothing.</li>
+<li><strong>Bounded fallback for a stuck winner.</strong> If the winner never concludes (crash/hang), the wait is capped at <code>defaultLoserRecycleDeferTimeout</code> (16 min, just past GitHub's ~15-minute unstarted-job timeout that force-releases the assignment), so a loser slot can never leak.</li>
+<li><strong>Only under Option A.</strong> The defer applies only when <code>AGC_FANOUT_COMPLETION</code> is enabled (the default) — that is what clears the loser's <code>422</code>.
+  With it off, losers fall back to the eager-recycle path (documented as the worse opt-out).</li>
+<li><strong>Observability.</strong> Each defer increments <code>actions_gateway_fanout_loser_recycle_deferred_total{outcome}</code> — <code>winner_concluded</code> (normal), <code>fallback_timeout</code> (alert-worthy: stuck winners), <code>context_cancelled</code> (shutdown).</li>
 </ul>
-<p><strong>Regression test.</strong>
-<code>TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine_q266_test.go"><code>goroutine_q266_test.go</code></a>) drives a
-sustained fan-out burst through the <code>brokertest</code> fan-out model with a <code>RecycleAgent</code> that
-<code>422</code>s until the winner concludes (the live mechanism), and asserts the pool <strong>holds</strong> —
-no loser strands+exits while the winner runs, and each loser recycles in place on the
-winner's conclusion. It FAILS against pre-Q266 behaviour (the eager losers exit) and needs
-no GKE turn-up.</p>
-<p><strong>Live re-benchmark (2026-07-05, <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #7).</strong> Q266's
-targeted seam is <strong>confirmed eliminated live</strong>: at moderate <code>maxListeners = 12</code> the fatal
-<code>deregister conflicting</code>/<code>recycle blocked</code> listener exits that collapsed the pool in §7 (41/38)
-were <strong>0</strong>; deduped losers <strong>park</strong> (busy-at-GitHub, pod-less) instead of exiting; Option A
-<code>completejob</code> (5) and dedup (7) fired. <strong>But full-matrix green / "holds at <code>maxWorkers</code>" was
-STILL not obtained.</strong> The residual is neither Q266's seam nor the <code>completejob</code> tax (0
-<code>worker capacity full</code>) — it is a <strong>two-way bind</strong>: throughput needs <code>maxListeners ≈ maxWorkers ×
-fan-out</code>, yet a wide <code>maxListeners</code> (48) multiplies GitHub runner records and inflates the
-<strong>broker-credential / registration recycle churn</strong> (Q259/Q114 — <code>"Registration … was not found"</code>)
-that keeps the <strong>online idle pool near 0</strong>, collapsing to <code>online = 0</code>; a moderate <code>maxListeners</code>
-(12) is stable but serializes to ≈ <code>maxListeners / fan-out ≈ 2</code> concurrent jobs. Un-cleanable
-stale records (guard-blocked mass-delete) compound it. A clean measurement needs the
-<strong>online-session / broker-credential recycle seam</strong> fixed <em>and</em> a clean namespace — both still
-blocked in-session, so <a href="../../../STATUS/">Q224</a> full-matrix green <strong>cannot yet be claimed</strong>. Separately,
-the <code>maxWorkers ≈ 4</code> SSD ceiling §7's honest-bounds flagged is <strong>resolved</strong> — not via an
-SSD-quota bump but by right-sizing the worker boot disk to <code>pd-standard</code> (off the SSD quota
-entirely), see <a href="../../dogfood-runner-rightsizing/#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05"><code>dogfood-runner-rightsizing.md</code></a>.</p>
+<p><strong>Regression test.</strong> <code>TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine_q266_test.go"><code>goroutine_q266_test.go</code></a>) drives a sustained fan-out burst through the <code>brokertest</code> fan-out model with a <code>RecycleAgent</code> that <code>422</code>s until the winner concludes (the live mechanism), and asserts the pool <strong>holds</strong> — no loser strands+exits while the winner runs, and each loser recycles in place on the winner's conclusion.
+It FAILS against pre-Q266 behaviour (the eager losers exit) and needs no GKE turn-up.</p>
+<p><strong>Live re-benchmark (2026-07-05, <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #7).</strong> Q266's targeted seam is <strong>confirmed eliminated live</strong>: at moderate <code>maxListeners = 12</code> the fatal <code>deregister conflicting</code>/<code>recycle blocked</code> listener exits that collapsed the pool in §7 (41/38) were <strong>0</strong>; deduped losers <strong>park</strong> (busy-at-GitHub, pod-less) instead of exiting; Option A <code>completejob</code> (5) and dedup (7) fired. <strong>But full-matrix green / "holds at <code>maxWorkers</code>" was STILL not obtained.</strong> The residual is neither Q266's seam nor the <code>completejob</code> tax (0 <code>worker capacity full</code>) — it is a <strong>two-way bind</strong>: throughput needs <code>maxListeners ≈ maxWorkers × fan-out</code>, yet a wide <code>maxListeners</code> (48) multiplies GitHub runner records and inflates the <strong>broker-credential / registration recycle churn</strong> (Q259/Q114 — <code>"Registration … was not found"</code>) that keeps the <strong>online idle pool near 0</strong>, collapsing to <code>online = 0</code>; a moderate <code>maxListeners</code> (12) is stable but serializes to ≈ <code>maxListeners / fan-out ≈ 2</code> concurrent jobs.
+Un-cleanable stale records (guard-blocked mass-delete) compound it.
+A clean measurement needs the <strong>online-session / broker-credential recycle seam</strong> fixed <em>and</em> a clean namespace — both still blocked in-session, so <a href="../../../STATUS/">Q224</a> full-matrix green <strong>cannot yet be claimed</strong>.
+Separately, the <code>maxWorkers ≈ 4</code> SSD ceiling §7's honest-bounds flagged is <strong>resolved</strong> — not via an SSD-quota bump but by right-sizing the worker boot disk to <code>pd-standard</code> (off the SSD quota entirely), see <a href="../../dogfood-runner-rightsizing/#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05"><code>dogfood-runner-rightsizing.md</code></a>.</p>
 <h2 id="9-re-route-8--q267-confirmed-and-the-residual-isolated-to-fan-out-dispatch-2026-07-05">9. Re-route #8 — Q267 confirmed, and the residual isolated to fan-out <em>dispatch</em> (2026-07-05)<a class="headerlink" href="#9-re-route-8--q267-confirmed-and-the-residual-isolated-to-fan-out-dispatch-2026-07-05" title="Permanent link">&para;</a></h2>
-<p>The clean-namespace wide-pool close-out (<a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #8,
-<code>agc:e2e-63cddfc</code>, fresh <code>dogfood8</code>/<code>ci8</code>/<code>gag-ci8</code>, <code>maxListeners = 48</code>,
-<code>maxWorkers = 8</code>, non-preemptible <code>pd-standard</code> capacity, no mid-run restart) closes out
-the seam accounting from re-route #7:</p>
+<p>The clean-namespace wide-pool close-out (<a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #8, <code>agc:e2e-63cddfc</code>, fresh <code>dogfood8</code>/<code>ci8</code>/<code>gag-ci8</code>, <code>maxListeners = 48</code>, <code>maxWorkers = 8</code>, non-preemptible <code>pd-standard</code> capacity, no mid-run restart) closes out the seam accounting from re-route #7:</p>
 <ul>
 <li>
-<p><strong>The broker-credential recycle collapse seam is GONE.</strong> At the exact <code>maxListeners = 48</code>
-  that collapsed #7's pool to <code>online = 0</code>, the pool <strong>held</strong> for a 20-minute window with
-  <strong>0</strong> token-400 (<code>"Registration … was not found"</code>), <strong>0</strong> Q267 ride-out retries, <strong>0</strong>
-  fatal <code>deregister conflicting</code> exits, <strong>0</strong> <code>worker capacity full</code>. (Nuance: the token-400
-  <em>condition never arose</em> — 0 occurrences — because Q266 parks losers
-  instead of recycling and the clean namespace removed the stale-record amplifier; so the
-  wide-pool hold is a property of the <strong>Q266 + Q267 + clean-ns</strong> stack, and Q267's retry
-  path stays covered by its offline repro, not exercised live.) <strong>Q267: DONE.</strong></p>
+<p><strong>The broker-credential recycle collapse seam is GONE.</strong> At the exact <code>maxListeners = 48</code> that collapsed #7's pool to <code>online = 0</code>, the pool <strong>held</strong> for a 20-minute window with <strong>0</strong> token-400 (<code>"Registration … was not found"</code>), <strong>0</strong> Q267 ride-out retries, <strong>0</strong> fatal <code>deregister conflicting</code> exits, <strong>0</strong> <code>worker capacity full</code>.
+  (Nuance: the token-400 <em>condition never arose</em> — 0 occurrences — because Q266 parks losers instead of recycling and the clean namespace removed the stale-record amplifier; so the wide-pool hold is a property of the <strong>Q266 + Q267 + clean-ns</strong> stack, and Q267's retry path stays covered by its offline repro, not exercised live.) <strong>Q267: DONE.</strong></p>
 </li>
 <li>
-<p><strong>Option A's accounting is correct — but fan-out <em>dispatch</em> starves distinct jobs.</strong> The
-  AGC received <strong>only 2 distinct planIDs</strong>; both ran and concluded <strong>green</strong>. GitHub fanned
-  <strong>one</strong> planID out as ~6 sibling deliveries (all deduped + <code>completejob</code>-released,
-  correctly), but the <strong>other 5 jobs' planIDs were never delivered</strong> while GitHub marked
-  those jobs <code>in_progress</code> on the recycled stable-named runners — leaving them wedged
-  <code>in_progress</code> <strong>indefinitely</strong> (run-level status froze <code>completed/success</code> while the jobs
-  API stayed <code>in_progress</code> &gt;1h). The online-idle pool <strong>stalled at 3 sessions ≪ 48</strong> because
-  a duplicate delivery does not grow the demand-driven 1:1 replacement pool. This <strong>refines
-  §5's "reconcilable AGC-side"</strong>: the <em>completion</em> accounting is reconcilable (a job that
-  <em>receives its planID</em> concludes green), but the fan-out <em>dispatch</em> stochastically starves
-  distinct jobs (#5 got 3/7 green, #8 got 2/7 with 5 wedged), so a <strong>reliable</strong> full-matrix
-  green is <strong>not</strong> achievable on the classic many-acquirers protocol.</p>
+<p><strong>Option A's accounting is correct — but fan-out <em>dispatch</em> starves distinct jobs.</strong> The AGC received <strong>only 2 distinct planIDs</strong>; both ran and concluded <strong>green</strong>.
+  GitHub fanned <strong>one</strong> planID out as ~6 sibling deliveries (all deduped + <code>completejob</code>-released, correctly), but the <strong>other 5 jobs' planIDs were never delivered</strong> while GitHub marked those jobs <code>in_progress</code> on the recycled stable-named runners — leaving them wedged <code>in_progress</code> <strong>indefinitely</strong> (run-level status froze <code>completed/success</code> while the jobs API stayed <code>in_progress</code> &gt;1h).
+  The online-idle pool <strong>stalled at 3 sessions ≪ 48</strong> because a duplicate delivery does not grow the demand-driven 1:1 replacement pool.
+  This <strong>refines §5's "reconcilable AGC-side"</strong>: the <em>completion</em> accounting is reconcilable (a job that <em>receives its planID</em> concludes green), but the fan-out <em>dispatch</em> stochastically starves distinct jobs (#5 got 3/7 green, #8 got 2/7 with 5 wedged), so a <strong>reliable</strong> full-matrix green is <strong>not</strong> achievable on the classic many-acquirers protocol.</p>
 </li>
 <li>
-<p><strong>Consequence for Q264.</strong> This is a real throughput/assignment <strong>wall</strong> — distinct from
-  the <code>completejob</code>-tax wall §7 ruled out (0 capacity rejections) — driven by GitHub's
-  server-side fan-out assignment against GAG's many-acquirers + stable-name single-use
-  (<a href="../../../STATUS/">Q114</a>) topology. It <strong>strengthens the <a href="../../q264-scale-set-protocol/">Option E / Q264</a>
-  case</strong> (one acquirer, one authoritative stream, no sibling deliveries, no per-name
-  recycle) — which eliminates the class by construction — though Q264 stays a deferred
-  v-next decision, not force-triggered. <strong>Q224/Q242 stay open</strong>, now blocked on the fan-out
-  dispatch topology, not on any recycle/capacity/tax seam (all resolved). Evidence: AGC
-  debug logs (<code>agc:e2e-63cddfc</code>), reruns <code>28734640377</code>/<code>28734640415</code> (burst <code>08:50:22Z</code>).</p>
+<p><strong>Consequence for Q264.</strong> This is a real throughput/assignment <strong>wall</strong> — distinct from the <code>completejob</code>-tax wall §7 ruled out (0 capacity rejections) — driven by GitHub's server-side fan-out assignment against GAG's many-acquirers + stable-name single-use (<a href="../../../STATUS/">Q114</a>) topology.
+  It <strong>strengthens the <a href="../../q264-scale-set-protocol/">Option E / Q264</a> case</strong> (one acquirer, one authoritative stream, no sibling deliveries, no per-name recycle) — which eliminates the class by construction — though Q264 stays a deferred v-next decision, not force-triggered. <strong>Q224/Q242 stay open</strong>, now blocked on the fan-out dispatch topology, not on any recycle/capacity/tax seam (all resolved).
+  Evidence: AGC debug logs (<code>agc:e2e-63cddfc</code>), reruns <code>28734640377</code>/<code>28734640415</code> (burst <code>08:50:22Z</code>).</p>
 </li>
 <li>
-<p><strong>AGC-side escape-hatch spike — none found (2026-07-05).</strong> #8's "Option E is the
-  structural fix" conclusion was stress-tested for an AGC-side lever before the Q264
-  go/no-go, in <a href="../../q224-fanout-dispatch-lever-spike/"><code>q224-fanout-dispatch-lever-spike.md</code></a>:
-  unique/ephemeral names are a non-lever (add no distinct idle sessions; #8 orphaning is
-  runner-id churn), and a warm idle <strong>listener</strong> baseline (≠ Q261 warm
-  <em>worker</em> pods) is at best a probabilistic green-rate stopgap that converges on a dominated
-  reimplementation of the scale-set model. <strong>Verdict: Option E (<a href="../../q264-scale-set-protocol/">Q264</a>)
-  is the only reliable fix — #530 stands.</strong></p>
+<p><strong>AGC-side escape-hatch spike — none found (2026-07-05).</strong> #8's "Option E is the structural fix" conclusion was stress-tested for an AGC-side lever before the Q264 go/no-go, in <a href="../../q224-fanout-dispatch-lever-spike/"><code>q224-fanout-dispatch-lever-spike.md</code></a>: unique/ephemeral names are a non-lever (add no distinct idle sessions; #8 orphaning is runner-id churn), and a warm idle <strong>listener</strong> baseline (≠ Q261 warm <em>worker</em> pods) is at best a probabilistic green-rate stopgap that converges on a dominated reimplementation of the scale-set model. <strong>Verdict: Option E (<a href="../../q264-scale-set-protocol/">Q264</a>) is the only reliable fix — #530 stands.</strong></p>
 </li>
 </ul>
 <h2 id="10-q265--close-out-comparison-settled-scaleset-decisively-wins-2026-07-06">10. Q265 — close-out: comparison settled, ScaleSet decisively wins (2026-07-06)<a class="headerlink" href="#10-q265--close-out-comparison-settled-scaleset-decisively-wins-2026-07-06" title="Permanent link">&para;</a></h2>
-<p>Q265 asked for a head-to-head fan-out (Option A / classic) vs scale-set throughput
-benchmark at a wide worker pool. <strong>Both sides have now been measured live on the
-dogfood cluster under the clean conditions Q265 required — the two confounders that
-previously blocked a clean "holds at <code>maxWorkers</code>" run (the Q266 loser-slot-stranding
-seam §8 and the Q267 online-session / broker-credential recycle seam §9) are fixed,
-and the SSD <code>maxWorkers</code> cap is gone (workers on <code>pd-standard</code>, <a href="../../../STATUS/">Q248</a>).
+<p>Q265 asked for a head-to-head fan-out (Option A / classic) vs scale-set throughput benchmark at a wide worker pool. <strong>Both sides have now been measured live on the dogfood cluster under the clean conditions Q265 required — the two confounders that previously blocked a clean "holds at <code>maxWorkers</code>" run (the Q266 loser-slot-stranding seam §8 and the Q267 online-session / broker-credential recycle seam §9) are fixed, and the SSD <code>maxWorkers</code> cap is gone (workers on <code>pd-standard</code>, <a href="../../../STATUS/">Q248</a>).
 No further turn-up is needed: the comparison is decided.</strong></p>
 <h3 id="the-measured-comparison">The measured comparison<a class="headerlink" href="#the-measured-comparison" title="Permanent link">&para;</a></h3>
 <table>
@@ -3553,41 +3272,27 @@ No further turn-up is needed: the comparison is decided.</strong></p>
 </tr>
 </tbody>
 </table>
-<p>The clean wide-pool run Q265 set out to obtain <strong>is</strong> re-route #8: with Q266 + Q267 +
-a clean namespace + <code>pd-standard</code>, the pool <em>held</em> (Q267 done, 0 collapse markers over a
-20-minute window) — proving the classic <strong>2/7</strong> ceiling is <strong>not</strong> a recycle-churn or
-<code>completejob</code>-tax artifact but the intrinsic many-acquirers <strong>dispatch</strong> wall. ScaleSet
-clears exactly that wall by construction.</p>
+<p>The clean wide-pool run Q265 set out to obtain <strong>is</strong> re-route #8: with Q266 + Q267 + a clean namespace + <code>pd-standard</code>, the pool <em>held</em> (Q267 done, 0 collapse markers over a 20-minute window) — proving the classic <strong>2/7</strong> ceiling is <strong>not</strong> a recycle-churn or <code>completejob</code>-tax artifact but the intrinsic many-acquirers <strong>dispatch</strong> wall.
+ScaleSet clears exactly that wall by construction.</p>
 <h3 id="verdict--q265-done">Verdict — Q265 DONE<a class="headerlink" href="#verdict--q265-done" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>No completion-tax throughput wall exists</strong> (re-route #6, §7: 0 <code>worker capacity full</code>
-  in every run) — Option A's <em>accounting</em> is correct.</li>
-<li><strong>But classic cannot reliably clear a high-concurrency burst:</strong> fan-out
-  distinct-delivery starvation caps it at 2–3/7 regardless of pool width — a GitHub
-  server-side limit with <strong>no AGC-side lever</strong>
-  (<a href="../../q224-fanout-dispatch-lever-spike/"><code>q224-fanout-dispatch-lever-spike.md</code></a>).</li>
+<li><strong>No completion-tax throughput wall exists</strong> (re-route #6, §7: 0 <code>worker capacity full</code> in every run) — Option A's <em>accounting</em> is correct.</li>
+<li><strong>But classic cannot reliably clear a high-concurrency burst:</strong> fan-out distinct-delivery starvation caps it at 2–3/7 regardless of pool width — a GitHub server-side limit with <strong>no AGC-side lever</strong> (<a href="../../q224-fanout-dispatch-lever-spike/"><code>q224-fanout-dispatch-lever-spike.md</code></a>).</li>
 <li><strong>ScaleSet clears it decisively: 7/7 vs classic 2/7</strong>, proven live.</li>
 </ul>
-<p><strong>Strategic close.</strong> <a href="../../q264-scale-set-protocol/">Q264</a> P5 has already flipped the
-default acquisition protocol to ScaleSet (PR #553); classic — the Option A fan-out path
-— is <strong>deprecated</strong>. This benchmark therefore <strong>closes the comparison and confirms the
-ScaleSet default decision</strong>; it is <em>not</em> a reason to revive or further tune Option A.
-Option A remains correct and supported for the deprecated classic protocol (its
-accounting fix stands unchanged), but the throughput ceiling measured here is exactly
-why the product front door is now ScaleSet.</p>
-<p>A fresh confirming turn-up was <strong>not</strong> run: both sides are already measured under clean,
-confounder-free conditions on the shared dogfood cluster, and re-running the deprecated
-classic path would only reproduce <strong>2/7</strong> at cost. Evidence:
-<a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #8 (classic <strong>2/7</strong>) + Q264 P4 clean-green
-(ScaleSet <strong>7/7</strong>).</p>
+<p><strong>Strategic close.</strong> <a href="../../q264-scale-set-protocol/">Q264</a> P5 has already flipped the default acquisition protocol to ScaleSet (PR #553); classic — the Option A fan-out path — is <strong>deprecated</strong>.
+This benchmark therefore <strong>closes the comparison and confirms the ScaleSet default decision</strong>; it is <em>not</em> a reason to revive or further tune Option A. Option A remains correct and supported for the deprecated classic protocol (its accounting fix stands unchanged), but the throughput ceiling measured here is exactly why the product front door is now ScaleSet.</p>
+<p>A fresh confirming turn-up was <strong>not</strong> run: both sides are already measured under clean, confounder-free conditions on the shared dogfood cluster, and re-running the deprecated classic path would only reproduce <strong>2/7</strong> at cost.
+Evidence: <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #8 (classic <strong>2/7</strong>) + Q264 P4 clean-green (ScaleSet <strong>7/7</strong>).</p>
 <hr />
 <h2 id="ruled-out-for-the-record">Ruled-out, for the record<a class="headerlink" href="#ruled-out-for-the-record" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>#513 completejob-abandon (immediate loser <code>skipped</code>)</strong> — live-tested worse than
-  the default (indefinite <code>in_progress</code>). OFF. See Option B.</li>
-<li><strong>Another dedup key</strong> — planID is correct and live-validated. See Option D.</li>
-<li><strong>Message-ack (<code>POST /acknowledge</code>)</strong> — Investigation A confirmed not required for
-  delivery; not the bug.</li>
+<li><strong>#513 completejob-abandon (immediate loser <code>skipped</code>)</strong> — live-tested worse than the default (indefinite <code>in_progress</code>).
+  OFF.
+  See Option B.</li>
+<li><strong>Another dedup key</strong> — planID is correct and live-validated.
+  See Option D.</li>
+<li><strong>Message-ack (<code>POST /acknowledge</code>)</strong> — Investigation A confirmed not required for delivery; not the bug.</li>
 </ul>
 
 

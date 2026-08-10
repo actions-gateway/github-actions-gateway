@@ -2609,45 +2609,27 @@
 
 
 <h1 id="q208--cni-native-fqdn-egress-opt-in-ciliumcalico-dns-policy">Q208 — CNI-native FQDN egress opt-in (Cilium/Calico DNS policy)<a class="headerlink" href="#q208--cni-native-fqdn-egress-opt-in-ciliumcalico-dns-policy" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> Let operators on a DNS-aware policy CNI express the proxy pool's GitHub
-egress allowlist as native FQDN rules (<code>toFQDNs</code> / Calico <code>domains</code>) instead of the
-GMC's 24h GitHub-CIDR reconcile — opt-in, additive, default unchanged.</p>
-<p><strong>Approach:</strong> Mirror the existing <code>managedNetworkPolicy</code> opt-out on the v2
-<code>EgressProxy</code> with a new <code>egressPolicyMode</code> enum (<code>CIDR</code> default | <code>CiliumFQDN</code> |
-<code>CalicoFQDN</code>). In an FQDN mode the GMC emits a CNI-native policy scoped to the
-GitHub FQDNs and drops the CIDR rule from the standard NetworkPolicy; the
-IPRangeReconciler skips FQDN-mode proxies. Scope is <strong>EgressProxy only</strong> (the v2
-shared-egress surface where <code>managedNetworkPolicy</code> lives); v1 ActionsGateway and v2
-direct egress are out of scope (noted as future work).</p>
+<p><strong>Goal:</strong> Let operators on a DNS-aware policy CNI express the proxy pool's GitHub egress allowlist as native FQDN rules (<code>toFQDNs</code> / Calico <code>domains</code>) instead of the GMC's 24h GitHub-CIDR reconcile — opt-in, additive, default unchanged.</p>
+<p><strong>Approach:</strong> Mirror the existing <code>managedNetworkPolicy</code> opt-out on the v2 <code>EgressProxy</code> with a new <code>egressPolicyMode</code> enum (<code>CIDR</code> default | <code>CiliumFQDN</code> | <code>CalicoFQDN</code>).
+In an FQDN mode the GMC emits a CNI-native policy scoped to the GitHub FQDNs and drops the CIDR rule from the standard NetworkPolicy; the IPRangeReconciler skips FQDN-mode proxies.
+Scope is <strong>EgressProxy only</strong> (the v2 shared-egress surface where <code>managedNetworkPolicy</code> lives); v1 ActionsGateway and v2 direct egress are out of scope (noted as future work).</p>
 <h2 id="security-posture-secure-by-default">Security posture (secure-by-default)<a class="headerlink" href="#security-posture-secure-by-default" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Default stays <code>CIDR</code> — works on every CNI, no behavior change.</li>
-<li>FQDN mode is <strong>fail-closed</strong>: the standard <code>networkingv1</code> NetworkPolicy still
-  selects the proxy pods with <code>policyTypes: [Egress, Ingress]</code> and only a DNS
-  egress rule + the workload ingress rule — so GitHub egress is <em>denied</em> unless the
-  CNI-native policy re-allows it. If the CNI cannot enforce the native policy (wrong
-  CNI / CRD absent), the apply fails loud (reconcile <code>Degraded</code>) and egress stays
-  denied. Selecting an FQDN mode can never silently open egress.</li>
-<li><code>egressPolicyMode</code> has no effect when <code>managedNetworkPolicy: false</code> (operator owns
-  the whole policy).</li>
+<li>FQDN mode is <strong>fail-closed</strong>: the standard <code>networkingv1</code> NetworkPolicy still selects the proxy pods with <code>policyTypes: [Egress, Ingress]</code> and only a DNS egress rule + the workload ingress rule — so GitHub egress is <em>denied</em> unless the CNI-native policy re-allows it.
+  If the CNI cannot enforce the native policy (wrong CNI / CRD absent), the apply fails loud (reconcile <code>Degraded</code>) and egress stays denied.
+  Selecting an FQDN mode can never silently open egress.</li>
+<li><code>egressPolicyMode</code> has no effect when <code>managedNetworkPolicy: false</code> (operator owns the whole policy).</li>
 </ul>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>api/v2alpha1/egressproxy_types.go</code> — <code>EgressPolicyMode</code> type + <code>EgressPolicyMode</code>
-   field (enum, default <code>CIDR</code>); regenerate deepcopy + CRD.</li>
-<li><code>cmd/gmc/internal/controller/egressproxy_fqdn.go</code> — GitHub FQDN constant set +
-   <code>buildEgressProxyCiliumNetworkPolicy</code> / <code>buildEgressProxyCalicoNetworkPolicy</code>
-   (unstructured) + mode helpers.</li>
-<li><code>egressproxy_builder.go</code> — <code>buildEgressProxyNetworkPolicy</code> drops the CIDR rule in
-   FQDN mode.</li>
-<li><code>egressproxy_controller.go</code> — apply the selected CNI policy, delete the
-   other-mode / disabled CNI policies (tolerant of NotFound + NoKindMatch).</li>
+<li><code>api/v2alpha1/egressproxy_types.go</code> — <code>EgressPolicyMode</code> type + <code>EgressPolicyMode</code> field (enum, default <code>CIDR</code>); regenerate deepcopy + CRD.</li>
+<li><code>cmd/gmc/internal/controller/egressproxy_fqdn.go</code> — GitHub FQDN constant set + <code>buildEgressProxyCiliumNetworkPolicy</code> / <code>buildEgressProxyCalicoNetworkPolicy</code> (unstructured) + mode helpers.</li>
+<li><code>egressproxy_builder.go</code> — <code>buildEgressProxyNetworkPolicy</code> drops the CIDR rule in FQDN mode.</li>
+<li><code>egressproxy_controller.go</code> — apply the selected CNI policy, delete the other-mode / disabled CNI policies (tolerant of NotFound + NoKindMatch).</li>
 <li><code>ipranges.go</code> — skip CIDR-patching FQDN-mode EgressProxies.</li>
-<li>Tests: unit (builders + standard-NP-no-CIDR) and envtest (emission per mode;
-   stub Cilium/Calico CRDs installed in the suite so the unstructured apply lands).</li>
-<li>Docs: <code>docs/design/05-security.md</code>, <code>docs/design/network-architecture.md</code>,
-   <code>docs/operations/security-operations.md</code> (new <code>egressPolicyMode</code> section with CNI
-   prerequisites), CRD reference.</li>
+<li>Tests: unit (builders + standard-NP-no-CIDR) and envtest (emission per mode; stub Cilium/Calico CRDs installed in the suite so the unstructured apply lands).</li>
+<li>Docs: <code>docs/design/05-security.md</code>, <code>docs/design/network-architecture.md</code>, <code>docs/operations/security-operations.md</code> (new <code>egressPolicyMode</code> section with CNI prerequisites), CRD reference.</li>
 </ol>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
 <p><code>make check</code> (gofmt + lint + unit) + GMC envtest integration suite.</p>

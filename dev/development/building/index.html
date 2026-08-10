@@ -2665,7 +2665,8 @@
 
 
 <h1 id="agent-reference-building">Agent reference: Building<a class="headerlink" href="#agent-reference-building" title="Permanent link">&para;</a></h1>
-<p>All binaries are built into <code>.build/</code> at the repo root (gitignored). Use the root <code>Makefile</code>:</p>
+<p>All binaries are built into <code>.build/</code> at the repo root (gitignored).
+Use the root <code>Makefile</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>build<span class="w">        </span><span class="c1"># build all binaries → .build/agc, .build/gmc, .build/probe, .build/proxy</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>build-agc<span class="w">    </span><span class="c1"># build only the AGC (Actions Gateway Controller)</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>build-gmc<span class="w">    </span><span class="c1"># build only the GMC (Gateway Manager Controller)</span>
@@ -2675,121 +2676,69 @@
 <p><code>cmd/worker</code> is a workspace module but has no dedicated root-level build target — it is built into its container image only.</p>
 <p>Individual module Makefiles (e.g. <code>cmd/agc/Makefile</code>) also output to <code>.build/</code> via a relative path (<code>../../.build/</code>), so both <code>make</code> invocations land in the same place.</p>
 <h2 id="container-images">Container images<a class="headerlink" href="#container-images" title="Permanent link">&para;</a></h2>
-<p>The four production images (<code>cmd/{agc,gmc,proxy,worker}/Dockerfile</code>) are built
-together via <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl"><code>docker-bake.hcl</code></a> (<code>docker buildx bake</code>).
-Every image is a named stage of the single root
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a>, selected with <code>--target</code>; they share one
-<code>deps</code> stage that compiles the vendored dependency tree once. The e2e/CI image
-pipeline is described in
-<a href="../../plan/e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a>, with the earlier
-round in <a href="../../plan/docker-image-speed/">docker-image-speed.md</a>.</p>
+<p>The four production images (<code>cmd/{agc,gmc,proxy,worker}/Dockerfile</code>) are built together via <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl"><code>docker-bake.hcl</code></a> (<code>docker buildx bake</code>).
+Every image is a named stage of the single root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a>, selected with <code>--target</code>; they share one <code>deps</code> stage that compiles the vendored dependency tree once.
+The e2e/CI image pipeline is described in <a href="../../plan/e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a>, with the earlier round in <a href="../../plan/docker-image-speed/">docker-image-speed.md</a>.</p>
 <h3 id="go-version-bumps-the-gotoolchainlocal-coupling">Go version bumps (the <code>GOTOOLCHAIN=local</code> coupling)<a class="headerlink" href="#go-version-bumps-the-gotoolchainlocal-coupling" title="Permanent link">&para;</a></h3>
-<p>The official <code>golang</code> base image sets <code>GOTOOLCHAIN=local</code>, so <code>go build</code> inside
-an image build will <strong>not</strong> auto-download a newer toolchain. Bumping the <code>go</code>
-directive (e.g. for a stdlib CVE) is therefore a <strong>three-part coupled change</strong>:</p>
+<p>The official <code>golang</code> base image sets <code>GOTOOLCHAIN=local</code>, so <code>go build</code> inside an image build will <strong>not</strong> auto-download a newer toolchain.
+Bumping the <code>go</code> directive (e.g. for a stdlib CVE) is therefore a <strong>three-part coupled change</strong>:</p>
 <ol>
-<li><strong>The <code>go</code> directive</strong> — <code>go.work</code>, every <code>go.mod</code> (including <code>tools/</code>), and
-   the three <code>go.work.gen</code> files; <code>make go-version-check</code> (part of <code>make check</code>)
-   enforces they match.</li>
-<li><strong>The <code>golang</code> builder digest in the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a></strong> —
-   one <code>FROM</code> line, on the shared <code>deps</code> stage every image builds from. The
-   pinned digest must already ship ≥ the new patch, or every image build fails
-   with
-   <code>go: /src/go.work requires go &gt;= X (running Y; GOTOOLCHAIN=local)</code>.
-   Dependabot bumps these digests weekly (see
-   <a href="../dependency-updates/">dependency-updates.md</a>), but a CVE-driven bump can't
-   wait for it: resolve the current digest with
-   <code>docker buildx imagetools inspect golang:1.NN</code> (top-level <code>Digest:</code> line) and
-   verify the patch with <code>docker run --rm golang:1.NN@sha256:&lt;digest&gt; go version</code>.</li>
-<li><strong><code>vendor/modules.txt</code></strong> — it records the <code>go</code> directive of the
-   workspace-replaced modules, so the bump drifts the committed vendor tree. Run
-   <code>make vendor-sync</code> and <strong>commit</strong> the result: CI's <code>vendor-check</code> diffs
-   against git HEAD, so a dirty-but-correct working tree still fails.</li>
+<li><strong>The <code>go</code> directive</strong> — <code>go.work</code>, every <code>go.mod</code> (including <code>tools/</code>), and the three <code>go.work.gen</code> files; <code>make go-version-check</code> (part of <code>make check</code>) enforces they match.</li>
+<li><strong>The <code>golang</code> builder digest in the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a></strong> — one <code>FROM</code> line, on the shared <code>deps</code> stage every image builds from.
+   The pinned digest must already ship ≥ the new patch, or every image build fails with <code>go: /src/go.work requires go &gt;= X (running Y; GOTOOLCHAIN=local)</code>.
+   Dependabot bumps these digests weekly (see <a href="../dependency-updates/">dependency-updates.md</a>), but a CVE-driven bump can't wait for it: resolve the current digest with <code>docker buildx imagetools inspect golang:1.NN</code> (top-level <code>Digest:</code> line) and verify the patch with <code>docker run --rm golang:1.NN@sha256:&lt;digest&gt; go version</code>.</li>
+<li><strong><code>vendor/modules.txt</code></strong> — it records the <code>go</code> directive of the workspace-replaced modules, so the bump drifts the committed vendor tree.
+   Run <code>make vendor-sync</code> and <strong>commit</strong> the result: CI's <code>vendor-check</code> diffs against git HEAD, so a dirty-but-correct working tree still fails.</li>
 </ol>
-<p>A green <code>make check</code> does <strong>not</strong> cover parts 2–3 — the vendor/tidy/notices
-gates are CI-only (see <a href="../testing/#the-make-check-pre-review-gate">testing.md</a>). Local
-<code>make vulncheck</code> genuinely re-verifies a stdlib fix: outside the image,
-<code>GOTOOLCHAIN=auto</code> fetches the newer toolchain, and govulncheck reads that
-version — confirm you see <code>No vulnerabilities found.</code></p>
+<p>A green <code>make check</code> does <strong>not</strong> cover parts 2–3 — the vendor/tidy/notices gates are CI-only (see <a href="../testing/#the-make-check-pre-review-gate">testing.md</a>).
+Local <code>make vulncheck</code> genuinely re-verifies a stdlib fix: outside the image, <code>GOTOOLCHAIN=auto</code> fetches the newer toolchain, and govulncheck reads that version — confirm you see <code>No vulnerabilities found.</code></p>
 <h3 id="multi-arch-linuxamd64--linuxarm64">Multi-arch (linux/amd64 + linux/arm64)<a class="headerlink" href="#multi-arch-linuxamd64--linuxarm64" title="Permanent link">&para;</a></h3>
-<p>Published images are <strong>multi-arch</strong> (Q97): the release pipeline
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a>) passes
-<code>platforms: linux/amd64,linux/arm64</code>, producing an OCI image index whose digest
-is what operators pin. All five Dockerfiles (the four production images plus
-<code>test/fakegithub</code>) plumb the target platform the same way:</p>
+<p>Published images are <strong>multi-arch</strong> (Q97): the release pipeline (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a>) passes <code>platforms: linux/amd64,linux/arm64</code>, producing an OCI image index whose digest is what operators pin.
+All five Dockerfiles (the four production images plus <code>test/fakegithub</code>) plumb the target platform the same way:</p>
 <ul>
-<li>The Go <strong>builder stage</strong> runs <code>FROM --platform=$BUILDPLATFORM</code> — always the
-  build host's native platform — and <strong>cross-compiles</strong> with
-  <code>GOOS=$TARGETOS GOARCH=$TARGETARCH</code>. BuildKit populates both args per target
-  platform, so no QEMU emulation is needed for the build.</li>
-<li>The <strong>runtime stages</strong> contain no <code>RUN</code> (only <code>COPY</code>/<code>ENV</code>/<code>LABEL</code>/<code>USER</code>), so
-  assembling the foreign-arch image needs no emulation either. All pinned base
-  digests (<code>golang</code>, <code>distroless/static</code>, <code>actions-runner</code>) are multi-arch
-  index digests covering both platforms.</li>
+<li>The Go <strong>builder stage</strong> runs <code>FROM --platform=$BUILDPLATFORM</code> — always the build host's native platform — and <strong>cross-compiles</strong> with <code>GOOS=$TARGETOS GOARCH=$TARGETARCH</code>.
+  BuildKit populates both args per target platform, so no QEMU emulation is needed for the build.</li>
+<li>The <strong>runtime stages</strong> contain no <code>RUN</code> (only <code>COPY</code>/<code>ENV</code>/<code>LABEL</code>/<code>USER</code>), so assembling the foreign-arch image needs no emulation either.
+  All pinned base digests (<code>golang</code>, <code>distroless/static</code>, <code>actions-runner</code>) are multi-arch index digests covering both platforms.</li>
 </ul>
-<p>Local builds (<code>docker buildx bake</code>, plain <code>docker build</code>) stay
-<strong>single-platform, targeting the host arch</strong> — on an Apple Silicon machine the
-bake produces arm64 images that run natively in a local kind cluster. To
-cross-build one image explicitly:</p>
+<p>Local builds (<code>docker buildx bake</code>, plain <code>docker build</code>) stay <strong>single-platform, targeting the host arch</strong> — on an Apple Silicon machine the bake produces arm64 images that run natively in a local kind cluster.
+To cross-build one image explicitly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>build<span class="w"> </span>--platform<span class="w"> </span>linux/arm64<span class="w"> </span>--target<span class="w"> </span>agc<span class="w"> </span>.
 </code></pre></div>
-<p>Cross-compilation does not affect reproducibility: <code>-trimpath
--ldflags=-buildid=</code> keeps each architecture's binary bit-for-bit reproducible
-regardless of the build host. (The <em>index</em> digest depends on both child
-manifests plus BuildKit's provenance attestation — the reproducibility claim is
-about the binaries and layers, not registry manifest bytes.)</p>
+<p>Cross-compilation does not affect reproducibility: <code>-trimpath -ldflags=-buildid=</code> keeps each architecture's binary bit-for-bit reproducible regardless of the build host.
+(The <em>index</em> digest depends on both child manifests plus BuildKit's provenance attestation — the reproducibility claim is about the binaries and layers, not registry manifest bytes.)</p>
 <h3 id="runner-version-pin-lockstep">Runner-version pin (lockstep)<a class="headerlink" href="#runner-version-pin-lockstep" title="Permanent link">&para;</a></h3>
-<p>The actions/runner version is pinned in <strong>one</strong> place — <code>RunnerVersion</code> (plus
-<code>WorkerImageDigest</code>) in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go"><code>cmd/agc/names/names.go</code></a>.
+<p>The actions/runner version is pinned in <strong>one</strong> place — <code>RunnerVersion</code> (plus <code>WorkerImageDigest</code>) in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go"><code>cmd/agc/names/names.go</code></a>.
 That single constant drives, and must stay in lockstep with, three consumers:</p>
 <ul>
 <li>the AGC's <code>DefaultWorkerImage</code> (the worker pod's runner binary),</li>
-<li>the <code>GITHUB_RUNNER_VERSION</code> the GMC injects into the AGC Deployment — forwarded
-  as <code>agent.version</code> on <code>CreateSession</code>, which <strong>GitHub validates</strong> at session
-  creation (an empty or wrong value risks rejection), and</li>
+<li>the <code>GITHUB_RUNNER_VERSION</code> the GMC injects into the AGC Deployment — forwarded as <code>agent.version</code> on <code>CreateSession</code>, which <strong>GitHub validates</strong> at session creation (an empty or wrong value risks rejection), and</li>
 <li>the <code>FROM</code> tag on the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a>'s <code>worker</code> stage.</li>
 </ul>
-<p>Dependabot bumps only the Dockerfile, so the lockstep test
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/runner_version_test.go"><code>cmd/agc/names/runner_version_test.go</code></a>
-fails CI (in the unit tier) when the <code>FROM</code> tag/digest and the constants
-disagree. To bump the version, follow the procedure in the Dockerfile header:
-update the <code>FROM</code> line <strong>and</strong> <code>RunnerVersion</code> + <code>WorkerImageDigest</code> together;
-<code>DefaultWorkerImage</code> and <code>GITHUB_RUNNER_VERSION</code> then follow automatically.</p>
+<p>Dependabot bumps only the Dockerfile, so the lockstep test <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/runner_version_test.go"><code>cmd/agc/names/runner_version_test.go</code></a> fails CI (in the unit tier) when the <code>FROM</code> tag/digest and the constants disagree.
+To bump the version, follow the procedure in the Dockerfile header: update the <code>FROM</code> line <strong>and</strong> <code>RunnerVersion</code> + <code>WorkerImageDigest</code> together; <code>DefaultWorkerImage</code> and <code>GITHUB_RUNNER_VERSION</code> then follow automatically.</p>
 <h3 id="license-attribution-licenses">License attribution (<code>/licenses/</code>)<a class="headerlink" href="#license-attribution-licenses" title="Permanent link">&para;</a></h3>
-<p>Each production image <code>COPY</code>s three license files into <code>/licenses/</code> — the
-Red Hat/OpenShift container-certification convention, paired with the
-<code>org.opencontainers.image.licenses="Apache-2.0"</code> label every image carries:</p>
+<p>Each production image <code>COPY</code>s three license files into <code>/licenses/</code> — the Red Hat/OpenShift container-certification convention, paired with the <code>org.opencontainers.image.licenses="Apache-2.0"</code> label every image carries:</p>
 <ul>
 <li><code>LICENSE</code> / <code>NOTICE</code> — the project's own Apache-2.0 license and notice.</li>
-<li><code>THIRD-PARTY-NOTICES</code> — the aggregated license/notice texts of the third-party
-  Go modules statically linked into the binary. This satisfies the
-  reproduce-the-notice clauses those licenses impose on a redistribution, and a
-  container image is a redistribution (Apache-2.0 §4(d), MIT/BSD).</li>
+<li><code>THIRD-PARTY-NOTICES</code> — the aggregated license/notice texts of the third-party Go modules statically linked into the binary.
+  This satisfies the reproduce-the-notice clauses those licenses impose on a redistribution, and a container image is a redistribution (Apache-2.0 §4(d), MIT/BSD).</li>
 </ul>
-<p><code>THIRD-PARTY-NOTICES</code> is a <strong>generated, committed</strong> file at the repo root. It is
-assembled from the committed, version-pinned <code>vendor/</code> tree (offline — no network
-or module cache) by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>:</p>
+<p><code>THIRD-PARTY-NOTICES</code> is a <strong>generated, committed</strong> file at the repo root.
+It is assembled from the committed, version-pinned <code>vendor/</code> tree (offline — no network or module cache) by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>third-party-notices<span class="w">         </span><span class="c1"># regenerate THIRD-PARTY-NOTICES from vendor/</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>third-party-notices-check<span class="w">   </span><span class="c1"># fail if it is stale (the CI drift gate)</span>
 </code></pre></div>
-<p><strong>Regenerate it whenever the dependency set changes</strong> (a module added, removed,
-or bumped — i.e. any <code>go mod vendor</code> that touches <code>vendor/</code>) and commit the
-result. The <code>license-notices</code> CI workflow runs <code>make third-party-notices-check</code>
-on every <code>vendor/**</code> change and fails the PR if the committed file is stale, so
-the image build always bundles current attribution. The operator-facing view of
-what ships at <code>/licenses/</code> is in
-<a href="../../operations/security-operations/#license-attribution-in-images">security-operations.md</a>.</p>
-<p>The test-only <code>test/fakegithub</code> image is not published as a product artifact and
-does not carry <code>/licenses/</code>.</p>
+<p><strong>Regenerate it whenever the dependency set changes</strong> (a module added, removed, or bumped — i.e. any <code>go mod vendor</code> that touches <code>vendor/</code>) and commit the result.
+The <code>license-notices</code> CI workflow runs <code>make third-party-notices-check</code> on every <code>vendor/**</code> change and fails the PR if the committed file is stale, so the image build always bundles current attribution.
+The operator-facing view of what ships at <code>/licenses/</code> is in <a href="../../operations/security-operations/#license-attribution-in-images">security-operations.md</a>.</p>
+<p>The test-only <code>test/fakegithub</code> image is not published as a product artifact and does not carry <code>/licenses/</code>.</p>
 <h4 id="what-it-covers--and-why-build-time-tooling-does-not">What it covers — and why build-time tooling does not<a class="headerlink" href="#what-it-covers--and-why-build-time-tooling-does-not" title="Permanent link">&para;</a></h4>
-<p>The obligation is triggered by <strong>distribution, not by use</strong>. MIT ("in all copies
-or substantial portions"), BSD-3 ("redistributions in binary form must reproduce
-…"), and Apache-2.0 §4(d) all attach to conveying the work to someone else. Code
-that only ever runs on a developer's machine or in CI is never conveyed, so it
-owes no attribution.</p>
-<p>So the file is assembled from the repo-root <code>vendor/</code> tree <strong>only</strong> — the modules
-statically linked into the shipped binaries. The other two vendored trees are
-deliberately excluded:</p>
+<p>The obligation is triggered by <strong>distribution, not by use</strong>.
+MIT ("in all copies or substantial portions"), BSD-3 ("redistributions in binary form must reproduce …"), and Apache-2.0 §4(d) all attach to conveying the work to someone else.
+Code that only ever runs on a developer's machine or in CI is never conveyed, so it owes no attribution.</p>
+<p>So the file is assembled from the repo-root <code>vendor/</code> tree <strong>only</strong> — the modules statically linked into the shipped binaries.
+The other two vendored trees are deliberately excluded:</p>
 <table>
 <thead>
 <tr>
@@ -2818,39 +2767,19 @@ deliberately excluded:</p>
 </table>
 <p>Adding a dependency to <code>tools/</code> or <code>devtools/</code> therefore owes no notices regen.
 Adding one to a workspace module does.</p>
-<p><strong>The source tree is its own distribution, and it is already satisfied.</strong>
-<code>vendor/</code> is committed and this repo is public, so the third-party <em>source</em> is
-redistributed too — but each vendored module keeps its own <code>LICENSE</code> beside its
-code, which is exactly what the reproduce-the-notice clauses ask for. The
-roll-up file exists because a <strong>binary</strong> strips that: the image carries no
-<code>vendor/</code> tree, so the texts have to travel separately at <code>/licenses/</code>.</p>
-<p><strong>Notices scope is not SBOM scope.</strong> The SBOM answers "what touched this build"
-for vulnerability tracking, and may legitimately inventory build-time tooling.
-<code>THIRD-PARTY-NOTICES</code> answers "what did we distribute" and is a legal artifact.
+<p><strong>The source tree is its own distribution, and it is already satisfied.</strong> <code>vendor/</code> is committed and this repo is public, so the third-party <em>source</em> is redistributed too — but each vendored module keeps its own <code>LICENSE</code> beside its code, which is exactly what the reproduce-the-notice clauses ask for.
+The roll-up file exists because a <strong>binary</strong> strips that: the image carries no <code>vendor/</code> tree, so the texts have to travel separately at <code>/licenses/</code>.</p>
+<p><strong>Notices scope is not SBOM scope.</strong> The SBOM answers "what touched this build" for vulnerability tracking, and may legitimately inventory build-time tooling. <code>THIRD-PARTY-NOTICES</code> answers "what did we distribute" and is a legal artifact.
 Keep the two scoped separately — widening one does not widen the other.</p>
 <h3 id="image-hardening">Image hardening<a class="headerlink" href="#image-hardening" title="Permanent link">&para;</a></h3>
-<p>A few build-time hardening conventions are shared by every Dockerfile and gated
-by the <a href="../testing/#the-dockerfile-lint-gate"><code>dockerfile-lint</code> CI workflow</a>
-(<code>hadolint</code> at the strictest <code>style</code> threshold):</p>
+<p>A few build-time hardening conventions are shared by every Dockerfile and gated by the <a href="../testing/#the-dockerfile-lint-gate"><code>dockerfile-lint</code> CI workflow</a> (<code>hadolint</code> at the strictest <code>style</code> threshold):</p>
 <ul>
-<li><strong>Explicit non-root <code>USER</code>.</strong> Each final stage pins its runtime user even
-  though the base already defaults to one — <code>USER 65532:65532</code> on the distroless
-  images, <code>USER runner</code> on the actions-runner-based worker — so the non-root
-  guarantee is local to the Dockerfile and survives a base-image/tag change. The
-  worker keeps the user <strong>by name</strong> (not a numeric UID) on purpose; see
-  <a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">security §5.3</a>
-  for why the GMC supplies the numeric <code>runAsUser: 1001</code> that lets kubelet verify
-  it. hadolint 2.15.0 added <code>DL3066</code>, which wants the numeric form, so each
-  by-name <code>USER</code> carries a <code># hadolint ignore=DL3066</code> pragma stating that
-  reason. The pragma is scoped to the instruction directly below it, so a new
-  by-name <code>USER</code> elsewhere still fails the gate.</li>
-<li><strong>Digest-pinned BuildKit frontend.</strong> The <code># syntax=docker/dockerfile:1.7</code>
-  directive carries an <code>@sha256:…</code> digest. Dependabot's docker ecosystem does
-  <strong>not</strong> bump syntax directives, so re-pin it manually when bumping the tag:
-  <code>docker buildx imagetools inspect docker/dockerfile:1.7</code>.</li>
-<li><strong>Digest-pinned bases</strong>, multi-stage builds onto a minimal/distroless runtime,
-  <code>CGO_ENABLED=0</code> static binaries, and reproducible-build flags — covered above
-  and in <a href="../../design/05-security/">security §threat-model</a>.</li>
+<li><strong>Explicit non-root <code>USER</code>.</strong> Each final stage pins its runtime user even though the base already defaults to one — <code>USER 65532:65532</code> on the distroless images, <code>USER runner</code> on the actions-runner-based worker — so the non-root guarantee is local to the Dockerfile and survives a base-image/tag change.
+  The worker keeps the user <strong>by name</strong> (not a numeric UID) on purpose; see <a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">security §5.3</a> for why the GMC supplies the numeric <code>runAsUser: 1001</code> that lets kubelet verify it. hadolint 2.15.0 added <code>DL3066</code>, which wants the numeric form, so each by-name <code>USER</code> carries a <code># hadolint ignore=DL3066</code> pragma stating that reason.
+  The pragma is scoped to the instruction directly below it, so a new by-name <code>USER</code> elsewhere still fails the gate.</li>
+<li><strong>Digest-pinned BuildKit frontend.</strong> The <code># syntax=docker/dockerfile:1.7</code> directive carries an <code>@sha256:…</code> digest.
+  Dependabot's docker ecosystem does <strong>not</strong> bump syntax directives, so re-pin it manually when bumping the tag: <code>docker buildx imagetools inspect docker/dockerfile:1.7</code>.</li>
+<li><strong>Digest-pinned bases</strong>, multi-stage builds onto a minimal/distroless runtime, <code>CGO_ENABLED=0</code> static binaries, and reproducible-build flags — covered above and in <a href="../../design/05-security/">security §threat-model</a>.</li>
 </ul>
 
 

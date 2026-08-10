@@ -2643,79 +2643,46 @@
 
 <h1 id="q72--per-tenant-metrics-scrape-wiring-services--servicemonitors">Q72 — Per-tenant metrics scrape wiring (Services + ServiceMonitors)<a class="headerlink" href="#q72--per-tenant-metrics-scrape-wiring-services--servicemonitors" title="Permanent link">&para;</a></h1>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Make Prometheus able to actually scrape the per-tenant mTLS <code>/metrics</code>
-endpoints that Q69 shipped on <code>:8443</code> for the proxy and the AGC.</p>
+<p>Make Prometheus able to actually scrape the per-tenant mTLS <code>/metrics</code> endpoints that Q69 shipped on <code>:8443</code> for the proxy and the AGC.</p>
 <h2 id="background-verified-by-source-inspection">Background (verified by source inspection)<a class="headerlink" href="#background-verified-by-source-inspection" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Q69 added an mTLS metrics listener on <code>metricsPort</code> (<code>:8443</code>) to both the
-  proxy and AGC pods, served with a per-tenant server cert and requiring a
-  client cert signed by the per-tenant metrics CA (<code>cmd/gmc/internal/controller/metrics_cert.go</code>).</li>
-<li>The GMC already publishes a per-tenant scraper <strong>client</strong> bundle Secret
-  <code>actions-gateway-metrics-client</code> (<code>ca.crt</code> + <code>tls.crt</code> + <code>tls.key</code>) in each
-  tenant namespace (<code>buildMetricsClientSecret</code>), and a NetworkPolicy ingress
-  rule (<code>metricsScrapeIngressRule</code>) admits scrapes of <code>:8443</code> from any
-  <code>metrics=enabled</code> namespace.</li>
-<li>BUT nothing scrapes it: <code>buildProxyService</code> exposes only the <code>proxy</code> port
-  (<code>:8080</code>); there is <strong>no AGC Service</strong> at all; and no per-tenant
-  ServiceMonitor exists. Per-tenant resources are built in Go by the GMC
-  reconciler — <strong>not</strong> the Helm chart (the chart only installs the GMC and its
-  own manager ServiceMonitor, added by Q104).</li>
-<li>The metrics <strong>server</strong> cert SANs already cover both the proxy and AGC
-  Service DNS names (<code>metricsServerSANs</code>), so verified scraping is drop-in once
-  the Services + ServiceMonitors exist.</li>
+<li>Q69 added an mTLS metrics listener on <code>metricsPort</code> (<code>:8443</code>) to both the proxy and AGC pods, served with a per-tenant server cert and requiring a client cert signed by the per-tenant metrics CA (<code>cmd/gmc/internal/controller/metrics_cert.go</code>).</li>
+<li>The GMC already publishes a per-tenant scraper <strong>client</strong> bundle Secret <code>actions-gateway-metrics-client</code> (<code>ca.crt</code> + <code>tls.crt</code> + <code>tls.key</code>) in each tenant namespace (<code>buildMetricsClientSecret</code>), and a NetworkPolicy ingress rule (<code>metricsScrapeIngressRule</code>) admits scrapes of <code>:8443</code> from any <code>metrics=enabled</code> namespace.</li>
+<li>BUT nothing scrapes it: <code>buildProxyService</code> exposes only the <code>proxy</code> port (<code>:8080</code>); there is <strong>no AGC Service</strong> at all; and no per-tenant ServiceMonitor exists.
+  Per-tenant resources are built in Go by the GMC reconciler — <strong>not</strong> the Helm chart (the chart only installs the GMC and its own manager ServiceMonitor, added by Q104).</li>
+<li>The metrics <strong>server</strong> cert SANs already cover both the proxy and AGC Service DNS names (<code>metricsServerSANs</code>), so verified scraping is drop-in once the Services + ServiceMonitors exist.</li>
 </ul>
 <h2 id="why-per-tenant-not-one-cross-namespace-servicemonitor">Why per-tenant (not one cross-namespace ServiceMonitor)<a class="headerlink" href="#why-per-tenant-not-one-cross-namespace-servicemonitor" title="Permanent link">&para;</a></h2>
-<p>Each tenant has its <strong>own</strong> metrics CA / client cert. A single ServiceMonitor
-presents exactly one client cert + one CA, so it cannot mutually authenticate
-to more than one tenant. Per-tenant ServiceMonitors in each tenant namespace,
-each referencing that tenant's <code>actions-gateway-metrics-client</code> Secret, are
-required. Tenants are created dynamically (one ActionsGateway CR each), so the
-GMC reconciler must create them — the chart cannot template unknown namespaces.</p>
+<p>Each tenant has its <strong>own</strong> metrics CA / client cert.
+A single ServiceMonitor presents exactly one client cert + one CA, so it cannot mutually authenticate to more than one tenant.
+Per-tenant ServiceMonitors in each tenant namespace, each referencing that tenant's <code>actions-gateway-metrics-client</code> Secret, are required.
+Tenants are created dynamically (one ActionsGateway CR each), so the GMC reconciler must create them — the chart cannot template unknown namespaces.</p>
 <h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Services (always created, no new dependency):</strong></li>
 <li>Add the <code>metrics</code> port (<code>:8443</code>) to the proxy Service.</li>
-<li>Add an AGC metrics Service named <code>actions-gateway-controller</code> (matches the
-     server-cert SAN) exposing <code>:8443</code>.</li>
-<li>Stamp an <code>app</code> label on each metrics Service's metadata so a ServiceMonitor
-     can select precisely.</li>
-<li><strong>ServiceMonitors (opt-in, built as <code>unstructured</code> to avoid adding the
-   prometheus-operator API as a Go dependency):</strong></li>
-<li>One per component (proxy, AGC), in the tenant namespace, selecting that
-     component's Service by managed + <code>app</code> labels (tenant-scoped via
-     owner-name/owner-ns labels), scraping port <code>metrics</code> over HTTPS, presenting
-     the per-tenant client bundle (<code>cert</code>/<code>keySecret</code>/<code>ca</code> from
-     <code>actions-gateway-metrics-client</code>) with <code>serverName</code> = <code>&lt;svc&gt;.&lt;ns&gt;.svc</code>.</li>
-<li>Gated behind a new GMC flag <code>--enable-tenant-service-monitors</code> (default
-     <strong>false</strong>), wired from the chart's existing <code>metrics.serviceMonitor.enabled</code>
-     value so one operator switch covers both the manager and per-tenant
-     monitors. Default-off keeps provisioning working on clusters without the
-     Prometheus Operator CRD (secure/safe by default).</li>
-<li>If the CRD is absent even when opted in, skip gracefully (log + Event) so a
-     missing optional scrape resource never breaks tenant provisioning.</li>
-<li>Owner reference on the ActionsGateway → GC on delete; reconcile also
-     deletes them best-effort when the flag is off (flag-flip cleanup).</li>
+<li>Add an AGC metrics Service named <code>actions-gateway-controller</code> (matches the server-cert SAN) exposing <code>:8443</code>.</li>
+<li>Stamp an <code>app</code> label on each metrics Service's metadata so a ServiceMonitor can select precisely.</li>
+<li><strong>ServiceMonitors (opt-in, built as <code>unstructured</code> to avoid adding the prometheus-operator API as a Go dependency):</strong></li>
+<li>One per component (proxy, AGC), in the tenant namespace, selecting that component's Service by managed + <code>app</code> labels (tenant-scoped via owner-name/owner-ns labels), scraping port <code>metrics</code> over HTTPS, presenting the per-tenant client bundle (<code>cert</code>/<code>keySecret</code>/<code>ca</code> from <code>actions-gateway-metrics-client</code>) with <code>serverName</code> = <code>&lt;svc&gt;.&lt;ns&gt;.svc</code>.</li>
+<li>Gated behind a new GMC flag <code>--enable-tenant-service-monitors</code> (default <strong>false</strong>), wired from the chart's existing <code>metrics.serviceMonitor.enabled</code> value so one operator switch covers both the manager and per-tenant monitors.
+     Default-off keeps provisioning working on clusters without the Prometheus Operator CRD (secure/safe by default).</li>
+<li>If the CRD is absent even when opted in, skip gracefully (log + Event) so a missing optional scrape resource never breaks tenant provisioning.</li>
+<li>Owner reference on the ActionsGateway → GC on delete; reconcile also deletes them best-effort when the flag is off (flag-flip cleanup).</li>
 </ol>
 <h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>cmd/gmc/internal/controller/builder.go</code> — proxy Service metrics port + label,
-  <code>buildAGCService</code>, <code>buildMetricsServiceMonitor</code> (unstructured), DNS-name helper.</li>
-<li><code>cmd/gmc/internal/controller/actionsgateway_controller.go</code> — apply AGC Service;
-  apply/delete ServiceMonitors gated on the flag; RBAC marker; teardown delete of
-  the AGC Service.</li>
+<li><code>cmd/gmc/internal/controller/builder.go</code> — proxy Service metrics port + label, <code>buildAGCService</code>, <code>buildMetricsServiceMonitor</code> (unstructured), DNS-name helper.</li>
+<li><code>cmd/gmc/internal/controller/actionsgateway_controller.go</code> — apply AGC Service; apply/delete ServiceMonitors gated on the flag; RBAC marker; teardown delete of the AGC Service.</li>
 <li><code>cmd/gmc/cmd/main.go</code> — <code>--enable-tenant-service-monitors</code> flag → reconciler.</li>
-<li><code>cmd/gmc/config/rbac/role.yaml</code> + <code>charts/actions-gateway/files/manager-role-rules.yaml</code>
-  — regenerated (<code>make manifests</code> + <code>make chart-rbac</code>).</li>
-<li><code>charts/actions-gateway/templates/deployment.yaml</code> + <code>values.yaml</code> — pass the
-  flag when <code>metrics.serviceMonitor.enabled</code>; document the broadened scope.</li>
+<li><code>cmd/gmc/config/rbac/role.yaml</code> + <code>charts/actions-gateway/files/manager-role-rules.yaml</code> — regenerated (<code>make manifests</code> + <code>make chart-rbac</code>).</li>
+<li><code>charts/actions-gateway/templates/deployment.yaml</code> + <code>values.yaml</code> — pass the flag when <code>metrics.serviceMonitor.enabled</code>; document the broadened scope.</li>
 <li>Tests: <code>builder_test.go</code> (Service ports, AGC Service, ServiceMonitor fields).</li>
-<li>Docs: <code>docs/operations/observability.md</code>, <code>docs/operations/troubleshooting.md</code>,
-  <code>docs/design/05-security.md</code>.</li>
+<li>Docs: <code>docs/operations/observability.md</code>, <code>docs/operations/troubleshooting.md</code>, <code>docs/design/05-security.md</code>.</li>
 </ul>
 <h2 id="out-of-scope-do-not-absorb">Out of scope (do not absorb)<a class="headerlink" href="#out-of-scope-do-not-absorb" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Q35 observability/logging-probes work beyond the metrics Service/ServiceMonitor
-  wiring.</li>
+<li>Q35 observability/logging-probes work beyond the metrics Service/ServiceMonitor wiring.</li>
 <li>Cert hot-reload (Q69 open question 2).</li>
 </ul>
 

@@ -2721,20 +2721,13 @@
 
 <h1 id="rename-actions-gateway-agc--actions-gateway-controller">Rename <code>actions-gateway-agc</code> → <code>actions-gateway-controller</code><a class="headerlink" href="#rename-actions-gateway-agc--actions-gateway-controller" title="Permanent link">&para;</a></h1>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Standardize the on-cluster name of the per-tenant Actions Gateway Controller
-Deployment (and the resources that hang off it) to <code>actions-gateway-controller</code>,
-matching the name used in the user-facing docs (<code>getting-started.md</code>,
-<code>operations/*.md</code>, <code>design/network-architecture.md</code>).</p>
-<p>Today the code produces <code>actions-gateway-agc</code>. The discrepancy has been latent
-since Milestone 4 (May 2026 — commit <code>94f90fb</code>); the docs were drafted against
-the planned name and the implementation diverged silently.</p>
+<p>Standardize the on-cluster name of the per-tenant Actions Gateway Controller Deployment (and the resources that hang off it) to <code>actions-gateway-controller</code>, matching the name used in the user-facing docs (<code>getting-started.md</code>, <code>operations/*.md</code>, <code>design/network-architecture.md</code>).</p>
+<p>Today the code produces <code>actions-gateway-agc</code>.
+The discrepancy has been latent since Milestone 4 (May 2026 — commit <code>94f90fb</code>); the docs were drafted against the planned name and the implementation diverged silently.</p>
 <h2 id="why-a-separate-task">Why a separate task<a class="headerlink" href="#why-a-separate-task" title="Permanent link">&para;</a></h2>
-<p>The rename touches five Go constants across two binaries (GMC and AGC), every
-e2e and integration test that references the strings literally, and downstream
-docs that currently use the <code>-agc</code> form. It also changes on-cluster Pod labels,
-which is observable to Prometheus queries and any alerting that pivots on
-<code>app=actions-gateway-agc</code>. Shipping it inside the current PR would obscure the
-review of the security work.</p>
+<p>The rename touches five Go constants across two binaries (GMC and AGC), every e2e and integration test that references the strings literally, and downstream docs that currently use the <code>-agc</code> form.
+It also changes on-cluster Pod labels, which is observable to Prometheus queries and any alerting that pivots on <code>app=actions-gateway-agc</code>.
+Shipping it inside the current PR would obscure the review of the security work.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="code-constants-to-rename">Code constants to rename<a class="headerlink" href="#code-constants-to-rename" title="Permanent link">&para;</a></h3>
 <table>
@@ -2780,8 +2773,7 @@ review of the security work.</p>
 </tbody>
 </table>
 <h3 id="shared-public-constant">Shared public constant<a class="headerlink" href="#shared-public-constant" title="Permanent link">&para;</a></h3>
-<p>Instead of five private constants spread across two binaries, declare one
-exported symbol that both modules import:</p>
+<p>Instead of five private constants spread across two binaries, declare one exported symbol that both modules import:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// internal/names/names.go or similar:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">package</span><span class="w"> </span><span class="nx">names</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -2797,20 +2789,14 @@ exported symbol that both modules import:</p>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1">// silently breaks the NetworkPolicy selector match.</span>
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="kd">const</span><span class="w"> </span><span class="nx">ControllerName</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">&quot;actions-gateway-controller&quot;</span>
 </code></pre></div>
-<p>The package needs to be importable by both <code>cmd/gmc/...</code> and <code>cmd/agc/...</code>. The
-root module (<code>github.com/actions-gateway/github-actions-gateway</code>) is already shared by
-both — putting it there (e.g. <code>names/names.go</code> at the repo root or
-<code>internal/names/</code> if the package should not be public API) keeps the import
-graph clean.</p>
-<p>Note: the AGC <code>provisioner</code> and <code>agentpool</code> packages use this value for the
-<code>app.kubernetes.io/managed-by</code> label on resources the <strong>AGC</strong> creates
-(worker pods, agent secrets). Today this happens to match the GMC's Deployment
-name, but semantically they could diverge. Confirm the unification is correct
-before collapsing to one constant — if these are conceptually two things, keep
-two constants but assign them the same shared value.</p>
+<p>The package needs to be importable by both <code>cmd/gmc/...</code> and <code>cmd/agc/...</code>.
+The root module (<code>github.com/actions-gateway/github-actions-gateway</code>) is already shared by both — putting it there (e.g. <code>names/names.go</code> at the repo root or <code>internal/names/</code> if the package should not be public API) keeps the import graph clean.</p>
+<p>Note: the AGC <code>provisioner</code> and <code>agentpool</code> packages use this value for the <code>app.kubernetes.io/managed-by</code> label on resources the <strong>AGC</strong> creates (worker pods, agent secrets).
+Today this happens to match the GMC's Deployment name, but semantically they could diverge.
+Confirm the unification is correct before collapsing to one constant — if these are conceptually two things, keep two constants but assign them the same shared value.</p>
 <h3 id="tests-to-update">Tests to update<a class="headerlink" href="#tests-to-update" title="Permanent link">&para;</a></h3>
-<p>Every e2e and integration test that references the string literally will need
-updating. As of this writing:</p>
+<p>Every e2e and integration test that references the string literally will need updating.
+As of this writing:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cmd/gmc/test/e2e/github_e2e_test.go
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>cmd/gmc/test/e2e/job_lifecycle_test.go
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>cmd/gmc/test/e2e/teardown_test.go
@@ -2822,12 +2808,11 @@ updating. As of this writing:</p>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>cmd/gmc/internal/controller/integration/teardown_test.go
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>cmd/gmc/internal/controller/builder_test.go
 </code></pre></div>
-<p>Where possible, import the shared constant in tests rather than re-typing
-the string — that way the next rename is a single change.</p>
+<p>Where possible, import the shared constant in tests rather than re-typing the string — that way the next rename is a single change.</p>
 <h3 id="docs-to-revisit">Docs to revisit<a class="headerlink" href="#docs-to-revisit" title="Permanent link">&para;</a></h3>
-<p>The operations docs were updated in this PR to use the current <code>-agc</code> name
-(reflecting code reality). Once the rename ships, flip them back. The list
-that needs flipping:</p>
+<p>The operations docs were updated in this PR to use the current <code>-agc</code> name (reflecting code reality).
+Once the rename ships, flip them back.
+The list that needs flipping:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>docs/getting-started.md
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>docs/operations/runbook.md
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>docs/operations/troubleshooting.md
@@ -2836,58 +2821,45 @@ that needs flipping:</p>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>docs/operations/observability.md
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>docs/design/network-architecture.md
 </code></pre></div>
-<p>The design and plan docs (<code>docs/design/</code>, <code>docs/plan/milestone-*.md</code>) refer
-to the controller concept by acronym (AGC) far more than by Deployment name
-— most of those need no update. Grep for <code>actions-gateway-agc</code> after the
-code rename to confirm.</p>
+<p>The design and plan docs (<code>docs/design/</code>, <code>docs/plan/milestone-*.md</code>) refer to the controller concept by acronym (AGC) far more than by Deployment name — most of those need no update.
+Grep for <code>actions-gateway-agc</code> after the code rename to confirm.</p>
 <h2 id="migration-considerations">Migration considerations<a class="headerlink" href="#migration-considerations" title="Permanent link">&para;</a></h2>
 <h3 id="existing-cluster-state">Existing cluster state<a class="headerlink" href="#existing-cluster-state" title="Permanent link">&para;</a></h3>
 <p>When the rename ships, the GMC's next reconcile will:</p>
 <ol>
-<li>Try to create a new Deployment <code>actions-gateway-controller</code> alongside the
-   existing <code>actions-gateway-agc</code>.</li>
-<li>Leave the old Deployment orphaned (no longer owned by the controller's
-   field manager but still running).</li>
+<li>Try to create a new Deployment <code>actions-gateway-controller</code> alongside the existing <code>actions-gateway-agc</code>.</li>
+<li>Leave the old Deployment orphaned (no longer owned by the controller's field manager but still running).</li>
 </ol>
 <p>Two safe paths:</p>
 <ul>
 <li>
-<p><strong>Recommended:</strong> Document a manual cleanup step in the release notes:
-  <code>kubectl delete deploy actions-gateway-agc -n &lt;ns&gt;</code> per tenant after
-  upgrading the GMC. The GMC creates the new Deployment, the old one is
-  removed, and the AGC's <code>app.kubernetes.io/managed-by</code> label change on
-  newly created worker pods is harmless (worker pods are ephemeral).</p>
+<p><strong>Recommended:</strong> Document a manual cleanup step in the release notes: <code>kubectl delete deploy actions-gateway-agc -n &lt;ns&gt;</code> per tenant after upgrading the GMC.
+  The GMC creates the new Deployment, the old one is removed, and the AGC's <code>app.kubernetes.io/managed-by</code> label change on newly created worker pods is harmless (worker pods are ephemeral).</p>
 </li>
 <li>
-<p><strong>Stretch:</strong> Have the GMC explicitly delete the legacy-named Deployment
-  on first reconcile after the upgrade, with a guard label to make the
-  cleanup idempotent. More code but no operator action required.</p>
+<p><strong>Stretch:</strong> Have the GMC explicitly delete the legacy-named Deployment on first reconcile after the upgrade, with a guard label to make the cleanup idempotent.
+  More code but no operator action required.</p>
 </li>
 </ul>
 <h3 id="prometheus--alerting-impact">Prometheus / alerting impact<a class="headerlink" href="#prometheus--alerting-impact" title="Permanent link">&para;</a></h3>
 <p>Pods labelled <code>app=actions-gateway-agc</code> become <code>app=actions-gateway-controller</code>.
-Any alert or dashboard pivoting on the old label needs updating. Flag this
-in the release notes.</p>
+Any alert or dashboard pivoting on the old label needs updating.
+Flag this in the release notes.</p>
 <h3 id="networkpolicy-selector-match">NetworkPolicy selector match<a class="headerlink" href="#networkpolicy-selector-match" title="Permanent link">&para;</a></h3>
-<p>The <code>actions-gateway-agc</code> NetworkPolicy currently selects pods by
-<code>app: actions-gateway-agc</code>. The rename keeps the selector and the Pod label
-in sync (both come from the same <code>agcAppName</code>/<code>ControllerName</code> constant), so
-the policy continues to match. The only window of risk is during the rolling
-update — for a few seconds, the old Deployment (with the new selector) has
-no matching pods. Worker pods are unaffected; they match the workload
-NetworkPolicy by <code>actions-gateway/component: workload</code>, not by the AGC's
-<code>app:</code> label.</p>
+<p>The <code>actions-gateway-agc</code> NetworkPolicy currently selects pods by <code>app: actions-gateway-agc</code>.
+The rename keeps the selector and the Pod label in sync (both come from the same <code>agcAppName</code>/<code>ControllerName</code> constant), so the policy continues to match.
+The only window of risk is during the rolling update — for a few seconds, the old Deployment (with the new selector) has no matching pods.
+Worker pods are unaffected; they match the workload NetworkPolicy by <code>actions-gateway/component: workload</code>, not by the AGC's <code>app:</code> label.</p>
 <h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <ul>
-<li>[x] One exported constant declared in a shared package (<code>cmd/agc/names/names.go</code>); both
-      binaries import it.</li>
+<li>[x] One exported constant declared in a shared package (<code>cmd/agc/names/names.go</code>); both binaries import it.</li>
 <li>[x] All five Go-side string literals replaced.</li>
 <li>[x] All test files updated (literal-string greps return zero results).</li>
 <li>[x] Operations docs flipped back to <code>actions-gateway-controller</code>.</li>
-<li>[x] Migration notes (on-cluster rename, manual cleanup command, Prometheus label change)
-      added to <code>docs/operations/upgrade.md</code>.</li>
+<li>[x] Migration notes (on-cluster rename, manual cleanup command, Prometheus label change) added to <code>docs/operations/upgrade.md</code>.</li>
 <li>[x] All e2e test literals replaced with <code>agcName = agcnames.ControllerName</code> (same pattern as integration tests).</li>
-<li>[ ] <code>make e2e-up</code> passes on a fresh kind cluster. (Requires live cluster.)</li>
+<li>[ ] <code>make e2e-up</code> passes on a fresh kind cluster.
+  (Requires live cluster.)</li>
 </ul>
 
 

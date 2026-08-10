@@ -2609,42 +2609,20 @@
 
 
 <h1 id="q311--scale-set-tier-monitoring-surface">Q311 — Scale-set tier monitoring surface<a class="headerlink" href="#q311--scale-set-tier-monitoring-surface" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> Give the scale-set acquisition tier (the default protocol since Q264 P5)
-the four monitoring surfaces the classic tier already has, so a scale-set-only
-deploy is not silently unobservable.</p>
-<p><strong>Problem.</strong> The scale-set listener emits four counters
-(<code>actions_gateway_scaleset_jobs_assigned_total</code>, <code>…_jobs_provisioned_total</code>,
-<code>…_provision_errors_total</code>, <code>…_jobs_completed_total</code>) that are documented in the
-Full Metrics Reference but wired to <strong>no alert, no SLO recording rule, no
-dashboard panel, and no preview series</strong>. Critically, the classic throughput
-alert <code>ActionsGatewayNoActiveSessions</code> keys off <code>actions_gateway_active_sessions</code>,
-a gauge <strong>only the classic listener emits</strong> — a ScaleSet-protocol RunnerSet never
-creates that series, so on a scale-set-only deploy the alert never evaluates and a
-wedged tier pages no one. The dashboards' <code>$namespace</code> template variable is also
-derived from <code>active_sessions</code>, so both dashboards render blank on a scale-set-only
-deploy.</p>
+<p><strong>Goal:</strong> Give the scale-set acquisition tier (the default protocol since Q264 P5) the four monitoring surfaces the classic tier already has, so a scale-set-only deploy is not silently unobservable.</p>
+<p><strong>Problem.</strong> The scale-set listener emits four counters (<code>actions_gateway_scaleset_jobs_assigned_total</code>, <code>…_jobs_provisioned_total</code>, <code>…_provision_errors_total</code>, <code>…_jobs_completed_total</code>) that are documented in the Full Metrics Reference but wired to <strong>no alert, no SLO recording rule, no dashboard panel, and no preview series</strong>.
+Critically, the classic throughput alert <code>ActionsGatewayNoActiveSessions</code> keys off <code>actions_gateway_active_sessions</code>, a gauge <strong>only the classic listener emits</strong> — a ScaleSet-protocol RunnerSet never creates that series, so on a scale-set-only deploy the alert never evaluates and a wedged tier pages no one.
+The dashboards' <code>$namespace</code> template variable is also derived from <code>active_sessions</code>, so both dashboards render blank on a scale-set-only deploy.</p>
 <h2 id="surfaces-to-add">Surfaces to add<a class="headerlink" href="#surfaces-to-add" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Alerts</strong> (<code>deploy/monitoring/prometheusrule.yaml</code>, mirrored in
-   <code>observability.md</code> + <code>runbook.md</code>):</li>
-<li><code>ActionsGatewayScaleSetProvisioningStalled</code> (critical) — the scale-set analog
-     of <code>NoActiveSessions</code>: jobs are being <em>assigned</em> but none are being
-     <em>provisioned</em> (a wedged tier). <code>assigned rate &gt; 0 unless provisioned rate &gt; 0</code>.</li>
-<li><code>ActionsGatewayScaleSetProvisionErrors</code> (warning) — sustained provision-attempt
-     failures (JIT-config mint / pod create).</li>
+<li><strong>Alerts</strong> (<code>deploy/monitoring/prometheusrule.yaml</code>, mirrored in <code>observability.md</code> + <code>runbook.md</code>):</li>
+<li><code>ActionsGatewayScaleSetProvisioningStalled</code> (critical) — the scale-set analog of <code>NoActiveSessions</code>: jobs are being <em>assigned</em> but none are being <em>provisioned</em> (a wedged tier). <code>assigned rate &gt; 0 unless provisioned rate &gt; 0</code>.</li>
+<li><code>ActionsGatewayScaleSetProvisionErrors</code> (warning) — sustained provision-attempt failures (JIT-config mint / pod create).</li>
 <li><strong>SLO recording rule</strong> (<code>prometheusrule.yaml</code> <code>actions-gateway-slos</code> group):</li>
-<li><code>actions_gateway:scaleset_provision_success_rate:rate5m</code> — provisioned /
-     (provisioned + errors) per namespace, mirroring
-     <code>job_acquisition_success_rate</code>.</li>
-<li><strong>Dashboard</strong> — new "Scale-set Acquisition Tier" row on
-   <code>grafana-dashboard-tenant.json</code> (assigned/provisioned throughput, provision
-   success-rate gauge, provision errors, completions by result); a scale-set
-   throughput panel on the platform dashboard's cross-tenant row. Both dashboards'
-   <code>$namespace</code> variable unioned to also populate from the scale-set series so they
-   render on a scale-set-only deploy.</li>
-<li><strong>Preview series</strong> — synthetic <code>scaleset_*</code> series in
-   <code>deploy/monitoring/preview/exporter.py</code> so the new panels render in the
-   screenshot harness.</li>
+<li><code>actions_gateway:scaleset_provision_success_rate:rate5m</code> — provisioned / (provisioned + errors) per namespace, mirroring <code>job_acquisition_success_rate</code>.</li>
+<li><strong>Dashboard</strong> — new "Scale-set Acquisition Tier" row on <code>grafana-dashboard-tenant.json</code> (assigned/provisioned throughput, provision success-rate gauge, provision errors, completions by result); a scale-set throughput panel on the platform dashboard's cross-tenant row.
+   Both dashboards' <code>$namespace</code> variable unioned to also populate from the scale-set series so they render on a scale-set-only deploy.</li>
+<li><strong>Preview series</strong> — synthetic <code>scaleset_*</code> series in <code>deploy/monitoring/preview/exporter.py</code> so the new panels render in the screenshot harness.</li>
 </ol>
 <h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2654,18 +2632,11 @@ deploy.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>DONE.</strong> All four surfaces shipped:</li>
-<li>Alerts <code>ActionsGatewayScaleSetProvisioningStalled</code> (critical, the throughput
-    wedge) + <code>ActionsGatewayScaleSetProvisionErrors</code> (warning) in
-    <code>prometheusrule.yaml</code>, mirrored in <code>observability.md</code>, with runbook entries.</li>
+<li>Alerts <code>ActionsGatewayScaleSetProvisioningStalled</code> (critical, the throughput wedge) + <code>ActionsGatewayScaleSetProvisionErrors</code> (warning) in <code>prometheusrule.yaml</code>, mirrored in <code>observability.md</code>, with runbook entries.</li>
 <li>SLO rule <code>actions_gateway:scaleset_provision_success_rate:rate5m</code>.</li>
-<li>Dashboard: "Scale-set Acquisition Tier" row on the tenant dashboard +
-    cross-tenant scale-set panel on the platform dashboard; both <code>$namespace</code>
-    variables unioned so a scale-set-only deploy still populates.</li>
-<li>Preview: synthetic <code>scaleset_*</code> series in <code>exporter.py</code> (verified emitting
-    end-to-end via a local exporter run).</li>
-<li>Follow-up (mechanical): regenerate the dashboard PNG screenshots via
-  <code>deploy/monitoring/preview/render.sh</code> — not run here (kind + kube-prometheus
-  stack); doc tables/captions already describe the new row.</li>
+<li>Dashboard: "Scale-set Acquisition Tier" row on the tenant dashboard + cross-tenant scale-set panel on the platform dashboard; both <code>$namespace</code> variables unioned so a scale-set-only deploy still populates.</li>
+<li>Preview: synthetic <code>scaleset_*</code> series in <code>exporter.py</code> (verified emitting end-to-end via a local exporter run).</li>
+<li>Follow-up (mechanical): regenerate the dashboard PNG screenshots via <code>deploy/monitoring/preview/render.sh</code> — not run here (kind + kube-prometheus stack); doc tables/captions already describe the new row.</li>
 </ul>
 
 

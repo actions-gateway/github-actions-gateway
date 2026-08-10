@@ -2817,9 +2817,7 @@
 <p class="gag-eyebrow">Comparison · ARC alternative</p>
 <h1 id="why-github-actions-gateway-over-arc">Why GitHub Actions Gateway over ARC?<a class="headerlink" href="#why-github-actions-gateway-over-arc" title="Permanent link">&para;</a></h1>
 <p class="gag-vs-hero__lede">Actions Runner Controller (ARC) struggles with one job: <strong>many runner sets, many tenants, one shared cluster, each tenant safely capped by its own <code>ResourceQuota</code></strong>. GitHub Actions Gateway (GAG) is built for that job.</p>
-<p><a class="md-button md-button--primary" href="../getting-started/">Get started</a>
-<a class="md-button" href="../operations/migration-from-arc/">Migrating from ARC</a>
-<a class="md-button" href="../design/02-architecture/">See the architecture</a></p>
+<p><a class="md-button md-button--primary" href="../getting-started/">Get started</a> <a class="md-button" href="../operations/migration-from-arc/">Migrating from ARC</a> <a class="md-button" href="../design/02-architecture/">See the architecture</a></p>
 </div>
 <div class="gag-vs-hero__proof">
 <p class="gag-vs-hero__proof-cap">When the job is disrupted</p>
@@ -2828,10 +2826,8 @@
 </div>
 </div>
 <h2 id="the-problem-arc-leaves-you-with">The problem ARC leaves you with<a class="headerlink" href="#the-problem-arc-leaves-you-with" title="Permanent link">&para;</a></h2>
-<p>All four trace to one root, and it is not a missing feature. <strong>ARC models a
-cluster with one owner</strong>, so it has no primitive separating what the platform
-owns from what a tenant owns. That is a reasonable product for a single-tenant
-cluster, and the same gap from four angles once teams share one.</p>
+<p>All four trace to one root, and it is not a missing feature. <strong>ARC models a cluster with one owner</strong>, so it has no primitive separating what the platform owns from what a tenant owns.
+That is a reasonable product for a single-tenant cluster, and the same gap from four angles once teams share one.</p>
 <div class="gag-pillars gag-pillars--problem gag-cols-2">
 <div class="grid cards">
 <ul>
@@ -2925,17 +2921,11 @@ cluster, and the same gap from four angles once teams share one.</p>
   </div>
 </div>
 
-<p>A tenant declares only namespaced resources; the GMC provisions the rest inside
-a platform-owned quota it cannot write, with no cluster admin after the install
-(<a href="../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">the object set</a>).
-The <a href="../design/appendix-f-cost-model/">cost model</a> runs the utilization argument
-in numbers, but a benchmark at scale is <a href="../roadmap/">on the roadmap</a> and not yet
-done: treat those figures as a model, not a measurement.</p>
+<p>A tenant declares only namespaced resources; the GMC provisions the rest inside a platform-owned quota it cannot write, with no cluster admin after the install (<a href="../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">the object set</a>).
+The <a href="../design/appendix-f-cost-model/">cost model</a> runs the utilization argument in numbers, but a benchmark at scale is <a href="../roadmap/">on the roadmap</a> and not yet done: treat those figures as a model, not a measurement.</p>
 <h2 id="gag-vs-arc-scale-set-mode">GAG vs ARC (scale-set mode)<a class="headerlink" href="#gag-vs-arc-scale-set-mode" title="Permanent link">&para;</a></h2>
-<p><strong>This is not a protocol argument.</strong> GAG acquires jobs with the same
-runner-scale-set protocol ARC uses, shipped as the v2 default, so every row
-below is additive rather than a different-architecture trade-off. What differs
-is what surrounds that shared core.</p>
+<p><strong>This is not a protocol argument.</strong> GAG acquires jobs with the same runner-scale-set protocol ARC uses, shipped as the v2 default, so every row below is additive rather than a different-architecture trade-off.
+What differs is what surrounds that shared core.</p>
 <table>
 <thead>
 <tr>
@@ -3032,9 +3022,8 @@ is what surrounds that shared core.</p>
 </tr>
 </tbody>
 </table>
-<p>Every GAG capability above is available today. Rows marked
-<span class="gag-v2-badge">v2</span> need the <code>actions-gateway.com/v2beta1</code> API,
-which is where new tenants start.</p>
+<p>Every GAG capability above is available today.
+Rows marked <span class="gag-v2-badge">v2</span> need the <code>actions-gateway.com/v2beta1</code> API, which is where new tenants start.</p>
 <div class="admonition note">
 <p class="admonition-title">When the ARC column was measured, and why that matters</p>
 <p><strong>Measured against ARC <code>gha-runner-scale-set</code> 0.14.2 (released 2026-05-22)
@@ -3052,50 +3041,34 @@ stamped above, re-check the column rather than trusting it, and
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too. -->
-<p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a drain
-and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers. A job
-that <em>failed</em> and a run you <em>cancelled</em> never do. Nor do workers the reaper took,
-with one exception: a worker reaped while still <code>Pending</code> is re-run on the
-classic tier once capacity returns.
+<p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a drain and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers.
+A job that <em>failed</em> and a run you <em>cancelled</em> never do.
+Nor do workers the reaper took, with one exception: a worker reaped while still <code>Pending</code> is re-run on the classic tier once capacity returns.
 <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">The full boundary</a>.</p>
-<p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one
-job and lives minutes, so stock Vertical Pod Autoscaler cannot size it. The loop
-only closes inside the controller that builds the pods.
+<p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
+The loop only closes inside the controller that builds the pods.
 <a href="../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D.7</a>.</p>
 <h2 id="where-arc-is-ahead">Where ARC is ahead<a class="headerlink" href="#where-arc-is-ahead" title="Permanent link">&para;</a></h2>
-<p>Some of it is capability, not only maturity. Measured 2026-08-06. Each gap below
-is tracked, and what closes it and when is on the
-<a href="../roadmap/">public roadmap</a>; the support entitlement is the one we do not plan
-to match.</p>
+<p>Some of it is capability, not only maturity.
+Measured 2026-08-06.
+Each gap below is tracked, and what closes it and when is on the <a href="../roadmap/">public roadmap</a>; the support entitlement is the one we do not plan to match.</p>
 <ul>
-<li><strong>A GitHub Support entitlement</strong>, covering ARC installed via the official
-  Helm charts, GitHub Enterprise Server 3.9 and later. GAG has none. Read the
-  scope exclusions before relying on it: Kubernetes orchestration, policy
-  application, and template customization are explicitly out of scope, which
-  is much of what a multi-tenant platform team actually pages about.</li>
-<li><strong>Multi-label scale sets</strong> since 0.14.0. A workflow using
-  <code>runs-on: [linux, gpu]</code> needs one edit per target to move to GAG, which
-  admits exactly one label per runner set.</li>
-<li><strong><code>containerMode: kubernetes</code></strong>, which runs <code>container:</code> and <code>services:</code>
-  steps as separate pods with a provisioned volume. GAG runs one worker pod
-  per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather
-  than a non-privileged pod-per-step model.</li>
-<li><strong>GitHub runner groups</strong> (<code>runnerGroup</code>), the forge-side control over which
-  repositories may target a runner set.</li>
-<li><strong>GHES that is actually tested.</strong> GAG serves GHES gateways and marks both
-  of its GHES features untested against a real appliance.</li>
+<li><strong>A GitHub Support entitlement</strong>, covering ARC installed via the official Helm charts, GitHub Enterprise Server 3.9 and later.
+  GAG has none.
+  Read the scope exclusions before relying on it: Kubernetes orchestration, policy application, and template customization are explicitly out of scope, which is much of what a multi-tenant platform team actually pages about.</li>
+<li><strong>Multi-label scale sets</strong> since 0.14.0.
+  A workflow using <code>runs-on: [linux, gpu]</code> needs one edit per target to move to GAG, which admits exactly one label per runner set.</li>
+<li><strong><code>containerMode: kubernetes</code></strong>, which runs <code>container:</code> and <code>services:</code> steps as separate pods with a provisioned volume.
+  GAG runs one worker pod per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather than a non-privileged pod-per-step model.</li>
+<li><strong>GitHub runner groups</strong> (<code>runnerGroup</code>), the forge-side control over which repositories may target a runner set.</li>
+<li><strong>GHES that is actually tested.</strong> GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.</li>
 </ul>
-<p>The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API
-has only just reached beta (<code>v2beta1</code>, its first stability contract). That is why
-the v1 to v2 migration runs on a committed, documented schedule with a working
-<a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> tool. The discipline is the
-"won't strand you" signal while the track record accumulates.</p>
-<p>One thing is <strong>not</strong> a differentiator either way: both ride the same
-Public-Preview runner-scale-set protocol, through the same
-<a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> client library.</p>
+<p>The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API has only just reached beta (<code>v2beta1</code>, its first stability contract).
+That is why the v1 to v2 migration runs on a committed, documented schedule with a working <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> tool.
+The discipline is the "won't strand you" signal while the track record accumulates.</p>
+<p>One thing is <strong>not</strong> a differentiator either way: both ride the same Public-Preview runner-scale-set protocol, through the same <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> client library.</p>
 <h2 id="secure-by-default">Secure by default<a class="headerlink" href="#secure-by-default" title="Permanent link">&para;</a></h2>
-<p>Built for shared clusters running other teams' code: the multi-tenant hardening
-ships as reconciled defaults, not a post-install project.</p>
+<p>Built for shared clusters running other teams' code: the multi-tenant hardening ships as reconciled defaults, not a post-install project.</p>
 <div class="gag-pillars">
 <div class="grid cards">
 <ul>
@@ -3137,16 +3110,13 @@ ships as reconciled defaults, not a post-install project.</p>
 </div>
 </div>
 <h3 id="sandboxing-is-not-the-runtimeclassname-field">Sandboxing is not the <code>runtimeClassName</code> field<a class="headerlink" href="#sandboxing-is-not-the-runtimeclassname-field" title="Permanent link">&para;</a></h3>
-<p>Both GAG and ARC can set one. The differentiator is the layer underneath.</p>
-<p><strong>Kata bounds the kernel, not the pod network</strong>, so cloud metadata still answers
-from inside the guest. GAG's default-deny NetworkPolicies close that path.</p>
-<p><strong>GAG's own CI runs this way</strong>, building a <code>kind</code> cluster inside a worker pod
-with <strong>zero</strong> <code>privileged: true</code> (<a href="../operations/kata-dind-workloads/#what-kata-does-not-buy-you">how, and what Kata does not buy
-you</a>).</p>
-<p><strong>Not yet a claim about untrusted pull requests</strong>, which need the egress work
-on the <a href="../roadmap/#in-progress--near-term">roadmap</a>.</p>
-<p>Threat model and abuse-response playbooks: <a href="../design/05-security/">Security</a>,
-<a href="../operations/security-operations/">Security operations</a>.</p>
+<p>Both GAG and ARC can set one.
+The differentiator is the layer underneath.</p>
+<p><strong>Kata bounds the kernel, not the pod network</strong>, so cloud metadata still answers from inside the guest.
+GAG's default-deny NetworkPolicies close that path.</p>
+<p><strong>GAG's own CI runs this way</strong>, building a <code>kind</code> cluster inside a worker pod with <strong>zero</strong> <code>privileged: true</code> (<a href="../operations/kata-dind-workloads/#what-kata-does-not-buy-you">how, and what Kata does not buy you</a>).</p>
+<p><strong>Not yet a claim about untrusted pull requests</strong>, which need the egress work on the <a href="../roadmap/#in-progress--near-term">roadmap</a>.</p>
+<p>Threat model and abuse-response playbooks: <a href="../design/05-security/">Security</a>, <a href="../operations/security-operations/">Security operations</a>.</p>
 
 
 

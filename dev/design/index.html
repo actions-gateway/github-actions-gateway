@@ -2657,10 +2657,12 @@
 </tr>
 </tbody>
 </table>
-<p>This section is the full system design, split into focused, cross-referenced documents. For a quick orientation, start with <a href="01-executive-summary/">01-executive-summary.md</a>, then follow the reading path for your role.</p>
+<p>This section is the full system design, split into focused, cross-referenced documents.
+For a quick orientation, start with <a href="01-executive-summary/">01-executive-summary.md</a>, then follow the reading path for your role.</p>
 <hr />
 <h2 id="reading-paths-by-role">Reading Paths by Role<a class="headerlink" href="#reading-paths-by-role" title="Permanent link">&para;</a></h2>
-<p><strong>Architect</strong>: reviewing the overall design: start with <a href="01-executive-summary/">01-executive-summary.md</a>, then <a href="02-architecture/">02-architecture.md</a>, then <a href="03-api-contracts/">03-api-contracts.md</a>. Read <a href="04-operational-flows/">04-operational-flows.md</a> and <a href="05-security/">05-security.md</a> for depth.</p>
+<p><strong>Architect</strong>: reviewing the overall design: start with <a href="01-executive-summary/">01-executive-summary.md</a>, then <a href="02-architecture/">02-architecture.md</a>, then <a href="03-api-contracts/">03-api-contracts.md</a>.
+Read <a href="04-operational-flows/">04-operational-flows.md</a> and <a href="05-security/">05-security.md</a> for depth.</p>
 <p><strong>Platform engineer</strong>: deploying or operating the system: read <a href="../getting-started/">Getting Started</a> first, then <a href="02-architecture/#21-tier-1--gateway-manager-controller-gmc">02-architecture.md §2.1</a> (GMC), <a href="appendix-a-capacity-slos/">Appendix A</a> (SLOs), <a href="../operations/observability/">Observability</a>, <a href="../operations/runbook/">Runbook</a>, and <a href="../operations/upgrade/">Upgrade &amp; Rollback</a>.</p>
 <p><strong>Security engineer</strong>: reviewing trust boundaries and threats: read <a href="05-security/">05-security.md</a>, <a href="02-architecture/#24-tier-4--ephemeral-worker-pod">02-architecture.md §2.4</a> (worker isolation), <a href="03-api-contracts/#32-github-app-credentials-secret-schema">03-api-contracts.md §3.2</a> (credentials), and <a href="appendix-b-worker-isolation/">Appendix B</a> (runtime hardening).</p>
 <p><strong>Tenant team</strong>: authoring RunnerGroup configs: read <a href="../getting-started/">Getting Started</a>, <a href="03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md §3.1</a> (CustomResourceDefinition schemas), and <a href="appendix-e-capacity-planning/">Appendix E</a> (sizing guidance).</p>

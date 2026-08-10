@@ -2643,9 +2643,8 @@
 
 <h1 id="q170--kubernetes-events-for-job-lifecycle">Q170 — Kubernetes Events for job lifecycle<a class="headerlink" href="#q170--kubernetes-events-for-job-lifecycle" title="Permanent link">&para;</a></h1>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Emit Kubernetes Events on the four key AGC job-lifecycle transitions that today surface
-only via metrics/conditions, so operators get event-based incident visibility
-(<code>kubectl describe</code>, event watchers). Mirror the reaper's existing EventRecorder usage.</p>
+<p>Emit Kubernetes Events on the four key AGC job-lifecycle transitions that today surface only via metrics/conditions, so operators get event-based incident visibility (<code>kubectl describe</code>, event watchers).
+Mirror the reaper's existing EventRecorder usage.</p>
 <h2 id="transitions-covered-confirmed-against-the-code">Transitions covered (confirmed against the code)<a class="headerlink" href="#transitions-covered-confirmed-against-the-code" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2704,23 +2703,23 @@ only via metrics/conditions, so operators get event-based incident visibility
 <p>Reasons mirror the existing Prometheus metric names so operators can correlate events with metrics.
 All emit on the <strong>owner</strong> (RunnerGroup/RunnerSet) — same object the reaper uses; the message names the pod/run.</p>
 <h2 id="mechanism-mirror-the-existing-conditionch-back-channel">Mechanism (mirror the existing <code>conditionCh</code> back-channel)<a class="headerlink" href="#mechanism-mirror-the-existing-conditionch-back-channel" title="Permanent link">&para;</a></h2>
-<p>The transition sites run in listener/provisioner goroutines, which do not hold the live
-owner object that the EventRecorder needs. Reuse the established condition-channel pattern:</p>
+<p>The transition sites run in listener/provisioner goroutines, which do not hold the live owner object that the EventRecorder needs.
+Reuse the established condition-channel pattern:</p>
 <ul>
-<li><code>listener.EventRecorder</code> interface (next to <code>ConditionUpdater</code>): <code>Event(namespace, name, eventtype, reason, action, note string)</code>. Non-blocking.</li>
+<li><code>listener.EventRecorder</code> interface (next to <code>ConditionUpdater</code>): <code>Event(namespace, name, eventtype, reason, action, note string)</code>.
+  Non-blocking.</li>
 <li><code>listener.Config.Events</code> carries it for the listener path; <code>recordEvent(cfg, ...)</code> helper mirrors <code>setCondition</code>.</li>
 <li>Provisioner path routes per-job via the <code>Target</code> seam: new <code>Target.RecordEvent(...)</code> method.</li>
 <li><code>runnerGroupTarget</code> (v1) routes via new <code>Provisioner.Events</code> field.</li>
 <li><code>runnerSetTarget</code> (v2) routes via a new <code>events</code> field captured from the reconciler.</li>
-<li>Controllers (<code>controller</code> package, shared): <code>eventRecord</code> struct + <code>channelEventRecorder</code> (in <code>runner_shared.go</code>); each reconciler gains an <code>eventCh</code> (256-buf, like <code>conditionCh</code>) and a <code>drainEvents</code> that records matching events on the live object via the existing <code>recordEvent(obj, ...)</code> and re-enqueues others. Drained each Reconcile right after <code>drainConditions</code>.</li>
+<li>Controllers (<code>controller</code> package, shared): <code>eventRecord</code> struct + <code>channelEventRecorder</code> (in <code>runner_shared.go</code>); each reconciler gains an <code>eventCh</code> (256-buf, like <code>conditionCh</code>) and a <code>drainEvents</code> that records matching events on the live object via the existing <code>recordEvent(obj, ...)</code> and re-enqueues others.
+  Drained each Reconcile right after <code>drainConditions</code>.</li>
 </ul>
-<p>The provisioner is shared across v1/v2, so per-job Target routing (not a single shared
-sink) is what sends each event to the correct owner's channel.</p>
+<p>The provisioner is shared across v1/v2, so per-job Target routing (not a single shared sink) is what sends each event to the correct owner's channel.</p>
 <h2 id="no-spam">No-spam<a class="headerlink" href="#no-spam" title="Permanent link">&para;</a></h2>
-<p>Events are pushed once per transition (failed acquire, non-retriable session failure, budget
-exhaustion) and consumed once by the drain — never per reconcile. The k8s event recorder
-additionally aggregates identical (reason+message+object) events with a count. Events are
-recorded on the owner's next reconcile (pod-watch / baseline recheck drives it), best-effort.</p>
+<p>Events are pushed once per transition (failed acquire, non-retriable session failure, budget exhaustion) and consumed once by the drain — never per reconcile.
+The k8s event recorder additionally aggregates identical (reason+message+object) events with a count.
+Events are recorded on the owner's next reconcile (pod-watch / baseline recheck drives it), best-effort.</p>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <ul>
 <li>listener: fake EventRecorder asserts acquisition-failure + session-failure events.</li>

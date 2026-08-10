@@ -2642,33 +2642,19 @@
 
 
 <h1 id="q201--workload-identity-agc-provisioning--vault-kind-e2e">Q201 — Workload-identity AGC provisioning + Vault kind e2e<a class="headerlink" href="#q201--workload-identity-agc-provisioning--vault-kind-e2e" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> complete the no-PEM delegation path (Q197) end to end so a
-<code>credentials.type: WorkloadIdentity</code> gateway actually provisions and authenticates
-to GitHub, instead of being admitted-but-failed-closed.</p>
-<p><strong>Approach:</strong> (1) GMC stamps the signer config env + a kubelet-projected
-ServiceAccount-token volume on the workload-identity AGC Deployment (no GitHub App
-Secret mount); (2) AGC <code>main.go</code> branches on the credential type and builds the
-<code>githubapp/vaultsigner</code>-backed token provider (the Q197 interface, wired end to
-end); (3) an in-cluster test-Vault kind e2e exercises the live no-PEM round-trip.</p>
-<p>This is the deferred follow-up named in Q197 (PR #383) and in
-<a href="../../../design/05-security/#57-workload-identity-the-no-pem-delegation-model">05-security.md §5.7</a>.
-The API shape, the <code>githubapp.Signer</code> interface, the <code>pemSigner</code> refactor, and the
-<code>vaultsigner</code> implementation already shipped and are unit-tested in Q197 — this PR
-consumes them.</p>
+<p><strong>Goal:</strong> complete the no-PEM delegation path (Q197) end to end so a <code>credentials.type: WorkloadIdentity</code> gateway actually provisions and authenticates to GitHub, instead of being admitted-but-failed-closed.</p>
+<p><strong>Approach:</strong> (1) GMC stamps the signer config env + a kubelet-projected ServiceAccount-token volume on the workload-identity AGC Deployment (no GitHub App Secret mount); (2) AGC <code>main.go</code> branches on the credential type and builds the <code>githubapp/vaultsigner</code>-backed token provider (the Q197 interface, wired end to end); (3) an in-cluster test-Vault kind e2e exercises the live no-PEM round-trip.</p>
+<p>This is the deferred follow-up named in Q197 (PR #383) and in <a href="../../../design/05-security/#57-workload-identity-the-no-pem-delegation-model">05-security.md §5.7</a>.
+The API shape, the <code>githubapp.Signer</code> interface, the <code>pemSigner</code> refactor, and the <code>vaultsigner</code> implementation already shipped and are unit-tested in Q197 — this PR consumes them.</p>
 <h2 id="security-invariants-non-negotiable">Security invariants (non-negotiable)<a class="headerlink" href="#security-invariants-non-negotiable" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>No App private key in the cluster, ever.</strong> The workload-identity AGC mounts no
-  GitHub App Secret. Its only credential is the kubelet-projected ServiceAccount
-  token (audience-scoped to Vault, minted by the kubelet, not stored in a Secret),
-  read fresh from disk at each Vault login.</li>
-<li><strong>No secret in env/logs/process args.</strong> <code>appId</code>/<code>installationId</code>/Vault address +
-  mounts/role are non-secret <em>configuration</em> and travel as env (mirroring the
-  existing AGC env contract). The projected token and the Vault client token are
-  file/response-body only — never env, never logged.</li>
-<li><strong>Secure-by-default unchanged.</strong> <code>githubApp</code> (possession model) stays the
-  default. The Vault address is HTTPS-by-default in the AGC; a plaintext address is
-  permitted only under the existing dev/test signal (<code>STUB_AUTH_URL</code> set), exactly
-  as the GitHub token-exchange base URL already is. Production GMCs never set it.</li>
+<li><strong>No App private key in the cluster, ever.</strong> The workload-identity AGC mounts no GitHub App Secret.
+  Its only credential is the kubelet-projected ServiceAccount token (audience-scoped to Vault, minted by the kubelet, not stored in a Secret), read fresh from disk at each Vault login.</li>
+<li><strong>No secret in env/logs/process args.</strong> <code>appId</code>/<code>installationId</code>/Vault address + mounts/role are non-secret <em>configuration</em> and travel as env (mirroring the existing AGC env contract).
+  The projected token and the Vault client token are file/response-body only — never env, never logged.</li>
+<li><strong>Secure-by-default unchanged.</strong> <code>githubApp</code> (possession model) stays the default.
+  The Vault address is HTTPS-by-default in the AGC; a plaintext address is permitted only under the existing dev/test signal (<code>STUB_AUTH_URL</code> set), exactly as the GitHub token-exchange base URL already is.
+  Production GMCs never set it.</li>
 </ul>
 <h2 id="the-credential-wiring-contract-gmc--agc">The credential-wiring contract (GMC → AGC)<a class="headerlink" href="#the-credential-wiring-contract-gmc--agc" title="Permanent link">&para;</a></h2>
 <p>The GMC threads the credential method to the AGC via env (config, never secrets):</p>
@@ -2728,73 +2714,40 @@ consumes them.</p>
 </tr>
 </tbody>
 </table>
-<p>The GMC stamps a <strong>projected ServiceAccount token volume</strong> on the workload-identity
-AGC pod: audience <code>vault</code>, short expiry (kubelet auto-rotates), mounted read-only at
-<code>/var/run/secrets/actions-gateway/vault-token/token</code>. The AGC's existing
-ServiceAccount (<code>&lt;ag&gt;-agc</code>) is the in-cluster identity; the operator binds it to a
-Vault Kubernetes-auth role out of band (the "Vault role binding"). The audience is a
-fixed <code>vault</code> for the MVP — see Future work.</p>
-<p>The AGC's GitHub App credential Secret mount is <strong>omitted entirely</strong> for workload
-identity (no Secret exists), and the <code>actions-gateway/github-app-secret</code> rollout
-annotation is dropped.</p>
+<p>The GMC stamps a <strong>projected ServiceAccount token volume</strong> on the workload-identity AGC pod: audience <code>vault</code>, short expiry (kubelet auto-rotates), mounted read-only at <code>/var/run/secrets/actions-gateway/vault-token/token</code>.
+The AGC's existing ServiceAccount (<code>&lt;ag&gt;-agc</code>) is the in-cluster identity; the operator binds it to a Vault Kubernetes-auth role out of band (the "Vault role binding").
+The audience is a fixed <code>vault</code> for the MVP — see Future work.</p>
+<p>The AGC's GitHub App credential Secret mount is <strong>omitted entirely</strong> for workload identity (no Secret exists), and the <code>actions-gateway/github-app-secret</code> rollout annotation is dropped.</p>
 <h2 id="scope-of-this-pr">Scope of THIS PR<a class="headerlink" href="#scope-of-this-pr" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>GMC provisioning</strong> (<code>builder.go</code>, <code>actionsgateway_v2_builder.go</code>,
-   <code>actionsgateway_v2_controller.go</code>): branch the AGC Deployment build on credential
-   type; stamp the signer env + projected token volume; remove the
-   <code>WorkloadIdentityProvisioningPending</code> fail-closed branch so workload-identity
-   gateways provision and reach Ready.</li>
-<li><strong>AGC consumption</strong> (<code>cmd/agc/main.go</code>): branch on <code>CREDENTIAL_TYPE</code>; build the
-   <code>vaultsigner.Signer</code> + <code>NewInstallationTokenProviderWithSigner</code>. Extract a
-   testable <code>buildTokenProvider</code> so the env→provider wiring is unit-covered without
-   a live Vault.</li>
+<li><strong>GMC provisioning</strong> (<code>builder.go</code>, <code>actionsgateway_v2_builder.go</code>, <code>actionsgateway_v2_controller.go</code>): branch the AGC Deployment build on credential type; stamp the signer env + projected token volume; remove the <code>WorkloadIdentityProvisioningPending</code> fail-closed branch so workload-identity gateways provision and reach Ready.</li>
+<li><strong>AGC consumption</strong> (<code>cmd/agc/main.go</code>): branch on <code>CREDENTIAL_TYPE</code>; build the <code>vaultsigner.Signer</code> + <code>NewInstallationTokenProviderWithSigner</code>.
+   Extract a testable <code>buildTokenProvider</code> so the env→provider wiring is unit-covered without a live Vault.</li>
 <li><strong>Tests:</strong></li>
-<li>GMC unit (<code>actionsgateway_v2_test.go</code>): workload-identity AGC Deployment has
-     the signer env + projected token volume, mounts no GitHub App Secret, drops the
-     rollout annotation.</li>
-<li>GMC envtest (<code>integration/v2_actionsgateway_test.go</code>): a workload-identity
-     gateway with <strong>no</strong> App Secret provisions and goes Ready (no
-     <code>CredentialUnavailable</code>).</li>
-<li>AGC unit (<code>cmd/agc</code>): <code>buildTokenProvider</code> builds a Vault-backed provider from
-     the workload-identity env and rejects a plaintext Vault address without the
-     dev/test opt-in. The vaultsigner-against-mock-transit coverage already lives in
-     <code>githubapp/vaultsigner</code> (Q197); a provider-level no-PEM-chain test confirms
-     sign→assemble→token end to end against an httptest Vault + GitHub.</li>
-<li><strong>kind e2e</strong> (<code>cmd/gmc/test/e2e/vault_workload_identity_test.go</code>): deploy an
-     in-cluster <strong>test</strong> Vault (dev mode, root token, transit + RSA key + k8s auth +
-     a role bound to the AGC SA), create a <code>WorkloadIdentity</code> gateway, assert it
-     reaches Ready and runs a job against fakegithub — the live no-PEM round-trip.
+<li>GMC unit (<code>actionsgateway_v2_test.go</code>): workload-identity AGC Deployment has the signer env + projected token volume, mounts no GitHub App Secret, drops the rollout annotation.</li>
+<li>GMC envtest (<code>integration/v2_actionsgateway_test.go</code>): a workload-identity gateway with <strong>no</strong> App Secret provisions and goes Ready (no <code>CredentialUnavailable</code>).</li>
+<li>AGC unit (<code>cmd/agc</code>): <code>buildTokenProvider</code> builds a Vault-backed provider from the workload-identity env and rejects a plaintext Vault address without the dev/test opt-in.
+     The vaultsigner-against-mock-transit coverage already lives in <code>githubapp/vaultsigner</code> (Q197); a provider-level no-PEM-chain test confirms sign→assemble→token end to end against an httptest Vault + GitHub.</li>
+<li><strong>kind e2e</strong> (<code>cmd/gmc/test/e2e/vault_workload_identity_test.go</code>): deploy an in-cluster <strong>test</strong> Vault (dev mode, root token, transit + RSA key + k8s auth + a role bound to the AGC SA), create a <code>WorkloadIdentity</code> gateway, assert it reaches Ready and runs a job against fakegithub — the live no-PEM round-trip.
      Runs in CI's e2e gate (kindnet); no local kind run in this session (repo policy).</li>
-<li><strong>Docs:</strong> 05-security §5.7 (flip the "lands in a follow-up (Q201)" note to
-   implemented), tenant-onboarding (operator Vault setup + the CNI egress caveat),
-   this plan, STATUS (remove Q201 row, isolated commit).</li>
+<li><strong>Docs:</strong> 05-security §5.7 (flip the "lands in a follow-up (Q201)" note to implemented), tenant-onboarding (operator Vault setup + the CNI egress caveat), this plan, STATUS (remove Q201 row, isolated commit).</li>
 </ol>
 <h2 id="test-vault-e2e-no-real-credentials">Test Vault (e2e, no real credentials)<a class="headerlink" href="#test-vault-e2e-no-real-credentials" title="Permanent link">&para;</a></h2>
-<p>The e2e stands up Vault in <strong>dev mode</strong> in <code>e2e-infra</code> (root token <code>root</code>, in-memory,
-HTTP listener). Configuration via <code>kubectl exec … vault …</code>:</p>
+<p>The e2e stands up Vault in <strong>dev mode</strong> in <code>e2e-infra</code> (root token <code>root</code>, in-memory, HTTP listener).
+Configuration via <code>kubectl exec … vault …</code>:</p>
 <ul>
 <li><code>vault secrets enable transit</code> + <code>vault write -f transit/keys/agc type=rsa-2048</code></li>
-<li><code>vault auth enable kubernetes</code> + <code>vault write auth/kubernetes/config
-  kubernetes_host=https://kubernetes.default.svc</code> (Vault auto-detects its in-cluster
-  reviewer token + CA; its SA is bound to <code>system:auth-delegator</code>)</li>
-<li>a policy granting <code>update</code> on <code>transit/sign/agc</code>, and a role
-  (<code>bound_service_account_names=&lt;ag&gt;-agc</code>, <code>bound_service_account_namespaces=&lt;ns&gt;</code>,
-  <code>audience=vault</code>)</li>
+<li><code>vault auth enable kubernetes</code> + <code>vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc</code> (Vault auto-detects its in-cluster reviewer token + CA; its SA is bound to <code>system:auth-delegator</code>)</li>
+<li>a policy granting <code>update</code> on <code>transit/sign/agc</code>, and a role (<code>bound_service_account_names=&lt;ag&gt;-agc</code>, <code>bound_service_account_namespaces=&lt;ns&gt;</code>, <code>audience=vault</code>)</li>
 </ul>
-<p>fakegithub accepts any App JWT (it never verifies the signature), so the e2e proves
-the <em>path</em> — the AGC has no PEM yet still mints a token — not GitHub's crypto check.
-The Vault transit key is dev-only and never leaves the test cluster. The AGC reaches
-the dev Vault over HTTP, allowed by the dev/test <code>STUB_AUTH_URL</code> signal the e2e
-already sets.</p>
+<p>fakegithub accepts any App JWT (it never verifies the signature), so the e2e proves the <em>path</em> — the AGC has no PEM yet still mints a token — not GitHub's crypto check.
+The Vault transit key is dev-only and never leaves the test cluster.
+The AGC reaches the dev Vault over HTTP, allowed by the dev/test <code>STUB_AUTH_URL</code> signal the e2e already sets.</p>
 <h2 id="known-limitation--follow-up">Known limitation / follow-up<a class="headerlink" href="#known-limitation--follow-up" title="Permanent link">&para;</a></h2>
-<p><strong>AGC→Vault NetworkPolicy egress.</strong> The per-tenant AGC NetworkPolicy default-denies
-egress except DNS + GitHub CIDRs + kube API (+ proxy). Vault is a new destination the
-API cannot express as a NetworkPolicy peer (Vault's address is an opaque URL, not a
-selectable namespace/pod or a managed CIDR). On the e2e's kindnet CNI egress is not
-enforced, so the round-trip validates; on a policy-enforcing CNI (Calico, the
-production recommendation) the operator must add an egress allowance for their Vault
-endpoint. Flagged as a Queue follow-up for first-class Vault egress (a <code>vaultPeer</code>
-selector or CIDR on the AGC policy) and documented in tenant-onboarding.</p>
+<p><strong>AGC→Vault NetworkPolicy egress.</strong> The per-tenant AGC NetworkPolicy default-denies egress except DNS + GitHub CIDRs + kube API (+ proxy).
+Vault is a new destination the API cannot express as a NetworkPolicy peer (Vault's address is an opaque URL, not a selectable namespace/pod or a managed CIDR).
+On the e2e's kindnet CNI egress is not enforced, so the round-trip validates; on a policy-enforcing CNI (Calico, the production recommendation) the operator must add an egress allowance for their Vault endpoint.
+Flagged as a Queue follow-up for first-class Vault egress (a <code>vaultPeer</code> selector or CIDR on the AGC policy) and documented in tenant-onboarding.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li>[x] GMC: branch AGC Deployment on credential type (signer env + projected token, no Secret mount)</li>
@@ -2803,9 +2756,7 @@ selector or CIDR on the AGC policy) and documented in tenant-onboarding.</p>
 <li>[x] GMC unit + envtest; AGC unit (provider build); no-PEM chain covered by Q197 vaultsigner tests</li>
 <li>[x] kind e2e (in-cluster test Vault, no-PEM round-trip) + CI image mirror</li>
 <li>[x] docs (05-security §5.7, tenant-onboarding, this plan); Queue follow-up for Vault egress</li>
-<li>[x] <code>make check</code> green; e2e gate must RUN in CI (verify after PR opens)
-</content>
-</invoke></li>
+<li>[x] <code>make check</code> green; e2e gate must RUN in CI (verify after PR opens) </content> </invoke></li>
 </ul>
 
 

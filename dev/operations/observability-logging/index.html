@@ -2798,14 +2798,24 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
-<p>Part of the <a href="../observability/">Observability</a> guide. See also: <a href="../observability-metrics/">Metrics reference</a> · <a href="../observability-metrics-access/">Accessing metrics</a> · <a href="../observability-alerting/">Alerting &amp; SLOs</a> · <a href="../observability-dashboards/">Grafana dashboards</a>.</p>
+<p>Part of the <a href="../observability/">Observability</a> guide.
+See also: <a href="../observability-metrics/">Metrics reference</a> · <a href="../observability-metrics-access/">Accessing metrics</a> · <a href="../observability-alerting/">Alerting &amp; SLOs</a> · <a href="../observability-dashboards/">Grafana dashboards</a>.</p>
 <h2 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h2>
-<p>All four components — the GMC, the per-tenant AGC, the egress proxy, and the worker wrapper — emit <strong>structured JSON logs at info level by default</strong>, one JSON shape per process stream, ready to ship to a log aggregator (Loki, Elasticsearch, CloudWatch, etc.) without reformatting. No flag needs to be set in production; the JSON default is what the GMC-provisioned Deployments run with.</p>
-<p>The controllers (GMC, AGC) take controller-runtime's standard <code>zap</code> flags. For local development, pass <code>--zap-devel</code> to switch to human-readable console logs at debug level, or use the finer-grained <code>--zap-encoder</code> / <code>--zap-log-level</code> flags (run a controller with <code>--help</code> for the full set). Application code paths that log through the Go standard library's <code>log/slog</code> are bridged onto the same <code>zap</code> logger, so <code>--zap-log-level</code> governs <strong>every</strong> line a controller emits — not just the manager's own — and the whole process shares one JSON schema.</p>
+<p>All four components — the GMC, the per-tenant AGC, the egress proxy, and the worker wrapper — emit <strong>structured JSON logs at info level by default</strong>, one JSON shape per process stream, ready to ship to a log aggregator (Loki, Elasticsearch, CloudWatch, etc.) without reformatting.
+No flag needs to be set in production; the JSON default is what the GMC-provisioned Deployments run with.</p>
+<p>The controllers (GMC, AGC) take controller-runtime's standard <code>zap</code> flags.
+For local development, pass <code>--zap-devel</code> to switch to human-readable console logs at debug level, or use the finer-grained <code>--zap-encoder</code> / <code>--zap-log-level</code> flags (run a controller with <code>--help</code> for the full set).
+Application code paths that log through the Go standard library's <code>log/slog</code> are bridged onto the same <code>zap</code> logger, so <code>--zap-log-level</code> governs <strong>every</strong> line a controller emits — not just the manager's own — and the whole process shares one JSON schema.</p>
 <p>The egress proxy and the worker wrapper are not controllers; they read their level from the <code>LOG_LEVEL</code> environment variable (<code>info</code> | <code>debug</code>, default <code>info</code>).</p>
-<p><strong>Per-tenant log level (GMC-managed AGCs).</strong> For a tenant the GMC provisions, you do not set <code>--zap-log-level</code> or <code>LOG_LEVEL</code> by hand. Set <code>spec.logLevel</code> (<code>info</code> | <code>debug</code>, default <code>info</code>) on the <code>ActionsGateway</code> CR and the GMC threads it to <strong>both</strong> the AGC and that tenant's egress proxy as <code>LOG_LEVEL</code> (the AGC honors <code>LOG_LEVEL</code> unless an explicit <code>--zap-log-level</code> flag is passed; the GMC never stamps one). Flipping it rolls the AGC and proxy Deployments — it is a rolling restart, not a hot reload. On the v2 (<code>actions-gateway.com</code>) API the knob is split per kind: <code>ActionsGateway.spec.logLevel</code> covers the AGC, and each proxy pool carries its own <code>EgressProxy.spec.logLevel</code> (same values, default, and rolling-restart semantics). See <a href="../tenant-onboarding/#per-tenant-log-level">tenant onboarding — per-tenant log level</a>.</p>
+<p><strong>Per-tenant log level (GMC-managed AGCs).</strong> For a tenant the GMC provisions, you do not set <code>--zap-log-level</code> or <code>LOG_LEVEL</code> by hand.
+Set <code>spec.logLevel</code> (<code>info</code> | <code>debug</code>, default <code>info</code>) on the <code>ActionsGateway</code> CR and the GMC threads it to <strong>both</strong> the AGC and that tenant's egress proxy as <code>LOG_LEVEL</code> (the AGC honors <code>LOG_LEVEL</code> unless an explicit <code>--zap-log-level</code> flag is passed; the GMC never stamps one).
+Flipping it rolls the AGC and proxy Deployments — it is a rolling restart, not a hot reload.
+On the v2 (<code>actions-gateway.com</code>) API the knob is split per kind: <code>ActionsGateway.spec.logLevel</code> covers the AGC, and each proxy pool carries its own <code>EgressProxy.spec.logLevel</code> (same values, default, and rolling-restart semantics).
+See <a href="../tenant-onboarding/#per-tenant-log-level">tenant onboarding — per-tenant log level</a>.</p>
 <h3 id="debug-diagnostics-for-otherwise-silent-paths">Debug diagnostics for otherwise-silent paths<a class="headerlink" href="#debug-diagnostics-for-otherwise-silent-paths" title="Permanent link">&para;</a></h3>
-<p>Several paths that can stall a tenant or a session emit <strong>debug</strong>-level diagnostics (suppressed at the default info level). Raise the component to debug to surface them — for a GMC-managed tenant, set <code>spec.logLevel: debug</code> on the <code>ActionsGateway</code> (the GMC threads it to the AGC and proxy); for a standalone controller, <code>--zap-log-level=debug</code>; for a standalone proxy/worker, <code>LOG_LEVEL=debug</code>. Useful <code>grep</code> anchors:</p>
+<p>Several paths that can stall a tenant or a session emit <strong>debug</strong>-level diagnostics (suppressed at the default info level).
+Raise the component to debug to surface them — for a GMC-managed tenant, set <code>spec.logLevel: debug</code> on the <code>ActionsGateway</code> (the GMC threads it to the AGC and proxy); for a standalone controller, <code>--zap-log-level=debug</code>; for a standalone proxy/worker, <code>LOG_LEVEL=debug</code>.
+Useful <code>grep</code> anchors:</p>
 <table>
 <thead>
 <tr>
@@ -2842,60 +2852,43 @@
 </tr>
 </tbody>
 </table>
-<p>These per-session/per-job lines are at <strong>debug</strong> by design: at thousands of
-concurrent sessions they dominate log volume, so the default info stream carries
-only the operator-relevant lifecycle events (concurrency-ceiling holds, quota
-and eviction retries, errors). Raise the AGC to debug — <code>spec.logLevel: debug</code>
-for a GMC-managed tenant, or <code>--zap-log-level=debug</code> standalone — to follow an
-individual job.</p>
-<p><strong>Correlation fields.</strong> AGC log lines carry structured fields that let you follow
-one session→job→pod through a log pipeline. Filter on <code>namespace</code> and <code>group</code>
-(RunnerGroup name) to scope to a tenant's RunnerGroup; <code>agentIndex</code> and
-<code>sessionId</code> identify a single listener goroutine and its current broker session
-(the <code>sessionId</code> is rebound when a session is healed or an agent recycled, so it
-always names the live session); <code>podName</code> appears on the provisioner lines for an
-acquired job's worker pod. On the scale-set tier those lines also carry <code>jobID</code> and
-<code>runID</code>: one workflow run has many jobs, so the pair is what separates sibling jobs of
-one run from a redelivered assignment for a single job.</p>
+<p>These per-session/per-job lines are at <strong>debug</strong> by design: at thousands of concurrent sessions they dominate log volume, so the default info stream carries only the operator-relevant lifecycle events (concurrency-ceiling holds, quota and eviction retries, errors).
+Raise the AGC to debug — <code>spec.logLevel: debug</code> for a GMC-managed tenant, or <code>--zap-log-level=debug</code> standalone — to follow an individual job.</p>
+<p><strong>Correlation fields.</strong> AGC log lines carry structured fields that let you follow one session→job→pod through a log pipeline.
+Filter on <code>namespace</code> and <code>group</code> (RunnerGroup name) to scope to a tenant's RunnerGroup; <code>agentIndex</code> and <code>sessionId</code> identify a single listener goroutine and its current broker session (the <code>sessionId</code> is rebound when a session is healed or an agent recycled, so it always names the live session); <code>podName</code> appears on the provisioner lines for an acquired job's worker pod.
+On the scale-set tier those lines also carry <code>jobID</code> and <code>runID</code>: one workflow run has many jobs, so the pair is what separates sibling jobs of one run from a redelivered assignment for a single job.</p>
 <p>Admission <strong>rejections</strong> (reserved-namespace, cross-namespace <code>gitHubAppRef</code>, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at <strong>info</strong> — they need no debug flag — as <code>ActionsGateway admission denied</code> with the <code>operation</code>, <code>namespace</code>, <code>name</code>, and <code>reason</code> fields, giving an audit trail of denied attempts.</p>
-<p><strong>API server warnings</strong> (e.g. the <a href="../upgrade/#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v1alpha1</code></a> and <a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v2alpha1</code></a> deprecation warnings) are logged at info, <strong>deduplicated to one line per unique message per process</strong> in both controllers. The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.</p>
+<p><strong>API server warnings</strong> (e.g. the <a href="../upgrade/#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v1alpha1</code></a> and <a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v2alpha1</code></a> deprecation warnings) are logged at info, <strong>deduplicated to one line per unique message per process</strong> in both controllers.
+The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.</p>
 <h3 id="what-never-appears-in-logs">What never appears in logs<a class="headerlink" href="#what-never-appears-in-logs" title="Permanent link">&para;</a></h3>
-<p>Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in
-front: <strong>credential material is redacted before a log line is emitted</strong>, not by
-the log stack afterward.</p>
-<p>Every GitHub response body — broker and runner-scale-set protocol alike — passes
-through a single redaction path before it can reach a log line or an error
-message. It replaces:</p>
+<p>Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in front: <strong>credential material is redacted before a log line is emitted</strong>, not by the log stack afterward.</p>
+<p>Every GitHub response body — broker and runner-scale-set protocol alike — passes through a single redaction path before it can reach a log line or an error message.
+It replaces:</p>
 <ul>
-<li>JSON credential fields (<code>access_token</code>, <code>refresh_token</code>, <code>token</code>,
-  <code>encoded_jit_config</code>, <code>client_secret</code>, <code>private_key</code>, <code>password</code>, <code>secret</code>);</li>
-<li>GitHub token literals by prefix (<code>ghp_</code>, <code>gho_</code>, <code>ghu_</code>, <code>ghs_</code>, <code>ghr_</code>,
-  <code>github_pat_</code>), JSON Web Tokens, and long base64 blobs anywhere in the body.</li>
+<li>JSON credential fields (<code>access_token</code>, <code>refresh_token</code>, <code>token</code>, <code>encoded_jit_config</code>, <code>client_secret</code>, <code>private_key</code>, <code>password</code>, <code>secret</code>);</li>
+<li>GitHub token literals by prefix (<code>ghp_</code>, <code>gho_</code>, <code>ghu_</code>, <code>ghs_</code>, <code>ghr_</code>, <code>github_pat_</code>), JSON Web Tokens, and long base64 blobs anywhere in the body.</li>
 </ul>
-<p>Redaction runs <strong>before truncation</strong>, so a shortened body cannot cut a secret
-loose from the field name that would have matched it, and it is <strong>not
-level-dependent</strong> — <code>spec.logLevel: debug</code> surfaces more lifecycle lines, never
-unsanitized bodies.</p>
-<p>The redaction complements how credentials are handled upstream of logging:
-GitHub App keys and JIT configs are mounted as files, never environment
-variables (env leaks into <code>kubectl describe</code>, process listings, and child
-processes), and both controllers bypass their informer caches for Secret bodies
-so key material is not cache-resident. See
-<a href="../../design/05-security/">security §5 — credential handling</a>.</p>
+<p>Redaction runs <strong>before truncation</strong>, so a shortened body cannot cut a secret loose from the field name that would have matched it, and it is <strong>not level-dependent</strong> — <code>spec.logLevel: debug</code> surfaces more lifecycle lines, never unsanitized bodies.</p>
+<p>The redaction complements how credentials are handled upstream of logging: GitHub App keys and JIT configs are mounted as files, never environment variables (env leaks into <code>kubectl describe</code>, process listings, and child processes), and both controllers bypass their informer caches for Secret bodies so key material is not cache-resident.
+See <a href="../../design/05-security/">security §5 — credential handling</a>.</p>
 <hr />
 <h2 id="distributed-tracing-agc">Distributed Tracing (AGC)<a class="headerlink" href="#distributed-tracing-agc" title="Permanent link">&para;</a></h2>
 <p>The per-tenant AGC emits <strong>OpenTelemetry traces</strong> for its two hottest operational paths:</p>
 <ul>
-<li><strong><code>RunnerGroup.Reconcile</code></strong> — one span per reconcile, attributed with <code>k8s.namespace.name</code> / <code>gateway.runnergroup.name</code>. Errors set the span status.</li>
-<li><strong><code>Provisioner.provision</code></strong> — one span per acquired job (the job-to-pod path), with child spans <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code>, and <code>waitForCompletion</code>. The root span carries <code>k8s.namespace.name</code>, <code>gateway.owner.name</code>, <code>gateway.plan.id</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, <code>gateway.priority_class</code>, and the final <code>gateway.pod.phase</code> / <code>gateway.pod.reason</code> / <code>gateway.provision.duration_seconds</code>. <code>waitForCompletion</code> is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.</li>
+<li><strong><code>RunnerGroup.Reconcile</code></strong> — one span per reconcile, attributed with <code>k8s.namespace.name</code> / <code>gateway.runnergroup.name</code>.
+  Errors set the span status.</li>
+<li><strong><code>Provisioner.provision</code></strong> — one span per acquired job (the job-to-pod path), with child spans <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code>, and <code>waitForCompletion</code>.
+  The root span carries <code>k8s.namespace.name</code>, <code>gateway.owner.name</code>, <code>gateway.plan.id</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, <code>gateway.priority_class</code>, and the final <code>gateway.pod.phase</code> / <code>gateway.pod.reason</code> / <code>gateway.provision.duration_seconds</code>. <code>waitForCompletion</code> is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.</li>
 </ul>
 <blockquote>
-<p>Span attribute names follow the <a href="https://opentelemetry.io/docs/specs/semconv/">OpenTelemetry semantic conventions</a>: Kubernetes-native attributes use the <code>k8s.*</code> keys (<code>k8s.namespace.name</code>, <code>k8s.pod.name</code>); project-specific attributes are namespaced under <code>gateway.</code>. These keys were renamed in the Q205 naming audit — see <a href="../observability-metrics/#breaking-observability-changes-q205">Breaking observability changes</a> for the old→new mapping.</p>
+<p>Span attribute names follow the <a href="https://opentelemetry.io/docs/specs/semconv/">OpenTelemetry semantic conventions</a>: Kubernetes-native attributes use the <code>k8s.*</code> keys (<code>k8s.namespace.name</code>, <code>k8s.pod.name</code>); project-specific attributes are namespaced under <code>gateway.</code>.
+These keys were renamed in the Q205 naming audit — see <a href="../observability-metrics/#breaking-observability-changes-q205">Breaking observability changes</a> for the old→new mapping.</p>
 </blockquote>
 <p>Each reconcile and each job provision is its own root trace — there is no inbound trace context to continue, and the per-job spans run on the listener goroutines independently of the reconcile that started the pool.</p>
 <p><strong>Tracing is opt-in and off by default.</strong> With no OTLP endpoint configured the AGC installs no exporter and the spans are no-ops (near-zero cost), so production runs without tracing unless you point it at a collector.</p>
 <h3 id="enabling-tracing">Enabling tracing<a class="headerlink" href="#enabling-tracing" title="Permanent link">&para;</a></h3>
-<p>The AGC reads the <strong>standard OpenTelemetry SDK environment variables</strong> — there is no bespoke flag. Tracing turns on as soon as an OTLP endpoint is configured:</p>
+<p>The AGC reads the <strong>standard OpenTelemetry SDK environment variables</strong> — there is no bespoke flag.
+Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <table>
 <thead>
 <tr>
@@ -2979,8 +2972,11 @@ so key material is not cache-resident. See
 </tbody>
 </table>
 <blockquote>
-<p><strong>No auth headers via env.</strong> <code>spec.tracing</code> deliberately has no field for <code>OTEL_EXPORTER_OTLP_HEADERS</code>: those can carry bearer tokens, and this project keeps secrets out of environment variables (they leak into process listings and child processes). Authenticate the collector at the <strong>network layer</strong> instead — an in-cluster collector reached over the tenant's egress path, mutual TLS, or a service mesh.</p>
-<p><strong>Testing-only passthrough.</strong> The <code>AGC_EXTRA_*</code> mechanism (<code>--allow-agc-extra-env</code> on the GMC, then <code>AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…</code> in the GMC pod env) still exists but is gated for tests only and not for production use. When both are present, <code>AGC_EXTRA_*</code> wins (it is appended last). Prefer <code>spec.tracing</code>.</p>
+<p><strong>No auth headers via env.</strong> <code>spec.tracing</code> deliberately has no field for <code>OTEL_EXPORTER_OTLP_HEADERS</code>: those can carry bearer tokens, and this project keeps secrets out of environment variables (they leak into process listings and child processes).
+Authenticate the collector at the <strong>network layer</strong> instead — an in-cluster collector reached over the tenant's egress path, mutual TLS, or a service mesh.</p>
+<p><strong>Testing-only passthrough.</strong> The <code>AGC_EXTRA_*</code> mechanism (<code>--allow-agc-extra-env</code> on the GMC, then <code>AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…</code> in the GMC pod env) still exists but is gated for tests only and not for production use.
+When both are present, <code>AGC_EXTRA_*</code> wins (it is appended last).
+Prefer <code>spec.tracing</code>.</p>
 </blockquote>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>

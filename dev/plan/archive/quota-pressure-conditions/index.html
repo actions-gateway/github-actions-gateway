@@ -2670,33 +2670,24 @@
 
 
 <h1 id="quota-pressure-conditions--metrics-q82">Quota-pressure conditions &amp; metrics (Q82)<a class="headerlink" href="#quota-pressure-conditions--metrics-q82" title="Permanent link">&para;</a></h1>
-<p>Surface namespace-<code>ResourceQuota</code> pressure on the proxy pool and on worker pods
-as standard Kubernetes status conditions <strong>and</strong> controller-exported Prometheus
-metrics, so operators can both see the problem in <code>kubectl describe</code> and alert on
-it without depending on kube-state-metrics scraping CRD conditions.</p>
-<p>Resolves E8 (k8s-best-practices audit). Replaces the original Q82 admission-webhook
-sketch — see <a href="../../../design/05-security/">05-security.md</a> and the rationale below.</p>
+<p>Surface namespace-<code>ResourceQuota</code> pressure on the proxy pool and on worker pods as standard Kubernetes status conditions <strong>and</strong> controller-exported Prometheus metrics, so operators can both see the problem in <code>kubectl describe</code> and alert on it without depending on kube-state-metrics scraping CRD conditions.</p>
+<p>Resolves E8 (k8s-best-practices audit).
+Replaces the original Q82 admission-webhook sketch — see <a href="../../../design/05-security/">05-security.md</a> and the rationale below.</p>
 <h2 id="why-not-a-webhook--runtime-gate">Why not a webhook / runtime gate<a class="headerlink" href="#why-not-a-webhook--runtime-gate" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Apply-time webhook</strong> rejecting <code>proxy.maxReplicas &gt; quota</code>: rejects existing
-  tenants on re-apply, couples provisioning to a webhook failure mode, and can't
-  see live quota <em>usage</em> at admission. The quota is the real enforcement point.</li>
-<li><strong>Runtime gate (à la Q59)</strong>: Q59 gates <em>job acquisition</em> on the configured
-  worker ceiling to avoid claimed-then-dropped jobs. The proxy claims no external
-  work — over-configured <code>maxReplicas</code> just runs fewer replicas (degraded, not
-  dropping). No equivalent harm, so no gate is warranted.</li>
+<li><strong>Apply-time webhook</strong> rejecting <code>proxy.maxReplicas &gt; quota</code>: rejects existing tenants on re-apply, couples provisioning to a webhook failure mode, and can't see live quota <em>usage</em> at admission.
+  The quota is the real enforcement point.</li>
+<li><strong>Runtime gate (à la Q59)</strong>: Q59 gates <em>job acquisition</em> on the configured worker ceiling to avoid claimed-then-dropped jobs.
+  The proxy claims no external work — over-configured <code>maxReplicas</code> just runs fewer replicas (degraded, not dropping).
+  No equivalent harm, so no gate is warranted.</li>
 </ul>
 <p>Conditions + metrics are the chosen low-coupling surface.</p>
 <h2 id="relationship-to-q59">Relationship to Q59<a class="headerlink" href="#relationship-to-q59" title="Permanent link">&para;</a></h2>
-<p>Q59 (<code>jobs_admission_rejected_total</code>, in-memory reservation gate) binds on the
-<strong>configured</strong> <code>maxWorkers</code>/<code>priorityTiers</code> ceiling — normal backpressure. These
-conditions bind on the <strong>namespace ResourceQuota</strong> — the silent failure mode Q59
-does not speak to (quota tighter than <code>maxWorkers</code> ⇒ Q59 gate never fires but pod
-creates are quota-rejected). Orthogonal; the worker conditions deliberately do
-<strong>not</strong> re-expose configured-ceiling backpressure.</p>
+<p>Q59 (<code>jobs_admission_rejected_total</code>, in-memory reservation gate) binds on the <strong>configured</strong> <code>maxWorkers</code>/<code>priorityTiers</code> ceiling — normal backpressure.
+These conditions bind on the <strong>namespace ResourceQuota</strong> — the silent failure mode Q59 does not speak to (quota tighter than <code>maxWorkers</code> ⇒ Q59 gate never fires but pod creates are quota-rejected).
+Orthogonal; the worker conditions deliberately do <strong>not</strong> re-expose configured-ceiling backpressure.</p>
 <h2 id="convention-the-reusable-pattern">Convention (the reusable pattern)<a class="headerlink" href="#convention-the-reusable-pattern" title="Permanent link">&para;</a></h2>
-<p>Two-tier ladder per scarce resource, abnormal-is-<code>True</code> polarity, mutually
-exclusive (the error forces the warning <code>False</code>):</p>
+<p>Two-tier ladder per scarce resource, abnormal-is-<code>True</code> polarity, mutually exclusive (the error forces the warning <code>False</code>):</p>
 <table>
 <thead>
 <tr>
@@ -2721,41 +2712,27 @@ exclusive (the error forces the warning <code>False</code>):</p>
 </tr>
 </tbody>
 </table>
-<p>Every alertable condition is mirrored by a controller-exported gauge (value
-<code>1</code>/<code>0</code>), labelled by namespace + object name, so alerting needs no
-kube-state-metrics. The gauge series is deleted when the owning object is torn
-down (no stale series).</p>
+<p>Every alertable condition is mirrored by a controller-exported gauge (value <code>1</code>/<code>0</code>), labelled by namespace + object name, so alerting needs no kube-state-metrics.
+The gauge series is deleted when the owning object is torn down (no stale series).</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="proxy-actionsgateway--gmc--replaces-the-static-proxyquotapressure">Proxy (ActionsGateway / GMC) — replaces the static <code>ProxyQuotaPressure</code><a class="headerlink" href="#proxy-actionsgateway--gmc--replaces-the-static-proxyquotapressure" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>ProxyQuotaPressure</code> (warn): <code>(maxReplicas − currentReplicas) × per-replica</code>
-  demand exceeds <code>hard − used</code> on any namespace quota.</li>
-<li><code>ProxyQuotaExceeded</code> (error): the proxy Deployment reports <code>ReplicaFailure=True</code>
-  with an "exceeded quota" message (creates being rejected now).</li>
-<li>Metrics: <code>actions_gateway_proxy_quota_pressure</code>,
-  <code>actions_gateway_proxy_quota_exceeded</code> (gauge, <code>{namespace,name}</code>), via a
-  scrape-time collector reading ActionsGateway <code>.status.conditions</code>.</li>
+<li><code>ProxyQuotaPressure</code> (warn): <code>(maxReplicas − currentReplicas) × per-replica</code> demand exceeds <code>hard − used</code> on any namespace quota.</li>
+<li><code>ProxyQuotaExceeded</code> (error): the proxy Deployment reports <code>ReplicaFailure=True</code> with an "exceeded quota" message (creates being rejected now).</li>
+<li>Metrics: <code>actions_gateway_proxy_quota_pressure</code>, <code>actions_gateway_proxy_quota_exceeded</code> (gauge, <code>{namespace,name}</code>), via a scrape-time collector reading ActionsGateway <code>.status.conditions</code>.</li>
 </ul>
 <h3 id="worker-runnergroup--agc">Worker (RunnerGroup / AGC)<a class="headerlink" href="#worker-runnergroup--agc" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>WorkerQuotaPressure</code> (warn): <code>(ceiling − currentActiveWorkers) × per-worker</code>
-  demand exceeds <code>hard − used</code>, where ceiling = <code>maxWorkers</code> / max priorityTier
-  threshold (<code>provisioner.WorkerCeiling</code>, the same value Q59's gate enforces).</li>
-<li><code>WorkerQuotaExceeded</code> (error): the quota can't admit even one more worker pod
-  (<code>hard − used</code> &lt; a single worker's footprint) — derived from live quota state,
-  no provisioner tracker. The observed-rejection complement is the existing
-  <code>actions_gateway_quota_retries_exhausted_total</code> counter.</li>
-<li>Metrics: <code>actions_gateway_worker_quota_pressure</code>,
-  <code>actions_gateway_worker_quota_exceeded</code> (gauge, <code>{namespace,runner_group}</code>),
-  via a scrape-time collector reading RunnerGroup <code>.status.conditions</code>.</li>
+<li><code>WorkerQuotaPressure</code> (warn): <code>(ceiling − currentActiveWorkers) × per-worker</code> demand exceeds <code>hard − used</code>, where ceiling = <code>maxWorkers</code> / max priorityTier threshold (<code>provisioner.WorkerCeiling</code>, the same value Q59's gate enforces).</li>
+<li><code>WorkerQuotaExceeded</code> (error): the quota can't admit even one more worker pod (<code>hard − used</code> &lt; a single worker's footprint) — derived from live quota state, no provisioner tracker.
+  The observed-rejection complement is the existing <code>actions_gateway_quota_retries_exhausted_total</code> counter.</li>
+<li>Metrics: <code>actions_gateway_worker_quota_pressure</code>, <code>actions_gateway_worker_quota_exceeded</code> (gauge, <code>{namespace,runner_group}</code>), via a scrape-time collector reading RunnerGroup <code>.status.conditions</code>.</li>
 <li>New AGC read-only <code>resourcequotas</code> RBAC (agc-tenant-role fragment + marker).</li>
 </ul>
 <h2 id="docs-to-update">Docs to update<a class="headerlink" href="#docs-to-update" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Design: <code>03-api-contracts.md</code> (condition lists), <code>05-security.md</code> (threat model
-  rows + RBAC posture).</li>
-<li>Operator: <code>troubleshooting.md</code>, <code>tenant-onboarding.md</code>, <code>observability.md</code>
-  (alert examples on the new metrics), <code>runbook.md</code>.</li>
+<li>Design: <code>03-api-contracts.md</code> (condition lists), <code>05-security.md</code> (threat model rows + RBAC posture).</li>
+<li>Operator: <code>troubleshooting.md</code>, <code>tenant-onboarding.md</code>, <code>observability.md</code> (alert examples on the new metrics), <code>runbook.md</code>.</li>
 <li>Convention: <code>docs/development/kubernetes-conventions.md</code>.</li>
 </ul>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>

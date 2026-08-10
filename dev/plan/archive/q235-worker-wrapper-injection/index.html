@@ -2704,128 +2704,82 @@
 
 <h1 id="worker-wrapper-injection-q235">Worker wrapper injection (Q235)<a class="headerlink" href="#worker-wrapper-injection-q235" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status:</strong> ✅ Done — merged in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/437">#437</a>; operator-doc flips followed up. Was Q235 (now closed/removed from the Queue).</p>
-<p><strong>Shipped:</strong> wrapper <code>install</code> subcommand + PATH-independent <code>Runner.Worker</code>
-resolution; provisioner injection (image-volume + initContainer paths, command
-override); AGC <code>WRAPPER_IMAGE</code>/<code>WRAPPER_DELIVERY</code> wiring + version detection; GMC
-forwarding + chart <code>wrapper</code> image slot; <code>Dockerfile.wrapper</code> + bake target +
-<code>publish.yml</code> + security-scan legs; unit tests (both delivery paths + <code>installSelf</code>);
-<strong>e2e wired through <code>WRAPPER_IMG</code>, validated on kindnet + Calico</strong> (the
-image-volume path on the v1.35 kind cluster); <code>release.md</code> + the operator-doc
-"default works" / ARC "drop-in" flips.</p>
-<p><strong>Residual:</strong> a live GKE + real-GitHub dogfood re-validate with <code>workerImage</code>
-unset — gold-standard extra confidence, folded into Q224
-(it happens naturally when production CI routes to the default image).</p>
+<p><strong>Status:</strong> ✅ Done — merged in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/437">#437</a>; operator-doc flips followed up.
+Was Q235 (now closed/removed from the Queue).</p>
+<p><strong>Shipped:</strong> wrapper <code>install</code> subcommand + PATH-independent <code>Runner.Worker</code> resolution; provisioner injection (image-volume + initContainer paths, command override); AGC <code>WRAPPER_IMAGE</code>/<code>WRAPPER_DELIVERY</code> wiring + version detection; GMC forwarding + chart <code>wrapper</code> image slot; <code>Dockerfile.wrapper</code> + bake target + <code>publish.yml</code> + security-scan legs; unit tests (both delivery paths + <code>installSelf</code>); <strong>e2e wired through <code>WRAPPER_IMG</code>, validated on kindnet + Calico</strong> (the image-volume path on the v1.35 kind cluster); <code>release.md</code> + the operator-doc "default works" / ARC "drop-in" flips.</p>
+<p><strong>Residual:</strong> a live GKE + real-GitHub dogfood re-validate with <code>workerImage</code> unset — gold-standard extra confidence, folded into Q224 (it happens naturally when production CI routes to the default image).</p>
 </blockquote>
 <h2 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h2>
-<p>GAG worker pods need GAG's <code>cmd/worker</code> <strong>wrapper</strong> as the container entrypoint:
-it reads the job payload from <code>PAYLOAD_SECRET_PATH</code>, materializes the runner
-config from the <code>jitconfig</code>, and spawns <code>Runner.Worker</code> over anonymous pipes
-(see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a>). Today the wrapper is baked
-into a first-party image (<code>ghcr.io/actions-gateway/worker</code> = upstream
-<code>actions-runner</code> + the wrapper as <code>ENTRYPOINT</code>), and <code>names.DefaultWorkerImage</code>
-is the <strong>bare upstream</strong> <code>actions-runner</code>, which has no wrapper. Consequences:</p>
+<p>GAG worker pods need GAG's <code>cmd/worker</code> <strong>wrapper</strong> as the container entrypoint: it reads the job payload from <code>PAYLOAD_SECRET_PATH</code>, materializes the runner config from the <code>jitconfig</code>, and spawns <code>Runner.Worker</code> over anonymous pipes (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a>).
+Today the wrapper is baked into a first-party image (<code>ghcr.io/actions-gateway/worker</code> = upstream <code>actions-runner</code> + the wrapper as <code>ENTRYPOINT</code>), and <code>names.DefaultWorkerImage</code> is the <strong>bare upstream</strong> <code>actions-runner</code>, which has no wrapper.
+Consequences:</p>
 <ul>
-<li>A <strong>default</strong> install (no per-tenant <code>workerImage</code>) provisions worker pods that
-  silently no-op every job — the pod exits <code>Completed</code> with empty logs and the
-  AGC's <code>RenewJob</code> 401s. Tests never caught it: the e2e suite always passes the
-  wrapper image explicitly. Found live in <a href="../../../STATUS/">Q224</a>.</li>
-<li>An <strong>ARC migrator's</strong> custom/slim image (<code>FROM actions-runner</code> + tooling) is not
-  drop-in: it has <code>Runner.Worker</code> but the stock entrypoint, so it must be rebuilt
-  with the wrapper layered on.</li>
+<li>A <strong>default</strong> install (no per-tenant <code>workerImage</code>) provisions worker pods that silently no-op every job — the pod exits <code>Completed</code> with empty logs and the AGC's <code>RenewJob</code> 401s.
+  Tests never caught it: the e2e suite always passes the wrapper image explicitly.
+  Found live in <a href="../../../STATUS/">Q224</a>.</li>
+<li>An <strong>ARC migrator's</strong> custom/slim image (<code>FROM actions-runner</code> + tooling) is not drop-in: it has <code>Runner.Worker</code> but the stock entrypoint, so it must be rebuilt with the wrapper layered on.</li>
 </ul>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Inject the wrapper into the worker pod at runtime so the <strong>runner container is the
-upstream (or any tenant) image, unmodified</strong>. A default install runs jobs against
-upstream <code>actions-runner</code>; any <code>actions/runner</code>-derived image works without a
-rebuild (ARC bring-your-image parity). GAG hosts only a ~2 MB wrapper artifact;
-the 518 MB runner is the upstream image (GitHub-hosted, widely mirrored).</p>
+<p>Inject the wrapper into the worker pod at runtime so the <strong>runner container is the upstream (or any tenant) image, unmodified</strong>.
+A default install runs jobs against upstream <code>actions-runner</code>; any <code>actions/runner</code>-derived image works without a rebuild (ARC bring-your-image parity).
+GAG hosts only a ~2 MB wrapper artifact; the 518 MB runner is the upstream image (GitHub-hosted, widely mirrored).</p>
 <h2 id="design">Design<a class="headerlink" href="#design" title="Permanent link">&para;</a></h2>
 <h3 id="worker-pod-shape">Worker pod shape<a class="headerlink" href="#worker-pod-shape" title="Permanent link">&para;</a></h3>
-<p>The provisioner (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>)
-builds every worker pod with:</p>
+<p>The provisioner (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>) builds every worker pod with:</p>
 <ul>
-<li><strong>runner container</strong> = <code>resolveWorkerImage(spec)</code> (default upstream, or per-tenant
-  <code>workerImage</code>), with:</li>
+<li><strong>runner container</strong> = <code>resolveWorkerImage(spec)</code> (default upstream, or per-tenant <code>workerImage</code>), with:</li>
 <li><code>command: ["/&lt;wrapperdir&gt;/wrapper"]</code> — overrides the image entrypoint.</li>
-<li>env <code>RUNNER_HOME_DIR</code> (default <code>/home/runner</code>) and <code>PATH=/home/runner/bin:$PATH</code>
-    so the wrapper's <code>exec.LookPath("Runner.Worker")</code> resolves in the upstream image.</li>
+<li>env <code>RUNNER_HOME_DIR</code> (default <code>/home/runner</code>) and <code>PATH=/home/runner/bin:$PATH</code> so the wrapper's <code>exec.LookPath("Runner.Worker")</code> resolves in the upstream image.</li>
 <li>the existing job-payload Secret mount + proxy-CA mount (unchanged).</li>
 <li><strong>wrapper delivery</strong> (auto-selected, see below):</li>
-<li><strong>OCI image volume</strong> (K8s ≥ 1.33): an <code>image:</code> <code>VolumeSource</code> mounting the
-    wrapper image read-only at <code>/&lt;wrapperdir&gt;</code>. No init container, no copy — lowest
-    per-job latency.</li>
-<li><strong>initContainer fallback</strong> (&lt; 1.33): a tiny <code>emptyDir</code> + an init container from
-    the wrapper image that <code>cp</code>s <code>/wrapper</code> into it.</li>
+<li><strong>OCI image volume</strong> (K8s ≥ 1.33): an <code>image:</code> <code>VolumeSource</code> mounting the wrapper image read-only at <code>/&lt;wrapperdir&gt;</code>.
+    No init container, no copy — lowest per-job latency.</li>
+<li><strong>initContainer fallback</strong> (&lt; 1.33): a tiny <code>emptyDir</code> + an init container from the wrapper image that <code>cp</code>s <code>/wrapper</code> into it.</li>
 </ul>
-<p><code>applySecurityDefaults</code> already hardens <code>spec.InitContainers</code> and gap-fills
-pod-level <code>runAsNonRoot</code> + <code>runAsUser: 1001</code> + seccomp, so the scratch wrapper init
-runs non-root as 1001 and the shared <code>emptyDir</code> is 1001↔1001. The image volume is
-read-only and PSA-compatible by KEP-4639 design (verify under <code>restricted</code> in e2e).</p>
+<p><code>applySecurityDefaults</code> already hardens <code>spec.InitContainers</code> and gap-fills pod-level <code>runAsNonRoot</code> + <code>runAsUser: 1001</code> + seccomp, so the scratch wrapper init runs non-root as 1001 and the shared <code>emptyDir</code> is 1001↔1001.
+The image volume is read-only and PSA-compatible by KEP-4639 design (verify under <code>restricted</code> in e2e).</p>
 <h3 id="delivery-selection">Delivery selection<a class="headerlink" href="#delivery-selection" title="Permanent link">&para;</a></h3>
-<p>The AGC gains a discovery client (from the controller-runtime <code>rest.Config</code>) and
-queries <code>ServerVersion()</code> once at startup. Selection precedence:</p>
+<p>The AGC gains a discovery client (from the controller-runtime <code>rest.Config</code>) and queries <code>ServerVersion()</code> once at startup.
+Selection precedence:</p>
 <ol>
 <li><code>WRAPPER_DELIVERY</code> env (<code>auto</code> | <code>imagevolume</code> | <code>init</code>), default <code>auto</code>.</li>
-<li><code>auto</code> → image volume when server minor ≥ 33 (the <code>ImageVolume</code> feature gate is
-   beta/default-on there), else init container.</li>
+<li><code>auto</code> → image volume when server minor ≥ 33 (the <code>ImageVolume</code> feature gate is beta/default-on there), else init container.</li>
 </ol>
-<p>Image volumes being unavailable on a ≥1.33 cluster with the gate explicitly
-disabled is handled by the <code>WRAPPER_DELIVERY=init</code> override (documented). A
-runtime probe-and-fallback is out of scope for v1.</p>
+<p>Image volumes being unavailable on a ≥1.33 cluster with the gate explicitly disabled is handled by the <code>WRAPPER_DELIVERY=init</code> override (documented).
+A runtime probe-and-fallback is out of scope for v1.</p>
 <h3 id="wrapper-artifact">Wrapper artifact<a class="headerlink" href="#wrapper-artifact" title="Permanent link">&para;</a></h3>
 <ul>
-<li>New build target: <code>cmd/worker</code> packaged as a <strong><code>FROM scratch</code></strong> image
-  <code>ghcr.io/actions-gateway/wrapper</code> (~2 MB, just the static binary). Added to
-  <code>publish.yml</code> (build + cosign sign + SBOM + provenance), digest-pinned the same
-  way as the other images.</li>
-<li><code>names.DefaultWorkerImage</code> <strong>stays</strong> the upstream <code>actions-runner</code> digest — the
-  wrapper is now injected, so the default runs jobs.</li>
-<li>The existing 518 MB <code>ghcr.io/actions-gateway/worker</code> image is <strong>kept for now</strong> as
-  an optional batteries-included image; retiring it is a follow-up (Phase 2).</li>
+<li>New build target: <code>cmd/worker</code> packaged as a <strong><code>FROM scratch</code></strong> image <code>ghcr.io/actions-gateway/wrapper</code> (~2 MB, just the static binary).
+  Added to <code>publish.yml</code> (build + cosign sign + SBOM + provenance), digest-pinned the same way as the other images.</li>
+<li><code>names.DefaultWorkerImage</code> <strong>stays</strong> the upstream <code>actions-runner</code> digest — the wrapper is now injected, so the default runs jobs.</li>
+<li>The existing 518 MB <code>ghcr.io/actions-gateway/worker</code> image is <strong>kept for now</strong> as an optional batteries-included image; retiring it is a follow-up (Phase 2).</li>
 </ul>
 <h3 id="chart--gmc-wiring">Chart / GMC wiring<a class="headerlink" href="#chart--gmc-wiring" title="Permanent link">&para;</a></h3>
 <ul>
-<li>New <code>wrapper:</code> image block in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/values.yaml">values.yaml</a>
-  (<code>repository</code>/<code>tag</code>/<code>digest</code>), digest-pinned like <code>agc</code>/<code>proxy</code>.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/deployment.yaml">deployment.yaml</a> sets
-  <code>WRAPPER_IMAGE</code> on the GMC via the <code>actions-gateway.image</code> helper.</li>
-<li>The GMC propagates <code>WRAPPER_IMAGE</code> (+ optional <code>WRAPPER_DELIVERY</code>) into each AGC
-  Deployment it provisions; the AGC reads them and the provisioner uses
-  <code>WRAPPER_IMAGE</code> as the init/volume source.</li>
+<li>New <code>wrapper:</code> image block in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/values.yaml">values.yaml</a> (<code>repository</code>/<code>tag</code>/<code>digest</code>), digest-pinned like <code>agc</code>/<code>proxy</code>.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/deployment.yaml">deployment.yaml</a> sets <code>WRAPPER_IMAGE</code> on the GMC via the <code>actions-gateway.image</code> helper.</li>
+<li>The GMC propagates <code>WRAPPER_IMAGE</code> (+ optional <code>WRAPPER_DELIVERY</code>) into each AGC Deployment it provisions; the AGC reads them and the provisioner uses <code>WRAPPER_IMAGE</code> as the init/volume source.</li>
 </ul>
 <h2 id="backward-compatibility">Backward compatibility<a class="headerlink" href="#backward-compatibility" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Existing <code>workerImage</code> pins — <strong>including the old full <code>worker</code> image</strong> — keep
-  working: the command override runs the injected wrapper, which finds
-  <code>Runner.Worker</code> in any <code>actions/runner</code>-derived image.</li>
-<li>DinD is unchanged: the wrapper replaces the entrypoint, so DinD stays a
-  <strong>sidecar</strong> + <code>securityProfile: privileged</code> (not the <code>actions-runner-dind</code>
-  bundled <code>dockerd</code>). Already documented in <code>migration-from-arc.md</code>.</li>
+<li>Existing <code>workerImage</code> pins — <strong>including the old full <code>worker</code> image</strong> — keep working: the command override runs the injected wrapper, which finds <code>Runner.Worker</code> in any <code>actions/runner</code>-derived image.</li>
+<li>DinD is unchanged: the wrapper replaces the entrypoint, so DinD stays a <strong>sidecar</strong> + <code>securityProfile: privileged</code> (not the <code>actions-runner-dind</code> bundled <code>dockerd</code>).
+  Already documented in <code>migration-from-arc.md</code>.</li>
 </ul>
 <h2 id="test-plan">Test plan<a class="headerlink" href="#test-plan" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/agc/internal/provisioner">provisioner</a>): image-volume path,
-  init-container path, command override, <code>RUNNER_HOME_DIR</code>/<code>PATH</code> env, init-container
-  hardening under <code>restricted</code>, and <code>WRAPPER_DELIVERY</code> selection (incl. version gate).</li>
-<li><strong>E2e</strong> (kind): a case that sets <code>WORKER_IMG</code> to the <strong>bare upstream</strong>
-  <code>actions-runner</code> (not the wrapper image) and asserts a job runs end-to-end —
-  the regression the unit tests can't cover. Run on both the ≥1.33 (image-volume)
-  and an init-fallback path.</li>
-<li><strong>Live</strong>: dogfood re-validate with <code>DefaultWorkerImage</code> = upstream + injection
-  (the <a href="../../../STATUS/">Q224</a> path), worker image <strong>unset</strong>.</li>
+<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/agc/internal/provisioner">provisioner</a>): image-volume path, init-container path, command override, <code>RUNNER_HOME_DIR</code>/<code>PATH</code> env, init-container hardening under <code>restricted</code>, and <code>WRAPPER_DELIVERY</code> selection (incl. version gate).</li>
+<li><strong>E2e</strong> (kind): a case that sets <code>WORKER_IMG</code> to the <strong>bare upstream</strong> <code>actions-runner</code> (not the wrapper image) and asserts a job runs end-to-end — the regression the unit tests can't cover.
+  Run on both the ≥1.33 (image-volume) and an init-fallback path.</li>
+<li><strong>Live</strong>: dogfood re-validate with <code>DefaultWorkerImage</code> = upstream + injection (the <a href="../../../STATUS/">Q224</a> path), worker image <strong>unset</strong>.</li>
 </ul>
 <h2 id="rollout">Rollout<a class="headerlink" href="#rollout" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>This plan:</strong> wrapper image + injection + default-on + tests + docs.</li>
-<li><strong>Phase 2 (separate item):</strong> retire the 518 MB <code>worker</code> image; flip the
-   <code>migration-from-arc.md</code> story to "point <code>workerImage</code> at your existing ARC image,
-   no rebuild."</li>
+<li><strong>Phase 2 (separate item):</strong> retire the 518 MB <code>worker</code> image; flip the <code>migration-from-arc.md</code> story to "point <code>workerImage</code> at your existing ARC image, no rebuild."</li>
 </ol>
 <h2 id="docs-to-update">Docs to update<a class="headerlink" href="#docs-to-update" title="Permanent link">&para;</a></h2>
-<p><code>tenant-onboarding.md</code> (default now runs on upstream; injection explained),
-<code>migration-from-arc.md</code> (drop-in once shipped), <code>release.md</code> (new <code>wrapper</code> image +
-the <code>DefaultWorkerImage</code> note), <code>values.yaml</code> comments.</p>
+<p><code>tenant-onboarding.md</code> (default now runs on upstream; injection explained), <code>migration-from-arc.md</code> (drop-in once shipped), <code>release.md</code> (new <code>wrapper</code> image + the <code>DefaultWorkerImage</code> note), <code>values.yaml</code> comments.</p>
 
 
 

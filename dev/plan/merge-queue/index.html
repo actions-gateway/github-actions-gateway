@@ -2631,16 +2631,10 @@
 
 
 <h1 id="merge-queue-kill-the-freshness-invalidation-loop">Merge queue: kill the freshness-invalidation loop<a class="headerlink" href="#merge-queue-kill-the-freshness-invalidation-loop" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> stop paying a full heavy-gate re-run (e2e ~9–30 min × two CNI lanes)
-every time <code>main</code> moves under an in-flight PR, without weakening the
-nothing-red-reaches-<code>main</code> guarantee.</p>
-<p><strong>Approach:</strong> adopt GitHub's merge queue on <code>main</code>. The queue constructs each
-candidate merge result and runs the required checks on <em>that</em> (the
-<code>merge_group</code> event), so the jointly-red hazard the manual freshness rule
-guards against is checked by machine, once per batch, instead of by every
-session rebasing and re-running CI on every push. Decision approved
-2026-08-03: adopt, and keep e2e per-PR (sessions keep early signal while
-iterating; the queue run is the authoritative combined check).</p>
+<p><strong>Goal:</strong> stop paying a full heavy-gate re-run (e2e ~9–30 min × two CNI lanes) every time <code>main</code> moves under an in-flight PR, without weakening the nothing-red-reaches-<code>main</code> guarantee.</p>
+<p><strong>Approach:</strong> adopt GitHub's merge queue on <code>main</code>.
+The queue constructs each candidate merge result and runs the required checks on <em>that</em> (the <code>merge_group</code> event), so the jointly-red hazard the manual freshness rule guards against is checked by machine, once per batch, instead of by every session rebasing and re-running CI on every push.
+Decision approved 2026-08-03: adopt, and keep e2e per-PR (sessions keep early signal while iterating; the queue run is the authoritative combined check).</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2667,56 +2661,31 @@ iterating; the queue run is the authoritative combined check).</p>
 <h2 id="the-measurement-2026-08-03">The measurement (2026-08-03)<a class="headerlink" href="#the-measurement-2026-08-03" title="Permanent link">&para;</a></h2>
 <p>Taken from the last 30 days of CI runs, merged PRs, and <code>git log</code> contention:</p>
 <ul>
-<li>26–34 PRs merge per day: <code>main</code> advances roughly every 25–30 min during
-  active hours.</li>
-<li>The e2e gate averages ~9 min on success (13.2 min on a representative
-  executed run, 7.6 min of it <code>make e2e</code> proper; max observed 30 min).
-  <code>e2e-gate</code> and <code>e2e-calico-gate</code> are both required checks.</li>
-<li>18 of 51 recent branches needed ≥2 e2e runs (worst: 5); 10 of the last 50
-  e2e runs were cancelled mid-flight by a superseding push. A third or more of
-  e2e compute is redo, not first-run validation.</li>
-<li>Contention is process files, not code: <code>docs/STATUS.md</code> appears in 542 of
-  702 commits (77%), <code>docs/plan/README.md</code> in 22%. No component source file is
-  in the top-20 contention list, which also answers "should we split the
-  monorepo": no, the conflict surface wouldn't move.</li>
-<li>The ruleset's <code>strict_required_status_checks_policy</code> is already <code>false</code>; the
-  freshness requirement is process (CONTRIBUTING.md's re-check rule), not
-  GitHub. The queue replaces the process rule's mechanism, not a GitHub
-  setting.</li>
+<li>26–34 PRs merge per day: <code>main</code> advances roughly every 25–30 min during active hours.</li>
+<li>The e2e gate averages ~9 min on success (13.2 min on a representative executed run, 7.6 min of it <code>make e2e</code> proper; max observed 30 min). <code>e2e-gate</code> and <code>e2e-calico-gate</code> are both required checks.</li>
+<li>18 of 51 recent branches needed ≥2 e2e runs (worst: 5); 10 of the last 50 e2e runs were cancelled mid-flight by a superseding push.
+  A third or more of e2e compute is redo, not first-run validation.</li>
+<li>Contention is process files, not code: <code>docs/STATUS.md</code> appears in 542 of 702 commits (77%), <code>docs/plan/README.md</code> in 22%.
+  No component source file is in the top-20 contention list, which also answers "should we split the monorepo": no, the conflict surface wouldn't move.</li>
+<li>The ruleset's <code>strict_required_status_checks_policy</code> is already <code>false</code>; the freshness requirement is process (CONTRIBUTING.md's re-check rule), not GitHub.
+  The queue replaces the process rule's mechanism, not a GitHub setting.</li>
 </ul>
-<p>The constraint is therefore not e2e duration but the multiplier on it: every
-merge invalidates every in-flight green PR, and re-validation costs a full
-gate cycle whose duration matches the inter-merge interval, so re-runs
-cascade. Amortizing one combined run per batch removes the quadratic term.</p>
+<p>The constraint is therefore not e2e duration but the multiplier on it: every merge invalidates every in-flight green PR, and re-validation costs a full gate cycle whose duration matches the inter-merge interval, so re-runs cascade.
+Amortizing one combined run per batch removes the quadratic term.</p>
 <h2 id="phase-1-merge_group-triggers-this-pr">Phase 1: <code>merge_group</code> triggers (this PR)<a class="headerlink" href="#phase-1-merge_group-triggers-this-pr" title="Permanent link">&para;</a></h2>
-<p>All nine workflows behind required checks gain a <code>merge_group:</code> trigger:
-<code>e2e-test</code>, <code>e2e-calico</code>, <code>integration-test</code>, <code>unit-test</code>, <code>license-notices</code>,
-<code>manifest-validate</code>, <code>plan-hygiene</code>, <code>security-scan</code>, <code>status-lint</code>.</p>
+<p>All nine workflows behind required checks gain a <code>merge_group:</code> trigger: <code>e2e-test</code>, <code>e2e-calico</code>, <code>integration-test</code>, <code>unit-test</code>, <code>license-notices</code>, <code>manifest-validate</code>, <code>plan-hygiene</code>, <code>security-scan</code>, <code>status-lint</code>.</p>
 <p>Why this is the whole change:</p>
 <ul>
-<li>Every workflow already uses the always-trigger + internal <code>changes</code>
-  paths-filter + aggregate-gate pattern, so the gate contexts report on any
-  event the workflow triggers on.</li>
-<li>dorny/paths-filter v4 supports <code>merge_group</code> natively: <code>base</code>/<code>ref</code> default
-  to the event's commit hashes and detection runs via git against the
-  already-present checkout (verified against the v4 README). Docs-only queue
-  entries therefore stay cheap: the heavy legs skip exactly as they do on a
-  docs-only PR.</li>
-<li>Every heavy job's condition has the shape
-  <code>needs.changes.outputs.X == 'true' || push || workflow_dispatch</code>, so a
-  <code>merge_group</code> run takes the path-filtered branch, the desired behavior.</li>
-<li>Concurrency groups key on <code>github.ref</code>; merge-group refs
-  (<code>gh-readonly-queue/...</code>) are unique per queue entry, and
-  <code>cancel-in-progress</code> stays scoped to <code>pull_request</code>.</li>
-<li>status-lint's per-PR isolation check reads <code>github.event.pull_request</code>; it
-  is already gated <code>if: github.event_name == 'pull_request'</code> and simply skips
-  on the queue run (the PR event already enforced it).</li>
+<li>Every workflow already uses the always-trigger + internal <code>changes</code> paths-filter + aggregate-gate pattern, so the gate contexts report on any event the workflow triggers on.</li>
+<li>dorny/paths-filter v4 supports <code>merge_group</code> natively: <code>base</code>/<code>ref</code> default to the event's commit hashes and detection runs via git against the already-present checkout (verified against the v4 README).
+  Docs-only queue entries therefore stay cheap: the heavy legs skip exactly as they do on a docs-only PR.</li>
+<li>Every heavy job's condition has the shape <code>needs.changes.outputs.X == 'true' || push || workflow_dispatch</code>, so a <code>merge_group</code> run takes the path-filtered branch, the desired behavior.</li>
+<li>Concurrency groups key on <code>github.ref</code>; merge-group refs (<code>gh-readonly-queue/...</code>) are unique per queue entry, and <code>cancel-in-progress</code> stays scoped to <code>pull_request</code>.</li>
+<li>status-lint's per-PR isolation check reads <code>github.event.pull_request</code>; it is already gated <code>if: github.event_name == 'pull_request'</code> and simply skips on the queue run (the PR event already enforced it).</li>
 </ul>
 <h2 id="phase-2-activation-post-merge-ordering-matters">Phase 2: activation (post-merge, ordering matters)<a class="headerlink" href="#phase-2-activation-post-merge-ordering-matters" title="Permanent link">&para;</a></h2>
-<p>Enabling the queue before Phase 1 reaches <code>main</code> wedges every merge: the
-required checks would never report on <code>merge_group</code> refs. After Phase 1
-merges, add the rule to the existing <code>default-protect</code> ruleset (id
-17350763):</p>
+<p>Enabling the queue before Phase 1 reaches <code>main</code> wedges every merge: the required checks would never report on <code>merge_group</code> refs.
+After Phase 1 merges, add the rule to the existing <code>default-protect</code> ruleset (id 17350763):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>repos/actions-gateway/github-actions-gateway/rulesets/17350763<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--input<span class="w"> </span>tmp/ruleset.json
 </code></pre></div>
@@ -2735,62 +2704,30 @@ merges, add the rule to the existing <code>default-protect</code> ruleset (id
 <a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">}</span>
 </code></pre></div>
 <ul>
-<li><code>SQUASH</code> preserves the repo's squash-merge convention and satisfies the
-  ruleset's <code>required_linear_history</code>.</li>
-<li><code>min_entries_to_merge: 1</code> with a 5-minute wait lets batches form at the
-  observed merge rate (~2 PRs per 5-min window at peak) without stalling a
-  lone PR.</li>
-<li><code>check_response_timeout_minutes: 60</code> clears the worst observed e2e run
-  (30 min) with headroom for queue-time image-cache misses.</li>
+<li><code>SQUASH</code> preserves the repo's squash-merge convention and satisfies the ruleset's <code>required_linear_history</code>.</li>
+<li><code>min_entries_to_merge: 1</code> with a 5-minute wait lets batches form at the observed merge rate (~2 PRs per 5-min window at peak) without stalling a lone PR.</li>
+<li><code>check_response_timeout_minutes: 60</code> clears the worst observed e2e run (30 min) with headroom for queue-time image-cache misses.</li>
 </ul>
-<p>After activation, <code>gh pr merge --squash</code> enqueues instead of merging
-directly; a PR whose queue run fails is kicked back out with the failure on
-the PR, which is the self-heal signal pr-sentinel already reacts to.</p>
-<p>Rollback: delete the <code>merge_queue</code> rule from the ruleset; behavior reverts
-to direct merges and the process rules in CONTRIBUTING.md.</p>
+<p>After activation, <code>gh pr merge --squash</code> enqueues instead of merging directly; a PR whose queue run fails is kicked back out with the failure on the PR, which is the self-heal signal pr-sentinel already reacts to.</p>
+<p>Rollback: delete the <code>merge_queue</code> rule from the ruleset; behavior reverts to direct merges and the process rules in CONTRIBUTING.md.</p>
 <h2 id="phase-3-re-measure-then-decide">Phase 3: re-measure, then decide<a class="headerlink" href="#phase-3-re-measure-then-decide" title="Permanent link">&para;</a></h2>
-<p>Re-run the same measurements after ~1 week of queue operation (e2e runs per
-branch, cancelled-run fraction, merge latency). Candidates <em>if</em> the numbers
-say the constraint is still CI churn, recorded here so they aren't
-re-derived, not committed to:</p>
+<p>Re-run the same measurements after ~1 week of queue operation (e2e runs per branch, cancelled-run fraction, merge latency).
+Candidates <em>if</em> the numbers say the constraint is still CI churn, recorded here so they aren't re-derived, not committed to:</p>
 <ul>
-<li>Demote e2e from per-PR to merge-group-only (halves e2e volume again;
-  trade-off: sessions learn of an e2e failure only at queue time).</li>
-<li><code>docs/STATUS.md</code> contention (77% of commits) still forces manual conflict
-  resolution before a PR can enqueue; a per-item-file backlog format would
-  remove it structurally, but is a large format change touching the backlog
-  skill and lint, and only worth it if post-queue measurement shows it binding.</li>
-<li>GitHub Issues + a Projects board would also zero the conflicts, but trades
-  them for a sync problem: today a Queue row is deleted in the same PR that
-  ships the work (atomic with the code, reviewable in the diff, greppable in
-  one file, and the bare-Q-ID anchor fabric across docs and code depends on
-  it), while an issue close is a separate mutation that can drift from code
-  state. Priority ordering is also weaker through <code>gh</code> (Projects v2 positions
-  are drag-first, not CLI-first). Considered 2026-08-03; behind the same
-  re-measurement, and per-item files in-repo rank ahead of it because they
-  keep every property above.</li>
-<li>Splitting the STATUS.md edit out of a code PR into its own docs-only PR is
-  the cheap half of the same idea. The backlog merge driver is local-only
-  (<code>.gitattributes</code> maps <code>docs/STATUS.md</code> to <code>merge=backlog</code>; GitHub cannot
-  run custom drivers), so the queue builds candidates with plain 3-way and an
-  adjacent-row edit conflicts server-side even though it auto-resolves
-  locally. A combined PR kicked back that way re-runs its e2e on the fixup
-  push; a split status PR re-runs only the cheap path-filtered gates, and the
-  code PR stays queued. Cost: GitHub has no native PR dependency ordering, so
-  a completion row's deletion trails the code merge as a follow-up PR, with a
-  short window where the row is open and no PR covers it. Same re-measurement
-  decides; per-item files dominate this too, closing the conflict itself
-  rather than routing around it.</li>
-<li>The ordering gap above has a buildable fix, parked 2026-08-03 behind the
-  same re-measurement: a <code>pr-deps-gate</code> required check that reads
-  <code>Depends-on: #N</code> from the PR body, reports green when no dependency is
-  named, and red while any named PR is unmerged. The queue enforces the
-  sequencing for free, since a PR cannot enqueue until its required checks
-  pass; the one extra piece is a push-to-main workflow that re-requests the
-  check on open PRs whose dependencies just merged, because GitHub emits no
-  event to a dependent PR. This closes the no-covering-PR window (the status
-  PR is open, just unqueueable) and makes the split machine-enforced. Build
-  it only if the measured kickback rate says split PRs are worth having.</li>
+<li>Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time).</li>
+<li><code>docs/STATUS.md</code> contention (77% of commits) still forces manual conflict resolution before a PR can enqueue; a per-item-file backlog format would remove it structurally, but is a large format change touching the backlog skill and lint, and only worth it if post-queue measurement shows it binding.</li>
+<li>GitHub Issues + a Projects board would also zero the conflicts, but trades them for a sync problem: today a Queue row is deleted in the same PR that ships the work (atomic with the code, reviewable in the diff, greppable in one file, and the bare-Q-ID anchor fabric across docs and code depends on it), while an issue close is a separate mutation that can drift from code state.
+  Priority ordering is also weaker through <code>gh</code> (Projects v2 positions are drag-first, not CLI-first).
+  Considered 2026-08-03; behind the same re-measurement, and per-item files in-repo rank ahead of it because they keep every property above.</li>
+<li>Splitting the STATUS.md edit out of a code PR into its own docs-only PR is the cheap half of the same idea.
+  The backlog merge driver is local-only (<code>.gitattributes</code> maps <code>docs/STATUS.md</code> to <code>merge=backlog</code>; GitHub cannot run custom drivers), so the queue builds candidates with plain 3-way and an adjacent-row edit conflicts server-side even though it auto-resolves locally.
+  A combined PR kicked back that way re-runs its e2e on the fixup push; a split status PR re-runs only the cheap path-filtered gates, and the code PR stays queued.
+  Cost: GitHub has no native PR dependency ordering, so a completion row's deletion trails the code merge as a follow-up PR, with a short window where the row is open and no PR covers it.
+  Same re-measurement decides; per-item files dominate this too, closing the conflict itself rather than routing around it.</li>
+<li>The ordering gap above has a buildable fix, parked 2026-08-03 behind the same re-measurement: a <code>pr-deps-gate</code> required check that reads <code>Depends-on: #N</code> from the PR body, reports green when no dependency is named, and red while any named PR is unmerged.
+  The queue enforces the sequencing for free, since a PR cannot enqueue until its required checks pass; the one extra piece is a push-to-main workflow that re-requests the check on open PRs whose dependencies just merged, because GitHub emits no event to a dependent PR.
+  This closes the no-covering-PR window (the status PR is open, just unqueueable) and makes the split machine-enforced.
+  Build it only if the measured kickback rate says split PRs are worth having.</li>
 </ul>
 
 

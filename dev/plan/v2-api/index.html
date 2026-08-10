@@ -2887,129 +2887,82 @@
 
 <h1 id="v2-api-implementation-plan">v2 API implementation plan<a class="headerlink" href="#v2-api-implementation-plan" title="Permanent link">&para;</a></h1>
 <p><strong>Design source of truth:</strong> <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API Decomposition</a>.
-That appendix holds the <em>what</em> and <em>why</em> (the CRD set, the resolved decisions in
-§H.16, the precedent-grounded recommendations). This doc holds the <em>sequencing</em> —
-how the work is split into independently shippable milestones and in what order.</p>
-<p><strong>Goal.</strong> Replace the monolithic <code>v1alpha1</code> <code>ActionsGateway</code> + <code>RunnerGroup</code> API
-with a decomposed <code>v2alpha1</code> API (<code>actions-gateway.com</code> group) that enables large
-reusable pod templates, multiple gateways per namespace, and an optional/shared
-egress proxy — without breaking running <code>v1alpha1</code> tenants.</p>
-<p><strong>Approach.</strong> Serve <code>v1alpha1</code> and <code>v2alpha1</code> side by side (no in-place
-conversion — the split is a fan-out, see <a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>).
-Build v2 incrementally against the running v1, <strong>nouns before verbs</strong>, with a
-one-shot migration tool last. The group rename folds in for free: <code>v2alpha1</code>
-<em>is</em> <code>actions-gateway.com</code> from birth; <code>v1alpha1</code> keeps the old
-<code>actions-gateway.github.com</code> group until it is removed.</p>
+That appendix holds the <em>what</em> and <em>why</em> (the CRD set, the resolved decisions in §H.16, the precedent-grounded recommendations).
+This doc holds the <em>sequencing</em> — how the work is split into independently shippable milestones and in what order.</p>
+<p><strong>Goal.</strong> Replace the monolithic <code>v1alpha1</code> <code>ActionsGateway</code> + <code>RunnerGroup</code> API with a decomposed <code>v2alpha1</code> API (<code>actions-gateway.com</code> group) that enables large reusable pod templates, multiple gateways per namespace, and an optional/shared egress proxy — without breaking running <code>v1alpha1</code> tenants.</p>
+<p><strong>Approach.</strong> Serve <code>v1alpha1</code> and <code>v2alpha1</code> side by side (no in-place conversion — the split is a fan-out, see <a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>).
+Build v2 incrementally against the running v1, <strong>nouns before verbs</strong>, with a one-shot migration tool last.
+The group rename folds in for free: <code>v2alpha1</code> <em>is</em> <code>actions-gateway.com</code> from birth; <code>v1alpha1</code> keeps the old <code>actions-gateway.github.com</code> group until it is removed.</p>
 <h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>No behavior change.</strong> v2 re-shapes the API; runtime semantics (job
-  acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are
-  preserved. <code>v2alpha1</code> tracks v1 behavior wherever a field is unchanged.</li>
-<li><strong>No in-place v1→v2 conversion</strong> — the split is a tooled fan-out (M5), not a
-  conversion webhook.</li>
-<li><strong>Not the admin policy layer, worker-image allowlist, credentials union, or
-  cross-namespace sharing</strong> — all out of the <code>v2alpha1</code> scope (see below and
-  Appendix H §H.14/§H.15). The credentials union is now scheduled for the
-  <code>v2beta1</code> cut (<a href="../v2beta1/">v2beta1.md</a>); the rest stay deferred.</li>
+<li><strong>No behavior change.</strong> v2 re-shapes the API; runtime semantics (job acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are preserved. <code>v2alpha1</code> tracks v1 behavior wherever a field is unchanged.</li>
+<li><strong>No in-place v1→v2 conversion</strong> — the split is a tooled fan-out (M5), not a conversion webhook.</li>
+<li><strong>Not the admin policy layer, worker-image allowlist, credentials union, or cross-namespace sharing</strong> — all out of the <code>v2alpha1</code> scope (see below and Appendix H §H.14/§H.15).
+  The credentials union is now scheduled for the <code>v2beta1</code> cut (<a href="../v2beta1/">v2beta1.md</a>); the rest stay deferred.</li>
 </ul>
 <h2 id="coexistence-rollback--parity">Coexistence, rollback &amp; parity<a class="headerlink" href="#coexistence-rollback--parity" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Dual-serve.</strong> <code>v1alpha1</code> and <code>v2alpha1</code> are served simultaneously until v1
-  removal; tenants migrate on their own schedule via the M5 tool. v1 bug-fixes are
-  ported to v2 throughout coexistence.</li>
-<li><strong>Rollback = stay on v1.</strong> Nothing forces a tenant onto v2 until they run the
-  migration, and no milestone removes v1 capability — so a regressed milestone
-  degrades to "keep using <code>v1alpha1</code>", not an outage.</li>
-<li><strong>Parity gate.</strong> <code>v2alpha1</code> must reach v1 feature parity (M3a) before
-  multi-gateway / optional-proxy features build on it; a per-field/-condition
-  parity checklist gates M3a exit.</li>
+<li><strong>Dual-serve.</strong> <code>v1alpha1</code> and <code>v2alpha1</code> are served simultaneously until v1 removal; tenants migrate on their own schedule via the M5 tool. v1 bug-fixes are ported to v2 throughout coexistence.</li>
+<li><strong>Rollback = stay on v1.</strong> Nothing forces a tenant onto v2 until they run the migration, and no milestone removes v1 capability — so a regressed milestone degrades to "keep using <code>v1alpha1</code>", not an outage.</li>
+<li><strong>Parity gate.</strong> <code>v2alpha1</code> must reach v1 feature parity (M3a) before multi-gateway / optional-proxy features build on it; a per-field/-condition parity checklist gates M3a exit.</li>
 </ul>
 <h2 id="resolved-design-decisions">Resolved design decisions<a class="headerlink" href="#resolved-design-decisions" title="Permanent link">&para;</a></h2>
 <p>All settled in <a href="../../design/appendix-h-v2-api-decomposition/#h16-open-questions--sign-off-needed">§H.16</a>:</p>
 <ul>
 <li><strong>Admin policy → keep controller flags</strong> (singleton/class deferred behind triggers, <a href="../../design/appendix-h-v2-api-decomposition/#h14-admin-policy-layer--deferred-until-tiering-is-real">§H.14</a>).</li>
-<li><strong>API group → <code>actions-gateway.com</code></strong>; <strong><code>githubURL</code> immutable</strong>, <code>githubAppRef.name</code> mutable; <strong><code>maxListeners</code> default → <code>10</code></strong>; drop <code>SecretReference.namespace</code>. Field casing: <code>github</code> lowercased, initialisms uppercase (<code>githubURL</code>, <code>githubAppRef</code>).</li>
+<li><strong>API group → <code>actions-gateway.com</code></strong>; <strong><code>githubURL</code> immutable</strong>, <code>githubAppRef.name</code> mutable; <strong><code>maxListeners</code> default → <code>10</code></strong>; drop <code>SecretReference.namespace</code>.
+  Field casing: <code>github</code> lowercased, initialisms uppercase (<code>githubURL</code>, <code>githubAppRef</code>).</li>
 <li><strong>Cross-namespace proxy CA → ConfigMap, not secret</strong> (trust-manager pattern).</li>
 <li><strong>Sharing → inline <code>allowedNamespaces</code> only</strong> for v2; <code>ReferenceGrant</code> additive later; consent always provider-side.</li>
 <li><strong>Deletion → degrade-not-block, no finalizer</strong>; <code>referencedBy</code> from the watch.</li>
 <li><strong>Q147 keywords → <code>tenant: managed</code>, <code>allow-profile-downgrade: allowed</code></strong>; dual-read window closes at <code>v1alpha1</code> removal.</li>
 </ul>
 <h2 id="milestones">Milestones<a class="headerlink" href="#milestones" title="Permanent link">&para;</a></h2>
-<p>Nouns (data kinds) before verbs (controller kinds); migration last. Each
-milestone is independently reviewable and leaves the tree green.</p>
+<p>Nouns (data kinds) before verbs (controller kinds); migration last.
+Each milestone is independently reviewable and leaves the tree green.</p>
 <h3 id="m1--api-foundation-no-controllers">M1 — API foundation (no controllers)<a class="headerlink" href="#m1--api-foundation-no-controllers" title="Permanent link">&para;</a></h3>
 <ul>
-<li>New <code>v2alpha1</code> API group <code>actions-gateway.com</code> with all five kinds:
-  <code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>,
-  <code>EgressProxy</code> (<a href="../../design/appendix-h-v2-api-decomposition/#h3-the-crd-set">§H.3</a>, <a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>).</li>
+<li>New <code>v2alpha1</code> API group <code>actions-gateway.com</code> with all five kinds: <code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>, <code>EgressProxy</code> (<a href="../../design/appendix-h-v2-api-decomposition/#h3-the-crd-set">§H.3</a>, <a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>).</li>
 <li>Generated deepcopy, CRD manifests, RBAC scaffolding, chart wiring.</li>
-<li>Structural + CEL validation: per-field immutability transitions, name
-  <code>maxLength</code> 52 (<a href="../../design/appendix-h-v2-api-decomposition/#h6-naming-and-length-budgets">§H.6</a>),
-  <code>maxListeners</code> default <code>10</code>, removal of <code>SecretReference.namespace</code>,
-  <code>additionalPrinterColumns</code> + <code>categories</code> + short names.</li>
-<li><strong>Field-naming pass</strong> — freeze acronym/brand casing while still cheap
-  (<code>githubURL</code>/<code>githubAppRef</code>), uniform <code>…Ref</code> shapes (<a href="../../design/appendix-h-v2-api-decomposition/#h6-naming-and-length-budgets">§H.6</a>).</li>
-<li><strong>Uniform status/condition contract</strong> across all five kinds — <code>Ready</code> +
-  <code>observedGeneration</code>, <code>listType=map</code> conditions, specific messages (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>).</li>
-<li><strong><code>selectableFields: spec.gatewayRef</code></strong> on <code>RunnerSet</code> so M3b's AGC scoping runs
-  server-side (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>).</li>
-<li>Labels, annotations, and finalizers use the new <code>actions-gateway.com/*</code> domain
-  from birth.</li>
-<li><strong>Exit:</strong> CRDs install and round-trip via the API server alongside <code>v1alpha1</code>;
-  <code>make check</code> green; no reconciler references the new kinds yet.</li>
+<li>Structural + CEL validation: per-field immutability transitions, name <code>maxLength</code> 52 (<a href="../../design/appendix-h-v2-api-decomposition/#h6-naming-and-length-budgets">§H.6</a>), <code>maxListeners</code> default <code>10</code>, removal of <code>SecretReference.namespace</code>, <code>additionalPrinterColumns</code> + <code>categories</code> + short names.</li>
+<li><strong>Field-naming pass</strong> — freeze acronym/brand casing while still cheap (<code>githubURL</code>/<code>githubAppRef</code>), uniform <code>…Ref</code> shapes (<a href="../../design/appendix-h-v2-api-decomposition/#h6-naming-and-length-budgets">§H.6</a>).</li>
+<li><strong>Uniform status/condition contract</strong> across all five kinds — <code>Ready</code> + <code>observedGeneration</code>, <code>listType=map</code> conditions, specific messages (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>).</li>
+<li><strong><code>selectableFields: spec.gatewayRef</code></strong> on <code>RunnerSet</code> so M3b's AGC scoping runs server-side (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>).</li>
+<li>Labels, annotations, and finalizers use the new <code>actions-gateway.com/*</code> domain from birth.</li>
+<li><strong>Exit:</strong> CRDs install and round-trip via the API server alongside <code>v1alpha1</code>; <code>make check</code> green; no reconciler references the new kinds yet.</li>
 </ul>
 <h3 id="m2--data-kinds-nouns">M2 — Data kinds (nouns)<a class="headerlink" href="#m2--data-kinds-nouns" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>EgressProxy</code> reconciler in the GMC: owns its proxy Deployment / Service / HPA /
-  PDB (<a href="../../design/appendix-h-v2-api-decomposition/#h8-ownership-gc-and-deletion">§H.8</a>). <strong>Same-namespace only</strong> at this stage.</li>
-<li><code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code>: pure data; the reserved-pod-field
-  rejection webhook moves here from <code>RunnerGroup</code> (<a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>).</li>
-<li><strong>Free observability win:</strong> because each <code>EgressProxy</code> Deployment is now
-  per-gateway, its proxy metrics carry the gateway label automatically — the
-  per-tenant proxy-connection visibility v1's shared-proxy shape could not express.</li>
-<li><strong>Exit:</strong> a standalone <code>EgressProxy</code> reconciles a working proxy pool; a
-  <code>RunnerTemplate</code> validates and is readable by name; envtest coverage for both.</li>
+<li><code>EgressProxy</code> reconciler in the GMC: owns its proxy Deployment / Service / HPA / PDB (<a href="../../design/appendix-h-v2-api-decomposition/#h8-ownership-gc-and-deletion">§H.8</a>). <strong>Same-namespace only</strong> at this stage.</li>
+<li><code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code>: pure data; the reserved-pod-field rejection webhook moves here from <code>RunnerGroup</code> (<a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>).</li>
+<li><strong>Free observability win:</strong> because each <code>EgressProxy</code> Deployment is now per-gateway, its proxy metrics carry the gateway label automatically — the per-tenant proxy-connection visibility v1's shared-proxy shape could not express.</li>
+<li><strong>Exit:</strong> a standalone <code>EgressProxy</code> reconciles a working proxy pool; a <code>RunnerTemplate</code> validates and is readable by name; envtest coverage for both.</li>
 </ul>
 <h3 id="m3a--control-kinds-verbs-single-gateway-parity-the-core-build">M3a — Control kinds (verbs), single-gateway parity <em>(the core build)</em><a class="headerlink" href="#m3a--control-kinds-verbs-single-gateway-parity-the-core-build" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>ActionsGateway</code> + <code>RunnerSet</code> reconcilers; <strong>one gateway per namespace</strong> —
-  v1 feature parity on the new shape.</li>
-<li><strong>Reference resolution at runtime</strong> (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>):
-  resolve <code>templateRef</code>/<code>proxyRef</code> via watch + enqueue; surface
-  <code>TemplateNotFound</code>/<code>ProxyNotFound</code> conditions; fail-closed (no wiring until refs
-  resolve).</li>
-<li>Proxy optional (same-namespace <code>EgressProxy</code> via <code>proxyRef</code>/<code>defaultProxyRef</code>);
-  no proxy ⇒ direct egress, shipped as a separate slice (Q168, below).</li>
-<li><strong>Exit:</strong> a v1-equivalent setup runs end-to-end on <code>v2alpha1</code> (job acquired →
-  worker pod → proxied egress); the parity checklist passes; envtest coverage.</li>
+<li><code>ActionsGateway</code> + <code>RunnerSet</code> reconcilers; <strong>one gateway per namespace</strong> — v1 feature parity on the new shape.</li>
+<li><strong>Reference resolution at runtime</strong> (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>): resolve <code>templateRef</code>/<code>proxyRef</code> via watch + enqueue; surface <code>TemplateNotFound</code>/<code>ProxyNotFound</code> conditions; fail-closed (no wiring until refs resolve).</li>
+<li>Proxy optional (same-namespace <code>EgressProxy</code> via <code>proxyRef</code>/<code>defaultProxyRef</code>); no proxy ⇒ direct egress, shipped as a separate slice (Q168, below).</li>
+<li><strong>Exit:</strong> a v1-equivalent setup runs end-to-end on <code>v2alpha1</code> (job acquired → worker pod → proxied egress); the parity checklist passes; envtest coverage.</li>
 </ul>
 <h3 id="m3b--multi-gateway-per-namespace">M3b — Multi-gateway per namespace<a class="headerlink" href="#m3b--multi-gateway-per-namespace" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Per-gateway resource naming under the 52-char cap; <strong>AGC scoping</strong> via the
-  <code>gatewayRef</code> field selector so each AGC reconciles only its gateway's
-  <code>RunnerSet</code>s; per-gateway ownership for clean GC. The <code>gmc-tenant-resource-guard</code>
-  VAP is unchanged — it keys on the namespace marker, not names (<a href="../../design/appendix-h-v2-api-decomposition/#h16-open-questions--sign-off-needed">§H.16 #1</a>).</li>
-<li><strong>Exit:</strong> two <code>ActionsGateway</code>s with their own <code>RunnerSet</code>s run concurrently in
-  one namespace; envtest + a kind e2e prove per-gateway isolation.</li>
+<li>Per-gateway resource naming under the 52-char cap; <strong>AGC scoping</strong> via the <code>gatewayRef</code> field selector so each AGC reconciles only its gateway's <code>RunnerSet</code>s; per-gateway ownership for clean GC.
+  The <code>gmc-tenant-resource-guard</code> VAP is unchanged — it keys on the namespace marker, not names (<a href="../../design/appendix-h-v2-api-decomposition/#h16-open-questions--sign-off-needed">§H.16 #1</a>).</li>
+<li><strong>Exit:</strong> two <code>ActionsGateway</code>s with their own <code>RunnerSet</code>s run concurrently in one namespace; envtest + a kind e2e prove per-gateway isolation.</li>
 </ul>
 <h3 id="m5--migration-tool--v1v2-cutover">M5 — Migration tool + v1/v2 cutover<a class="headerlink" href="#m5--migration-tool--v1v2-cutover" title="Permanent link">&para;</a></h3>
 <ul>
-<li>One-shot fan-out migration tool (<a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>):
-  reads <code>v1alpha1</code> CRs, emits the <code>v2alpha1</code> object set (extract inline
-  <code>podTemplate</code> → <code>RunnerTemplate</code>, inline <code>proxy</code> → <code>EgressProxy</code>, rewrite
-  references). Dry-run to manifests by default; <code>--apply</code> to apply. Plus tests.</li>
-<li><strong>Dual-read window — group domain + Q147 values</strong> (<a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>):
-  VAPs + downgrade webhook accept either domain (<code>actions-gateway.github.com/*</code> or
-  <code>actions-gateway.com/*</code>) <strong>and</strong> either value (<code>"true"</code> or the new keyword) until
-  v1 removal; the tool relabels keys and rewrites values (plus finalizer names) in
-  one pass.</li>
+<li>One-shot fan-out migration tool (<a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>): reads <code>v1alpha1</code> CRs, emits the <code>v2alpha1</code> object set (extract inline <code>podTemplate</code> → <code>RunnerTemplate</code>, inline <code>proxy</code> → <code>EgressProxy</code>, rewrite references).
+  Dry-run to manifests by default; <code>--apply</code> to apply.
+  Plus tests.</li>
+<li><strong>Dual-read window — group domain + Q147 values</strong> (<a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>): VAPs + downgrade webhook accept either domain (<code>actions-gateway.github.com/*</code> or <code>actions-gateway.com/*</code>) <strong>and</strong> either value (<code>"true"</code> or the new keyword) until v1 removal; the tool relabels keys and rewrites values (plus finalizer names) in one pass.</li>
 <li>Operator migration guide; <code>v1alpha1</code> deprecation notice.</li>
-<li><strong>Exit:</strong> the tool migrates a representative v1 namespace to a working v2 object
-  set in dry-run and <code>--apply</code>; dual-read verified; docs updated.</li>
+<li><strong>Exit:</strong> the tool migrates a representative v1 namespace to a working v2 object set in dry-run and <code>--apply</code>; dual-read verified; docs updated.</li>
 </ul>
 <h2 id="itemized-tasks">Itemized tasks<a class="headerlink" href="#itemized-tasks" title="Permanent link">&para;</a></h2>
-<p>The actionable breakdown per milestone. Each box is a self-contained unit of work;
-a milestone is done when every box is checked and its exit criterion holds.</p>
+<p>The actionable breakdown per milestone.
+Each box is a self-contained unit of work; a milestone is done when every box is checked and its exit criterion holds.</p>
 <h3 id="m1--api-foundation-q149">M1 — API foundation (Q149)<a class="headerlink" href="#m1--api-foundation-q149" title="Permanent link">&para;</a></h3>
 <ul>
 <li>[x] Scaffold <code>cmd/agc/api/v2alpha1/</code> and <code>cmd/gmc/api/v2alpha1/</code> (group <code>actions-gateway.com</code>, <code>groupversion_info.go</code>).</li>
@@ -3027,70 +2980,35 @@ a milestone is done when every box is checked and its exit criterion holds.</p>
 <ul>
 <li>[x] <code>EgressProxy</code> reconciler (GMC): owns Deployment/Service/HPA/PDB/NetworkPolicy + self-signed proxy TLS Secret via controller owner refs; per-<code>EgressProxy</code> name <code>&lt;ep&gt;-proxy</code>; same-namespace only.</li>
 <li>[x] Per-<code>EgressProxy</code> identity label (<code>actions-gateway.com/egress-proxy: &lt;name&gt;</code>) on pods + children, so proxy metrics carry the proxy identity (free win) <strong>and</strong> multiple proxy pools in one namespace stay selector-isolated.</li>
-<li>[x] <code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code>: data only; reserved-pod-field rejection webhook (GMC-hosted) — per-container proxy env vars on both kinds; privileged rejected on namespaced <code>RunnerTemplate</code>, allowed on platform-authored <code>ClusterRunnerTemplate</code>. Scalar reserved fields stay on M1 CEL.</li>
+<li>[x] <code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code>: data only; reserved-pod-field rejection webhook (GMC-hosted) — per-container proxy env vars on both kinds; privileged rejected on namespaced <code>RunnerTemplate</code>, allowed on platform-authored <code>ClusterRunnerTemplate</code>.
+  Scalar reserved fields stay on M1 CEL.</li>
 <li>[x] envtest for both kinds (reconcile + owner-refs + defaulting + status; webhook accept/reject).</li>
-<li>Metrics-mTLS listener + ServiceMonitor on the standalone proxy are <strong>deferred to M3a</strong> (the metrics CA is jointly owned with the AGC). M2 stamps the identity label so the metric series carry the proxy identity once the M3a scrape is wired; the proxy boots fine without the metrics listener.</li>
+<li>Metrics-mTLS listener + ServiceMonitor on the standalone proxy are <strong>deferred to M3a</strong> (the metrics CA is jointly owned with the AGC).
+  M2 stamps the identity label so the metric series carry the proxy identity once the M3a scrape is wired; the proxy boots fine without the metrics listener.</li>
 </ul>
 <h3 id="m3a--single-gateway-parity-q164--securityprofile-relocation-q175">M3a — Single-gateway parity (Q164) + securityProfile relocation (Q175)<a class="headerlink" href="#m3a--single-gateway-parity-q164--securityprofile-relocation-q175" title="Permanent link">&para;</a></h3>
 <ul>
-<li>[x] <strong>securityProfile → namespace (Q175, §H.16 #7).</strong> <code>SecurityProfile</code> removed from
-  the v2 <code>ActionsGatewaySpec</code>; the namespace <code>actions-gateway.com/security-profile</code>
-  label is the new selector. <code>NamespacePSAReconciler</code> (GMC) stamps the six PSA labels
-  from it; the <code>gmc-namespace-security-profile-guard</code> ValidatingAdmissionPolicy guards
-  enum / no-silent-downgrade / privileged-eligibility (none weaker than the v1 webhook,
-  now a VAP because the checks no longer cross objects). The <code>namespace-psa-guard</code> and
-  <code>tenant-resource-guard</code> VAPs dual-read the v1/v2 tenant markers so the GMC can stamp
-  and provision in v2 tenant namespaces. envtest covers the VAP and the reconciler.</li>
-<li>[x] <code>ActionsGateway</code> reconciler (GMC): AGC Deployment/SA/RoleBinding, credential mount,
-  AGC + workload NetworkPolicy, metrics certs; proxy egress wired from
-  <code>defaultProxyRef</code> → resolved <code>EgressProxy</code>; one gateway/ns. (PSA stamping is now the
-  <code>NamespacePSAReconciler</code>'s job; proxy pool / HPA / PDB are the <code>EgressProxy</code>
-  reconciler's — both removed from the gateway's responsibility vs. v1.) Children are
-  owner-referenced for cascade GC; the AGC Deployment/NetworkPolicy assembly is shared
-  with v1 via <code>buildAGCDeploymentFrom</code>/<code>buildAGCNetworkPolicyFrom</code>. envtest covers
-  provisioning, owner-refs, egress/security-profile wiring, and the fail-closed
-  <code>CredentialUnavailable</code>/<code>ProxyNotFound</code> conditions.</li>
-<li>[x] <code>RunnerSet</code> reconciler (AGC): resolve <code>gatewayRef</code>/<code>templateRef</code>/<code>proxyRef</code> via
-  watch + enqueue; <code>GatewayNotFound</code>/<code>TemplateNotFound</code>/<code>ProxyNotFound</code> conditions +
-  <code>observedGeneration</code>; fail-closed (no worker wiring until refs resolve). Drives the
-  same listener/multiplexer/provisioner stack as v1 via the provisioner <strong>Target seam</strong>
-  (<code>Target</code>/<code>ResolvedSpec</code>): the provisioner own-refs the real <code>RunnerSet</code> and
-  re-resolves the template/proxy per job (Q117), with v1 <code>RunnerGroup</code> unchanged
-  (HandlerFor/AdmitFor wrap a v1 adapter). Cluster-scoped <code>ClusterRunnerTemplate</code> reads
-  need a ClusterRoleBinding and are deferred to M3b (fail closed with a clear condition
-  until then); namespaced <code>RunnerTemplate</code> gives v1 parity. Both obstacles below are
-  resolved:</li>
-<li><strong>Module dependency cycle — RESOLVED (option (a), neutral <code>api/</code> module).</strong>
-    <code>gatewayRef</code> resolves to a GMC-group <code>ActionsGateway</code> and <code>proxyRef</code> to a GMC-group
-    <code>EgressProxy</code>, so the AGC must read those kinds — but the <strong>GMC module already
-    depends on the AGC module</strong> (<code>cmd/gmc/go.mod</code> requires <code>…/agc</code> to build <code>RunnerSet</code>
-    CRs), and importing the GMC types into the AGC would close a module cycle. Resolved
-    by extracting <strong>all five</strong> v2 <code>v2alpha1</code> kinds (the previously GMC-owned
-    <code>ActionsGateway</code>/<code>EgressProxy</code> and AGC-owned <code>RunnerSet</code>/<code>RunnerTemplate</code>/
-    <code>ClusterRunnerTemplate</code>) into a neutral <code>api/</code> module
-    (<code>github.com/actions-gateway/github-actions-gateway/api</code>) that both controllers
-    import — chosen over (b) the dynamic/unstructured client because the reconciler
-    wants typed, cached, watch-driven reads, not existence-only probes. Pure relocation:
-    no API shape change, CRD/chart manifests byte-identical, v1 kinds untouched. The
-    <code>RunnerSet</code> reconciler can now import the resolved <code>ActionsGateway</code>/<code>EgressProxy</code>
-    types directly. See <code>docs/development/go-workspaces.md</code> (module table) and
-    <code>docs/development/code-generation.md</code> (api-module codegen).</li>
-<li><strong>Provisioner owner-ref seam.</strong> The <code>provisioner</code>/<code>listener</code>/<code>multiplexer</code> stack is
-    pervasively typed to <code>*v1alpha1.RunnerGroup</code>, and worker pods/Secrets carry an
-    OwnerReference to it — a synthesized in-memory RunnerGroup cannot be used (its
-    dangling owner-ref would make the apiserver immediately GC every worker pod), so the
-    provisioner must be refactored to own-ref the real <code>RunnerSet</code>. Tracked as the
-    runtime half of M3a.</li>
+<li>[x] <strong>securityProfile → namespace (Q175, §H.16 #7).</strong> <code>SecurityProfile</code> removed from the v2 <code>ActionsGatewaySpec</code>; the namespace <code>actions-gateway.com/security-profile</code> label is the new selector. <code>NamespacePSAReconciler</code> (GMC) stamps the six PSA labels from it; the <code>gmc-namespace-security-profile-guard</code> ValidatingAdmissionPolicy guards enum / no-silent-downgrade / privileged-eligibility (none weaker than the v1 webhook, now a VAP because the checks no longer cross objects).
+  The <code>namespace-psa-guard</code> and <code>tenant-resource-guard</code> VAPs dual-read the v1/v2 tenant markers so the GMC can stamp and provision in v2 tenant namespaces. envtest covers the VAP and the reconciler.</li>
+<li>[x] <code>ActionsGateway</code> reconciler (GMC): AGC Deployment/SA/RoleBinding, credential mount, AGC + workload NetworkPolicy, metrics certs; proxy egress wired from <code>defaultProxyRef</code> → resolved <code>EgressProxy</code>; one gateway/ns.
+  (PSA stamping is now the <code>NamespacePSAReconciler</code>'s job; proxy pool / HPA / PDB are the <code>EgressProxy</code> reconciler's — both removed from the gateway's responsibility vs. v1.)
+  Children are owner-referenced for cascade GC; the AGC Deployment/NetworkPolicy assembly is shared with v1 via <code>buildAGCDeploymentFrom</code>/<code>buildAGCNetworkPolicyFrom</code>. envtest covers provisioning, owner-refs, egress/security-profile wiring, and the fail-closed <code>CredentialUnavailable</code>/<code>ProxyNotFound</code> conditions.</li>
+<li>[x] <code>RunnerSet</code> reconciler (AGC): resolve <code>gatewayRef</code>/<code>templateRef</code>/<code>proxyRef</code> via watch + enqueue; <code>GatewayNotFound</code>/<code>TemplateNotFound</code>/<code>ProxyNotFound</code> conditions + <code>observedGeneration</code>; fail-closed (no worker wiring until refs resolve).
+  Drives the same listener/multiplexer/provisioner stack as v1 via the provisioner <strong>Target seam</strong> (<code>Target</code>/<code>ResolvedSpec</code>): the provisioner own-refs the real <code>RunnerSet</code> and re-resolves the template/proxy per job (Q117), with v1 <code>RunnerGroup</code> unchanged (HandlerFor/AdmitFor wrap a v1 adapter).
+  Cluster-scoped <code>ClusterRunnerTemplate</code> reads need a ClusterRoleBinding and are deferred to M3b (fail closed with a clear condition until then); namespaced <code>RunnerTemplate</code> gives v1 parity.
+  Both obstacles below are resolved:</li>
+<li><strong>Module dependency cycle — RESOLVED (option (a), neutral <code>api/</code> module).</strong> <code>gatewayRef</code> resolves to a GMC-group <code>ActionsGateway</code> and <code>proxyRef</code> to a GMC-group <code>EgressProxy</code>, so the AGC must read those kinds — but the <strong>GMC module already depends on the AGC module</strong> (<code>cmd/gmc/go.mod</code> requires <code>…/agc</code> to build <code>RunnerSet</code> CRs), and importing the GMC types into the AGC would close a module cycle.
+    Resolved by extracting <strong>all five</strong> v2 <code>v2alpha1</code> kinds (the previously GMC-owned <code>ActionsGateway</code>/<code>EgressProxy</code> and AGC-owned <code>RunnerSet</code>/<code>RunnerTemplate</code>/ <code>ClusterRunnerTemplate</code>) into a neutral <code>api/</code> module (<code>github.com/actions-gateway/github-actions-gateway/api</code>) that both controllers import — chosen over (b) the dynamic/unstructured client because the reconciler wants typed, cached, watch-driven reads, not existence-only probes.
+    Pure relocation: no API shape change, CRD/chart manifests byte-identical, v1 kinds untouched.
+    The <code>RunnerSet</code> reconciler can now import the resolved <code>ActionsGateway</code>/<code>EgressProxy</code> types directly.
+    See <code>docs/development/go-workspaces.md</code> (module table) and <code>docs/development/code-generation.md</code> (api-module codegen).</li>
+<li><strong>Provisioner owner-ref seam.</strong> The <code>provisioner</code>/<code>listener</code>/<code>multiplexer</code> stack is pervasively typed to <code>*v1alpha1.RunnerGroup</code>, and worker pods/Secrets carry an OwnerReference to it — a synthesized in-memory RunnerGroup cannot be used (its dangling owner-ref would make the apiserver immediately GC every worker pod), so the provisioner must be refactored to own-ref the real <code>RunnerSet</code>.
+    Tracked as the runtime half of M3a.</li>
 <li>[x] Proxy required (<code>proxyRef</code>/<code>defaultProxyRef</code>, same-namespace).</li>
-<li>[x] envtest (both suites: GMC provisioning + owner-refs + fail-closed conditions; AGC
-  ref-resolution + fail-closed conditions + end-to-end worker provisioning via the
-  broker stub). <strong>kind e2e</strong> (a live job → worker pod → proxied egress → GitHub run) is
-  deferred to M3b per the task — the M3a minimum is envtest; the worker→pod→proxy path
-  is exercised by the AGC envtest's broker-stub job-delivery test.</li>
+<li>[x] envtest (both suites: GMC provisioning + owner-refs + fail-closed conditions; AGC ref-resolution + fail-closed conditions + end-to-end worker provisioning via the broker stub). <strong>kind e2e</strong> (a live job → worker pod → proxied egress → GitHub run) is deferred to M3b per the task — the M3a minimum is envtest; the worker→pod→proxy path is exercised by the AGC envtest's broker-stub job-delivery test.</li>
 </ul>
 <h4 id="per-field---condition-parity-checklist-gates-m3a-exit">Per-field / -condition parity checklist (gates M3a exit)<a class="headerlink" href="#per-field---condition-parity-checklist-gates-m3a-exit" title="Permanent link">&para;</a></h4>
-<p>The v1 <code>RunnerGroup</code> + <code>ActionsGateway</code> behavior the v2 shape must preserve, and where
-each lands in v2. <strong>✓</strong> = implemented + tested this milestone; <strong>◻</strong> = remaining.</p>
+<p>The v1 <code>RunnerGroup</code> + <code>ActionsGateway</code> behavior the v2 shape must preserve, and where each lands in v2. <strong>✓</strong> = implemented + tested this milestone; <strong>◻</strong> = remaining.</p>
 <table>
 <thead>
 <tr>
@@ -3174,74 +3092,41 @@ each lands in v2. <strong>✓</strong> = implemented + tested this milestone; <s
 </table>
 <h3 id="m3b--multi-gateway-q167--the-m3a-deferred-tail-closes-q164">M3b — Multi-gateway (Q167) + the M3a-deferred tail (closes Q164)<a class="headerlink" href="#m3b--multi-gateway-q167--the-m3a-deferred-tail-closes-q164" title="Permanent link">&para;</a></h3>
 <ul>
-<li>[x] Per-gateway derived naming across every GMC-created AGC child (52-char cap):
-  <code>&lt;ag&gt;-agc</code> (Deployment/SA/RoleBinding/Service/AGC NetworkPolicy + pod <code>app</code> label),
-  <code>&lt;ag&gt;-worker</code> (worker SA), <code>&lt;ag&gt;-workload</code> (workload NetworkPolicy), and
-  <code>&lt;ag&gt;-agc-metrics-{tls,client}</code> (metrics Secrets). <code>buildAGCDeploymentFrom</code>/
-  <code>buildAGCNetworkPolicyFrom</code> take per-gateway names; v1 passes the fixed singleton
-  names (no behavior change). The <code>gmc-tenant-resource-guard</code> VAP is unchanged (it
-  keys on the namespace marker, not names).</li>
-<li>[x] AGC watch-scoping via the <code>gatewayRef</code> field selector (server-side): the GMC
-  stamps <code>GATEWAY_NAME</code> on each AGC Deployment; the AGC scopes its RunnerSet informer
-  with <code>cache.ByObject{Field: spec.gatewayRef.name=&lt;gw&gt;}</code> (KEP-4358) plus a
-  defense-in-depth guard in <code>Reconcile</code>. <strong>Requires k8s ≥ 1.31</strong> (alpha-off in 1.30);
-  the integration-test CI tier was bumped from envtest <strong>1.30.x → 1.35.x</strong>
-  (<code>.github/workflows/integration-test.yml</code>) so the scoping test runs in CI. The e2e
-  kind cluster is already v1.35.</li>
-<li>[x] Per-gateway ownership refs for clean cascade GC: per-gateway names mean deleting
-  one gateway GCs only its own children. The cluster-scoped ClusterRunnerTemplate
-  ClusterRoleBinding cannot carry a cross-scope owner ref, so <code>reconcileDelete</code>
-  removes it explicitly.</li>
-<li>[x] <strong>ClusterRunnerTemplate access (the M3a deferral, closes Q164):</strong> shipped
-  read-only ClusterRole <code>agc-clusterrunnertemplate-reader</code>; the GMC creates a
-  per-gateway ClusterRoleBinding (holds only <code>bind</code> on that name) so the AGC gains
-  least-privilege cluster-scoped read. <code>resolveTemplate</code> resolves ClusterRunnerTemplate
-  live and the RunnerSet watches the kind.</li>
-<li>[x] envtest (both suites: AGC field-scoped isolation + ClusterRunnerTemplate
-  resolution; GMC per-gateway naming + per-gateway ownership/GC) <strong>and kind e2e</strong>
-  (<code>E2E_V2_MultiGateway</code>): two gateways in one namespace, each AGC scoped to its
-  RunnerSet (proven by the worker pod's per-gateway worker ServiceAccount), plus a
-  workload pod reaching GitHub through the v2 EgressProxy (proxy-egress parity).</li>
+<li>[x] Per-gateway derived naming across every GMC-created AGC child (52-char cap): <code>&lt;ag&gt;-agc</code> (Deployment/SA/RoleBinding/Service/AGC NetworkPolicy + pod <code>app</code> label), <code>&lt;ag&gt;-worker</code> (worker SA), <code>&lt;ag&gt;-workload</code> (workload NetworkPolicy), and <code>&lt;ag&gt;-agc-metrics-{tls,client}</code> (metrics Secrets). <code>buildAGCDeploymentFrom</code>/ <code>buildAGCNetworkPolicyFrom</code> take per-gateway names; v1 passes the fixed singleton names (no behavior change).
+  The <code>gmc-tenant-resource-guard</code> VAP is unchanged (it keys on the namespace marker, not names).</li>
+<li>[x] AGC watch-scoping via the <code>gatewayRef</code> field selector (server-side): the GMC stamps <code>GATEWAY_NAME</code> on each AGC Deployment; the AGC scopes its RunnerSet informer with <code>cache.ByObject{Field: spec.gatewayRef.name=&lt;gw&gt;}</code> (KEP-4358) plus a defense-in-depth guard in <code>Reconcile</code>. <strong>Requires k8s ≥ 1.31</strong> (alpha-off in 1.30); the integration-test CI tier was bumped from envtest <strong>1.30.x → 1.35.x</strong> (<code>.github/workflows/integration-test.yml</code>) so the scoping test runs in CI.
+  The e2e kind cluster is already v1.35.</li>
+<li>[x] Per-gateway ownership refs for clean cascade GC: per-gateway names mean deleting one gateway GCs only its own children.
+  The cluster-scoped ClusterRunnerTemplate ClusterRoleBinding cannot carry a cross-scope owner ref, so <code>reconcileDelete</code> removes it explicitly.</li>
+<li>[x] <strong>ClusterRunnerTemplate access (the M3a deferral, closes Q164):</strong> shipped read-only ClusterRole <code>agc-clusterrunnertemplate-reader</code>; the GMC creates a per-gateway ClusterRoleBinding (holds only <code>bind</code> on that name) so the AGC gains least-privilege cluster-scoped read. <code>resolveTemplate</code> resolves ClusterRunnerTemplate live and the RunnerSet watches the kind.</li>
+<li>[x] envtest (both suites: AGC field-scoped isolation + ClusterRunnerTemplate resolution; GMC per-gateway naming + per-gateway ownership/GC) <strong>and kind e2e</strong> (<code>E2E_V2_MultiGateway</code>): two gateways in one namespace, each AGC scoped to its RunnerSet (proven by the worker pod's per-gateway worker ServiceAccount), plus a workload pod reaching GitHub through the v2 EgressProxy (proxy-egress parity).</li>
 </ul>
 <h3 id="m5--migration--cutover-q165">M5 — Migration + cutover (Q165)<a class="headerlink" href="#m5--migration--cutover-q165" title="Permanent link">&para;</a></h3>
 <ul>
-<li>[x] Fan-out migration tool (<code>gag-migrate</code>: core <code>cmd/gmc/internal/migrate</code>, CLI <code>cmd/gmc/migrate</code>): v1 → v2 object set; dry-run default, <code>--apply</code>. Never reads Secret contents (rewrites the <code>githubAppRef</code> name only); never deletes v1 objects (coexistence/rollback).</li>
-<li>[x] Dual-read window: the three VAPs (M3a/M3b) <strong>and</strong> the v1 GMC <code>ActionsGateway</code> webhook (M5) accept both domains <em>and</em> both values; tool relabels keys/values additively (adds v2 keys, keeps v1 keys, so nothing is stranded). Finalizer names migrated as code constants (v2 objects carry v2 finalizers; v1 objects keep theirs until v1 removal).</li>
+<li>[x] Fan-out migration tool (<code>gag-migrate</code>: core <code>cmd/gmc/internal/migrate</code>, CLI <code>cmd/gmc/migrate</code>): v1 → v2 object set; dry-run default, <code>--apply</code>.
+  Never reads Secret contents (rewrites the <code>githubAppRef</code> name only); never deletes v1 objects (coexistence/rollback).</li>
+<li>[x] Dual-read window: the three VAPs (M3a/M3b) <strong>and</strong> the v1 GMC <code>ActionsGateway</code> webhook (M5) accept both domains <em>and</em> both values; tool relabels keys/values additively (adds v2 keys, keeps v1 keys, so nothing is stranded).
+  Finalizer names migrated as code constants (v2 objects carry v2 finalizers; v1 objects keep theirs until v1 removal).</li>
 <li>[x] Operator migration guide (<a href="../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a>); <a href="../../operations/v1alpha1-deprecation/"><code>v1alpha1</code> deprecation notice</a> (named removal release announced at removal time).</li>
-<li>[ ] Conversion scaffolding (Q74 <code>Hub</code>/<code>Convertible</code>) staged for the <code>v2alpha1</code>→<code>v2beta1</code> graduation. <strong>Deferred — distinct from the M5 fan-out:</strong> a conversion webhook is an in-place graduation mechanism the fan-out tool cannot replace, and it lands at the first graduation hop, not the v1→v2 cutover (see <a href="#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a>). Tracked as Q74.</li>
+<li>[ ] Conversion scaffolding (Q74 <code>Hub</code>/<code>Convertible</code>) staged for the <code>v2alpha1</code>→<code>v2beta1</code> graduation. <strong>Deferred — distinct from the M5 fan-out:</strong> a conversion webhook is an in-place graduation mechanism the fan-out tool cannot replace, and it lands at the first graduation hop, not the v1→v2 cutover (see <a href="#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a>).
+  Tracked as Q74.</li>
 <li>[x] Coexistence test (v1 keeps working while v2 served) + migration golden tests (golden-manifest unit tests + envtest apply-path/dual-read/coexistence).</li>
 <li>[x] <strong>Behavior-preservation acceptance checks</strong> (<a href="../../design/appendix-h-v2-api-decomposition/#h17-migration-correctness--the-fan-outs-untested-invariants">§H.17</a>): proxied→proxied (always wires <code>defaultProxyRef</code>, never silent direct egress); <code>maxListeners</code> pinned to the v1 effective value; emitted objects pass v2 CEL under envtest; K identical templates → one content-addressed <code>RunnerTemplate</code>; standalone-vs-inline precedence (standalone wins) defined.</li>
 </ul>
 <h2 id="api-maturity--graduation-v2alpha1--v2beta1--v2">API maturity &amp; graduation (<code>v2alpha1</code> → <code>v2beta1</code> → <code>v2</code>)<a class="headerlink" href="#api-maturity--graduation-v2alpha1--v2beta1--v2" title="Permanent link">&para;</a></h2>
-<p><strong>Why <code>v2alpha1</code> and not <code>v1alpha1</code> in the new group?</strong> Nothing technical forces
-the version bump: a CRD is identified by <strong>group + kind</strong>, and the version is
-orthogonal, so <code>actionsgateways.actions-gateway.com</code> would coexist with
-<code>actionsgateways.actions-gateway.github.com</code> just as cleanly at <code>v1alpha1</code>. The
-breaking-ness comes entirely from the group rename and the decomposition (the
-fan-out the migration tool handles), not from the version number. <code>v2alpha1</code> is a
-<strong>deliberate communication choice</strong>: this whole effort is named "v2" throughout the
-docs, the migration is "v1→v2", and the graduation ladder targets <code>v2</code> — so serving
-it as <code>v1alpha1</code> would leave the API surface contradicting how everyone refers to
-it. It also keeps the in-module Go layout unambiguous (<code>api/v1alpha1</code> +
-<code>api/v2alpha1</code>, rather than two <code>api/v1alpha1</code> packages). The minor cost — a fresh
-group whose first GA is <code>v2</code>, skipping <code>v1</code> — is accepted. (Confirmed 2026-06-21.)</p>
-<p>The milestones above ship <code>v2alpha1</code>. Reaching the stable <code>v2</code> group involves two
-<em>different</em> kinds of transition — do not conflate them:</p>
+<p><strong>Why <code>v2alpha1</code> and not <code>v1alpha1</code> in the new group?</strong> Nothing technical forces the version bump: a CRD is identified by <strong>group + kind</strong>, and the version is orthogonal, so <code>actionsgateways.actions-gateway.com</code> would coexist with <code>actionsgateways.actions-gateway.github.com</code> just as cleanly at <code>v1alpha1</code>.
+The breaking-ness comes entirely from the group rename and the decomposition (the fan-out the migration tool handles), not from the version number. <code>v2alpha1</code> is a <strong>deliberate communication choice</strong>: this whole effort is named "v2" throughout the docs, the migration is "v1→v2", and the graduation ladder targets <code>v2</code> — so serving it as <code>v1alpha1</code> would leave the API surface contradicting how everyone refers to it.
+It also keeps the in-module Go layout unambiguous (<code>api/v1alpha1</code> + <code>api/v2alpha1</code>, rather than two <code>api/v1alpha1</code> packages).
+The minor cost — a fresh group whose first GA is <code>v2</code>, skipping <code>v1</code> — is accepted.
+(Confirmed 2026-06-21.)</p>
+<p>The milestones above ship <code>v2alpha1</code>.
+Reaching the stable <code>v2</code> group involves two <em>different</em> kinds of transition — do not conflate them:</p>
 <ul>
-<li><strong><code>v1alpha1</code> → <code>v2alpha1</code> is a fan-out, done once.</strong> One v1 object becomes
-  several v2 objects, which a conversion webhook cannot express — hence the M5
-  migration tool (<a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>).
+<li><strong><code>v1alpha1</code> → <code>v2alpha1</code> is a fan-out, done once.</strong> One v1 object becomes several v2 objects, which a conversion webhook cannot express — hence the M5 migration tool (<a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>).
   This is the only expensive transition.</li>
-<li><strong><code>v2alpha1</code> → <code>v2beta1</code> → <code>v2</code> are in-place graduations of the same kinds.</strong>
-  Field changes are refinements within the same object shape, so a conversion
-  webhook round-trips served versions automatically — no tenant re-apply, no
-  migration tool.</li>
+<li><strong><code>v2alpha1</code> → <code>v2beta1</code> → <code>v2</code> are in-place graduations of the same kinds.</strong> Field changes are refinements within the same object shape, so a conversion webhook round-trips served versions automatically — no tenant re-apply, no migration tool.</li>
 </ul>
-<p>We graduate <strong>through beta</strong>, not <code>alpha → GA</code> directly: GA's contract is
-permanent backward compatibility, and <code>v2</code>'s large surface (five kinds,
-multi-gateway, cross-references) needs a beta soak — where operators can rely on
-it in production while shape problems can still be fixed <em>with</em> a migration path —
-before that contract is signed.</p>
+<p>We graduate <strong>through beta</strong>, not <code>alpha → GA</code> directly: GA's contract is permanent backward compatibility, and <code>v2</code>'s large surface (five kinds, multi-gateway, cross-references) needs a beta soak — where operators can rely on it in production while shape problems can still be fixed <em>with</em> a migration path — before that contract is signed.</p>
 <table>
 <thead>
 <tr>
@@ -3267,115 +3152,59 @@ before that contract is signed.</p>
 <p>Each graduation hop is cheap but not free:</p>
 <ol>
 <li>Add the new version to each CRD; mark it the <strong>storage version</strong>.</li>
-<li><strong>Conversion webhook</strong> round-trips served versions — <a href="../../STATUS/#deferred">Q74</a>
-   (<code>Hub</code>/<code>Convertible</code> scaffolding) lands at the first graduation, and is
-   distinct from the M5 fan-out tool a conversion webhook cannot replace.</li>
-<li><strong>Storage migration</strong> — rewrite stored objects to the new version, then drop
-   the superseded served version.</li>
+<li><strong>Conversion webhook</strong> round-trips served versions — <a href="../../STATUS/#deferred">Q74</a> (<code>Hub</code>/<code>Convertible</code> scaffolding) lands at the first graduation, and is distinct from the M5 fan-out tool a conversion webhook cannot replace.</li>
+<li><strong>Storage migration</strong> — rewrite stored objects to the new version, then drop the superseded served version.</li>
 </ol>
-<p><code>v1alpha1</code> is deprecated and removed on its own track once v2 adoption is
-sufficient — which is also when the Q147 dual-read window closes (M5,
-<a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>).</p>
+<p><code>v1alpha1</code> is deprecated and removed on its own track once v2 adoption is sufficient — which is also when the Q147 dual-read window closes (M5, <a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>).</p>
 <h2 id="definition-of-done-v2-ga">Definition of done (v2 GA)<a class="headerlink" href="#definition-of-done-v2-ga" title="Permanent link">&para;</a></h2>
-<p>v2 is GA when <strong>all</strong> hold: M1, M2, M3a, M3b, and M5 have shipped; the API has
-graduated <code>v2alpha1 → v2beta1 → v2</code> (conversion webhook + storage migration per
-hop); at least one representative tenant has migrated v1→v2 with the tool for
-real; <code>v1alpha1</code> is deprecated with a named removal release; and the
-operator-facing docs (onboarding, migration guide, CRD reference) are updated.
+<p>v2 is GA when <strong>all</strong> hold: M1, M2, M3a, M3b, and M5 have shipped; the API has graduated <code>v2alpha1 → v2beta1 → v2</code> (conversion webhook + storage migration per hop); at least one representative tenant has migrated v1→v2 with the tool for real; <code>v1alpha1</code> is deprecated with a named removal release; and the operator-facing docs (onboarding, migration guide, CRD reference) are updated.
 Cross-namespace sharing (M4) and direct egress are <strong>not</strong> GA gates.</p>
-<p><strong>Website per capability.</strong> Any milestone that lands a user-facing capability —
-notably <strong>M2</strong> (reusable <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code> golden images)
-and <strong>M3b</strong> (multiple gateways per namespace) — updates the positioning pages
-(<a href="../../why-gag/">why-gag.md</a>, <a href="../../">index.md</a>) in the same PR, so the
-competitive story vs ARC tracks what actually ships. Per the
-<a href="../../development/doc-update-matrix/">doc-update matrix</a>. Internal-only milestones
-(M1 types, M5 tooling) need no website change.</p>
+<p><strong>Website per capability.</strong> Any milestone that lands a user-facing capability — notably <strong>M2</strong> (reusable <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code> golden images) and <strong>M3b</strong> (multiple gateways per namespace) — updates the positioning pages (<a href="../../why-gag/">why-gag.md</a>, <a href="../../">index.md</a>) in the same PR, so the competitive story vs ARC tracks what actually ships.
+Per the <a href="../../development/doc-update-matrix/">doc-update matrix</a>.
+Internal-only milestones (M1 types, M5 tooling) need no website change.</p>
 <h2 id="deferred-out-of-the-critical-path">Deferred (out of the critical path)<a class="headerlink" href="#deferred-out-of-the-critical-path" title="Permanent link">&para;</a></h2>
 <h3 id="direct-egress-optional-proxy-behavior--shipped-q168">Direct egress (optional-proxy behavior) — shipped (Q168)<a class="headerlink" href="#direct-egress-optional-proxy-behavior--shipped-q168" title="Permanent link">&para;</a></h3>
-<p>The <code>proxyRef</code>-optional <em>schema</em> landed in M1; the direct-egress <em>behavior</em> shipped
-in Q168 as an additive fast-follow on M3a: an unset <code>proxyRef</code>/<code>defaultProxyRef</code>
-resolves to <code>proxyMode: Direct</code>, the AGC + workload NetworkPolicies gain the
-GitHub-CIDR allowlist (default-deny egress, allow only DNS + GitHub + the kube API
-for the AGC — restriction preserved, only per-tenant IP <em>identity</em> is lost), the
-managed GitHub-IP refresh was relocated to the gateway level (the <code>IPRangeReconciler</code>
-patches each direct gateway's NetworkPolicies), and the proxy-less gateway/runner set
-carry an advisory <code>EgressUnattributed</code> condition. A reference that names a <em>missing</em>
-proxy still fails closed (<code>ProxyNotFound</code>). See
-<a href="../../design/appendix-h-v2-api-decomposition/#h10-the-egress-proxy-becomes-optional">§H.10</a>.</p>
+<p>The <code>proxyRef</code>-optional <em>schema</em> landed in M1; the direct-egress <em>behavior</em> shipped in Q168 as an additive fast-follow on M3a: an unset <code>proxyRef</code>/<code>defaultProxyRef</code> resolves to <code>proxyMode: Direct</code>, the AGC + workload NetworkPolicies gain the GitHub-CIDR allowlist (default-deny egress, allow only DNS + GitHub + the kube API for the AGC — restriction preserved, only per-tenant IP <em>identity</em> is lost), the managed GitHub-IP refresh was relocated to the gateway level (the <code>IPRangeReconciler</code> patches each direct gateway's NetworkPolicies), and the proxy-less gateway/runner set carry an advisory <code>EgressUnattributed</code> condition.
+A reference that names a <em>missing</em> proxy still fails closed (<code>ProxyNotFound</code>).
+See <a href="../../design/appendix-h-v2-api-decomposition/#h10-the-egress-proxy-becomes-optional">§H.10</a>.</p>
 <h3 id="optional-default-runnertemplate-q172--shipped">Optional default RunnerTemplate (Q172) — <strong>shipped</strong><a class="headerlink" href="#optional-default-runnertemplate-q172--shipped" title="Permanent link">&para;</a></h3>
-<p>The parallel relaxation for <code>templateRef</code>, now implemented. <code>templateRef</code> is
-optional: omit it and resolve via the chain <code>rs.templateRef</code> →
-<code>ActionsGateway.defaultTemplateRef</code> → the single default-marked <code>ClusterRunnerTemplate</code>
-(annotation <code>actions-gateway.com/is-default-template: "true"</code>, the <code>StorageClass</code>
-pattern) → <strong>fail-closed</strong> <code>TemplateNotFound</code>, never a synthesized phantom pod.
-At-most-one cluster-default is enforced at runtime (<code>AmbiguousDefault</code> if two are
-marked, not a silent pick); <code>status.templateSource</code> reports which rung resolved.
-Required → optional is backward-compatible. See
-<a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>.</p>
+<p>The parallel relaxation for <code>templateRef</code>, now implemented. <code>templateRef</code> is optional: omit it and resolve via the chain <code>rs.templateRef</code> → <code>ActionsGateway.defaultTemplateRef</code> → the single default-marked <code>ClusterRunnerTemplate</code> (annotation <code>actions-gateway.com/is-default-template: "true"</code>, the <code>StorageClass</code> pattern) → <strong>fail-closed</strong> <code>TemplateNotFound</code>, never a synthesized phantom pod.
+At-most-one cluster-default is enforced at runtime (<code>AmbiguousDefault</code> if two are marked, not a silent pick); <code>status.templateSource</code> reports which rung resolved.
+Required → optional is backward-compatible.
+See <a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>.</p>
 <h3 id="bring-your-own-proxy-autoscaler-q173--shipped">Bring-your-own proxy autoscaler (Q173) — <strong>shipped</strong><a class="headerlink" href="#bring-your-own-proxy-autoscaler-q173--shipped" title="Permanent link">&para;</a></h3>
-<p><code>targetCPUUtilizationPercentage</code> is the <em>managed-default</em> knob, not the ceiling on
-flexibility. Mirroring <code>managedNetworkPolicy</code>, <code>managedAutoscaling</code> (default
-<code>true</code>) is now implemented: GMC manages the proxy HPA by default; setting it
-<code>false</code> makes GMC create only the proxy Deployment (stable <code>&lt;name&gt;-proxy</code> name,
-labels) and <strong>no HPA</strong> — a previously managed HPA is deleted on the flip — so an
-operator can target the Deployment with KEDA, VPA, or a custom HPA. While <code>false</code>
-the external scaler owns <code>.spec.replicas</code> outright (scale-to-zero included — the
-reconciler's zero-restore only applies to the managed-HPA mode),
-<code>maxReplicas</code>/<code>targetCPUUtilizationPercentage</code> are inert, and Ready and
-<code>ProxyQuotaPressure</code> are measured against the Deployment's own desired count.
-Distinct from improving the <em>managed</em> metric (CPU → connection-based), which is
-the Q19 proxy-features work. See
-<a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>.</p>
+<p><code>targetCPUUtilizationPercentage</code> is the <em>managed-default</em> knob, not the ceiling on flexibility.
+Mirroring <code>managedNetworkPolicy</code>, <code>managedAutoscaling</code> (default <code>true</code>) is now implemented: GMC manages the proxy HPA by default; setting it <code>false</code> makes GMC create only the proxy Deployment (stable <code>&lt;name&gt;-proxy</code> name, labels) and <strong>no HPA</strong> — a previously managed HPA is deleted on the flip — so an operator can target the Deployment with KEDA, VPA, or a custom HPA.
+While <code>false</code> the external scaler owns <code>.spec.replicas</code> outright (scale-to-zero included — the reconciler's zero-restore only applies to the managed-HPA mode), <code>maxReplicas</code>/<code>targetCPUUtilizationPercentage</code> are inert, and Ready and <code>ProxyQuotaPressure</code> are measured against the Deployment's own desired count.
+Distinct from improving the <em>managed</em> metric (CPU → connection-based), which is the Q19 proxy-features work.
+See <a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>.</p>
 <h3 id="bring-your-own-proxy-tls-certificate-q174">Bring-your-own proxy TLS certificate (Q174)<a class="headerlink" href="#bring-your-own-proxy-tls-certificate-q174" title="Permanent link">&para;</a></h3>
-<p>The proxy CA/cert is GMC-generated (self-signed) by default. Same pattern: add an
-operator-supplied <code>certificateSecretRef</code> on <code>EgressProxy</code> — when set, GMC uses that
-TLS Secret instead of generating one, letting operators source proxy certs from an
-external PKI/Vault (different algorithm, lifetime, or HSM-backed issuance). <strong>Security
-invariant:</strong> the referenced Secret must be a same-namespace TLS Secret — no
-cross-tenant reuse. Additive optional field, deferred until an operator with managed
-PKI asks. Instantiates <a href="../../design/01-executive-summary/#design-goals">design goal 6</a>.</p>
+<p>The proxy CA/cert is GMC-generated (self-signed) by default.
+Same pattern: add an operator-supplied <code>certificateSecretRef</code> on <code>EgressProxy</code> — when set, GMC uses that TLS Secret instead of generating one, letting operators source proxy certs from an external PKI/Vault (different algorithm, lifetime, or HSM-backed issuance). <strong>Security invariant:</strong> the referenced Secret must be a same-namespace TLS Secret — no cross-tenant reuse.
+Additive optional field, deferred until an operator with managed PKI asks.
+Instantiates <a href="../../design/01-executive-summary/#design-goals">design goal 6</a>.</p>
 <h3 id="m4--cross-namespace-egressproxy-sharing--shipped-q166">M4 — Cross-namespace <code>EgressProxy</code> sharing — <strong>shipped</strong> (Q166)<a class="headerlink" href="#m4--cross-namespace-egressproxy-sharing--shipped-q166" title="Permanent link">&para;</a></h3>
-<p>Demand fired 2026-08-01 and it shipped into 1.4.0. <code>spec.sharing.allowedNamespaces</code>
-had been served by <code>v2beta1</code> since <code>v1.3.0</code> with <strong>no enforcement</strong>, so every release
-hardened a dormant field; implementing it while it was still effectively unused was
-what kept the fix from being a breaking change.</p>
-<p>Delivered: the proxy references carry an optional <code>namespace</code> on a dedicated
-<code>ProxyObjectRef</code> (not on the shared <code>ObjectRef</code>, which would have opened
-<code>gatewayRef</code>/<code>templateRef</code> too); provider-side consent failing closed with
-<code>ProxyShareNotGranted</code>; CA distribution as a ConfigMap into granted namespaces only;
-dual-side NetworkPolicy, with the granted peer carrying both selectors in one entry so
-they AND. Absent or empty <code>sharing</code> denies, so the same-namespace-only posture is both
-the default and the unset case.</p>
-<p>The GMC mediates every cross-namespace resolution, because the AGC's namespace-scoped
-cache and per-tenant <code>Role</code> cannot read a remote <code>EgressProxy</code> and widening them was a
-blast-radius regression. The projected ConfigMap's presence is the grant. Design
-detail and what the implementation settled:
-<a href="../../design/appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharing">§H.9</a>.</p>
+<p>Demand fired 2026-08-01 and it shipped into 1.4.0. <code>spec.sharing.allowedNamespaces</code> had been served by <code>v2beta1</code> since <code>v1.3.0</code> with <strong>no enforcement</strong>, so every release hardened a dormant field; implementing it while it was still effectively unused was what kept the fix from being a breaking change.</p>
+<p>Delivered: the proxy references carry an optional <code>namespace</code> on a dedicated <code>ProxyObjectRef</code> (not on the shared <code>ObjectRef</code>, which would have opened <code>gatewayRef</code>/<code>templateRef</code> too); provider-side consent failing closed with <code>ProxyShareNotGranted</code>; CA distribution as a ConfigMap into granted namespaces only; dual-side NetworkPolicy, with the granted peer carrying both selectors in one entry so they AND.
+Absent or empty <code>sharing</code> denies, so the same-namespace-only posture is both the default and the unset case.</p>
+<p>The GMC mediates every cross-namespace resolution, because the AGC's namespace-scoped cache and per-tenant <code>Role</code> cannot read a remote <code>EgressProxy</code> and widening them was a blast-radius regression.
+The projected ConfigMap's presence is the grant.
+Design detail and what the implementation settled: <a href="../../design/appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharing">§H.9</a>.</p>
 <h3 id="also-deferred--opportunistic-per-appendix-h">Also deferred / opportunistic (per Appendix H)<a class="headerlink" href="#also-deferred--opportunistic-per-appendix-h" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Admin policy singleton/class</strong> — keep flags; promote on the documented triggers (<a href="../../design/appendix-h-v2-api-decomposition/#h14-admin-policy-layer--deferred-until-tiering-is-real">§H.14</a>).</li>
 <li><strong>Worker-image registry allowlist</strong> — lands with the admin policy layer, not as a standalone tenant field (<a href="../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">§H.15</a>).</li>
-<li><strong>Credentials discriminated union</strong> — ~~a future <code>workloadIdentityRef</code> sibling field is additive; keep the single <code>githubAppRef</code> now.~~ <strong>Reversed (Q196):</strong> nesting the credential under an explicit-discriminator <code>spec.credentials</code> parent is itself break-only, so it ships in <code>v2alpha1</code> before the v2beta1 freeze. See <a href="../v2beta1/">v2beta1.md</a> and <a href="../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">§H.15</a>.</li>
+<li><strong>Credentials discriminated union</strong> — ~~a future <code>workloadIdentityRef</code> sibling field is additive; keep the single <code>githubAppRef</code> now.~~ <strong>Reversed (Q196):</strong> nesting the credential under an explicit-discriminator <code>spec.credentials</code> parent is itself break-only, so it ships in <code>v2alpha1</code> before the v2beta1 freeze.
+  See <a href="../v2beta1/">v2beta1.md</a> and <a href="../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">§H.15</a>.</li>
 <li><strong>Webhook → CEL migration</strong> — opportunistic during M1's schema rewrite, not a gate.</li>
 </ul>
-<p><strong>Architecture review (enhancements evaluated).</strong> A full architecture pass found
-no new <em>breaking</em> holes — the breaking surface is fully covered by the milestones
-above. New <em>additive</em> enhancements were filed as backlog rather than pulled into
-v2: AGC horizontal-scaling/HA (Q169), Kubernetes Events for job lifecycle (Q170),
-and tenant-tunable AGC resources (Q171). Deliberately <strong>not</strong> pre-added to the v2
-schema: the proxy feature fields (destination allowlist, audit logging, in-cluster
-TLS, per-set dedicated pool — Q19). An optional field added later is non-breaking,
-so per the simplicity principle they wait for their trigger; pre-adding them now
-would be abstraction ahead of need.</p>
+<p><strong>Architecture review (enhancements evaluated).</strong> A full architecture pass found no new <em>breaking</em> holes — the breaking surface is fully covered by the milestones above.
+New <em>additive</em> enhancements were filed as backlog rather than pulled into v2: AGC horizontal-scaling/HA (Q169), Kubernetes Events for job lifecycle (Q170), and tenant-tunable AGC resources (Q171).
+Deliberately <strong>not</strong> pre-added to the v2 schema: the proxy feature fields (destination allowlist, audit logging, in-cluster TLS, per-set dedicated pool — Q19).
+An optional field added later is non-breaking, so per the simplicity principle they wait for their trigger; pre-adding them now would be abstraction ahead of need.</p>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
-<p>Each milestone adds to the existing tiers (see <a href="../../development/testing/">testing.md</a>):
-M1 unit + CRD install; M2/M3a envtest integration (real apiserver: defaulting,
-CEL, watch-driven conditions); M3b a kind e2e for per-gateway isolation; M5
-migration-tool unit + a round-trip integration test.</p>
-<p>Two cross-cutting checks: a <strong>coexistence test</strong> asserting <code>v1alpha1</code> keeps
-working while <code>v2alpha1</code> is served (the no-behavior-change non-goal), and — because
-the migration tool targets the latest <em>served</em> v2 version — its golden output is
-regenerated and re-validated at each graduation (alpha→beta→GA).</p>
+<p>Each milestone adds to the existing tiers (see <a href="../../development/testing/">testing.md</a>): M1 unit + CRD install; M2/M3a envtest integration (real apiserver: defaulting, CEL, watch-driven conditions); M3b a kind e2e for per-gateway isolation; M5 migration-tool unit + a round-trip integration test.</p>
+<p>Two cross-cutting checks: a <strong>coexistence test</strong> asserting <code>v1alpha1</code> keeps working while <code>v2alpha1</code> is served (the no-behavior-change non-goal), and — because the migration tool targets the latest <em>served</em> v2 version — its golden output is regenerated and re-validated at each graduation (alpha→beta→GA).</p>
 
 
 

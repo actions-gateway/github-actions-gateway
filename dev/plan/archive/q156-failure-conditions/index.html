@@ -2598,21 +2598,16 @@
 
 
 <h1 id="q156--surface-provisioning--credential-failures-as-conditions">Q156 — Surface provisioning + credential failures as conditions<a class="headerlink" href="#q156--surface-provisioning--credential-failures-as-conditions" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> Make provisioning and credential failures visible in CRD <code>.status.conditions</code>
-(not just stale conditions / the event stream), and promote condition type + reason
-strings to exported API consts so Q157 can extend them consistently.</p>
+<p><strong>Goal:</strong> Make provisioning and credential failures visible in CRD <code>.status.conditions</code> (not just stale conditions / the event stream), and promote condition type + reason strings to exported API consts so Q157 can extend them consistently.</p>
 <p><strong>Approach:</strong>
-1. Promote condition <strong>type</strong> and <strong>reason</strong> strings to exported consts in new
-   <code>conditions.go</code> files in <code>cmd/gmc/api/v1alpha1</code> and <code>cmd/agc/api/v1alpha1</code>.
+1. Promote condition <strong>type</strong> and <strong>reason</strong> strings to exported consts in new <code>conditions.go</code> files in <code>cmd/gmc/api/v1alpha1</code> and <code>cmd/agc/api/v1alpha1</code>.
    Reconcilers/metrics/listener reference the consts.
-2. <strong>ActionsGateway <code>Degraded</code> (GMC):</strong> on a provisioning error <code>Reconcile</code> returns
-   before <code>updateStatus</code>, leaving conditions stale. Capture the failing step
-   (typed <code>provisioningError</code> set via a deferred wrap in <code>reconcileResources</code>) and
-   write <code>Degraded=True</code> (+ <code>Ready=False</code>) <em>before</em> the early return. Clear it
-   (<code>Degraded=False</code>) on the success path in <code>updateStatus</code>.
-3. <strong>RunnerGroup <code>CredentialUnavailable</code> (AGC):</strong> the installation-token fetch
-   failure path emits only an Event. Add <code>CredentialUnavailable=True</code> written to
-   status before the early return (keep the Event). Clear it on the success path.</p>
+2. <strong>ActionsGateway <code>Degraded</code> (GMC):</strong> on a provisioning error <code>Reconcile</code> returns before <code>updateStatus</code>, leaving conditions stale.
+   Capture the failing step (typed <code>provisioningError</code> set via a deferred wrap in <code>reconcileResources</code>) and write <code>Degraded=True</code> (+ <code>Ready=False</code>) <em>before</em> the early return.
+   Clear it (<code>Degraded=False</code>) on the success path in <code>updateStatus</code>.
+3. <strong>RunnerGroup <code>CredentialUnavailable</code> (AGC):</strong> the installation-token fetch failure path emits only an Event.
+   Add <code>CredentialUnavailable=True</code> written to status before the early return (keep the Event).
+   Clear it on the success path.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li>[x] Investigate reconcilers, condition helpers, status types, const locations</li>
@@ -2629,10 +2624,8 @@ strings to exported API consts so Q157 can extend them consistently.</p>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Q82 quota-condition <strong>reason</strong> literals (<code>QuotaUnknown</code>, <code>InsufficientQuotaHeadroom</code>,
-  …) are left inline — computed branch states owned by that feature; only their
-  <strong>types</strong> are promoted. Q157 adds <code>WorkersUnschedulable</code>/<code>EgressRulesStale</code>
-  alongside these consts.</li>
+<li>Q82 quota-condition <strong>reason</strong> literals (<code>QuotaUnknown</code>, <code>InsufficientQuotaHeadroom</code>, …) are left inline — computed branch states owned by that feature; only their <strong>types</strong> are promoted.
+  Q157 adds <code>WorkersUnschedulable</code>/<code>EgressRulesStale</code> alongside these consts.</li>
 </ul>
 
 

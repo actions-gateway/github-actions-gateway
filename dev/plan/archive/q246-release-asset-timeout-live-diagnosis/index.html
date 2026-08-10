@@ -2653,117 +2653,65 @@
 
 
 <h1 id="q246--live-cold-cache-diagnosis-of-the-dogfood-release-asset-download-timeout">Q246 — Live cold-cache diagnosis of the dogfood release-asset download timeout<a class="headerlink" href="#q246--live-cold-cache-diagnosis-of-the-dogfood-release-asset-download-timeout" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ done — cause confirmed (a) Q61 cache race; minimal fix implemented (this session)
-<strong>Owner:</strong> worker session
-<strong>Parent:</strong> <a href="../../gke-dogfood/">gke-dogfood.md</a> (Q246 note), blocks <a href="../../../STATUS/">Q224</a></p>
+<p><strong>Status:</strong> ✅ done — cause confirmed (a) Q61 cache race; minimal fix implemented (this session) <strong>Owner:</strong> worker session <strong>Parent:</strong> <a href="../../gke-dogfood/">gke-dogfood.md</a> (Q246 note), blocks <a href="../../../STATUS/">Q224</a></p>
 <h2 id="goal-one-sentence">Goal (one sentence)<a class="headerlink" href="#goal-one-sentence" title="Permanent link">&para;</a></h2>
-<p>Confirm on a live GKE cold run whether the dogfood release-asset download
-timeout (shellcheck/coverage tool tarballs) is caused by <strong>(a)</strong> the Q61
-cold-start IP-range-cache race or <strong>(b)</strong> the Q247 node-CPU exhaustion that
-co-occurred — and act on the confirmed cause only.</p>
+<p>Confirm on a live GKE cold run whether the dogfood release-asset download timeout (shellcheck/coverage tool tarballs) is caused by <strong>(a)</strong> the Q61 cold-start IP-range-cache race or <strong>(b)</strong> the Q247 node-CPU exhaustion that co-occurred — and act on the confirmed cause only.</p>
 <h2 id="premise-correction-already-established-do-not-re-litigate">Premise correction (already established, do not re-litigate)<a class="headerlink" href="#premise-correction-already-established-do-not-re-litigate" title="Permanent link">&para;</a></h2>
-<p>Release-asset downloads 302-redirect <code>github.com</code> → <code>objects.githubusercontent.com</code>
-→ <code>185.199.108.0/22</code>, which the worker egress NetworkPolicy already permits
-(GMC merges GitHub <code>/meta</code> api+actions+web; <code>web</code> contains that range —
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go"><code>ipranges.go</code></a>). So the
-original "widen the allowlist / bake the asset into the image" premise is
-wrong. Verified live: at steady state the <code>dogfood-workload</code> NP carries 7337
-CIDR peers including <code>185.199.108.0/22</code>.</p>
+<p>Release-asset downloads 302-redirect <code>github.com</code> → <code>objects.githubusercontent.com</code> → <code>185.199.108.0/22</code>, which the worker egress NetworkPolicy already permits (GMC merges GitHub <code>/meta</code> api+actions+web; <code>web</code> contains that range — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go"><code>ipranges.go</code></a>).
+So the original "widen the allowlist / bake the asset into the image" premise is wrong.
+Verified live: at steady state the <code>dogfood-workload</code> NP carries 7337 CIDR peers including <code>185.199.108.0/22</code>.</p>
 <h2 id="two-hypotheses">Two hypotheses<a class="headerlink" href="#two-hypotheses" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>(a) Q61 cache race.</strong> At GMC cold start the per-CR reconcile
-  (<code>ActionsGatewayV2Reconciler.applyNetworkPolicy</code>, a <code>CreateOrPatch</code> that
-  overwrites <code>Spec.Egress</code> wholesale) can rebuild the workload NP from an
-  <strong>empty</strong> cache (<code>githubCIDRs()</code> → nil → <code>githubCIDREgressRule</code> returns
-  <code>ok=false</code> → no GitHub egress rule), transiently blanking the 7337-CIDR
-  allowlist until <code>IPRangeReconciler.reconcileInitial</code> fetches <code>/meta</code> and
-  patches it back. A worker egressing inside that window is default-denied.</li>
-<li><strong>(b) Q247 CPU starve.</strong> The node the worker lands on is CPU-saturated at
-  the moment of the download, so the transfer stalls/times out even though the
-  NP is correctly programmed.</li>
+<li><strong>(a) Q61 cache race.</strong> At GMC cold start the per-CR reconcile (<code>ActionsGatewayV2Reconciler.applyNetworkPolicy</code>, a <code>CreateOrPatch</code> that overwrites <code>Spec.Egress</code> wholesale) can rebuild the workload NP from an <strong>empty</strong> cache (<code>githubCIDRs()</code> → nil → <code>githubCIDREgressRule</code> returns <code>ok=false</code> → no GitHub egress rule), transiently blanking the 7337-CIDR allowlist until <code>IPRangeReconciler.reconcileInitial</code> fetches <code>/meta</code> and patches it back.
+  A worker egressing inside that window is default-denied.</li>
+<li><strong>(b) Q247 CPU starve.</strong> The node the worker lands on is CPU-saturated at the moment of the download, so the transfer stalls/times out even though the NP is correctly programmed.</li>
 </ul>
 <h2 id="method-live-not-source-reading--repo-has-been-burned-by-source-only-pr-59">Method (live, not source-reading — repo has been burned by source-only, PR #59)<a class="headerlink" href="#method-live-not-source-reading--repo-has-been-burned-by-source-only-pr-59" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Measure the race window (deterministic).</strong> Instrument the <code>dogfood-workload</code>
-   NP's <code>185.199.108.0/22</code> presence + total CIDR count on a tight poll, then
-   scale <code>default-pool</code> 0→1 (the exact cold-start path <code>start.sh</code> uses; evicts &amp;
-   reschedules the GMC pod fresh). Capture: does the NP ever lose the web range?
-   for how long? → the race-window duration.</li>
-<li><strong>Live CI cold run.</strong> Route CI to GAG (<code>GAG_RUNNER</code> = gag-ci), trigger a
-   workflow whose job downloads a release asset (shellcheck tarball / setup-go
-   toolchain). At the download moment capture: workload NP web-CIDR presence,
-   node CPU/mem (<code>kubectl top</code>), and whether the download succeeds or times out.</li>
-<li><strong>Correlate</strong> the race window against the worker's actual download timing
-   (acquire → pod → runner boot → checkout → download ≈ minutes after cold
-   start). Decide (a) vs (b) from the live evidence.</li>
+<li><strong>Measure the race window (deterministic).</strong> Instrument the <code>dogfood-workload</code> NP's <code>185.199.108.0/22</code> presence + total CIDR count on a tight poll, then scale <code>default-pool</code> 0→1 (the exact cold-start path <code>start.sh</code> uses; evicts &amp; reschedules the GMC pod fresh).
+   Capture: does the NP ever lose the web range? for how long? → the race-window duration.</li>
+<li><strong>Live CI cold run.</strong> Route CI to GAG (<code>GAG_RUNNER</code> = gag-ci), trigger a workflow whose job downloads a release asset (shellcheck tarball / setup-go toolchain).
+   At the download moment capture: workload NP web-CIDR presence, node CPU/mem (<code>kubectl top</code>), and whether the download succeeds or times out.</li>
+<li><strong>Correlate</strong> the race window against the worker's actual download timing (acquire → pod → runner boot → checkout → download ≈ minutes after cold start).
+   Decide (a) vs (b) from the live evidence.</li>
 </ol>
 <h2 id="decision-rule">Decision rule<a class="headerlink" href="#decision-rule" title="Permanent link">&para;</a></h2>
 <ul>
-<li>NP missing the web range at worker-download time → <strong>(a)</strong>; implement the
-  minimal fix (gate worker egress on cache-ready, or warm cache before first
-  acquire).</li>
-<li>NP has the web range, node CPU pegged, download stalls → <strong>(b)</strong>; Q246 is
-  subsumed by Q247/Q248, record and close (no new fix).</li>
-<li>NP has the web range, node CPU fine, download succeeds → Q246 no longer
-  reproduces; record as resolved/subsumed.</li>
+<li>NP missing the web range at worker-download time → <strong>(a)</strong>; implement the minimal fix (gate worker egress on cache-ready, or warm cache before first acquire).</li>
+<li>NP has the web range, node CPU pegged, download stalls → <strong>(b)</strong>; Q246 is subsumed by Q247/Q248, record and close (no new fix).</li>
+<li>NP has the web range, node CPU fine, download succeeds → Q246 no longer reproduces; record as resolved/subsumed.</li>
 </ul>
 <h2 id="findings--confirmed-cause-a-q61-cold-start-cache-race">Findings — CONFIRMED CAUSE: (a) Q61 cold-start cache race<a class="headerlink" href="#findings--confirmed-cause-a-q61-cold-start-cache-race" title="Permanent link">&para;</a></h2>
-<p>Live run on <code>gag-dogfood</code> (us-east1-b), GMC <code>v1.1.0-rc.5</code>, AGC <code>q247-45c7bff</code>,
-direct-egress gateway, <code>2026-07-01</code>. All four observations are live-exec'd, not
-source-inferred.</p>
+<p>Live run on <code>gag-dogfood</code> (us-east1-b), GMC <code>v1.1.0-rc.5</code>, AGC <code>q247-45c7bff</code>, direct-egress gateway, <code>2026-07-01</code>.
+All four observations are live-exec'd, not source-inferred.</p>
 <ol>
 <li>
-<p><strong>Premise is dead (egress already works).</strong> A pod carrying
-   <code>actions-gateway/component=workload</code> (so <code>dogfood-workload</code> applies) curled the
-   exact shellcheck release asset
-   <code>github.com/koalaman/shellcheck/releases/download/v0.11.0/…tar.xz</code>: <strong>HTTP 200,
-   <code>remote_ip=185.199.108.133</code>, 0.32 s, 2 559 196 bytes</strong>. The 302→
-   <code>objects.githubusercontent.com</code>→<code>185.199.108.0/22</code> hop is already permitted —
-   the workload NP carries <strong>7337</strong> CIDR peers including that range.</p>
+<p><strong>Premise is dead (egress already works).</strong> A pod carrying <code>actions-gateway/component=workload</code> (so <code>dogfood-workload</code> applies) curled the exact shellcheck release asset <code>github.com/koalaman/shellcheck/releases/download/v0.11.0/…tar.xz</code>: <strong>HTTP 200, <code>remote_ip=185.199.108.133</code>, 0.32 s, 2 559 196 bytes</strong>.
+   The 302→ <code>objects.githubusercontent.com</code>→<code>185.199.108.0/22</code> hop is already permitted — the workload NP carries <strong>7337</strong> CIDR peers including that range.</p>
 </li>
 <li>
-<p><strong>The Q61 blank is real and live-measured.</strong> Scaling <code>default-pool</code> 0→1 (the
-   real cold-start path) forced a fresh GMC. From <code>08:39:01</code>→<code>08:39:26</code> (<strong>~25 s</strong>)
-   the <code>dogfood-workload</code> NP dropped from <code>web=YES cidrs=7337</code> to <code>web=NO cidrs=1</code>:
-   the per-CR reconcile (<code>ActionsGatewayV2Reconciler.applyNetworkPolicy</code>, a
-   <code>CreateOrPatch</code> that overwrites <code>Spec.Egress</code> wholesale) rebuilt the NP from the
-   still-empty IP-range cache (<code>githubCIDRs()</code>→nil → <code>githubCIDREgressRule</code> returns
-   <code>ok=false</code> → GitHub rule omitted), then <code>IPRangeReconciler.reconcileInitial</code>
-   completed the first <code>/meta</code> fetch and re-patched the 7337 CIDRs back.</p>
+<p><strong>The Q61 blank is real and live-measured.</strong> Scaling <code>default-pool</code> 0→1 (the real cold-start path) forced a fresh GMC.
+   From <code>08:39:01</code>→<code>08:39:26</code> (<strong>~25 s</strong>) the <code>dogfood-workload</code> NP dropped from <code>web=YES cidrs=7337</code> to <code>web=NO cidrs=1</code>: the per-CR reconcile (<code>ActionsGatewayV2Reconciler.applyNetworkPolicy</code>, a <code>CreateOrPatch</code> that overwrites <code>Spec.Egress</code> wholesale) rebuilt the NP from the still-empty IP-range cache (<code>githubCIDRs()</code>→nil → <code>githubCIDREgressRule</code> returns <code>ok=false</code> → GitHub rule omitted), then <code>IPRangeReconciler.reconcileInitial</code> completed the first <code>/meta</code> fetch and re-patched the 7337 CIDRs back.</p>
 </li>
 <li>
-<p><strong>The blank denies the CDN — the exact Q246 symptom.</strong> Removing the GitHub rule
-   from the live NP (deterministically modelling the blank) while a curl loop hit
-   the CDN: the sample inside the window returned <strong><code>code=000 rc=28</code></strong> (connect
-   timeout — curl "downloads time out"), bracketed by HTTP 200 before and after.
-   Restoring the rule → HTTP 200 again. NetworkPolicy default-deny semantics + this
-   live test prove egress is dropped whenever the rule is absent.</p>
+<p><strong>The blank denies the CDN — the exact Q246 symptom.</strong> Removing the GitHub rule from the live NP (deterministically modelling the blank) while a curl loop hit the CDN: the sample inside the window returned <strong><code>code=000 rc=28</code></strong> (connect timeout — curl "downloads time out"), bracketed by HTTP 200 before and after.
+   Restoring the rule → HTTP 200 again.
+   NetworkPolicy default-deny semantics + this live test prove egress is dropped whenever the rule is absent.</p>
 </li>
 <li>
-<p><strong>The blank is non-deterministic; CPU is the amplifier.</strong> A fast <em>warm</em> GMC pod
-   restart did <strong>not</strong> blank at all — the <code>/meta</code> fetch won the race. Only the slow
-   <em>node-cold-start</em> blanked, for 25 s. So the window's occurrence and width scale
-   with GMC-startup + <code>/meta</code>-fetch latency, which the Q247 node CPU exhaustion
-   lengthens (and a CPU-starved e2-standard-2 system node can <em>restart</em> GMC
-   mid-run, re-opening the window while workers are live). CPU (b) is a severity
-   amplifier, not the cause: egress succeeds in 0.32 s whenever the NP is
-   programmed, at any CPU level.</p>
+<p><strong>The blank is non-deterministic; CPU is the amplifier.</strong> A fast <em>warm</em> GMC pod restart did <strong>not</strong> blank at all — the <code>/meta</code> fetch won the race.
+   Only the slow <em>node-cold-start</em> blanked, for 25 s.
+   So the window's occurrence and width scale with GMC-startup + <code>/meta</code>-fetch latency, which the Q247 node CPU exhaustion lengthens (and a CPU-starved e2-standard-2 system node can <em>restart</em> GMC mid-run, re-opening the window while workers are live).
+   CPU (b) is a severity amplifier, not the cause: egress succeeds in 0.32 s whenever the NP is programmed, at any CPU level.</p>
 </li>
 </ol>
-<p><strong>Verdict:</strong> cause is <strong>(a) the Q61 cache race</strong> — the per-CR reconcile blanking an
-already-programmed direct-egress allowlist from an empty cache. (b) Q247 CPU
-exhaustion only widens/re-triggers the window; it is already fixed (Q247) with node
-right-sizing tracked in Q248.</p>
+<p><strong>Verdict:</strong> cause is <strong>(a) the Q61 cache race</strong> — the per-CR reconcile blanking an already-programmed direct-egress allowlist from an empty cache.
+(b) Q247 CPU exhaustion only widens/re-triggers the window; it is already fixed (Q247) with node right-sizing tracked in Q248.</p>
 <h2 id="fix-minimal">Fix (minimal)<a class="headerlink" href="#fix-minimal" title="Permanent link">&para;</a></h2>
-<p>Stop the per-CR reconcile from blanking an existing direct-egress NP's GitHub
-allowlist while the IP-range cache is not yet ready: when the cache has not
-completed its first fetch (<code>IPRangeCache.LastRefresh</code> bool false), <strong>preserve the
-existing NP's egress</strong> instead of overwriting it with an empty-cache rebuild. A
-not-yet-created NP is still created fail-closed (no GitHub rule) — safe, because no
-worker exists that early and <code>IPRangeReconciler</code> patches the rule in within seconds.
-This closes the window entirely: no GMC restart, under any load, ever strips a live
-worker's (or the AGC's) GitHub egress. Secure-by-default preserved — egress is never
-widened beyond the last-known-good GitHub ranges.</p>
+<p>Stop the per-CR reconcile from blanking an existing direct-egress NP's GitHub allowlist while the IP-range cache is not yet ready: when the cache has not completed its first fetch (<code>IPRangeCache.LastRefresh</code> bool false), <strong>preserve the existing NP's egress</strong> instead of overwriting it with an empty-cache rebuild.
+A not-yet-created NP is still created fail-closed (no GitHub rule) — safe, because no worker exists that early and <code>IPRangeReconciler</code> patches the rule in within seconds.
+This closes the window entirely: no GMC restart, under any load, ever strips a live worker's (or the AGC's) GitHub egress.
+Secure-by-default preserved — egress is never widened beyond the last-known-good GitHub ranges.</p>
 
 
 

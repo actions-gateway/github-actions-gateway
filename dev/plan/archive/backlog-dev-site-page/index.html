@@ -2703,116 +2703,64 @@
 
 
 <h1 id="filterable-backlog-page-on-the-dev-docs-site-q558">Filterable backlog page on the dev docs site (Q558)<a class="headerlink" href="#filterable-backlog-page-on-the-dev-docs-site-q558" title="Permanent link">&para;</a></h1>
-<p>Publish <code>docs/STATUS.md</code> on the docs site — <strong><code>dev</code> version only</strong> — with
-label/status/size filter chips, so humans get a filterable backlog view while
-the markdown file stays the single source of truth that sessions, the linter,
-and the merge discipline operate on. Filed 2026-07-31 from a
-backlog-visibility design discussion; this doc records the decisions so the
-implementing session doesn't re-litigate them.</p>
+<p>Publish <code>docs/STATUS.md</code> on the docs site — <strong><code>dev</code> version only</strong> — with label/status/size filter chips, so humans get a filterable backlog view while the markdown file stays the single source of truth that sessions, the linter, and the merge discipline operate on.
+Filed 2026-07-31 from a backlog-visibility design discussion; this doc records the decisions so the implementing session doesn't re-litigate them.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>Complete</strong> — shipped 2026-07-31. All five acceptance criteria met; the durable
-how-to-maintain content is now
-<a href="../../../development/website/#publication-scope">website.md § Publication scope</a> and
-<a href="../../../development/website/#links-into-the-source-tree">§ Links into the source tree</a>.</p>
-<p>One thing this doc did not anticipate. Publishing the repo-internal tree turned
-<strong>724 relative links into source files</strong> — <code>../cmd/agc/main.go</code> and friends,
-which resolve on github.com and 404 on the site — into published dead links, 34
-of them on <code>STATUS.md</code> itself. Criterion 1 ("working links") could not be met
-without a fix, so the change also adds
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a>, which absolutizes any
-relative target escaping <code>docs/</code> against <code>repo_url</code>. That was not scope growth
-for its own sake: <code>design/</code> and <code>operations/</code> had been shipping the same links
-dead on the public site all along, and the rewrite is one rule for the whole
-tree. Remaining after it: 9 pre-existing INFO-level directory links, none
-broken.</p>
+<p><strong>Complete</strong> — shipped 2026-07-31.
+All five acceptance criteria met; the durable how-to-maintain content is now <a href="../../../development/website/#publication-scope">website.md § Publication scope</a> and <a href="../../../development/website/#links-into-the-source-tree">§ Links into the source tree</a>.</p>
+<p>One thing this doc did not anticipate.
+Publishing the repo-internal tree turned <strong>724 relative links into source files</strong> — <code>../cmd/agc/main.go</code> and friends, which resolve on github.com and 404 on the site — into published dead links, 34 of them on <code>STATUS.md</code> itself.
+Criterion 1 ("working links") could not be met without a fix, so the change also adds <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a>, which absolutizes any relative target escaping <code>docs/</code> against <code>repo_url</code>.
+That was not scope growth for its own sake: <code>design/</code> and <code>operations/</code> had been shipping the same links dead on the public site all along, and the rewrite is one rule for the whole tree.
+Remaining after it: 9 pre-existing INFO-level directory links, none broken.</p>
 <h2 id="decisions">Decisions<a class="headerlink" href="#decisions" title="Permanent link">&para;</a></h2>
 <h3 id="markdown-stays-the-single-source-of-truth">Markdown stays the single source of truth<a class="headerlink" href="#markdown-stays-the-single-source-of-truth" title="Permanent link">&para;</a></h3>
-<p>Rejected: moving the backlog to HTML or a YAML source. The lint gate, the
-isolated-commit merge semantics, the <code>&lt;a id="QN"&gt;</code> anchors, PR-diff
-readability, and the backlog skill all operate on the markdown table. The
-site is already "HTML that reads from a markdown source" — MkDocs renders
-it; a small script enhances the rendered table. No second format, nothing to
-drift.</p>
+<p>Rejected: moving the backlog to HTML or a YAML source.
+The lint gate, the isolated-commit merge semantics, the <code>&lt;a id="QN"&gt;</code> anchors, PR-diff readability, and the backlog skill all operate on the markdown table.
+The site is already "HTML that reads from a markdown source" — MkDocs renders it; a small script enhances the rendered table.
+No second format, nothing to drift.</p>
 <h3 id="dev-only-publication-via-a-conditional-exclusion">Dev-only publication, via a conditional exclusion<a class="headerlink" href="#dev-only-publication-via-a-conditional-exclusion" title="Permanent link">&para;</a></h3>
-<p>Release versions are frozen builds — a backlog in them would be a snapshot
-from tag day, stale by construction. The site's mike versioning already
-diverges content per version (each version builds from its ref;
-<code>dev</code> redeploys on every push to <code>main</code>), so dev-only is one conditional:
-MkDocs <code>!ENV</code> tags make the repo-internal <code>exclude_docs</code> entries conditional
-on an env var (<code>MKDOCS_EXCLUDE_DOCS</code>) that only the dev deploy path in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">pages.yml</a> sets. Release deploys never
-set it, including future tags, so no release version ever carries the page.</p>
-<p>As implemented, the env var holds the exclusion <em>list</em> and the <code>!ENV</code> default
-is the full repo-internal set, so the two lists never duplicate. <code>!ENV</code>
-resolves an env value as a scalar node verbatim (measured against
-<code>yaml_env_tag</code>), not by re-parsing it as YAML, so a multi-line default keeps
-its newlines. The trap is that the default applies only when the variable is
-<strong>absent</strong>: a step-level <code>env:</code> with a falling-through <code>|| ''</code> would publish
-the internal docs on every release. <code>pages.yml</code> <code>export</code>s it inside a
-conditional instead.</p>
-<p>Bonus: <code>extra.version.default: stable</code> means Material already banners <code>dev</code>
-as "a different version" — visitors get the not-canonical framing for free.</p>
-<p><strong>This bonus was wrong, and was measured wrong on the deployed site afterwards.</strong>
-Material renders that banner only when a theme override fills its <code>outdated</code>
-block; the stock block is empty, and this repo defined no override, so no version
-carried the framing — <code>dev</code> included. Nothing came for free. The banner (and with
-it the only site-chrome route to this page) was added later; see
-<a href="../../../development/website/#the-version-banner">website.md § The version banner</a>.</p>
+<p>Release versions are frozen builds — a backlog in them would be a snapshot from tag day, stale by construction.
+The site's mike versioning already diverges content per version (each version builds from its ref; <code>dev</code> redeploys on every push to <code>main</code>), so dev-only is one conditional: MkDocs <code>!ENV</code> tags make the repo-internal <code>exclude_docs</code> entries conditional on an env var (<code>MKDOCS_EXCLUDE_DOCS</code>) that only the dev deploy path in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">pages.yml</a> sets.
+Release deploys never set it, including future tags, so no release version ever carries the page.</p>
+<p>As implemented, the env var holds the exclusion <em>list</em> and the <code>!ENV</code> default is the full repo-internal set, so the two lists never duplicate. <code>!ENV</code> resolves an env value as a scalar node verbatim (measured against <code>yaml_env_tag</code>), not by re-parsing it as YAML, so a multi-line default keeps its newlines.
+The trap is that the default applies only when the variable is <strong>absent</strong>: a step-level <code>env:</code> with a falling-through <code>|| ''</code> would publish the internal docs on every release. <code>pages.yml</code> <code>export</code>s it inside a conditional instead.</p>
+<p>Bonus: <code>extra.version.default: stable</code> means Material already banners <code>dev</code> as "a different version" — visitors get the not-canonical framing for free.</p>
+<p><strong>This bonus was wrong, and was measured wrong on the deployed site afterwards.</strong> Material renders that banner only when a theme override fills its <code>outdated</code> block; the stock block is empty, and this repo defined no override, so no version carried the framing — <code>dev</code> included.
+Nothing came for free.
+The banner (and with it the only site-chrome route to this page) was added later; see <a href="../../../development/website/#the-version-banner">website.md § The version banner</a>.</p>
 <h3 id="the-whole-repo-internal-set-publishes-on-dev-not-statusmd-alone">The whole repo-internal set publishes on dev, not STATUS.md alone<a class="headerlink" href="#the-whole-repo-internal-set-publishes-on-dev-not-statusmd-alone" title="Permanent link">&para;</a></h3>
-<p><code>STATUS.md</code> links densely into <code>docs/plan/</code> and <code>docs/development/</code>, which
-share the exclusion. The build is not <code>--strict</code> (pages.yml runs plain
-<code>mkdocs build</code>), so STATUS-only publication would <em>succeed</em> with a page full
-of dead links. The coherent policy: <strong><code>dev</code> = operator docs + contributor
-docs; releases = operator docs only.</strong> The one env var conditions all the
-repo-internal <code>exclude_docs</code> entries together.</p>
+<p><code>STATUS.md</code> links densely into <code>docs/plan/</code> and <code>docs/development/</code>, which share the exclusion.
+The build is not <code>--strict</code> (pages.yml runs plain <code>mkdocs build</code>), so STATUS-only publication would <em>succeed</em> with a page full of dead links.
+The coherent policy: <strong><code>dev</code> = operator docs + contributor docs; releases = operator docs only.</strong> The one env var conditions all the repo-internal <code>exclude_docs</code> entries together.</p>
 <h3 id="filter-chips-via-the-existing-progressive-enhancement-pattern">Filter chips via the existing progressive-enhancement pattern<a class="headerlink" href="#filter-chips-via-the-existing-progressive-enhancement-pattern" title="Permanent link">&para;</a></h3>
-<p><code>docs/javascripts/extra.js</code> already implements persona filter chips over the
-<code>docs/operations/README.md</code> table (<a href="../../../development/website/#progressive-enhancement-docsjavascriptsextrajs">website.md § Progressive
-enhancement</a>).
-Apply the same pattern to the Queue and Deferred tables: chips for label,
-status, and size, parsing the rendered cells (backticked labels, the St/Sz
-columns). Degrades to the plain table on github.com and without JS. The
-website.md enhancement table gains a row naming the source markers it
-depends on.</p>
-<p>As implemented the trigger is table <em>shape</em> — a <code>Labels</code> column plus an
-<code>ID</code>/<code>Item</code> first column — which picks up Flake watch and Progress for free.
-The first-column half is load-bearing: the metric tables in
-<code>design/02-architecture.md</code> and <code>operations/observability-metrics.md</code> also head
-a column <code>Labels</code>, and would otherwise have sprouted chips.</p>
+<p><code>docs/javascripts/extra.js</code> already implements persona filter chips over the <code>docs/operations/README.md</code> table (<a href="../../../development/website/#progressive-enhancement-docsjavascriptsextrajs">website.md § Progressive enhancement</a>).
+Apply the same pattern to the Queue and Deferred tables: chips for label, status, and size, parsing the rendered cells (backticked labels, the St/Sz columns).
+Degrades to the plain table on github.com and without JS.
+The website.md enhancement table gains a row naming the source markers it depends on.</p>
+<p>As implemented the trigger is table <em>shape</em> — a <code>Labels</code> column plus an <code>ID</code>/<code>Item</code> first column — which picks up Flake watch and Progress for free.
+The first-column half is load-bearing: the metric tables in <code>design/02-architecture.md</code> and <code>operations/observability-metrics.md</code> also head a column <code>Labels</code>, and would otherwise have sprouted chips.</p>
 <h3 id="feature-label"><code>feature</code> label<a class="headerlink" href="#feature-label" title="Permanent link">&para;</a></h3>
-<p>The vocabulary covers most work types (<code>bug</code> ≈ fix, <code>docs</code>, <code>tests</code>,
-<code>speed</code> ≈ perf, <code>infra</code> ≈ chore) but has no way to mark a feature — under a
-filterable view that's the first chip someone reaches for. Add <code>feature</code> to
-the legend and retag the rows that warrant it (e.g. Q554, the runner template
-library, which carried <code>docs</code> for want of anything better).
-Stop there: importing the Conventional Commit taxonomy wholesale would
-create synonym pairs (<code>bug</code>/<code>fix</code>) with no query behind them.</p>
+<p>The vocabulary covers most work types (<code>bug</code> ≈ fix, <code>docs</code>, <code>tests</code>, <code>speed</code> ≈ perf, <code>infra</code> ≈ chore) but has no way to mark a feature — under a filterable view that's the first chip someone reaches for.
+Add <code>feature</code> to the legend and retag the rows that warrant it (e.g.
+Q554, the runner template library, which carried <code>docs</code> for want of anything better).
+Stop there: importing the Conventional Commit taxonomy wholesale would create synonym pairs (<code>bug</code>/<code>fix</code>) with no query behind them.</p>
 <h3 id="reachability">Reachability<a class="headerlink" href="#reachability" title="Permanent link">&para;</a></h3>
-<p><a href="../../../roadmap/">roadmap.md</a> (published on all versions) links to the backlog
-with a version-pinned URL (<code>/dev/STATUS/</code>), labeled as the working backlog —
-honest from <code>stable</code>, where the page does not exist.</p>
+<p><a href="../../../roadmap/">roadmap.md</a> (published on all versions) links to the backlog with a version-pinned URL (<code>/dev/STATUS/</code>), labeled as the working backlog — honest from <code>stable</code>, where the page does not exist.</p>
 <h2 id="accepted-wart">Accepted wart<a class="headerlink" href="#accepted-wart" title="Permanent link">&para;</a></h2>
-<p>mike's version switcher keeps the current path, so switching from the dev
-backlog page to <code>stable</code> lands on a 404. Inherent to any per-version page;
-acceptable for a contributor-facing view.</p>
+<p>mike's version switcher keeps the current path, so switching from the dev backlog page to <code>stable</code> lands on a 404.
+Inherent to any per-version page; acceptable for a contributor-facing view.</p>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>/dev/STATUS/</code> renders on the published site with working links into
-   <code>plan/</code> and <code>development/</code>; no release version (existing or future) gains
-   any repo-internal page.</li>
-<li>Queue and Deferred tables get label/status/size filter chips on the site
-   and stay plain readable tables on github.com.</li>
-<li><code>feature</code> joins the STATUS.md label legend and is applied to current
-   feature rows.</li>
+<li><code>/dev/STATUS/</code> renders on the published site with working links into <code>plan/</code> and <code>development/</code>; no release version (existing or future) gains any repo-internal page.</li>
+<li>Queue and Deferred tables get label/status/size filter chips on the site and stay plain readable tables on github.com.</li>
+<li><code>feature</code> joins the STATUS.md label legend and is applied to current feature rows.</li>
 <li>roadmap.md links to the dev backlog page.</li>
-<li>website.md documents the new enhancement's source markers and the
-   conditional-exclusion mechanism; the mkdocs.yml exclusion comment stays
-   accurate.</li>
+<li>website.md documents the new enhancement's source markers and the conditional-exclusion mechanism; the mkdocs.yml exclusion comment stays accurate.</li>
 </ol>
 <h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Any change to the backlog file format, the linter, or the editing
-  workflow.</li>
+<li>Any change to the backlog file format, the linter, or the editing workflow.</li>
 <li>Publishing repo-internal docs on release versions.</li>
 <li>A standalone status/backlog web app or YAML data source.</li>
 </ul>

@@ -2670,95 +2670,59 @@
 
 
 <h1 id="q97--multi-arch-linuxamd64--linuxarm64-published-images">Q97 — Multi-arch (linux/amd64 + linux/arm64) published images<a class="headerlink" href="#q97--multi-arch-linuxamd64--linuxarm64-published-images" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> every published first-party image (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>) is a
-multi-arch OCI image index covering <code>linux/amd64</code> and <code>linux/arm64</code>, with the
-existing signing/SBOM supply-chain story intact across both architectures.</p>
-<p><strong>Status: ✅ implemented</strong> (this doc records the design choices; the live publish
-path is first proven on the next <code>v*</code> tag — see §Verification).</p>
+<p><strong>Goal:</strong> every published first-party image (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>) is a multi-arch OCI image index covering <code>linux/amd64</code> and <code>linux/arm64</code>, with the existing signing/SBOM supply-chain story intact across both architectures.</p>
+<p><strong>Status: ✅ implemented</strong> (this doc records the design choices; the live publish path is first proven on the next <code>v*</code> tag — see §Verification).</p>
 <h2 id="why-multi-arch-not-document-the-limitation">Why multi-arch (not document-the-limitation)<a class="headerlink" href="#why-multi-arch-not-document-the-limitation" title="Permanent link">&para;</a></h2>
-<p>All three pinned base images already cover arm64 — verified against the exact
-digests in the Dockerfiles with <code>docker buildx imagetools inspect</code>:</p>
+<p>All three pinned base images already cover arm64 — verified against the exact digests in the Dockerfiles with <code>docker buildx imagetools inspect</code>:</p>
 <ul>
 <li><code>golang:1.26@sha256:68cb6d…</code> — index incl. <code>linux/amd64</code>, <code>linux/arm64/v8</code></li>
 <li><code>gcr.io/distroless/static:nonroot@sha256:963fa6…</code> — index incl. both</li>
 <li><code>ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b…</code> — index incl. both</li>
 </ul>
-<p>The runtime stages are <code>COPY</code>/<code>ENV</code>/<code>LABEL</code> only (no <code>RUN</code>), so arm64 image
-assembly needs <strong>no QEMU emulation</strong> anywhere: builder stages run on the build
-host's native platform (<code>--platform=$BUILDPLATFORM</code>) and Go cross-compiles via
-<code>GOARCH=$TARGETARCH</code>. Cost is roughly 2× Go compile time on the publish leg only.</p>
+<p>The runtime stages are <code>COPY</code>/<code>ENV</code>/<code>LABEL</code> only (no <code>RUN</code>), so arm64 image assembly needs <strong>no QEMU emulation</strong> anywhere: builder stages run on the build host's native platform (<code>--platform=$BUILDPLATFORM</code>) and Go cross-compiles via <code>GOARCH=$TARGETARCH</code>.
+Cost is roughly 2× Go compile time on the publish leg only.</p>
 <h2 id="changes">Changes<a class="headerlink" href="#changes" title="Permanent link">&para;</a></h2>
 <h3 id="1-dockerfiles--targetostargetarch-plumbing-all-five">1. Dockerfiles — <code>TARGETOS</code>/<code>TARGETARCH</code> plumbing (all five)<a class="headerlink" href="#1-dockerfiles--targetostargetarch-plumbing-all-five" title="Permanent link">&para;</a></h3>
-<p>Each builder stage becomes <code>FROM --platform=$BUILDPLATFORM golang:… AS builder</code>
-and the <code>go build</code> gets <code>GOOS=$TARGETOS GOARCH=$TARGETARCH</code> (BuildKit populates
-both automatically; a plain single-platform <code>docker build</code> keeps working and
-targets the host platform). This also fixes the worker image for local arm64
-(Apple Silicon kind) builds, where the hardcoded <code>GOARCH=amd64</code> produced an
-amd64 wrapper binary on top of an arm64 base image.</p>
-<p><code>test/fakegithub</code> is plumbed too (not published, but built by the e2e bake on
-developer machines that may be arm64).</p>
-<p><code>docker-bake.hcl</code> intentionally stays single-platform (host arch): e2e/kind runs
-only consume the host platform, and a multi-arch bake would double e2e CI build
-time for nothing.</p>
+<p>Each builder stage becomes <code>FROM --platform=$BUILDPLATFORM golang:… AS builder</code> and the <code>go build</code> gets <code>GOOS=$TARGETOS GOARCH=$TARGETARCH</code> (BuildKit populates both automatically; a plain single-platform <code>docker build</code> keeps working and targets the host platform).
+This also fixes the worker image for local arm64 (Apple Silicon kind) builds, where the hardcoded <code>GOARCH=amd64</code> produced an amd64 wrapper binary on top of an arm64 base image.</p>
+<p><code>test/fakegithub</code> is plumbed too (not published, but built by the e2e bake on developer machines that may be arm64).</p>
+<p><code>docker-bake.hcl</code> intentionally stays single-platform (host arch): e2e/kind runs only consume the host platform, and a multi-arch bake would double e2e CI build time for nothing.</p>
 <h3 id="2-publishyml--platforms-recursive-signing-per-arch-sboms">2. <code>publish.yml</code> — platforms, recursive signing, per-arch SBOMs<a class="headerlink" href="#2-publishyml--platforms-recursive-signing-per-arch-sboms" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>platforms: linux/amd64,linux/arm64</code> on the build-push step. With multiple
-  platforms, <code>steps.build.outputs.digest</code> becomes the <strong>image index</strong> digest —
-  exactly what chart values / GMC digest pinning should reference (the kubelet
-  resolves the per-arch manifest from the index at pull time). The run-summary
-  digest step is unchanged and now records the index digest.</li>
-<li><strong>Signing:</strong> <code>cosign sign --recursive</code> — signs the index <em>and</em> each per-arch
-  child manifest. <code>cosign verify</code> on the index (what <code>make verify-release</code> and
-  the operator runbook do) is unchanged; verifying a per-arch digest (e.g. the
-  <code>imageID</code> a kubelet actually pulled) now also succeeds.</li>
-<li><strong>SBOM:</strong> one SBOM <strong>per architecture</strong>, attested onto that architecture's
-  manifest digest. A single syft scan of an index silently picks one platform —
-  an arm64 operator auditing the attestation would get an amd64 package list.
-  The per-arch digests are resolved from the index with
-  <code>docker buildx imagetools inspect --format</code>; syft scans each per-arch ref;
-  <code>cosign attest</code> binds each SBOM to its arch digest. SBOM files are still
-  uploaded as run artifacts (one per arch).</li>
-<li><em>Trade-off:</em> <code>cosign verify-attestation</code> against the <strong>index</strong> digest finds
-    nothing — attestations live on the per-arch manifests. The operator docs
-    show how to resolve the per-arch digest first. The alternative (also
-    attaching both SBOMs to the index) was rejected: two same-type attestations
-    on one digest is ambiguous for policy engines, and the per-arch binding is
-    the precise one.</li>
-<li><code>anchore/sbom-action</code> is replaced by <code>anchore/sbom-action/download-syft</code> +
-    an explicit loop, since the action has no per-platform mode.</li>
+<li><code>platforms: linux/amd64,linux/arm64</code> on the build-push step.
+  With multiple platforms, <code>steps.build.outputs.digest</code> becomes the <strong>image index</strong> digest — exactly what chart values / GMC digest pinning should reference (the kubelet resolves the per-arch manifest from the index at pull time).
+  The run-summary digest step is unchanged and now records the index digest.</li>
+<li><strong>Signing:</strong> <code>cosign sign --recursive</code> — signs the index <em>and</em> each per-arch child manifest. <code>cosign verify</code> on the index (what <code>make verify-release</code> and the operator runbook do) is unchanged; verifying a per-arch digest (e.g. the <code>imageID</code> a kubelet actually pulled) now also succeeds.</li>
+<li><strong>SBOM:</strong> one SBOM <strong>per architecture</strong>, attested onto that architecture's manifest digest.
+  A single syft scan of an index silently picks one platform — an arm64 operator auditing the attestation would get an amd64 package list.
+  The per-arch digests are resolved from the index with <code>docker buildx imagetools inspect --format</code>; syft scans each per-arch ref; <code>cosign attest</code> binds each SBOM to its arch digest.
+  SBOM files are still uploaded as run artifacts (one per arch).</li>
+<li><em>Trade-off:</em> <code>cosign verify-attestation</code> against the <strong>index</strong> digest finds nothing — attestations live on the per-arch manifests.
+    The operator docs show how to resolve the per-arch digest first.
+    The alternative (also attaching both SBOMs to the index) was rejected: two same-type attestations on one digest is ambiguous for policy engines, and the per-arch binding is the precise one.</li>
+<li><code>anchore/sbom-action</code> is replaced by <code>anchore/sbom-action/download-syft</code> + an explicit loop, since the action has no per-platform mode.</li>
 </ul>
 <h3 id="3-pr-ci-security-scanyml--unchanged">3. PR CI (<code>security-scan.yml</code>) — unchanged<a class="headerlink" href="#3-pr-ci-security-scanyml--unchanged" title="Permanent link">&para;</a></h3>
-<p>PR-time image builds/scans/SBOMs stay amd64-only (<code>load: true</code> is
-single-platform by design). The cross-compile path itself is exercised on PRs
-because the Dockerfile builder stages now always go through the
-<code>TARGETOS</code>/<code>TARGETARCH</code> arguments. An arm64 e2e leg is explicitly out of scope
-(amd64 runners cannot run arm64 images).</p>
+<p>PR-time image builds/scans/SBOMs stay amd64-only (<code>load: true</code> is single-platform by design).
+The cross-compile path itself is exercised on PRs because the Dockerfile builder stages now always go through the <code>TARGETOS</code>/<code>TARGETARCH</code> arguments.
+An arm64 e2e leg is explicitly out of scope (amd64 runners cannot run arm64 images).</p>
 <h3 id="4-reproducibility">4. Reproducibility<a class="headerlink" href="#4-reproducibility" title="Permanent link">&para;</a></h3>
-<p>Unchanged per binary: <code>-trimpath -ldflags=-buildid=</code> keeps each arch's binary
-bit-for-bit reproducible; Go cross-compilation is deterministic w.r.t. build
-host. The <em>index</em> digest additionally depends on both child manifests (and
-BuildKit's provenance attestation, as before) — the reproducibility claim
-remains about the binaries/layers, not registry manifest bytes.</p>
+<p>Unchanged per binary: <code>-trimpath -ldflags=-buildid=</code> keeps each arch's binary bit-for-bit reproducible; Go cross-compilation is deterministic w.r.t. build host.
+The <em>index</em> digest additionally depends on both child manifests (and BuildKit's provenance attestation, as before) — the reproducibility claim remains about the binaries/layers, not registry manifest bytes.</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
 <ul>
 <li>PR CI: all five images still build (amd64 leg of the same plumbing).</li>
-<li>Local: <code>docker buildx build --platform linux/arm64 …</code> spot-check of one image
-  confirms cross-compile works without QEMU for the Go stage.</li>
-<li><strong>The multi-arch publish + recursive sign + per-arch attest path runs for the
-  first time on the next <code>v*</code> tag</strong> — same caveat the release runbook already
-  carries for the signing path. Release step 3 (<code>make verify-release</code>) plus the
-  arm64 spot-checks added to the runbook prove it then.</li>
+<li>Local: <code>docker buildx build --platform linux/arm64 …</code> spot-check of one image confirms cross-compile works without QEMU for the Go stage.</li>
+<li><strong>The multi-arch publish + recursive sign + per-arch attest path runs for the first time on the next <code>v*</code> tag</strong> — same caveat the release runbook already carries for the signing path.
+  Release step 3 (<code>make verify-release</code>) plus the arm64 spot-checks added to the runbook prove it then.</li>
 </ul>
 <h2 id="docs-touched">Docs touched<a class="headerlink" href="#docs-touched" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>docs/development/building.md</code> — multi-arch publish, local bake = host arch.</li>
-<li><code>docs/operations/release.md</code> — what a release produces (index digest),
-  per-arch SBOM attestation note in verification.</li>
-<li><code>docs/operations/security-operations.md</code> — verify per-arch signatures;
-  resolve arch digest before <code>verify-attestation</code>.</li>
+<li><code>docs/operations/release.md</code> — what a release produces (index digest), per-arch SBOM attestation note in verification.</li>
+<li><code>docs/operations/security-operations.md</code> — verify per-arch signatures; resolve arch digest before <code>verify-attestation</code>.</li>
 <li><code>docs/operations/install.md</code> — supported platforms prerequisite line.</li>
-<li><code>docs/design/05-security.md</code> — supply-chain row: recursive signing, per-arch
-  SBOM attestations.</li>
+<li><code>docs/design/05-security.md</code> — supply-chain row: recursive signing, per-arch SBOM attestations.</li>
 </ul>
 
 

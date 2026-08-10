@@ -2681,14 +2681,10 @@
 
 
 <h1 id="q436-a-failed-deletesession-strands-the-job-queued-on-a-recycling-session">Q436: a failed <code>DeleteSession</code> strands the job queued on a recycling session<a class="headerlink" href="#q436-a-failed-deletesession-strands-the-job-queued-on-a-recycling-session" title="Permanent link">&para;</a></h1>
-<p><strong>Observed:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30209990520"><code>e2e / e2e</code> run 30209990520</a>
-(kindnet lane, 2026-07-26), spec <code>E2E_AGC_JobLifecycle / E2E_AGC_MultipleJobsQueued:
-each queued job gets its own worker pod</code>. Failed with <code>expected &gt;= 1 new worker
-pods, have 0</code> after the spec's full 6-minute <code>Eventually</code> budget. 50 of 51 other
-specs passed in the same run.</p>
-<p>This is filed as a <strong>bug with an e2e symptom</strong>, not a bare flake: the timeline
-below identifies a specific mechanism, and its production analogue is a job that
-nobody picks up until the broker expires the session server-side.</p>
+<p><strong>Observed:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30209990520"><code>e2e / e2e</code> run 30209990520</a> (kindnet lane, 2026-07-26), spec <code>E2E_AGC_JobLifecycle / E2E_AGC_MultipleJobsQueued: each queued job gets its own worker pod</code>.
+Failed with <code>expected &gt;= 1 new worker pods, have 0</code> after the spec's full 6-minute <code>Eventually</code> budget.
+50 of 51 other specs passed in the same run.</p>
+<p>This is filed as a <strong>bug with an e2e symptom</strong>, not a bare flake: the timeline below identifies a specific mechanism, and its production analogue is a job that nobody picks up until the broker expires the session server-side.</p>
 <h2 id="timeline">Timeline<a class="headerlink" href="#timeline" title="Permanent link">&para;</a></h2>
 <p>Every line is the AGC's own log for <code>session-14</code>, from the failing run:</p>
 <table>
@@ -2730,67 +2726,36 @@ nobody picks up until the broker expires the session server-side.</p>
 </tbody>
 </table>
 <h2 id="mechanism">Mechanism<a class="headerlink" href="#mechanism" title="Permanent link">&para;</a></h2>
-<p>The spec enqueues onto a session it has just observed as live, and the AGC
-recycles that same session nine seconds later. That much is expected and the
-spec is written to tolerate it — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/job_lifecycle_test.go"><code>job_lifecycle_test.go</code></a>
-says so inline: <em>"a recycled single-use session redelivers pool-wide, so the
-worker pod for this job can lag behind the enqueue by a full re-register +
-acquire cycle"</em>.</p>
-<p><strong>That tolerance depends on the recycle completing.</strong> Redelivery is what happens
-when a session is cleanly closed. Here <code>DeleteSession</code> timed out three times, so
-the session leaked instead of closing: fakegithub still holds it, nothing is
-polling it, and the job queued on it is never redelivered to the pool. The
-6-minute budget cannot help — no amount of waiting redelivers a message on a
-session that was never closed.</p>
-<p>So the widened budget (4 min → 6 min, Q179) treats a <em>latency</em> problem, and this
-is a <em>liveness</em> problem wearing the same symptom. That is why the spec has looked
-flaky-but-slow and why widening the window did not retire it.</p>
+<p>The spec enqueues onto a session it has just observed as live, and the AGC recycles that same session nine seconds later.
+That much is expected and the spec is written to tolerate it — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/job_lifecycle_test.go"><code>job_lifecycle_test.go</code></a> says so inline: <em>"a recycled single-use session redelivers pool-wide, so the worker pod for this job can lag behind the enqueue by a full re-register + acquire cycle"</em>.</p>
+<p><strong>That tolerance depends on the recycle completing.</strong> Redelivery is what happens when a session is cleanly closed.
+Here <code>DeleteSession</code> timed out three times, so the session leaked instead of closing: fakegithub still holds it, nothing is polling it, and the job queued on it is never redelivered to the pool.
+The 6-minute budget cannot help — no amount of waiting redelivers a message on a session that was never closed.</p>
+<p>So the widened budget (4 min → 6 min, Q179) treats a <em>latency</em> problem, and this is a <em>liveness</em> problem wearing the same symptom.
+That is why the spec has looked flaky-but-slow and why widening the window did not retire it.</p>
 <h2 id="why-this-is-not-only-a-test-concern">Why this is not only a test concern<a class="headerlink" href="#why-this-is-not-only-a-test-concern" title="Permanent link">&para;</a></h2>
-<p><code>DeleteSession</code> failing is a normal partial failure — a slow or unreachable
-broker. The AGC already logs the consequence accurately (<em>"leaked until it
-expires server-side"</em>), but the log frames it as a resource leak. The timeline
-above shows the leak also <strong>strands any message queued on that session</strong>. In
-production that is a job which no runner will ever acquire until server-side
-expiry, with no condition, event, or metric announcing it.</p>
+<p><code>DeleteSession</code> failing is a normal partial failure — a slow or unreachable broker.
+The AGC already logs the consequence accurately (<em>"leaked until it expires server-side"</em>), but the log frames it as a resource leak.
+The timeline above shows the leak also <strong>strands any message queued on that session</strong>.
+In production that is a job which no runner will ever acquire until server-side expiry, with no condition, event, or metric announcing it.</p>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <p>Investigated 2026-07-26 against the attempt-1 logs and the two implementations.</p>
 <h3 id="1-the-strand-is-fakegithub-only--the-product-analogue-does-not-exist-">1. The strand is fakegithub-only — the product analogue does not exist ✅<a class="headerlink" href="#1-the-strand-is-fakegithub-only--the-product-analogue-does-not-exist-" title="Permanent link">&para;</a></h3>
-<p>The timeline is confirmed verbatim in the attempt-1 log, including the AGC's
-silence afterwards: no further listener activity for <code>agentIndex 0</code> until the
-suite tore down. Two listeners were up (<code>session-14</code> at agentIndex 0,
-<code>session-17</code> at agentIndex 1), and <code>session-17</code> polled throughout — it simply
-had no way to see a job sitting on <code>session-14</code>'s queue.</p>
-<p>That per-session queue is the artifact. fakegithub's <code>/control/enqueue?sessionId=</code>
-addresses a job to <strong>one</strong> session (<code>jobQueues[sessionID]</code>), and only two paths
-move it back to the deliverable pool: <code>DELETE /session</code> and the single-use
-consumption hook, both of which call <code>requeueLocked</code>. The real broker has no
-such state — a job stays in the pool until some session polls for it, and a
-delivery that is not acquired within ~2 min is redelivered pool-wide
-(<a href="../../../design/02-architecture/">02-architecture §2.2</a>, live-confirmed in the
-Q260 dogfood, where GitHub redelivered one job repeatedly over ~12 min).
-<code>DeleteSession</code> <em>accelerates</em> that redelivery; it is not what makes the work
-reachable. So in production a failed <code>DeleteSession</code> costs a session record and
-a delayed redelivery, not a stranded job.</p>
-<p>Corollary worth keeping: <code>/control/sessions</code> reports <strong>registered</strong>, not
-<strong>polling</strong>. <code>session-14</code> was already mid-job when the spec picked it at
-16:24:36 — nine seconds before the recycle — so the enqueue was betting on the
-DELETE from the start. All seven <code>fakegithubEnqueueJob</code> call sites take that bet.</p>
+<p>The timeline is confirmed verbatim in the attempt-1 log, including the AGC's silence afterwards: no further listener activity for <code>agentIndex 0</code> until the suite tore down.
+Two listeners were up (<code>session-14</code> at agentIndex 0, <code>session-17</code> at agentIndex 1), and <code>session-17</code> polled throughout — it simply had no way to see a job sitting on <code>session-14</code>'s queue.</p>
+<p>That per-session queue is the artifact. fakegithub's <code>/control/enqueue?sessionId=</code> addresses a job to <strong>one</strong> session (<code>jobQueues[sessionID]</code>), and only two paths move it back to the deliverable pool: <code>DELETE /session</code> and the single-use consumption hook, both of which call <code>requeueLocked</code>.
+The real broker has no such state — a job stays in the pool until some session polls for it, and a delivery that is not acquired within ~2 min is redelivered pool-wide (<a href="../../../design/02-architecture/">02-architecture §2.2</a>, live-confirmed in the Q260 dogfood, where GitHub redelivered one job repeatedly over ~12 min). <code>DeleteSession</code> <em>accelerates</em> that redelivery; it is not what makes the work reachable.
+So in production a failed <code>DeleteSession</code> costs a session record and a delayed redelivery, not a stranded job.</p>
+<p>Corollary worth keeping: <code>/control/sessions</code> reports <strong>registered</strong>, not <strong>polling</strong>. <code>session-14</code> was already mid-job when the spec picked it at 16:24:36 — nine seconds before the recycle — so the enqueue was betting on the DELETE from the start.
+All seven <code>fakegithubEnqueueJob</code> call sites take that bet.</p>
 <h3 id="2-the-leak-deserved-a-metric-not-more-retries-">2. The leak deserved a metric, not more retries ✅<a class="headerlink" href="#2-the-leak-deserved-a-metric-not-more-retries-" title="Permanent link">&para;</a></h3>
-<p>The AGC's behaviour is already right: <code>deleteSessionDetached</code> retries three
-times on a detached context (Q222) and the listener recycles into a fresh
-session either way. What was missing is that the leak is <em>silent</em> — no
-condition, no event, and the listener recovers as if nothing happened, so a
-broker slow enough to leak a session on every recycle looks like a healthy
-gateway. A counter (<code>actions_gateway_broker_session_leaks_total</code>) closes that
-gap; a longer retry budget would only hold a shutdown open longer, and a
-RunnerGroup condition would alarm on something the gateway self-heals.</p>
+<p>The AGC's behaviour is already right: <code>deleteSessionDetached</code> retries three times on a detached context (Q222) and the listener recycles into a fresh session either way.
+What was missing is that the leak is <em>silent</em> — no condition, no event, and the listener recovers as if nothing happened, so a broker slow enough to leak a session on every recycle looks like a healthy gateway.
+A counter (<code>actions_gateway_broker_session_leaks_total</code>) closes that gap; a longer retry budget would only hold a shutdown open longer, and a RunnerGroup condition would alarm on something the gateway self-heals.</p>
 <h3 id="3-the-spec-did-not-need-to-change-">3. The spec did not need to change ✅<a class="headerlink" href="#3-the-spec-did-not-need-to-change-" title="Permanent link">&para;</a></h3>
-<p>Fixing the harness invariant covers the race for every spec rather than pinning
-one. A job addressed to a session now ages into the owner pool after 30 s
-undelivered, so reachability no longer depends on a DELETE landing or on the
-target session ever polling again. A session that <em>is</em> polling drains its queue
-within one <code>longPollTick</code>, so targeted delivery — which the single-use specs
-rely on — is unaffected.</p>
+<p>Fixing the harness invariant covers the race for every spec rather than pinning one.
+A job addressed to a session now ages into the owner pool after 30 s undelivered, so reachability no longer depends on a DELETE landing or on the target session ever polling again.
+A session that <em>is</em> polling drains its queue within one <code>longPollTick</code>, so targeted delivery — which the single-use specs rely on — is unaffected.</p>
 <h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2818,17 +2783,11 @@ rely on — is unaffected.</p>
 </tr>
 </tbody>
 </table>
-<p>Not addressed: <strong>why</strong> three 3 s DELETE attempts all timed out. The AGC's broker
-client clones <code>http.DefaultTransport</code> (no <code>MaxConnsPerHost</code> cap), so connection
-starvation behind the long-polls is ruled out; fakegithub logs no requests, so
-there is no server-side record of whether the DELETE arrived. A loaded kindnet
-node stalling a 3 s control-plane call is the remaining hypothesis and is not
-worth chasing — the harness no longer depends on the answer, and the metric now
-makes the same event visible in production if it recurs.</p>
+<p>Not addressed: <strong>why</strong> three 3 s DELETE attempts all timed out.
+The AGC's broker client clones <code>http.DefaultTransport</code> (no <code>MaxConnsPerHost</code> cap), so connection starvation behind the long-polls is ruled out; fakegithub logs no requests, so there is no server-side record of whether the DELETE arrived.
+A loaded kindnet node stalling a 3 s control-plane call is the remaining hypothesis and is not worth chasing — the harness no longer depends on the answer, and the metric now makes the same event visible in production if it recurs.</p>
 <h2 id="evidence">Evidence<a class="headerlink" href="#evidence" title="Permanent link">&para;</a></h2>
-<p>Attempt-1 logs for the run above (the default log view is overwritten once a
-failed job is re-run; recover a prior attempt with
-<code>gh api repos/&lt;owner&gt;/&lt;repo&gt;/actions/runs/&lt;id&gt;/attempts/1/logs</code>).</p>
+<p>Attempt-1 logs for the run above (the default log view is overwritten once a failed job is re-run; recover a prior attempt with <code>gh api repos/&lt;owner&gt;/&lt;repo&gt;/actions/runs/&lt;id&gt;/attempts/1/logs</code>).</p>
 
 
 

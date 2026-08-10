@@ -2665,15 +2665,11 @@
 
 
 <h1 id="isolating-concurrent-live-github-runs">Isolating concurrent live-GitHub runs<a class="headerlink" href="#isolating-concurrent-live-github-runs" title="Permanent link">&para;</a></h1>
-<p>Two live-GitHub e2e runs executed simultaneously on 2026-07-29 and collided on
-shared GitHub-side state. Neither run failed — they interfered <em>invisibly</em>, and
-roughly 2.5 hours went into diagnosing symptoms that had no in-cluster cause.
-A third failure mode surfaced the same day: a run killed with <code>kill -9</code> skips
-its <code>AfterAll</code>, stranding a registered runner that then poisons the next run.</p>
-<p>This plan carried Q511, and absorbed the collision reported separately as Q500 —
-that row described the same incident and proposed the alternative fix rather than
-complementary work. The forbid half shipped 2026-07-31; the isolation half is
-parked as <a href="../../STATUS/#Q530">Q530</a>.</p>
+<p>Two live-GitHub e2e runs executed simultaneously on 2026-07-29 and collided on shared GitHub-side state.
+Neither run failed — they interfered <em>invisibly</em>, and roughly 2.5 hours went into diagnosing symptoms that had no in-cluster cause.
+A third failure mode surfaced the same day: a run killed with <code>kill -9</code> skips its <code>AfterAll</code>, stranding a registered runner that then poisons the next run.</p>
+<p>This plan carried Q511, and absorbed the collision reported separately as Q500 — that row described the same incident and proposed the alternative fix rather than complementary work.
+The forbid half shipped 2026-07-31; the isolation half is parked as <a href="../../STATUS/#Q530">Q530</a>.</p>
 <h2 id="what-was-observed">What was observed<a class="headerlink" href="#what-was-observed" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2698,88 +2694,49 @@ parked as <a href="../../STATUS/#Q530">Q530</a>.</p>
 </tbody>
 </table>
 <h3 id="why-the-collision-is-silent">Why the collision is silent<a class="headerlink" href="#why-the-collision-is-silent" title="Permanent link">&para;</a></h3>
-<p>Runner names are unique per registration scope, and the fixture repo is one scope
-(the live-GitHub tenant sets <code>GITHUB_ORG_URL</code> to the repo, so <code>agentpool</code> registers
-repo-scoped). A second run registering a name the first already holds therefore takes
-<code>registerAgent</code>'s conflict path in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go</code></a>: resolve the conflicting record,
-<strong>delete it</strong>, register again. Both runs end up holding a listener whose registration
-the other has removed, and each acquires jobs the other dispatched.</p>
-<p>Nothing on either side errors, because that path is the intended recovery for an AGC
-restart — where deleting the incumbent record <em>is</em> correct. Concurrency turns a
-correct repair into mutual sabotage, and the only observable is a job that never gets
-a worker.</p>
-<p>The singleton rule ("only one live-GitHub run at a time") was documented in
-<a href="../../development/testing/">testing.md</a> but had no enforcement, which is why two
-runs were in flight without either operator noticing.</p>
-<p>The measurement taken during the colliding run was separately confirmed sound —
-the worker pod's job began at 13:21:00Z, matching its own run's 13:20:55Z job
-start, and its namespace did not exist when the other run started. So this plan
-addresses a latent hazard, not a known-corrupted result.</p>
+<p>Runner names are unique per registration scope, and the fixture repo is one scope (the live-GitHub tenant sets <code>GITHUB_ORG_URL</code> to the repo, so <code>agentpool</code> registers repo-scoped).
+A second run registering a name the first already holds therefore takes <code>registerAgent</code>'s conflict path in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go</code></a>: resolve the conflicting record, <strong>delete it</strong>, register again.
+Both runs end up holding a listener whose registration the other has removed, and each acquires jobs the other dispatched.</p>
+<p>Nothing on either side errors, because that path is the intended recovery for an AGC restart — where deleting the incumbent record <em>is</em> correct.
+Concurrency turns a correct repair into mutual sabotage, and the only observable is a job that never gets a worker.</p>
+<p>The singleton rule ("only one live-GitHub run at a time") was documented in <a href="../../development/testing/">testing.md</a> but had no enforcement, which is why two runs were in flight without either operator noticing.</p>
+<p>The measurement taken during the colliding run was separately confirmed sound — the worker pod's job began at 13:21:00Z, matching its own run's 13:20:55Z job start, and its namespace did not exist when the other run started.
+So this plan addresses a latent hazard, not a known-corrupted result.</p>
 <h2 id="the-decision-forbid-concurrency">The decision: forbid concurrency<a class="headerlink" href="#the-decision-forbid-concurrency" title="Permanent link">&para;</a></h2>
-<p>The two filed rows proposed opposite designs — fail fast when a peer run is live,
-or scope the names so concurrent runs cannot collide. <strong>Forbid wins</strong>, decided
-2026-07-31.</p>
+<p>The two filed rows proposed opposite designs — fail fast when a peer run is live, or scope the names so concurrent runs cannot collide. <strong>Forbid wins</strong>, decided 2026-07-31.</p>
 <p>What settled it is that isolating the <em>names</em> does not isolate the <em>routing</em>.
-GitHub routes a job by the runner's <code>runs-on</code> label, and the fixture workflows in
-<code>actions-gateway/gateway-test</code> pin that label literally. Per-run names would leave
-both runs advertising the same label in the same repo, so either run's job could
-still land on either cluster's gateway — the collision would survive the fix that
-was supposed to remove it. Real isolation therefore needs the fixture workflows
-parameterized (<code>runs-on: ${{ inputs.label }}</code>), which is a change to a <strong>different
-repository</strong>, unverifiable from this one, and it still leaves
-<code>dispatchAndResolveRun</code>'s "the run that was not there before" racy under
-concurrency.</p>
+GitHub routes a job by the runner's <code>runs-on</code> label, and the fixture workflows in <code>actions-gateway/gateway-test</code> pin that label literally.
+Per-run names would leave both runs advertising the same label in the same repo, so either run's job could still land on either cluster's gateway — the collision would survive the fix that was supposed to remove it.
+Real isolation therefore needs the fixture workflows parameterized (<code>runs-on: ${{ inputs.label }}</code>), which is a change to a <strong>different repository</strong>, unverifiable from this one, and it still leaves <code>dispatchAndResolveRun</code>'s "the run that was not there before" racy under concurrency.</p>
 <p>Forbidding costs the ability to take two independent live measurements at once.
-That is a real cost given how many Queue rows want live runs, so isolation is
-deferred rather than declined — <a href="../../STATUS/#Q530">Q530</a> carries it, and this
-plan stays open for that half.</p>
+That is a real cost given how many Queue rows want live runs, so isolation is deferred rather than declined — <a href="../../STATUS/#Q530">Q530</a> carries it, and this plan stays open for that half.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <ol>
 <li>✅ Decide forbid-vs-isolate and record the rationale here.</li>
 <li>✅ Implement the chosen design — a <code>BeforeAll</code> preflight.</li>
-<li>✅ Add a cleanup target that deregisters stranded runners, for the <code>kill -9</code>
-   path that skips <code>AfterAll</code>. This is needed regardless of the decision above.</li>
-<li>🔲 Isolate the runs, if the cost of the singleton rule proves too high
-   (<a href="../../STATUS/#Q530">Q530</a>).</li>
+<li>✅ Add a cleanup target that deregisters stranded runners, for the <code>kill -9</code> path that skips <code>AfterAll</code>.
+   This is needed regardless of the decision above.</li>
+<li>🔲 Isolate the runs, if the cost of the singleton rule proves too high (<a href="../../STATUS/#Q530">Q530</a>).</li>
 </ol>
 <h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
-<p><code>preflightFixtureRepoIdle</code> runs in the live-GitHub suite's <code>BeforeAll</code>, ahead of
-the cluster-wide GMC env swap — the suite's first mutation of anything shared. It
-fails the suite when the fixture repo carries either a runner this suite owns or a
-workflow run that has not completed.</p>
-<p>It cannot tell a live peer from wreckage a killed run left behind, and does not
-try: it prints what it found and names both remedies. The <code>kill -9</code> remedy is
-<code>make e2e-github-cleanup</code>, which deregisters those runners and cancels the runs
-holding them. The two filters have to agree — a cleanup narrower than the
-preflight would report success and leave the next run still blocked — so the
-runner-name rule is stated in both places with a cross-reference, and
-<code>scripts/e2e/e2e-github-cleanup-test.sh</code> pins it from the shell side against the
-actual name observed on 2026-07-29.</p>
+<p><code>preflightFixtureRepoIdle</code> runs in the live-GitHub suite's <code>BeforeAll</code>, ahead of the cluster-wide GMC env swap — the suite's first mutation of anything shared.
+It fails the suite when the fixture repo carries either a runner this suite owns or a workflow run that has not completed.</p>
+<p>It cannot tell a live peer from wreckage a killed run left behind, and does not try: it prints what it found and names both remedies.
+The <code>kill -9</code> remedy is <code>make e2e-github-cleanup</code>, which deregisters those runners and cancels the runs holding them.
+The two filters have to agree — a cleanup narrower than the preflight would report success and leave the next run still blocked — so the runner-name rule is stated in both places with a cross-reference, and <code>scripts/e2e/e2e-github-cleanup-test.sh</code> pins it from the shell side against the actual name observed on 2026-07-29.</p>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <ul>
-<li>✅ Starting a second live-GitHub run while one is in flight produces a clear,
-  immediate outcome — a fast failure or a clean isolated run — never silent
-  interference.</li>
-<li>🔲 A run terminated with <code>kill -9</code> leaves no registration that affects the next
-  run, after the cleanup target is invoked. Shipped, not yet demonstrated — see
-  below.</li>
-<li>✅ The singleton rule in <code>testing.md</code> is either enforced in code or replaced by
-  documentation of the isolation guarantee that supersedes it.</li>
+<li>✅ Starting a second live-GitHub run while one is in flight produces a clear, immediate outcome — a fast failure or a clean isolated run — never silent interference.</li>
+<li>🔲 A run terminated with <code>kill -9</code> leaves no registration that affects the next run, after the cleanup target is invoked.
+  Shipped, not yet demonstrated — see below.</li>
+<li>✅ The singleton rule in <code>testing.md</code> is either enforced in code or replaced by documentation of the isolation guarantee that supersedes it.</li>
 </ul>
 <h3 id="what-is-verified-and-what-is-not">What is verified, and what is not<a class="headerlink" href="#what-is-verified-and-what-is-not" title="Permanent link">&para;</a></h3>
-<p>Verified live on 2026-07-31, against <code>actions-gateway/gateway-test</code>: the listing
-half of both filters. <code>gh api repos/…/actions/runners</code> returns what the preflight
-parses, over the operator's existing <code>repo</code> token scope — no App credential and no
-new host dependency — and <code>make e2e-github-cleanup ARGS='--dry-run'</code> reported the
-repo idle, which it was.</p>
-<p>Not demonstrated: the destructive half. The fixture repo held zero runners and no
-in-flight run when this was written, so nothing exercised a real DELETE, a real
-cancel, or the 422 wait that follows one. The runner filter is asserted at the
-unit level against the name observed on 2026-07-29
-(<code>scripts/e2e/e2e-github-cleanup-test.sh</code>), and the preflight's failure path has not
-been observed against real GitHub state at all. The next <code>kill -9</code> is the
-opportunity — take it rather than assuming the second acceptance criterion above.</p>
+<p>Verified live on 2026-07-31, against <code>actions-gateway/gateway-test</code>: the listing half of both filters. <code>gh api repos/…/actions/runners</code> returns what the preflight parses, over the operator's existing <code>repo</code> token scope — no App credential and no new host dependency — and <code>make e2e-github-cleanup ARGS='--dry-run'</code> reported the repo idle, which it was.</p>
+<p>Not demonstrated: the destructive half.
+The fixture repo held zero runners and no in-flight run when this was written, so nothing exercised a real DELETE, a real cancel, or the 422 wait that follows one.
+The runner filter is asserted at the unit level against the name observed on 2026-07-29 (<code>scripts/e2e/e2e-github-cleanup-test.sh</code>), and the preflight's failure path has not been observed against real GitHub state at all.
+The next <code>kill -9</code> is the opportunity — take it rather than assuming the second acceptance criterion above.</p>
 
 
 

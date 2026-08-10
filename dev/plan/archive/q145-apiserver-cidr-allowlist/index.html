@@ -2549,6 +2549,47 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#secure-by-default-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secure-by-default contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2568,50 +2609,34 @@
 
 
 <h1 id="q145--optional-apiserver-cidr-allowlist-for-agc-egress">Q145 — Optional apiserver-CIDR allowlist for AGC egress<a class="headerlink" href="#q145--optional-apiserver-cidr-allowlist-for-agc-egress" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> give operators an opt-in way to scope the AGC NetworkPolicy's
-443/6443 (Kubernetes API server) egress rule to a known apiserver CIDR set,
-closing the deliberately-accepted residual documented in 05-security §5.2
-(Q127 item 7). Leaving it unset preserves today's any-destination behavior
-byte-for-byte.</p>
-<p><strong>Why a GMC flag, not a per-tenant CR field:</strong> the apiserver endpoint is a
-<em>cluster-wide</em> property — identical for every tenant in the cluster — and
-tightening it is a platform/operator decision, not a tenant one. This mirrors
-the existing <code>allowed-priority-classes</code> platform allowlist exactly: chart value
-→ GMC flag → controller → NetworkPolicy. The post-DNAT-unpredictable trap (PR</p>
-<h1 id="59-means-we-cannot-pick-a-portable-default-so-the-safe-default-stays">59) means we cannot pick a portable default, so the safe default stays<a class="headerlink" href="#59-means-we-cannot-pick-a-portable-default-so-the-safe-default-stays" title="Permanent link">&para;</a></h1>
-<p>any-dest and the operator opts in only when their platform exposes a stable
-apiserver CIDR.</p>
+<p><strong>Goal:</strong> give operators an opt-in way to scope the AGC NetworkPolicy's 443/6443 (Kubernetes API server) egress rule to a known apiserver CIDR set, closing the deliberately-accepted residual documented in 05-security §5.2 (Q127 item 7).
+Leaving it unset preserves today's any-destination behavior byte-for-byte.</p>
+<p><strong>Why a GMC flag, not a per-tenant CR field:</strong> the apiserver endpoint is a <em>cluster-wide</em> property — identical for every tenant in the cluster — and tightening it is a platform/operator decision, not a tenant one.
+This mirrors the existing <code>allowed-priority-classes</code> platform allowlist exactly: chart value → GMC flag → controller → NetworkPolicy.
+The post-DNAT-unpredictable trap (PR #59) means we cannot pick a portable default, so the safe default stays any-dest and the operator opts in only when their platform exposes a stable apiserver CIDR.</p>
 <h2 id="secure-by-default-contract">Secure-by-default contract<a class="headerlink" href="#secure-by-default-contract" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>UNSET / empty</strong> → render exactly today's rule: one egress rule with ports
-  443 + 6443 and <strong>no <code>To</code></strong> (any-destination). No behavior change. Clusters
-  with unpredictable post-DNAT apiserver IPs keep working.</li>
-<li><strong>SET</strong> → same ports, but <code>To: [ipBlock per CIDR]</code>. Strictly tighter. This is
-  an opt-in <em>tightening</em>, never a loosening.</li>
+<li><strong>UNSET / empty</strong> → render exactly today's rule: one egress rule with ports 443 + 6443 and <strong>no <code>To</code></strong> (any-destination).
+  No behavior change.
+  Clusters with unpredictable post-DNAT apiserver IPs keep working.</li>
+<li><strong>SET</strong> → same ports, but <code>To: [ipBlock per CIDR]</code>.
+  Strictly tighter.
+  This is an opt-in <em>tightening</em>, never a loosening.</li>
 </ul>
 <h2 id="changes">Changes<a class="headerlink" href="#changes" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>cmd/gmc/cmd/main.go</code> — add <code>--apiserver-cidrs</code> (comma-separated) flag;
-   parse + validate each entry with <code>net.ParseCIDR</code> (fail-fast at startup on a
-   malformed entry — a bad CIDR would otherwise yield an apiserver-rejected NP
-   or silently mis-scope). Thread into the reconciler as <code>APIServerCIDRs</code>.</li>
-<li><code>cmd/gmc/internal/controller/actionsgateway_controller.go</code> — add
-   <code>APIServerCIDRs []string</code> field; pass it to <code>buildAGCNetworkPolicy</code>.</li>
-<li><code>cmd/gmc/internal/controller/builder.go</code> — <code>buildAGCNetworkPolicy(ag,
-   apiServerCIDRs)</code>: when non-empty, attach <code>ipBlock</code> peers to the 443/6443
-   rule; when empty, unchanged. Update godoc.</li>
-<li>Tests — update call sites; add a builder test asserting (a) unset → no <code>To</code>,
-   (b) set → ports unchanged + one <code>ipBlock</code> peer per CIDR.</li>
-<li>Chart — <code>values.yaml</code> <code>apiServerCIDRs: []</code> (secure-by-default comment);
-   <code>deployment.yaml</code> <code>{{- with .Values.apiServerCIDRs }} --apiserver-cidrs=...</code>;
-   <code>values.schema.json</code> array-of-CIDR-strings shape validation.</li>
-<li>Docs — 05-security §5.2 residual row now operator-closable; plan item 7
-   note; <code>docs/operations/security-operations.md</code> operator how-to.</li>
+<li><code>cmd/gmc/cmd/main.go</code> — add <code>--apiserver-cidrs</code> (comma-separated) flag; parse + validate each entry with <code>net.ParseCIDR</code> (fail-fast at startup on a malformed entry — a bad CIDR would otherwise yield an apiserver-rejected NP or silently mis-scope).
+   Thread into the reconciler as <code>APIServerCIDRs</code>.</li>
+<li><code>cmd/gmc/internal/controller/actionsgateway_controller.go</code> — add <code>APIServerCIDRs []string</code> field; pass it to <code>buildAGCNetworkPolicy</code>.</li>
+<li><code>cmd/gmc/internal/controller/builder.go</code> — <code>buildAGCNetworkPolicy(ag, apiServerCIDRs)</code>: when non-empty, attach <code>ipBlock</code> peers to the 443/6443 rule; when empty, unchanged.
+   Update godoc.</li>
+<li>Tests — update call sites; add a builder test asserting (a) unset → no <code>To</code>, (b) set → ports unchanged + one <code>ipBlock</code> peer per CIDR.</li>
+<li>Chart — <code>values.yaml</code> <code>apiServerCIDRs: []</code> (secure-by-default comment); <code>deployment.yaml</code> <code>{{- with .Values.apiServerCIDRs }} --apiserver-cidrs=...</code>; <code>values.schema.json</code> array-of-CIDR-strings shape validation.</li>
+<li>Docs — 05-security §5.2 residual row now operator-closable; plan item 7 note; <code>docs/operations/security-operations.md</code> operator how-to.</li>
 <li><code>docs/STATUS.md</code> — remove Q145 row (own commit).</li>
 </ol>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
-<p><code>make check</code> (incl. helm lint/template) green; render the AGC NetworkPolicy
-both with and without <code>apiServerCIDRs</code> set and confirm any-dest vs ipBlock.</p>
+<p><code>make check</code> (incl. helm lint/template) green; render the AGC NetworkPolicy both with and without <code>apiServerCIDRs</code> set and confirm any-dest vs ipBlock.</p>
 
 
 

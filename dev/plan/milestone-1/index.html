@@ -2968,7 +2968,8 @@
 <li><a href="#8-investigation-findings">8. Investigation Findings</a></li>
 </ul>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><strong>Goal:</strong> Produce a standalone Go binary under <code>cmd/probe/</code> that exercises the complete pre-execution protocol sequence: authenticate via GitHub App credentials → <code>POST /sessions</code> → long-poll <code>GET /message</code> → <code>POST /acquirejob</code> on the <code>run_service_url</code> extracted from the message body → start a <code>renewjob</code> loop every 60 seconds. The probe prints the decrypted job payload to stdout and renews until cancelled.</p>
+<p><strong>Goal:</strong> Produce a standalone Go binary under <code>cmd/probe/</code> that exercises the complete pre-execution protocol sequence: authenticate via GitHub App credentials → <code>POST /sessions</code> → long-poll <code>GET /message</code> → <code>POST /acquirejob</code> on the <code>run_service_url</code> extracted from the message body → start a <code>renewjob</code> loop every 60 seconds.
+The probe prints the decrypted job payload to stdout and renews until cancelled.</p>
 <p><strong>Duration:</strong> Days 1–4</p>
 <p><strong>Definition of Done:</strong>
 - The probe acquires a real job and renews its lock at least three times without GitHub cancelling it.
@@ -2995,8 +2996,10 @@
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>go work init .
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>go work use ./cmd/probe
 </code></pre></div>
-<p>This produces a <code>go.work</code> at the repo root. With it in place, <code>go build ./cmd/probe/...</code> from the root resolves the root module dependency locally, and <code>go test ./...</code> from the root runs tests in every module in the workspace.</p>
-<p>The <code>go.work</code> file is committed to the repository. Future milestones add new module entries as each binary is scaffolded:</p>
+<p>This produces a <code>go.work</code> at the repo root.
+With it in place, <code>go build ./cmd/probe/...</code> from the root resolves the root module dependency locally, and <code>go test ./...</code> from the root runs tests in every module in the workspace.</p>
+<p>The <code>go.work</code> file is committed to the repository.
+Future milestones add new module entries as each binary is scaffolded:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># go.work (final state after all milestones)
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>go 1.22
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
@@ -3007,7 +3010,8 @@
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    ./cmd/gmc     # Milestone 4
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>)
 </code></pre></div>
-<p>Use Go 1.22 or later (required for <code>net/http</code> routing improvements and the <code>slices</code> stdlib package used later). Pin the Go version in both <code>go.mod</code> files and in <code>go.work</code>.</p>
+<p>Use Go 1.22 or later (required for <code>net/http</code> routing improvements and the <code>slices</code> stdlib package used later).
+Pin the Go version in both <code>go.mod</code> files and in <code>go.work</code>.</p>
 <h3 id="12-directory-layout">1.2 Directory layout<a class="headerlink" href="#12-directory-layout" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>github-actions-gateway/
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>├── go.work                          # workspace: ties root + cmd/* modules together
@@ -3033,7 +3037,9 @@
 <a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    └── plan/
 <a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>        └── milestone-1.md           # This file
 </code></pre></div>
-<p>Shared packages (<code>broker</code>, <code>githubapp</code>) live at the root module level, not under <code>internal/</code>. Because the root module is a library consumed only by other modules in this workspace, visibility is controlled by module boundaries rather than the <code>internal/</code> directory mechanism — packages are importable by sibling modules in the workspace but not by unrelated external consumers unless the root module is explicitly published and depended upon. This is the right trade-off for a single-repo multi-binary project.</p>
+<p>Shared packages (<code>broker</code>, <code>githubapp</code>) live at the root module level, not under <code>internal/</code>.
+Because the root module is a library consumed only by other modules in this workspace, visibility is controlled by module boundaries rather than the <code>internal/</code> directory mechanism — packages are importable by sibling modules in the workspace but not by unrelated external consumers unless the root module is explicitly published and depended upon.
+This is the right trade-off for a single-repo multi-binary project.</p>
 <h3 id="13-required-dependencies">1.3 Required dependencies<a class="headerlink" href="#13-required-dependencies" title="Permanent link">&para;</a></h3>
 <p>Add these to the <strong>root module</strong> (<code>go.mod</code> at repo root), since the shared packages need them:</p>
 <table>
@@ -3067,12 +3073,15 @@
 </tr>
 </tbody>
 </table>
-<p>The probe module's <code>go.mod</code> requires only the root module; transitive dependencies are resolved via the workspace. Run <code>go work sync</code> after any dependency change to keep the workspace consistent.</p>
-<p>No Kubernetes dependencies are introduced in Milestone 1. The broker and auth packages must remain K8s-free so they can be unit-tested without a cluster.</p>
+<p>The probe module's <code>go.mod</code> requires only the root module; transitive dependencies are resolved via the workspace.
+Run <code>go work sync</code> after any dependency change to keep the workspace consistent.</p>
+<p>No Kubernetes dependencies are introduced in Milestone 1.
+The broker and auth packages must remain K8s-free so they can be unit-tested without a cluster.</p>
 <hr />
 <h2 id="2-package-design">2. Package Design<a class="headerlink" href="#2-package-design" title="Permanent link">&para;</a></h2>
 <h3 id="21-githubapp--authentication">2.1 <code>githubapp</code> — Authentication<a class="headerlink" href="#21-githubapp--authentication" title="Permanent link">&para;</a></h3>
-<p>Responsible for generating short-lived GitHub App installation access tokens. The probe calls this once at startup and again if the token is near expiry (though the probe is short-lived enough that a single token suffices).</p>
+<p>Responsible for generating short-lived GitHub App installation access tokens.
+The probe calls this once at startup and again if the token is near expiry (though the probe is short-lived enough that a single token suffices).</p>
 <p><strong><code>auth.go</code> — exported surface:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">// Credentials holds the three values read from the GitHub App Secret.</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Credentials</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
@@ -3096,7 +3105,8 @@
 <p><strong>Implementation notes:</strong>
 - Sign a JWT with <code>exp = now + 10 minutes</code>, <code>iat = now - 60 seconds</code> (clock-skew buffer), <code>iss = appId</code> using RS256 via <code>golang-jwt/jwt</code>.
 - Exchange the JWT at <code>POST https://api.github.com/app/installations/{installationId}/access_tokens</code> with <code>Authorization: Bearer {jwt}</code>.
-- Return the <code>token</code> field from the JSON response. The <code>expires_at</code> field should be parsed and stored alongside the token so the AGC's Token Manager (Milestone 2) can use it for proactive refresh.
+- Return the <code>token</code> field from the JSON response.
+  The <code>expires_at</code> field should be parsed and stored alongside the token so the AGC's Token Manager (Milestone 2) can use it for proactive refresh.
 - All HTTP calls in this package must accept an injected <code>*http.Client</code> so tests can substitute an <code>httptest.Server</code>.</p>
 <p><strong><code>auth_test.go</code> — what to cover:</strong>
 - Happy path: stub server returns <code>{"token": "ghs_xxx", "expires_at": "..."}</code>, assert <code>Token()</code> returns <code>"ghs_xxx"</code>.
@@ -3104,7 +3114,8 @@
 - Non-200 from GitHub: assert error is returned with status code in the message.
 - Clock-skew buffer: assert the JWT's <code>iat</code> claim is at least 60 seconds before <code>now</code> (prevents GitHub rejection on clock-skewed hosts).</p>
 <h3 id="22-broker--github-broker-api-client">2.2 <code>broker</code> — GitHub Broker API Client<a class="headerlink" href="#22-broker--github-broker-api-client" title="Permanent link">&para;</a></h3>
-<p>Implements the four broker protocol calls. The design separates concerns clearly:</p>
+<p>Implements the four broker protocol calls.
+The design separates concerns clearly:</p>
 <ul>
 <li><code>types.go</code> — pure Go structs, no methods, no imports beyond <code>encoding/json</code> and <code>time</code>.</li>
 <li><code>client.go</code> — HTTP client wrapping the four calls.</li>
@@ -3186,8 +3197,13 @@
 <a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="c1">// unacquired work. Called during graceful shutdown.</span>
 <a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">BrokerClient</span><span class="p">)</span><span class="w"> </span><span class="nx">DeleteSession</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">sessionID</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
 </code></pre></div>
-<p><strong>Critical implementation detail — the two-URL model:</strong> <code>CreateSession</code> and <code>GetMessage</code> use <code>BrokerClient.BrokerURL</code>. <code>AcquireJob</code> and <code>RenewJob</code> use the <code>run_service_url</code> from the message body, passed as a parameter. These must never be conflated. The comment in <code>types.go</code> and the function signatures enforce this at the call site.</p>
-<p><strong><code>planId</code> extraction:</strong> <code>AcquireJob</code> must check the <code>x-plan-id</code> response header first. If present and non-empty, use it as the plan ID. Fall back to <code>AcquireJobResponse.Plan.PlanID</code> from the body only if the header is absent. This dual-source logic belongs in <code>AcquireJob</code>, not in the caller.</p>
+<p><strong>Critical implementation detail — the two-URL model:</strong> <code>CreateSession</code> and <code>GetMessage</code> use <code>BrokerClient.BrokerURL</code>. <code>AcquireJob</code> and <code>RenewJob</code> use the <code>run_service_url</code> from the message body, passed as a parameter.
+These must never be conflated.
+The comment in <code>types.go</code> and the function signatures enforce this at the call site.</p>
+<p><strong><code>planId</code> extraction:</strong> <code>AcquireJob</code> must check the <code>x-plan-id</code> response header first.
+If present and non-empty, use it as the plan ID.
+Fall back to <code>AcquireJobResponse.Plan.PlanID</code> from the body only if the header is absent.
+This dual-source logic belongs in <code>AcquireJob</code>, not in the caller.</p>
 <p><strong><code>client_test.go</code> — what to cover (full list per §7.1 of the test plan):</strong>
 - Request construction and header injection for all four calls.
 - <code>acquirejob</code> and <code>renewjob</code> use the <code>run_service_url</code> parameter, not <code>BrokerURL</code>.
@@ -3196,15 +3212,20 @@
 - <code>VersionTooOldError</code> is returned on 400 with the version-too-old message.
 - <code>x-plan-id</code> header takes precedence over body <code>.plan.planId</code>.</p>
 <p><strong><code>crypto.go</code>:</strong></p>
-<p>The <code>TaskAgentMessage.Body</code> field is an AES-256 encrypted JSON blob. The AGC must decrypt it before parsing <code>RunnerJobRequestBody</code>.</p>
+<p>The <code>TaskAgentMessage.Body</code> field is an AES-256 encrypted JSON blob.
+The AGC must decrypt it before parsing <code>RunnerJobRequestBody</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// DecryptMessageBody decrypts the AES-256-CBC encrypted body of a TaskAgentMessage.</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">// key is the session key returned by CreateSession (base64-encoded in the response).</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1">// Returns the plaintext bytes or an error.</span>
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="kd">func</span><span class="w"> </span><span class="nx">DecryptMessageBody</span><span class="p">(</span><span class="nx">encryptedBody</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
-<p><strong><code>crypto_test.go</code>:</strong> Test against a pre-generated key/ciphertext pair committed under <code>testdata/</code>. Cover: correct decryption, wrong key, truncated payload, invalid base64. The fixture must be self-contained so the test never calls GitHub.</p>
+<p><strong><code>crypto_test.go</code>:</strong> Test against a pre-generated key/ciphertext pair committed under <code>testdata/</code>.
+Cover: correct decryption, wrong key, truncated payload, invalid base64.
+The fixture must be self-contained so the test never calls GitHub.</p>
 <h3 id="23-cmdprobemaingo--probe-entry-point">2.3 <code>cmd/probe/main.go</code> — Probe Entry Point<a class="headerlink" href="#23-cmdprobemaingo--probe-entry-point" title="Permanent link">&para;</a></h3>
-<p>The probe is a thin orchestration layer over the two packages above. It imports them as <code>github.com/actions-gateway/github-actions-gateway/broker</code> and <code>github.com/actions-gateway/github-actions-gateway/githubapp</code> — the workspace resolves these to the root module locally. It is not itself unit-tested (it wires up real credentials and makes live calls), but its logic is simple enough to read and audit directly.</p>
+<p>The probe is a thin orchestration layer over the two packages above.
+It imports them as <code>github.com/actions-gateway/github-actions-gateway/broker</code> and <code>github.com/actions-gateway/github-actions-gateway/githubapp</code> — the workspace resolves these to the root module locally.
+It is not itself unit-tested (it wires up real credentials and makes live calls), but its logic is simple enough to read and audit directly.</p>
 <p><strong>Startup sequence:</strong></p>
 <ol>
 <li>Read GitHub App credentials from environment variables:</li>
@@ -3214,40 +3235,57 @@
 <li><code>GITHUB_BROKER_URL</code> (the broker base URL for the runner registration)</li>
 <li><code>GITHUB_RUNNER_VERSION</code> (e.g. <code>"2.327.1"</code>)</li>
 <li>Call <code>NewInstallationTokenProvider</code> and get a token.</li>
-<li>Construct a <code>BrokerClient</code> and call <code>CreateSession</code>. Print the session ID.</li>
+<li>Construct a <code>BrokerClient</code> and call <code>CreateSession</code>.
+   Print the session ID.</li>
 <li>Enter a <code>GetMessage</code> loop:</li>
 <li>On <code>nil</code> (202), log "no job, polling again…" and retry immediately (the 50s long-poll already provides natural rate limiting).</li>
 <li>On error, apply backoff per §3.3 of the design (up to 5 consecutive errors: 15–30s jitter; beyond 5: 30–60s jitter).</li>
 <li>On a <code>RunnerJobRequest</code> message, break out of the loop.</li>
 <li>Decrypt the message body using the session key from <code>CreateSession</code>.</li>
-<li>Call <code>AcquireJob</code> using <code>RunJobRequestBody.RunServiceURL</code>. Log the <code>planId</code> and <code>lockedUntil</code>.</li>
+<li>Call <code>AcquireJob</code> using <code>RunJobRequestBody.RunServiceURL</code>.
+   Log the <code>planId</code> and <code>lockedUntil</code>.</li>
 <li>Print the full decrypted payload to stdout.</li>
-<li>Start a <code>renewjob</code> goroutine that ticks every 60 seconds. The goroutine logs each renewal result.</li>
+<li>Start a <code>renewjob</code> goroutine that ticks every 60 seconds.
+   The goroutine logs each renewal result.</li>
 <li>Optionally call <code>AcknowledgeRunnerRequest</code> (see Investigation Task A below) and observe the result.</li>
-<li>Block until <code>SIGINT</code>/<code>SIGTERM</code>. On signal, call <code>DeleteSession</code> and log exit.</li>
+<li>Block until <code>SIGINT</code>/<code>SIGTERM</code>.
+    On signal, call <code>DeleteSession</code> and log exit.</li>
 </ol>
-<p><strong>Output for fixture capture:</strong> The probe prints the full raw <code>AcquireJobResponse</code> body (the complete decrypted job instructions) to stdout as JSON. The operator pipes this to <code>testdata/job_payload.json</code> after a successful run. This file is committed as the ground-truth fixture for Milestone 3's worker handoff tests.</p>
+<p><strong>Output for fixture capture:</strong> The probe prints the full raw <code>AcquireJobResponse</code> body (the complete decrypted job instructions) to stdout as JSON.
+The operator pipes this to <code>testdata/job_payload.json</code> after a successful run.
+This file is committed as the ground-truth fixture for Milestone 3's worker handoff tests.</p>
 <hr />
 <h2 id="3-investigation-tasks">3. Investigation Tasks<a class="headerlink" href="#3-investigation-tasks" title="Permanent link">&para;</a></h2>
-<p>Both investigations must be completed before the milestone is declared done. Their findings feed directly into the design — either confirming the existing spec or triggering a revision.</p>
+<p>Both investigations must be completed before the milestone is declared done.
+Their findings feed directly into the design — either confirming the existing spec or triggering a revision.</p>
 <h3 id="3a-investigation--acknowledgerunnerrequest">3.A Investigation — <code>AcknowledgeRunnerRequest</code><a class="headerlink" href="#3a-investigation--acknowledgerunnerrequest" title="Permanent link">&para;</a></h3>
-<p><strong>Context:</strong> The official runner source (<code>MessageListener.cs</code>) calls <code>AcknowledgeRunnerRequestAsync(runnerRequestId, sessionId)</code> after handing a job to the worker. This endpoint is not in the public broker API documentation. Its role is unclear — it may be a replacement for the old <code>DeleteMessage</code> call, a no-op, or required for correct delivery semantics.</p>
+<p><strong>Context:</strong> The official runner source (<code>MessageListener.cs</code>) calls <code>AcknowledgeRunnerRequestAsync(runnerRequestId, sessionId)</code> after handing a job to the worker.
+This endpoint is not in the public broker API documentation.
+Its role is unclear — it may be a replacement for the old <code>DeleteMessage</code> call, a no-op, or required for correct delivery semantics.</p>
 <p><strong>How to investigate:</strong>
 1. After a successful <code>AcquireJob</code>, attempt <code>POST {broker_url}/acknowledge</code> with body <code>{"runnerRequestId": "&lt;runner_request_id&gt;", "sessionId": "&lt;session_id&gt;"}</code>.
 2. Record the HTTP status and response body.
-3. In a second probe run, omit the <code>acknowledge</code> call entirely. Observe whether the same job is redelivered, whether session errors occur, or whether behavior is indistinguishable.</p>
+3. In a second probe run, omit the <code>acknowledge</code> call entirely.
+   Observe whether the same job is redelivered, whether session errors occur, or whether behavior is indistinguishable.</p>
 <p><strong>Expected outcomes:</strong>
-- If <code>acknowledge</code> is required: add it to the execution flow in §4.2 of the operational flows doc and §3.3 of the API contracts doc. Add it to the <code>BrokerClient</code> interface.
-- If <code>acknowledge</code> is a no-op or optional: document the finding as a code comment in <code>client.go</code> and do not add it to the required execution path. The design §3.3 already notes it as unconfirmed.</p>
+- If <code>acknowledge</code> is required: add it to the execution flow in §4.2 of the operational flows doc and §3.3 of the API contracts doc.
+  Add it to the <code>BrokerClient</code> interface.
+- If <code>acknowledge</code> is a no-op or optional: document the finding as a code comment in <code>client.go</code> and do not add it to the required execution path.
+  The design §3.3 already notes it as unconfirmed.</p>
 <p><strong>Document findings:</strong> Add a <code>## Investigation Findings</code> section at the bottom of this file before closing the milestone.</p>
 <h3 id="3b-investigation--egress-ip-variance">3.B Investigation — Egress IP Variance<a class="headerlink" href="#3b-investigation--egress-ip-variance" title="Permanent link">&para;</a></h3>
-<p><strong>Context:</strong> The design requires GitHub broker calls to route through a proxy pool where each call may land on a different pod (different egress IP). GitHub's abuse detection is undocumented. If IP variance causes session rejections or unexpected errors, the proxy design needs a fallback.</p>
+<p><strong>Context:</strong> The design requires GitHub broker calls to route through a proxy pool where each call may land on a different pod (different egress IP).
+GitHub's abuse detection is undocumented.
+If IP variance causes session rejections or unexpected errors, the proxy design needs a fallback.</p>
 <p><strong>How to investigate:</strong>
 1. Implement two <code>httptest</code>-backed <code>CONNECT</code> proxies bound to different local ports (simulating two pods with different egress IPs).
 2. Configure the probe's <code>http.Client</code> with a custom <code>DialContext</code> that round-robins or randomly selects between the two proxy ports for each outbound connection.
 3. Run the probe through the full sequence: <code>CreateSession</code> → <code>GetMessage</code> → <code>AcquireJob</code> → three <code>RenewJob</code> calls, each routed through a different "pod".
-4. Record whether all calls succeed. Note any <code>403 Forbidden</code>, <code>401 Unauthorized</code>, or unusual status codes.</p>
-<p><strong>Implementation note:</strong> This test uses real GitHub calls routed through local <code>httptest</code> CONNECT proxies, not a stubbed broker. The proxies just tunnel CONNECT; they do not intercept TLS. For local testing, two <code>httptest.Server</code> instances running a simple CONNECT handler suffice:</p>
+4. Record whether all calls succeed.
+   Note any <code>403 Forbidden</code>, <code>401 Unauthorized</code>, or unusual status codes.</p>
+<p><strong>Implementation note:</strong> This test uses real GitHub calls routed through local <code>httptest</code> CONNECT proxies, not a stubbed broker.
+The proxies just tunnel CONNECT; they do not intercept TLS.
+For local testing, two <code>httptest.Server</code> instances running a simple CONNECT handler suffice:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">newCONNECTProxy</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">httptest</span><span class="p">.</span><span class="nx">Server</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">httptest</span><span class="p">.</span><span class="nx">NewServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">Method</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodConnect</span><span class="w"> </span><span class="p">{</span>
@@ -3269,10 +3307,12 @@
 </code></pre></div>
 <p><strong>Expected outcomes:</strong>
 - If all calls succeed across IP changes: document as confirmed, proceed to Milestone 4's proxy pool design with confidence.
-- If any call fails: evaluate <code>sessionAffinity: ClientIP</code> on the proxy Service (low effort) vs. per-goroutine proxy assignment (higher fidelity). Pause Milestone 4 planning until resolved.</p>
+- If any call fails: evaluate <code>sessionAffinity: ClientIP</code> on the proxy Service (low effort) vs. per-goroutine proxy assignment (higher fidelity).
+  Pause Milestone 4 planning until resolved.</p>
 <p><strong>Document findings:</strong> Add a <code>## Investigation Findings</code> section at the bottom of this file before closing the milestone.</p>
 <h3 id="3c-investigation--session-reuse-after-acquirejob">3.C Investigation — Session Reuse After <code>acquirejob</code><a class="headerlink" href="#3c-investigation--session-reuse-after-acquirejob" title="Permanent link">&para;</a></h3>
-<p><strong>Context:</strong> The adaptive listener model in <a href="../../design/02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a> requires that a goroutine can call <code>GET /message</code> again on the same <code>sessionId</code> immediately after a successful <code>POST /acquirejob</code>, without tearing down and re-creating the session. If GitHub does not permit this, the AGC must call <code>DELETE /sessions</code> followed by <code>POST /sessions</code> between each job, adding a full registration round-trip of latency to every acquisition cycle and complicating the goroutine lifecycle.</p>
+<p><strong>Context:</strong> The adaptive listener model in <a href="../../design/02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a> requires that a goroutine can call <code>GET /message</code> again on the same <code>sessionId</code> immediately after a successful <code>POST /acquirejob</code>, without tearing down and re-creating the session.
+If GitHub does not permit this, the AGC must call <code>DELETE /sessions</code> followed by <code>POST /sessions</code> between each job, adding a full registration round-trip of latency to every acquisition cycle and complicating the goroutine lifecycle.</p>
 <p><strong>How to investigate:</strong>
 1. Run the probe through the normal sequence: <code>CreateSession</code> → <code>GetMessage</code> → <code>AcquireJob</code>.
 2. Without calling <code>DeleteSession</code>, immediately re-enter the <code>GetMessage</code> long-poll loop on the same <code>sessionId</code>.
@@ -3282,27 +3322,40 @@
    - 404, 410, or any non-2xx → session is invalidated after job acquisition; reuse not supported.
 4. If reuse appears to work, renew the acquired job's lock (via the existing <code>renewjob</code> loop) while simultaneously polling for the second job to confirm the two operations do not interfere.</p>
 <p><strong>Expected outcomes:</strong>
-- If session reuse is permitted: document as confirmed. The Milestone 2 Session Multiplexer design proceeds as specified — one goroutine holds one session and loops indefinitely. Update <a href="../../design/03-api-contracts/">§3.3</a> to record this as a confirmed behavior.
-- If session reuse is not permitted: the AGC goroutine must tear down and re-create the session after each <code>AcquireJob</code>. Add a <code>TODO(session-reuse)</code> note to the Milestone 2 plan flagging the extra latency and the need for a delete→create cycle between jobs.</p>
+- If session reuse is permitted: document as confirmed.
+  The Milestone 2 Session Multiplexer design proceeds as specified — one goroutine holds one session and loops indefinitely.
+  Update <a href="../../design/03-api-contracts/">§3.3</a> to record this as a confirmed behavior.
+- If session reuse is not permitted: the AGC goroutine must tear down and re-create the session after each <code>AcquireJob</code>.
+  Add a <code>TODO(session-reuse)</code> note to the Milestone 2 plan flagging the extra latency and the need for a delete→create cycle between jobs.</p>
 <p><strong>Document findings:</strong> Add §8.C to the Investigation Findings section at the bottom of this file before closing the milestone.</p>
 <h3 id="3d-investigation--job-delivery-throttling-by-session-count">3.D Investigation — Job Delivery Throttling by Session Count<a class="headerlink" href="#3d-investigation--job-delivery-throttling-by-session-count" title="Permanent link">&para;</a></h3>
-<p><strong>Context:</strong> The design assumes GitHub will deliver a queued job to any session that is polling when the job arrives. If GitHub instead binds delivery to the set of sessions registered at the moment the job was <em>queued</em>, the adaptive spawn-on-acquire model has a race: a job can arrive while the replacement listener's <code>POST /sessions</code> call is still in flight, leaving no ready session to receive it. This would cause silent job drops during bursts.</p>
+<p><strong>Context:</strong> The design assumes GitHub will deliver a queued job to any session that is polling when the job arrives.
+If GitHub instead binds delivery to the set of sessions registered at the moment the job was <em>queued</em>, the adaptive spawn-on-acquire model has a race: a job can arrive while the replacement listener's <code>POST /sessions</code> call is still in flight, leaving no ready session to receive it.
+This would cause silent job drops during bursts.</p>
 <p><strong>How to investigate:</strong>
 1. Register a single session and start its <code>GetMessage</code> long-poll.
 2. Queue two workflow jobs simultaneously (trigger two parallel workflow runs).
 3. After the first session acquires the first job, register a second session and start its <code>GetMessage</code> poll.
 4. Observe whether the second session receives the second job:
-   - If it does: GitHub delivers opportunistically to any ready session. The adaptive model is safe.
-   - If the second job is never delivered (times out in the queue or is requeued elsewhere): throttling is tied to the registered session count at queue time. The adaptive model has a delivery gap.
+   - If it does: GitHub delivers opportunistically to any ready session.
+     The adaptive model is safe.
+   - If the second job is never delivered (times out in the queue or is requeued elsewhere): throttling is tied to the registered session count at queue time.
+     The adaptive model has a delivery gap.
 5. As a secondary data point, invert the order: register two sessions, queue two jobs, confirm both jobs are delivered — this establishes the baseline that two simultaneous sessions do each receive a job.</p>
 <p><strong>Expected outcomes:</strong>
-- If delivery is opportunistic: document as confirmed. Proceed with the adaptive listener model. No standby pool is needed.
-- If throttling is confirmed: document the gap. Evaluate pre-spawning 2–3 warm standby sessions per <code>RunnerGroup</code> as a mitigation. Update <a href="../../design/appendix-e-capacity-planning/">Appendix E</a> with the revised warm-pool sizing guidance before beginning Milestone 2.</p>
+- If delivery is opportunistic: document as confirmed.
+  Proceed with the adaptive listener model.
+  No standby pool is needed.
+- If throttling is confirmed: document the gap.
+  Evaluate pre-spawning 2–3 warm standby sessions per <code>RunnerGroup</code> as a mitigation.
+  Update <a href="../../design/appendix-e-capacity-planning/">Appendix E</a> with the revised warm-pool sizing guidance before beginning Milestone 2.</p>
 <p><strong>Document findings:</strong> Add §8.D to the Investigation Findings section at the bottom of this file before closing the milestone.</p>
 <hr />
 <h2 id="4-test-plan">4. Test Plan<a class="headerlink" href="#4-test-plan" title="Permanent link">&para;</a></h2>
 <h3 id="41-unit-tests-go-test--race--from-repo-root">4.1 Unit Tests (<code>go test -race ./...</code> from repo root)<a class="headerlink" href="#41-unit-tests-go-test--race--from-repo-root" title="Permanent link">&para;</a></h3>
-<p>All unit tests must run without network access. Use <code>httptest.NewServer</code> for any HTTP interaction. All tests must pass under <code>-race</code>.</p>
+<p>All unit tests must run without network access.
+Use <code>httptest.NewServer</code> for any HTTP interaction.
+All tests must pass under <code>-race</code>.</p>
 <h4 id="githubapp-root-module"><code>githubapp</code> (root module)<a class="headerlink" href="#githubapp-root-module" title="Permanent link">&para;</a></h4>
 <table>
 <thead>
@@ -3448,7 +3501,8 @@
 </tbody>
 </table>
 <h3 id="42-integration--live-tests-manual-run-during-the-probe-execution">4.2 Integration / Live Tests (manual, run during the probe execution)<a class="headerlink" href="#42-integration--live-tests-manual-run-during-the-probe-execution" title="Permanent link">&para;</a></h3>
-<p>These are not automated in CI for Milestone 1 — they require real GitHub credentials. They become the foundation for the automated integration suite in Milestone 2.</p>
+<p>These are not automated in CI for Milestone 1 — they require real GitHub credentials.
+They become the foundation for the automated integration suite in Milestone 2.</p>
 <table>
 <thead>
 <tr>
@@ -3489,7 +3543,8 @@
 </table>
 <h3 id="43-test-fixture-commitment">4.3 Test Fixture Commitment<a class="headerlink" href="#43-test-fixture-commitment" title="Permanent link">&para;</a></h3>
 <p>After a successful live probe run:
-1. Pipe stdout to <code>testdata/job_payload.json</code>. Redact any sensitive tokens before committing (the <code>ACTIONS_RUNTIME_TOKEN</code> field must be replaced with a placeholder value).
+1. Pipe stdout to <code>testdata/job_payload.json</code>.
+   Redact any sensitive tokens before committing (the <code>ACTIONS_RUNTIME_TOKEN</code> field must be replaced with a placeholder value).
 2. Add a <code>testdata/README.md</code> explaining what each fixture is, how it was captured, and what fields have been redacted.
 3. Generate and commit a <code>testdata/crypto_fixture.json</code> containing a self-contained key/ciphertext/plaintext triple for use by <code>crypto_test.go</code> — this must be synthetically generated (not a real key from GitHub) so the test can run without network access.</p>
 <hr />
@@ -3504,7 +3559,8 @@
 <li>[x] Investigation A finding documented.</li>
 <li>[x] Investigation B finding documented.</li>
 <li>[x] Investigation C finding documented.</li>
-<li>[x] Investigation D finding documented. (409 one-session-per-agent confirmed; opportunistic delivery inferred from §8.C — see §8.D)</li>
+<li>[x] Investigation D finding documented.
+  (409 one-session-per-agent confirmed; opportunistic delivery inferred from §8.C — see §8.D)</li>
 <li>[x] No <code>TODO(milestone-2+)</code> items left untracked — each deferred item has a corresponding note in the Milestone 2 plan or a filed issue.</li>
 </ul>
 <hr />
@@ -3567,7 +3623,8 @@
 <h2 id="7-deferred-to-later-milestones">7. Deferred to Later Milestones<a class="headerlink" href="#7-deferred-to-later-milestones" title="Permanent link">&para;</a></h2>
 <p>The following are explicitly out of scope for Milestone 1 but are noted here so they are not forgotten:</p>
 <ul>
-<li><strong>Token Manager with proactive refresh</strong> (60s before expiry, mutex-protected, shared across goroutines) — Milestone 2. The probe calls <code>Token()</code> once and holds it; the probe is short-lived enough that this suffices.</li>
+<li><strong>Token Manager with proactive refresh</strong> (60s before expiry, mutex-protected, shared across goroutines) — Milestone 2.
+  The probe calls <code>Token()</code> once and holds it; the probe is short-lived enough that this suffices.</li>
 <li><strong>Rate-limit backoff surfaced as a <code>RunnerGroup</code> condition</strong> — Milestone 2 (requires the CRD reconciler).</li>
 <li><strong><code>priorityTiers</code> pod-count logic</strong> — Milestone 2.</li>
 <li><strong>Eviction retry via <code>rerun-failed-jobs</code></strong> — Milestone 2.</li>
@@ -3579,59 +3636,48 @@
 <hr />
 <h2 id="8-investigation-findings">8. Investigation Findings<a class="headerlink" href="#8-investigation-findings" title="Permanent link">&para;</a></h2>
 <h3 id="8a--acknowledgerunnerrequest">8.A — <code>AcknowledgeRunnerRequest</code><a class="headerlink" href="#8a--acknowledgerunnerrequest" title="Permanent link">&para;</a></h3>
-<p><strong>Finding: not required for correct job delivery. AcquireJob alone claims the job.</strong></p>
-<p><strong>What was tested.</strong> After a successful <code>AcquireJob</code>, <code>probeAcknowledge</code> in <code>cmd/probe/main.go</code>
-attempted the v1 VSTS delete-message path:</p>
+<p><strong>Finding: not required for correct job delivery.
+AcquireJob alone claims the job.</strong></p>
+<p><strong>What was tested.</strong> After a successful <code>AcquireJob</code>, <code>probeAcknowledge</code> in <code>cmd/probe/main.go</code> attempted the v1 VSTS delete-message path:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>DELETE {poolBase}/messages/{messageId}?sessionId={sessionId}
 </code></pre></div>
 <p>The live probe (v2 flow, <code>broker.actions.githubusercontent.com</code>) returned:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>HTTP 404  body: &quot;Not found: /_apis/distributedtask/pools/1/messages/5714371765723164553&quot;
 </code></pre></div>
-<p><strong>Why it 404s.</strong> The v2 broker host (<code>broker.actions.githubusercontent.com</code>) does not expose the
-VSTS pool API at all. The correct v2 acknowledge endpoint from the runner source
-(<code>BrokerHttpClient.AcknowledgeRunnerRequestAsync</code>) is:</p>
+<p><strong>Why it 404s.</strong> The v2 broker host (<code>broker.actions.githubusercontent.com</code>) does not expose the VSTS pool API at all.
+The correct v2 acknowledge endpoint from the runner source (<code>BrokerHttpClient.AcknowledgeRunnerRequestAsync</code>) is:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>POST {brokerURL}acknowledge?sessionId={sessionId}
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Content-Type: application/json
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
 <a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>{&quot;runnerRequestId&quot;: &quot;&lt;runnerRequestId&gt;&quot;}
 </code></pre></div>
-<p><strong>Effect of omitting the call.</strong> The probe acquired the job (planId non-empty, job payload
-returned) and the job was not redelivered. The VSTS <code>DeleteMessage</code> semantics are irrelevant in
-the v2 flow — <code>AcquireJob</code> itself is the atomic claim; once it succeeds the job is locked to this
-runner until the lock expires or is explicitly released.</p>
-<p><strong>Decision: do not add to the required execution path.</strong> Acknowledge is a telemetry notification
-to the broker, not a delivery gate. The <code>probeAcknowledge</code> function in <code>cmd/probe/main.go</code> will
-remain as a diagnostic probe only. The <code>BrokerClient</code> does not need an <code>AcknowledgeRunnerRequest</code>
-method for Milestone 2.</p>
-<p><strong>Future note.</strong> If future investigation of the v1 VSTS flow (non-v2 runners) reveals that
-<code>DeleteMessage</code> is required for requeue prevention, add <code>DeleteMessage</code> (not <code>Acknowledge</code>) to
-<code>BrokerClient</code> under a v1 flag. For v2 runners this is confirmed unnecessary.</p>
+<p><strong>Effect of omitting the call.</strong> The probe acquired the job (planId non-empty, job payload returned) and the job was not redelivered.
+The VSTS <code>DeleteMessage</code> semantics are irrelevant in the v2 flow — <code>AcquireJob</code> itself is the atomic claim; once it succeeds the job is locked to this runner until the lock expires or is explicitly released.</p>
+<p><strong>Decision: do not add to the required execution path.</strong> Acknowledge is a telemetry notification to the broker, not a delivery gate.
+The <code>probeAcknowledge</code> function in <code>cmd/probe/main.go</code> will remain as a diagnostic probe only.
+The <code>BrokerClient</code> does not need an <code>AcknowledgeRunnerRequest</code> method for Milestone 2.</p>
+<p><strong>Future note.</strong> If future investigation of the v1 VSTS flow (non-v2 runners) reveals that <code>DeleteMessage</code> is required for requeue prevention, add <code>DeleteMessage</code> (not <code>Acknowledge</code>) to <code>BrokerClient</code> under a v1 flag.
+For v2 runners this is confirmed unnecessary.</p>
 <hr />
 <h3 id="8b--egress-ip-variance">8.B — Egress IP Variance<a class="headerlink" href="#8b--egress-ip-variance" title="Permanent link">&para;</a></h3>
-<p><strong>Finding: IP variance is safe. The v2 broker protocol is stateless per-request. Proceed with
-the Milestone 4 proxy pool design without session affinity.</strong></p>
-<p><strong>Unit-level confirmation.</strong> <code>broker/egress_ip_test.go</code> provides <code>TestCONNECTProxy_TunnelsHTTPS</code>,
-which runs four requests through two alternating transparent CONNECT proxies to a local TLS
-backend. All four succeed. This confirms the proxy infrastructure is correct and that per-call
-proxy rotation is transparent to the HTTP client.</p>
+<p><strong>Finding: IP variance is safe.
+The v2 broker protocol is stateless per-request.
+Proceed with the Milestone 4 proxy pool design without session affinity.</strong></p>
+<p><strong>Unit-level confirmation.</strong> <code>broker/egress_ip_test.go</code> provides <code>TestCONNECTProxy_TunnelsHTTPS</code>, which runs four requests through two alternating transparent CONNECT proxies to a local TLS backend.
+All four succeed.
+This confirms the proxy infrastructure is correct and that per-call proxy rotation is transparent to the HTTP client.</p>
 <p><strong>Why statelessness is assured.</strong> The v2 broker flow observed during the live probe run:</p>
 <ul>
-<li>Authentication is a Bearer token in the <code>Authorization</code> header on every request — no session
-  cookies, no connection-level state.</li>
+<li>Authentication is a Bearer token in the <code>Authorization</code> header on every request — no session cookies, no connection-level state.</li>
 <li><code>CreateSession</code> (v2) returns <code>hasEncryptionKey: false</code> — message bodies are plaintext JSON.
-  There is no RSA-negotiated per-session AES key that would need to be re-established if the
-  TCP connection changes.</li>
+  There is no RSA-negotiated per-session AES key that would need to be re-established if the TCP connection changes.</li>
 <li><code>GetMessage</code> and <code>DeleteSession</code> use only the <code>sessionId</code> query param and the Bearer token.
   No IP-bound state is observed server-side.</li>
 </ul>
-<p><strong>Live test status.</strong> <code>TestEgressIPVariance_Live</code> was scaffolded in <code>broker/egress_ip_test.go</code>
-but was not executed against real GitHub credentials in Milestone 1 (the full protocol impl is
-not wired into a test-callable form yet). It is left with a <code>TODO(investigation-b)</code> for Milestone 2,
-when <code>NewInstallationTokenProvider</code> and <code>BrokerClient</code> are fully integrated and can be called
-from a test harness without duplicating the probe's main.go orchestration.</p>
-<p><strong>Recommendation.</strong> Deploy the Milestone 4 proxy pool without <code>sessionAffinity: ClientIP</code>. If
-unexpected 401/403 responses appear in production under proxy rotation, add affinity as the
-low-effort fallback before investigating per-goroutine proxy assignment.</p>
+<p><strong>Live test status.</strong> <code>TestEgressIPVariance_Live</code> was scaffolded in <code>broker/egress_ip_test.go</code> but was not executed against real GitHub credentials in Milestone 1 (the full protocol impl is not wired into a test-callable form yet).
+It is left with a <code>TODO(investigation-b)</code> for Milestone 2, when <code>NewInstallationTokenProvider</code> and <code>BrokerClient</code> are fully integrated and can be called from a test harness without duplicating the probe's main.go orchestration.</p>
+<p><strong>Recommendation.</strong> Deploy the Milestone 4 proxy pool without <code>sessionAffinity: ClientIP</code>.
+If unexpected 401/403 responses appear in production under proxy rotation, add affinity as the low-effort fallback before investigating per-goroutine proxy assignment.</p>
 <hr />
 <h3 id="8c--session-reuse-after-acquirejob">8.C — Session Reuse After <code>acquirejob</code><a class="headerlink" href="#8c--session-reuse-after-acquirejob" title="Permanent link">&para;</a></h3>
 <p><strong>How to run:</strong></p>
@@ -3645,15 +3691,25 @@ low-effort fallback before investigating per-goroutine proxy assignment.</p>
 <a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span><span class="nv">GITHUB_AGENT_NAME</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span>go<span class="w"> </span>run<span class="w"> </span>./cmd/probe/
 </code></pre></div>
-<p>Queue the first workflow job before starting the probe. Once the probe logs <code>"job acquired"</code>, queue a <strong>second</strong> workflow job. The probe re-enters <code>GetMessage</code> on the same <code>sessionId</code> and logs either <code>SESSION REUSE CONFIRMED</code> (200 with a new <code>RunnerJobRequest</code>) or a session error. Findings appear under <code>INVESTIGATION-C:</code> in the probe's stderr log.</p>
+<p>Queue the first workflow job before starting the probe.
+Once the probe logs <code>"job acquired"</code>, queue a <strong>second</strong> workflow job.
+The probe re-enters <code>GetMessage</code> on the same <code>sessionId</code> and logs either <code>SESSION REUSE CONFIRMED</code> (200 with a new <code>RunnerJobRequest</code>) or a session error.
+Findings appear under <code>INVESTIGATION-C:</code> in the probe's stderr log.</p>
 <p><strong>Questions to answer:</strong>
 - Does <code>GET /message</code> on the same <code>sessionId</code> succeed (200 or 202) immediately after a successful <code>AcquireJob</code>?
 - If 200: does the delivered message represent a new job, confirming the session remained valid?
 - If any error status (404, 410, other): what is the exact status and response body?
 - Does the <code>renewjob</code> loop for the acquired job interfere with the concurrent <code>GetMessage</code> poll?</p>
-<p><strong>Finding:</strong> Session reuse is supported. After <code>AcquireJob</code>, <code>GetMessage</code> on the same <code>sessionId</code> returned <code>202</code> (no-job) on three consecutive polls — the session was never rejected with 404, 410, or any other protocol error. The context deadline (3-minute watchdog) expired before a second job arrived, which ended the test, but this is not a session error. The session remained valid throughout. One incidental observation: the <code>renewjob</code> loop failed with <code>401 Not Authorized</code> ~60 seconds into the test, indicating the run-service URL's job lock expired after the probe acquired but did not execute the job — this is expected and unrelated to session validity.</p>
-<p><strong>Conclusion for Milestone 2:</strong> The Session Multiplexer design proceeds as written. A goroutine can call <code>GetMessage</code> again on the same <code>sessionId</code> immediately after <code>AcquireJob</code> without a delete→create cycle. No additional latency needs to be noted in the Milestone 2 plan.</p>
-<p><strong>Impact on Milestone 2:</strong> If reuse is confirmed, the Session Multiplexer design proceeds as written. If not, add a delete→create cycle to the goroutine's post-acquisition path and note the added latency in the Milestone 2 plan.</p>
+<p><strong>Finding:</strong> Session reuse is supported.
+After <code>AcquireJob</code>, <code>GetMessage</code> on the same <code>sessionId</code> returned <code>202</code> (no-job) on three consecutive polls — the session was never rejected with 404, 410, or any other protocol error.
+The context deadline (3-minute watchdog) expired before a second job arrived, which ended the test, but this is not a session error.
+The session remained valid throughout.
+One incidental observation: the <code>renewjob</code> loop failed with <code>401 Not Authorized</code> ~60 seconds into the test, indicating the run-service URL's job lock expired after the probe acquired but did not execute the job — this is expected and unrelated to session validity.</p>
+<p><strong>Conclusion for Milestone 2:</strong> The Session Multiplexer design proceeds as written.
+A goroutine can call <code>GetMessage</code> again on the same <code>sessionId</code> immediately after <code>AcquireJob</code> without a delete→create cycle.
+No additional latency needs to be noted in the Milestone 2 plan.</p>
+<p><strong>Impact on Milestone 2:</strong> If reuse is confirmed, the Session Multiplexer design proceeds as written.
+If not, add a delete→create cycle to the goroutine's post-acquisition path and note the added latency in the Milestone 2 plan.</p>
 <hr />
 <h3 id="8d--job-delivery-throttling-by-session-count">8.D — Job Delivery Throttling by Session Count<a class="headerlink" href="#8d--job-delivery-throttling-by-session-count" title="Permanent link">&para;</a></h3>
 <p><strong>How to run (sub-step 1 — post-acquisition registration):</strong></p>
@@ -3667,19 +3723,33 @@ low-effort fallback before investigating per-goroutine proxy assignment.</p>
 <a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="nv">GITHUB_AGENT_NAME</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span>go<span class="w"> </span>run<span class="w"> </span>./cmd/probe/
 </code></pre></div>
-<p>Queue the first workflow job before starting the probe. Once the probe logs <code>"job acquired"</code>, queue a <strong>second</strong> workflow job. The probe immediately registers a second session and polls <code>GetMessage</code> on it. Findings appear under <code>INVESTIGATION-D:</code> in stderr. A 3-minute timeout is applied; if it expires with no job delivered, the finding is possible throttling (inconclusive — repeat with the second job pre-queued before the second session registers).</p>
+<p>Queue the first workflow job before starting the probe.
+Once the probe logs <code>"job acquired"</code>, queue a <strong>second</strong> workflow job.
+The probe immediately registers a second session and polls <code>GetMessage</code> on it.
+Findings appear under <code>INVESTIGATION-D:</code> in stderr.
+A 3-minute timeout is applied; if it expires with no job delivered, the finding is possible throttling (inconclusive — repeat with the second job pre-queued before the second session registers).</p>
 <p><strong>How to run (sub-step 2 — inverse baseline, two probe instances):</strong></p>
-<p>Start two probe instances simultaneously (without <code>PROBE_JOB_DELIVERY_TEST</code>), then queue two workflow jobs at the same time. Both instances should each acquire one job. This establishes the baseline that concurrent sessions do each receive a job when they are registered before the jobs are queued.</p>
+<p>Start two probe instances simultaneously (without <code>PROBE_JOB_DELIVERY_TEST</code>), then queue two workflow jobs at the same time.
+Both instances should each acquire one job.
+This establishes the baseline that concurrent sessions do each receive a job when they are registered before the jobs are queued.</p>
 <p><strong>Questions to answer:</strong>
 - Does a session registered <em>after</em> two jobs are queued receive the second job?
 - Does the inverse test (two sessions pre-registered, two jobs queued simultaneously) deliver one job to each session?
 - Is there any observable delay or error when a second job is queued with no second session ready?</p>
 <p><strong>Finding (partial — one confirmed, one inferred):</strong></p>
-<p><strong>One session per registered runner is enforced.</strong> <code>POST {brokerURL}session</code> for an agent that already holds an active session returns HTTP 409 Conflict immediately. The second <code>CreateSession</code> in the probe failed with <code>status 409</code>. This means the AGC cannot multiplex two sessions under the same <code>agentId</code> — each concurrent listener goroutine must correspond to a distinct registered runner agent in the pool.</p>
-<p><strong>Opportunistic delivery is likely but not directly tested.</strong> The probe's <code>investigateJobDelivery</code> function used the <em>same</em> <code>agentId</code> for the second session, so the 409 terminated the test before the second session could poll. The original question — whether a job queued while zero sessions are polling will be delivered to the <em>next</em> session to register — remains unanswered by direct measurement.</p>
-<p><strong>Inference from Investigation C.</strong> Investigation C showed that a session already polling received a newly dispatched job within ~1 second (<code>msg="job message received"</code> appeared immediately after dispatch). This strongly suggests GitHub delivers jobs opportunistically to any ready polling session rather than binding delivery to sessions present at queue time. The 409 constraint is at the <em>session-creation</em> level, not the delivery level.</p>
-<p><strong>Conclusion for Milestone 2:</strong> Each AGC goroutine must correspond to a distinct registered runner (distinct <code>agentId</code>). The adaptive listener model is valid as long as the runner pool is pre-registered with at least as many agents as the target concurrency. The opportunistic delivery assumption is supported by the Investigation C timing evidence; confirm with a two-runner test if stronger proof is needed before finalising the warm-pool sizing in <a href="../../design/appendix-e-capacity-planning/">Appendix E</a>.</p>
-<p><strong>Impact on Milestone 2:</strong> If delivery is opportunistic, no standby pool is needed. If throttling is confirmed, update <a href="../../design/appendix-e-capacity-planning/">Appendix E</a> with warm-pool sizing (2–3 sessions per RunnerGroup) before Milestone 2 design is finalized.</p>
+<p><strong>One session per registered runner is enforced.</strong> <code>POST {brokerURL}session</code> for an agent that already holds an active session returns HTTP 409 Conflict immediately.
+The second <code>CreateSession</code> in the probe failed with <code>status 409</code>.
+This means the AGC cannot multiplex two sessions under the same <code>agentId</code> — each concurrent listener goroutine must correspond to a distinct registered runner agent in the pool.</p>
+<p><strong>Opportunistic delivery is likely but not directly tested.</strong> The probe's <code>investigateJobDelivery</code> function used the <em>same</em> <code>agentId</code> for the second session, so the 409 terminated the test before the second session could poll.
+The original question — whether a job queued while zero sessions are polling will be delivered to the <em>next</em> session to register — remains unanswered by direct measurement.</p>
+<p><strong>Inference from Investigation C.</strong> Investigation C showed that a session already polling received a newly dispatched job within ~1 second (<code>msg="job message received"</code> appeared immediately after dispatch).
+This strongly suggests GitHub delivers jobs opportunistically to any ready polling session rather than binding delivery to sessions present at queue time.
+The 409 constraint is at the <em>session-creation</em> level, not the delivery level.</p>
+<p><strong>Conclusion for Milestone 2:</strong> Each AGC goroutine must correspond to a distinct registered runner (distinct <code>agentId</code>).
+The adaptive listener model is valid as long as the runner pool is pre-registered with at least as many agents as the target concurrency.
+The opportunistic delivery assumption is supported by the Investigation C timing evidence; confirm with a two-runner test if stronger proof is needed before finalising the warm-pool sizing in <a href="../../design/appendix-e-capacity-planning/">Appendix E</a>.</p>
+<p><strong>Impact on Milestone 2:</strong> If delivery is opportunistic, no standby pool is needed.
+If throttling is confirmed, update <a href="../../design/appendix-e-capacity-planning/">Appendix E</a> with warm-pool sizing (2–3 sessions per RunnerGroup) before Milestone 2 design is finalized.</p>
 
 
 

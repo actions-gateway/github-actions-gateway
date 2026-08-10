@@ -2745,28 +2745,17 @@
 
 <h1 id="github-protocol-dependency-register">GitHub protocol dependency register<a class="headerlink" href="#github-protocol-dependency-register" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> Maintainer / platform engineer. This is a durable watch-list, not
-a tutorial.</p>
+<p><strong>Audience:</strong> Maintainer / platform engineer.
+This is a durable watch-list, not a tutorial.</p>
 </blockquote>
 <h2 id="why-this-register-exists">Why this register exists<a class="headerlink" href="#why-this-register-exists" title="Permanent link">&para;</a></h2>
-<p>GAG's core capability — multiplexing thousands of virtual runner sessions and
-provisioning workers on demand — rests on speaking GitHub's <strong>runner-facing
-protocols directly</strong>, not just the public REST API. Those protocols are GitHub's
-to change, and several are <strong>not</strong> covered by a published wire specification or a
-compatibility guarantee. <a href="../appendix-d-alternatives-considered/">Appendix D</a> names
-this explicitly as the maintenance risk GAG takes on in exchange for its density
-and isolation advantages over ARC ("this design re-implements a significant portion
-of the broker API … which carries ongoing maintenance risk").</p>
-<p>As of the Q264 scale-set work, GAG depends on <strong>two</strong> such protocols at once — and
-one of them (runner-scale-set) is officially <strong>Public Preview</strong>, where GitHub
-reserves the right to change interfaces. The risk is not theoretical: the live
-scale-set probe (Q264 §2a) found the current backend <strong>auto-assigns</strong> jobs, a
-behaviour that deviates from the ARC-era sources the client was built from. A
-protocol GAG assumed was stable had already drifted.</p>
-<p>This register is the single place that answers, for each GitHub-internal protocol
-GAG speaks: <strong>what is the source of truth, how stable is it, and what event should
-make us revisit it?</strong> Update it whenever a protocol dependency is added, changes
-stability tier, or drifts in a way that bites.</p>
+<p>GAG's core capability — multiplexing thousands of virtual runner sessions and provisioning workers on demand — rests on speaking GitHub's <strong>runner-facing protocols directly</strong>, not just the public REST API.
+Those protocols are GitHub's to change, and several are <strong>not</strong> covered by a published wire specification or a compatibility guarantee.
+<a href="../appendix-d-alternatives-considered/">Appendix D</a> names this explicitly as the maintenance risk GAG takes on in exchange for its density and isolation advantages over ARC ("this design re-implements a significant portion of the broker API … which carries ongoing maintenance risk").</p>
+<p>As of the Q264 scale-set work, GAG depends on <strong>two</strong> such protocols at once — and one of them (runner-scale-set) is officially <strong>Public Preview</strong>, where GitHub reserves the right to change interfaces.
+The risk is not theoretical: the live scale-set probe (Q264 §2a) found the current backend <strong>auto-assigns</strong> jobs, a behaviour that deviates from the ARC-era sources the client was built from.
+A protocol GAG assumed was stable had already drifted.</p>
+<p>This register is the single place that answers, for each GitHub-internal protocol GAG speaks: <strong>what is the source of truth, how stable is it, and what event should make us revisit it?</strong> Update it whenever a protocol dependency is added, changes stability tier, or drifts in a way that bites.</p>
 <h2 id="stability-tiers">Stability tiers<a class="headerlink" href="#stability-tiers" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2825,31 +2814,20 @@ stability tier, or drifts in a way that bites.</p>
 </tr>
 </tbody>
 </table>
-<p><em>Not in scope here:</em> the <strong>public REST API</strong> (registration-token endpoints, org/repo
-admin) is T1 and covered by GitHub's normal API compatibility — it is the <em>runner
-protocols above</em> that carry the drift risk this register tracks.</p>
+<p><em>Not in scope here:</em> the <strong>public REST API</strong> (registration-token endpoints, org/repo admin) is T1 and covered by GitHub's normal API compatibility — it is the <em>runner protocols above</em> that carry the drift risk this register tracks.</p>
 <h2 id="why-it-matters-beyond-maintenance">Why it matters beyond maintenance<a class="headerlink" href="#why-it-matters-beyond-maintenance" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Positioning.</strong> GAG's differentiator vs ARC is partly <em>protocol transparency</em> —
-  making the broker contract explicit and testable where ARC leaves it implicit
-  (<a href="../appendix-d-alternatives-considered/">Appendix D</a>). Depending on a Preview
-  protocol without tracking its maturity would quietly undercut that claim; this
-  register is how the claim stays honest.</li>
-<li><strong>Secure-by-default.</strong> A protocol change can move a security boundary (e.g. where
-  a token is delivered). Both current protocols keep the App token out of the worker
-  and all traffic behind the per-tenant egress proxy; any tier change must be
-  re-checked against that invariant, not assumed to carry over.</li>
+<li><strong>Positioning.</strong> GAG's differentiator vs ARC is partly <em>protocol transparency</em> — making the broker contract explicit and testable where ARC leaves it implicit (<a href="../appendix-d-alternatives-considered/">Appendix D</a>).
+  Depending on a Preview protocol without tracking its maturity would quietly undercut that claim; this register is how the claim stays honest.</li>
+<li><strong>Secure-by-default.</strong> A protocol change can move a security boundary (e.g. where a token is delivered).
+  Both current protocols keep the App token out of the worker and all traffic behind the per-tenant egress proxy; any tier change must be re-checked against that invariant, not assumed to carry over.</li>
 </ul>
 <h2 id="maintenance">Maintenance<a class="headerlink" href="#maintenance" title="Permanent link">&para;</a></h2>
 <p>Update this register when:</p>
 <ol>
-<li>A <strong>new</strong> GitHub-internal protocol dependency is added (new row + tier + code
-   pointer + watch trigger).</li>
-<li>A protocol <strong>changes tier</strong> — e.g. <code>actions/scaleset</code> reaches GA (T2 → T1), or a
-   T1 REST surface GAG starts depending on in an undocumented way (T1 → T3).</li>
-<li>A <strong>drift incident</strong> occurs — record what deviated, how it surfaced, and whether
-   the fake/tests were updated to encode the new reality (as Q264 §2a did for
-   auto-assign).</li>
+<li>A <strong>new</strong> GitHub-internal protocol dependency is added (new row + tier + code pointer + watch trigger).</li>
+<li>A protocol <strong>changes tier</strong> — e.g. <code>actions/scaleset</code> reaches GA (T2 → T1), or a T1 REST surface GAG starts depending on in an undocumented way (T1 → T3).</li>
+<li>A <strong>drift incident</strong> occurs — record what deviated, how it surfaced, and whether the fake/tests were updated to encode the new reality (as Q264 §2a did for auto-assign).</li>
 </ol>
 
 

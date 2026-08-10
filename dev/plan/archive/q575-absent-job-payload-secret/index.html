@@ -2693,25 +2693,19 @@
 
 <h1 id="q575--a-worker-pod-whose-job-payload-secret-is-absent-stalls-until-something-else-clears-it">Q575 — a worker pod whose <code>job-payload</code> secret is absent stalls until something else clears it<a class="headerlink" href="#q575--a-worker-pod-whose-job-payload-secret-is-absent-stalls-until-something-else-clears-it" title="Permanent link">&para;</a></h1>
 <h2 id="symptom-rc3-dogfood-gate-2026-08-01">Symptom (rc.3 dogfood gate, 2026-08-01)<a class="headerlink" href="#symptom-rc3-dogfood-gate-2026-08-01" title="Permanent link">&para;</a></h2>
-<p>8 worker pods sat <code>Pending</code> for ~10 minutes mounting a <code>job-ss-&lt;jobID&gt;</code> Secret that did
-not exist, then recovered unaided.</p>
+<p>8 worker pods sat <code>Pending</code> for ~10 minutes mounting a <code>job-ss-&lt;jobID&gt;</code> Secret that did not exist, then recovered unaided.</p>
 <h2 id="diagnosis">Diagnosis<a class="headerlink" href="#diagnosis" title="Permanent link">&para;</a></h2>
-<p>The Queue row offered two directions — "find what deletes it, or what creates the pod
-first". Both were traced; the answer is the first, plus a third thing the row did not
-name: nothing acts on the result.</p>
+<p>The Queue row offered two directions — "find what deletes it, or what creates the pod first".
+Both were traced; the answer is the first, plus a third thing the row did not name: nothing acts on the result.</p>
 <h3 id="the-secret-is-always-created-before-the-pod">The Secret is always created before the pod<a class="headerlink" href="#the-secret-is-always-created-before-the-pod" title="Permanent link">&para;</a></h3>
-<p><code>ProvisionScaleSetWorker</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:698</a>)
-stages the Secret as step 1 and creates the pod as step 5. Every failure exit between
-them calls <code>unstage()</code>, which deletes the Secret only when <em>this</em> call created it and
-only on paths that leave no pod behind. So a worker pod never starts life without its
-Secret, and "the provisioner creates the pod first" is refuted.</p>
+<p><code>ProvisionScaleSetWorker</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:698</a>) stages the Secret as step 1 and creates the pod as step 5.
+Every failure exit between them calls <code>unstage()</code>, which deletes the Secret only when <em>this</em> call created it and only on paths that leave no pod behind.
+So a worker pod never starts life without its Secret, and "the provisioner creates the pod first" is refuted.</p>
 <h3 id="the-only-deleter-that-can-reach-a-live-pod-is-cleanupscalesetjob">The only deleter that can reach a live pod is <code>CleanupScaleSetJob</code><a class="headerlink" href="#the-only-deleter-that-can-reach-a-live-pod-is-cleanupscalesetjob" title="Permanent link">&para;</a></h3>
-<p><code>deleteSecret</code> has six call sites in the classic <code>provision()</code> path (all of which own
-the job end to end) and two on the scale-set path: <code>unstage()</code> (pre-pod, above) and
-<code>CleanupScaleSetJob</code>, which the listener calls from <code>completeJob</code> on every terminal
-<code>JobCompleted</code>. That is the deleter.</p>
-<p><code>CleanupScaleSetJob</code> deletes the Secret without regard to the state of that job's worker
-pod. Of the four states the pod can be in, three are safe and one is not:</p>
+<p><code>deleteSecret</code> has six call sites in the classic <code>provision()</code> path (all of which own the job end to end) and two on the scale-set path: <code>unstage()</code> (pre-pod, above) and <code>CleanupScaleSetJob</code>, which the listener calls from <code>completeJob</code> on every terminal <code>JobCompleted</code>.
+That is the deleter.</p>
+<p><code>CleanupScaleSetJob</code> deletes the Secret without regard to the state of that job's worker pod.
+Of the four states the pod can be in, three are safe and one is not:</p>
 <table>
 <thead>
 <tr>
@@ -2739,78 +2733,57 @@ pod. Of the four states the pod can be in, three are safe and one is not:</p>
 </tbody>
 </table>
 <h3 id="nothing-acts-on-the-pending-case--which-is-what-makes-it-a-10-minute-stall">Nothing acts on the <code>Pending</code> case — which is what makes it a ~10-minute stall<a class="headerlink" href="#nothing-acts-on-the-pending-case--which-is-what-makes-it-a-10-minute-stall" title="Permanent link">&para;</a></h3>
-<p><code>markJobCompleted</code> <em>does</em> stamp <code>AnnotationJobCompletedAt</code> on a <code>Pending</code> pod: its
-early-return switch covers only <code>Succeeded</code>/<code>Failed</code>/<code>Unknown</code>. But the reaper
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go">runner_shared.go:284</a>) consults
-that stamp <strong>only in the <code>PodRunning</code> arm</strong>. The <code>PodPending</code> arm computes
-<code>due = pod.CreationTimestamp.Add(deadline)</code> and ignores the stamp entirely.</p>
-<p>So the completion signal is written and then thrown away, and the pod waits out
-<code>spec.pendingPodDeadline</code> — <code>DefaultPendingPodDeadline = 10 * time.Minute</code>. That constant
-is the "~10 minutes, then recovered unaided" in the capture: the pending-deadline reaper
-collected them. The clue is fully explained.</p>
-<p>It is also misreported. The reap is labelled <code>pending_deadline</code> and emits a
-<code>WorkerPodStuckPending</code> Warning telling the operator to "check the pod template image and
-scheduling constraints" — blaming the scheduler for a pod the scheduler placed fine and
-the AGC then removed the Secret from.</p>
+<p><code>markJobCompleted</code> <em>does</em> stamp <code>AnnotationJobCompletedAt</code> on a <code>Pending</code> pod: its early-return switch covers only <code>Succeeded</code>/<code>Failed</code>/<code>Unknown</code>.
+But the reaper (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go">runner_shared.go:284</a>) consults that stamp <strong>only in the <code>PodRunning</code> arm</strong>.
+The <code>PodPending</code> arm computes <code>due = pod.CreationTimestamp.Add(deadline)</code> and ignores the stamp entirely.</p>
+<p>So the completion signal is written and then thrown away, and the pod waits out <code>spec.pendingPodDeadline</code> — <code>DefaultPendingPodDeadline = 10 * time.Minute</code>.
+That constant is the "~10 minutes, then recovered unaided" in the capture: the pending-deadline reaper collected them.
+The clue is fully explained.</p>
+<p>It is also misreported.
+The reap is labelled <code>pending_deadline</code> and emits a <code>WorkerPodStuckPending</code> Warning telling the operator to "check the pod template image and scheduling constraints" — blaming the scheduler for a pod the scheduler placed fine and the AGC then removed the Secret from.</p>
 <h3 id="how-the-pod-and-the-completion-end-up-in-that-order">How the pod and the completion end up in that order<a class="headerlink" href="#how-the-pod-and-the-completion-end-up-in-that-order" title="Permanent link">&para;</a></h3>
-<p><code>handleMessage</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go:958</a>)
-processes a batch's <code>JobAssigned</code> messages <strong>first</strong>, then its <code>JobCompleted</code> messages.
-And <code>provisionAssigned</code> guards on <code>provisioned</code> and <code>abandoned</code> — but <strong>not</strong> on
-<code>completed</code>. So a batch carrying both messages for the same job provisions a worker and
-then deletes its Secret microseconds later. That is not a race; it is deterministic.</p>
+<p><code>handleMessage</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go:958</a>) processes a batch's <code>JobAssigned</code> messages <strong>first</strong>, then its <code>JobCompleted</code> messages.
+And <code>provisionAssigned</code> guards on <code>provisioned</code> and <code>abandoned</code> — but <strong>not</strong> on <code>completed</code>.
+So a batch carrying both messages for the same job provisions a worker and then deletes its Secret microseconds later.
+That is not a race; it is deterministic.</p>
 <p>Three orderings reach the stall, in rising order of likelihood for the capture:</p>
 <ol>
-<li><strong>Same batch.</strong> A run cancelled or fast-failing between two polls delivers
-   <code>JobAssigned(X)</code> and <code>JobCompleted(X)</code> together. Guaranteed stall.</li>
-<li><strong>Adjacent batches.</strong> The completion lands while the pod is still Pending on ordinary
-   scheduling latency (image pull, node scale-up).</li>
-<li><strong>Restart replay.</strong> A re-created session polls from cursor 0 with empty
-   <code>provisioned</code>/<code>completed</code>/<code>abandoned</code> sets and replays the whole queue, provisioning
-   workers for long-gone jobs and then completing them. <strong>8 pods at once fits a replayed
-   queue far better than 8 independent cancellations</strong>, so this is the most likely trigger
-   of the actual capture. The replay itself is Q583 and is explicitly out of scope here —
-   but the stall it produces is this defect, and fixing this defect bounds its damage.</li>
+<li><strong>Same batch.</strong> A run cancelled or fast-failing between two polls delivers <code>JobAssigned(X)</code> and <code>JobCompleted(X)</code> together.
+   Guaranteed stall.</li>
+<li><strong>Adjacent batches.</strong> The completion lands while the pod is still Pending on ordinary scheduling latency (image pull, node scale-up).</li>
+<li><strong>Restart replay.</strong> A re-created session polls from cursor 0 with empty <code>provisioned</code>/<code>completed</code>/<code>abandoned</code> sets and replays the whole queue, provisioning workers for long-gone jobs and then completing them. <strong>8 pods at once fits a replayed queue far better than 8 independent cancellations</strong>, so this is the most likely trigger of the actual capture.
+   The replay itself is Q583 and is explicitly out of scope here — but the stall it produces is this defect, and fixing this defect bounds its damage.</li>
 </ol>
 <h2 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h2>
-<p>Two changes, addressing different orderings. Neither stops the replay (Q583).</p>
+<p>Two changes, addressing different orderings.
+Neither stops the replay (Q583).</p>
 <ol>
 <li>
-<p><strong>Listener (<code>handleMessage</code>): handle a batch's completions before its assignments, and
-   skip provisioning a job already known completed.</strong> Kills ordering 1 outright — no pod
-   is created for a job whose completion is already in hand — and shrinks ordering 3 to
-   its cross-batch remainder. This is the same reasoning as Q553's <code>abandoned</code> guard,
-   applied to the completed case.</p>
+<p><strong>Listener (<code>handleMessage</code>): handle a batch's completions before its assignments, and skip provisioning a job already known completed.</strong> Kills ordering 1 outright — no pod is created for a job whose completion is already in hand — and shrinks ordering 3 to its cross-batch remainder.
+   This is the same reasoning as Q553's <code>abandoned</code> guard, applied to the completed case.</p>
 </li>
 <li>
-<p><strong>Reaper (<code>reapWorkerPodsByLabel</code>): honour <code>AnnotationJobCompletedAt</code> in the
-   <code>PodPending</code> arm</strong>, as the <code>PodRunning</code> arm already does. A stamped Pending pod is
-   reaped on a short completion-derived grace under a new <code>completed_pending</code> reason and
-   its own Event, instead of masquerading as a scheduling stall for ten minutes. This is
-   what ordering 2 needs, which fix 1 structurally cannot reach.</p>
+<p><strong>Reaper (<code>reapWorkerPodsByLabel</code>): honour <code>AnnotationJobCompletedAt</code> in the <code>PodPending</code> arm</strong>, as the <code>PodRunning</code> arm already does.
+   A stamped Pending pod is reaped on a short completion-derived grace under a new <code>completed_pending</code> reason and its own Event, instead of masquerading as a scheduling stall for ten minutes.
+   This is what ordering 2 needs, which fix 1 structurally cannot reach.</p>
 </li>
 </ol>
-<p>Fix 2 deliberately lands in the shared reaper rather than in <code>CleanupScaleSetJob</code>, so it
-inherits the machinery that already exists there: the Q502 stamp-then-delete (so eviction
-recovery does not read the reap as a disruption and re-run the job), the Q550
-<code>deregisterRunner</code> hook, the UID precondition, and the reap metric.</p>
+<p>Fix 2 deliberately lands in the shared reaper rather than in <code>CleanupScaleSetJob</code>, so it inherits the machinery that already exists there: the Q502 stamp-then-delete (so eviction recovery does not read the reap as a disruption and re-run the job), the Q550 <code>deregisterRunner</code> hook, the UID precondition, and the reap metric.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li>[x] Diagnosis traced end to end from source; the 10-minute constant matches the capture.</li>
 <li>[x] Fix 1 — listener ordering + <code>completed</code> guard.</li>
 <li>[x] Fix 2 — reaper honours the completion stamp on Pending pods.</li>
-<li>[x] Tests: listener unit (same-batch), reaper unit (grace arithmetic), envtest
-      (<code>v2_completed_pending_test.go</code>) against a real apiserver.</li>
+<li>[x] Tests: listener unit (same-batch), reaper unit (grace arithmetic), envtest (<code>v2_completed_pending_test.go</code>) against a real apiserver.</li>
 <li>[x] Causation settled by deleting the mechanism (both fixes, independently).</li>
 <li>[x] Docs: reap reasons, Events, metric label, troubleshooting.</li>
 </ul>
 <h2 id="not-verified-live">Not verified live<a class="headerlink" href="#not-verified-live" title="Permanent link">&para;</a></h2>
-<p>The dogfood cluster is out of scope for this change. Unit, race and envtest coverage is
-the bar here; live confirmation belongs to the rc.4 dogfood gate.</p>
+<p>The dogfood cluster is out of scope for this change.
+Unit, race and envtest coverage is the bar here; live confirmation belongs to the rc.4 dogfood gate.</p>
 <h2 id="effect-on-q577">Effect on Q577<a class="headerlink" href="#effect-on-q577" title="Permanent link">&para;</a></h2>
-<p>Q577 (<code>stop.sh</code> leaves the pool up when its drain cannot converge) is blocked on this row
-alone. This fix removes the ten-minute floor a stalled worker put under a drain, but Q577
-was never re-measured with Q553's wedge closed, so whether it is still real is a question
-for rc.4 — see the PR body.</p>
+<p>Q577 (<code>stop.sh</code> leaves the pool up when its drain cannot converge) is blocked on this row alone.
+This fix removes the ten-minute floor a stalled worker put under a drain, but Q577 was never re-measured with Q553's wedge closed, so whether it is still real is a question for rc.4 — see the PR body.</p>
 
 
 

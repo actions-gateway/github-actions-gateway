@@ -2653,82 +2653,44 @@
 
 
 <h1 id="q134--e2e-no-session-registered-flake-root-cause-and-fix">Q134 — e2e "no session registered" flake: root cause and fix<a class="headerlink" href="#q134--e2e-no-session-registered-flake-root-cause-and-fix" title="Permanent link">&para;</a></h1>
-<p>Intermittent failure of the AGC→fakegithub session-registration e2e specs
-(<code>E2E_AGC_WorkerPodAdmittedWithNonNumericUserImage</code>, <code>E2E_AGC_SessionRegistered</code>,
-<code>E2E_AGC_MultipleJobsQueued</code>). One spec per run times out (180–240s) on
-<code>fakegithubActiveSessionsForOwner(...)</code> staying empty — the AGC never registers
-a broker session with the shared in-cluster <code>fakegithub</code>.</p>
+<p>Intermittent failure of the AGC→fakegithub session-registration e2e specs (<code>E2E_AGC_WorkerPodAdmittedWithNonNumericUserImage</code>, <code>E2E_AGC_SessionRegistered</code>, <code>E2E_AGC_MultipleJobsQueued</code>).
+One spec per run times out (180–240s) on <code>fakegithubActiveSessionsForOwner(...)</code> staying empty — the AGC never registers a broker session with the shared in-cluster <code>fakegithub</code>.</p>
 <h2 id="what-it-is-not">What it is NOT<a class="headerlink" href="#what-it-is-not" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Not a regression from <code>5e490d9</code> (Q134's own "fix", PR #226).</strong> The identical
-  failure (<code>worker_securitycontext_test.go:96</code>, "no session registered", 180s)
-  occurred on <code>main</code> at <code>5bab2d50e</code> (run 27505615811), <em>before</em> the "last green"
-  <code>ac54a78</code>. The apparent <code>ac54a78</code>-green / <code>5e490d9</code>-red bisect boundary is an
-  artifact of an intermittent flake landing on a green run by luck. It predates
-  the commit.</li>
-<li><strong>Not the gate added by <code>5e490d9</code>.</strong> <code>WaitForRunnerGroupReconciled</code> waits for
-  <code>RunnerGroup.status.observedGeneration</code>, which the reconciler sets
-  (<code>runnergroup_controller.go:327</code>) <em>synchronously, right after <code>mux.Start()</code>
-  returns</em>. <code>mux.Start()</code> only <em>spawns</em> the listener goroutine — it does not wait
-  for <code>createSession</code> to succeed. So <code>observedGeneration</code> is set ~9s after the
-  tenant is applied (CI timeline) while the session is still not registered; the
-  gate passes in &lt;1s and the 180s session wait then fails. The gate's premise
-  ("observedGeneration ⇒ a broker session is imminent") is incomplete. It is
-  harmless but did not address the flake.</li>
-<li><strong>Not DNS/NetworkPolicy.</strong> <code>EnsureAgents</code> (agent registration, an HTTP
-  round-trip to fakegithub) <em>succeeds</em> at reconcile time — that is what sets
-  <code>observedGeneration</code> the gate observes. So AGC→fakegithub connectivity is fine
-  when the session subsequently fails to register.</li>
+<li><strong>Not a regression from <code>5e490d9</code> (Q134's own "fix", PR #226).</strong> The identical failure (<code>worker_securitycontext_test.go:96</code>, "no session registered", 180s) occurred on <code>main</code> at <code>5bab2d50e</code> (run 27505615811), <em>before</em> the "last green" <code>ac54a78</code>.
+  The apparent <code>ac54a78</code>-green / <code>5e490d9</code>-red bisect boundary is an artifact of an intermittent flake landing on a green run by luck.
+  It predates the commit.</li>
+<li><strong>Not the gate added by <code>5e490d9</code>.</strong> <code>WaitForRunnerGroupReconciled</code> waits for <code>RunnerGroup.status.observedGeneration</code>, which the reconciler sets (<code>runnergroup_controller.go:327</code>) <em>synchronously, right after <code>mux.Start()</code> returns</em>. <code>mux.Start()</code> only <em>spawns</em> the listener goroutine — it does not wait for <code>createSession</code> to succeed.
+  So <code>observedGeneration</code> is set ~9s after the tenant is applied (CI timeline) while the session is still not registered; the gate passes in &lt;1s and the 180s session wait then fails.
+  The gate's premise ("observedGeneration ⇒ a broker session is imminent") is incomplete.
+  It is harmless but did not address the flake.</li>
+<li><strong>Not DNS/NetworkPolicy.</strong> <code>EnsureAgents</code> (agent registration, an HTTP round-trip to fakegithub) <em>succeeds</em> at reconcile time — that is what sets <code>observedGeneration</code> the gate observes.
+  So AGC→fakegithub connectivity is fine when the session subsequently fails to register.</li>
 </ul>
 <h2 id="root-cause">Root cause<a class="headerlink" href="#root-cause" title="Permanent link">&para;</a></h2>
-<p>The listener's session-establishment broker calls have <strong>no per-call deadline</strong>.
-<code>createSession</code> (<code>goroutine.go</code>) and the OAuth token exchange
-(<code>refreshBrokerToken</code> → <code>githubapp.FetchRunnerOAuthToken</code>) run on the goroutine's
-context, which derives from the <strong>long-lived manager context</strong> (cancelled only at
-AGC shutdown). The per-agent <code>broker.Client</code> is built with <code>HTTPClient: nil</code>
-(<code>BrokerConfig.HTTPClient</code> is never set in <code>cmd/agc/main.go</code>), so it falls back to
-<code>http.DefaultClient</code> — which has no overall/read timeout.</p>
-<p>Consequently, if fakegithub <em>accepts the TCP connection but is slow to respond</em>
-— plausible for a single-replica service under 6-proc parallel CI load — the
-goroutine blocks <strong>inside a single <code>createSession</code>/token call indefinitely</strong>
-rather than failing and retrying. The Multiplexer restarts a baseline listener
-every ~1s on a <em>returned</em> (retriable) error, but a wedged call never returns, so
-no retry happens and the RunnerGroup never registers a session within the test
-budget. The missing timeout is what converts transient slowness into a
-budget-exhausting hang.</p>
+<p>The listener's session-establishment broker calls have <strong>no per-call deadline</strong>. <code>createSession</code> (<code>goroutine.go</code>) and the OAuth token exchange (<code>refreshBrokerToken</code> → <code>githubapp.FetchRunnerOAuthToken</code>) run on the goroutine's context, which derives from the <strong>long-lived manager context</strong> (cancelled only at AGC shutdown).
+The per-agent <code>broker.Client</code> is built with <code>HTTPClient: nil</code> (<code>BrokerConfig.HTTPClient</code> is never set in <code>cmd/agc/main.go</code>), so it falls back to <code>http.DefaultClient</code> — which has no overall/read timeout.</p>
+<p>Consequently, if fakegithub <em>accepts the TCP connection but is slow to respond</em> — plausible for a single-replica service under 6-proc parallel CI load — the goroutine blocks <strong>inside a single <code>createSession</code>/token call indefinitely</strong> rather than failing and retrying.
+The Multiplexer restarts a baseline listener every ~1s on a <em>returned</em> (retriable) error, but a wedged call never returns, so no retry happens and the RunnerGroup never registers a session within the test budget.
+The missing timeout is what converts transient slowness into a budget-exhausting hang.</p>
 <h2 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h2>
-<p>Bound the two session-establishment broker calls with a per-call deadline
-(<code>Config.ControlPlaneTimeout</code>, default 30s). A stalled call now fails fast and
-<em>retriably</em>, so the Multiplexer restarts the baseline and retries — many attempts
-fit inside the 180s budget. The <code>GetMessage</code> long-poll is deliberately left
-unbounded (it holds the connection open for the broker's poll interval by
-design).</p>
+<p>Bound the two session-establishment broker calls with a per-call deadline (<code>Config.ControlPlaneTimeout</code>, default 30s).
+A stalled call now fails fast and <em>retriably</em>, so the Multiplexer restarts the baseline and retries — many attempts fit inside the 180s budget.
+The <code>GetMessage</code> long-poll is deliberately left unbounded (it holds the connection open for the broker's poll interval by design).</p>
 <ul>
-<li><code>cmd/agc/internal/listener/goroutine.go</code>: <code>Config.ControlPlaneTimeout</code> +
-  <code>controlPlaneTimeout()</code> default; wrap <code>createSession</code> and <code>refreshBrokerToken</code>.</li>
-<li>Test: <code>TestListener_CreateSessionStallDoesNotWedge</code> — a broker that never
-  responds to <code>CreateSession</code> makes <code>Run</code> return a <em>retriable</em> error well before
-  the outer deadline, instead of hanging.</li>
+<li><code>cmd/agc/internal/listener/goroutine.go</code>: <code>Config.ControlPlaneTimeout</code> + <code>controlPlaneTimeout()</code> default; wrap <code>createSession</code> and <code>refreshBrokerToken</code>.</li>
+<li>Test: <code>TestListener_CreateSessionStallDoesNotWedge</code> — a broker that never responds to <code>CreateSession</code> makes <code>Run</code> return a <em>retriable</em> error well before the outer deadline, instead of hanging.</li>
 </ul>
 <h2 id="ci-validation-and-the-acquirejob-extension">CI validation and the AcquireJob extension<a class="headerlink" href="#ci-validation-and-the-acquirejob-extension" title="Permanent link">&para;</a></h2>
-<p>The first push (createSession + OAuth bound) got the suite <strong>past session
-registration</strong> in CI: the next e2e run logged <code>job 1: picking a live session →
-enqueuing onto session-4</code>, then still timed out at <code>job_lifecycle_test.go:179</code>
-with <code>expected &gt;= 1 new worker pods, have 0</code>. A job was enqueued onto a <em>live</em>
-session but no worker pod spawned for 240s — the <strong>same unbounded-control-plane
-class at the next call site</strong>: <code>AcquireJob</code> (the request between job delivery and
-pod provisioning) also ran on the manager ctx with <code>http.DefaultClient</code>. It is
-now bound by the same <code>ControlPlaneTimeout</code>; a stalled <code>AcquireJob</code> fails fast
-and the poll loop re-acquires (its error is already handled as recoverable).</p>
-<p>The e2e suite is <strong>multi-flaky</strong>, not single-cause. The same run also failed
-<code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> (<code>provisioning_test.go:282</code>, a
-curl-through-proxy egress test) — a fast failure unrelated to AGC sessions or
-this change. That is a separate flake outside this PR's scope.</p>
+<p>The first push (createSession + OAuth bound) got the suite <strong>past session registration</strong> in CI: the next e2e run logged <code>job 1: picking a live session → enqueuing onto session-4</code>, then still timed out at <code>job_lifecycle_test.go:179</code> with <code>expected &gt;= 1 new worker pods, have 0</code>.
+A job was enqueued onto a <em>live</em> session but no worker pod spawned for 240s — the <strong>same unbounded-control-plane class at the next call site</strong>: <code>AcquireJob</code> (the request between job delivery and pod provisioning) also ran on the manager ctx with <code>http.DefaultClient</code>.
+It is now bound by the same <code>ControlPlaneTimeout</code>; a stalled <code>AcquireJob</code> fails fast and the poll loop re-acquires (its error is already handled as recoverable).</p>
+<p>The e2e suite is <strong>multi-flaky</strong>, not single-cause.
+The same run also failed <code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> (<code>provisioning_test.go:282</code>, a curl-through-proxy egress test) — a fast failure unrelated to AGC sessions or this change.
+That is a separate flake outside this PR's scope.</p>
 <h2 id="recurrence-after-231-and-why-diagnostics-come-next">Recurrence after #231, and why diagnostics come next<a class="headerlink" href="#recurrence-after-231-and-why-diagnostics-come-next" title="Permanent link">&para;</a></h2>
 <p>The bounded-control-plane fix (#231) reduced but did <strong>not</strong> eliminate the flake.
-It recurred on a <code>main</code> push at <code>bfd6409</code> (e2e run 27529447832, 2026-06-15
-~07:05): <code>39 Passed | 1 Failed</code>, <code>worker_securitycontext_test.go:103</code> timed out
-at 180s on "no session registered."</p>
+It recurred on a <code>main</code> push at <code>bfd6409</code> (e2e run 27529447832, 2026-06-15 ~07:05): <code>39 Passed | 1 Failed</code>, <code>worker_securitycontext_test.go:103</code> timed out at 180s on "no session registered."</p>
 <p>The CI timeline rules out AGC <em>startup</em> latency as the cause:</p>
 <table>
 <thead>
@@ -2756,38 +2718,22 @@ at 180s on "no session registered."</p>
 </tr>
 </tbody>
 </table>
-<p>So the AGC was up within ~12s and the reconcile gate passed immediately; the
-listener then failed to register a session for a full 180s. The unanswered
-question is <strong>why</strong>, and the spec captured no AGC-side state on timeout — only
-the bare fakegithub poll result. Two failure modes fit the evidence equally and
-need different fixes:</p>
+<p>So the AGC was up within ~12s and the reconcile gate passed immediately; the listener then failed to register a session for a full 180s.
+The unanswered question is <strong>why</strong>, and the spec captured no AGC-side state on timeout — only the bare fakegithub poll result.
+Two failure modes fit the evidence equally and need different fixes:</p>
 <ol>
-<li><strong>Recoverable-but-persistently-failing <code>createSession</code></strong> — fakegithub
-   (single-replica, shared, under 6-proc parallel load) is slow/erroring, so the
-   baseline restarts every <code>RestartDelay</code>+<code>ControlPlaneTimeout</code> and every attempt
-   fails. An AGC code change does not help; the fix is test-side (load/capacity/
-   isolation) or the slowness is legitimate.</li>
-<li><strong>Non-retriable baseline exit</strong> (<code>NonRetriableError</code>: pool-exhausted at startup
-   / unauthorized) — <code>multiplexer.go</code> sets <code>permAlive=false</code> and does <strong>not</strong>
-   restart; nothing revives it until a watch event, because <code>RequeueAfter=reapAfter</code>
-   is 0 with no worker pods. This is exactly <strong>Q137</strong>, a deterministic controller
-   bug, and would be the fix.</li>
+<li><strong>Recoverable-but-persistently-failing <code>createSession</code></strong> — fakegithub (single-replica, shared, under 6-proc parallel load) is slow/erroring, so the baseline restarts every <code>RestartDelay</code>+<code>ControlPlaneTimeout</code> and every attempt fails.
+   An AGC code change does not help; the fix is test-side (load/capacity/ isolation) or the slowness is legitimate.</li>
+<li><strong>Non-retriable baseline exit</strong> (<code>NonRetriableError</code>: pool-exhausted at startup / unauthorized) — <code>multiplexer.go</code> sets <code>permAlive=false</code> and does <strong>not</strong> restart; nothing revives it until a watch event, because <code>RequeueAfter=reapAfter</code> is 0 with no worker pods.
+   This is exactly <strong>Q137</strong>, a deterministic controller bug, and would be the fix.</li>
 </ol>
-<p>Without AGC logs the prior root cause (#231) was itself an inference, and it
-recurred. Rather than ship a third speculative fix, this change makes the flake
-<strong>observable</strong>: a failure-gated <code>AfterEach</code> on the three session-registration
-specs dumps <code>utils.DumpAGCSessionDiagnostics</code> — RunnerGroup status
-(<code>activeSessions</code>/conditions/<code>observedGeneration</code>), AGC pod logs (where the
-listener logs broker-call errors), pod/Deployment descriptions, the namespace
-event stream, and fakegithub's logs/description. The next CI recurrence then
-shows which mode is occurring, and the targeted fix (Q137, or a test-side load
-change) follows from evidence instead of a guess. Q134 stays open until that
-evidence lands and a real fix produces multiple consecutive green runs.</p>
+<p>Without AGC logs the prior root cause (#231) was itself an inference, and it recurred.
+Rather than ship a third speculative fix, this change makes the flake <strong>observable</strong>: a failure-gated <code>AfterEach</code> on the three session-registration specs dumps <code>utils.DumpAGCSessionDiagnostics</code> — RunnerGroup status (<code>activeSessions</code>/conditions/<code>observedGeneration</code>), AGC pod logs (where the listener logs broker-call errors), pod/Deployment descriptions, the namespace event stream, and fakegithub's logs/description.
+The next CI recurrence then shows which mode is occurring, and the targeted fix (Q137, or a test-side load change) follows from evidence instead of a guess.
+Q134 stays open until that evidence lands and a real fix produces multiple consecutive green runs.</p>
 <h2 id="first-diagnostic-capture-pr-240-e2e-run-27533137868">First diagnostic capture (PR #240 e2e, run 27533137868)<a class="headerlink" href="#first-diagnostic-capture-pr-240-e2e-run-27533137868" title="Permanent link">&para;</a></h2>
-<p>The diagnostics fired on their very first CI run — but on <strong>Q135</strong>
-(<code>E2E_AGC_MultipleJobsQueued</code>), not Q134, and the captured state proves mode 2
-(non-retriable baseline exit, the Q137 mechanism) is real in the wild. AGC log
-timeline (<code>tenant-job-lifecycle</code>):</p>
+<p>The diagnostics fired on their very first CI run — but on <strong>Q135</strong> (<code>E2E_AGC_MultipleJobsQueued</code>), not Q134, and the captured state proves mode 2 (non-retriable baseline exit, the Q137 mechanism) is real in the wild.
+AGC log timeline (<code>tenant-job-lifecycle</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>08:21:15  listener started   agentIndex=0 sessionId=session-2   (permanent baseline)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>08:21:21  job received        agentIndex=0 messageId=2  → worker pod plan-2 created
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>08:21:21  listener started   agentIndex=1 sessionId=session-4
@@ -2799,42 +2745,31 @@ timeline (<code>tenant-job-lifecycle</code>):</p>
 </code></pre></div>
 <p>So the session registered fine; the failure is <strong>downstream</strong>:</p>
 <ol>
-<li>After the first job, the single-use JIT <strong>agent recycle</strong> (Q114 re-register)
-   gets <strong>HTTP 401</strong> from the broker → a <code>NonRetriableError</code>.</li>
-<li><code>multiplexer.go</code> does not restart a non-retriable exit (<code>permAlive=false</code>), so
-   the permanent baseline (index 0) is gone.</li>
-<li>Nothing re-reconciles to revive it. The dumped <code>status.activeSessions: 1</code> /
-   <code>Ready: True</code> is <strong>stale</strong> — last written before the exit — exactly the
-   <strong>Q137</strong> symptom (<code>RequeueAfter=reapAfter</code> is 0 with no live worker pods).</li>
+<li>After the first job, the single-use JIT <strong>agent recycle</strong> (Q114 re-register) gets <strong>HTTP 401</strong> from the broker → a <code>NonRetriableError</code>.</li>
+<li><code>multiplexer.go</code> does not restart a non-retriable exit (<code>permAlive=false</code>), so the permanent baseline (index 0) is gone.</li>
+<li>Nothing re-reconciles to revive it.
+   The dumped <code>status.activeSessions: 1</code> / <code>Ready: True</code> is <strong>stale</strong> — last written before the exit — exactly the <strong>Q137</strong> symptom (<code>RequeueAfter=reapAfter</code> is 0 with no live worker pods).</li>
 <li>The 2nd queued job is never serviced → the 240s <code>MultipleJobsQueued</code> timeout.</li>
 </ol>
-<p>This is a real, deterministic-looking bug, not load: the flake is the race
-between picking up the 2nd job and the recycle-401 killing the baseline. Two
-distinct defects sit underneath it:</p>
+<p>This is a real, deterministic-looking bug, not load: the flake is the race between picking up the 2nd job and the recycle-401 killing the baseline.
+Two distinct defects sit underneath it:</p>
 <ul>
-<li><strong>The recycle 401 itself</strong> — why does broker re-registration after a job return
-  401 when the installation token is freshly valid (<code>validFor 1h</code>)? Likely an
-  auth-context bug in the Q114 single-use recycle path (or a fakegithub stub
-  gap). This is the <em>primary</em> Q135 defect and needs its own investigation.</li>
-<li><strong>Q137</strong> — even granting a transient recycle error, the controller should
-  revive the baseline promptly instead of leaving a dead listener with stale
-  <code>Ready: True</code> until the 10h resync. Requeue when <code>ActiveCount &lt; desired</code>.</li>
+<li><strong>The recycle 401 itself</strong> — why does broker re-registration after a job return 401 when the installation token is freshly valid (<code>validFor 1h</code>)?
+  Likely an auth-context bug in the Q114 single-use recycle path (or a fakegithub stub gap).
+  This is the <em>primary</em> Q135 defect and needs its own investigation.</li>
+<li><strong>Q137</strong> — even granting a transient recycle error, the controller should revive the baseline promptly instead of leaving a dead listener with stale <code>Ready: True</code> until the 10h resync.
+  Requeue when <code>ActiveCount &lt; desired</code>.</li>
 </ul>
-<p>Q134 (<code>worker_securitycontext</code>, "no session registered") did <strong>not</strong> recur in
-this run — that spec passed — so its specific cause (first <code>createSession</code> never
-succeeding, <em>before</em> any job) is still uncaptured and distinct from this
-recycle-401 path. The diagnostics are now in place to catch it next time.</p>
+<p>Q134 (<code>worker_securitycontext</code>, "no session registered") did <strong>not</strong> recur in this run — that spec passed — so its specific cause (first <code>createSession</code> never succeeding, <em>before</em> any job) is still uncaptured and distinct from this recycle-401 path.
+The diagnostics are now in place to catch it next time.</p>
 <h2 id="follow-ups-filed-separately">Follow-ups (filed separately)<a class="headerlink" href="#follow-ups-filed-separately" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Q136 / Q137</strong> — <code>runnergroup_controller.go</code> returns <code>RequeueAfter=reapAfter</code>,
-  which is 0 when the RunnerGroup has no worker pods. If the permanent baseline
-  exits <em>non-retriably</em> (pool-exhausted / unauthorized / <strong>recycle 401</strong>), the
-  recovery at L317 (<code>if mux.ActiveCount()==0 { mux.Start() }</code>) only fires on the
-  next watch event — up to the 10h resync. Requeue when <code>ActiveCount &lt; desired</code>.
+<li><strong>Q136 / Q137</strong> — <code>runnergroup_controller.go</code> returns <code>RequeueAfter=reapAfter</code>, which is 0 when the RunnerGroup has no worker pods.
+  If the permanent baseline exits <em>non-retriably</em> (pool-exhausted / unauthorized / <strong>recycle 401</strong>), the recovery at L317 (<code>if mux.ActiveCount()==0 { mux.Start() }</code>) only fires on the next watch event — up to the 10h resync.
+  Requeue when <code>ActiveCount &lt; desired</code>.
   Now <strong>confirmed</strong> by the PR #240 capture above as the revival half of Q135.</li>
-<li><strong>Recycle-401 (under Q135)</strong> — the broker returning 401 on post-job single-use
-  agent re-registration is the primary Q135 defect; investigate the Q114 recycle
-  auth path. Flagged for a separate session — out of scope for this diagnostics PR.</li>
+<li><strong>Recycle-401 (under Q135)</strong> — the broker returning 401 on post-job single-use agent re-registration is the primary Q135 defect; investigate the Q114 recycle auth path.
+  Flagged for a separate session — out of scope for this diagnostics PR.</li>
 </ul>
 
 

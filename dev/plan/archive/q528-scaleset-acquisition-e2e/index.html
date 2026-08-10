@@ -2670,18 +2670,12 @@
 
 
 <h1 id="q528-a-kind-e2e-for-the-scale-set-acquisition-half">Q528: A kind e2e for the scale-set acquisition half<a class="headerlink" href="#q528-a-kind-e2e-for-the-scale-set-acquisition-half" title="Permanent link">&para;</a></h1>
-<p>The scale-set tier's <em>recovery</em> half runs on kind under the chart's real RBAC
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go"><code>worker_scaleset_recovery_test.go</code></a>,
-Q519). Its <em>acquisition</em> half — open a message-queue session, take an assignment
-off the queue, mint a JIT runner config, provision a worker pod from it — has
-never run on a cluster. The reason is stated in that spec's own header: the e2e
-fakegithub speaks only the classic broker protocol, so the scale-set listener's
-session can never open there and the spec has to stage its worker pod by hand.</p>
-<p>This plan closes that: teach the deployed fake-GitHub image the scale-set
-protocol, then assert the acquisition chain end-to-end on kind.</p>
+<p>The scale-set tier's <em>recovery</em> half runs on kind under the chart's real RBAC (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go"><code>worker_scaleset_recovery_test.go</code></a>, Q519).
+Its <em>acquisition</em> half — open a message-queue session, take an assignment off the queue, mint a JIT runner config, provision a worker pod from it — has never run on a cluster.
+The reason is stated in that spec's own header: the e2e fakegithub speaks only the classic broker protocol, so the scale-set listener's session can never open there and the spec has to stage its worker pod by hand.</p>
+<p>This plan closes that: teach the deployed fake-GitHub image the scale-set protocol, then assert the acquisition chain end-to-end on kind.</p>
 <h2 id="what-is-missing-precisely">What is missing, precisely<a class="headerlink" href="#what-is-missing-precisely" title="Permanent link">&para;</a></h2>
-<p>Everything below is covered by envtest and by the <code>scalesettest</code> unit stub, and
-by nothing that runs against a real apiserver + kubelet + chart RBAC:</p>
+<p>Everything below is covered by envtest and by the <code>scalesettest</code> unit stub, and by nothing that runs against a real apiserver + kubelet + chart RBAC:</p>
 <table>
 <thead>
 <tr>
@@ -2736,85 +2730,47 @@ by nothing that runs against a real apiserver + kubelet + chart RBAC:</p>
 <p>The recovery spec covers the tier's <em>other</em> half and deliberately says so.</p>
 <h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
 <h3 id="1-split-the-protocol-model-out-of-scalesettest">1. Split the protocol model out of <code>scalesettest</code><a class="headerlink" href="#1-split-the-protocol-model-out-of-scalesettest" title="Permanent link">&para;</a></h3>
-<p><code>scaleset/scalesettest</code> already models the whole protocol — sessions, the
-cursor-based queue log, auto-assign vs JobAvailable→acquire, claim-once
-acquisition, JIT minting, the long poll. It is the model to reuse, not to
-re-derive; a second hand-written copy inside fakegithub would be ~1,400 lines
-that drift.</p>
-<p>It cannot be imported as-is: it builds an <code>httptest.Server</code>, and
-<code>TestNoPackageMainReachesHTTPTest</code> forbids any <code>package main</code> in the workspace
-from linking <code>net/http/httptest</code>. fakegithub is <code>package main</code>.</p>
-<p>So the model moves to <strong><code>scaleset/scalesetstub</code></strong> — transport-free, exposing an
-<code>http.Handler</code> — and <code>scalesettest.Server</code> becomes a thin <code>httptest</code> wrapper
-that embeds it, keeping its exported API intact for the unit and envtest suites.
-This is the same split <code>broker/brokerstub</code> already makes for the classic
-protocol, and the compat gate's own error message names it as the pattern.</p>
-<p>The one transport-coupled detail is the self-referential URLs the protocol hands
-back — the admin connection's tenant URL, the session's <code>messageQueueUrl</code>, a
-<code>JobAvailable</code>'s <code>acquireJobUrl</code>. In <code>scalesettest</code> those are the fixed
-<code>httptest</code> base; in a deployed pod they must follow the request's <code>Host</code>. The
-stub therefore resolves its base per request through a <code>BaseURL func(*http.Request) string</code>,
-which is what fakegithub's existing <code>externalBase</code> already does for the classic
-protocol.</p>
+<p><code>scaleset/scalesettest</code> already models the whole protocol — sessions, the cursor-based queue log, auto-assign vs JobAvailable→acquire, claim-once acquisition, JIT minting, the long poll.
+It is the model to reuse, not to re-derive; a second hand-written copy inside fakegithub would be ~1,400 lines that drift.</p>
+<p>It cannot be imported as-is: it builds an <code>httptest.Server</code>, and <code>TestNoPackageMainReachesHTTPTest</code> forbids any <code>package main</code> in the workspace from linking <code>net/http/httptest</code>. fakegithub is <code>package main</code>.</p>
+<p>So the model moves to <strong><code>scaleset/scalesetstub</code></strong> — transport-free, exposing an <code>http.Handler</code> — and <code>scalesettest.Server</code> becomes a thin <code>httptest</code> wrapper that embeds it, keeping its exported API intact for the unit and envtest suites.
+This is the same split <code>broker/brokerstub</code> already makes for the classic protocol, and the compat gate's own error message names it as the pattern.</p>
+<p>The one transport-coupled detail is the self-referential URLs the protocol hands back — the admin connection's tenant URL, the session's <code>messageQueueUrl</code>, a <code>JobAvailable</code>'s <code>acquireJobUrl</code>.
+In <code>scalesettest</code> those are the fixed <code>httptest</code> base; in a deployed pod they must follow the request's <code>Host</code>.
+The stub therefore resolves its base per request through a <code>BaseURL func(*http.Request) string</code>, which is what fakegithub's existing <code>externalBase</code> already does for the classic protocol.</p>
 <h3 id="2-mount-it-in-fakegithub">2. Mount it in fakegithub<a class="headerlink" href="#2-mount-it-in-fakegithub" title="Permanent link">&para;</a></h3>
 <p>fakegithub serves the stub's handler at the paths the client uses:</p>
 <ul>
-<li><code>/_apis/runtime/…</code> and <code>/queue/…</code> — scale-set only, no collision with the
-  classic routes.</li>
-<li><code>/api/v3/actions/runner-registration</code> and
-  <code>/api/v3/{orgs,repos}/…/actions/runners/registration-token</code> — the two REST hops
-  of the bootstrap, prefix-stripped onto the same handler.</li>
+<li><code>/_apis/runtime/…</code> and <code>/queue/…</code> — scale-set only, no collision with the classic routes.</li>
+<li><code>/api/v3/actions/runner-registration</code> and <code>/api/v3/{orgs,repos}/…/actions/runners/registration-token</code> — the two REST hops of the bootstrap, prefix-stripped onto the same handler.</li>
 </ul>
-<p>The classic <code>/api/v3/…/actions/runners</code> routes (generate-jitconfig, list, delete)
-stay on fakegithub's own runner registry. The scale-set happy path never touches
-them — it mints runners through <code>generatejitconfig</code> on the Actions Service — so
-the two registries do not have to agree. <code>DeregisterRunnerByName</code>, which does use
-the REST routes, is only reached on a runner-name 409, which this venue does not
-produce.</p>
+<p>The classic <code>/api/v3/…/actions/runners</code> routes (generate-jitconfig, list, delete) stay on fakegithub's own runner registry.
+The scale-set happy path never touches them — it mints runners through <code>generatejitconfig</code> on the Actions Service — so the two registries do not have to agree. <code>DeregisterRunnerByName</code>, which does use the REST routes, is only reached on a runner-name 409, which this venue does not produce.</p>
 <p>Control endpoints, alongside the existing classic ones:</p>
 <ul>
 <li><code>POST /control/scaleset/enqueue?name=&lt;scale set&gt;</code> — queue a job.</li>
-<li><code>POST /control/scaleset/acquireflow?ghes=true|false</code> — pick auto-assign
-  (dotcom) or JobAvailable→acquire (GHES).</li>
-<li><code>GET  /control/scaleset/state?name=&lt;scale set&gt;</code> — session liveness, assigned
-  count, and the call log, so a spec asserts on what the server saw rather than
-  inferring it from the AGC's logs.</li>
+<li><code>POST /control/scaleset/acquireflow?ghes=true|false</code> — pick auto-assign (dotcom) or JobAvailable→acquire (GHES).</li>
+<li><code>GET  /control/scaleset/state?name=&lt;scale set&gt;</code> — session liveness, assigned count, and the call log, so a spec asserts on what the server saw rather than inferring it from the AGC's logs.</li>
 </ul>
 <h3 id="3-point-the-agcs-scale-set-client-at-it">3. Point the AGC's scale-set client at it<a class="headerlink" href="#3-point-the-agcs-scale-set-client-at-it" title="Permanent link">&para;</a></h3>
-<p><code>buildScaleSetClient</code> derives both <code>ConfigURL</code> and <code>APIBase</code> from
-<code>gw.Spec.GitHubURL</code>, and that field is pinned to <code>^https://</code> by the CRD pattern
-<em>and</em> by the webhook — so it cannot name plaintext fakegithub. (This is exactly
-why the recovery spec's listener never starts: its bootstrap dies on a TLS
-handshake against the plaintext port, which that spec wants.)</p>
-<p>The codebase already solves this for the classic tier: <code>buildRegistrar</code> prefers a
-<code>StubRegistrar</code> when <code>STUB_AUTH_URL</code> <strong>and</strong> <code>STUB_BROKER_URL</code> are both set, a
-pair that reaches a GMC-provisioned AGC only through <code>AGC_EXTRA_*</code> under the
-testing-only <code>--allow-agc-extra-env</code> flag. The scale-set client follows the same
-rule and the same signal: with the stub env set, <code>ConfigURL</code>/<code>APIBase</code> are
-derived from <code>STUB_BROKER_URL</code> instead of the gateway's <code>githubURL</code>. Production
-AGCs never carry the pair and are unaffected.</p>
-<p>No new env var, no new opt-in surface, and the security posture is the one
-already reviewed for the classic path.</p>
+<p><code>buildScaleSetClient</code> derives both <code>ConfigURL</code> and <code>APIBase</code> from <code>gw.Spec.GitHubURL</code>, and that field is pinned to <code>^https://</code> by the CRD pattern <em>and</em> by the webhook — so it cannot name plaintext fakegithub.
+(This is exactly why the recovery spec's listener never starts: its bootstrap dies on a TLS handshake against the plaintext port, which that spec wants.)</p>
+<p>The codebase already solves this for the classic tier: <code>buildRegistrar</code> prefers a <code>StubRegistrar</code> when <code>STUB_AUTH_URL</code> <strong>and</strong> <code>STUB_BROKER_URL</code> are both set, a pair that reaches a GMC-provisioned AGC only through <code>AGC_EXTRA_*</code> under the testing-only <code>--allow-agc-extra-env</code> flag.
+The scale-set client follows the same rule and the same signal: with the stub env set, <code>ConfigURL</code>/<code>APIBase</code> are derived from <code>STUB_BROKER_URL</code> instead of the gateway's <code>githubURL</code>.
+Production AGCs never carry the pair and are unaffected.</p>
+<p>No new env var, no new opt-in surface, and the security posture is the one already reviewed for the classic path.</p>
 <h3 id="4-the-spec">4. The spec<a class="headerlink" href="#4-the-spec" title="Permanent link">&para;</a></h3>
 <p><code>E2E_AGC_ScaleSetAcquisition</code>, one <code>Ordered</code> container, both acquire flows:</p>
 <ol>
 <li>Apply a v2 object set whose RunnerSet is <code>acquisitionProtocol: ScaleSet</code>.</li>
-<li>Wait for the listener to reach the queue — the RunnerSet's Ready condition,
-   corroborated by fakegithub reporting a live session for the scale set.</li>
-<li>Enqueue a job; assert a worker pod appears carrying the run identity the
-   assignment delivered, and that the pod is the shape
-   <code>ProvisionScaleSetWorker</code> stamps (owner label, acquisition-protocol label,
-   run-id/repository annotations, the JIT config env var).</li>
-<li>Flip fakegithub to the GHES acquire flow, enqueue again, and assert the
-   claim landed server-side (<code>acquirejobs</code> in the call log) before the second
-   worker appears — the rung auto-assign skips entirely.</li>
+<li>Wait for the listener to reach the queue — the RunnerSet's Ready condition, corroborated by fakegithub reporting a live session for the scale set.</li>
+<li>Enqueue a job; assert a worker pod appears carrying the run identity the assignment delivered, and that the pod is the shape <code>ProvisionScaleSetWorker</code> stamps (owner label, acquisition-protocol label, run-id/repository annotations, the JIT config env var).</li>
+<li>Flip fakegithub to the GHES acquire flow, enqueue again, and assert the claim landed server-side (<code>acquirejobs</code> in the call log) before the second worker appears — the rung auto-assign skips entirely.</li>
 <li>Delete the RunnerSet and assert the session is released rather than leaked.</li>
 </ol>
 <h2 id="result-the-acquisition-chain-run-on-kind-2026-07-31">Result: the acquisition chain, run on kind 2026-07-31<a class="headerlink" href="#result-the-acquisition-chain-run-on-kind-2026-07-31" title="Permanent link">&para;</a></h2>
-<p><code>E2E_AGC_ScaleSetAcquisition</code> — 4 specs, green on three consecutive runs against the
-local kind cluster (<code>e2e-1e54fbf4</code> images).</p>
-<p>The load-bearing evidence is fakegithub's own ordered call log, attached to the
-report by the GHES spec:</p>
+<p><code>E2E_AGC_ScaleSetAcquisition</code> — 4 specs, green on three consecutive runs against the local kind cluster (<code>e2e-1e54fbf4</code> images).</p>
+<p>The load-bearing evidence is fakegithub's own ordered call log, attached to the report by the GHES spec:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>registration-token /orgs/ssacqorg/actions/runners/registration-token
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>runner-registration
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>get-scaleset name=e2e-ssacq
@@ -2828,31 +2784,16 @@ report by the GHES spec:</p>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>generatejitconfig id=1
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>poll id=1 cap=10 last=3
 </code></pre></div>
-<p>Every rung of the table above, from the deployed AGC, under the chart's real
-<code>agc-tenant-role</code>: both bootstrap hops, scale-set resolve-then-create, the session,
-capacity-advertising long polls (<code>cap=10</code>, the <code>defaultScaleSetMaxCapacity</code>), an
-auto-assigned job provisioned through <code>generatejitconfig</code>, then — after the flow
-switch — a <code>JobAvailable</code> claimed with <code>acquirejobs</code> <strong>authorized by the queue
-token, not the admin JWT</strong>, and only then its own JIT mint. Two worker pods, each
-carrying the run identity its assignment delivered.</p>
-<p><strong>Why the call log is in the spec and not just in this doc.</strong> The whole chain runs
-in-cluster against a stub whose long polls wake the instant a job is enqueued, so
-the GHES spec completes in ~34 ms end to end. At that resolution a genuine pass and
-a vacuous one — assertions satisfied by state that predates the enqueue — are
-indistinguishable from spec timings, which is exactly what the first green run
-looked like before the log was captured. The log is diagnostics, not a gate; the
-assertions remain the gate.</p>
-<p><strong>Two things the run did not exercise</strong>, recorded so neither is read into the
-result. <code>ResolveRunnerGroup</code> is absent from the log — the listener carried no group
-name, so the scale set was created against group 1 directly. And no runner ever
-starts: fakegithub's JIT config is a syntactic placeholder, so the spec's terminal
-assertion is the staged JIT-config Secret the worker pod mounts, not a pod phase.
+<p>Every rung of the table above, from the deployed AGC, under the chart's real <code>agc-tenant-role</code>: both bootstrap hops, scale-set resolve-then-create, the session, capacity-advertising long polls (<code>cap=10</code>, the <code>defaultScaleSetMaxCapacity</code>), an auto-assigned job provisioned through <code>generatejitconfig</code>, then — after the flow switch — a <code>JobAvailable</code> claimed with <code>acquirejobs</code> <strong>authorized by the queue token, not the admin JWT</strong>, and only then its own JIT mint.
+Two worker pods, each carrying the run identity its assignment delivered.</p>
+<p><strong>Why the call log is in the spec and not just in this doc.</strong> The whole chain runs in-cluster against a stub whose long polls wake the instant a job is enqueued, so the GHES spec completes in ~34 ms end to end.
+At that resolution a genuine pass and a vacuous one — assertions satisfied by state that predates the enqueue — are indistinguishable from spec timings, which is exactly what the first green run looked like before the log was captured.
+The log is diagnostics, not a gate; the assertions remain the gate.</p>
+<p><strong>Two things the run did not exercise</strong>, recorded so neither is read into the result. <code>ResolveRunnerGroup</code> is absent from the log — the listener carried no group name, so the scale set was created against group 1 directly.
+And no runner ever starts: fakegithub's JIT config is a syntactic placeholder, so the spec's terminal assertion is the staged JIT-config Secret the worker pod mounts, not a pod phase.
 A real runner executing a real job stays with the live-GitHub tier.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>Done.</strong> fakegithub serves the scale-set protocol from the shared
-<code>scaleset/scalesetstub</code> model, the AGC's bootstrap is re-pointed at it under the
-existing <code>STUB_AUTH_URL</code>/<code>STUB_BROKER_URL</code> pair, and the acquisition chain is gated
-on kind by <code>E2E_AGC_ScaleSetAcquisition</code>.</p>
+<p><strong>Done.</strong> fakegithub serves the scale-set protocol from the shared <code>scaleset/scalesetstub</code> model, the AGC's bootstrap is re-pointed at it under the existing <code>STUB_AUTH_URL</code>/<code>STUB_BROKER_URL</code> pair, and the acquisition chain is gated on kind by <code>E2E_AGC_ScaleSetAcquisition</code>.</p>
 
 
 

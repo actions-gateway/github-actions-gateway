@@ -2813,22 +2813,17 @@
 
 
 <h1 id="kata-on-gke-runbook">Kata-on-GKE runbook<a class="headerlink" href="#kata-on-gke-runbook" title="Permanent link">&para;</a></h1>
-<p>Reproduce the Q226 result: a GitHub Actions runner running <code>dockerd</code> + <code>kind</code>
-inside a Kata Containers micro-VM on GKE, with <strong>no</strong> <code>privileged: true</code> on the
-runner pod.</p>
-<p><strong>This was run live and passed</strong> (GKE <code>1.35.5-gke.1241004</code>, Ubuntu 24.04 /
-containerd 2.1.5, <code>c2-standard-4</code> nested-virt, Kata 3.32.0 / QEMU). Results and
-the full constraint list are in
-<a href="../../plan/archive/kata-on-gke/">Kata Containers on GKE</a>; the cluster-side how-to for
-operators is <a href="../kata-dind-workloads/">Running DinD workloads under Kata</a>.</p>
-<p>Steps below mutate cloud resources. Use a <strong>throwaway project or cluster</strong> — never
-a production one — and tear it down when finished.</p>
+<p>Reproduce the Q226 result: a GitHub Actions runner running <code>dockerd</code> + <code>kind</code> inside a Kata Containers micro-VM on GKE, with <strong>no</strong> <code>privileged: true</code> on the runner pod.</p>
+<p><strong>This was run live and passed</strong> (GKE <code>1.35.5-gke.1241004</code>, Ubuntu 24.04 / containerd 2.1.5, <code>c2-standard-4</code> nested-virt, Kata 3.32.0 / QEMU).
+Results and the full constraint list are in <a href="../../plan/archive/kata-on-gke/">Kata Containers on GKE</a>; the cluster-side how-to for operators is <a href="../kata-dind-workloads/">Running DinD workloads under Kata</a>.</p>
+<p>Steps below mutate cloud resources.
+Use a <strong>throwaway project or cluster</strong> — never a production one — and tear it down when finished.</p>
 <h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>gcloud</code> authenticated, with permission to create clusters.</li>
 <li><code>kubectl</code> and <code>helm</code> on <code>PATH</code> (<code>make doctor</code> checks both).</li>
-<li>Pin <code>--project</code> / <code>--zone</code> on every <code>gcloud</code> call, and <code>--context</code> on every
-  <code>kubectl</code> call. Parallel sessions share <code>~/.kube/config</code> and <code>~/.config/gcloud</code>.</li>
+<li>Pin <code>--project</code> / <code>--zone</code> on every <code>gcloud</code> call, and <code>--context</code> on every <code>kubectl</code> call.
+  Parallel sessions share <code>~/.kube/config</code> and <code>~/.config/gcloud</code>.</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PROJECT</span><span class="o">=</span>&lt;throwaway-gcp-project&gt;
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>&lt;throwaway-cluster&gt;
@@ -2840,10 +2835,8 @@ a production one — and tear it down when finished.</p>
 <blockquote>
 <p>Acceptance criterion <strong>#1</strong>.</p>
 </blockquote>
-<p>Create the nested-virt pool as the cluster's <em>initial</em> pool. A separate
-<code>node-pools create</code> that hits a capacity stockout holds a cluster-level lock and
-blocks every other mutation — including deleting the stuck pool — for tens of
-minutes.</p>
+<p>Create the nested-virt pool as the cluster's <em>initial</em> pool.
+A separate <code>node-pools create</code> that hits a capacity stockout holds a cluster-level lock and blocks every other mutation — including deleting the stuck pool — for tens of minutes.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>create<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CLUSTER</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span>--zone<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$ZONE</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--num-nodes<span class="o">=</span><span class="m">1</span><span class="w"> </span>--machine-type<span class="o">=</span>c2-standard-4<span class="w"> </span><span class="se">\</span>
@@ -2853,18 +2846,14 @@ minutes.</p>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--node-labels<span class="o">=</span>gag.dev/kata-ci<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span>--workload-pool<span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">PROJECT</span><span class="si">}</span><span class="s2">.svc.id.goog&quot;</span>
 </code></pre></div>
-<p><code>--enable-nested-virtualization</code> requires <code>UBUNTU_CONTAINERD</code> (or
-<code>COS_CONTAINERD</code> ≥ <code>1.28.4-gke.1083000</code>) and GKE <strong>Standard</strong> — Autopilot cannot
-do it. The machine family must be one GCP supports for nested virt; it names the
-list when it rejects a create (measured 2026-08-02):</p>
+<p><code>--enable-nested-virtualization</code> requires <code>UBUNTU_CONTAINERD</code> (or <code>COS_CONTAINERD</code> ≥ <code>1.28.4-gke.1083000</code>) and GKE <strong>Standard</strong> — Autopilot cannot do it.
+The machine family must be one GCP supports for nested virt; it names the list when it rejects a create (measured 2026-08-02):</p>
 <blockquote>
 <p>A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3 and M4</p>
 </blockquote>
-<p><strong><code>C2D</code> and <code>N2D</code> are not on it</strong>, nor is <code>e2</code>. If you hit
-<code>ZONE_RESOURCE_POOL_EXHAUSTED</code>, that is a capacity stockout, not a quota error —
-try another family or zone. Check the <strong>per-family</strong> quota too: <code>C2_CPUS</code>
-defaults to 8 on a fresh project, which is one node of an 8-vCPU shape, while
-<code>N2_CPUS</code> defaults to 200.</p>
+<p><strong><code>C2D</code> and <code>N2D</code> are not on it</strong>, nor is <code>e2</code>.
+If you hit <code>ZONE_RESOURCE_POOL_EXHAUSTED</code>, that is a capacity stockout, not a quota error — try another family or zone.
+Check the <strong>per-family</strong> quota too: <code>C2_CPUS</code> defaults to 8 on a fresh project, which is one node of an 8-vCPU shape, while <code>N2_CPUS</code> defaults to 200.</p>
 <p>Harden the metadata server — Kata does <strong>not</strong> do this for you:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>update<span class="w"> </span>default-pool<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span>--cluster<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$CLUSTER</span><span class="s2">&quot;</span><span class="w"> </span>--zone<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$ZONE</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
@@ -2874,15 +2863,15 @@ defaults to 8 on a fresh project, which is one node of an 8-vCPU shape, while
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>debug<span class="w"> </span>node/<span class="s2">&quot;</span><span class="k">$(</span>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>nodes<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[0].metadata.name}&#39;</span><span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>-it<span class="w"> </span>--image<span class="o">=</span>busybox<span class="w"> </span>--<span class="w"> </span>ls<span class="w"> </span>-l<span class="w"> </span>/host/dev/kvm
 </code></pre></div>
-<p><strong>Expected:</strong> <code>crw-rw---- ... 10, 232 /host/dev/kvm</code>. If absent, nested
-virtualization did not take effect and nothing below will work.</p>
+<p><strong>Expected:</strong> <code>crw-rw---- ... 10, 232 /host/dev/kvm</code>.
+If absent, nested virtualization did not take effect and nothing below will work.</p>
 <hr />
 <h2 id="step-2--install-kata-and-the-runtimeclass">Step 2 — Install Kata and the RuntimeClass<a class="headerlink" href="#step-2--install-kata-and-the-runtimeclass" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p>Acceptance criterion <strong>#2</strong>.</p>
 </blockquote>
-<p>Upstream no longer publishes <code>kata-deploy.yaml</code> / <code>kata-rbac.yaml</code> release assets
-(they 404). Install from the OCI Helm chart:</p>
+<p>Upstream no longer publishes <code>kata-deploy.yaml</code> / <code>kata-rbac.yaml</code> release assets (they 404).
+Install from the OCI Helm chart:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>helm<span class="w"> </span>--kube-context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>install<span class="w"> </span>kata-deploy<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>oci://quay.io/kata-containers/kata-deploy-charts/kata-deploy<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">3</span>.32.0<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span><span class="se">\</span>
@@ -2890,15 +2879,13 @@ virtualization did not take effect and nothing below will work.</p>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>deploy/kata-ci/runtimeclass.yaml
 </code></pre></div>
-<p>Confirm the runtime landed and the node self-labelled. GKE preinstalls unrelated
-<code>gvisor</code> / <code>confidential-linked-runner</code> classes, so check the label too:</p>
+<p>Confirm the runtime landed and the node self-labelled.
+GKE preinstalls unrelated <code>gvisor</code> / <code>confidential-linked-runner</code> classes, so check the label too:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>ds/kata-deploy<span class="w"> </span>--timeout<span class="o">=</span>10m
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>nodes<span class="w"> </span>-l<span class="w"> </span>katacontainers.io/kata-runtime<span class="o">=</span><span class="nb">true</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>runtimeclass<span class="w"> </span>kata<span class="w"> </span>kata-qemu
 </code></pre></div>
-<p><strong>Expected:</strong> the DaemonSet is Ready, the node carries
-<code>katacontainers.io/kata-runtime=true</code> (applied by <code>kata-deploy</code>, <em>not</em> by you),
-and both classes exist.</p>
+<p><strong>Expected:</strong> the DaemonSet is Ready, the node carries <code>katacontainers.io/kata-runtime=true</code> (applied by <code>kata-deploy</code>, <em>not</em> by you), and both classes exist.</p>
 <hr />
 <h2 id="step-3--start-the-unprivileged-runner">Step 3 — Start the unprivileged runner<a class="headerlink" href="#step-3--start-the-unprivileged-runner" title="Permanent link">&para;</a></h2>
 <blockquote>
@@ -2918,14 +2905,14 @@ and both classes exist.</p>
 <a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># dockerd must be on overlay2. `vfs` means the block volume did not mount.</span>
 <a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span><span class="nb">exec</span><span class="w"> </span>kata-runner<span class="w"> </span>--<span class="w"> </span>docker<span class="w"> </span>info<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{.Driver}}&#39;</span>
 </code></pre></div>
-<p><strong>Expected:</strong> <code>0</code>; two different kernels (spike saw <code>6.8.0-1054-gke</code> vs
-<code>6.18.35</code>); <code>overlay2</code>.</p>
-<p>If <code>dockerd</code> fails, add <strong>one</strong> capability at a time and re-test. Never set
-<code>privileged: true</code> — that defeats the entire design.</p>
+<p><strong>Expected:</strong> <code>0</code>; two different kernels (spike saw <code>6.8.0-1054-gke</code> vs <code>6.18.35</code>); <code>overlay2</code>.</p>
+<p>If <code>dockerd</code> fails, add <strong>one</strong> capability at a time and re-test.
+Never set <code>privileged: true</code> — that defeats the entire design.</p>
 <hr />
 <h2 id="step-4--kind-create-cluster-inside-the-micro-vm">Step 4 — <code>kind create cluster</code> inside the micro-VM<a class="headerlink" href="#step-4--kind-create-cluster-inside-the-micro-vm" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p>Acceptance criteria <strong>#3</strong>, <strong>#4</strong>, <strong>#6</strong>. This is the headline claim.</p>
+<p>Acceptance criteria <strong>#3</strong>, <strong>#4</strong>, <strong>#6</strong>.
+This is the headline claim.</p>
 </blockquote>
 <p><code>kind</code> needs the guest's <code>/dev/kmsg</code> bound into its node container:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span><span class="nb">exec</span><span class="w"> </span>kata-runner<span class="w"> </span>--<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;cat &gt; /root/kind-config.yaml &lt;&lt;YAML</span>
@@ -2947,31 +2934,27 @@ and both classes exist.</p>
 <a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">  </span><span class="s1">&#39;docker pull -q busybox:latest &amp;&amp; kind load docker-image --name kata-spike busybox:latest&#39;</span>
 </code></pre></div>
 <p><strong>Expected:</strong> the kind control-plane node reaches <code>Ready</code>, and <code>kind load</code> succeeds.
-Spike timings: 58 s cold / 43 s warm for <code>kind create cluster</code>; 2 s for <code>kind load</code>
-— well inside the ≤ ~6 min ceiling.</p>
+Spike timings: 58 s cold / 43 s warm for <code>kind create cluster</code>; 2 s for <code>kind load</code> — well inside the ≤ ~6 min ceiling.</p>
 <hr />
 <h2 id="step-5--confirm-the-metadata-server-is-closed">Step 5 — Confirm the metadata server is closed<a class="headerlink" href="#step-5--confirm-the-metadata-server-is-closed" title="Permanent link">&para;</a></h2>
-<p>Kata isolates the kernel, not the pod network. Verify Workload Identity is doing
-its job. <strong>Never print the token body.</strong></p>
+<p>Kata isolates the kernel, not the pod network.
+Verify Workload Identity is doing its job. <strong>Never print the token body.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>run<span class="w"> </span>meta-id<span class="w"> </span>--image<span class="o">=</span>busybox:1.36<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--overrides<span class="o">=</span><span class="s1">&#39;{&quot;spec&quot;:{&quot;runtimeClassName&quot;:&quot;kata&quot;}}&#39;</span><span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="s1">&#39;wget -qO- --header=&quot;Metadata-Flavor: Google&quot; \</span>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="s1">    http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/email&#39;</span>
 <a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>logs<span class="w"> </span>meta-id
 </code></pre></div>
-<p><strong>Expected:</strong> <code>&lt;project&gt;.svc.id.goog</code> — the workload-pool identity. If it returns a
-<code>*-compute@developer.gserviceaccount.com</code> address, the pod can mint <strong>node</strong>
-credentials: <code>GKE_METADATA</code> is not in effect and the runner is not safe for
-untrusted code.</p>
+<p><strong>Expected:</strong> <code>&lt;project&gt;.svc.id.goog</code> — the workload-pool identity.
+If it returns a <code>*-compute@developer.gserviceaccount.com</code> address, the pod can mint <strong>node</strong> credentials: <code>GKE_METADATA</code> is not in effect and the runner is not safe for untrusted code.</p>
 <hr />
 <h2 id="step-6--tear-down">Step 6 — Tear down<a class="headerlink" href="#step-6--tear-down" title="Permanent link">&para;</a></h2>
-<p>Delete the PVC <strong>first</strong>. A <code>Delete</code> reclaim policy only fires when the <em>PVC</em> is
-deleted — tearing down the cluster orphans the underlying PD, which keeps billing:</p>
+<p>Delete the PVC <strong>first</strong>.
+A <code>Delete</code> reclaim policy only fires when the <em>PVC</em> is deleted — tearing down the cluster orphans the underlying PD, which keeps billing:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>deploy/kata-ci/runner-pod.yaml<span class="w">   </span><span class="c1"># pod + PVC</span>
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>delete<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CLUSTER</span><span class="s2">&quot;</span><span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span>--zone<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$ZONE</span><span class="s2">&quot;</span><span class="w"> </span>--quiet
 </code></pre></div>
-<p>Confirm you are deleting the throwaway cluster, then check for orphans — the
-100Gi <code>pd-balanced</code> behind the Block PVC is the one that gets left behind:</p>
+<p>Confirm you are deleting the throwaway cluster, then check for orphans — the 100Gi <code>pd-balanced</code> behind the Block PVC is the one that gets left behind:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>disks<span class="w"> </span>list<span class="w">     </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w">    </span><span class="c1"># expect: Listed 0 items.</span>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>instances<span class="w"> </span>list<span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span>
 <a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>addresses<span class="w"> </span>list<span class="w"> </span>--project<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span>
@@ -2979,11 +2962,9 @@ deleted — tearing down the cluster orphans the underlying PD, which keeps bill
 <p>Delete any survivor with <code>gcloud compute disks delete &lt;name&gt; --zone="$ZONE"</code>.</p>
 <hr />
 <h2 id="what-is-still-outstanding">What is still outstanding<a class="headerlink" href="#what-is-still-outstanding" title="Permanent link">&para;</a></h2>
-<p><code>make e2e</code> inside the runner (acceptance criterion #5) has <strong>not</strong> been run: it
-needs a GAG e2e runner image bundling <code>dockerd</code>, <code>kind</code> and the Go/test toolchain,
-which does not exist yet. Everything beneath it — Docker, <code>kind</code>, image loading,
-pod scheduling in the inner cluster — is proven above. See
-<a href="../../plan/archive/kata-on-gke/#ci-integration--the-follow-up">CI integration</a>.</p>
+<p><code>make e2e</code> inside the runner (acceptance criterion #5) has <strong>not</strong> been run: it needs a GAG e2e runner image bundling <code>dockerd</code>, <code>kind</code> and the Go/test toolchain, which does not exist yet.
+Everything beneath it — Docker, <code>kind</code>, image loading, pod scheduling in the inner cluster — is proven above.
+See <a href="../../plan/archive/kata-on-gke/#ci-integration--the-follow-up">CI integration</a>.</p>
 
 
 

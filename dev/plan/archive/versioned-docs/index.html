@@ -2643,88 +2643,50 @@
 
 <h1 id="versioned-docs-mike">Versioned docs (mike)<a class="headerlink" href="#versioned-docs-mike" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ✅ Done — shipped for Q238 (supersedes the Q387 tag-trigger fix).</p>
-<p>Decision log for making <a href="https://actions-gateway.com">actions-gateway.com</a> a
-versioned docs site. The durable how-to-maintain reference is
-<a href="../../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>;
-this file records <em>why</em> the design is shaped the way it is.</p>
+<p>Decision log for making <a href="https://actions-gateway.com">actions-gateway.com</a> a versioned docs site.
+The durable how-to-maintain reference is <a href="../../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>; this file records <em>why</em> the design is shaped the way it is.</p>
 <h2 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h2>
-<p><code>pages.yml</code> deployed the site on <strong>every push to <code>main</code></strong>, so a feature whose code
-merged but whose Helm chart had not yet been tagged/released appeared as
-"Available now" on the live site (Q387). Operators installing the released chart
-couldn't find it. The deeper issue (Q238): a single <code>main</code>-rendered page can't be
-correct for all readers at once — a released operator and a <code>main</code> reader need
-different install/config steps.</p>
+<p><code>pages.yml</code> deployed the site on <strong>every push to <code>main</code></strong>, so a feature whose code merged but whose Helm chart had not yet been tagged/released appeared as "Available now" on the live site (Q387).
+Operators installing the released chart couldn't find it.
+The deeper issue (Q238): a single <code>main</code>-rendered page can't be correct for all readers at once — a released operator and a <code>main</code> reader need different install/config steps.</p>
 <h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
-<p>Adopt <a href="https://github.com/jimporter/mike"><code>mike</code></a>, MkDocs Material's first-party
-versioning tool, so the site carries one built copy per version with a native
-version selector:</p>
+<p>Adopt <a href="https://github.com/jimporter/mike"><code>mike</code></a>, MkDocs Material's first-party versioning tool, so the site carries one built copy per version with a native version selector:</p>
 <ul>
-<li><strong><code>stable</code></strong> — an alias of the latest stable release tag; the <strong>default</strong> the
-  root <code>/</code> redirects to. Operators land here.</li>
+<li><strong><code>stable</code></strong> — an alias of the latest stable release tag; the <strong>default</strong> the root <code>/</code> redirects to.
+  Operators land here.</li>
 <li><strong>older releases</strong> (<code>1.0.0</code>, …) — reachable via the selector.</li>
-<li><strong><code>dev</code></strong> — the unreleased <code>main</code> branch; opt-in via the selector, kept out of
-  search results (<code>robots.txt</code> <code>Disallow: /dev/</code>).</li>
+<li><strong><code>dev</code></strong> — the unreleased <code>main</code> branch; opt-in via the selector, kept out of search results (<code>robots.txt</code> <code>Disallow: /dev/</code>).</li>
 </ul>
-<p><code>stable</code> being the default is what fixes Q387: unreleased <code>main</code> content is only
-ever visible under the opt-in <code>dev</code> version, never as the released docs.</p>
+<p><code>stable</code> being the default is what fixes Q387: unreleased <code>main</code> content is only ever visible under the opt-in <code>dev</code> version, never as the released docs.</p>
 <h2 id="key-decisions">Key decisions<a class="headerlink" href="#key-decisions" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>mike over a hand-rolled two-track build.</strong> Material renders the version
-  selector and the "you're viewing a different version" banner natively from
-  mike's <code>versions.json</code> (<code>extra.version.provider: mike</code>). Reusing the standard
-  tool beats reinventing the selector.</li>
-<li><strong>Pages source stays "GitHub Actions" (not branch-serving).</strong> mike maintains the
-  version tree on the <code>gh-pages</code> branch; the <code>publish</code> job serves that tree as the
-  Pages <strong>artifact</strong>. This keeps full control of the artifact root, which matters
-  for the custom domain: mike does <strong>not</strong> keep a root <code>CNAME</code>, so the workflow
-  re-asserts <code>docs/CNAME</code> at the artifact root every deploy. Branch-serving would
-  have required a server-side Pages-source change and risked mike clobbering the
-  root CNAME.</li>
-<li><strong><code>--alias-type=copy</code> for aliases.</strong> GitHub Pages artifact deploys don't follow
-  symlinks, so mike's default symlinked <code>stable/</code> would 404 on deep links. <code>copy</code>
-  makes <code>stable/</code> a real directory; <code>stable/operations/…</code> resolves.</li>
-<li><strong>Trigger model mirrors <code>publish.yml</code>.</strong> A stable <code>v*</code> tag deploys the release; a
-  prerelease tag (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) does not deploy — the same
-  prerelease test <code>publish.yml</code> uses (Q293), so the site republishes on exactly the
-  tags that ship a stable chart. A <code>main</code> push refreshes <code>dev</code>. <code>workflow_dispatch</code>
-  deploys an explicit <code>version</code>/<code>alias</code> (for seeding and manual redeploys).</li>
-<li><strong><code>stable</code>/default is semver-aware, not latest-tag-wins.</strong> A stable tag claims the
-  <code>stable</code> alias + the default root redirect <strong>only when it is the highest released
-  version</strong> (<code>mike list</code> → <code>sort -V</code>). This handles patch releases: a backport to an
-  older supported line (e.g. <code>v1.2.5</code> cut after <code>v1.3.0</code>) publishes its own version
-  without demoting the site from <code>1.3.0</code>. Because <code>mike</code> builds each version from
-  its tag, a patch tagged off the release line (not off feature-ahead <code>main</code>)
-  carries only that line's content — so correct release engineering makes the docs
-  correct for free; no docs-specific branch is needed. See
-  <a href="../../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a>.</li>
+<li><strong>mike over a hand-rolled two-track build.</strong> Material renders the version selector and the "you're viewing a different version" banner natively from mike's <code>versions.json</code> (<code>extra.version.provider: mike</code>).
+  Reusing the standard tool beats reinventing the selector.</li>
+<li><strong>Pages source stays "GitHub Actions" (not branch-serving).</strong> mike maintains the version tree on the <code>gh-pages</code> branch; the <code>publish</code> job serves that tree as the Pages <strong>artifact</strong>.
+  This keeps full control of the artifact root, which matters for the custom domain: mike does <strong>not</strong> keep a root <code>CNAME</code>, so the workflow re-asserts <code>docs/CNAME</code> at the artifact root every deploy.
+  Branch-serving would have required a server-side Pages-source change and risked mike clobbering the root CNAME.</li>
+<li><strong><code>--alias-type=copy</code> for aliases.</strong> GitHub Pages artifact deploys don't follow symlinks, so mike's default symlinked <code>stable/</code> would 404 on deep links. <code>copy</code> makes <code>stable/</code> a real directory; <code>stable/operations/…</code> resolves.</li>
+<li><strong>Trigger model mirrors <code>publish.yml</code>.</strong> A stable <code>v*</code> tag deploys the release; a prerelease tag (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) does not deploy — the same prerelease test <code>publish.yml</code> uses (Q293), so the site republishes on exactly the tags that ship a stable chart.
+  A <code>main</code> push refreshes <code>dev</code>. <code>workflow_dispatch</code> deploys an explicit <code>version</code>/<code>alias</code> (for seeding and manual redeploys).</li>
+<li><strong><code>stable</code>/default is semver-aware, not latest-tag-wins.</strong> A stable tag claims the <code>stable</code> alias + the default root redirect <strong>only when it is the highest released version</strong> (<code>mike list</code> → <code>sort -V</code>).
+  This handles patch releases: a backport to an older supported line (e.g. <code>v1.2.5</code> cut after <code>v1.3.0</code>) publishes its own version without demoting the site from <code>1.3.0</code>.
+  Because <code>mike</code> builds each version from its tag, a patch tagged off the release line (not off feature-ahead <code>main</code>) carries only that line's content — so correct release engineering makes the docs correct for free; no docs-specific branch is needed.
+  See <a href="../../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a>.</li>
 </ul>
 <h2 id="rollout">Rollout<a class="headerlink" href="#rollout" title="Permanent link">&para;</a></h2>
-<p>Releases cut before this workflow landed (<code>v1.0.0</code>, <code>v1.1.0</code>) aren't in the mike
-tree yet, and the root has nothing to redirect to until a <code>stable</code> version exists.
-Seed them once via <code>workflow_dispatch</code> — see
-<a href="../../../development/website/#seeding-already-released-versions">website.md § Seeding already-released versions</a>.</p>
+<p>Releases cut before this workflow landed (<code>v1.0.0</code>, <code>v1.1.0</code>) aren't in the mike tree yet, and the root has nothing to redirect to until a <code>stable</code> version exists.
+Seed them once via <code>workflow_dispatch</code> — see <a href="../../../development/website/#seeding-already-released-versions">website.md § Seeding already-released versions</a>.</p>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
-<p>The deploy path only runs on push/tag, so the PR's CI does not exercise it. It was
-validated locally against an isolated clone (no <code>--push</code>, real origin untouched):
-mike deploy of <code>dev</code> + <code>1.0.0</code> + <code>1.1.0 stable</code>, <code>set-default stable</code>, then
-<code>git archive gh-pages</code> + CNAME injection — confirming the root redirect to
-<code>stable/</code>, a correct <code>versions.json</code>, a real (non-symlink) <code>stable/</code> directory with
-working deep links, and the injected root <code>CNAME</code>. The <code>resolve</code> step's
-event/ref→version mapping was table-tested across <code>main</code>, stable tag, prerelease
-tag, and each <code>workflow_dispatch</code> input shape. Cross-run <strong>accumulation</strong> was
-verified too (a fresh clone with no local <code>gh-pages</code> deploys a new version onto the
-existing ones via <code>origin/gh-pages</code>, which <code>fetch-depth: 0</code> makes available). The
-semver-aware <code>stable</code> decision was table-tested across first release, forward
-release, backport-after-newer-minor (keeps <code>stable</code>), double-digit ordering
-(<code>1.10.0</code> &gt; <code>1.9.0</code>), and re-run idempotency.</p>
+<p>The deploy path only runs on push/tag, so the PR's CI does not exercise it.
+It was validated locally against an isolated clone (no <code>--push</code>, real origin untouched): mike deploy of <code>dev</code> + <code>1.0.0</code> + <code>1.1.0 stable</code>, <code>set-default stable</code>, then <code>git archive gh-pages</code> + CNAME injection — confirming the root redirect to <code>stable/</code>, a correct <code>versions.json</code>, a real (non-symlink) <code>stable/</code> directory with working deep links, and the injected root <code>CNAME</code>.
+The <code>resolve</code> step's event/ref→version mapping was table-tested across <code>main</code>, stable tag, prerelease tag, and each <code>workflow_dispatch</code> input shape.
+Cross-run <strong>accumulation</strong> was verified too (a fresh clone with no local <code>gh-pages</code> deploys a new version onto the existing ones via <code>origin/gh-pages</code>, which <code>fetch-depth: 0</code> makes available).
+The semver-aware <code>stable</code> decision was table-tested across first release, forward release, backport-after-newer-minor (keeps <code>stable</code>), double-digit ordering (<code>1.10.0</code> &gt; <code>1.9.0</code>), and re-run idempotency.</p>
 <h2 id="follow-ups">Follow-ups<a class="headerlink" href="#follow-ups" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>First-deploy seeding is manual</strong> (the two <code>workflow_dispatch</code> runs above) —
-  acceptable one-time cost, documented in website.md.</li>
-<li><strong>Old flat URLs → versioned paths.</strong> Inbound links to the pre-versioning flat
-  paths (<code>/operations/…</code>) now live under <code>/stable/operations/…</code>; mike's root
-  redirect covers <code>/</code> but not deep flat links. The site is new (launched Q129), so
-  link rot is limited; per-page redirects were judged not worth the complexity.</li>
+<li><strong>First-deploy seeding is manual</strong> (the two <code>workflow_dispatch</code> runs above) — acceptable one-time cost, documented in website.md.</li>
+<li><strong>Old flat URLs → versioned paths.</strong> Inbound links to the pre-versioning flat paths (<code>/operations/…</code>) now live under <code>/stable/operations/…</code>; mike's root redirect covers <code>/</code> but not deep flat links.
+  The site is new (launched Q129), so link rot is limited; per-page redirects were judged not worth the complexity.</li>
 </ul>
 
 

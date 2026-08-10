@@ -2742,137 +2742,65 @@
 
 
 <h1 id="v2beta1-graduation-plan">v2beta1 graduation plan<a class="headerlink" href="#v2beta1-graduation-plan" title="Permanent link">&para;</a></h1>
-<p><strong>Design source of truth:</strong> <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API Decomposition</a>
-(the CRD set and resolved decisions) and <a href="../v2-api/">v2-api.md</a> (the <code>v2alpha1</code>
-build). This doc holds the <em>graduation</em>: what must land before cutting
-<code>v2alpha1 → v2beta1</code>, in what order, and the design decisions that gate it.</p>
-<p><strong>Goal.</strong> Graduate the v2 API from <code>v2alpha1</code> to <code>v2beta1</code> — the first stability
-contract (<em>won't be removed; changes carry a migration path; production-relyable</em>)
-— with the credential shape correct before the freeze.</p>
-<p><strong>Approach.</strong> <code>alpha → beta</code> is the <strong>last free breaking change</strong>: alpha carries
-no stability promise, and once beta is signed the conversion webhook must
-round-trip served versions for every later change. So the gate is narrow — get
-the shape right, then cut. Five blockers land first (a broker-compatibility
-sweep, the credentials discriminated-union reshape, the workload-identity
-feature that validates that union, gVisor worker-isolation validation, and
-worker-pod disruption-safety defaults), then the graduation itself.</p>
-<p>Two of the five are <em>not</em> shape blockers but <strong>production-reliability</strong> blockers:
-beta's contract is "production-relyable," so the worker posture is confirmed
-before signing — gVisor isolation holds (Q15) <strong>and</strong> routine cluster churn (node
-consolidation, descheduler) cannot strand a running job (Q218). Neither is a CRD
-shape change — both are cheap, additive runtime behavior — but both gate the beta
-<em>quality</em> bar exactly as the gVisor check does.</p>
+<p><strong>Design source of truth:</strong> <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API Decomposition</a> (the CRD set and resolved decisions) and <a href="../v2-api/">v2-api.md</a> (the <code>v2alpha1</code> build).
+This doc holds the <em>graduation</em>: what must land before cutting <code>v2alpha1 → v2beta1</code>, in what order, and the design decisions that gate it.</p>
+<p><strong>Goal.</strong> Graduate the v2 API from <code>v2alpha1</code> to <code>v2beta1</code> — the first stability contract (<em>won't be removed; changes carry a migration path; production-relyable</em>) — with the credential shape correct before the freeze.</p>
+<p><strong>Approach.</strong> <code>alpha → beta</code> is the <strong>last free breaking change</strong>: alpha carries no stability promise, and once beta is signed the conversion webhook must round-trip served versions for every later change.
+So the gate is narrow — get the shape right, then cut.
+Five blockers land first (a broker-compatibility sweep, the credentials discriminated-union reshape, the workload-identity feature that validates that union, gVisor worker-isolation validation, and worker-pod disruption-safety defaults), then the graduation itself.</p>
+<p>Two of the five are <em>not</em> shape blockers but <strong>production-reliability</strong> blockers: beta's contract is "production-relyable," so the worker posture is confirmed before signing — gVisor isolation holds (Q15) <strong>and</strong> routine cluster churn (node consolidation, descheduler) cannot strand a running job (Q218).
+Neither is a CRD shape change — both are cheap, additive runtime behavior — but both gate the beta <em>quality</em> bar exactly as the gVisor check does.</p>
 <h2 id="why-graduate-now">Why graduate now<a class="headerlink" href="#why-graduate-now" title="Permanent link">&para;</a></h2>
-<p>The decision and its rationale live in
-<a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md § API maturity &amp; graduation</a>.
-In brief: the architecture review found the breaking surface fully covered;
-everything else outstanding is additive. We do <strong>not</strong> gate on external adoption —
-<code>v1alpha1</code> never carried a stability contract either, and a <code>v3</code> re-cut remains
-the escape hatch if the shape proves wrong. Beta's "production-relyable" signal is
-itself an adoption driver (nobody relies on an alpha that may vanish without
-notice).</p>
+<p>The decision and its rationale live in <a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">v2-api.md § API maturity &amp; graduation</a>.
+In brief: the architecture review found the breaking surface fully covered; everything else outstanding is additive.
+We do <strong>not</strong> gate on external adoption — <code>v1alpha1</code> never carried a stability contract either, and a <code>v3</code> re-cut remains the escape hatch if the shape proves wrong.
+Beta's "production-relyable" signal is itself an adoption driver (nobody relies on an alpha that may vanish without notice).</p>
 <h2 id="the-blocker-sequence">The blocker sequence<a class="headerlink" href="#the-blocker-sequence" title="Permanent link">&para;</a></h2>
-<p>Ordered in the <a href="../../STATUS/">Queue</a>. <strong>Q191/Q196/Q197/Q15/Q218 are independent and
-run in parallel; Q74 waits for all five.</strong></p>
+<p>Ordered in the <a href="../../STATUS/">Queue</a>. <strong>Q191/Q196/Q197/Q15/Q218 are independent and run in parallel; Q74 waits for all five.</strong></p>
 <h3 id="1-q191--broker-compatibility-sweep-run-first">1. Q191 — Broker-compatibility sweep <em>(run first)</em><a class="headerlink" href="#1-q191--broker-compatibility-sweep-run-first" title="Permanent link">&para;</a></h3>
-<p>GAG re-implements the GitHub broker protocol, so a protocol gap could force a CRD
-change. Run this <em>before</em> freezing the beta shape: expand <code>cmd/probe</code> into a
-compatibility suite that exercises the full broker surface and publish a compat
-report. If it surfaces a needed field, that field lands in the beta shape; if
-it's clean, we freeze with confidence. Turns the silent-break risk into a
-managed, visible asset.</p>
-<p><strong>Done.</strong> The <code>cmd/probe/compat</code> suite asserts every documented broker contract
-(§3.2 credential crypto, §3.3 endpoints, §3.4 payload shapes, §3.5 rate-limit
-handling) against the in-process broker model; it runs credential-free in
-<code>make check</code>/CI on every change, with the live-against-real-GitHub probe
-(<code>cmd/probe</code>) as its companion. The published result is
-<a href="../../development/broker-compatibility/">broker-compatibility.md</a>: all documented
-contracts pass, so no protocol gap forces a field into the beta shape.</p>
+<p>GAG re-implements the GitHub broker protocol, so a protocol gap could force a CRD change.
+Run this <em>before</em> freezing the beta shape: expand <code>cmd/probe</code> into a compatibility suite that exercises the full broker surface and publish a compat report.
+If it surfaces a needed field, that field lands in the beta shape; if it's clean, we freeze with confidence.
+Turns the silent-break risk into a managed, visible asset.</p>
+<p><strong>Done.</strong> The <code>cmd/probe/compat</code> suite asserts every documented broker contract (§3.2 credential crypto, §3.3 endpoints, §3.4 payload shapes, §3.5 rate-limit handling) against the in-process broker model; it runs credential-free in <code>make check</code>/CI on every change, with the live-against-real-GitHub probe (<code>cmd/probe</code>) as its companion.
+The published result is <a href="../../development/broker-compatibility/">broker-compatibility.md</a>: all documented contracts pass, so no protocol gap forces a field into the beta shape.</p>
 <h3 id="2-q196--credentials-discriminated-union-shape-shipped-in-v2alpha1">2. Q196 — Credentials discriminated-union shape <em>(shipped in <code>v2alpha1</code>)</em><a class="headerlink" href="#2-q196--credentials-discriminated-union-shape-shipped-in-v2alpha1" title="Permanent link">&para;</a></h3>
-<p>Nest the credential reference under a parent with an <strong>explicit discriminator</strong>
-(see <a href="#design-decisions">Design decisions</a>). This is the one genuinely
-shape-breaking change the last-free-break exists for. It ships <strong>in <code>v2alpha1</code></strong>:
-alpha carries no stability contract, so the reshape is free now, and the beta cut
-then inherits the correct shape — the conversion webhook (Q74) round-trips the
-credentials block as an identity rather than reshaping it.</p>
+<p>Nest the credential reference under a parent with an <strong>explicit discriminator</strong> (see <a href="#design-decisions">Design decisions</a>).
+This is the one genuinely shape-breaking change the last-free-break exists for.
+It ships <strong>in <code>v2alpha1</code></strong>: alpha carries no stability contract, so the reshape is free now, and the beta cut then inherits the correct shape — the conversion webhook (Q74) round-trips the credentials block as an identity rather than reshaping it.</p>
 <h3 id="3-q197--workload-identity-credentials-the-second-union-member--shipped">3. Q197 — Workload-identity credentials <em>(the second union member)</em> — <strong>shipped</strong><a class="headerlink" href="#3-q197--workload-identity-credentials-the-second-union-member--shipped" title="Permanent link">&para;</a></h3>
-<p>Built the <code>workloadIdentity</code> member <strong>before the cut</strong>, so both auth methods ship
-in the first beta shape and the union is validated against a real second consumer
-— not a designed-but-unbuilt one. Shipped: the <code>WorkloadIdentity</code> union member +
-CEL <code>iff</code>; a <code>githubapp.Signer</code> interface; the MVP Vault transit signer + Vault
-Kubernetes auth (<code>githubapp/vaultsigner</code>, unit-tested against a mock Vault); the
-no-PEM provider path (<code>NewInstallationTokenProviderWithSigner</code>). Cloud KMS
-providers (AWS/GCP/Azure) are additive follow-ups behind the same signer
-interface. The GMC runtime provisioning of a workload-identity AGC + the
-in-cluster Vault kind e2e land in Q201 (the kind-e2e tier below); until then a
-<code>WorkloadIdentity</code> gateway is admitted but fails closed.</p>
+<p>Built the <code>workloadIdentity</code> member <strong>before the cut</strong>, so both auth methods ship in the first beta shape and the union is validated against a real second consumer — not a designed-but-unbuilt one.
+Shipped: the <code>WorkloadIdentity</code> union member + CEL <code>iff</code>; a <code>githubapp.Signer</code> interface; the MVP Vault transit signer + Vault Kubernetes auth (<code>githubapp/vaultsigner</code>, unit-tested against a mock Vault); the no-PEM provider path (<code>NewInstallationTokenProviderWithSigner</code>).
+Cloud KMS providers (AWS/GCP/Azure) are additive follow-ups behind the same signer interface.
+The GMC runtime provisioning of a workload-identity AGC + the in-cluster Vault kind e2e land in Q201 (the kind-e2e tier below); until then a <code>WorkloadIdentity</code> gateway is admitted but fails closed.</p>
 <h3 id="4-q15--gvisor-runtimeclass-validation">4. Q15 — gVisor RuntimeClass validation<a class="headerlink" href="#4-q15--gvisor-runtimeclass-validation" title="Permanent link">&para;</a></h3>
-<p>Beta is the <em>production-relyable</em> contract, so the worker-isolation posture
-should be confirmed before signing it: validate that a worker pod with
-<code>RuntimeClass=gvisor</code> actually runs under <code>runsc</code> and that the sandbox holds.
-Now <strong>free</strong> to test — <code>minikube</code> + the <code>gvisor</code> addon (systrap platform, no
-nested virtualization) runs locally on a Mac and on a stock CI runner (see
-<a href="../../development/testing/">testing.md</a>). Independent of the API-shape blockers;
-runs in parallel.</p>
+<p>Beta is the <em>production-relyable</em> contract, so the worker-isolation posture should be confirmed before signing it: validate that a worker pod with <code>RuntimeClass=gvisor</code> actually runs under <code>runsc</code> and that the sandbox holds.
+Now <strong>free</strong> to test — <code>minikube</code> + the <code>gvisor</code> addon (systrap platform, no nested virtualization) runs locally on a Mac and on a stock CI runner (see <a href="../../development/testing/">testing.md</a>).
+Independent of the API-shape blockers; runs in parallel.</p>
 <h3 id="5-q218--worker-pod-disruption-safety-defaults">5. Q218 — Worker-pod disruption-safety defaults<a class="headerlink" href="#5-q218--worker-pod-disruption-safety-defaults" title="Permanent link">&para;</a></h3>
-<p>Beta is the <em>production-relyable</em> contract, so a beta-quality runner platform must
-not let routine cluster operations kill a running CI job. By default a Karpenter
-consolidation event, a Cluster Autoscaler scale-down, or a Descheduler eviction
-will reschedule a worker pod mid-job — stranding the GitHub Actions run. Stamp the
-disruption-safety annotations on worker pods — <code>karpenter.sh/do-not-disrupt</code>,
-<code>cluster-autoscaler.kubernetes.io/safe-to-evict: "false"</code>, and a descheduler
-exclusion — as a secure-default gap-fill, the same way the AGC already stamps
-<code>runAsNonRoot</code>/<code>seccompProfile</code> when a tenant omits them (a tenant value always
-wins). Not a CRD shape change; additive runtime behavior, independent of the
-API-shape blockers, runs in parallel. A per-<code>RunnerSet</code> toggle, if wanted, is an
-additive field that can land post-beta.</p>
-<p><strong>Recommended before the freeze (not a hard gate):</strong> Q205 — apply
-<code>app.kubernetes.io/*</code> recommended labels across all objects and align metric/span
-names to Prometheus/OTel semantic conventions. Adding labels later is non-breaking,
-but operators build selectors, dashboards, and alerts against the observable
-surface the moment beta says "production-relyable," so the convention is cheapest
-to settle now (the same cheap-now/expensive-later logic as M1's field-naming pass).</p>
+<p>Beta is the <em>production-relyable</em> contract, so a beta-quality runner platform must not let routine cluster operations kill a running CI job.
+By default a Karpenter consolidation event, a Cluster Autoscaler scale-down, or a Descheduler eviction will reschedule a worker pod mid-job — stranding the GitHub Actions run.
+Stamp the disruption-safety annotations on worker pods — <code>karpenter.sh/do-not-disrupt</code>, <code>cluster-autoscaler.kubernetes.io/safe-to-evict: "false"</code>, and a descheduler exclusion — as a secure-default gap-fill, the same way the AGC already stamps <code>runAsNonRoot</code>/<code>seccompProfile</code> when a tenant omits them (a tenant value always wins).
+Not a CRD shape change; additive runtime behavior, independent of the API-shape blockers, runs in parallel.
+A per-<code>RunnerSet</code> toggle, if wanted, is an additive field that can land post-beta.</p>
+<p><strong>Recommended before the freeze (not a hard gate):</strong> Q205 — apply <code>app.kubernetes.io/*</code> recommended labels across all objects and align metric/span names to Prometheus/OTel semantic conventions.
+Adding labels later is non-breaking, but operators build selectors, dashboards, and alerts against the observable surface the moment beta says "production-relyable," so the convention is cheapest to settle now (the same cheap-now/expensive-later logic as M1's field-naming pass).</p>
 <h3 id="6-q74--the-graduation-cut">6. Q74 — The graduation cut<a class="headerlink" href="#6-q74--the-graduation-cut" title="Permanent link">&para;</a></h3>
-<p>After the above: add <code>Hub</code>/<code>Convertible</code> conversion-webhook stubs, add <code>v2beta1</code>
-as a served version, mark it the storage version, run the storage migration, then
-drop the superseded served version per the
-<a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation ladder</a>. Because
-Q196 already shipped <code>spec.credentials</code> in <code>v2alpha1</code>, the conversion webhook maps the
-credentials block as an <strong>identity</strong> (<code>v2alpha1.credentials ↔ v2beta1.credentials</code>) — no
-reshape. It is the in-place graduation the webhook exists for, distinct from the M5
-fan-out tool (a webhook cannot express a fan-out).</p>
-<p><strong>The one non-identity delta — the RunnerSet protocol fields (added after this plan was
-first written).</strong> <code>v2beta1</code> is <strong>ScaleSet-only</strong>
-(<a href="../archive/q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">Q264 §5a-U7/U8</a>), so
-the graduation <strong>drops <code>RunnerSet.spec.acquisitionProtocol</code></strong> (v2alpha1-only) <strong>and
-<code>maxListeners</code></strong> (meaningless under ScaleSet) from the <code>v2beta1</code> shape; the conversion
-preserves a coexistence-era spoke's values via an annotation round-trip so no <code>v2alpha1</code>
-set is silently re-protocol'd.</p>
-<p><strong>Corollary: a hub-only constraint must be ratcheted, never spec-wide.</strong> The hub is the
-storage version, so it <em>holds</em> every shape any served spoke admits — including a Classic
-multi-label set that <code>v2beta1</code>'s own single-<code>runnerLabel</code> rule forbids. A spec-level CEL
-rule re-evaluates on every write, so it turned each such stored object into an
-un-editable one: any unqualified <code>kubectl edit/patch</code> (which addresses the storage
-version) was rejected on a field unrelated to labels (Q398). The
-rule therefore lives on <code>runnerLabels</code> itself, where CRD validation ratcheting
-(<a href="https://github.com/kubernetes/enhancements/issues/4008">KEP-4008</a>; default-on from
-1.30, and the v2 floor is 1.31) suppresses it while the value is unchanged. The
-constraint is undiminished where it matters — a <code>v2beta1</code>-authored create, or a label
-edit through <code>v2beta1</code>, is still rejected. Generalized: <strong>a constraint the hub cannot
-satisfy for every stored spoke shape belongs on the narrowest field that expresses it</strong>,
-so ratcheting can scope it to writers who actually touch that field.</p>
-<p><strong>Sequencing — Q74 is the last rung, not independent.</strong> Per the
-<a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">U8 ladder</a> the ScaleSet-only cut
-<strong>follows Q264 P5</strong> (the <code>ScaleSet</code> default flip + positioning rewrite) and a one-minor
-Classic deprecation window: a ScaleSet-only beta while <code>v2alpha1</code> still defaults to
-<code>Classic</code> would invert the alpha/beta protocol signal. The mechanical build blueprint is
-<a href="../archive/q74-v2beta1-conversion-webhook/">q74-v2beta1-conversion-webhook.md</a>.</p>
+<p>After the above: add <code>Hub</code>/<code>Convertible</code> conversion-webhook stubs, add <code>v2beta1</code> as a served version, mark it the storage version, run the storage migration, then drop the superseded served version per the <a href="../v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation ladder</a>.
+Because Q196 already shipped <code>spec.credentials</code> in <code>v2alpha1</code>, the conversion webhook maps the credentials block as an <strong>identity</strong> (<code>v2alpha1.credentials ↔ v2beta1.credentials</code>) — no reshape.
+It is the in-place graduation the webhook exists for, distinct from the M5 fan-out tool (a webhook cannot express a fan-out).</p>
+<p><strong>The one non-identity delta — the RunnerSet protocol fields (added after this plan was first written).</strong> <code>v2beta1</code> is <strong>ScaleSet-only</strong> (<a href="../archive/q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">Q264 §5a-U7/U8</a>), so the graduation <strong>drops <code>RunnerSet.spec.acquisitionProtocol</code></strong> (v2alpha1-only) <strong>and <code>maxListeners</code></strong> (meaningless under ScaleSet) from the <code>v2beta1</code> shape; the conversion preserves a coexistence-era spoke's values via an annotation round-trip so no <code>v2alpha1</code> set is silently re-protocol'd.</p>
+<p><strong>Corollary: a hub-only constraint must be ratcheted, never spec-wide.</strong> The hub is the storage version, so it <em>holds</em> every shape any served spoke admits — including a Classic multi-label set that <code>v2beta1</code>'s own single-<code>runnerLabel</code> rule forbids.
+A spec-level CEL rule re-evaluates on every write, so it turned each such stored object into an un-editable one: any unqualified <code>kubectl edit/patch</code> (which addresses the storage version) was rejected on a field unrelated to labels (Q398).
+The rule therefore lives on <code>runnerLabels</code> itself, where CRD validation ratcheting (<a href="https://github.com/kubernetes/enhancements/issues/4008">KEP-4008</a>; default-on from 1.30, and the v2 floor is 1.31) suppresses it while the value is unchanged.
+The constraint is undiminished where it matters — a <code>v2beta1</code>-authored create, or a label edit through <code>v2beta1</code>, is still rejected.
+Generalized: <strong>a constraint the hub cannot satisfy for every stored spoke shape belongs on the narrowest field that expresses it</strong>, so ratcheting can scope it to writers who actually touch that field.</p>
+<p><strong>Sequencing — Q74 is the last rung, not independent.</strong> Per the <a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">U8 ladder</a> the ScaleSet-only cut <strong>follows Q264 P5</strong> (the <code>ScaleSet</code> default flip + positioning rewrite) and a one-minor Classic deprecation window: a ScaleSet-only beta while <code>v2alpha1</code> still defaults to <code>Classic</code> would invert the alpha/beta protocol signal.
+The mechanical build blueprint is <a href="../archive/q74-v2beta1-conversion-webhook/">q74-v2beta1-conversion-webhook.md</a>.</p>
 <h2 id="design-decisions">Design decisions<a class="headerlink" href="#design-decisions" title="Permanent link">&para;</a></h2>
 <h3 id="credentials-explicit-discriminator-parent">Credentials: explicit-discriminator parent<a class="headerlink" href="#credentials-explicit-discriminator-parent" title="Permanent link">&para;</a></h3>
-<p><strong>Decided:</strong> nest <code>githubAppRef</code> under <code>spec.credentials</code> with an explicit
-<code>+unionDiscriminator</code> <code>type</code> field. This reverses the
-<a href="../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">§H.15</a>
-"keep the single field" stance.</p>
+<p><strong>Decided:</strong> nest <code>githubAppRef</code> under <code>spec.credentials</code> with an explicit <code>+unionDiscriminator</code> <code>type</code> field.
+This reverses the <a href="../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">§H.15</a> "keep the single field" stance.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># v1alpha1 — required, top-level (the shape v2 migrates away from)</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">githubAppRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme-github-app</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">       </span><span class="c1"># Secret: {appId, installationId, privateKey}</span>
@@ -2885,32 +2813,20 @@ Classic deprecation window: a ScaleSet-only beta while <code>v2alpha1</code> sti
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acme-github-app</span><span class="w">                     </span><span class="c1"># name-only Secret ref (possession model)</span>
 </code></pre></div>
 <ul>
-<li><strong>Why a common parent.</strong> GitHub App auth and workload-identity auth are
-  mutually exclusive with non-overlapping field sets — the textbook discriminated
-  union. A <code>type</code> discriminator makes "pick one" structural (the schema <em>is</em> the
-  doc) instead of an invisible CEL "exactly one of"; it does not degrade into an
-  N-way CEL rule as methods are added; and it gives the <code>CredentialUnavailable</code>
-  condition, validation, and rotation semantics one home.</li>
-<li><strong>Why now.</strong> A flat <code>workloadIdentityRef</code> sibling is <em>mechanically</em> additive but
-  additive <em>into a permanently worse shape</em>: once <code>githubAppRef</code> is top-level
-  under beta it can never move under a parent without a breaking change + storage
-  migration. The beta cut is the last moment to pick the parent shape for free.</li>
-<li><strong>Why explicit, not implicit.</strong> Adding a <em>required</em> <code>type</code> after beta is
-  breaking; matching the k8s convention now makes member #2 a clean enum
-  extension.</li>
+<li><strong>Why a common parent.</strong> GitHub App auth and workload-identity auth are mutually exclusive with non-overlapping field sets — the textbook discriminated union.
+  A <code>type</code> discriminator makes "pick one" structural (the schema <em>is</em> the doc) instead of an invisible CEL "exactly one of"; it does not degrade into an N-way CEL rule as methods are added; and it gives the <code>CredentialUnavailable</code> condition, validation, and rotation semantics one home.</li>
+<li><strong>Why now.</strong> A flat <code>workloadIdentityRef</code> sibling is <em>mechanically</em> additive but additive <em>into a permanently worse shape</em>: once <code>githubAppRef</code> is top-level under beta it can never move under a parent without a breaking change + storage migration.
+  The beta cut is the last moment to pick the parent shape for free.</li>
+<li><strong>Why explicit, not implicit.</strong> Adding a <em>required</em> <code>type</code> after beta is breaking; matching the k8s convention now makes member #2 a clean enum extension.</li>
 </ul>
 <h3 id="workload-identity-a-different-config-vault-first">Workload identity: a different config, Vault-first<a class="headerlink" href="#workload-identity-a-different-config-vault-first" title="Permanent link">&para;</a></h3>
-<p>Workload identity is not "a different Secret" — it is a different trust model, so
-it needs a different field set:</p>
+<p>Workload identity is not "a different Secret" — it is a different trust model, so it needs a different field set:</p>
 <ul>
-<li><strong>GitHub App = possession model.</strong> Hold the App's RSA private key.
-  <code>{appId, installationId, privateKeyRef → Secret}</code>. Signing material sits at rest
-  in the namespace.</li>
-<li><strong>Workload identity = delegation model.</strong> Hold no key. The signing material
-  lives in an external trust anchor (Vault, cloud KMS/HSM) or is federated via
-  OIDC. The pod proves its identity (Vault Kubernetes auth / IRSA / GKE WI /
-  Azure WI) and the anchor signs the JWT or releases a short-lived token. <strong>No
-  <code>privateKey</code> field at all.</strong></li>
+<li><strong>GitHub App = possession model.</strong> Hold the App's RSA private key. <code>{appId, installationId, privateKeyRef → Secret}</code>.
+  Signing material sits at rest in the namespace.</li>
+<li><strong>Workload identity = delegation model.</strong> Hold no key.
+  The signing material lives in an external trust anchor (Vault, cloud KMS/HSM) or is federated via OIDC.
+  The pod proves its identity (Vault Kubernetes auth / IRSA / GKE WI / Azure WI) and the anchor signs the JWT or releases a short-lived token. <strong>No <code>privateKey</code> field at all.</strong></li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
@@ -2923,18 +2839,12 @@ it needs a different field set:</p>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">        </span><span class="nt">keyRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transit/keys/github-app</span>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">      </span><span class="c1"># the pod&#39;s cloud/Vault identity binding is on the GMC-stamped ServiceAccount, not inline</span>
 </code></pre></div>
-<p><code>privateKeyRef</code> is meaningless under workload identity; <code>signer.{provider,keyRef}</code>
-is meaningless under GitHub App. Rotation (you rotate the Secret vs. the anchor
-rotates), RBAC (mount a Secret vs. bind an annotated ServiceAccount), validation
-(parse a PEM vs. resolve a key + verify the identity binding), and failure modes
-(<code>SecretNotFound</code> vs. <code>SignerUnreachable</code>) all differ. It is also on-strategy:
-workload identity removes the App key from the cluster entirely — the
-strict-upgrade direction of the secure-by-default principle.</p>
-<p><strong>MVP = Vault transit.</strong> The first signer implementation is Vault transit +
-Kubernetes auth, because it is <strong>kind-validatable</strong> (see Testing), serves the
-managed-PKI/Vault operator persona (cf. <a href="../../STATUS/">Q174</a>), and avoids
-three-cloud-SDK sprawl. Cloud KMS providers slot in behind the same signer
-interface as additive follow-ups.</p>
+<p><code>privateKeyRef</code> is meaningless under workload identity; <code>signer.{provider,keyRef}</code> is meaningless under GitHub App.
+Rotation (you rotate the Secret vs. the anchor rotates), RBAC (mount a Secret vs. bind an annotated ServiceAccount), validation (parse a PEM vs. resolve a key + verify the identity binding), and failure modes (<code>SecretNotFound</code> vs. <code>SignerUnreachable</code>) all differ.
+It is also on-strategy: workload identity removes the App key from the cluster entirely — the strict-upgrade direction of the secure-by-default principle.</p>
+<p><strong>MVP = Vault transit.</strong> The first signer implementation is Vault transit + Kubernetes auth, because it is <strong>kind-validatable</strong> (see Testing), serves the managed-PKI/Vault operator persona (cf.
+<a href="../../STATUS/">Q174</a>), and avoids three-cloud-SDK sprawl.
+Cloud KMS providers slot in behind the same signer interface as additive follow-ups.</p>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2970,25 +2880,18 @@ interface as additive follow-ups.</p>
 <h2 id="definition-of-done-v2beta1">Definition of done (v2beta1)<a class="headerlink" href="#definition-of-done-v2beta1" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Q191 compat report published; any field it forced is in the beta shape.</li>
-<li><code>spec.credentials</code> shipped with an explicit discriminator; <strong>both</strong> <code>githubApp</code>
-  and <code>workloadIdentity</code> (Vault MVP) members built and tested.</li>
-<li><code>v2beta1</code> served + storage version; conversion webhook round-trips
-  <code>v2alpha1 ↔ v2beta1</code>; storage migration run.</li>
+<li><code>spec.credentials</code> shipped with an explicit discriminator; <strong>both</strong> <code>githubApp</code> and <code>workloadIdentity</code> (Vault MVP) members built and tested.</li>
+<li><code>v2beta1</code> served + storage version; conversion webhook round-trips <code>v2alpha1 ↔ v2beta1</code>; storage migration run.</li>
 <li>Migration tool golden output regenerated for the new served version.</li>
 <li>gVisor <code>RuntimeClass</code> isolation validated (minikube + gvisor addon), local + CI.</li>
-<li>Worker pods carry the disruption-safety defaults (Q218) so node
-  consolidation/descheduler cannot strand a running job; verified under envtest +
-  the kind e2e.</li>
+<li>Worker pods carry the disruption-safety defaults (Q218) so node consolidation/descheduler cannot strand a running job; verified under envtest + the kind e2e.</li>
 <li>§H.15 and the affected appendix/operator docs updated to the shipped shape.</li>
 </ul>
 <h2 id="out-of-scope-additive-post-beta">Out of scope (additive, post-beta)<a class="headerlink" href="#out-of-scope-additive-post-beta" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Cloud KMS workload-identity providers (AWS/GCP/Azure) — additive impls behind
-  the Q197 signer interface.</li>
+<li>Cloud KMS workload-identity providers (AWS/GCP/Azure) — additive impls behind the Q197 signer interface.</li>
 <li>PAT or other credential methods — additive union members.</li>
-<li>The real-cluster capacity run (<a href="../../STATUS/">Q181</a>), AGC HA
-  (<a href="../../STATUS/">Q169</a>), and proxy feature/sharing items (Q19/Q166/Q173/Q174) —
-  all additive and independently triggered.</li>
+<li>The real-cluster capacity run (<a href="../../STATUS/">Q181</a>), AGC HA (<a href="../../STATUS/">Q169</a>), and proxy feature/sharing items (Q19/Q166/Q173/Q174) — all additive and independently triggered.</li>
 </ul>
 
 

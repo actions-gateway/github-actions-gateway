@@ -2703,86 +2703,50 @@
 
 
 <h1 id="platform-owned-priorityclass-allowlist-for-runner-tiers-q132">Platform-owned PriorityClass allowlist for runner tiers (Q132)<a class="headerlink" href="#platform-owned-priorityclass-allowlist-for-runner-tiers-q132" title="Permanent link">&para;</a></h1>
-<p><strong>Decision (2026-06-14):</strong> the platform owns <em>which</em> cluster-scoped
-<code>PriorityClass</code> names a tenant may reference in <code>priorityTiers</code>. The platform
-admin pre-creates the <code>PriorityClass</code> objects (as it already does today) <strong>and</strong>
-configures a GMC allowlist of their names; the GMC validating webhook rejects any
-<code>ActionsGateway</code> whose <code>spec.runnerGroups[].priorityTiers[].priorityClassName</code> is
-not on the allowlist. Secure-by-default: an empty/unset allowlist forbids <em>all</em>
-<code>priorityTiers</code> PriorityClass references.</p>
-<p>Tracked as STATUS Queue Q132 (<code>security</code>, <code>1.0-gate</code>). Same "platform owns it,
-not the tenant" family as <a href="../platform-owned-quota/">Q130</a> (platform-owned
-<code>ResourceQuota</code>) and the <a href="../q121-q122-q125-gmc-confinement/">Q121/Q122/Q125</a> GMC
-write confinement.</p>
+<p><strong>Decision (2026-06-14):</strong> the platform owns <em>which</em> cluster-scoped <code>PriorityClass</code> names a tenant may reference in <code>priorityTiers</code>.
+The platform admin pre-creates the <code>PriorityClass</code> objects (as it already does today) <strong>and</strong> configures a GMC allowlist of their names; the GMC validating webhook rejects any <code>ActionsGateway</code> whose <code>spec.runnerGroups[].priorityTiers[].priorityClassName</code> is not on the allowlist.
+Secure-by-default: an empty/unset allowlist forbids <em>all</em> <code>priorityTiers</code> PriorityClass references.</p>
+<p>Tracked as STATUS Queue Q132 (<code>security</code>, <code>1.0-gate</code>).
+Same "platform owns it, not the tenant" family as <a href="../platform-owned-quota/">Q130</a> (platform-owned <code>ResourceQuota</code>) and the <a href="../q121-q122-q125-gmc-confinement/">Q121/Q122/Q125</a> GMC write confinement.</p>
 <h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
-<p><code>priorityTiers[].priorityClassName</code> is <strong>tenant-authored and unvalidated</strong>. The
-GMC copies the <code>RunnerGroupSpec</code> verbatim into the namespaced <code>RunnerGroup</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go#L813">builder.go:813</a>,
-<code>Spec: spec</code>), and the AGC provisioner stamps it onto worker pods
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go#L809">provisioner.go:809</a>,
-<code>pod.Spec.PriorityClassName = priorityClass</code>).</p>
-<p><code>PriorityClass</code> is <strong>cluster-scoped</strong> and carries a <code>value</code> (priority) and a
-<code>preemptionPolicy</code> (k8s default <code>PreemptLowerPriority</code>). A tenant who names a
-high-<code>value</code> class with <code>PreemptLowerPriority</code> gets the scheduler to <strong>preempt
-(evict) other tenants' running worker pods</strong> to make room for its own. That
-breaks the cross-tenant isolation the whole per-tenant model promises — the same
-class of hole Q130 closed for quota.</p>
+<p><code>priorityTiers[].priorityClassName</code> is <strong>tenant-authored and unvalidated</strong>.
+The GMC copies the <code>RunnerGroupSpec</code> verbatim into the namespaced <code>RunnerGroup</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go#L813">builder.go:813</a>, <code>Spec: spec</code>), and the AGC provisioner stamps it onto worker pods (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go#L809">provisioner.go:809</a>, <code>pod.Spec.PriorityClassName = priorityClass</code>).</p>
+<p><code>PriorityClass</code> is <strong>cluster-scoped</strong> and carries a <code>value</code> (priority) and a <code>preemptionPolicy</code> (k8s default <code>PreemptLowerPriority</code>).
+A tenant who names a high-<code>value</code> class with <code>PreemptLowerPriority</code> gets the scheduler to <strong>preempt (evict) other tenants' running worker pods</strong> to make room for its own.
+That breaks the cross-tenant isolation the whole per-tenant model promises — the same class of hole Q130 closed for quota.</p>
 <h2 id="decision-allowlist-not-tierclass-map">Decision: allowlist, not tier→class map<a class="headerlink" href="#decision-allowlist-not-tierclass-map" title="Permanent link">&para;</a></h2>
-<p>The prompt leaned toward a tier→class map (tenant picks an abstract tier; the
-platform maps it to a real class it created). We chose the <strong>allowlist</strong> instead.
-Both deliver the <em>same</em> security property — a tenant cannot reference an
-arbitrary cluster-scoped class — but the allowlist fits this codebase far better:</p>
+<p>The prompt leaned toward a tier→class map (tenant picks an abstract tier; the platform maps it to a real class it created).
+We chose the <strong>allowlist</strong> instead.
+Both deliver the <em>same</em> security property — a tenant cannot reference an arbitrary cluster-scoped class — but the allowlist fits this codebase far better:</p>
 <ol>
-<li><strong>A tier→class map forces the GMC to own cluster-scoped objects.</strong> The mapped
-   <code>PriorityClass</code> objects have to exist; "the GMC creates/owns them" re-expands
-   the cluster-scoped write surface that
-   <a href="../q121-q122-q125-gmc-confinement/">Q121/Q122/Q125</a> just <em>confined</em> to tenant
-   namespaces, and contradicts <a href="../platform-owned-quota/">Q130</a>'s model (platform
-   admin owns infra/cluster resources; GAG operates <em>within</em> them). The platform
-   already pre-creates these classes today — keep it that way.</li>
-<li><strong>The <code>RunnerGroupSpec</code> type is shared verbatim.</strong> <code>ActionsGateway.spec.runnerGroups</code>
-   is <code>[]agcv1alpha1.RunnerGroupSpec</code>, copied unchanged into the <code>RunnerGroup</code>
-   CR, which the AGC reads to stamp the <em>real</em> class name on pods. An abstract
-   <code>tier</code> enum would require either splitting that shared type (tenant-facing
-   <code>tier</code> vs AGC-facing <code>className</code>) or teaching the AGC the platform mapping —
-   spreading platform config across two controllers. The allowlist keeps the
-   field shape and validates references against platform config in one place.</li>
-<li><strong>The allowlist adds no new control plane.</strong> A platform flag + a webhook
-   membership check, alongside the existing <code>validateRunnerGroups</code>
-   privileged-container check. No new owned resources, no new RBAC, no teardown.</li>
+<li><strong>A tier→class map forces the GMC to own cluster-scoped objects.</strong> The mapped <code>PriorityClass</code> objects have to exist; "the GMC creates/owns them" re-expands the cluster-scoped write surface that <a href="../q121-q122-q125-gmc-confinement/">Q121/Q122/Q125</a> just <em>confined</em> to tenant namespaces, and contradicts <a href="../platform-owned-quota/">Q130</a>'s model (platform admin owns infra/cluster resources; GAG operates <em>within</em> them).
+   The platform already pre-creates these classes today — keep it that way.</li>
+<li><strong>The <code>RunnerGroupSpec</code> type is shared verbatim.</strong> <code>ActionsGateway.spec.runnerGroups</code> is <code>[]agcv1alpha1.RunnerGroupSpec</code>, copied unchanged into the <code>RunnerGroup</code> CR, which the AGC reads to stamp the <em>real</em> class name on pods.
+   An abstract <code>tier</code> enum would require either splitting that shared type (tenant-facing <code>tier</code> vs AGC-facing <code>className</code>) or teaching the AGC the platform mapping — spreading platform config across two controllers.
+   The allowlist keeps the field shape and validates references against platform config in one place.</li>
+<li><strong>The allowlist adds no new control plane.</strong> A platform flag + a webhook membership check, alongside the existing <code>validateRunnerGroups</code> privileged-container check.
+   No new owned resources, no new RBAC, no teardown.</li>
 </ol>
-<p>The tier→class map's only extra over the allowlist is an abstraction layer
-(tenant names <code>"high"</code> instead of <code>"runner-high"</code>); it buys no security property
-the allowlist lacks. Rejected for the cost above.</p>
+<p>The tier→class map's only extra over the allowlist is an abstraction layer (tenant names <code>"high"</code> instead of <code>"runner-high"</code>); it buys no security property the allowlist lacks.
+Rejected for the cost above.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="api--crd-breaking-pre-10">API / CRD (breaking, pre-1.0)<a class="headerlink" href="#api--crd-breaking-pre-10" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Remove the dead <code>PreemptionPolicy</code> field</strong> from <code>PriorityTier</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go#L19">runnergroup_types.go:19-24</a>).
-  It has existed since Milestone 2 but is <strong>never consumed</strong> — the provisioner
-  only sets <code>PriorityClassName</code>, never <code>pod.Spec.PreemptionPolicy</code>. The design
-  doc already calls it "informational only." Keeping a tenant-settable
-  preemption field is misleading <em>and</em> a latent preemption lever; preemption is
-  governed by the platform-owned <code>PriorityClass</code> object's own <code>preemptionPolicy</code>.
-  Field removal is a breaking CRD change — free pre-1.0 (no conversion webhook;
-  same window as Q130). Zero behavioural change (the field never reached a pod).</li>
-<li><code>PriorityClassName</code> stays required and unchanged in shape (tenant still names a
-  class; the webhook gates <em>which</em> names are legal).</li>
-<li>Regenerate per <a href="../../../development/code-generation/">code-generation.md</a>:
-  <code>make -C cmd/agc generate manifests</code> → <code>zz_generated.deepcopy.go</code>, both CRD YAML
-  copies (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml">cmd/agc/.../runnergroups.yaml</a>,
-  the GMC-bundled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml">cmd/gmc/.../runnergroups.yaml</a>),
-  and the chart CRD template. Keep all copies in sync (Q73).</li>
+<li><strong>Remove the dead <code>PreemptionPolicy</code> field</strong> from <code>PriorityTier</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go#L19">runnergroup_types.go:19-24</a>).
+  It has existed since Milestone 2 but is <strong>never consumed</strong> — the provisioner only sets <code>PriorityClassName</code>, never <code>pod.Spec.PreemptionPolicy</code>.
+  The design doc already calls it "informational only."
+  Keeping a tenant-settable preemption field is misleading <em>and</em> a latent preemption lever; preemption is governed by the platform-owned <code>PriorityClass</code> object's own <code>preemptionPolicy</code>.
+  Field removal is a breaking CRD change — free pre-1.0 (no conversion webhook; same window as Q130).
+  Zero behavioural change (the field never reached a pod).</li>
+<li><code>PriorityClassName</code> stays required and unchanged in shape (tenant still names a class; the webhook gates <em>which</em> names are legal).</li>
+<li>Regenerate per <a href="../../../development/code-generation/">code-generation.md</a>: <code>make -C cmd/agc generate manifests</code> → <code>zz_generated.deepcopy.go</code>, both CRD YAML copies (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml">cmd/agc/.../runnergroups.yaml</a>, the GMC-bundled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml">cmd/gmc/.../runnergroups.yaml</a>), and the chart CRD template.
+  Keep all copies in sync (Q73).</li>
 </ul>
 <h3 id="gmc-config-allowlist-source">GMC config (allowlist source)<a class="headerlink" href="#gmc-config-allowlist-source" title="Permanent link">&para;</a></h3>
 <ul>
-<li>New flag <code>--allowed-priority-classes</code> on the GMC
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a>), comma-separated class names, matching
-  the existing <code>--allow-floating-image-tags</code> / <code>--allow-agc-extra-env</code> style.
+<li>New flag <code>--allowed-priority-classes</code> on the GMC (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a>), comma-separated class names, matching the existing <code>--allow-floating-image-tags</code> / <code>--allow-agc-extra-env</code> style.
   Empty (default) = no classes permitted = <code>priorityTiers</code> rejected.</li>
-<li>Thread it into <code>SetupActionsGatewayWebhookWithManager</code> →
-  <code>NewActionsGatewayCustomValidator(podNamespace, allowedPriorityClasses)</code>; store
-  as a <code>map[string]bool</code> on the validator (mirrors <code>reservedNamespaces</code>).</li>
+<li>Thread it into <code>SetupActionsGatewayWebhookWithManager</code> → <code>NewActionsGatewayCustomValidator(podNamespace, allowedPriorityClasses)</code>; store as a <code>map[string]bool</code> on the validator (mirrors <code>reservedNamespaces</code>).</li>
 </ul>
 <h3 id="webhook-validation">Webhook validation<a class="headerlink" href="#webhook-validation" title="Permanent link">&para;</a></h3>
 <ul>
@@ -2802,41 +2766,25 @@ the allowlist lacks. Rejected for the cost above.</p>
 </ul>
 <h3 id="preemptionpolicy-guidance-secure-by-default-operational">preemptionPolicy guidance (secure-by-default, operational)<a class="headerlink" href="#preemptionpolicy-guidance-secure-by-default-operational" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Even an <em>allowlisted</em> class with <code>preemptionPolicy: PreemptLowerPriority</code>
-  preempts cross-tenant (PriorityClasses are global). The platform must create
-  allowlisted classes with <code>preemptionPolicy: Never</code> <strong>unless</strong> cross-tenant
-  preemption is genuinely intended for that tier. Document this strongly in
-  security-operations + tenant-onboarding (it is the real preemption knob now
-  that the tenant field is gone).</li>
+<li>Even an <em>allowlisted</em> class with <code>preemptionPolicy: PreemptLowerPriority</code> preempts cross-tenant (PriorityClasses are global).
+  The platform must create allowlisted classes with <code>preemptionPolicy: Never</code> <strong>unless</strong> cross-tenant preemption is genuinely intended for that tier.
+  Document this strongly in security-operations + tenant-onboarding (it is the real preemption knob now that the tenant field is gone).</li>
 </ul>
 <h3 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h3>
 <ul>
-<li>envtest webhook test (cmd/gmc <code>controller/integration</code> or <code>webhook</code> suite,
-  using <code>WebhookInstallOptions</code>): an ActionsGateway whose priorityTiers names a
-  non-allowlisted class is <strong>rejected</strong>; one naming an allowlisted class
-  <strong>passes</strong>; empty allowlist rejects any class. Drive the validator with a known
-  allowlist via the constructor (as reserved-namespace tests do).</li>
+<li>envtest webhook test (cmd/gmc <code>controller/integration</code> or <code>webhook</code> suite, using <code>WebhookInstallOptions</code>): an ActionsGateway whose priorityTiers names a non-allowlisted class is <strong>rejected</strong>; one naming an allowlisted class <strong>passes</strong>; empty allowlist rejects any class.
+  Drive the validator with a known allowlist via the constructor (as reserved-namespace tests do).</li>
 <li>Unit tests for the membership logic.</li>
-<li>Provisioner/CRD tests that previously set <code>PreemptionPolicy</code> (none found in
-  code; only the type defined it) — confirm <code>make check</code> stays green after field
-  removal.</li>
-<li>Run gmc under <code>-race</code> per testing.md. <strong>No kind e2e</strong> — admission rejection is
-  envtest-provable; scheduler preemption is a k8s property we don't re-prove.</li>
+<li>Provisioner/CRD tests that previously set <code>PreemptionPolicy</code> (none found in code; only the type defined it) — confirm <code>make check</code> stays green after field removal.</li>
+<li>Run gmc under <code>-race</code> per testing.md. <strong>No kind e2e</strong> — admission rejection is envtest-provable; scheduler preemption is a k8s property we don't re-prove.</li>
 </ul>
 <h3 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>03-api-contracts.md</code>: drop <code>preemptionPolicy</code> from the <code>PriorityTier</code>
-  contract; add the allowlist gate to the <code>priorityClassName</code> description.</li>
-<li><code>05-security.md</code>: add the cross-tenant preemption threat + the platform-owned
-  allowlist control; mark the threat closed.</li>
-<li><code>operations/tenant-onboarding.md</code>: the PriorityClass pre-create checklist item
-  now also requires the class name be added to the GMC allowlist; how a tenant
-  requests a priority tier (ask the platform to allowlist + create the class).</li>
-<li><code>operations/security-operations.md</code>: configuring <code>--allowed-priority-classes</code>;
-  the <code>preemptionPolicy: Never</code> guidance for allowlisted classes.</li>
-<li><code>operations/upgrade.md</code>: BREAKING — <code>preemptionPolicy</code> removed from
-  <code>priorityTiers</code> (pruned silently); set <code>--allowed-priority-classes</code> before/at
-  upgrade or existing <code>priorityTiers</code> CRs will be rejected on next apply.</li>
+<li><code>03-api-contracts.md</code>: drop <code>preemptionPolicy</code> from the <code>PriorityTier</code> contract; add the allowlist gate to the <code>priorityClassName</code> description.</li>
+<li><code>05-security.md</code>: add the cross-tenant preemption threat + the platform-owned allowlist control; mark the threat closed.</li>
+<li><code>operations/tenant-onboarding.md</code>: the PriorityClass pre-create checklist item now also requires the class name be added to the GMC allowlist; how a tenant requests a priority tier (ask the platform to allowlist + create the class).</li>
+<li><code>operations/security-operations.md</code>: configuring <code>--allowed-priority-classes</code>; the <code>preemptionPolicy: Never</code> guidance for allowlisted classes.</li>
+<li><code>operations/upgrade.md</code>: BREAKING — <code>preemptionPolicy</code> removed from <code>priorityTiers</code> (pruned silently); set <code>--allowed-priority-classes</code> before/at upgrade or existing <code>priorityTiers</code> CRs will be rejected on next apply.</li>
 <li>appendix-g: future-enhancement note for the RunnerGroup VAP defense-in-depth.</li>
 </ul>
 <h3 id="status">STATUS<a class="headerlink" href="#status" title="Permanent link">&para;</a></h3>
@@ -2846,23 +2794,14 @@ the allowlist lacks. Rejected for the cost above.</p>
 <h2 id="status_1">Status<a class="headerlink" href="#status_1" title="Permanent link">&para;</a></h2>
 <p><strong>Implemented (2026-06-14, Q132).</strong> Delivered per scope above:</p>
 <ul>
-<li><strong>API/CRD:</strong> removed <code>PreemptionPolicy</code> from <code>PriorityTier</code>; regenerated
-  deepcopy and all five CRD copies (AGC authoritative, GMC bundled runnergroups +
-  actionsgateways, both chart CRD templates), verified in sync.</li>
-<li><strong>GMC:</strong> <code>--allowed-priority-classes</code> flag → <code>NewActionsGatewayCustomValidator</code>
-  → <code>validatePriorityClasses</code> (rejects off-allowlist classes, names class + allowed
-  set; empty allowlist rejects all).</li>
-<li><strong>Chart:</strong> <code>allowedPriorityClasses</code> value wired to the deployment arg
-  (<code>helm template</code>/<code>helm lint</code> verified — flag present when set, absent on the
-  secure default).</li>
-<li><strong>Tests:</strong> webhook unit tests + envtest <code>TestCRD_ActionsGateway_PriorityClassAllowlist</code>
-  (reject/accept/empty/update); <code>make check</code> green; gmc run under <code>-race</code>.</li>
-<li><strong>Docs:</strong> design 01/03/05/appendix-e/f/g, tenant-onboarding, security-operations
-  (new Priority classes section), upgrade breaking-change note, getting-started,
-  why-gag. Threat marked Closed in 05-security.md.</li>
+<li><strong>API/CRD:</strong> removed <code>PreemptionPolicy</code> from <code>PriorityTier</code>; regenerated deepcopy and all five CRD copies (AGC authoritative, GMC bundled runnergroups + actionsgateways, both chart CRD templates), verified in sync.</li>
+<li><strong>GMC:</strong> <code>--allowed-priority-classes</code> flag → <code>NewActionsGatewayCustomValidator</code> → <code>validatePriorityClasses</code> (rejects off-allowlist classes, names class + allowed set; empty allowlist rejects all).</li>
+<li><strong>Chart:</strong> <code>allowedPriorityClasses</code> value wired to the deployment arg (<code>helm template</code>/<code>helm lint</code> verified — flag present when set, absent on the secure default).</li>
+<li><strong>Tests:</strong> webhook unit tests + envtest <code>TestCRD_ActionsGateway_PriorityClassAllowlist</code> (reject/accept/empty/update); <code>make check</code> green; gmc run under <code>-race</code>.</li>
+<li><strong>Docs:</strong> design 01/03/05/appendix-e/f/g, tenant-onboarding, security-operations (new Priority classes section), upgrade breaking-change note, getting-started, why-gag.
+  Threat marked Closed in 05-security.md.</li>
 </ul>
-<p>Direct-RunnerGroup-write bypass (a tenant with direct <code>runnergroups</code> RBAC) is
-out of scope here and captured as future-enhancement G.7 (a <code>runnergroups</code> VAP).
+<p>Direct-RunnerGroup-write bypass (a tenant with direct <code>runnergroups</code> RBAC) is out of scope here and captured as future-enhancement G.7 (a <code>runnergroups</code> VAP).
 Shipped in PR #234.</p>
 
 

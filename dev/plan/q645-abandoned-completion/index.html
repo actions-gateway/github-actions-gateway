@@ -2776,85 +2776,51 @@
 
 
 <h1 id="q645--what-the-run-service-does-with-an-abandoned-completion">Q645 — What the run service does with an <code>abandoned</code> completion<a class="headerlink" href="#q645--what-the-run-service-does-with-an-abandoned-completion" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> answered 2026-08-04 — conclude, not re-dispatch, and the conclusion
-is <strong>success</strong>. See <a href="#findings">Findings</a>. The remedy (Q676) is measured and
-decided the same day: the listener reports <strong>nothing</strong> for its own unrun
-delivery, per <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>.
-The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST
-force-cancel concludes run and job <code>cancelled</code> in ~1 s, per
-<a href="#q683--the-fast-ending-measurement-2026-08-05">the fast-ending measurement</a>.
-The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run
-is re-run automatically once capacity returns, bounded by the shared per-run
-retry budget, per <a href="#q691--the-recovery-re-run-arm-2026-08-08">the recovery re-run arm</a>.
+<p><strong>Status:</strong> answered 2026-08-04 — conclude, not re-dispatch, and the conclusion is <strong>success</strong>.
+See <a href="#findings">Findings</a>.
+The remedy (Q676) is measured and decided the same day: the listener reports <strong>nothing</strong> for its own unrun delivery, per <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>.
+The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST force-cancel concludes run and job <code>cancelled</code> in ~1 s, per <a href="#q683--the-fast-ending-measurement-2026-08-05">the fast-ending measurement</a>.
+The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run is re-run automatically once capacity returns, bounded by the shared per-run retry budget, per <a href="#q691--the-recovery-re-run-arm-2026-08-08">the recovery re-run arm</a>.
 Remaining follow-up: Q682 (sibling <code>skipped</code> arm).</p>
-<p>Queue item: Q645 (completed; done rows are deleted). Origin:
-<a href="../release-1.3/#the-rc5-re-run-2026-08-02">release-1.3.md § The rc.5 re-run</a>.</p>
+<p>Queue item: Q645 (completed; done rows are deleted).
+Origin: <a href="../release-1.3/#the-rc5-re-run-2026-08-02">release-1.3.md § The rc.5 re-run</a>.</p>
 <h2 id="the-question">The question<a class="headerlink" href="#the-question" title="Permanent link">&para;</a></h2>
-<p>The Q628 fix releases an acquired-but-never-run job assignment (a worker pod
-reaped while <code>Pending</code>, so no runner binary ever registered) by calling
-<code>POST {run_service_url}/completejob</code> with <code>result=abandoned</code>
-(<code>cmd/agc/internal/listener/job.go</code>, behind <code>AGC_FANOUT_COMPLETION</code>). That stops
-the assignment dangling until GitHub's ~15-minute unstarted-job timeout cancels
-the whole run. What it does <strong>not</strong> establish is what GitHub does next:</p>
+<p>The Q628 fix releases an acquired-but-never-run job assignment (a worker pod reaped while <code>Pending</code>, so no runner binary ever registered) by calling <code>POST {run_service_url}/completejob</code> with <code>result=abandoned</code> (<code>cmd/agc/internal/listener/job.go</code>, behind <code>AGC_FANOUT_COMPLETION</code>).
+That stops the assignment dangling until GitHub's ~15-minute unstarted-job timeout cancels the whole run.
+What it does <strong>not</strong> establish is what GitHub does next:</p>
 <ol>
-<li><strong>Re-dispatch.</strong> The job returns to the queue and is offered to the next
-   available runner. The AGC needs no further mechanism: when capacity returns,
-   a new worker picks the job up.</li>
-<li><strong>Conclude.</strong> The job (and with it the run) is driven terminal. Then Q628
-   trades a silent 16-minute hang for a fast, visible failure. Better, but a
-   re-run arm (the <code>rerun-failed-jobs</code> mechanism the disruption-recovery arms
-   already have) would be needed for the job to ever execute.</li>
+<li><strong>Re-dispatch.</strong> The job returns to the queue and is offered to the next available runner.
+   The AGC needs no further mechanism: when capacity returns, a new worker picks the job up.</li>
+<li><strong>Conclude.</strong> The job (and with it the run) is driven terminal.
+   Then Q628 trades a silent 16-minute hang for a fast, visible failure.
+   Better, but a re-run arm (the <code>rerun-failed-jobs</code> mechanism the disruption-recovery arms already have) would be needed for the job to ever execute.</li>
 </ol>
-<p>Which one happens decides whether a re-run arm is also needed, which is the
-decision the Q645 row exists to inform. A secondary unknown rides along for
-free: <code>broker/types.go</code> flags the completejob <strong>wire format</strong> (<code>result</code> as a
-lowercase-camelCase string) as never live-confirmed, the reason
-<code>AGC_FANOUT_COMPLETION</code> defaults off. The same live call that answers the
-primary question confirms or refutes the serialization.</p>
+<p>Which one happens decides whether a re-run arm is also needed, which is the decision the Q645 row exists to inform.
+A secondary unknown rides along for free: <code>broker/types.go</code> flags the completejob <strong>wire format</strong> (<code>result</code> as a lowercase-camelCase string) as never live-confirmed, the reason <code>AGC_FANOUT_COMPLETION</code> defaults off.
+The same live call that answers the primary question confirms or refutes the serialization.</p>
 <h2 id="why-a-probe-not-a-dogfood-turn-up">Why a probe, not a dogfood turn-up<a class="headerlink" href="#why-a-probe-not-a-dogfood-turn-up" title="Permanent link">&para;</a></h2>
 <p>The Q645 row proposes a turn-up: reap a Pending worker on GKE, watch the run.
-That measures the same wire exchange, but through five extra moving layers
-(cluster, autoscaler, AGC deploy, worker scheduling, reap timing), each of
-which has independently eaten a validation attempt in the 1.3 ledger. The
-question is about <strong>GitHub's behaviour, not ours</strong>, which is exactly the class
-<a href="../../development/testing/#the-credential-gated-probe-scenarios">testing.md § The credential-gated probe scenarios</a>
-routes to <code>cmd/probe</code>: no double can answer it, and no cluster is needed to ask
-it. The probe drives the same shipping <code>broker.Client</code> calls the listener
-makes, so the exchange under measurement is byte-identical to the AGC's.</p>
+That measures the same wire exchange, but through five extra moving layers (cluster, autoscaler, AGC deploy, worker scheduling, reap timing), each of which has independently eaten a validation attempt in the 1.3 ledger.
+The question is about <strong>GitHub's behaviour, not ours</strong>, which is exactly the class <a href="../../development/testing/#the-credential-gated-probe-scenarios">testing.md § The credential-gated probe scenarios</a> routes to <code>cmd/probe</code>: no double can answer it, and no cluster is needed to ask it.
+The probe drives the same shipping <code>broker.Client</code> calls the listener makes, so the exchange under measurement is byte-identical to the AGC's.</p>
 <h2 id="investigation-h--the-measurement">Investigation H — the measurement<a class="headerlink" href="#investigation-h--the-measurement" title="Permanent link">&para;</a></h2>
-<p><code>PROBE_ABANDONED_TEST=true</code> selects it. One run, two JIT runners, both
-registered repo-level against this repo (the org <code>Default</code> group refuses public
-repos, same as Investigations E/F/G):</p>
+<p><code>PROBE_ABANDONED_TEST=true</code> selects it.
+One run, two JIT runners, both registered repo-level against this repo (the org <code>Default</code> group refuses public repos, same as Investigations E/F/G):</p>
 <ol>
-<li>Register JIT runners <strong>A</strong> and <strong>B</strong> with the probe label
-   (<code>gag-q645-abandoned</code>) via <code>generate-jitconfig</code>, and open a broker v2
-   session for each. This is the registration, OAuth-exchange, and session
-   flow the AGC's agent pool and listener run
-   (<code>agentpool.GithubRegistrar</code> / <code>listener.createSession</code>), reproduced in the
-   probe over the shared <code>githubapp</code> and <code>broker</code> packages.</li>
-<li>Dispatch the fixture workflow
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q645-abandoned-probe.yml"><code>q645-abandoned-probe.yml</code></a>):
-   one job, <code>runs-on: gag-q645-abandoned</code>, nothing ever runs it.</li>
-<li>Both sessions receive the fan-out <code>RunnerJobRequest</code>. <strong>A acquires</strong> its
-   delivery (<code>acquirejob</code> on the delivered <code>run_service_url</code>); B only polls and
-   logs. The probe resolves the run REST-side (newest queued run of the fixture
-   workflow) before acquiring, so the REST watch has a subject.</li>
-<li><strong>A completes its assignment with <code>result=abandoned</code></strong>: the Q628 call,
-   nothing else in between. No renew loop is needed, since the initial lock
-   outlasts the seconds between acquire and complete. T0 is this call's
-   response. A's session is then deleted and its consumed runner record
-   deregistered, mirroring the listener's post-job recycle, so B is the only
-   listener during the window.</li>
-<li>Observe for a bounded window (default 20 min, spanning the ~15-minute
-   unstarted-job horizon), on two channels at once:</li>
-<li><strong>B's session.</strong> A <code>RunnerJobRequest</code> arriving after T0 is a
-     re-dispatch, observed on the same channel a real AGC listener would see
-     it on. Its <code>runner_request_id</code> (same as A's, or fresh) is recorded:
-     that is the fan-out identity a recovering AGC would have to dedup against.</li>
-<li><strong>REST.</strong> The fixture run's and job's <code>status</code>/<code>conclusion</code> polled every
-     15 s; every transition logged with its timestamp. Both levels, because
-     the live run split them (see Findings): the run concluded while the job
-     record never did.</li>
+<li>Register JIT runners <strong>A</strong> and <strong>B</strong> with the probe label (<code>gag-q645-abandoned</code>) via <code>generate-jitconfig</code>, and open a broker v2 session for each.
+   This is the registration, OAuth-exchange, and session flow the AGC's agent pool and listener run (<code>agentpool.GithubRegistrar</code> / <code>listener.createSession</code>), reproduced in the probe over the shared <code>githubapp</code> and <code>broker</code> packages.</li>
+<li>Dispatch the fixture workflow (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q645-abandoned-probe.yml"><code>q645-abandoned-probe.yml</code></a>): one job, <code>runs-on: gag-q645-abandoned</code>, nothing ever runs it.</li>
+<li>Both sessions receive the fan-out <code>RunnerJobRequest</code>. <strong>A acquires</strong> its delivery (<code>acquirejob</code> on the delivered <code>run_service_url</code>); B only polls and logs.
+   The probe resolves the run REST-side (newest queued run of the fixture workflow) before acquiring, so the REST watch has a subject.</li>
+<li><strong>A completes its assignment with <code>result=abandoned</code></strong>: the Q628 call, nothing else in between.
+   No renew loop is needed, since the initial lock outlasts the seconds between acquire and complete.
+   T0 is this call's response.
+   A's session is then deleted and its consumed runner record deregistered, mirroring the listener's post-job recycle, so B is the only listener during the window.</li>
+<li>Observe for a bounded window (default 20 min, spanning the ~15-minute unstarted-job horizon), on two channels at once:</li>
+<li><strong>B's session.</strong> A <code>RunnerJobRequest</code> arriving after T0 is a re-dispatch, observed on the same channel a real AGC listener would see it on.
+     Its <code>runner_request_id</code> (same as A's, or fresh) is recorded: that is the fan-out identity a recovering AGC would have to dedup against.</li>
+<li><strong>REST.</strong> The fixture run's and job's <code>status</code>/<code>conclusion</code> polled every 15 s; every transition logged with its timestamp.
+     Both levels, because the live run split them (see Findings): the run concluded while the job record never did.</li>
 </ol>
 <p>Verdicts, each logged with the evidence behind it:</p>
 <table>
@@ -2883,47 +2849,28 @@ repos, same as Investigations E/F/G):</p>
 </tr>
 </tbody>
 </table>
-<p><code>REDISPATCHED</code> and <code>CONCLUDED-*</code> are not mutually exclusive in principle
-(GitHub could re-queue, fail to place, then conclude at the unstarted-job
-timeout); the log carries both channels' full timelines so a compound outcome
-reads as what it is rather than being flattened into one word.</p>
+<p><code>REDISPATCHED</code> and <code>CONCLUDED-*</code> are not mutually exclusive in principle (GitHub could re-queue, fail to place, then conclude at the unstarted-job timeout); the log carries both channels' full timelines so a compound outcome reads as what it is rather than being flattened into one word.</p>
 <h3 id="what-would-make-a-result-invalid">What would make a result invalid<a class="headerlink" href="#what-would-make-a-result-invalid" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>B's session missing or late.</strong> B must be polling before T0, or a prompt
-  re-dispatch lands on no listener and <code>NO-SIGNAL</code> lies. The probe opens both
-  sessions before the acquire and fails the run if either drops.</li>
-<li><strong>Another consumer on the label.</strong> A leftover runner from an earlier run
-  acquiring the redelivery would turn <code>REDISPATCHED</code> into <code>NO-SIGNAL</code> or
-  <code>CONCLUDED</code>. The label is probe-specific and both runner records are
-  deregistered on exit; the probe logs every runner on the label at startup.</li>
-<li><strong>The wrong run watched.</strong> REST discovery takes the newest queued run of the
-  fixture workflow. A stale queued run from an aborted earlier probe would be
-  older, but the probe logs the run id and <code>created_at</code> it locked onto so a
-  misattribution is visible in the record.</li>
-<li><strong>A cancel racing the window.</strong> Cleanup cancels the fixture run only after
-  the window closes (409-tolerant, per Investigation F's helper); a cancel
-  before T0+window would manufacture <code>CONCLUDED-cancelled</code>.</li>
+<li><strong>B's session missing or late.</strong> B must be polling before T0, or a prompt re-dispatch lands on no listener and <code>NO-SIGNAL</code> lies.
+  The probe opens both sessions before the acquire and fails the run if either drops.</li>
+<li><strong>Another consumer on the label.</strong> A leftover runner from an earlier run acquiring the redelivery would turn <code>REDISPATCHED</code> into <code>NO-SIGNAL</code> or <code>CONCLUDED</code>.
+  The label is probe-specific and both runner records are deregistered on exit; the probe logs every runner on the label at startup.</li>
+<li><strong>The wrong run watched.</strong> REST discovery takes the newest queued run of the fixture workflow.
+  A stale queued run from an aborted earlier probe would be older, but the probe logs the run id and <code>created_at</code> it locked onto so a misattribution is visible in the record.</li>
+<li><strong>A cancel racing the window.</strong> Cleanup cancels the fixture run only after the window closes (409-tolerant, per Investigation F's helper); a cancel before T0+window would manufacture <code>CONCLUDED-cancelled</code>.</li>
 </ul>
 <h2 id="what-the-answer-feeds">What the answer feeds<a class="headerlink" href="#what-the-answer-feeds" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>REDISPATCHED</code></strong> → Q628 is complete as shipped; the Q645 row is deleted
-  and the <code>release-1.3.md</code> "unmeasured" sentence gets the answer. The
-  <code>AGC_FANOUT_COMPLETION</code> default-off caveat in <code>broker/types.go</code> can cite a
-  live confirmation instead of a gap (flipping the default is its own
-  decision, filed separately if taken).</li>
-<li><strong><code>CONCLUDED-*</code></strong> → a new Queue row for the re-run arm: on an abandoned
-  completion the listener must also call <code>rerun-failed-jobs</code> (or the run-level
-  re-run), the mechanism <code>externallyDeletedBeforeTerminal</code> deliberately does
-  not arm today because "a job that never ran has no failed job to re-run",
-  which this verdict would refute at the run level.</li>
-<li><strong><code>WIRE-REJECTED</code></strong> → the <code>TaskResult</code> serialization is wrong; fixing it
-  precedes everything above, and the gated-off default was the right call.</li>
+<li><strong><code>REDISPATCHED</code></strong> → Q628 is complete as shipped; the Q645 row is deleted and the <code>release-1.3.md</code> "unmeasured" sentence gets the answer.
+  The <code>AGC_FANOUT_COMPLETION</code> default-off caveat in <code>broker/types.go</code> can cite a live confirmation instead of a gap (flipping the default is its own decision, filed separately if taken).</li>
+<li><strong><code>CONCLUDED-*</code></strong> → a new Queue row for the re-run arm: on an abandoned completion the listener must also call <code>rerun-failed-jobs</code> (or the run-level re-run), the mechanism <code>externallyDeletedBeforeTerminal</code> deliberately does not arm today because "a job that never ran has no failed job to re-run", which this verdict would refute at the run level.</li>
+<li><strong><code>WIRE-REJECTED</code></strong> → the <code>TaskResult</code> serialization is wrong; fixing it precedes everything above, and the gated-off default was the right call.</li>
 </ul>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="the-answer-wire-accepted-then-concluded-run-success-2026-08-04">The answer: WIRE-ACCEPTED, then CONCLUDED-run-success (2026-08-04)<a class="headerlink" href="#the-answer-wire-accepted-then-concluded-run-success-2026-08-04" title="Permanent link">&para;</a></h3>
-<p>One live run, first attempt, fixture run
-<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30886332454">30886332454</a>,
-full log in the session record. The timeline (all times UTC):</p>
+<p>One live run, first attempt, fixture run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30886332454">30886332454</a>, full log in the session record.
+The timeline (all times UTC):</p>
 <table>
 <thead>
 <tr>
@@ -2958,63 +2905,34 @@ full log in the session record. The timeline (all times UTC):</p>
 </tr>
 </tbody>
 </table>
-<p><strong>The wire format is confirmed.</strong> The run service accepted the lowercase
-camelCase <code>result</code> serialization with a 204. The <code>WIRE FORMAT NOT
-LIVE-CONFIRMED</code> caveat in <code>broker/types.go</code> is resolved; keeping
-<code>AGC_FANOUT_COMPLETION</code> off is no longer justified by serialization risk; it
-is now justified by the semantics below.</p>
-<p><strong>The answer to Q645 is: conclude, not re-dispatch — and the conclusion is
-<code>success</code>.</strong> GitHub ended the run one second after the abandoned completion.
-No re-queue, no redelivery to a live listener, no unstarted-job timeout. A job
-that never executed a single step reports green: the false-green outcome, worse
-for a CI consumer than either the silent 16-minute hang Q628 replaced or an
-honest failure. The remedy decision was filed as Q676 and measured the same
-day, in <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>;
-candidate arms included reporting <code>failed</code> instead (concludes red and gives
-<code>rerun-failed-jobs</code> a target; result-value semantics unmeasured beyond
-<code>abandoned</code>), cancelling the run via REST before or instead of completing, or
-not completing at all (the told-nothing path measured 2026-08-02 left the job
-<code>queued</code> for 16+ minutes, which at least stays visibly unfinished).</p>
-<p><strong>The run and job records disagree.</strong> The run concluded while its only job
-never did: <code>in_progress</code>, <code>conclusion: null</code>, <code>completed_at: null</code>, indefinitely.
-The probe's own window verdict printed <code>NO-SIGNAL</code> because its watch covered the
-job endpoint only; the run endpoint carried the signal. The instrument now
-watches both levels (verdicts <code>CONCLUDED-run-&lt;c&gt;</code> / <code>CONCLUDED-job-&lt;c&gt;</code>), so a
-re-run reports this outcome directly instead of leaving it to a post-hoc REST
-read.</p>
+<p><strong>The wire format is confirmed.</strong> The run service accepted the lowercase camelCase <code>result</code> serialization with a 204.
+The <code>WIRE FORMAT NOT LIVE-CONFIRMED</code> caveat in <code>broker/types.go</code> is resolved; keeping <code>AGC_FANOUT_COMPLETION</code> off is no longer justified by serialization risk; it is now justified by the semantics below.</p>
+<p><strong>The answer to Q645 is: conclude, not re-dispatch — and the conclusion is <code>success</code>.</strong> GitHub ended the run one second after the abandoned completion.
+No re-queue, no redelivery to a live listener, no unstarted-job timeout.
+A job that never executed a single step reports green: the false-green outcome, worse for a CI consumer than either the silent 16-minute hang Q628 replaced or an honest failure.
+The remedy decision was filed as Q676 and measured the same day, in <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>; candidate arms included reporting <code>failed</code> instead (concludes red and gives <code>rerun-failed-jobs</code> a target; result-value semantics unmeasured beyond <code>abandoned</code>), cancelling the run via REST before or instead of completing, or not completing at all (the told-nothing path measured 2026-08-02 left the job <code>queued</code> for 16+ minutes, which at least stays visibly unfinished).</p>
+<p><strong>The run and job records disagree.</strong> The run concluded while its only job never did: <code>in_progress</code>, <code>conclusion: null</code>, <code>completed_at: null</code>, indefinitely.
+The probe's own window verdict printed <code>NO-SIGNAL</code> because its watch covered the job endpoint only; the run endpoint carried the signal.
+The instrument now watches both levels (verdicts <code>CONCLUDED-run-&lt;c&gt;</code> / <code>CONCLUDED-job-&lt;c&gt;</code>), so a re-run reports this outcome directly instead of leaving it to a post-hoc REST read.</p>
 <p>Secondary observations, recorded because a stub would have answered otherwise:</p>
 <ul>
-<li><strong>No fan-out to B.</strong> Both sessions were polling before dispatch; the
-  delivery reached A alone. The Q260 multi-delivery fan-out did not occur for
-  a single queued job with two idle same-label sessions on the classic v2
-  flow.</li>
-<li><strong>Acquire is what "starts" the job REST-side.</strong> <code>started_at</code> and
-  <code>runner_name</code> were stamped at <code>acquirejob</code>, before any runner binary
-  existed.</li>
-<li><strong>Both broker sessions came back with no encryption key</strong> — message bodies
-  arrived as plaintext JSON and parsed directly (<code>hasAESKey=false</code> in the
-  log).</li>
-<li><strong>Cancel of an already-completed run returned 2xx</strong>, not the 409 the
-  cleanup helper treats as already-terminal.</li>
+<li><strong>No fan-out to B.</strong> Both sessions were polling before dispatch; the delivery reached A alone.
+  The Q260 multi-delivery fan-out did not occur for a single queued job with two idle same-label sessions on the classic v2 flow.</li>
+<li><strong>Acquire is what "starts" the job REST-side.</strong> <code>started_at</code> and <code>runner_name</code> were stamped at <code>acquirejob</code>, before any runner binary existed.</li>
+<li><strong>Both broker sessions came back with no encryption key</strong> — message bodies arrived as plaintext JSON and parsed directly (<code>hasAESKey=false</code> in the log).</li>
+<li><strong>Cancel of an already-completed run returned 2xx</strong>, not the 409 the cleanup helper treats as already-terminal.</li>
 </ul>
 <h3 id="what-this-feeds">What this feeds<a class="headerlink" href="#what-this-feeds" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Q676: the Q628 release path must not ship <code>result=abandoned</code> for the
-  winner's own delivery as-is; pick and measure a remedy. Done: see
-  <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>. The
-  Q260 sibling case (<code>result=skipped</code> on deduped deliveries while the winner
-  still runs) is <strong>not</strong> covered by this measurement. Whether a sibling
-  completion also concludes the whole run is exactly the semantics
-  brokertest's fan-out accounting assumes it does not, and needs its own probe
-  arm (<a href="../../STATUS/#Q682">Q682</a>).</li>
-<li><code>broker/types.go</code> and <code>listener/job.go</code> comments updated to cite this
-  measurement instead of the unmeasured ~15-minute-timeout rationale.</li>
+<li>Q676: the Q628 release path must not ship <code>result=abandoned</code> for the winner's own delivery as-is; pick and measure a remedy.
+  Done: see <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>.
+  The Q260 sibling case (<code>result=skipped</code> on deduped deliveries while the winner still runs) is <strong>not</strong> covered by this measurement.
+  Whether a sibling completion also concludes the whole run is exactly the semantics brokertest's fan-out accounting assumes it does not, and needs its own probe arm (<a href="../../STATUS/#Q682">Q682</a>).</li>
+<li><code>broker/types.go</code> and <code>listener/job.go</code> comments updated to cite this measurement instead of the unmeasured ~15-minute-timeout rationale.</li>
 </ul>
 <h2 id="q676--the-remedy-measurements-2026-08-04">Q676 — the remedy measurements (2026-08-04)<a class="headerlink" href="#q676--the-remedy-measurements-2026-08-04" title="Permanent link">&para;</a></h2>
-<p>The same instrument re-run with <code>PROBE_ABANDONED_RESULT</code> selecting a candidate
-remedy value, plus <code>PROBE_ABANDONED_RERUN_CHECK=true</code> for the half a red
-conclusion alone cannot prove (does <code>rerun-failed-jobs</code> get a target?). Full
-logs in the session record; fixture runs named per row.</p>
+<p>The same instrument re-run with <code>PROBE_ABANDONED_RESULT</code> selecting a candidate remedy value, plus <code>PROBE_ABANDONED_RERUN_CHECK=true</code> for the half a red conclusion alone cannot prove (does <code>rerun-failed-jobs</code> get a target?).
+Full logs in the session record; fixture runs named per row.</p>
 <table>
 <thead>
 <tr>
@@ -3051,55 +2969,25 @@ logs in the session record; fixture runs named per row.</p>
 </tr>
 </tbody>
 </table>
-<p>Every accepted completejob value drives the run to <code>success</code>, <code>failed</code> is
-refused, and the green conclusion arms no re-run. <strong>The completejob family
-cannot produce an honest outcome for an acquired-but-never-run job; saying
-nothing produces the only honest one</strong>: <code>cancelled</code> at GitHub's
-~15-minute unstarted-job horizon.</p>
+<p>Every accepted completejob value drives the run to <code>success</code>, <code>failed</code> is refused, and the green conclusion arms no re-run. <strong>The completejob family cannot produce an honest outcome for an acquired-but-never-run job; saying nothing produces the only honest one</strong>: <code>cancelled</code> at GitHub's ~15-minute unstarted-job horizon.</p>
 <h3 id="the-remedy">The remedy<a class="headerlink" href="#the-remedy" title="Permanent link">&para;</a></h3>
-<p>The listener <strong>reports nothing</strong> for its own unrun delivery: the Q628
-<code>completejob(abandoned)</code> release is removed (it was live <strong>by default</strong>, since
-<code>AGC_FANOUT_COMPLETION</code> defaults on, contrary to what the pre-remedy comments
-here and in <code>broker/types.go</code> claimed), and a reaped-Pending worker's job now
-ends in the measured told-nothing cancel. The Q260 sibling fan-out completion
-is untouched: with the winner's own delivery still open, sibling completions
-conclude nothing (the 2026-07-04 dogfood re-route #5 measured per-delivery
-scoping), though the sibling <code>skipped</code> value has no live probe measurement.
-That arm is Q682. Making the released job's ending faster than 15 minutes was
-Q683, measured and shipped 2026-08-05:
-<a href="#q683--the-fast-ending-measurement-2026-08-05">the fast-ending measurement</a>.</p>
+<p>The listener <strong>reports nothing</strong> for its own unrun delivery: the Q628 <code>completejob(abandoned)</code> release is removed (it was live <strong>by default</strong>, since <code>AGC_FANOUT_COMPLETION</code> defaults on, contrary to what the pre-remedy comments here and in <code>broker/types.go</code> claimed), and a reaped-Pending worker's job now ends in the measured told-nothing cancel.
+The Q260 sibling fan-out completion is untouched: with the winner's own delivery still open, sibling completions conclude nothing (the 2026-07-04 dogfood re-route #5 measured per-delivery scoping), though the sibling <code>skipped</code> value has no live probe measurement.
+That arm is Q682.
+Making the released job's ending faster than 15 minutes was Q683, measured and shipped 2026-08-05: <a href="#q683--the-fast-ending-measurement-2026-08-05">the fast-ending measurement</a>.</p>
 <p>Secondary observations, each load-bearing for the remedy choice:</p>
 <ul>
-<li><strong>Fan-out is real on this flow.</strong> Both runs delivered a sibling
-  <code>RunnerJobRequest</code> (distinct <code>runner_request_id</code>) to observer B immediately,
-  then a second delivery to A ~60 s later; A acquired its own. The Q645 run's
-  "no fan-out to B" was one draw, not a rule. An <strong>unacked</strong> sibling redelivers
-  ~1/s with a fresh broker <code>MessageID</code> for as long as it stays unresolved;
-  the probe now filters pre-T0 request ids out of the <code>REDISPATCHED</code> verdict,
-  and the Q260 dedup accounting gets live confirmation that siblings are
-  per-delivery assignments.</li>
-<li><strong>A plain REST cancel does not promptly conclude a run whose only job is an
-  acquired-but-ownerless <code>in_progress</code> record.</strong> Run 30912707732: cancel
-  202-accepted, still <code>in_progress</code> ~2.5 min later; <code>force-cancel</code> concluded
-  it within ~1 min. Run 30913319212: cancel 202, then force-cancel, and the
-  run still took ~3 more minutes to conclude <code>cancelled</code>. Any REST-cancel
-  remedy inherits this latency, needs <code>force-cancel</code> as the effective call,
-  and needs the run id, which the broker delivery does not carry (it is in the
-  worker's job payload, not <code>RunnerJobRequestBody</code>).</li>
-<li><strong>The acquire's <code>in_progress</code> job pins the runner record.</strong> Deleting the
-  acquiring runner answers 422 <code>currently running a job</code> until the run
-  concludes, so the release path's recycle cannot remove the runner while the
-  orphan lives; measured twice via the probe's own cleanup.</li>
+<li><strong>Fan-out is real on this flow.</strong> Both runs delivered a sibling <code>RunnerJobRequest</code> (distinct <code>runner_request_id</code>) to observer B immediately, then a second delivery to A ~60 s later; A acquired its own.
+  The Q645 run's "no fan-out to B" was one draw, not a rule.
+  An <strong>unacked</strong> sibling redelivers ~1/s with a fresh broker <code>MessageID</code> for as long as it stays unresolved; the probe now filters pre-T0 request ids out of the <code>REDISPATCHED</code> verdict, and the Q260 dedup accounting gets live confirmation that siblings are per-delivery assignments.</li>
+<li><strong>A plain REST cancel does not promptly conclude a run whose only job is an acquired-but-ownerless <code>in_progress</code> record.</strong> Run 30912707732: cancel 202-accepted, still <code>in_progress</code> ~2.5 min later; <code>force-cancel</code> concluded it within ~1 min.
+  Run 30913319212: cancel 202, then force-cancel, and the run still took ~3 more minutes to conclude <code>cancelled</code>.
+  Any REST-cancel remedy inherits this latency, needs <code>force-cancel</code> as the effective call, and needs the run id, which the broker delivery does not carry (it is in the worker's job payload, not <code>RunnerJobRequestBody</code>).</li>
+<li><strong>The acquire's <code>in_progress</code> job pins the runner record.</strong> Deleting the acquiring runner answers 422 <code>currently running a job</code> until the run concludes, so the release path's recycle cannot remove the runner while the orphan lives; measured twice via the probe's own cleanup.</li>
 </ul>
 <h2 id="q683--the-fast-ending-measurement-2026-08-05">Q683 — the fast-ending measurement (2026-08-05)<a class="headerlink" href="#q683--the-fast-ending-measurement-2026-08-05" title="Permanent link">&para;</a></h2>
-<p>The instrument gained a <code>PROBE_ABANDONED_FORCECANCEL=true</code> arm: after the
-told-nothing walk-away (<code>result=none</code>), a <strong>standalone</strong> REST
-<code>POST …/actions/runs/{id}/force-cancel</code> — no prior plain cancel, the call shape
-a listener remedy would use (the 2026-08-04 force-cancels all followed a
-202-accepted plain cancel, and plain cancel alone was measured sluggish against
-an orphaned acquire). One run,
-<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31022925992">31022925992</a>,
-first attempt (T0 = the acquire + walk-away, 15:59:39 UTC):</p>
+<p>The instrument gained a <code>PROBE_ABANDONED_FORCECANCEL=true</code> arm: after the told-nothing walk-away (<code>result=none</code>), a <strong>standalone</strong> REST <code>POST …/actions/runs/{id}/force-cancel</code> — no prior plain cancel, the call shape a listener remedy would use (the 2026-08-04 force-cancels all followed a 202-accepted plain cancel, and plain cancel alone was measured sluggish against an orphaned acquire).
+One run, <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31022925992">31022925992</a>, first attempt (T0 = the acquire + walk-away, 15:59:39 UTC):</p>
 <table>
 <thead>
 <tr>
@@ -3126,77 +3014,37 @@ first attempt (T0 = the acquire + walk-away, 15:59:39 UTC):</p>
 </tr>
 </tbody>
 </table>
-<p>Every property the remedy needs, measured on one run: honest (<code>cancelled</code>),
-~1 s instead of 15 m 14 s, no orphaned <code>in_progress</code> job record, the runner
-record immediately deletable, and the ending is recoverable via re-run. The
-deregistration candidate (Q418's mechanism) is moot for this scenario: the
-record is deletable only <em>after</em> a conclusion, so it cannot cause one.</p>
-<p>Shipped the same day: the classic-tier provisioner force-cancels the run
-(identity from the acquire payload's <code>github</code> context, the same
-<code>repoInfo()</code> read the eviction re-run uses) before reporting <code>abandoned</code>,
-counted by <code>actions_gateway_abandoned_run_force_cancels_total</code>; the
-unstarted-job timeout stays the backstop for <code>identity_unknown</code>/<code>error</code>
-outcomes. The recovery re-run arm this measurement arms is Q691, below.</p>
+<p>Every property the remedy needs, measured on one run: honest (<code>cancelled</code>), ~1 s instead of 15 m 14 s, no orphaned <code>in_progress</code> job record, the runner record immediately deletable, and the ending is recoverable via re-run.
+The deregistration candidate (Q418's mechanism) is moot for this scenario: the record is deletable only <em>after</em> a conclusion, so it cannot cause one.</p>
+<p>Shipped the same day: the classic-tier provisioner force-cancels the run (identity from the acquire payload's <code>github</code> context, the same <code>repoInfo()</code> read the eviction re-run uses) before reporting <code>abandoned</code>, counted by <code>actions_gateway_abandoned_run_force_cancels_total</code>; the unstarted-job timeout stays the backstop for <code>identity_unknown</code>/<code>error</code> outcomes.
+The recovery re-run arm this measurement arms is Q691, below.</p>
 <h2 id="q691--the-recovery-re-run-arm-2026-08-08">Q691 — the recovery re-run arm (2026-08-08)<a class="headerlink" href="#q691--the-recovery-re-run-arm-2026-08-08" title="Permanent link">&para;</a></h2>
-<p>The Q683 ending is honest and recoverable, but recovery was still a human
-opening the run and clicking re-run. This arm automates it, and the whole
-design question is <em>when</em>, not <em>whether</em>: the run was abandoned because a
-worker pod sat Pending past <code>pendingPodDeadline</code> and the reaper deleted it, so
-an immediate re-run re-queues the job into the pool that was starved in the
-first place. Fire it unconditionally and a capacity shortage becomes a re-run
-storm that deepens the shortage.</p>
+<p>The Q683 ending is honest and recoverable, but recovery was still a human opening the run and clicking re-run.
+This arm automates it, and the whole design question is <em>when</em>, not <em>whether</em>: the run was abandoned because a worker pod sat Pending past <code>pendingPodDeadline</code> and the reaper deleted it, so an immediate re-run re-queues the job into the pool that was starved in the first place.
+Fire it unconditionally and a capacity shortage becomes a re-run storm that deepens the shortage.</p>
 <h3 id="what-capacity-returned-means">What "capacity returned" means<a class="headerlink" href="#what-capacity-returned-means" title="Permanent link">&para;</a></h3>
-<p>The codebase already answers this, for the Q512 capacity-gate latch: a worker
-pod that <strong>bound to a node</strong> (<code>PodScheduled=True</code>) after the decline is the
-evidence capacity came back, and the binding rather than the phase is the
-signal, because a bound pod still pulling images proves as much as a running
-one. Q691 reuses that definition verbatim, with the abandonment time as the
-"after". <code>podScheduledAt</code> moves from the controller package to the provisioner
-as <code>PodScheduledAt</code>, so both readers share one answer instead of two.</p>
-<p>An entry is registered only on the <code>cancelled</code> force-cancel outcome. That is
-the state the 2026-08-05 measurement showed accepts <code>rerun-failed-jobs</code>;
-<code>identity_unknown</code> has no endpoint to address, and after an <code>error</code> the run has
-not been concluded by us at all.</p>
+<p>The codebase already answers this, for the Q512 capacity-gate latch: a worker pod that <strong>bound to a node</strong> (<code>PodScheduled=True</code>) after the decline is the evidence capacity came back, and the binding rather than the phase is the signal, because a bound pod still pulling images proves as much as a running one.
+Q691 reuses that definition verbatim, with the abandonment time as the "after". <code>podScheduledAt</code> moves from the controller package to the provisioner as <code>PodScheduledAt</code>, so both readers share one answer instead of two.</p>
+<p>An entry is registered only on the <code>cancelled</code> force-cancel outcome.
+That is the state the 2026-08-05 measurement showed accepts <code>rerun-failed-jobs</code>; <code>identity_unknown</code> has no endpoint to address, and after an <code>error</code> the run has not been concluded by us at all.</p>
 <h3 id="the-loop-budget">The loop budget<a class="headerlink" href="#the-loop-budget" title="Permanent link">&para;</a></h3>
-<p>The re-run fires through the existing <code>handleEviction</code>, with a new
-<code>recoveryCauseAbandoned</code> cause. That is the load-bearing choice: the budget is
-<code>reserveEvictionRetry</code>, keyed by <code>run_id</code> alone and shared with the eviction,
-preemption, and deletion arms, so a run that is abandoned, re-run, and
-abandoned again spends one slot per re-run and stops at
-<code>spec.maxEvictionRetries</code>. A re-run loop is therefore bounded by the same
-Q106 hard cap that already bounds every other recovery, and a run cannot spend
-two budgets by being disrupted two ways.</p>
-<p>Exhaustion is not silent: it emits
-<code>actions_gateway_eviction_retries_exhausted_total{cause="abandoned"}</code> and the
-<code>EvictionRetriesExhausted</code> warning Event on the owner, the surfaces an operator
-already alerts on.</p>
-<p>The second bound is time. Capacity may never return (an idle group, or a
-scheduling constraint no amount of waiting fixes, since <code>pending_deadline</code>
-also covers an unpullable image), so an entry that waits longer than
-<code>defaultAbandonedRerunWaitWindow</code> (30 minutes) is dropped. Both endings are
-counted by a new
-<code>actions_gateway_abandoned_run_rerun_waits_total{outcome}</code>: <code>capacity_returned</code>
-when a worker bound and the re-run was handed to the budget, <code>expired</code> when it
-never did.</p>
+<p>The re-run fires through the existing <code>handleEviction</code>, with a new <code>recoveryCauseAbandoned</code> cause.
+That is the load-bearing choice: the budget is <code>reserveEvictionRetry</code>, keyed by <code>run_id</code> alone and shared with the eviction, preemption, and deletion arms, so a run that is abandoned, re-run, and abandoned again spends one slot per re-run and stops at <code>spec.maxEvictionRetries</code>.
+A re-run loop is therefore bounded by the same Q106 hard cap that already bounds every other recovery, and a run cannot spend two budgets by being disrupted two ways.</p>
+<p>Exhaustion is not silent: it emits <code>actions_gateway_eviction_retries_exhausted_total{cause="abandoned"}</code> and the <code>EvictionRetriesExhausted</code> warning Event on the owner, the surfaces an operator already alerts on.</p>
+<p>The second bound is time.
+Capacity may never return (an idle group, or a scheduling constraint no amount of waiting fixes, since <code>pending_deadline</code> also covers an unpullable image), so an entry that waits longer than <code>defaultAbandonedRerunWaitWindow</code> (30 minutes) is dropped.
+Both endings are counted by a new <code>actions_gateway_abandoned_run_rerun_waits_total{outcome}</code>: <code>capacity_returned</code> when a worker bound and the re-run was handed to the budget, <code>expired</code> when it never did.</p>
 <h3 id="shape">Shape<a class="headerlink" href="#shape" title="Permanent link">&para;</a></h3>
-<p>An <code>AbandonedRerunSweeper</code> (<code>manager.Runnable</code>, per replica, like
-<code>EvictionSweeper</code>) polls the pending set every 30 s. The registry is in-memory
-and keyed by owner plus <code>run_id</code>, so two abandoned jobs of one run cost one
-re-run rather than two budget slots, and it is bounded by the 30-minute
-expiry rather than by a cap.</p>
-<p>Classic tier only, matching Q683: the scale-set tier does not force-cancel, so
-it has no cancelled conclusion to re-run.</p>
+<p>An <code>AbandonedRerunSweeper</code> (<code>manager.Runnable</code>, per replica, like <code>EvictionSweeper</code>) polls the pending set every 30 s.
+The registry is in-memory and keyed by owner plus <code>run_id</code>, so two abandoned jobs of one run cost one re-run rather than two budget slots, and it is bounded by the 30-minute expiry rather than by a cap.</p>
+<p>Classic tier only, matching Q683: the scale-set tier does not force-cancel, so it has no cancelled conclusion to re-run.</p>
 <h3 id="what-is-tested-and-how-the-bound-is-proven">What is tested, and how the bound is proven<a class="headerlink" href="#what-is-tested-and-how-the-bound-is-proven" title="Permanent link">&para;</a></h3>
-<p><code>abandoned_rerun_internal_test.go</code>, unit tier: the sweeper's pass is driven
-directly against a fake pod client and a counting <code>rerun-failed-jobs</code> stub.</p>
-<p>The bound is the part worth being careful about. An aggregate call count cannot
-show a per-run budget binding, because one run looping can produce every call
-on its own, so the loop test runs <strong>two distinct runs</strong> through repeated
-abandon-and-recover cycles and asserts the re-run count <strong>per run id</strong>, taken
-from the stub's own per-path tally. Run A exhausting its budget must leave run
-B's intact. Deleting the <code>reserveEvictionRetry</code> call turns the per-run counts
-from <code>maxRetries</code> into the full cycle count, which is the red the test exists
-to produce.</p>
+<p><code>abandoned_rerun_internal_test.go</code>, unit tier: the sweeper's pass is driven directly against a fake pod client and a counting <code>rerun-failed-jobs</code> stub.</p>
+<p>The bound is the part worth being careful about.
+An aggregate call count cannot show a per-run budget binding, because one run looping can produce every call on its own, so the loop test runs <strong>two distinct runs</strong> through repeated abandon-and-recover cycles and asserts the re-run count <strong>per run id</strong>, taken from the stub's own per-path tally.
+Run A exhausting its budget must leave run B's intact.
+Deleting the <code>reserveEvictionRetry</code> call turns the per-run counts from <code>maxRetries</code> into the full cycle count, which is the red the test exists to produce.</p>
 
 
 

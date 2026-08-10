@@ -2609,18 +2609,11 @@
 
 
 <h1 id="q205--well-known-label--metricspan-naming-audit">Q205 — Well-known label + metric/span naming audit<a class="headerlink" href="#q205--well-known-label--metricspan-naming-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> before the v2beta1 API freeze, make GAG "feel native" to the
-Kubernetes ecosystem by (1) stamping the recommended <code>app.kubernetes.io/*</code> labels
-on every object GAG creates and (2) aligning metric/span names to the
-Prometheus / OpenTelemetry conventions. Names become load-bearing once operators
-build selectors and dashboards on them, so renames are cheap now and breaking
-later.</p>
+<p><strong>Goal:</strong> before the v2beta1 API freeze, make GAG "feel native" to the Kubernetes ecosystem by (1) stamping the recommended <code>app.kubernetes.io/*</code> labels on every object GAG creates and (2) aligning metric/span names to the Prometheus / OpenTelemetry conventions.
+Names become load-bearing once operators build selectors and dashboards on them, so renames are cheap now and breaking later.</p>
 <h2 id="part-1--recommended-labels">Part 1 — recommended labels<a class="headerlink" href="#part-1--recommended-labels" title="Permanent link">&para;</a></h2>
-<p>Shared helper: <code>api/apilabels</code> (neutral module imported by both GMC and AGC) —
-<code>apilabels.Recommended(name, instance, component, version, managedBy)</code> and
-<code>apilabels.Merge(dst, …)</code>. The <code>app.kubernetes.io/*</code> set is <strong>additive metadata</strong>;
-existing functional selector labels (<code>app:</code>, <code>actions-gateway/component: workload</code>,
-the v2 per-gateway identity labels) are preserved untouched.</p>
+<p>Shared helper: <code>api/apilabels</code> (neutral module imported by both GMC and AGC) — <code>apilabels.Recommended(name, instance, component, version, managedBy)</code> and <code>apilabels.Merge(dst, …)</code>.
+The <code>app.kubernetes.io/*</code> set is <strong>additive metadata</strong>; existing functional selector labels (<code>app:</code>, <code>actions-gateway/component: workload</code>, the v2 per-gateway identity labels) are preserved untouched.</p>
 <p>Canonical values:</p>
 <table>
 <thead>
@@ -2670,17 +2663,13 @@ the v2 per-gateway identity labels) are preserved untouched.</p>
 </tr>
 </tbody>
 </table>
-<p><code>version</code> is set only where a stable, meaningful value exists: the runner version
-on worker pods and their job Secrets. Versionless infra (RBAC, NetworkPolicies,
-Services, TLS Secrets) and control-plane objects (no controller build-version is
-plumbed to the GMC/AGC at object-build time; <code>"dev"</code> is meaningless) omit it.</p>
-<p>Coverage: GMC v1 + v2 builders (SA, RBAC, NetworkPolicy, Service, ServiceMonitor,
-Deployment + pod template, Secret, PDB, HPA, RunnerGroup, EgressProxy children) and
-the AGC provisioner (worker pod + job Secret).</p>
+<p><code>version</code> is set only where a stable, meaningful value exists: the runner version on worker pods and their job Secrets.
+Versionless infra (RBAC, NetworkPolicies, Services, TLS Secrets) and control-plane objects (no controller build-version is plumbed to the GMC/AGC at object-build time; <code>"dev"</code> is meaningless) omit it.</p>
+<p>Coverage: GMC v1 + v2 builders (SA, RBAC, NetworkPolicy, Service, ServiceMonitor, Deployment + pod template, Secret, PDB, HPA, RunnerGroup, EgressProxy children) and the AGC provisioner (worker pod + job Secret).</p>
 <h2 id="part-2--metric--span-naming">Part 2 — metric / span naming<a class="headerlink" href="#part-2--metric--span-naming" title="Permanent link">&para;</a></h2>
-<p><strong>Metrics</strong> are already largely conformant (every counter ends <code>_total</code>; every
-histogram carries the <code>_seconds</code> base unit; gauges are sensibly named). Audited all
-21 <code>actions_gateway_*</code> series. One genuine snake_case fix:</p>
+<p><strong>Metrics</strong> are already largely conformant (every counter ends <code>_total</code>; every histogram carries the <code>_seconds</code> base unit; gauges are sensibly named).
+Audited all 21 <code>actions_gateway_*</code> series.
+One genuine snake_case fix:</p>
 <table>
 <thead>
 <tr>
@@ -2695,15 +2684,9 @@ histogram carries the <code>_seconds</code> base unit; gauges are sensibly named
 </tr>
 </tbody>
 </table>
-<p><code>pod_creation_latency_seconds</code> was considered for <code>…_duration_seconds</code> (sibling of
-<code>job_duration_seconds</code>) but kept: <code>latency</code> is a recognised Prometheus term, the
-metric already carries its base unit, and the rename's blast radius (two Grafana
-dashboards, recording-rule names that bake in <code>latency</code>, the SLO appendix) is large
-for a synonym swap.</p>
-<p><strong>Spans/attributes</strong> — span names already describe operations at low cardinality
-(kept). Attributes aligned to OTel semconv: k8s-native attributes now use the
-<code>k8s.*</code> semconv keys, and the remaining custom attributes are consistently
-namespaced under <code>gateway.</code>:</p>
+<p><code>pod_creation_latency_seconds</code> was considered for <code>…_duration_seconds</code> (sibling of <code>job_duration_seconds</code>) but kept: <code>latency</code> is a recognised Prometheus term, the metric already carries its base unit, and the rename's blast radius (two Grafana dashboards, recording-rule names that bake in <code>latency</code>, the SLO appendix) is large for a synonym swap.</p>
+<p><strong>Spans/attributes</strong> — span names already describe operations at low cardinality (kept).
+Attributes aligned to OTel semconv: k8s-native attributes now use the <code>k8s.*</code> semconv keys, and the remaining custom attributes are consistently namespaced under <code>gateway.</code>:</p>
 <table>
 <thead>
 <tr>
@@ -2758,13 +2741,11 @@ namespaced under <code>gateway.</code>:</p>
 </tr>
 </tbody>
 </table>
-<p>All metric/span renames are documented as breaking observability changes in
-<code>docs/operations/observability.md</code> with the old→new mapping.</p>
+<p>All metric/span renames are documented as breaking observability changes in <code>docs/operations/observability.md</code> with the old→new mapping.</p>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>make check</code> (gofmt, golangci-lint, shellcheck, STATUS lint, unit tests).</li>
-<li>envtest assertions on created-object labels (label presence is real-apiserver
-  observable) in the GMC + AGC integration suites.</li>
+<li>envtest assertions on created-object labels (label presence is real-apiserver observable) in the GMC + AGC integration suites.</li>
 </ul>
 
 

@@ -2620,14 +2620,14 @@
 
 
 <h1 id="q168--v2-direct-egress-optional-proxy-behavior">Q168 — v2 direct egress (optional-proxy behavior)<a class="headerlink" href="#q168--v2-direct-egress-optional-proxy-behavior" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> make the v2 egress proxy genuinely optional — no <code>defaultProxyRef</code>/<code>proxyRef</code>
-⇒ <strong>direct egress</strong> (still NetworkPolicy-restricted), not <code>Degraded</code>/<code>ProxyNotFound</code>.</p>
-<p>Design: appendix-h §H.10 + §H.4. Plan slice: <code>docs/plan/v2-api.md</code> § "Direct egress".</p>
+<p><strong>Goal:</strong> make the v2 egress proxy genuinely optional — no <code>defaultProxyRef</code>/<code>proxyRef</code> ⇒ <strong>direct egress</strong> (still NetworkPolicy-restricted), not <code>Degraded</code>/<code>ProxyNotFound</code>.</p>
+<p>Design: appendix-h §H.10 + §H.4.
+Plan slice: <code>docs/plan/v2-api.md</code> § "Direct egress".</p>
 <h2 id="secure-by-default-guardrail-the-whole-point">Secure-by-default guardrail (the whole point)<a class="headerlink" href="#secure-by-default-guardrail-the-whole-point" title="Permanent link">&para;</a></h2>
-<p>Dropping the proxy drops egress <strong>identity</strong> (per-tenant IP attribution), NOT egress
-<strong>restriction</strong>. Direct egress is still default-deny egress + allow only <strong>DNS + GitHub
-CIDRs</strong> (+ <strong>kube API</strong> for the AGC control plane). There is no proxy-less <em>unrestricted</em>
-mode. Identity becomes the opt-in (add a proxy); restriction stays mandatory/default-on.</p>
+<p>Dropping the proxy drops egress <strong>identity</strong> (per-tenant IP attribution), NOT egress <strong>restriction</strong>.
+Direct egress is still default-deny egress + allow only <strong>DNS + GitHub CIDRs</strong> (+ <strong>kube API</strong> for the AGC control plane).
+There is no proxy-less <em>unrestricted</em> mode.
+Identity becomes the opt-in (add a proxy); restriction stays mandatory/default-on.</p>
 <h2 id="behavior-matrix">Behavior matrix<a class="headerlink" href="#behavior-matrix" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2660,22 +2660,18 @@ mode. Identity becomes the opt-in (add a proxy); restriction stays mandatory/def
 </tr>
 </tbody>
 </table>
-<p>A Direct RunnerSet always sits under a Direct gateway (defaultProxyRef nil), so the
-GMC-provisioned workload NetworkPolicy (gateway-scoped) already carries the GitHub-CIDR
-egress the direct worker needs — the two are consistent by construction. Mixed case
-(Direct gateway + a RunnerSet with its own proxyRef): the workload NP allows GitHub CIDRs,
-so that proxied worker <em>could</em> reach GitHub directly — a best-effort attribution caveat,
-documented; restriction is still preserved.</p>
+<p>A Direct RunnerSet always sits under a Direct gateway (defaultProxyRef nil), so the GMC-provisioned workload NetworkPolicy (gateway-scoped) already carries the GitHub-CIDR egress the direct worker needs — the two are consistent by construction.
+Mixed case (Direct gateway + a RunnerSet with its own proxyRef): the workload NP allows GitHub CIDRs, so that proxied worker <em>could</em> reach GitHub directly — a best-effort attribution caveat, documented; restriction is still preserved.</p>
 <h2 id="work-items">Work items<a class="headerlink" href="#work-items" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>API (<code>api/v2alpha1</code>)</strong></li>
-<li><code>conditions.go</code>: <code>ProxyModeProxied</code>/<code>ProxyModeDirect</code>; <code>ConditionEgressUnattributed</code>
-     (advisory, abnormal-is-True, does NOT gate Ready); <code>ReasonDirectEgress</code>/<code>ReasonProxiedEgress</code>.</li>
+<li><code>conditions.go</code>: <code>ProxyModeProxied</code>/<code>ProxyModeDirect</code>; <code>ConditionEgressUnattributed</code> (advisory, abnormal-is-True, does NOT gate Ready); <code>ReasonDirectEgress</code>/<code>ReasonProxiedEgress</code>.</li>
 <li><code>actionsgateway_types.go</code> + <code>runnerset_types.go</code>: <code>ProxyMode string</code> in status + printcolumn.</li>
 <li>Regenerate deepcopy + CRDs (<code>make generate manifests</code> per code-generation.md).</li>
 <li><strong>GMC <code>ActionsGatewayV2Reconciler</code></strong></li>
 <li>Inject <code>IPCache *IPRangeCache</code>.</li>
-<li><code>defaultProxyRef == nil</code> ⇒ direct (don't fail closed). Set ⇒ proxied; missing set ref still fail-closed ProxyNotFound.</li>
+<li><code>defaultProxyRef == nil</code> ⇒ direct (don't fail closed).
+     Set ⇒ proxied; missing set ref still fail-closed ProxyNotFound.</li>
 <li><code>reconcileResources(proxy *EgressProxy)</code> (nil = direct):<ul>
 <li>AGC NP + workload NP gain GitHub-CIDR egress in direct mode (from IPCache snapshot).</li>
 <li>AGC Deployment: direct ⇒ no HTTP(S)_PROXY/PROXY_TLS_SECRET_NAME env, no proxy-CA mount.</li>
@@ -2688,32 +2684,20 @@ documented; restriction is still preserved.</p>
 <li><code>resolveRunnerSetRefs</code>: proxyName "" ⇒ resolved with <code>proxy == nil</code> (direct), not ProxyNotFound.</li>
 <li><code>Resolve</code>: nil proxy ⇒ empty HTTP(S)Proxy/ProxyTLSSecretName ⇒ direct worker egress.</li>
 <li>Reconcile: set <code>ProxyMode</code> + <code>EgressUnattributed</code> on the RunnerSet status.</li>
-<li><strong>IP refresh relocation (<code>ipranges.go</code>)</strong>: in <code>reconcileAll</code>, also patch each Direct v2
-   <code>ActionsGateway</code>'s AGC NP + workload NP GitHub-CIDR egress (new <code>patchDirectEgressNetworkPolicies</code>).
+<li><strong>IP refresh relocation (<code>ipranges.go</code>)</strong>: in <code>reconcileAll</code>, also patch each Direct v2 <code>ActionsGateway</code>'s AGC NP + workload NP GitHub-CIDR egress (new <code>patchDirectEgressNetworkPolicies</code>).
    Proxied gateways/EgressProxy path unchanged.</li>
-<li><strong>Docs</strong>: appendix-h (drop "deferred", direct egress shipped); <code>docs/operations/tenant-onboarding.md</code>
-   (proxy-less option + IP-attribution trade + egress still restricted); <code>05-security.md</code>
-   (secure-by-default line); troubleshooting if warranted. STATUS.md: remove Q168 deferred row (own commit).</li>
+<li><strong>Docs</strong>: appendix-h (drop "deferred", direct egress shipped); <code>docs/operations/tenant-onboarding.md</code> (proxy-less option + IP-attribution trade + egress still restricted); <code>05-security.md</code> (secure-by-default line); troubleshooting if warranted.
+   STATUS.md: remove Q168 deferred row (own commit).</li>
 </ol>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <ul>
-<li>GMC envtest (<code>integration/</code>): proxy-less gateway → Ready, AGC NP + workload NP have GitHub-CIDR
-  egress, <code>proxyMode: Direct</code> + EgressUnattributed; proxied regression; IP-refresh patches direct NPs.</li>
-<li>AGC envtest (<code>integration/</code>): proxy-less RunnerSet → Ready, <code>proxyMode: Direct</code> + EgressUnattributed;
-  proxied regression. Unit tests for builders + resolve.</li>
-<li>e2e (proxy-less job→pod→direct→GitHub, non-GitHub blocked): <strong>shipped (Q178)</strong>.
-  <code>E2E_V2_DirectEgress</code> (<code>cmd/gmc/test/e2e/direct_egress_test.go</code>) provisions a
-  proxy-less gateway + RunnerSet on kind and proves both halves of the §H.10 contract
-  live on a CNI:</li>
-<li><strong>Positive (both CNI legs):</strong> a workload-labelled pod reaches <code>api.github.com</code>
-    directly — no proxy in the path — confirming the workload NP's GitHub-CIDR
-    allowance lets proxy-less workers egress to GitHub.</li>
-<li><strong>Negative (Calico leg only):</strong> from the same workload network context a
-    connection to a non-GitHub destination (fakegithub in <code>e2e-infra</code>) is dropped by
-    the default-deny egress NetworkPolicy. Self-skips on kindnet via
-    <code>egressEnforcingCNI()</code> — kindnet accepts NetworkPolicy but does not enforce egress
-    drops (Q7b/Q119), so the block can only be proven on the Calico lane
-    (<code>e2e-calico.yml</code>, triggered per-PR on <code>cmd/gmc/**</code>).</li>
+<li>GMC envtest (<code>integration/</code>): proxy-less gateway → Ready, AGC NP + workload NP have GitHub-CIDR egress, <code>proxyMode: Direct</code> + EgressUnattributed; proxied regression; IP-refresh patches direct NPs.</li>
+<li>AGC envtest (<code>integration/</code>): proxy-less RunnerSet → Ready, <code>proxyMode: Direct</code> + EgressUnattributed; proxied regression.
+  Unit tests for builders + resolve.</li>
+<li>e2e (proxy-less job→pod→direct→GitHub, non-GitHub blocked): <strong>shipped (Q178)</strong>. <code>E2E_V2_DirectEgress</code> (<code>cmd/gmc/test/e2e/direct_egress_test.go</code>) provisions a proxy-less gateway + RunnerSet on kind and proves both halves of the §H.10 contract live on a CNI:</li>
+<li><strong>Positive (both CNI legs):</strong> a workload-labelled pod reaches <code>api.github.com</code> directly — no proxy in the path — confirming the workload NP's GitHub-CIDR allowance lets proxy-less workers egress to GitHub.</li>
+<li><strong>Negative (Calico leg only):</strong> from the same workload network context a connection to a non-GitHub destination (fakegithub in <code>e2e-infra</code>) is dropped by the default-deny egress NetworkPolicy.
+    Self-skips on kindnet via <code>egressEnforcingCNI()</code> — kindnet accepts NetworkPolicy but does not enforce egress drops (Q7b/Q119), so the block can only be proven on the Calico lane (<code>e2e-calico.yml</code>, triggered per-PR on <code>cmd/gmc/**</code>).</li>
 </ul>
 
 

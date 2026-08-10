@@ -2708,9 +2708,14 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer</p>
 </blockquote>
-<p>Part of the <a href="../observability/">Observability</a> guide. The metrics referenced below are catalogued in the <a href="../observability-metrics/">Metrics reference</a>; to scrape them, see <a href="../observability-metrics-access/">Accessing metrics</a>. For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a>.</p>
+<p>Part of the <a href="../observability/">Observability</a> guide.
+The metrics referenced below are catalogued in the <a href="../observability-metrics/">Metrics reference</a>; to scrape them, see <a href="../observability-metrics-access/">Accessing metrics</a>.
+For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a>.</p>
 <blockquote>
-<p><strong>The duration and latency series are classic-only, so the rules built on them are silent on the default tier.</strong> <code>actions_gateway_pod_creation_latency_seconds</code> and <code>actions_gateway_job_duration_seconds</code> are observed only on the classic acquisition path. On a <code>ScaleSet</code> set, the default since P5, both are absent, so <code>ActionsGatewayPodCreationLatencyP99</code>, <code>ActionsGatewayPodCreationLatencyP95</code> and the four <code>actions_gateway:*</code> recording rules below never fire and their panels read blank. Treat that silence as a missing signal rather than a healthy one. Tracked by Q713; scope is catalogued in the <a href="../observability-metrics/">Metrics reference</a>.</p>
+<p><strong>The duration and latency series are classic-only, so the rules built on them are silent on the default tier.</strong> <code>actions_gateway_pod_creation_latency_seconds</code> and <code>actions_gateway_job_duration_seconds</code> are observed only on the classic acquisition path.
+On a <code>ScaleSet</code> set, the default since P5, both are absent, so <code>ActionsGatewayPodCreationLatencyP99</code>, <code>ActionsGatewayPodCreationLatencyP95</code> and the four <code>actions_gateway:*</code> recording rules below never fire and their panels read blank.
+Treat that silence as a missing signal rather than a healthy one.
+Tracked by Q713; scope is catalogued in the <a href="../observability-metrics/">Metrics reference</a>.</p>
 </blockquote>
 <h2 id="symptom--metric-mapping">Symptom → Metric Mapping<a class="headerlink" href="#symptom--metric-mapping" title="Permanent link">&para;</a></h2>
 <table>
@@ -2832,17 +2837,14 @@
 <hr />
 <h2 id="recommended-alert-rules">Recommended Alert Rules<a class="headerlink" href="#recommended-alert-rules" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Apply as code.</strong> These rules — and the <a href="#slo-recording-rules">SLO recording rules</a> below — ship as a directly-appliable <code>PrometheusRule</code> at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml"><code>deploy/monitoring/prometheusrule.yaml</code></a>. <code>kubectl apply</code> it into a namespace your Prometheus selects rules from instead of copying the YAML below by hand (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/README.md</code></a>). The blocks here are the same rules, reproduced for reference.</p>
+<p><strong>Apply as code.</strong> These rules — and the <a href="#slo-recording-rules">SLO recording rules</a> below — ship as a directly-appliable <code>PrometheusRule</code> at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml"><code>deploy/monitoring/prometheusrule.yaml</code></a>. <code>kubectl apply</code> it into a namespace your Prometheus selects rules from instead of copying the YAML below by hand (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/README.md</code></a>).
+The blocks here are the same rules, reproduced for reference.</p>
 </blockquote>
-<p>The following Prometheus alerting rules map to the SLO targets in <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>. Adjust thresholds to match your environment.</p>
+<p>The following Prometheus alerting rules map to the SLO targets in <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>.
+Adjust thresholds to match your environment.</p>
 <blockquote>
-<p><strong>The three worker-capacity alerts fire for both owners.</strong> Each <code>or</code>s the v1
-<code>RunnerGroup</code> gauge with its <code>actions_gateway_runnerset_*</code> v2 twin (Q319), because the
-two are separate metric families keyed on <code>runner_group</code> and <code>runner_set</code> respectively
-— an alert naming only the v1 family never fires on a v2-only deploy. Their summaries
-print <code>{{ $labels.runner_group }}{{ $labels.runner_set }}</code> for the same reason: a given
-series carries exactly one of the two, so concatenating names the owner without needing
-a separate rule per kind.</p>
+<p><strong>The three worker-capacity alerts fire for both owners.</strong> Each <code>or</code>s the v1 <code>RunnerGroup</code> gauge with its <code>actions_gateway_runnerset_*</code> v2 twin (Q319), because the two are separate metric families keyed on <code>runner_group</code> and <code>runner_set</code> respectively — an alert naming only the v1 family never fires on a v2-only deploy.
+Their summaries print <code>{{ $labels.runner_group }}{{ $labels.runner_set }}</code> for the same reason: a given series carries exactly one of the two, so concatenating names the owner without needing a separate rule per kind.</p>
 </blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">groups</span><span class="p">:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway</span>
@@ -3125,7 +3127,8 @@ a separate rule per kind.</p>
 </code></pre></div>
 <hr />
 <h2 id="slo-recording-rules">SLO Recording Rules<a class="headerlink" href="#slo-recording-rules" title="Permanent link">&para;</a></h2>
-<p>These recording rules pre-compute the metrics needed for burn-rate alerting against the SLO targets in <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>. Apply them alongside the alert rules above.</p>
+<p>These recording rules pre-compute the metrics needed for burn-rate alerting against the SLO targets in <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>.
+Apply them alongside the alert rules above.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">groups</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway-slos</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>

@@ -2693,11 +2693,8 @@
 
 <h1 id="worker-egress-via-the-per-tenant-proxy-pool">Worker Egress via the Per-Tenant Proxy Pool<a class="headerlink" href="#worker-egress-via-the-per-tenant-proxy-pool" title="Permanent link">&para;</a></h1>
 <h2 id="statement-of-the-design-choice">Statement of the design choice<a class="headerlink" href="#statement-of-the-design-choice" title="Permanent link">&para;</a></h2>
-<p>Worker pod traffic to GitHub — image pulls (when proxied), action source
-downloads, artifact uploads, and the long-lived Twirp log stream — routes
-through the same per-tenant HTTPS <code>CONNECT</code> proxy pool that carries AGC
-control-plane calls. Worker pods are not permitted to egress directly to
-GitHub CIDRs.</p>
+<p>Worker pod traffic to GitHub — image pulls (when proxied), action source downloads, artifact uploads, and the long-lived Twirp log stream — routes through the same per-tenant HTTPS <code>CONNECT</code> proxy pool that carries AGC control-plane calls.
+Worker pods are not permitted to egress directly to GitHub CIDRs.</p>
 <p>This is documented in:</p>
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md">README.md</a>, "Tier 3 — Egress Proxy Pool"</li>
@@ -2705,40 +2702,24 @@ GitHub CIDRs.</p>
 <li><a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">docs/design/02-architecture.md §2.3</a></li>
 <li><a href="../../design/network-architecture/">docs/design/network-architecture.md</a></li>
 </ul>
-<p>This plan exists to make the choice explicit, record the tradeoffs that
-were weighed, and track the implementation gap that currently allows
-workers to bypass the path.</p>
+<p>This plan exists to make the choice explicit, record the tradeoffs that were weighed, and track the implementation gap that currently allows workers to bypass the path.</p>
 <hr />
 <h2 id="why-route-worker-traffic-through-the-proxy">Why route worker traffic through the proxy<a class="headerlink" href="#why-route-worker-traffic-through-the-proxy" title="Permanent link">&para;</a></h2>
-<p>The per-tenant egress-IP guarantee is the differentiating feature that
-distinguishes this gateway from ARC and KEDA-based alternatives
-(see <a href="../../design/appendix-d-alternatives-considered/">Appendix D</a>). It is
-only a coherent claim if <em>all</em> GitHub-bound traffic — not just AGC API
-calls — appears at GitHub from the per-tenant proxy IPs.</p>
+<p>The per-tenant egress-IP guarantee is the differentiating feature that distinguishes this gateway from ARC and KEDA-based alternatives (see <a href="../../design/appendix-d-alternatives-considered/">Appendix D</a>).
+It is only a coherent claim if <em>all</em> GitHub-bound traffic — not just AGC API calls — appears at GitHub from the per-tenant proxy IPs.</p>
 <p>Four downstream capabilities depend on this:</p>
 <ol>
-<li><strong>GitHub-side IP allowlisting.</strong> GHES and the GitHub App allowlist
-   feature filter inbound requests by source IP. If worker traffic egresses
-   from node IPs that are shared across tenants and not stable across pod
-   reschedules, the allowlist either rejects legitimate traffic or has to
-   be broadened to "any node IP in the cluster" — defeating the control.</li>
-<li><strong>Per-tenant audit attribution.</strong> GitHub's audit log groups requests
-   by source IP. Direct-from-worker egress attributes job traffic to the
-   node, not the tenant.</li>
-<li><strong>GitHub-side incident containment.</strong> A rate limit, abuse flag, or IP
-   ban issued by GitHub against one tenant's egress IPs only affects that
-   tenant. With shared node IPs, a flag on one tenant's IPs can
-   collaterally affect any other tenant whose workers happen to land on
-   the same node.</li>
-<li><strong>Per-tenant kill-switch.</strong> To halt one tenant's egress in an
-   incident, draining the proxy pool is one operation. Without proxy
-   egress, the same outcome requires per-tenant NetworkPolicy edits or
-   node-level controls — slower and easier to get wrong under pressure.</li>
+<li><strong>GitHub-side IP allowlisting.</strong> GHES and the GitHub App allowlist feature filter inbound requests by source IP.
+   If worker traffic egresses from node IPs that are shared across tenants and not stable across pod reschedules, the allowlist either rejects legitimate traffic or has to be broadened to "any node IP in the cluster" — defeating the control.</li>
+<li><strong>Per-tenant audit attribution.</strong> GitHub's audit log groups requests by source IP.
+   Direct-from-worker egress attributes job traffic to the node, not the tenant.</li>
+<li><strong>GitHub-side incident containment.</strong> A rate limit, abuse flag, or IP ban issued by GitHub against one tenant's egress IPs only affects that tenant.
+   With shared node IPs, a flag on one tenant's IPs can collaterally affect any other tenant whose workers happen to land on the same node.</li>
+<li><strong>Per-tenant kill-switch.</strong> To halt one tenant's egress in an incident, draining the proxy pool is one operation.
+   Without proxy egress, the same outcome requires per-tenant NetworkPolicy edits or node-level controls — slower and easier to get wrong under pressure.</li>
 </ol>
-<p>These are not security boundaries against a compromised worker (the
-installation token already scopes that). They are network-attribution
-properties that turn into compliance, billing, and operability
-properties.</p>
+<p>These are not security boundaries against a compromised worker (the installation token already scopes that).
+They are network-attribution properties that turn into compliance, billing, and operability properties.</p>
 <hr />
 <h2 id="tradeoffs-evaluated">Tradeoffs evaluated<a class="headerlink" href="#tradeoffs-evaluated" title="Permanent link">&para;</a></h2>
 <table>
@@ -2770,199 +2751,102 @@ properties.</p>
 </table>
 <p>The proxy-via path was chosen because:</p>
 <ul>
-<li>The CONNECT proxy does <em>not</em> terminate TLS; it forwards bytes between
-  two TCP sockets. Per-byte CPU cost is low. A <code>c5.large</code>-equivalent pod
-  can sustain low-multiple-Gbps of CONNECT traffic — well within the
-  bandwidth a single tenant's concurrent workers would generate, given
-  GitHub's own per-installation rate caps.</li>
-<li>The HPA scales proxy replicas on CPU; bursty worker upload traffic
-  drives replica count up automatically. Bandwidth scales with replica
-  count and node NIC capacity.</li>
-<li>Worker traffic patterns are dominated by long-lived flows (artifact
-  upload, log stream) rather than per-call latency. Adding one in-cluster
-  TCP hop is negligible compared to the wide-area RTT to GitHub.</li>
-<li>A proxy outage is rare; node anti-affinity, PDB, and HPA <code>minReplicas: 2</code>
-  give multi-node redundancy.</li>
+<li>The CONNECT proxy does <em>not</em> terminate TLS; it forwards bytes between two TCP sockets.
+  Per-byte CPU cost is low.
+  A <code>c5.large</code>-equivalent pod can sustain low-multiple-Gbps of CONNECT traffic — well within the bandwidth a single tenant's concurrent workers would generate, given GitHub's own per-installation rate caps.</li>
+<li>The HPA scales proxy replicas on CPU; bursty worker upload traffic drives replica count up automatically.
+  Bandwidth scales with replica count and node NIC capacity.</li>
+<li>Worker traffic patterns are dominated by long-lived flows (artifact upload, log stream) rather than per-call latency.
+  Adding one in-cluster TCP hop is negligible compared to the wide-area RTT to GitHub.</li>
+<li>A proxy outage is rare; node anti-affinity, PDB, and HPA <code>minReplicas: 2</code> give multi-node redundancy.</li>
 </ul>
 <p>Counter-arguments considered:</p>
 <ul>
-<li><em>"Workers should be self-contained so an AGC/proxy outage doesn't kill
-  running jobs."</em> — Valid for in-flight jobs only; new jobs already
-  depend on the AGC. The marginal availability gain from bypassing the
-  proxy for in-flight workers does not outweigh the network-attribution
-  loss for <em>all</em> worker traffic.</li>
-<li><em>"Image pulls don't need to go through the proxy."</em> — They don't go
-  through the proxy in this design; image pulls are performed by the
-  kubelet using cluster-default networking, not by the worker pod's
-  process. This document covers <em>worker process</em> egress to GitHub: action
-  source downloads, artifact uploads, log streams, and any
-  workflow-initiated <code>curl</code>/<code>git</code>/SDK call.</li>
+<li><em>"Workers should be self-contained so an AGC/proxy outage doesn't kill running jobs."</em> — Valid for in-flight jobs only; new jobs already depend on the AGC.
+  The marginal availability gain from bypassing the proxy for in-flight workers does not outweigh the network-attribution loss for <em>all</em> worker traffic.</li>
+<li><em>"Image pulls don't need to go through the proxy."</em> — They don't go through the proxy in this design; image pulls are performed by the kubelet using cluster-default networking, not by the worker pod's process.
+  This document covers <em>worker process</em> egress to GitHub: action source downloads, artifact uploads, log streams, and any workflow-initiated <code>curl</code>/<code>git</code>/SDK call.</li>
 </ul>
 <hr />
 <h2 id="capacity-sizing">Capacity sizing<a class="headerlink" href="#capacity-sizing" title="Permanent link">&para;</a></h2>
-<p>Worker egress is the dominant load on the proxy pool. Sizing must
-account for:</p>
+<p>Worker egress is the dominant load on the proxy pool.
+Sizing must account for:</p>
 <ul>
-<li><strong>Concurrent workers per tenant.</strong> Bounded by <code>RunnerGroup.maxWorkers</code>
-  and namespace <code>ResourceQuota</code>. Each worker holds at minimum one
-  long-lived HTTP/2 connection to the Twirp Results Service for log
-  streaming, plus burst connections for artifact uploads and action
-  downloads.</li>
-<li><strong>Per-worker peak bandwidth.</strong> ML and data jobs commonly upload
-  multi-GB checkpoints. Assume up to ~1 Gbps per active worker as a
-  planning ceiling for bandwidth-intensive RunnerGroups (typically GPU).</li>
-<li><strong>Aggregate node NIC capacity.</strong> Proxy replicas are spread across
-  nodes; aggregate proxy bandwidth is bounded by <code>replicas × per-node NIC
-  available bandwidth</code>. A 25 Gbps node with anti-affinity-spread proxies
-  rarely becomes the bottleneck.</li>
-<li><strong>HPA reaction time.</strong> CPU utilization is a <em>coarse</em> signal for CONNECT
-  load. Under bursty upload patterns the HPA may lag by 30–60 s. The v2
-  upgrade path is <code>active_connections</code> exposed via prometheus-adapter; the
-  v1 implementation accepts the lag in exchange for not requiring a
-  metrics-server extension.</li>
+<li><strong>Concurrent workers per tenant.</strong> Bounded by <code>RunnerGroup.maxWorkers</code> and namespace <code>ResourceQuota</code>.
+  Each worker holds at minimum one long-lived HTTP/2 connection to the Twirp Results Service for log streaming, plus burst connections for artifact uploads and action downloads.</li>
+<li><strong>Per-worker peak bandwidth.</strong> ML and data jobs commonly upload multi-GB checkpoints.
+  Assume up to ~1 Gbps per active worker as a planning ceiling for bandwidth-intensive RunnerGroups (typically GPU).</li>
+<li><strong>Aggregate node NIC capacity.</strong> Proxy replicas are spread across nodes; aggregate proxy bandwidth is bounded by <code>replicas × per-node NIC available bandwidth</code>.
+  A 25 Gbps node with anti-affinity-spread proxies rarely becomes the bottleneck.</li>
+<li><strong>HPA reaction time.</strong> CPU utilization is a <em>coarse</em> signal for CONNECT load.
+  Under bursty upload patterns the HPA may lag by 30–60 s.
+  The v2 upgrade path is <code>active_connections</code> exposed via prometheus-adapter; the v1 implementation accepts the lag in exchange for not requiring a metrics-server extension.</li>
 </ul>
-<p>Default <code>proxy.minReplicas: 2</code>, <code>maxReplicas: 10</code>, <code>targetCPUUtilizationPercentage: 60</code>
-covers small-to-medium tenants. Heavy GPU tenants should raise
-<code>maxReplicas</code> in their <code>ActionsGateway</code> spec and verify the HPA reaches
-steady state below saturation under their representative workload.</p>
-<p>See <a href="../../design/appendix-a-capacity-slos/">Appendix A</a> and
-<a href="../../design/appendix-e-capacity-planning/">Appendix E</a> for the full
-capacity model.</p>
+<p>Default <code>proxy.minReplicas: 2</code>, <code>maxReplicas: 10</code>, <code>targetCPUUtilizationPercentage: 60</code> covers small-to-medium tenants.
+Heavy GPU tenants should raise <code>maxReplicas</code> in their <code>ActionsGateway</code> spec and verify the HPA reaches steady state below saturation under their representative workload.</p>
+<p>See <a href="../../design/appendix-a-capacity-slos/">Appendix A</a> and <a href="../../design/appendix-e-capacity-planning/">Appendix E</a> for the full capacity model.</p>
 <hr />
 <h2 id="implementation-status">Implementation status<a class="headerlink" href="#implementation-status" title="Permanent link">&para;</a></h2>
 <p><strong>Done (2026-05-23, commit <code>4932ce7</code>).</strong></p>
-<p>The split shipped. <code>cmd/gmc/internal/controller/builder.go</code> now emits
-three NetworkPolicies:</p>
+<p>The split shipped. <code>cmd/gmc/internal/controller/builder.go</code> now emits three NetworkPolicies:</p>
 <ul>
-<li><code>buildProxyNetworkPolicy</code> (lines 112-157) — <code>podSelector: { app:
-  actions-gateway-proxy }</code>, egress = DNS + GitHub CIDRs:443, ingress
-  restricted to pods carrying <code>labelComponent: componentWorkload</code> on
-  <code>proxyPort</code>.</li>
-<li><code>buildWorkloadNetworkPolicy</code> (lines 159-188) — <code>podSelector</code> matching
-  AGC and worker labels, egress = DNS + proxy ClusterIP:<code>proxyPort</code>
-  only.</li>
-<li><code>buildAGCNetworkPolicy</code> (lines 190-223) — additive AGC-only policy
-  granting 443 for k8s API access. Worker pods are <em>not</em> selected by
-  this policy, so they cannot directly reach the API server or GitHub.</li>
+<li><code>buildProxyNetworkPolicy</code> (lines 112-157) — <code>podSelector: { app: actions-gateway-proxy }</code>, egress = DNS + GitHub CIDRs:443, ingress restricted to pods carrying <code>labelComponent: componentWorkload</code> on <code>proxyPort</code>.</li>
+<li><code>buildWorkloadNetworkPolicy</code> (lines 159-188) — <code>podSelector</code> matching AGC and worker labels, egress = DNS + proxy ClusterIP:<code>proxyPort</code> only.</li>
+<li><code>buildAGCNetworkPolicy</code> (lines 190-223) — additive AGC-only policy granting 443 for k8s API access.
+  Worker pods are <em>not</em> selected by this policy, so they cannot directly reach the API server or GitHub.</li>
 </ul>
-<p><code>patchNetworkPolicy</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">ipranges.go:193-204</a>
-only mutates <code>npProxyName</code>; the workload policy carrying the
-worker→proxy egress rule survives IP-range refreshes (closes <strong>M-9</strong>).
-The <code>labelComponent</code>/<code>componentWorkload</code> selector closes <strong>M-8</strong> — dev
-or debug pods in the namespace can no longer reach the proxy or AGC.</p>
+<p><code>patchNetworkPolicy</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">ipranges.go:193-204</a> only mutates <code>npProxyName</code>; the workload policy carrying the worker→proxy egress rule survives IP-range refreshes (closes <strong>M-9</strong>).
+The <code>labelComponent</code>/<code>componentWorkload</code> selector closes <strong>M-8</strong> — dev or debug pods in the namespace can no longer reach the proxy or AGC.</p>
 <h3 id="live-validation--done">Live validation — done<a class="headerlink" href="#live-validation--done" title="Permanent link">&para;</a></h3>
-<p>The e2e procedure in
-<a href="../../design/network-architecture/">docs/design/network-architecture.md "How to Validate Network Isolation"</a>
-runs as four cluster-only specs in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/provisioning_test.go"><code>cmd/gmc/test/e2e/provisioning_test.go</code></a>:</p>
+<p>The e2e procedure in <a href="../../design/network-architecture/">docs/design/network-architecture.md "How to Validate Network Isolation"</a> runs as four cluster-only specs in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/provisioning_test.go"><code>cmd/gmc/test/e2e/provisioning_test.go</code></a>:</p>
 <ul>
-<li><code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> — positive: a
-  workload-labelled curl pod CONNECTs through the per-tenant HTTPS proxy
-  to <code>https://api.github.com/zen</code> and asserts HTTP 200 + non-empty body.
-  Exercises kindnet workload-NP egress to the proxy pods, the proxy's
-  HTTPS+CONNECT path, the proxy egress NP's IP-range allowlist, and the
-  proxy TLS cert+SAN chain end-to-end.</li>
-<li><code>E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod</code> —
-  runtime negative: a workload-labelled curl pod attempting to reach the
-  fakegithub pod in another namespace (a real, reachable destination the
-  workload NP does not authorise) is observed dropped — no HTTP exchange,
-  curl connect timeout/refused — while an unlabelled control pod in the
-  same namespace reaches it, attributing the drop to NP enforcement.
+<li><code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> — positive: a workload-labelled curl pod CONNECTs through the per-tenant HTTPS proxy to <code>https://api.github.com/zen</code> and asserts HTTP 200 + non-empty body.
+  Exercises kindnet workload-NP egress to the proxy pods, the proxy's HTTPS+CONNECT path, the proxy egress NP's IP-range allowlist, and the proxy TLS cert+SAN chain end-to-end.</li>
+<li><code>E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod</code> — runtime negative: a workload-labelled curl pod attempting to reach the fakegithub pod in another namespace (a real, reachable destination the workload NP does not authorise) is observed dropped — no HTTP exchange, curl connect timeout/refused — while an unlabelled control pod in the same namespace reaches it, attributing the drop to NP enforcement.
   Requires an egress-enforcing CNI; self-skips on kindnet.</li>
-<li><code>E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI</code> — runtime
-  negative: a workload-labelled curl pod cannot complete a connection to
-  <code>kubernetes.default.svc</code> (worker pods are not selected by the AGC NP,
-  so they get no 443/6443 egress), with the same control-pod pattern.
+<li><code>E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI</code> — runtime negative: a workload-labelled curl pod cannot complete a connection to <code>kubernetes.default.svc</code> (worker pods are not selected by the AGC NP, so they get no 443/6443 egress), with the same control-pod pattern.
   Requires an egress-enforcing CNI; self-skips on kindnet.</li>
-<li><code>E2E_GMC_TenantProvisioning_WorkloadNPSpec</code> — authoring guard: asserts
-  the <em>shape</em> of the workload and AGC NetworkPolicies the GMC reconciles
-  into the tenant namespace. Locks the workload NP at exactly two
-  egress rules (DNS, port-8080 to the proxy <code>podSelector</code>), confirms the
-  AGC NP selects only pods labelled <code>app=actions-gateway-controller</code>,
-  and verifies the AGC NP egress lists both 443 and 6443 (the post-DNAT
-  port-axis trap documented in
-  <a href="../../development/networkpolicy-port-matching/"><code>networkpolicy-port-matching.md</code></a>).</li>
+<li><code>E2E_GMC_TenantProvisioning_WorkloadNPSpec</code> — authoring guard: asserts the <em>shape</em> of the workload and AGC NetworkPolicies the GMC reconciles into the tenant namespace.
+  Locks the workload NP at exactly two egress rules (DNS, port-8080 to the proxy <code>podSelector</code>), confirms the AGC NP selects only pods labelled <code>app=actions-gateway-controller</code>, and verifies the AGC NP egress lists both 443 and 6443 (the post-DNAT port-axis trap documented in <a href="../../development/networkpolicy-port-matching/"><code>networkpolicy-port-matching.md</code></a>).</li>
 </ul>
 <h3 id="runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11">Runtime negative-case enforcement: validated on Calico (Q7b, 2026-06-11)<a class="headerlink" href="#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11" title="Permanent link">&para;</a></h3>
-<p>kindnet's bundled <code>kube-network-policies</code> enforcer does <strong>not</strong> drop
-egress for the negative cases: two CI iterations observed successful
-HTTP exchanges from a workload-labelled pod to destinations the
-workload NP does not authorise (<code>curl --noproxy '*'
-https://api.github.com</code>, then the in-cluster <code>fakegithub:8080</code>
-equivalent). That is why CI's kindnet green was positive-case-only and
-the egress claim carried a docs caveat.</p>
-<p>The gap closed on 2026-06-11: on a kind cluster built with
-<code>make e2e-cluster KIND_CNI=calico</code> (Calico v3.31.5,
-<code>disableDefaultCNI</code>), the two runtime negative specs
-<code>E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod</code> and
-<code>E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI</code> were observed
-<strong>enforcing</strong> — the workload-labelled probe pods completed no HTTP
-exchange (<code>HTTP_CODE=000</code>, curl connect timeout) against both the
-cross-namespace pod and the kubernetes API, while unlabelled control
-pods in the same namespace reached both destinations — alongside a
-green <code>ProxyConnectWorks</code> positive on the same cluster (full
-provisioning container: 14/14 passed). The specs detect the CNI at
-runtime and skip themselves on kindnet, so the standard CI lane is
-unaffected; re-run the validation any time with the <code>KIND_CNI=calico</code>
-profile (see
-<a href="../../development/kind-iteration/#cni-selection-kindnet-default-vs-calico">kind-iteration.md</a>).
+<p>kindnet's bundled <code>kube-network-policies</code> enforcer does <strong>not</strong> drop egress for the negative cases: two CI iterations observed successful HTTP exchanges from a workload-labelled pod to destinations the workload NP does not authorise (<code>curl --noproxy '*' https://api.github.com</code>, then the in-cluster <code>fakegithub:8080</code> equivalent).
+That is why CI's kindnet green was positive-case-only and the egress claim carried a docs caveat.</p>
+<p>The gap closed on 2026-06-11: on a kind cluster built with <code>make e2e-cluster KIND_CNI=calico</code> (Calico v3.31.5, <code>disableDefaultCNI</code>), the two runtime negative specs <code>E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod</code> and <code>E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI</code> were observed <strong>enforcing</strong> — the workload-labelled probe pods completed no HTTP exchange (<code>HTTP_CODE=000</code>, curl connect timeout) against both the cross-namespace pod and the kubernetes API, while unlabelled control pods in the same namespace reached both destinations — alongside a green <code>ProxyConnectWorks</code> positive on the same cluster (full provisioning container: 14/14 passed).
+The specs detect the CNI at runtime and skip themselves on kindnet, so the standard CI lane is unaffected; re-run the validation any time with the <code>KIND_CNI=calico</code> profile (see <a href="../../development/kind-iteration/#cni-selection-kindnet-default-vs-calico">kind-iteration.md</a>).
 A dedicated CI leg for the Calico profile is tracked as Q119.</p>
-<p>The AGC-pod negative case (<code>curl --noproxy '*'
-https://api.github.com</code> from an AGC-labelled pod) remains deliberately
-unasserted: the AGC NetworkPolicy permits port 443/6443 to <em>any</em>
-destination because the kubernetes Service's apiserver port is not
-fixed across clusters. An AGC-labelled pod can therefore reach
-<code>api.github.com:443</code> directly, by design. The per-tenant egress-IP
-guarantee for AGC traffic relies on the AGC binary honouring the
-configured proxy URL, not on the NetworkPolicy.</p>
+<p>The AGC-pod negative case (<code>curl --noproxy '*' https://api.github.com</code> from an AGC-labelled pod) remains deliberately unasserted: the AGC NetworkPolicy permits port 443/6443 to <em>any</em> destination because the kubernetes Service's apiserver port is not fixed across clusters.
+An AGC-labelled pod can therefore reach <code>api.github.com:443</code> directly, by design.
+The per-tenant egress-IP guarantee for AGC traffic relies on the AGC binary honouring the configured proxy URL, not on the NetworkPolicy.</p>
 <hr />
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <p>The implementation change is complete when:</p>
 <ol>
 <li>An e2e test in <code>cmd/gmc/test/e2e/</code> provisions a tenant and asserts:</li>
-<li>A workload-labelled curl pod attempting <code>curl -x
-     https://actions-gateway-proxy:8080 https://api.github.com</code>
-     succeeds. ✅ — <code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code>.</li>
-<li>The workload and AGC NetworkPolicies the GMC reconciles match the
-     documented shape (rule count, port lists, podSelectors). ✅ —
-     <code>E2E_GMC_TenantProvisioning_WorkloadNPSpec</code>.</li>
-<li>Runtime direct-egress and worker→K8s API negative cases. ✅ —
-     <code>WorkloadEgressBlockedToNonProxyPod</code> + <code>WorkerCannotReachK8sAPI</code>,
-     observed enforcing on the Calico profile 2026-06-11 (Q7b); they
-     self-skip on kindnet, whose enforcer does not drop the traffic.</li>
-<li>The <code>IPRangeReconciler</code> background loop preserves the worker→proxy
-   egress rule across iterations (no observable NetworkPolicy churn that
-   removes the proxy ClusterIP rule). ✅ — <code>patchNetworkPolicy</code> only
-   mutates <code>npProxyName</code>; covered by builder unit tests.</li>
-<li>The validation snippets in
-   <a href="../../design/network-architecture/">docs/design/network-architecture.md §"How to Validate Network Isolation"</a>
-   pass against a freshly provisioned tenant. ✅ — covered by the four
-   specs above (negatives on the egress-enforcing Calico profile).</li>
-<li>No regression in proxy pool sizing under the existing e2e workload
-   (proxy CPU utilization stays below the HPA target with default
-   <code>maxReplicas</code>). ✅ — HPA + PDB validated by <code>hpa_pdb_test.go</code>.</li>
+<li>A workload-labelled curl pod attempting <code>curl -x https://actions-gateway-proxy:8080 https://api.github.com</code> succeeds. ✅ — <code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code>.</li>
+<li>The workload and AGC NetworkPolicies the GMC reconciles match the documented shape (rule count, port lists, podSelectors). ✅ — <code>E2E_GMC_TenantProvisioning_WorkloadNPSpec</code>.</li>
+<li>Runtime direct-egress and worker→K8s API negative cases. ✅ — <code>WorkloadEgressBlockedToNonProxyPod</code> + <code>WorkerCannotReachK8sAPI</code>, observed enforcing on the Calico profile 2026-06-11 (Q7b); they self-skip on kindnet, whose enforcer does not drop the traffic.</li>
+<li>The <code>IPRangeReconciler</code> background loop preserves the worker→proxy egress rule across iterations (no observable NetworkPolicy churn that removes the proxy ClusterIP rule). ✅ — <code>patchNetworkPolicy</code> only mutates <code>npProxyName</code>; covered by builder unit tests.</li>
+<li>The validation snippets in <a href="../../design/network-architecture/">docs/design/network-architecture.md §"How to Validate Network Isolation"</a> pass against a freshly provisioned tenant. ✅ — covered by the four specs above (negatives on the egress-enforcing Calico profile).</li>
+<li>No regression in proxy pool sizing under the existing e2e workload (proxy CPU utilization stays below the HPA target with default <code>maxReplicas</code>). ✅ — HPA + PDB validated by <code>hpa_pdb_test.go</code>.</li>
 </ol>
 <hr />
 <h2 id="out-of-scope-for-this-plan">Out of scope for this plan<a class="headerlink" href="#out-of-scope-for-this-plan" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Proxy destination allowlist.</strong> Tracked as M-2 in
-  <a href="../security/">security.md</a>. Independent of this plan; the network path
-  change here neither helps nor hurts that gap.</li>
-<li><strong>TLS between AGC/workers and the proxy.</strong> Tracked as M-5 in
-  <a href="../security/">security.md</a>. Same independence.</li>
-<li><strong>Capacity-planning model refinements for GPU-heavy tenants.</strong> Belongs
-  in <a href="../../design/appendix-e-capacity-planning/">Appendix E</a>, not here.</li>
+<li><strong>Proxy destination allowlist.</strong> Tracked as M-2 in <a href="../security/">security.md</a>.
+  Independent of this plan; the network path change here neither helps nor hurts that gap.</li>
+<li><strong>TLS between AGC/workers and the proxy.</strong> Tracked as M-5 in <a href="../security/">security.md</a>.
+  Same independence.</li>
+<li><strong>Capacity-planning model refinements for GPU-heavy tenants.</strong> Belongs in <a href="../../design/appendix-e-capacity-planning/">Appendix E</a>, not here.</li>
 </ul>
 <hr />
 <h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Should <code>automountServiceAccountToken: false</code> workers be in the same
-  <code>np-agc-worker</code> policy as the AGC, or in a third selector-scoped policy
-  that omits the K8s API egress rule? The K8s API egress is harmless to
-  the worker (it has no credentials), but a separate selector makes the
-  intent explicit. Defer until the split is implemented.</li>
-<li>For very heavy GPU tenants, is a dedicated proxy pool per RunnerGroup
-  warranted, rather than per ActionsGateway? Out of scope for v1; revisit
-  if a tenant report shows the shared per-tenant pool saturating.</li>
+<li>Should <code>automountServiceAccountToken: false</code> workers be in the same <code>np-agc-worker</code> policy as the AGC, or in a third selector-scoped policy that omits the K8s API egress rule?
+  The K8s API egress is harmless to the worker (it has no credentials), but a separate selector makes the intent explicit.
+  Defer until the split is implemented.</li>
+<li>For very heavy GPU tenants, is a dedicated proxy pool per RunnerGroup warranted, rather than per ActionsGateway?
+  Out of scope for v1; revisit if a tenant report shows the shared per-tenant pool saturating.</li>
 </ul>
 
 

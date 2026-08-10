@@ -2648,26 +2648,16 @@
 
 
 <h1 id="q365--move-the-shared-foundation-out-of-v1-named-files">Q365 — Move the shared foundation out of v1-named files<a class="headerlink" href="#q365--move-the-shared-foundation-out-of-v1-named-files" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ complete (2026-07-25)
-<strong>Backlog:</strong> Q365 · audit finding F6 in
-<a href="../../structural-debt-audit-2026-07/">structural-debt-audit-2026-07.md</a></p>
+<p><strong>Status:</strong> ✅ complete (2026-07-25) <strong>Backlog:</strong> Q365 · audit finding F6 in <a href="../../structural-debt-audit-2026-07/">structural-debt-audit-2026-07.md</a></p>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Relocate the version-neutral code that today lives inside v1-named files into
-version-neutral homes, so the later v1 removal (<a href="../../../STATUS/#Q273">Q273</a>) and the
-classic-machinery removal (<a href="../../../STATUS/#Q264">Q264</a>) become file deletions rather
-than extract-then-delete refactors.</p>
-<p>Strictly behaviour-preserving: same emitted objects, same metric names and labels,
-same admission behaviour. This is a move, not a redesign.</p>
+<p>Relocate the version-neutral code that today lives inside v1-named files into version-neutral homes, so the later v1 removal (<a href="../../../STATUS/#Q273">Q273</a>) and the classic-machinery removal (<a href="../../../STATUS/#Q264">Q264</a>) become file deletions rather than extract-then-delete refactors.</p>
+<p>Strictly behaviour-preserving: same emitted objects, same metric names and labels, same admission behaviour.
+This is a move, not a redesign.</p>
 <h2 id="what-version-neutral-means-here-measured">What "version-neutral" means here, measured<a class="headerlink" href="#what-version-neutral-means-here-measured" title="Permanent link">&para;</a></h2>
 <p>The audit is dated 2026-07-20; Q360, Q364 and Q366 have reshaped these files since.
-The classification below was re-derived from the current tree with an AST pass over
-<code>cmd/gmc/internal/controller</code> (declaration site → referencing files, comments
-excluded), then transitively closed over the helpers each shared entry point calls.</p>
+The classification below was re-derived from the current tree with an AST pass over <code>cmd/gmc/internal/controller</code> (declaration site → referencing files, comments excluded), then transitively closed over the helpers each shared entry point calls.</p>
 <h3 id="gmc--cmdgmcinternalcontroller">GMC — <code>cmd/gmc/internal/controller</code><a class="headerlink" href="#gmc--cmdgmcinternalcontroller" title="Permanent link">&para;</a></h3>
-<p>The v1 deletion unit is <code>builder.go</code>, <code>actionsgateway_controller.go</code>, <code>cert.go</code>,
-<code>metrics_cert.go</code> and the v1 tests (these are the only non-test files that import
-<code>gmc/api/v1alpha1</code>, apart from <code>ipranges.go</code> and <code>metrics.go</code>, which are genuinely
-dual-version).</p>
+<p>The v1 deletion unit is <code>builder.go</code>, <code>actionsgateway_controller.go</code>, <code>cert.go</code>, <code>metrics_cert.go</code> and the v1 tests (these are the only non-test files that import <code>gmc/api/v1alpha1</code>, apart from <code>ipranges.go</code> and <code>metrics.go</code>, which are genuinely dual-version).</p>
 <p>Version-neutral (moved out), grouped by the file it moves to:</p>
 <table>
 <thead>
@@ -2711,68 +2701,41 @@ dual-version).</p>
 </tr>
 </tbody>
 </table>
-<p>Left in the v1 files because they are genuinely v1-specific — every one takes a
-<code>gmcv1alpha1.ActionsGateway</code>, or names a v1 singleton resource that v2 derives
-per-object:</p>
+<p>Left in the v1 files because they are genuinely v1-specific — every one takes a <code>gmcv1alpha1.ActionsGateway</code>, or names a v1 singleton resource that v2 derives per-object:</p>
 <ul>
-<li><code>builder.go</code>: the fixed v1 resource names (<code>agcSAName</code>, <code>workerSAName</code>,
-  <code>proxyServiceName</code>, <code>np*Name</code>, the two ServiceMonitor names), <code>finalizerName</code>,
-  <code>securityProfileOrDefault</code> + <code>defaultSecurityProfile</code> (v2 reads the namespace
-  label instead), <code>componentLabels</code>/<code>managedLabels</code>/<code>proxyLabels</code>/<code>workerLabels</code>,
-  <code>metricsServiceLabels</code>, <code>metricsServiceDNSName</code>, <code>proxyResources</code>, <code>tracingEnv</code>,
-  and every <code>build*</code> that renders a v1 object.</li>
-<li><code>actionsgateway_controller.go</code>: the reconciler and its methods, <code>proxyFootprint</code>,
-  <code>proxyMaxReplicas</code>, <code>runnerGroupHealth</code>, <code>runnerGroupImpairingConditionsChanged</code>,
-  <code>psaFieldManager</code>, <code>labelSafe</code>.</li>
+<li><code>builder.go</code>: the fixed v1 resource names (<code>agcSAName</code>, <code>workerSAName</code>, <code>proxyServiceName</code>, <code>np*Name</code>, the two ServiceMonitor names), <code>finalizerName</code>, <code>securityProfileOrDefault</code> + <code>defaultSecurityProfile</code> (v2 reads the namespace label instead), <code>componentLabels</code>/<code>managedLabels</code>/<code>proxyLabels</code>/<code>workerLabels</code>, <code>metricsServiceLabels</code>, <code>metricsServiceDNSName</code>, <code>proxyResources</code>, <code>tracingEnv</code>, and every <code>build*</code> that renders a v1 object.</li>
+<li><code>actionsgateway_controller.go</code>: the reconciler and its methods, <code>proxyFootprint</code>, <code>proxyMaxReplicas</code>, <code>runnerGroupHealth</code>, <code>runnerGroupImpairingConditionsChanged</code>, <code>psaFieldManager</code>, <code>labelSafe</code>.</li>
 <li><code>cert.go</code>: <code>proxyTLSSecretName</code>, <code>generateProxyCert</code>.</li>
-<li><code>metrics_cert.go</code>: <code>metricsTLSSecretName</code>, <code>metricsClientSecretName</code>,
-  <code>generateMetricsCerts</code>, <code>metricsServerSANs</code>.</li>
+<li><code>metrics_cert.go</code>: <code>metricsTLSSecretName</code>, <code>metricsClientSecretName</code>, <code>generateMetricsCerts</code>, <code>metricsServerSANs</code>.</li>
 </ul>
-<p><code>ipranges.go</code> also carried a v1-only pass. Its v1 gateway loop and
-<code>patchNetworkPolicy</code> move to <code>ipranges_v1.go</code>, leaving <code>ipranges.go</code> free of
-<code>gmc/api/v1alpha1</code>.</p>
-<p><code>metrics.go</code> is left alone: its collectors interleave v1 and v2 series inside a
-single <code>Collect</code>, so separating them is a redesign, not a move. Filed as Q403 and
-shipped separately — the v1 passes now live in <code>metrics_v1.go</code>.</p>
+<p><code>ipranges.go</code> also carried a v1-only pass.
+Its v1 gateway loop and <code>patchNetworkPolicy</code> move to <code>ipranges_v1.go</code>, leaving <code>ipranges.go</code> free of <code>gmc/api/v1alpha1</code>.</p>
+<p><code>metrics.go</code> is left alone: its collectors interleave v1 and v2 series inside a single <code>Collect</code>, so separating them is a redesign, not a move.
+Filed as Q403 and shipped separately — the v1 passes now live in <code>metrics_v1.go</code>.</p>
 <h3 id="agc--cmdagcinternallistener">AGC — <code>cmd/agc/internal/listener</code><a class="headerlink" href="#agc--cmdagcinternallistener" title="Permanent link">&para;</a></h3>
 <p><code>internal/listener</code> is the classic long-poll acquisition tier, deleted by Q264.
-Four of its exported types have no classic-protocol content and are consumed by
-packages that outlive it (<code>provisioner</code>, <code>token</code>, <code>agentpool</code>, <code>usage</code>, the
-RunnerSet reconciler's ScaleSet path, <code>main.go</code>). They move to a new leaf package
-<code>cmd/agc/internal/runnercore</code>:</p>
+Four of its exported types have no classic-protocol content and are consumed by packages that outlive it (<code>provisioner</code>, <code>token</code>, <code>agentpool</code>, <code>usage</code>, the RunnerSet reconciler's ScaleSet path, <code>main.go</code>).
+They move to a new leaf package <code>cmd/agc/internal/runnercore</code>:</p>
 <ul>
-<li><code>Metrics</code> / <code>NewMetrics</code> / the <code>Inc*</code> recorder adapters — most of the metric set
-  is emitted by the provisioner, the reapers, the agent pool and the token manager,
-  none of which is classic.</li>
-<li><code>EventRecorder</code>, <code>ConditionUpdater</code> — the non-blocking sinks; the ScaleSet
-  listener's status sink implements both.</li>
-<li><code>AdmitFunc</code> — the worker-capacity gate. Its signature and semantics carry no
-  protocol detail; the gate itself lives in <code>provisioner/admission.go</code> and is wired
-  by both the v1 RunnerGroup and the v2 RunnerSet reconcilers.</li>
+<li><code>Metrics</code> / <code>NewMetrics</code> / the <code>Inc*</code> recorder adapters — most of the metric set is emitted by the provisioner, the reapers, the agent pool and the token manager, none of which is classic.</li>
+<li><code>EventRecorder</code>, <code>ConditionUpdater</code> — the non-blocking sinks; the ScaleSet listener's status sink implements both.</li>
+<li><code>AdmitFunc</code> — the worker-capacity gate.
+  Its signature and semantics carry no protocol detail; the gate itself lives in <code>provisioner/admission.go</code> and is wired by both the v1 RunnerGroup and the v2 RunnerSet reconcilers.</li>
 </ul>
-<p>Contrary to the audit's list, <strong><code>JobHandlerFunc</code> stays in <code>listener</code></strong>: its
-parameters are the classic <code>AcquireJob</code> response (<code>runServiceURL</code>, <code>planID</code>,
-payload) and it returns a <code>broker.TaskResult</code> from the classic <code>broker</code> module. The
-ScaleSet tier uses <code>scalesetlistener.ProvisionFunc</code> instead. Moving it would
-relocate classic surface into a package meant to outlive classic.</p>
+<p>Contrary to the audit's list, <strong><code>JobHandlerFunc</code> stays in <code>listener</code></strong>: its parameters are the classic <code>AcquireJob</code> response (<code>runServiceURL</code>, <code>planID</code>, payload) and it returns a <code>broker.TaskResult</code> from the classic <code>broker</code> module.
+The ScaleSet tier uses <code>scalesetlistener.ProvisionFunc</code> instead.
+Moving it would relocate classic surface into a package meant to outlive classic.</p>
 <h2 id="proving-behaviour-unchanged">Proving behaviour unchanged<a class="headerlink" href="#proving-behaviour-unchanged" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Every move is a cut-and-paste of the declaration with its doc comment; no
-  signature, constant value, metric name, metric label, or control flow changes.</li>
-<li>Both existing suites are the check: the GMC package's v1 and v2 tests (including
-  the rendered-object assertions in <code>builder_test.go</code>, <code>actionsgateway_v2_test.go</code>,
-  <code>egressproxy_builder_test.go</code> and the owner-reference contract pinned by
-  <code>apply_helpers_ownerref_test.go</code>) and the AGC listener/provisioner/controller
-  suites. No test expectations are edited.</li>
+<li>Every move is a cut-and-paste of the declaration with its doc comment; no signature, constant value, metric name, metric label, or control flow changes.</li>
+<li>Both existing suites are the check: the GMC package's v1 and v2 tests (including the rendered-object assertions in <code>builder_test.go</code>, <code>actionsgateway_v2_test.go</code>, <code>egressproxy_builder_test.go</code> and the owner-reference contract pinned by <code>apply_helpers_ownerref_test.go</code>) and the AGC listener/provisioner/controller suites.
+  No test expectations are edited.</li>
 <li><code>make check</code> for the fast gate.</li>
 </ul>
 <h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li>No ownerRef or finalizer-GC policy change (Q394 owns that);
-  <code>apply_helpers_ownerref_test.go</code> must keep passing unmodified.</li>
-<li>No renames of moved symbols, even where the name now reads oddly
-  (<code>proxyQuotaChecks</code> is shared with the EgressProxy); renaming would churn the
-  diff and hide the moves.</li>
+<li>No ownerRef or finalizer-GC policy change (Q394 owns that); <code>apply_helpers_ownerref_test.go</code> must keep passing unmodified.</li>
+<li>No renames of moved symbols, even where the name now reads oddly (<code>proxyQuotaChecks</code> is shared with the EgressProxy); renaming would churn the diff and hide the moves.</li>
 </ul>
 
 

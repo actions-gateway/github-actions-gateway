@@ -2686,10 +2686,9 @@
 
 
 <h1 id="e2e-progress-visibility">E2E Progress Visibility<a class="headerlink" href="#e2e-progress-visibility" title="Permanent link">&para;</a></h1>
-<p>Make a running e2e suite legible from the GitHub Actions log — which specs are
-running, which have completed, and how many remain — on both the hosted and the
-GKE dogfood self-hosted lanes.</p>
-<p>Q608. Shipped in one PR, so no Queue row was ever filed.</p>
+<p>Make a running e2e suite legible from the GitHub Actions log — which specs are running, which have completed, and how many remain — on both the hosted and the GKE dogfood self-hosted lanes.</p>
+<p>Q608.
+Shipped in one PR, so no Queue row was ever filed.</p>
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="#background--what-the-log-does-today">Background — what the log does today</a></li>
@@ -2731,102 +2730,59 @@ GKE dogfood self-hosted lanes.</p>
 </tr>
 </tbody>
 </table>
-<p>Both lanes stream at second granularity, so the dogfood self-hosted path — where
-the runner is itself a gateway worker pod — has no log-batching pathology. One
-mechanism serves both, which is expected: <code>runs-on</code> resolves from the same
-expression in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">e2e-reusable.yml</a>, so
-the two lanes run the same job definition.</p>
+<p>Both lanes stream at second granularity, so the dogfood self-hosted path — where the runner is itself a gateway worker pod — has no log-batching pathology.
+One mechanism serves both, which is expected: <code>runs-on</code> resolves from the same expression in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">e2e-reusable.yml</a>, so the two lanes run the same job definition.</p>
 <p>What the log contains during those silences:</p>
 <ul>
-<li><strong>Nothing is printed when a spec starts.</strong> <code>DefaultReporter.WillRun</code> returns
-  early on <code>report.RunningInParallel</code>, so at <code>--procs 6</code> spec starts are
-  invisible by construction.</li>
-<li><strong>Completion is a bare <code>•</code></strong> unless the spec failed or carries a
-  <code>ReportEntry</code>. Naming is therefore inconsistent across specs.</li>
-<li><strong><code>--poll-progress-after 30s</code> is the only live per-spec signal.</strong> It names the
-  spec, the current <code>By</code> step, and both runtimes — genuinely the right data —
-  but it fired 8 times in the hosted run and each report trails a goroutine and
-  GinkgoWriter dump.</li>
-<li><strong><code>Will run 73 of 73 specs</code> prints once at suite start.</strong> The denominator is
-  already available; only the numerator is missing.</li>
-<li><strong><code>tmp/e2e-report.xml</code> is uploaded as an artifact and never rendered.</strong>
-  <a href="../../e2e-tests-speed/#13-junit-report-for-pr-test-summary">e2e-tests-speed.md §13</a>
-  planned the upload on the premise that "GitHub Actions can render this as a
-  test summary table in the PR sidebar using the built-in test reporter". There
-  is no such built-in reporter. The upload shipped, the rendering never did, and
-  reading the report still means downloading an artifact.</li>
+<li><strong>Nothing is printed when a spec starts.</strong> <code>DefaultReporter.WillRun</code> returns early on <code>report.RunningInParallel</code>, so at <code>--procs 6</code> spec starts are invisible by construction.</li>
+<li><strong>Completion is a bare <code>•</code></strong> unless the spec failed or carries a <code>ReportEntry</code>.
+  Naming is therefore inconsistent across specs.</li>
+<li><strong><code>--poll-progress-after 30s</code> is the only live per-spec signal.</strong> It names the spec, the current <code>By</code> step, and both runtimes — genuinely the right data — but it fired 8 times in the hosted run and each report trails a goroutine and GinkgoWriter dump.</li>
+<li><strong><code>Will run 73 of 73 specs</code> prints once at suite start.</strong> The denominator is already available; only the numerator is missing.</li>
+<li><strong><code>tmp/e2e-report.xml</code> is uploaded as an artifact and never rendered.</strong> <a href="../../e2e-tests-speed/#13-junit-report-for-pr-test-summary">e2e-tests-speed.md §13</a> planned the upload on the premise that "GitHub Actions can render this as a test summary table in the PR sidebar using the built-in test reporter".
+  There is no such built-in reporter.
+  The upload shipped, the rendering never did, and reading the report still means downloading an artifact.</li>
 </ul>
 <h2 id="two-constraints-that-shape-the-design">Two constraints that shape the design<a class="headerlink" href="#two-constraints-that-shape-the-design" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Live progress cannot be printed from inside the suite.</strong> Ginkgo installs a
-   <code>dup2</code>-based output interceptor around spec execution, so anything a spec or
-   a <code>ReportAfterEach</code> writes to stdout is captured and replayed when the spec
-   ends — precisely the buffering we are trying to escape.
-   <code>--output-interceptor-mode=none</code> would stream it at the cost of per-spec
-   failure capture, which is a bad trade. <strong>File writes are not intercepted</strong>,
-   so the suite can emit to a file and a process <em>outside</em> Ginkgo can do the
-   printing.</li>
-<li><strong>The Actions log is append-only.</strong> No cursor addressing, so no redrawing
-   progress bar; heartbeat lines must each stand alone.
-   <code>GITHUB_STEP_SUMMARY</code> renders after the job, not during it, so it serves the
-   post-run view and cannot serve the live one.</li>
+<li><strong>Live progress cannot be printed from inside the suite.</strong> Ginkgo installs a <code>dup2</code>-based output interceptor around spec execution, so anything a spec or a <code>ReportAfterEach</code> writes to stdout is captured and replayed when the spec ends — precisely the buffering we are trying to escape. <code>--output-interceptor-mode=none</code> would stream it at the cost of per-spec failure capture, which is a bad trade. <strong>File writes are not intercepted</strong>, so the suite can emit to a file and a process <em>outside</em> Ginkgo can do the printing.</li>
+<li><strong>The Actions log is append-only.</strong> No cursor addressing, so no redrawing progress bar; heartbeat lines must each stand alone. <code>GITHUB_STEP_SUMMARY</code> renders after the job, not during it, so it serves the post-run view and cannot serve the live one.</li>
 </ol>
-<p>Together these force the shape: <strong>the suite writes a structured event stream to
-a file; a separate watcher process renders it to the step log.</strong></p>
+<p>Together these force the shape: <strong>the suite writes a structured event stream to a file; a separate watcher process renders it to the step log.</strong></p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
-<p>Three pieces, one PR. Deliberately excluded: teeing <code>By()</code> steps into the stream
-(Ginkgo's Progress Report already carries that data — tune
-<code>--poll-progress-after</code> first), and interleaving cluster state into the
-heartbeat. Both are follow-ons once the heartbeat shows what it does and does
-not answer.</p>
+<p>Three pieces, one PR.
+Deliberately excluded: teeing <code>By()</code> steps into the stream (Ginkgo's Progress Report already carries that data — tune <code>--poll-progress-after</code> first), and interleaving cluster state into the heartbeat.
+Both are follow-ons once the heartbeat shows what it does and does not answer.</p>
 <h2 id="1-the-progress-event-stream">1. The progress event stream<a class="headerlink" href="#1-the-progress-event-stream" title="Permanent link">&para;</a></h2>
-<p><code>ReportBeforeSuite</code> / <code>ReportBeforeEach</code> / <code>ReportAfterEach</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go">e2e_suite_test.go</a> append one JSON
-object per line to <code>$E2E_PROGRESS_FILE</code> (default <code>tmp/e2e-progress.jsonl</code>,
-gitignored). Unset disables the whole mechanism, so a plain <code>go test</code> run is
-unaffected.</p>
-<p>Events: <code>total</code> (from <code>PreRunStats.SpecsThatWillRun</code>, once), <code>start</code>, <code>end</code>
-(with state and duration).</p>
-<p><strong>The atomicity constraint is load-bearing.</strong> Six parallel processes append to
-one file. <code>O_APPEND</code> writes to a regular file are atomic only below <code>PIPE_BUF</code>
-(4 KiB), so event lines carry spec text and state — never captured output — and
-the writer truncates each line defensively. A spec name long enough to breach
-the limit would interleave two processes' bytes and corrupt both records.</p>
-<p>Rendering must consume <em>this</em> stream, not Ginkgo's human-readable log. Reporter
-output is not a stable contract; a regex scraper over it would drift silently,
-the same failure mode the autoscaler event-reason matcher exists to catch.</p>
+<p><code>ReportBeforeSuite</code> / <code>ReportBeforeEach</code> / <code>ReportAfterEach</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go">e2e_suite_test.go</a> append one JSON object per line to <code>$E2E_PROGRESS_FILE</code> (default <code>tmp/e2e-progress.jsonl</code>, gitignored).
+Unset disables the whole mechanism, so a plain <code>go test</code> run is unaffected.</p>
+<p>Events: <code>total</code> (from <code>PreRunStats.SpecsThatWillRun</code>, once), <code>start</code>, <code>end</code> (with state and duration).</p>
+<p><strong>The atomicity constraint is load-bearing.</strong> Six parallel processes append to one file. <code>O_APPEND</code> writes to a regular file are atomic only below <code>PIPE_BUF</code> (4 KiB), so event lines carry spec text and state — never captured output — and the writer truncates each line defensively.
+A spec name long enough to breach the limit would interleave two processes' bytes and corrupt both records.</p>
+<p>Rendering must consume <em>this</em> stream, not Ginkgo's human-readable log.
+Reporter output is not a stable contract; a regex scraper over it would drift silently, the same failure mode the autoscaler event-reason matcher exists to catch.</p>
 <h2 id="2-the-heartbeat-watcher">2. The heartbeat watcher<a class="headerlink" href="#2-the-heartbeat-watcher" title="Permanent link">&para;</a></h2>
-<p><code>scripts/e2e/progress-watch.sh</code>, started in the background before the ginkgo run
-and stopped after it, emits one line per interval (default 30 s):</p>
+<p><code>scripts/e2e/progress-watch.sh</code>, started in the background before the ginkgo run and stopped after it, emits one line per interval (default 30 s):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_AGC_WorkerDrain a dr... (3m58s), E2E_GMC_Isolation cross... (2m01s)
 </code></pre></div>
-<p>Derived state: running = started-minus-ended; counts by terminal state; elapsed
-from the first event. Silent until the <code>total</code> event lands, so bring-up noise is
-not competing with it.</p>
-<p>The aggregation is a pure function of the stream, so
-<code>scripts/e2e/progress-watch-test.sh</code> asserts it against synthetic fixtures — the
-convention every other <code>scripts/**-test.sh</code> follows.</p>
+<p>Derived state: running = started-minus-ended; counts by terminal state; elapsed from the first event.
+Silent until the <code>total</code> event lands, so bring-up noise is not competing with it.</p>
+<p>The aggregation is a pure function of the stream, so <code>scripts/e2e/progress-watch-test.sh</code> asserts it against synthetic fixtures — the convention every other <code>scripts/**-test.sh</code> follows.</p>
 <h2 id="3-post-run-summary-and-annotations">3. Post-run summary and annotations<a class="headerlink" href="#3-post-run-summary-and-annotations" title="Permanent link">&para;</a></h2>
 <p><code>scripts/e2e/e2e-report-summary.sh</code> reads <code>tmp/e2e-report.xml</code> and writes:</p>
 <ul>
-<li><strong><code>$GITHUB_STEP_SUMMARY</code></strong> — counts, every failure with its message, and the
-  ten slowest specs (the input to any future speed work).</li>
-<li><strong><code>::error::</code> annotations</strong> per failed spec, so failures surface at the top of
-  the run and inline on the diff rather than 3,500 log lines down.</li>
+<li><strong><code>$GITHUB_STEP_SUMMARY</code></strong> — counts, every failure with its message, and the ten slowest specs (the input to any future speed work).</li>
+<li><strong><code>::error::</code> annotations</strong> per failed spec, so failures surface at the top of the run and inline on the diff rather than 3,500 log lines down.</li>
 </ul>
 <p>Runs <code>if: always()</code> so a failed suite — the case that matters — still gets both.</p>
 <h2 id="rejected-alternatives">Rejected alternatives<a class="headerlink" href="#rejected-alternatives" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>-v</code> on the ginkgo run.</strong> Names every completed spec, but streams all 361
-  <code>By()</code> steps across 73 specs and still reports neither starts nor remaining
-  count. Reasonable as a per-run debugging opt-in; wrong as a default.</li>
-<li><strong><code>--output-interceptor-mode=none</code>.</strong> Would let the suite print live, at the
-  cost of the per-spec output capture that failure diagnosis depends on.</li>
-<li><strong>A live-updating Check Run via the API.</strong> A live view outside the log, for
-  the price of auth and rate-limit surface. Marginal gain over a heartbeat line.</li>
-<li><strong>A Go devtool instead of shell.</strong> Justified if this grows an ETA model or
-  more report rendering; not yet, and shell keeps it beside the other e2e
-  scripts under the same shellcheck gate.</li>
+<li><strong><code>-v</code> on the ginkgo run.</strong> Names every completed spec, but streams all 361 <code>By()</code> steps across 73 specs and still reports neither starts nor remaining count.
+  Reasonable as a per-run debugging opt-in; wrong as a default.</li>
+<li><strong><code>--output-interceptor-mode=none</code>.</strong> Would let the suite print live, at the cost of the per-spec output capture that failure diagnosis depends on.</li>
+<li><strong>A live-updating Check Run via the API.</strong> A live view outside the log, for the price of auth and rate-limit surface.
+  Marginal gain over a heartbeat line.</li>
+<li><strong>A Go devtool instead of shell.</strong> Justified if this grows an ETA model or more report rendering; not yet, and shell keeps it beside the other e2e scripts under the same shellcheck gate.</li>
 </ul>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
@@ -2862,9 +2818,12 @@ convention every other <code>scripts/**-test.sh</code> follows.</p>
 <h2 id="what-the-build-changed-from-the-plan">What the build changed from the plan<a class="headerlink" href="#what-the-build-changed-from-the-plan" title="Permanent link">&para;</a></h2>
 <p>Three things the plan did not anticipate, each found by measuring rather than by review:</p>
 <ul>
-<li><strong><code>E2E_PROGRESS_FILE=… cd cmd/gmc &amp;&amp; …</code> scopes the variable to the <code>cd</code> alone.</strong> The Makefile's <code>_GINKGO_RUN</code> macro opens with a <code>cd</code>, so the obvious prefix placement left the suite emitting nothing at all — a heartbeat that would have stayed permanently silent while every test passed. Caught by running the target against a stub ginkgo that echoed its environment. The variable now sits with the other env vars <em>inside</em> the macro, after the <code>cd</code>.</li>
+<li><strong><code>E2E_PROGRESS_FILE=… cd cmd/gmc &amp;&amp; …</code> scopes the variable to the <code>cd</code> alone.</strong> The Makefile's <code>_GINKGO_RUN</code> macro opens with a <code>cd</code>, so the obvious prefix placement left the suite emitting nothing at all — a heartbeat that would have stayed permanently silent while every test passed.
+  Caught by running the target against a stub ginkgo that echoed its environment.
+  The variable now sits with the other env vars <em>inside</em> the macro, after the <code>cd</code>.</li>
 <li><strong><code>encoding/xml</code> writes <code>&amp;#34;</code>, not <code>&amp;quot;</code>.</strong> The JUnit fixture was generated with Ginkgo's own <code>GenerateJUnitReport</code> rather than hand-written, which is the only reason this surfaced: a hand-rolled fixture would have used the named entity, passed its own test, and left raw <code>&amp;#34;</code> in every quoted spec name in the job summary.</li>
-<li><strong>A bare <code>sleep</code> in the watcher delays its own teardown by up to a full interval.</strong> Bash defers a trapped signal until the running command completes, so <code>kill -TERM</code> during <code>sleep 30</code> waits out the sleep. Backgrounding the sleep and <code>wait</code>-ing on it drops teardown to ~11 ms, measured.</li>
+<li><strong>A bare <code>sleep</code> in the watcher delays its own teardown by up to a full interval.</strong> Bash defers a trapped signal until the running command completes, so <code>kill -TERM</code> during <code>sleep 30</code> waits out the sleep.
+  Backgrounding the sleep and <code>wait</code>-ing on it drops teardown to ~11 ms, measured.</li>
 </ul>
 
 

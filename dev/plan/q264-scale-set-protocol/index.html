@@ -2609,37 +2609,23 @@
 
 
 <h1 id="q264--remove-the-deprecated-classic-acquisition-machinery">Q264 — Remove the deprecated classic acquisition machinery<a class="headerlink" href="#q264--remove-the-deprecated-classic-acquisition-machinery" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> RESIDUAL ONLY. The scale-set migration (Option E) is fully shipped —
-phases <strong>P0–P5 landed</strong>, ScaleSet is the <strong>default</strong> acquisition protocol since
-v1.1.0, and Classic is <strong>deprecated</strong>. The full P0–P5 record — protocol
-reverse-engineering, the Investigation E/E2 live probes, the U6–U8 decisions of
-record, and the P1–P5 execution narrative — lives in the archived phase narrative:
-<a href="../archive/q264-scale-set-protocol-phases/">q264-scale-set-protocol-phases.md</a>.</p>
-<p>This doc now tracks only the <strong>open residual</strong> (<a href="../../STATUS/#Q264">Q264</a>): the
-terminal PR that removes the classic acquisition machinery and the transitional
-API fields. It is the last step of Option E's retirement ladder — one isolated PR,
-gated on two independent conditions.</p>
+<p><strong>Status:</strong> RESIDUAL ONLY.
+The scale-set migration (Option E) is fully shipped — phases <strong>P0–P5 landed</strong>, ScaleSet is the <strong>default</strong> acquisition protocol since v1.1.0, and Classic is <strong>deprecated</strong>.
+The full P0–P5 record — protocol reverse-engineering, the Investigation E/E2 live probes, the U6–U8 decisions of record, and the P1–P5 execution narrative — lives in the archived phase narrative: <a href="../archive/q264-scale-set-protocol-phases/">q264-scale-set-protocol-phases.md</a>.</p>
+<p>This doc now tracks only the <strong>open residual</strong> (<a href="../../STATUS/#Q264">Q264</a>): the terminal PR that removes the classic acquisition machinery and the transitional API fields.
+It is the last step of Option E's retirement ladder — one isolated PR, gated on two independent conditions.</p>
 <h2 id="the-gate-both-must-hold">The gate (both must hold)<a class="headerlink" href="#the-gate-both-must-hold" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>The one-minor classic deprecation window from v1.1.0 elapses</strong> (i.e. v1.2.0
-   ships). ScaleSet became the default and Classic was deprecated in v1.1.0's
-   release notes, which starts the window.</li>
-<li><strong>v1alpha1 tenants have migrated off</strong> via <code>gag-migrate</code>
-   (<a href="../../STATUS/#Q273">Q273</a>). Classic is v1alpha1's <em>only</em> acquisition path, so
-   removing it necessarily ends v1alpha1's ability to acquire jobs — the classic
-   deprecation window <strong>is</strong> the v1alpha1 migration window.</li>
+<li><strong>The one-minor classic deprecation window from v1.1.0 elapses</strong> (i.e. v1.2.0 ships).
+   ScaleSet became the default and Classic was deprecated in v1.1.0's release notes, which starts the window.</li>
+<li><strong>v1alpha1 tenants have migrated off</strong> via <code>gag-migrate</code> (<a href="../../STATUS/#Q273">Q273</a>).
+   Classic is v1alpha1's <em>only</em> acquisition path, so removing it necessarily ends v1alpha1's ability to acquire jobs — the classic deprecation window <strong>is</strong> the v1alpha1 migration window.</li>
 </ol>
-<p>The removal was originally expected to ride the Q74 v2beta1 graduation hop (that
-hop is where the transitional fields were to be stripped). v2beta1 has since
-graduated <strong>without</strong> carrying the removal, so it is no longer bundled — it is now
-the terminal step, gated on the two conditions above. When both hold, one isolated
-PR does the removal. Sequence it <strong>after</strong> v1alpha1 is itself deprecated (tenants
-moved via <code>gag-migrate</code>); announcing the two deprecations together turns the
-fan-out-free model into the concrete incentive to complete the v1→v2 migration.</p>
+<p>The removal was originally expected to ride the Q74 v2beta1 graduation hop (that hop is where the transitional fields were to be stripped). v2beta1 has since graduated <strong>without</strong> carrying the removal, so it is no longer bundled — it is now the terminal step, gated on the two conditions above.
+When both hold, one isolated PR does the removal.
+Sequence it <strong>after</strong> v1alpha1 is itself deprecated (tenants moved via <code>gag-migrate</code>); announcing the two deprecations together turns the fan-out-free model into the concrete incentive to complete the v1→v2 migration.</p>
 <h2 id="what-the-removal-pr-deletes">What the removal PR deletes<a class="headerlink" href="#what-the-removal-pr-deletes" title="Permanent link">&para;</a></h2>
-<p>The classic-protocol acquisition tier (full "Discarded" delta, with the <em>why</em> per
-component, is in
-<a href="../archive/q264-scale-set-protocol-phases/#discarded-the-classic-protocol-acquisition-tier">archive §3</a>):</p>
+<p>The classic-protocol acquisition tier (full "Discarded" delta, with the <em>why</em> per component, is in <a href="../archive/q264-scale-set-protocol-phases/#discarded-the-classic-protocol-acquisition-tier">archive §3</a>):</p>
 <table>
 <thead>
 <tr>
@@ -2674,25 +2660,14 @@ component, is in
 </tr>
 </tbody>
 </table>
-<p>Plus the <strong>transitional API fields</strong>: <code>acquisitionProtocol</code> and <code>maxListeners</code> on
-the v2alpha1 <code>RunnerSet</code>. These exist <strong>only on v2alpha1</strong>, as the per-set
-canary/rollback lever P3–P4 needed (rollback had to be a field edit, not an AGC
-image downgrade). v2beta1 never served <code>Classic</code> — the graduation conversion
-strips both fields — so the end state is that the protocol is an API-version
-property (v1 = classic/deprecated, v2 = scale-set) with no enum surviving. Decision
-of record:
-<a href="../archive/q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">archive §5a-U7</a>
-and
-<a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">§5a-U8</a>.</p>
+<p>Plus the <strong>transitional API fields</strong>: <code>acquisitionProtocol</code> and <code>maxListeners</code> on the v2alpha1 <code>RunnerSet</code>.
+These exist <strong>only on v2alpha1</strong>, as the per-set canary/rollback lever P3–P4 needed (rollback had to be a field edit, not an AGC image downgrade). v2beta1 never served <code>Classic</code> — the graduation conversion strips both fields — so the end state is that the protocol is an API-version property (v1 = classic/deprecated, v2 = scale-set) with no enum surviving.
+Decision of record: <a href="../archive/q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">archive §5a-U7</a> and <a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">§5a-U8</a>.</p>
 <h2 id="why-removing-classic-is-safe-now">Why removing classic is safe now<a class="headerlink" href="#why-removing-classic-is-safe-now" title="Permanent link">&para;</a></h2>
-<p>Keeping classic forever re-imports the dual-protocol maintenance burden Option E
-exists to end. Retiring it at cutover strands nobody: scale sets cover dotcom + all
-vendor-supported GHES (≥ 3.9; the floor excludes zero supported deployments). P4's
-clean-green live validation (2026-07-05) confirmed the scale-set path handles the
-real CI matrix pristine — see
-<a href="../archive/q264-scale-set-protocol-phases/#6-phased-execution-path-no-big-bang-rewrite">archive §6-P4</a>.
-No security property regresses (single-acquirer topology, same
-egress/isolation/NetworkPolicy).</p>
+<p>Keeping classic forever re-imports the dual-protocol maintenance burden Option E exists to end.
+Retiring it at cutover strands nobody: scale sets cover dotcom + all vendor-supported GHES (≥ 3.9; the floor excludes zero supported deployments).
+P4's clean-green live validation (2026-07-05) confirmed the scale-set path handles the real CI matrix pristine — see <a href="../archive/q264-scale-set-protocol-phases/#6-phased-execution-path-no-big-bang-rewrite">archive §6-P4</a>.
+No security property regresses (single-acquirer topology, same egress/isolation/NetworkPolicy).</p>
 
 
 

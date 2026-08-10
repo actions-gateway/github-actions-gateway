@@ -2568,9 +2568,12 @@
 
 
 <h1 id="retired-flakes">Retired flakes<a class="headerlink" href="#retired-flakes" title="Permanent link">&para;</a></h1>
-<p>Cold storage for flake-watch rows that have graduated out of the live <a href="../../STATUS/#flake-watch">Flake watch</a> table. A row lands here when its recurrence-memory has decayed to ~zero — see the retirement bar in <a href="../maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md</a> (<strong>soaked</strong> — the spec's blast-radius run threshold of green <code>main</code> runs since the fix, <strong>or</strong> the test/code path is <strong>obsolete</strong>).</p>
-<p>This ledger exists so retirement is not deletion: it keeps the "a fix was already attempted here" memory <code>grep</code>-able at zero live-table cost. If a retired flake ever recurs, it re-enters the Queue as a fresh find (flakes-first); this row is the pointer back to the original diagnosis, so re-add it to the escalation history rather than starting cold.</p>
-<p>Run counts below are green <code>main</code> runs of the covering workflow since the fix merged, measured with the <code>gh run list</code> recipe in <a href="../maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md</a>. Each is anchored on a date at or after the fix, so every count is a conservative undercount.</p>
+<p>Cold storage for flake-watch rows that have graduated out of the live <a href="../../STATUS/#flake-watch">Flake watch</a> table.
+A row lands here when its recurrence-memory has decayed to ~zero — see the retirement bar in <a href="../maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md</a> (<strong>soaked</strong> — the spec's blast-radius run threshold of green <code>main</code> runs since the fix, <strong>or</strong> the test/code path is <strong>obsolete</strong>).</p>
+<p>This ledger exists so retirement is not deletion: it keeps the "a fix was already attempted here" memory <code>grep</code>-able at zero live-table cost.
+If a retired flake ever recurs, it re-enters the Queue as a fresh find (flakes-first); this row is the pointer back to the original diagnosis, so re-add it to the escalation history rather than starting cold.</p>
+<p>Run counts below are green <code>main</code> runs of the covering workflow since the fix merged, measured with the <code>gh run list</code> recipe in <a href="../maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md</a>.
+Each is anchored on a date at or after the fix, so every count is a conservative undercount.</p>
 <p>Newest retirement first.</p>
 <table>
 <thead>

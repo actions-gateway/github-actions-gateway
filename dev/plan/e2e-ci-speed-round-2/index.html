@@ -2815,16 +2815,12 @@
 
 
 <h1 id="e2e-ci-speed-round-2">e2e CI speed, round 2<a class="headerlink" href="#e2e-ci-speed-round-2" title="Permanent link">&para;</a></h1>
-<p><strong>Status: Complete.</strong> All six items shipped. Two sub-items under §6 are closed
-decisions rather than open work: the metrics-server <code>--metric-resolution</code> drop
-was tried, measured, and reverted, and the kube-controller-manager HPA sync
-period is declined on flake-risk grounds. Both are recorded below with their
-evidence. No Queue or Deferred row carries a residual.</p>
-<p>Second pass at the wall-clock cost of the <code>e2e / e2e</code> job, after
-<a href="../docker-image-speed/">docker-image-speed.md</a> and
-<a href="../e2e-tests-speed/">e2e-tests-speed.md</a> exhausted their own lists. Everything
-here is either outside what those covered or a hole one of them explicitly left
-open.</p>
+<p><strong>Status: Complete.</strong> All six items shipped.
+Two sub-items under §6 are closed decisions rather than open work: the metrics-server <code>--metric-resolution</code> drop was tried, measured, and reverted, and the kube-controller-manager HPA sync period is declined on flake-risk grounds.
+Both are recorded below with their evidence.
+No Queue or Deferred row carries a residual.</p>
+<p>Second pass at the wall-clock cost of the <code>e2e / e2e</code> job, after <a href="../docker-image-speed/">docker-image-speed.md</a> and <a href="../e2e-tests-speed/">e2e-tests-speed.md</a> exhausted their own lists.
+Everything here is either outside what those covered or a hole one of them explicitly left open.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2868,9 +2864,7 @@ open.</p>
 </tbody>
 </table>
 <h2 id="baseline">Baseline<a class="headerlink" href="#baseline" title="Permanent link">&para;</a></h2>
-<p>Measured on run
-<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30228166140">30228166140</a>
-— a warm-cache success on <code>main</code>, 12 min wall.</p>
+<p>Measured on run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30228166140">30228166140</a> — a warm-cache success on <code>main</code>, 12 min wall.</p>
 <table>
 <thead>
 <tr>
@@ -2903,9 +2897,8 @@ open.</p>
 </table>
 <p>Two poles carry ~90% of the job.</p>
 <h3 id="pole-1--the-bake-not-the-cluster">Pole 1 — the bake, not the cluster<a class="headerlink" href="#pole-1--the-bake-not-the-cluster" title="Permanent link">&para;</a></h3>
-<p>The "build images while the kind cluster and cert-manager come up" step already
-overlaps cluster bring-up with the image build (round 1, §16). From the run log,
-that overlap is fully effective and no longer where the time goes:</p>
+<p>The "build images while the kind cluster and cert-manager come up" step already overlaps cluster bring-up with the image build (round 1, §16).
+From the run log, that overlap is fully effective and no longer where the time goes:</p>
 <table>
 <thead>
 <tr>
@@ -2933,29 +2926,18 @@ that overlap is fully effective and no longer where the time goes:</p>
 </code></pre></div>
 <p>~570 s of compile contending for a 4-vCPU runner, every run, because:</p>
 <ul>
-<li><strong>Each image compiled the shared dependency closure separately.</strong> Six
-  Dockerfiles meant six <code>builder</code> stages; BuildKit can only share a build step
-  between targets when it is the same stage in the same Dockerfile, so the
-  <code>--mount=type=cache</code> on <code>/root/.cache/go-build</code> that round 1 added (§2) never
-  paid off across targets — all six started cold simultaneously and raced.</li>
-<li><strong><code>GOCACHE</code> was cold on every run.</strong> Round 1 noted this and left it: "the
-  cache mount … does not persist across runs unless BuildKit state itself is
-  cached." <code>docker/setup-buildx-action</code> boots a fresh builder each run, so it
-  never is. Meanwhile <code>cache-to type=gha</code> could not help either, because
-  <code>COPY . .</code> invalidates the build layer on every PR.</li>
-<li><strong>The wrapper binary was compiled twice.</strong> <code>cmd/worker/Dockerfile</code> and
-  <code>cmd/worker/Dockerfile.wrapper</code> ran an identical <code>go build ./cmd/worker</code> in
-  identical builder stages (log steps <code>#41</code> and <code>#47</code>, 41 s each). Two files, so
-  BuildKit could not deduplicate them.</li>
+<li><strong>Each image compiled the shared dependency closure separately.</strong> Six Dockerfiles meant six <code>builder</code> stages; BuildKit can only share a build step between targets when it is the same stage in the same Dockerfile, so the <code>--mount=type=cache</code> on <code>/root/.cache/go-build</code> that round 1 added (§2) never paid off across targets — all six started cold simultaneously and raced.</li>
+<li><strong><code>GOCACHE</code> was cold on every run.</strong> Round 1 noted this and left it: "the cache mount … does not persist across runs unless BuildKit state itself is cached." <code>docker/setup-buildx-action</code> boots a fresh builder each run, so it never is.
+  Meanwhile <code>cache-to type=gha</code> could not help either, because <code>COPY . .</code> invalidates the build layer on every PR.</li>
+<li><strong>The wrapper binary was compiled twice.</strong> <code>cmd/worker/Dockerfile</code> and <code>cmd/worker/Dockerfile.wrapper</code> ran an identical <code>go build ./cmd/worker</code> in identical builder stages (log steps <code>#41</code> and <code>#47</code>, 41 s each).
+  Two files, so BuildKit could not deduplicate them.</li>
 </ul>
 <h3 id="pole-2--the-suites-serial-tail">Pole 2 — the suite's serial tail<a class="headerlink" href="#pole-2--the-suites-serial-tail" title="Permanent link">&para;</a></h3>
-<p>From the JUnit report of the same run: 66 active specs, 796 s of spec time,
-294 s wall.</p>
+<p>From the JUnit report of the same run: 66 active specs, 796 s of spec time, 294 s wall.</p>
 <ul>
-<li>The parallel phase does 646 s of spec time in ~144 s — 4.5× on <code>--procs 6</code>
-  against 4 vCPUs. That is healthy and is not worth further tuning.</li>
-<li>The six <code>Serial</code> specs are <strong>150 s, over half the suite wall</strong>, and Ginkgo
-  always runs <code>Serial</code> last, so it is a pure tail:</li>
+<li>The parallel phase does 646 s of spec time in ~144 s — 4.5× on <code>--procs 6</code> against 4 vCPUs.
+  That is healthy and is not worth further tuning.</li>
+<li>The six <code>Serial</code> specs are <strong>150 s, over half the suite wall</strong>, and Ginkgo always runs <code>Serial</code> last, so it is a pure tail:</li>
 </ul>
 <table>
 <thead>
@@ -2991,14 +2973,12 @@ that overlap is fully effective and no longer where the time goes:</p>
 </tr>
 </tbody>
 </table>
-<p>Fixed sleeps and <code>Consistently</code> blocks elsewhere in the suite are negligible —
-two <code>Consistently</code> calls and three real sleeps in the whole package. Round 1
-(§3, §7, §9) already took that ground.</p>
+<p>Fixed sleeps and <code>Consistently</code> blocks elsewhere in the suite are negligible — two <code>Consistently</code> calls and three real sleeps in the whole package.
+Round 1 (§3, §7, §9) already took that ground.</p>
 <hr />
 <h2 id="13-one-dockerfile-one-shared-dependency-compile-">1–3. One Dockerfile, one shared dependency compile ✓<a class="headerlink" href="#13-one-dockerfile-one-shared-dependency-compile-" title="Permanent link">&para;</a></h2>
 <h3 id="approach-shipped">Approach (shipped)<a class="headerlink" href="#approach-shipped" title="Permanent link">&para;</a></h3>
-<p>All six images collapse into named stages of a single root
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a>, selected with <code>--target</code>:</p>
+<p>All six images collapse into named stages of a single root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a>, selected with <code>--target</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>deps    golang + workspace manifests + vendor/ → warm Go build cache
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  └─ src    + first-party source
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>       ├─ build-gmc / build-agc / build-proxy / build-wrapper / build-fakegithub
@@ -3006,29 +2986,18 @@ two <code>Consistently</code> calls and three real sleeps in the whole package. 
 </code></pre></div>
 <p>Three properties do the work:</p>
 <ol>
-<li><strong><code>deps</code> copies only <code>go.work</code>, <code>go.work.sum</code>, the ten module <code>go.mod</code>
-   files, and <code>vendor/</code></strong> — never first-party source. The layer is therefore
-   keyed on the dependency set alone, so any PR that does not touch <code>vendor/</code>
-   restores it from the Actions cache instead of compiling.</li>
-<li><strong><code>GOCACHE</code> is a real directory in the layer (<code>/gocache</code>), not a
-   <code>--mount=type=cache</code>.</strong> This is the fix for the hole round 1 left: a cache
-   mount lives in BuildKit's own state, which <code>cache-to type=gha</code> does not
-   export and which a freshly-booted CI builder never has. A plain directory is
-   part of the layer, so the layer cache carries it between runs.</li>
-<li><strong><code>build-wrapper</code> feeds both the <code>worker</code> and <code>wrapper</code> images</strong>, so the
-   wrapper binary is compiled once and the two images ship byte-identical
-   binaries by construction rather than by convention.</li>
+<li><strong><code>deps</code> copies only <code>go.work</code>, <code>go.work.sum</code>, the ten module <code>go.mod</code> files, and <code>vendor/</code></strong> — never first-party source.
+   The layer is therefore keyed on the dependency set alone, so any PR that does not touch <code>vendor/</code> restores it from the Actions cache instead of compiling.</li>
+<li><strong><code>GOCACHE</code> is a real directory in the layer (<code>/gocache</code>), not a <code>--mount=type=cache</code>.</strong> This is the fix for the hole round 1 left: a cache mount lives in BuildKit's own state, which <code>cache-to type=gha</code> does not export and which a freshly-booted CI builder never has.
+   A plain directory is part of the layer, so the layer cache carries it between runs.</li>
+<li><strong><code>build-wrapper</code> feeds both the <code>worker</code> and <code>wrapper</code> images</strong>, so the wrapper binary is compiled once and the two images ship byte-identical binaries by construction rather than by convention.</li>
 </ol>
-<p><code>deps</code> compiles every vendored package. The package list comes from
-<code>vendor/modules.txt</code>, filtered through <code>go list -e</code> to drop packages whose build
-constraints exclude every file on the target platform
-(<code>golang.org/x/sys/windows</code>, <code>.../plan9</code>, …) — <code>go build</code> fails fast on those and
-would abort the warm-up.</p>
+<p><code>deps</code> compiles every vendored package.
+The package list comes from <code>vendor/modules.txt</code>, filtered through <code>go list -e</code> to drop packages whose build constraints exclude every file on the target platform (<code>golang.org/x/sys/windows</code>, <code>.../plan9</code>, …) — <code>go build</code> fails fast on those and would abort the warm-up.</p>
 <h3 id="-trimpath-is-load-bearing"><code>-trimpath</code> is load-bearing<a class="headerlink" href="#-trimpath-is-load-bearing" title="Permanent link">&para;</a></h3>
-<p>The warm-up must pass the <strong>same</strong> <code>-trimpath</code> the binary builds use. It is an
-input to every package's build-cache key, so a warm-up without it populates
-entries the real builds can never hit — the stage appears to work and saves
-nothing. Measured locally, building <code>gmc</code> against:</p>
+<p>The warm-up must pass the <strong>same</strong> <code>-trimpath</code> the binary builds use.
+It is an input to every package's build-cache key, so a warm-up without it populates entries the real builds can never hit — the stage appears to work and saves nothing.
+Measured locally, building <code>gmc</code> against:</p>
 <table>
 <thead>
 <tr>
@@ -3047,9 +3016,8 @@ nothing. Measured locally, building <code>gmc</code> against:</p>
 </tr>
 </tbody>
 </table>
-<p>For the same reason <code>build-fakegithub</code> now passes <code>-trimpath</code> too. It is a test
-image and does not need reproducibility, but without the flag it misses the
-shared cache (11.9 s CPU vs 0.3 s).</p>
+<p>For the same reason <code>build-fakegithub</code> now passes <code>-trimpath</code> too.
+It is a test image and does not need reproducibility, but without the flag it misses the shared cache (11.9 s CPU vs 0.3 s).</p>
 <h3 id="measured-locally-apple-silicon-warm-deps">Measured locally (Apple Silicon, warm <code>deps</code>)<a class="headerlink" href="#measured-locally-apple-silicon-warm-deps" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3081,118 +3049,70 @@ shared cache (11.9 s CPU vs 0.3 s).</p>
 </tr>
 </tbody>
 </table>
-<p>Cache size is ~1.1 GB, which is why <code>docker-bake.hcl</code> exports <strong>one</strong> cache
-scope (<code>scope=images</code>) rather than the previous scope-per-image: six scopes
-would store the same layer six times against the repo's 10 GB Actions-cache
-budget.</p>
+<p>Cache size is ~1.1 GB, which is why <code>docker-bake.hcl</code> exports <strong>one</strong> cache scope (<code>scope=images</code>) rather than the previous scope-per-image: six scopes would store the same layer six times against the repo's 10 GB Actions-cache budget.</p>
 <h3 id="trade-offs-accepted">Trade-offs accepted<a class="headerlink" href="#trade-offs-accepted" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>A <code>vendor/</code> bump pays for a full-tree compile.</strong> The <code>deps</code> stage compiles
-  every vendored package, including test-only dependencies (ginkgo, envtest)
-  that no image links. On a dependabot vendor bump that is more work than the
-  old per-image closures. It is paid once and then cached for every subsequent
-  PR, which is the trade we want.</li>
-<li><strong><code>publish.yml</code> executes <code>deps</code> for real.</strong> Release builds are <code>no-cache: true</code>
-  for supply-chain reasons (Q127), so they cannot benefit from the stage and
-  compile the whole tree per leg per architecture. Measured cost is a couple of
-  minutes on the smaller legs, well inside the job's 30-minute timeout. The
-  alternative — an ARG-selected base so only the bake path warms — was rejected:
-  it would make e2e exercise a different stage graph than the one releases build
-  from, and the saving is on a job that runs a handful of times a year.</li>
+<li><strong>A <code>vendor/</code> bump pays for a full-tree compile.</strong> The <code>deps</code> stage compiles every vendored package, including test-only dependencies (ginkgo, envtest) that no image links.
+  On a dependabot vendor bump that is more work than the old per-image closures.
+  It is paid once and then cached for every subsequent PR, which is the trade we want.</li>
+<li><strong><code>publish.yml</code> executes <code>deps</code> for real.</strong> Release builds are <code>no-cache: true</code> for supply-chain reasons (Q127), so they cannot benefit from the stage and compile the whole tree per leg per architecture.
+  Measured cost is a couple of minutes on the smaller legs, well inside the job's 30-minute timeout.
+  The alternative — an ARG-selected base so only the bake path warms — was rejected: it would make e2e exercise a different stage graph than the one releases build from, and the saving is on a job that runs a handful of times a year.</li>
 </ul>
 <h3 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h3>
 <ul>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">Dockerfile</a> (new) — replaces <code>cmd/{gmc,agc,proxy,worker}/Dockerfile</code>,
-  <code>cmd/worker/Dockerfile.wrapper</code>, <code>test/fakegithub/Dockerfile</code> (all deleted)</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">Dockerfile</a> (new) — replaces <code>cmd/{gmc,agc,proxy,worker}/Dockerfile</code>, <code>cmd/worker/Dockerfile.wrapper</code>, <code>test/fakegithub/Dockerfile</code> (all deleted)</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl">docker-bake.hcl</a> — <code>target</code> per image, one cache scope</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">.github/workflows/publish.yml</a>,
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">security-scan.yml</a>,
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dockerfile-lint.yml">dockerfile-lint.yml</a> — matrices
-  select a stage instead of a file</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/security/trivy-scan.sh">scripts/security/trivy-scan.sh</a> — <code>--target</code>; also gained
-  the <code>wrapper</code> leg it was missing relative to the CI matrix</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/runner_version_test.go">cmd/agc/names/runner_version_test.go</a>
-  — the runner-version lockstep guard reads the root Dockerfile</li>
-<li>Path filters in <code>e2e-test.yml</code>, <code>e2e-calico.yml</code>, <code>security-scan.yml</code>,
-  <code>unit-test.yml</code> — the Dockerfiles used to sit under <code>cmd/**</code> and <code>test/**</code> and
-  were covered incidentally; at the repo root the file needs its own entry or an
-  image-only change silently skips those gates</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">.github/workflows/publish.yml</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">security-scan.yml</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dockerfile-lint.yml">dockerfile-lint.yml</a> — matrices select a stage instead of a file</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/security/trivy-scan.sh">scripts/security/trivy-scan.sh</a> — <code>--target</code>; also gained the <code>wrapper</code> leg it was missing relative to the CI matrix</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/runner_version_test.go">cmd/agc/names/runner_version_test.go</a> — the runner-version lockstep guard reads the root Dockerfile</li>
+<li>Path filters in <code>e2e-test.yml</code>, <code>e2e-calico.yml</code>, <code>security-scan.yml</code>, <code>unit-test.yml</code> — the Dockerfiles used to sit under <code>cmd/**</code> and <code>test/**</code> and were covered incidentally; at the repo root the file needs its own entry or an image-only change silently skips those gates</li>
 </ul>
 <hr />
 <h2 id="4-overlap-the-runner-disk-cleanup-with-job-setup-">4. Overlap the runner disk cleanup with job setup ✓<a class="headerlink" href="#4-overlap-the-runner-disk-cleanup-with-job-setup-" title="Permanent link">&para;</a></h2>
 <p><strong>Saving: 17–61 s</strong></p>
-<p>"Free runner disk space" (Q292's ENOSPC mitigation) deletes ~15–20 GB of unused
-toolchains and was pure serial critical path before any other step. Nothing
-until the bake needs that headroom.</p>
+<p>"Free runner disk space" (Q292's ENOSPC mitigation) deletes ~15–20 GB of unused toolchains and was pure serial critical path before any other step.
+Nothing until the bake needs that headroom.</p>
 <h3 id="approach-shipped_1">Approach (shipped)<a class="headerlink" href="#approach-shipped_1" title="Permanent link">&para;</a></h3>
-<p>The deletions moved into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/free-runner-disk.sh">scripts/e2e/free-runner-disk.sh</a>
-and now run in two workflow steps:</p>
+<p>The deletions moved into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/free-runner-disk.sh">scripts/e2e/free-runner-disk.sh</a> and now run in two workflow steps:</p>
 <ul>
-<li><strong>Start freeing runner disk space</strong>, at the top of the job, launches the
-  script under <code>setsid</code> so tearing the step down cannot take the cleanup with
-  it. The deletions then overlap with setup-go, setup-helm, the kind install,
-  the buildx boot, and the four cache-restore/mirror steps.</li>
-<li><strong>Wait for the disk cleanup to finish</strong>, immediately before the bake, blocks
-  on a sentinel the script writes as its last action.</li>
+<li><strong>Start freeing runner disk space</strong>, at the top of the job, launches the script under <code>setsid</code> so tearing the step down cannot take the cleanup with it.
+  The deletions then overlap with setup-go, setup-helm, the kind install, the buildx boot, and the four cache-restore/mirror steps.</li>
+<li><strong>Wait for the disk cleanup to finish</strong>, immediately before the bake, blocks on a sentinel the script writes as its last action.</li>
 </ul>
-<p>The barrier is what makes this safe rather than a re-run of Q292. Everything
-above it is light on disk; everything below it — six baked images plus the
-kind-loads — is exactly what exhausted the filesystem before. The sentinel is
-written last and only on the success path, so a deletion that fails under
-<code>set -e</code> looks identical to a dead process: the waiter times out (180 s, chosen
-to catch a dead process rather than a slow one) and runs the cleanup
-synchronously instead of building on a half-cleaned runner. Re-deleting paths
-the background run already removed is a no-op.</p>
+<p>The barrier is what makes this safe rather than a re-run of Q292.
+Everything above it is light on disk; everything below it — six baked images plus the kind-loads — is exactly what exhausted the filesystem before.
+The sentinel is written last and only on the success path, so a deletion that fails under <code>set -e</code> looks identical to a dead process: the waiter times out (180 s, chosen to catch a dead process rather than a slow one) and runs the cleanup synchronously instead of building on a half-cleaned runner.
+Re-deleting paths the background run already removed is a no-op.</p>
 <h2 id="5-de-serialize-e2e_agc_workerpodlifecycle-">5. De-serialize <code>E2E_AGC_WorkerPodLifecycle</code> ✓<a class="headerlink" href="#5-de-serialize-e2e_agc_workerpodlifecycle-" title="Permanent link">&para;</a></h2>
 <p><strong>Saving: ~60 s off the serial tail</strong></p>
-<p>Its three specs were <code>Serial</code> for a reason that no longer held. The comment said
-session IDs carry no tenant identity, so the suite enqueued a job onto <em>every</em>
-active fakegithub session and could not run alongside other session-consuming
-suites. But fakegithub grew an owner filter since —
-<code>GET /control/sessions?owner=&lt;prefix&gt;</code>, already used by <code>singleuse_selfheal</code>,
-<code>acquire_admission</code>, and <code>job_lifecycle</code> via <code>fakegithubActiveSessionsForOwner</code>.</p>
+<p>Its three specs were <code>Serial</code> for a reason that no longer held.
+The comment said session IDs carry no tenant identity, so the suite enqueued a job onto <em>every</em> active fakegithub session and could not run alongside other session-consuming suites.
+But fakegithub grew an owner filter since — <code>GET /control/sessions?owner=&lt;prefix&gt;</code>, already used by <code>singleuse_selfheal</code>, <code>acquire_admission</code>, and <code>job_lifecycle</code> via <code>fakegithubActiveSessionsForOwner</code>.</p>
 <h3 id="approach-shipped_2">Approach (shipped)<a class="headerlink" href="#approach-shipped_2" title="Permanent link">&para;</a></h3>
 <ul>
-<li>The enqueue loop is scoped by owner prefix to this suite's own two tenants
-  instead of spraying every active session.</li>
-<li>Those tenants get distinct ActionsGateway names (<code>podclean-ag</code>, <code>podstuck-ag</code>)
-  where both were <code>test-ag</code> before. Session ownerName is
-  <code>&lt;runnerGroup&gt;-&lt;agentIndex&gt;</code> and RunnerGroup name is <code>&lt;ag&gt;-&lt;first label&gt;</code>, so
-  the ActionsGateway name is what makes the prefix selective — and sharing
-  <code>test-ag</code> with <code>job_lifecycle</code> is precisely what made the spray unavoidable.</li>
+<li>The enqueue loop is scoped by owner prefix to this suite's own two tenants instead of spraying every active session.</li>
+<li>Those tenants get distinct ActionsGateway names (<code>podclean-ag</code>, <code>podstuck-ag</code>) where both were <code>test-ag</code> before.
+  Session ownerName is <code>&lt;runnerGroup&gt;-&lt;agentIndex&gt;</code> and RunnerGroup name is <code>&lt;ag&gt;-&lt;first label&gt;</code>, so the ActionsGateway name is what makes the prefix selective — and sharing <code>test-ag</code> with <code>job_lifecycle</code> is precisely what made the spray unavoidable.</li>
 <li><code>Serial</code> dropped; <code>Ordered</code> kept.</li>
 </ul>
-<p>Dropping <code>Serial</code> does not disturb the shared <code>fakegithubLocalPort</code> package
-var. Six sibling suites (<code>job_lifecycle</code>, <code>acquire_admission</code>,
-<code>singleuse_selfheal</code>, <code>vault_workload_identity</code>, <code>v2_multigateway</code>,
-<code>worker_securitycontext</code>) already assign it from their own base port in their own
-<code>BeforeAll</code> without being <code>Serial</code>: Ginkgo runs an <code>Ordered</code> container's specs
-contiguously within one process, so no other container can reassign it
-mid-suite. This suite keeps its own base port (19300).</p>
-<p>The general rule behind that — the two guarantees, and the mutual exclusion it
-does <em>not</em> grant — is in
-<a href="../../development/testing/#ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state">testing.md</a>.</p>
+<p>Dropping <code>Serial</code> does not disturb the shared <code>fakegithubLocalPort</code> package var.
+Six sibling suites (<code>job_lifecycle</code>, <code>acquire_admission</code>, <code>singleuse_selfheal</code>, <code>vault_workload_identity</code>, <code>v2_multigateway</code>, <code>worker_securitycontext</code>) already assign it from their own base port in their own <code>BeforeAll</code> without being <code>Serial</code>: Ginkgo runs an <code>Ordered</code> container's specs contiguously within one process, so no other container can reassign it mid-suite.
+This suite keeps its own base port (19300).</p>
+<p>The general rule behind that — the two guarantees, and the mutual exclusion it does <em>not</em> grant — is in <a href="../../development/testing/#ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state">testing.md</a>.</p>
 <h2 id="6-trim-the-hpa-specs-fixed-waits-">6. Trim the HPA spec's fixed waits ✓<a class="headerlink" href="#6-trim-the-hpa-specs-fixed-waits-" title="Permanent link">&para;</a></h2>
 <p><strong>Saving: ~15 s off the serial tail, plus part of the ScalingActive wait</strong></p>
-<p><code>E2E_GMC_HPADrivesScaleUp</code> is 78 s, of which 30 s was a fixed
-<code>Consistently(30*time.Second, ...)</code> — the Q283 regression guard that the
-reconciler does not claim <code>.spec.replicas</code> back from the HPA.</p>
+<p><code>E2E_GMC_HPADrivesScaleUp</code> is 78 s, of which 30 s was a fixed <code>Consistently(30*time.Second, ...)</code> — the Q283 regression guard that the reconciler does not claim <code>.spec.replicas</code> back from the HPA.</p>
 <h3 id="approach-shipped_3">Approach (shipped)<a class="headerlink" href="#approach-shipped_3" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>Consistently</code> 30 s → 15 s.</strong> What determines whether a revert is caught is
-  the reconcile rate, not the wall-clock window; every proxy pod reaching Ready
-  re-triggers a reconcile, and at 2 s polling 15 s still samples the Deployment
-  eight times across many passes. This is a fixed cost paid on every run inside
-  a Serial spec, so it lands whole on the critical tail.</li>
+<li><strong><code>Consistently</code> 30 s → 15 s.</strong> What determines whether a revert is caught is the reconcile rate, not the wall-clock window; every proxy pod reaching Ready re-triggers a reconcile, and at 2 s polling 15 s still samples the Deployment eight times across many passes.
+  This is a fixed cost paid on every run inside a Serial spec, so it lands whole on the critical tail.</li>
 </ul>
 <h3 id="tried-and-reverted-metrics-server---metric-resolution-15-s--10-s">Tried and reverted: metrics-server <code>--metric-resolution</code> 15 s → 10 s<a class="headerlink" href="#tried-and-reverted-metrics-server---metric-resolution-15-s--10-s" title="Permanent link">&para;</a></h3>
-<p>The HPA cannot report <code>ScalingActive=True</code> until metrics-server has scraped, so
-the default resolution sits directly in front of this spec. Lowering it to 10 s
-— metrics-server's minimum <em>accepted</em> value — looked like free latency.</p>
-<p>It is not. <code>--metric-resolution</code> must also <strong>exceed kubelet's housekeeping
-interval</strong> (10 s by default). At exactly 10 s metrics-server keeps re-reading
-unchanged cAdvisor samples, discards them as duplicate timestamps, and never
-serves usage at all — so the outcome is not a slower HPA but a dead one.</p>
+<p>The HPA cannot report <code>ScalingActive=True</code> until metrics-server has scraped, so the default resolution sits directly in front of this spec.
+Lowering it to 10 s — metrics-server's minimum <em>accepted</em> value — looked like free latency.</p>
+<p>It is not. <code>--metric-resolution</code> must also <strong>exceed kubelet's housekeeping interval</strong> (10 s by default).
+At exactly 10 s metrics-server keeps re-reading unchanged cAdvisor samples, discards them as duplicate timestamps, and never serves usage at all — so the outcome is not a slower HPA but a dead one.</p>
 <p>On PR #874 both specs that gate on <code>ScalingActive=True</code> timed out:</p>
 <table>
 <thead>
@@ -3215,26 +3135,16 @@ serves usage at all — so the outcome is not a slower HPA but a dead one.</p>
 </tr>
 </tbody>
 </table>
-<p>Reverted, with the reasoning recorded inline at the patch site so the next
-person to spot that 15 s does not re-derive it the expensive way. The lesson is
-the repo's own rule: this was shipped on a recalled documentation fact instead
-of a measurement, and the e2e leg is what caught it.</p>
+<p>Reverted, with the reasoning recorded inline at the patch site so the next person to spot that 15 s does not re-derive it the expensive way.
+The lesson is the repo's own rule: this was shipped on a recalled documentation fact instead of a measurement, and the e2e leg is what caught it.</p>
 <h3 id="not-done-the-kube-controller-manager-hpa-sync-period">Not done: the kube-controller-manager HPA sync period<a class="headerlink" href="#not-done-the-kube-controller-manager-hpa-sync-period" title="Permanent link">&para;</a></h3>
-<p>The other bound on <code>ScalingActive</code> is kube-controller-manager's 15 s
-<code>--horizontal-pod-autoscaler-sync-period</code>, settable through a kind
-<code>kubeadmConfigPatches</code> block. Left alone deliberately: it raises the reconcile
-rate cluster-wide, on a 4-vCPU runner, for perhaps 5 s on one spec — and CPU
-starvation on this cluster is the documented mechanism behind the Q300 kindnet
-flake family. Not a trade worth making for 5 s.</p>
+<p>The other bound on <code>ScalingActive</code> is kube-controller-manager's 15 s <code>--horizontal-pod-autoscaler-sync-period</code>, settable through a kind <code>kubeadmConfigPatches</code> block.
+Left alone deliberately: it raises the reconcile rate cluster-wide, on a 4-vCPU runner, for perhaps 5 s on one spec — and CPU starvation on this cluster is the documented mechanism behind the Q300 kindnet flake family.
+Not a trade worth making for 5 s.</p>
 <h2 id="not-doing">Not doing<a class="headerlink" href="#not-doing" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>A larger runner.</strong> Both poles are CPU-bound on a 4-vCPU <code>ubuntu-latest</code> and
-  both scale close to linearly, and <code>vars.GAG_E2E_RUNNER</code> already routes this
-  job to self-hosted runners when set — so this is a config decision, not a code
-  change, and it is orthogonal to everything above.</li>
-<li><strong>Precompiling the Ginkgo test binary.</strong> The "Run e2e tests" step is 336 s
-  against 294 s of specs; the ~18 s of Ginkgo compile/setup in between is not
-  worth a change.</li>
+<li><strong>A larger runner.</strong> Both poles are CPU-bound on a 4-vCPU <code>ubuntu-latest</code> and both scale close to linearly, and <code>vars.GAG_E2E_RUNNER</code> already routes this job to self-hosted runners when set — so this is a config decision, not a code change, and it is orthogonal to everything above.</li>
+<li><strong>Precompiling the Ginkgo test binary.</strong> The "Run e2e tests" step is 336 s against 294 s of specs; the ~18 s of Ginkgo compile/setup in between is not worth a change.</li>
 </ul>
 
 

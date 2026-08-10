@@ -2746,16 +2746,21 @@
 <h1 id="appendix-b--worker-isolation-runtime-optional">Appendix B — Worker Isolation Runtime (Optional)<a class="headerlink" href="#appendix-b--worker-isolation-runtime-optional" title="Permanent link">&para;</a></h1>
 <p>← <a href="../appendix-a-capacity-slos/">Appendix A</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-c-ai-implementation/">Appendix C — AI-Assisted Implementation →</a></p>
 <hr />
-<p>Worker pods execute arbitrary workflow code, which is untrusted by definition. The system functions correctly on the default <code>runc</code> container runtime, but operators concerned about kernel-level container-escape attacks have the option of running worker pods under a sandboxed runtime by setting a <code>RuntimeClass</code> on the worker <code>PodTemplate</code>.</p>
-<p><strong>This is optional.</strong> Sandboxed runtimes add operational complexity (additional node configuration, larger pod startup latency, occasional kernel-feature incompatibilities) that may not be justified for every deployment. Use this appendix to decide whether to opt in.</p>
+<p>Worker pods execute arbitrary workflow code, which is untrusted by definition.
+The system functions correctly on the default <code>runc</code> container runtime, but operators concerned about kernel-level container-escape attacks have the option of running worker pods under a sandboxed runtime by setting a <code>RuntimeClass</code> on the worker <code>PodTemplate</code>.</p>
+<p><strong>This is optional.</strong> Sandboxed runtimes add operational complexity (additional node configuration, larger pod startup latency, occasional kernel-feature incompatibilities) that may not be justified for every deployment.
+Use this appendix to decide whether to opt in.</p>
 <blockquote>
 <p><strong>Validation status.</strong> The AGC honours a <code>runtimeClassName</code> set on the worker <code>PodTemplate</code> and applies no override that would strip it.</p>
-<p><strong>Kata Containers is live-validated (Q226/Q286).</strong> GAG's own end-to-end CI creates a <code>kind</code> cluster inside a worker pod under <code>runtimeClassName: kata</code> with zero <code>privileged: true</code>, on a nested-virtualization GKE node pool, and that is the dogfood default. The validated node prerequisites, the capability set an unprivileged <code>dockerd</code> needs, and the boundary's real limits are in <a href="../../operations/kata-dind-workloads/">Running DinD workloads under Kata</a>.</p>
+<p><strong>Kata Containers is live-validated (Q226/Q286).</strong> GAG's own end-to-end CI creates a <code>kind</code> cluster inside a worker pod under <code>runtimeClassName: kata</code> with zero <code>privileged: true</code>, on a nested-virtualization GKE node pool, and that is the dogfood default.
+The validated node prerequisites, the capability set an unprivileged <code>dockerd</code> needs, and the boundary's real limits are in <a href="../../operations/kata-dind-workloads/">Running DinD workloads under Kata</a>.</p>
 <p><strong>gVisor has not been exercised on a real cluster (Q15).</strong> Validating it needs a runsc-enabled node pool; operators selecting <code>runsc</code> should validate the full job path on their own cluster before relying on it for isolation.</p>
 </blockquote>
 <hr />
 <h2 id="b1-threat-coverage">B.1. Threat Coverage<a class="headerlink" href="#b1-threat-coverage" title="Permanent link">&para;</a></h2>
-<p>The escape vectors covered by sandboxed runtimes are kernel-level: shared-kernel exploits (e.g., <code>dirtyc0w</code>-class vulnerabilities), syscall-table abuse, and privilege escalation through container-runtime bugs. They do <strong>not</strong> cover the threats that ordinary Pod Security Standards already mitigate: dropped capabilities, non-root user, read-only root filesystem, seccomp profiles. Those should be enforced <em>regardless</em> of the runtime choice.</p>
+<p>The escape vectors covered by sandboxed runtimes are kernel-level: shared-kernel exploits (e.g., <code>dirtyc0w</code>-class vulnerabilities), syscall-table abuse, and privilege escalation through container-runtime bugs.
+They do <strong>not</strong> cover the threats that ordinary Pod Security Standards already mitigate: dropped capabilities, non-root user, read-only root filesystem, seccomp profiles.
+Those should be enforced <em>regardless</em> of the runtime choice.</p>
 <table>
 <thead>
 <tr>
@@ -2846,7 +2851,8 @@
 <h2 id="b3-when-to-opt-in">B.3. When to Opt In<a class="headerlink" href="#b3-when-to-opt-in" title="Permanent link">&para;</a></h2>
 <p><strong>Strong reasons to enable a sandboxed runtime:</strong></p>
 <ul>
-<li>The cluster hosts both first-party and third-party workflow code (e.g. PRs from external contributors).</li>
+<li>The cluster hosts both first-party and third-party workflow code (e.g.
+  PRs from external contributors).</li>
 <li>The compliance posture requires hardware or hypervisor-level workload isolation.</li>
 <li>A previous incident or pen-test surfaced a kernel-level concern.</li>
 </ul>
@@ -2870,11 +2876,20 @@
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">            </span><span class="nt">requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2Gi&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
-<p>The cluster must have the corresponding <code>RuntimeClass</code> object installed and at least one node carrying the appropriate handler. The Gateway Manager Controller (GMC) does not install RuntimeClasses or runtime handlers — that is a cluster-admin operation.</p>
+<p>The cluster must have the corresponding <code>RuntimeClass</code> object installed and at least one node carrying the appropriate handler.
+The Gateway Manager Controller (GMC) does not install RuntimeClasses or runtime handlers — that is a cluster-admin operation.</p>
 <h2 id="b5-sidecar-containers-and-pod-reaping-q249">B.5. Sidecar containers and pod reaping (Q249)<a class="headerlink" href="#b5-sidecar-containers-and-pod-reaping-q249" title="Permanent link">&para;</a></h2>
-<p>A worker pod is one runner container plus, optionally, sidecars. A Kubernetes pod terminates only when <strong>every</strong> regular <code>spec.containers[]</code> entry has exited, so a sidecar that runs for the life of the job — a <code>docker:dind</code> daemon, a rootless BuildKit sidecar, a metrics agent — keeps the pod alive after the runner container finishes if it is declared as a <strong>regular container</strong>. The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the <code>RunnerSet</code>'s <code>maxWorkers</code> — the same stranding class as <a href="../../STATUS/">Q247</a> (a pod left behind after its job is gone). Under a concurrent matrix the pool collapses to the pods that happened to reap.</p>
-<p>GAG does <strong>not</strong> solve this with a bespoke reaper — it relies on the upstream mechanism. A <strong>native sidecar</strong> (<a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>: a <code>restartPolicy: Always</code> init container, beta/on-by-default in Kubernetes 1.29, GA in 1.33) is torn down by the kubelet when the main container exits, so the pod completes on its own. Operators declare long-running build sidecars that way.</p>
-<p>Because nothing in a pod spec declares that a container "runs forever" (<code>dockerd</code> never exits; <code>busybox true</code> exits at once), the detection is necessarily a <strong>heuristic</strong> — "a regular, non-runner container may block reaping." That is why every outlet is a <strong>non-blocking warning</strong>, never a rejection: an admission <code>Warning:</code>, the advisory <code>PossibleReapBlockingSidecar</code> condition on the <code>RunnerSet</code>, and the <code>actions_gateway_reap_blocking_sidecar_templates</code> gauge. A per-template <code>actions-gateway.com/self-exiting-sidecars</code> name-list annotation acknowledges sidecars the operator asserts exit cleanly, silencing all three for the named containers only (a name-list, not a boolean, so a newly added footgun still warns). The operator-facing how-to lives in <a href="../../operations/in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">in-runner image builds § Sidecar containers must be native sidecars</a>.</p>
+<p>A worker pod is one runner container plus, optionally, sidecars.
+A Kubernetes pod terminates only when <strong>every</strong> regular <code>spec.containers[]</code> entry has exited, so a sidecar that runs for the life of the job — a <code>docker:dind</code> daemon, a rootless BuildKit sidecar, a metrics agent — keeps the pod alive after the runner container finishes if it is declared as a <strong>regular container</strong>.
+The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the <code>RunnerSet</code>'s <code>maxWorkers</code> — the same stranding class as <a href="../../STATUS/">Q247</a> (a pod left behind after its job is gone).
+Under a concurrent matrix the pool collapses to the pods that happened to reap.</p>
+<p>GAG does <strong>not</strong> solve this with a bespoke reaper — it relies on the upstream mechanism.
+A <strong>native sidecar</strong> (<a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>: a <code>restartPolicy: Always</code> init container, beta/on-by-default in Kubernetes 1.29, GA in 1.33) is torn down by the kubelet when the main container exits, so the pod completes on its own.
+Operators declare long-running build sidecars that way.</p>
+<p>Because nothing in a pod spec declares that a container "runs forever" (<code>dockerd</code> never exits; <code>busybox true</code> exits at once), the detection is necessarily a <strong>heuristic</strong> — "a regular, non-runner container may block reaping."
+That is why every outlet is a <strong>non-blocking warning</strong>, never a rejection: an admission <code>Warning:</code>, the advisory <code>PossibleReapBlockingSidecar</code> condition on the <code>RunnerSet</code>, and the <code>actions_gateway_reap_blocking_sidecar_templates</code> gauge.
+A per-template <code>actions-gateway.com/self-exiting-sidecars</code> name-list annotation acknowledges sidecars the operator asserts exit cleanly, silencing all three for the named containers only (a name-list, not a boolean, so a newly added footgun still warns).
+The operator-facing how-to lives in <a href="../../operations/in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">in-runner image builds § Sidecar containers must be native sidecars</a>.</p>
 <hr />
 <p>← <a href="../appendix-a-capacity-slos/">Appendix A</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-c-ai-implementation/">Appendix C — AI-Assisted Implementation →</a></p>
 

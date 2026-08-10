@@ -2643,20 +2643,13 @@
 
 <h1 id="release-ladder-to-v200">Release ladder to <code>v2.0.0</code><a class="headerlink" href="#release-ladder-to-v200" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: shape decided 2026-08-09.</strong> How many releases stand between here and
-the v2 General Availability (GA) cut, what each carries, and what is
-deliberately not scheduled at all. Per-release detail lives in the individual
-plans; this page is the map between them.</p>
+<p><strong>Status: shape decided 2026-08-09.</strong> How many releases stand between here and the v2 General Availability (GA) cut, what each carries, and what is deliberately not scheduled at all.
+Per-release detail lives in the individual plans; this page is the map between them.</p>
 </blockquote>
 <h2 id="why-this-exists">Why this exists<a class="headerlink" href="#why-this-exists" title="Permanent link">&para;</a></h2>
-<p>The backlog answers "what is next" and the individual release plans answer "what
-is in this one". Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
-what is punted past it"</strong>, so the roadmap's near-term section accumulated work
-with no release behind it: on 2026-08-09 it listed twelve items, nine of which
-carried no release gate, under a heading that reads <em>"Work that is scoped and
-actively being built"</em>.</p>
-<p>That is a page telling adopters nine things are in progress when they are
-waiting on demand, a prerequisite, or hardware nobody has.</p>
+<p>The backlog answers "what is next" and the individual release plans answer "what is in this one".
+Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and what is punted past it"</strong>, so the roadmap's near-term section accumulated work with no release behind it: on 2026-08-09 it listed twelve items, nine of which carried no release gate, under a heading that reads <em>"Work that is scoped and actively being built"</em>.</p>
+<p>That is a page telling adopters nine things are in progress when they are waiting on demand, a prerequisite, or hardware nobody has.</p>
 <h2 id="the-ladder">The ladder<a class="headerlink" href="#the-ladder" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2690,30 +2683,17 @@ waiting on demand, a prerequisite, or hardware nobody has.</p>
 </tbody>
 </table>
 <h2 id="why-16-exists-rather-than-folding-into-15">Why 1.6 exists rather than folding into 1.5<a class="headerlink" href="#why-16-exists-rather-than-folding-into-15" title="Permanent link">&para;</a></h2>
-<p><strong>Revised 2026-08-09.</strong> This section originally rested on two capability drops
-that go permanent at <code>v2.0.0</code>, and one of them closed while the page was being
-written: <a href="../arc-parity/">Q766</a> ported the abandoned-run recovery to the ScaleSet
-tier inside 1.4, so it is shipped rather than scheduled. The surviving one is
-<a href="../../STATUS/#Q726">Q726</a>, where <code>v1alpha1</code> puts no ceiling on <code>runnerLabels</code>
-while <code>v2beta1</code> enforces exactly one and the godoc's workaround is to stay on a
-<code>v2alpha1</code> Classic set, which <code>v2.0.0</code> removes. Q726 is <code>M</code> and is admitted to
-1.5, so it needs no release of its own.</p>
-<p>So 1.6 is not the pre-2.0 repair slot any more. What justifies it is
-<a href="../../STATUS/#Q719">Q719</a> and <a href="../../STATUS/#Q727">Q727</a>, which are the last two
-<a href="../arc-parity/">ARC parity</a> gaps and cannot compress into 1.5: Q727 is <code>L</code> and
-strictly depends on Q719's <code>ReadWriteMany</code> validation, and 1.5 already carries
-three <code>M</code> items plus a marketing body of work.</p>
-<p>The soak argument is unchanged and still favours a separate minor. <code>v2-ga.md</code>
-Phase 1 requires no incompatible <code>v2beta1</code> shape change across at least two
-minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without
-restarting the clock.</p>
+<p><strong>Revised 2026-08-09.</strong> This section originally rested on two capability drops that go permanent at <code>v2.0.0</code>, and one of them closed while the page was being written: <a href="../arc-parity/">Q766</a> ported the abandoned-run recovery to the ScaleSet tier inside 1.4, so it is shipped rather than scheduled.
+The surviving one is <a href="../../STATUS/#Q726">Q726</a>, where <code>v1alpha1</code> puts no ceiling on <code>runnerLabels</code> while <code>v2beta1</code> enforces exactly one and the godoc's workaround is to stay on a <code>v2alpha1</code> Classic set, which <code>v2.0.0</code> removes.
+Q726 is <code>M</code> and is admitted to 1.5, so it needs no release of its own.</p>
+<p>So 1.6 is not the pre-2.0 repair slot any more.
+What justifies it is <a href="../../STATUS/#Q719">Q719</a> and <a href="../../STATUS/#Q727">Q727</a>, which are the last two <a href="../arc-parity/">ARC parity</a> gaps and cannot compress into 1.5: Q727 is <code>L</code> and strictly depends on Q719's <code>ReadWriteMany</code> validation, and 1.5 already carries three <code>M</code> items plus a marketing body of work.</p>
+<p>The soak argument is unchanged and still favours a separate minor. <code>v2-ga.md</code> Phase 1 requires no incompatible <code>v2beta1</code> shape change across at least two minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without restarting the clock.</p>
 <p>If Q719 and Q727 both slip on demand, 1.6 has no contents and should not be cut.
-That is the honest reading of a ladder whose middle rung exists to carry two
-specific items.</p>
+That is the honest reading of a ladder whose middle rung exists to carry two specific items.</p>
 <h2 id="what-is-punted-past-v200">What is punted past <code>v2.0.0</code><a class="headerlink" href="#what-is-punted-past-v200" title="Permanent link">&para;</a></h2>
-<p>Not scheduled, and that is a decision rather than an oversight. Each waits on a
-real signal, and each carries a revive trigger on the backlog rather than a
-release:</p>
+<p>Not scheduled, and that is a decision rather than an oversight.
+Each waits on a real signal, and each carries a revive trigger on the backlog rather than a release:</p>
 <table>
 <thead>
 <tr>
@@ -2740,35 +2720,21 @@ release:</p>
 </tr>
 </tbody>
 </table>
-<p>The proxy cluster is the clearest case and the one most likely to be
-re-litigated. <a href="../release-1.4/">release-1.4.md</a> shelved all four together with the
-reasoning that they are a coherent release theme, and recorded in the same
-breath that <strong>none has demand recorded against it</strong>. A theme with no demand is a
-theme, not a release.</p>
+<p>The proxy cluster is the clearest case and the one most likely to be re-litigated.
+<a href="../release-1.4/">release-1.4.md</a> shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that <strong>none has demand recorded against it</strong>.
+A theme with no demand is a theme, not a release.</p>
 <h2 id="the-rule-this-establishes">The rule this establishes<a class="headerlink" href="#the-rule-this-establishes" title="Permanent link">&para;</a></h2>
-<p><strong>The roadmap's near-term section means "committed to a named release".</strong> An item
-with no release belongs in Deferred with a revive trigger, and surfaces on the
-roadmap under <em>Exploring / longer-term</em>.</p>
-<p>This is enforceable rather than aspirational: <code>roadmapcheck</code> already binds each
-roadmap bullet to its backlog rows and requires a near-term bullet to name at
-least one Queue row. Parking an item moves the row to Deferred, which moves the
-bullet, which the gate checks.</p>
-<p>The failure mode to watch is the comfortable one: leaving an item in the Queue
-because parking it feels like giving up. Deferred is not a graveyard here, it is
-a trigger list, and every row in it names the event that revives it.</p>
+<p><strong>The roadmap's near-term section means "committed to a named release".</strong> An item with no release belongs in Deferred with a revive trigger, and surfaces on the roadmap under <em>Exploring / longer-term</em>.</p>
+<p>This is enforceable rather than aspirational: <code>roadmapcheck</code> already binds each roadmap bullet to its backlog rows and requires a near-term bullet to name at least one Queue row.
+Parking an item moves the row to Deferred, which moves the bullet, which the gate checks.</p>
+<p>The failure mode to watch is the comfortable one: leaving an item in the Queue because parking it feels like giving up.
+Deferred is not a graveyard here, it is a trigger list, and every row in it names the event that revives it.</p>
 <h2 id="what-this-does-not-decide">What this does not decide<a class="headerlink" href="#what-this-does-not-decide" title="Permanent link">&para;</a></h2>
-<p><strong>Applied 2026-08-09.</strong> The seven punted items above moved to Deferred with the
-triggers this page names, and <a href="../../STATUS/#Q719">Q719</a> and
-<a href="../../STATUS/#Q727">Q727</a> now carry <code>1.6-gate</code>, which is what publishes the
-commitment where an adopter reads it.</p>
-<p>That does not make 1.6 a decided release. The labels encode the target, and the
-reading above still governs: if both items slip on demand, the labels come off
-rather than an empty tag being cut. <code>release-1.6.md</code> gets written when 1.5 tags,
-on the same evidence the other release plans use.</p>
-<p>The one hard constraint the ladder does encode is <a href="../../STATUS/#Q726">Q726</a>
-landing before <code>v2.0.0</code>, since 2.0 removes the <code>v2alpha1</code> escape hatch its godoc
-points at. Its <code>1.5-gate</code> label is what enforces that, a release earlier than
-strictly required.</p>
+<p><strong>Applied 2026-08-09.</strong> The seven punted items above moved to Deferred with the triggers this page names, and <a href="../../STATUS/#Q719">Q719</a> and <a href="../../STATUS/#Q727">Q727</a> now carry <code>1.6-gate</code>, which is what publishes the commitment where an adopter reads it.</p>
+<p>That does not make 1.6 a decided release.
+The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut. <code>release-1.6.md</code> gets written when 1.5 tags, on the same evidence the other release plans use.</p>
+<p>The one hard constraint the ladder does encode is <a href="../../STATUS/#Q726">Q726</a> landing before <code>v2.0.0</code>, since 2.0 removes the <code>v2alpha1</code> escape hatch its godoc points at.
+Its <code>1.5-gate</code> label is what enforces that, a release earlier than strictly required.</p>
 
 
 

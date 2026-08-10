@@ -2704,122 +2704,70 @@
 
 
 <h1 id="q603--a-stop-between-concluding-a-job-and-deleting-its-message-replays-the-assignment">Q603 — A stop between concluding a job and deleting its message replays the assignment<a class="headerlink" href="#q603--a-stop-between-concluding-a-job-and-deleting-its-message-replays-the-assignment" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> done 2026-08-02. The graceful-stop half is closed and regression-tested;
-the hard-kill residual was closed by Q606: the concluded-job guards are persisted to a
-per-RunnerSet ConfigMap ahead of every delete
-(<a href="../../../design/02-architecture/">02-architecture.md</a>). A third window this doc did not
-see, a conclusion the listener never read, was closed by Q689 on 2026-08-05; see
-<a href="#what-this-does-not-close">What this does not close</a>.</p>
-<p>Q583 made acking two halves: advance the cursor, then delete the message once every
-job it names has concluded. The two halves are not atomic, and nothing carries the
-second one across a process boundary. Q603 is that seam.</p>
+<p><strong>Status:</strong> done 2026-08-02.
+The graceful-stop half is closed and regression-tested; the hard-kill residual was closed by Q606: the concluded-job guards are persisted to a per-RunnerSet ConfigMap ahead of every delete (<a href="../../../design/02-architecture/">02-architecture.md</a>).
+A third window this doc did not see, a conclusion the listener never read, was closed by Q689 on 2026-08-05; see <a href="#what-this-does-not-close">What this does not close</a>.</p>
+<p>Q583 made acking two halves: advance the cursor, then delete the message once every job it names has concluded.
+The two halves are not atomic, and nothing carries the second one across a process boundary.
+Q603 is that seam.</p>
 <h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
-<p><code>settle</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>) marks a
-job concluded <strong>in memory</strong> — it drops the job from every held message's waiting set.
-The message is not deleted there. <code>flushDeletes</code> issues the DELETE, and it is called
-from the poll loop, so the delete lands some time after the conclusion that authorised
-it.</p>
-<p>Between those two moments the queue still holds a message whose only remaining guard
-is process-scoped state. A process that stops in that window leaves the message in the
-queue; the next process polls from cursor 0, receives it with <code>provisioned</code>,
-<code>completed</code>, and <code>abandoned</code> all empty, and provisions a worker for a job that is over.
-That is the Q583 defect returning through the fix's own seam — which is what the row
-means by "Q583 narrows it, not closes it".</p>
-<p>The row was filed off Q602's flake, and the flake is the measurement: the Q583
-regression test stopped its listener on the abandoned counter, which rises at <code>settle</code>,
-and the message was sometimes still undeleted when the process went away. Q602 fixed
-the test by waiting for the delete. Production has no such wait.</p>
+<p><code>settle</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>) marks a job concluded <strong>in memory</strong> — it drops the job from every held message's waiting set.
+The message is not deleted there. <code>flushDeletes</code> issues the DELETE, and it is called from the poll loop, so the delete lands some time after the conclusion that authorised it.</p>
+<p>Between those two moments the queue still holds a message whose only remaining guard is process-scoped state.
+A process that stops in that window leaves the message in the queue; the next process polls from cursor 0, receives it with <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> all empty, and provisions a worker for a job that is over.
+That is the Q583 defect returning through the fix's own seam — which is what the row means by "Q583 narrows it, not closes it".</p>
+<p>The row was filed off Q602's flake, and the flake is the measurement: the Q583 regression test stopped its listener on the abandoned counter, which rises at <code>settle</code>, and the message was sometimes still undeleted when the process went away.
+Q602 fixed the test by waiting for the delete.
+Production has no such wait.</p>
 <h3 id="two-windows-not-one">Two windows, not one<a class="headerlink" href="#two-windows-not-one" title="Permanent link">&para;</a></h3>
-<p><strong>The graceful-stop window is unconditional.</strong> <code>run</code> returns on context cancellation —
-from the top-of-loop check or from <code>handlePollError</code> — with <code>deleteSession</code> as its only
-deferred work. It never flushes. So whatever settled since the last <code>flushDeletes</code> is
-stranded on <em>every</em> rollout, drain, eviction, and scale-down that lands in the window,
-and nothing brings it back: the cursor has already moved past the message, so only a
-new session replaying from 0 will ever see it again — which is exactly the harm.</p>
+<p><strong>The graceful-stop window is unconditional.</strong> <code>run</code> returns on context cancellation — from the top-of-loop check or from <code>handlePollError</code> — with <code>deleteSession</code> as its only deferred work.
+It never flushes.
+So whatever settled since the last <code>flushDeletes</code> is stranded on <em>every</em> rollout, drain, eviction, and scale-down that lands in the window, and nothing brings it back: the cursor has already moved past the message, so only a new session replaying from 0 will ever see it again — which is exactly the harm.</p>
 <p><strong>The in-cycle window is the one the row names.</strong> The loop runs</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>reconcileDeferred → retryDeferred → flushDeletes → GetMessage → handleMessage
 </code></pre></div>
-<p><code>abandonDeferredBefore</code> settles inside <code>reconcileDeferred</code>, so its delete is separated
-from its conclusion by <code>retryDeferred</code> — which re-offers every remaining deferred job,
-walking the runner-name ladder against the network, and which the loop's own comment
-notes "can hold the loop for a few pollBackoffs". The abandon path always has deferred
-jobs by construction, so this is the widest of the in-cycle gaps rather than an
-unlikely one. <code>completeJob</code> settles inside <code>handleMessage</code>, at the end of an iteration,
-so its delete waits on the next iteration's <code>reconcileDeferred</code> (a <code>RefreshSession</code>
-round trip) and <code>retryDeferred</code> before it is issued.</p>
+<p><code>abandonDeferredBefore</code> settles inside <code>reconcileDeferred</code>, so its delete is separated from its conclusion by <code>retryDeferred</code> — which re-offers every remaining deferred job, walking the runner-name ladder against the network, and which the loop's own comment notes "can hold the loop for a few pollBackoffs".
+The abandon path always has deferred jobs by construction, so this is the widest of the in-cycle gaps rather than an unlikely one. <code>completeJob</code> settles inside <code>handleMessage</code>, at the end of an iteration, so its delete waits on the next iteration's <code>reconcileDeferred</code> (a <code>RefreshSession</code> round trip) and <code>retryDeferred</code> before it is issued.</p>
 <h2 id="the-fix">The fix<a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h2>
-<p>Both halves are ordering, and neither needs persistence or an unverified backend
-property.</p>
+<p>Both halves are ordering, and neither needs persistence or an unverified backend property.</p>
 <ol>
 <li>
-<p><strong>Flush on loop exit</strong>, before the session is torn down, on a context detached from
-   the cancelled one — rules 1 and 3 of
-   <a href="../../../development/kubernetes-conventions/#graceful-shutdown-sigterm">kubernetes-conventions.md § Graceful shutdown</a>.
-   An undeleted message for a concluded job is work the listener owns: GitHub is still
-   holding it, and the next process will act on it. The session delete must follow the
-   flush, not precede it — <code>DeleteMessage</code> is issued against the session, and the
-   client reports the 404 a dead session would answer as a successful ack.</p>
+<p><strong>Flush on loop exit</strong>, before the session is torn down, on a context detached from the cancelled one — rules 1 and 3 of <a href="../../../development/kubernetes-conventions/#graceful-shutdown-sigterm">kubernetes-conventions.md § Graceful shutdown</a>.
+   An undeleted message for a concluded job is work the listener owns: GitHub is still holding it, and the next process will act on it.
+   The session delete must follow the flush, not precede it — <code>DeleteMessage</code> is issued against the session, and the client reports the 404 a dead session would answer as a successful ack.</p>
 </li>
 <li>
-<p><strong>Flush adjacent to each settle site</strong> rather than once per cycle at a fixed point:
-   after <code>reconcileDeferred</code> (where abandoning settles) and after <code>handleMessage</code>
-   (where completing settles). No network work then separates a conclusion from its
-   delete, and the per-cycle retry of a failed delete is preserved — it gets two
-   attempts per cycle instead of one.</p>
+<p><strong>Flush adjacent to each settle site</strong> rather than once per cycle at a fixed point: after <code>reconcileDeferred</code> (where abandoning settles) and after <code>handleMessage</code> (where completing settles).
+   No network work then separates a conclusion from its delete, and the per-cycle retry of a failed delete is preserved — it gets two attempts per cycle instead of one.</p>
 </li>
 </ol>
-<p>The AGC pod's grace period is 60s
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_agc_deployment.go">shared_agc_deployment.go</a>),
-so a 10s flush budget mirroring <code>deleteSession</code>'s fits alongside it with room for the
-manager's own shutdown.</p>
+<p>The AGC pod's grace period is 60s (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_agc_deployment.go">shared_agc_deployment.go</a>), so a 10s flush budget mirroring <code>deleteSession</code>'s fits alongside it with room for the manager's own shutdown.</p>
 <h3 id="what-this-does-not-close">What this does not close<a class="headerlink" href="#what-this-does-not-close" title="Permanent link">&para;</a></h3>
-<p><strong>Update 2026-08-05 (Q689):</strong> the two residuals below are both on the far side of a
-conclusion the listener has already read. There is a third window before it: the job
-concludes at GitHub and the process stops before a poll delivers the <code>JobCompleted</code>,
-and it needs no hard kill, since a graceful stop lands in it. Measured over the 60 stops
-recorded for Q685, all 4 taken before the completion was read replayed and re-provisioned;
-none of the 56 taken after it did. Closed by draining the queue's outstanding conclusions
-on the way out, ahead of the exit flush
-(<a href="../../../design/02-architecture/">02-architecture.md</a>).</p>
-<p>A hard kill — SIGKILL at grace expiry, OOM, node loss — between <code>settle</code> and a
-successful DELETE still strands the message, and no ordering can prevent that: the
-conclusion lives in memory and the ack lives at GitHub, and the two cannot be made
-atomic from this side. Closing it needs either persisted guard state or a way for the
-restarted listener to recognise a stale assignment at intake. The second is the
-interesting one and it rests on a backend property nobody has measured — whether the
-statistics delivered with a replayed message report live assigned-job counts or the
-counts captured when the message was enqueued. That is an Investigation-G-shaped live
-probe, not a code change, so it is filed separately rather than guessed at here.</p>
+<p><strong>Update 2026-08-05 (Q689):</strong> the two residuals below are both on the far side of a conclusion the listener has already read.
+There is a third window before it: the job concludes at GitHub and the process stops before a poll delivers the <code>JobCompleted</code>, and it needs no hard kill, since a graceful stop lands in it.
+Measured over the 60 stops recorded for Q685, all 4 taken before the completion was read replayed and re-provisioned; none of the 56 taken after it did.
+Closed by draining the queue's outstanding conclusions on the way out, ahead of the exit flush (<a href="../../../design/02-architecture/">02-architecture.md</a>).</p>
+<p>A hard kill — SIGKILL at grace expiry, OOM, node loss — between <code>settle</code> and a successful DELETE still strands the message, and no ordering can prevent that: the conclusion lives in memory and the ack lives at GitHub, and the two cannot be made atomic from this side.
+Closing it needs either persisted guard state or a way for the restarted listener to recognise a stale assignment at intake.
+The second is the interesting one and it rests on a backend property nobody has measured — whether the statistics delivered with a replayed message report live assigned-job counts or the counts captured when the message was enqueued.
+That is an Investigation-G-shaped live probe, not a code change, so it is filed separately rather than guessed at here.</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
-<p>The graceful-stop window is deterministic and testable directly: with the queue's
-DELETE refused, a settled message is guaranteed to still be pending when the process
-stops, so the assertion is that stopping attempts the delete at all. Pre-fix that
-attempt does not exist.</p>
-<p>The end-to-end invariant — stop in the gap, restart, no worker — needs the running loop
-held out of its own flush while the test stops it. Parking it in a long poll does that:
-the stub records a poll on arrival and then holds it, so a poll call appearing after
-the timeout is raised proves the loop is inside it and cannot flush.</p>
-<p>Both are paired with the mechanism-deletion check the repo requires for a causation
-claim: with the exit flush removed the tests must go red.</p>
+<p>The graceful-stop window is deterministic and testable directly: with the queue's DELETE refused, a settled message is guaranteed to still be pending when the process stops, so the assertion is that stopping attempts the delete at all.
+Pre-fix that attempt does not exist.</p>
+<p>The end-to-end invariant — stop in the gap, restart, no worker — needs the running loop held out of its own flush while the test stops it.
+Parking it in a long poll does that: the stub records a poll on arrival and then holds it, so a poll call appearing after the timeout is raised proves the loop is inside it and cannot flush.</p>
+<p>Both are paired with the mechanism-deletion check the repo requires for a causation claim: with the exit flush removed the tests must go red.</p>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="the-graceful-stop-window-was-the-bigger-half-and-it-was-unconditional">The graceful-stop window was the bigger half, and it was unconditional<a class="headerlink" href="#the-graceful-stop-window-was-the-bigger-half-and-it-was-unconditional" title="Permanent link">&para;</a></h3>
-<p>The row describes a race. The exit path is not one: <code>run</code> had no flush at all, so
-<em>every</em> stop that landed after a conclusion and before the next <code>flushDeletes</code> stranded
-the message, on every rollout, drain, eviction, and scale-down. That is what the first
-regression test pins, and it needs no timing at all to observe — with the queue's
-DELETE refused throughout, the message is certainly still pending when the process
-stops, so the assertion is simply that a delete is attempted on the way out. Before the
-fix the count does not move.</p>
+<p>The row describes a race.
+The exit path is not one: <code>run</code> had no flush at all, so <em>every</em> stop that landed after a conclusion and before the next <code>flushDeletes</code> stranded the message, on every rollout, drain, eviction, and scale-down.
+That is what the first regression test pins, and it needs no timing at all to observe — with the queue's DELETE refused throughout, the message is certainly still pending when the process stops, so the assertion is simply that a delete is attempted on the way out.
+Before the fix the count does not move.</p>
 <h3 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>flushDeletesOnExit</code> runs as <code>run</code> unwinds, on a detached context bounded by the new
-  <code>teardownBudget</code>, ordered before <code>deleteSession</code> by defer's LIFO. <code>deleteSession</code>'s
-  own 10s literal became that constant: they are the same class of call, both spending
-  the same pod grace period, and naming the budget once says so.</li>
-<li>The per-cycle <code>flushDeletes</code> moved to sit directly after <code>reconcileDeferred</code>, and a
-  second call now follows <code>handleMessage</code>. Those are the two places a job concludes, so
-  a conclusion is no longer separated from its delete by <code>retryDeferred</code>'s re-offers or
-  <code>reconcileDeferred</code>'s session refresh.</li>
+<li><code>flushDeletesOnExit</code> runs as <code>run</code> unwinds, on a detached context bounded by the new <code>teardownBudget</code>, ordered before <code>deleteSession</code> by defer's LIFO. <code>deleteSession</code>'s own 10s literal became that constant: they are the same class of call, both spending the same pod grace period, and naming the budget once says so.</li>
+<li>The per-cycle <code>flushDeletes</code> moved to sit directly after <code>reconcileDeferred</code>, and a second call now follows <code>handleMessage</code>.
+  Those are the two places a job concludes, so a conclusion is no longer separated from its delete by <code>retryDeferred</code>'s re-offers or <code>reconcileDeferred</code>'s session refresh.</li>
 </ul>
 <h3 id="verification_1">Verification<a class="headerlink" href="#verification_1" title="Permanent link">&para;</a></h3>
 <p><code>cmd/agc/internal/scalesetlistener/settlegap_q603_test.go</code>, three tests:</p>
@@ -2845,37 +2793,23 @@ fix the count does not move.</p>
 </tr>
 </tbody>
 </table>
-<p>Removing <code>defer l.flushDeletesOnExit(sess)</code> turns the first two red on their own
-assertions and leaves the third green, which is the shape it should have. The package
-is green at <code>-count=6</code> on the restart and abandon tests together, so the new
-<code>parkInPoll</code> helper is not itself a flake source.</p>
-<p><code>parkInPoll</code> is the piece worth remembering. Stopping a listener <em>inside</em> the gap needs
-the loop held out of its own flush, and the stub's long poll does it: a poll is recorded
-on arrival and only then held, so the poll count going quiet is the loop being parked
-rather than the loop being between two polls. The first attempt waited for two fresh
-polls instead, which cannot happen — once a poll parks, there is no second one.</p>
+<p>Removing <code>defer l.flushDeletesOnExit(sess)</code> turns the first two red on their own assertions and leaves the third green, which is the shape it should have.
+The package is green at <code>-count=6</code> on the restart and abandon tests together, so the new <code>parkInPoll</code> helper is not itself a flake source.</p>
+<p><code>parkInPoll</code> is the piece worth remembering.
+Stopping a listener <em>inside</em> the gap needs the loop held out of its own flush, and the stub's long poll does it: a poll is recorded on arrival and only then held, so the poll count going quiet is the loop being parked rather than the loop being between two polls.
+The first attempt waited for two fresh polls instead, which cannot happen — once a poll parks, there is no second one.</p>
 <h3 id="the-residual-stated-precisely">The residual, stated precisely<a class="headerlink" href="#the-residual-stated-precisely" title="Permanent link">&para;</a></h3>
-<p>A hard kill between <code>settle</code> and a successful <code>DELETE</code> still strands the message. Two
-candidate closures, neither built here:</p>
+<p>A hard kill between <code>settle</code> and a successful <code>DELETE</code> still strands the message.
+Two candidate closures, neither built here:</p>
 <ul>
-<li><strong>Persist the guard state.</strong> Durable and unambiguous. Q597 (2026-08-03) removed the
-  size objection — the guards are now retired with the message that assigned their job,
-  so they are bounded by the queue rather than by the process's lifetime — but it
-  sharpened the rest: what would have to be persisted is the guards <em>and</em> the pending-
-  message bookkeeping that retires them, since a stored guard with no retirement rule is
-  the unbounded set again, in etcd.</li>
-<li><strong>Recognise a stale assignment at intake.</strong> A restarted listener could refuse to
-  provision a replayed <code>JobAssigned</code> that arrives while the scale set reports no
-  assigned jobs — Q553's rule applied before provisioning instead of only after a
-  provision failure. It hangs entirely on whether the statistics delivered with a
-  message report live counts or the counts captured when it was enqueued, which nobody
-  has measured; Investigation G recorded no statistics. Guessing wrong here builds a
-  check that silently never fires, or one that refuses real work.</li>
+<li><strong>Persist the guard state.</strong> Durable and unambiguous.
+  Q597 (2026-08-03) removed the size objection — the guards are now retired with the message that assigned their job, so they are bounded by the queue rather than by the process's lifetime — but it sharpened the rest: what would have to be persisted is the guards <em>and</em> the pending- message bookkeeping that retires them, since a stored guard with no retirement rule is the unbounded set again, in etcd.</li>
+<li><strong>Recognise a stale assignment at intake.</strong> A restarted listener could refuse to provision a replayed <code>JobAssigned</code> that arrives while the scale set reports no assigned jobs — Q553's rule applied before provisioning instead of only after a provision failure.
+  It hangs entirely on whether the statistics delivered with a message report live counts or the counts captured when it was enqueued, which nobody has measured; Investigation G recorded no statistics.
+  Guessing wrong here builds a check that silently never fires, or one that refuses real work.</li>
 </ul>
-<p>Filed as Q606, closed by persisting the guards: the row's sharper candidate held up,
-with the write-ahead ordering and the drained-queue retirement rule recorded in
-<a href="../../../design/02-architecture/">02-architecture.md</a>. The intake-recognition
-alternative (and its unmeasured statistics premise) stays unbuilt.</p>
+<p>Filed as Q606, closed by persisting the guards: the row's sharper candidate held up, with the write-ahead ordering and the drained-queue retirement rule recorded in <a href="../../../design/02-architecture/">02-architecture.md</a>.
+The intake-recognition alternative (and its unmeasured statistics premise) stays unbuilt.</p>
 
 
 

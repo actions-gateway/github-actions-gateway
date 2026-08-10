@@ -2598,13 +2598,9 @@
 
 
 <h1 id="self-hosted-webfonts">Self-hosted webfonts<a class="headerlink" href="#self-hosted-webfonts" title="Permanent link">&para;</a></h1>
-<p>These woff2 files back the docs site's "GitHub-native" type pairing. They are
-served from our own origin so the site makes <strong>no third-party font requests</strong> —
-Material's Google Fonts loader is disabled via <code>theme.font: false</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/mkdocs.yml"><code>mkdocs.yml</code></a>, and the <code>@font-face</code> + <code>--md-text-font</code>/
-<code>--md-code-font</code> wiring lives in
-<a href="../../stylesheets/extra.css"><code>docs/stylesheets/extra.css</code></a>. Background:
-<a href="../../development/website/"><code>docs/development/website.md</code></a> § Fonts.</p>
+<p>These woff2 files back the docs site's "GitHub-native" type pairing.
+They are served from our own origin so the site makes <strong>no third-party font requests</strong> — Material's Google Fonts loader is disabled via <code>theme.font: false</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/mkdocs.yml"><code>mkdocs.yml</code></a>, and the <code>@font-face</code> + <code>--md-text-font</code>/ <code>--md-code-font</code> wiring lives in <a href="../../stylesheets/extra.css"><code>docs/stylesheets/extra.css</code></a>.
+Background: <a href="../../development/website/"><code>docs/development/website.md</code></a> § Fonts.</p>
 <table>
 <thead>
 <tr>
@@ -2660,22 +2656,17 @@ Material's Google Fonts loader is disabled via <code>theme.font: false</code> in
 </tbody>
 </table>
 <h2 id="licensing">Licensing<a class="headerlink" href="#licensing" title="Permanent link">&para;</a></h2>
-<p>Both families are licensed under the <strong>SIL Open Font License 1.1</strong>, which permits
-bundling and redistributing them with software (commercially too), provided the
-fonts aren't sold on their own and each family's copyright notice + license text
-travel with them. Each family keeps its <strong>own</strong> license file — copy the matching
-one wherever these fonts go:</p>
+<p>Both families are licensed under the <strong>SIL Open Font License 1.1</strong>, which permits bundling and redistributing them with software (commercially too), provided the fonts aren't sold on their own and each family's copyright notice + license text travel with them.
+Each family keeps its <strong>own</strong> license file — copy the matching one wherever these fonts go:</p>
 <ul>
-<li><strong>IBM Plex Sans</strong> — Copyright 2019 IBM Corp. No Reserved Font Name (IBM chose
-  not to reserve "Plex", so the name may be used freely, subsets included).
+<li><strong>IBM Plex Sans</strong> — Copyright 2019 IBM Corp. No Reserved Font Name (IBM chose not to reserve "Plex", so the name may be used freely, subsets included).
   License: <a href="IBMPlexSans-OFL.txt"><code>IBMPlexSans-OFL.txt</code></a>.</li>
-<li><strong>Monaspace</strong> (Neon, Argon) — Copyright © 2023 GitHub, with Reserved Font Name
-  "Monaspace". Shipped here unmodified. License: <a href="Monaspace-OFL.txt"><code>Monaspace-OFL.txt</code></a>.</li>
+<li><strong>Monaspace</strong> (Neon, Argon) — Copyright © 2023 GitHub, with Reserved Font Name "Monaspace".
+  Shipped here unmodified.
+  License: <a href="Monaspace-OFL.txt"><code>Monaspace-OFL.txt</code></a>.</li>
 </ul>
-<p>Each <code>.woff2</code> also embeds its own copyright + license in its <code>name</code>-table
-metadata, so the notice travels with the binary even on its own. The wider repo
-is Apache-2.0; these font files are governed by the OFL license files here, not
-by the repo license.</p>
+<p>Each <code>.woff2</code> also embeds its own copyright + license in its <code>name</code>-table metadata, so the notice travels with the binary even on its own.
+The wider repo is Apache-2.0; these font files are governed by the OFL license files here, not by the repo license.</p>
 <h2 id="updating">Updating<a class="headerlink" href="#updating" title="Permanent link">&para;</a></h2>
 <p>Re-fetch the same weights (keep the filenames stable so the CSS keeps resolving):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">FS</span><span class="o">=</span><span class="s2">&quot;https://cdn.jsdelivr.net/npm/@fontsource&quot;</span>

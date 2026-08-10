@@ -2714,20 +2714,11 @@
 
 
 <h1 id="backpressure-the-developeragent-feedback-loops">Backpressure: the developer/agent feedback loops<a class="headerlink" href="#backpressure-the-developeragent-feedback-loops" title="Permanent link">&para;</a></h1>
-<p><strong>Backpressure</strong> is any machine-readable signal that pushes back on bad changes
-<em>before</em> a human (or coding agent) spends attention reviewing them. A typed
-compiler error, a failing test, a lint finding, a rejected commit — each lets the
-author see the failure and fix it without a reviewer having to find and explain
-it. The term and the framing here are from
-<a href="https://generativeprogrammer.com/p/stop-babysitting-your-coding-agent"><em>Stop Babysitting Your Coding Agent</em></a>;
-this doc records which mechanisms this repo has, how they are layered by speed,
-and a graded assessment of the result with the evidence enumerated.</p>
-<p>The guiding principle: <strong>layer feedback by speed</strong> — the cheapest checks fire in
-the tightest loop (at commit time), slower checks run on demand before review,
-and the full suite runs in continuous integration (CI). A second principle:
-<strong>the local verdict must match the CI verdict</strong>, so a green local check is
-trustworthy and you don't burn a CI round-trip to learn what a local command
-could have told you.</p>
+<p><strong>Backpressure</strong> is any machine-readable signal that pushes back on bad changes <em>before</em> a human (or coding agent) spends attention reviewing them.
+A typed compiler error, a failing test, a lint finding, a rejected commit — each lets the author see the failure and fix it without a reviewer having to find and explain it.
+The term and the framing here are from <a href="https://generativeprogrammer.com/p/stop-babysitting-your-coding-agent"><em>Stop Babysitting Your Coding Agent</em></a>; this doc records which mechanisms this repo has, how they are layered by speed, and a graded assessment of the result with the evidence enumerated.</p>
+<p>The guiding principle: <strong>layer feedback by speed</strong> — the cheapest checks fire in the tightest loop (at commit time), slower checks run on demand before review, and the full suite runs in continuous integration (CI).
+A second principle: <strong>the local verdict must match the CI verdict</strong>, so a green local check is trustworthy and you don't burn a CI round-trip to learn what a local command could have told you.</p>
 <h2 id="the-three-tiers">The three tiers<a class="headerlink" href="#the-three-tiers" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2763,10 +2754,9 @@ could have told you.</p>
 </tr>
 </tbody>
 </table>
-<p>Installation: <code>make hooks</code> (or <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/setup.sh"><code>scripts/dev/setup.sh</code></a>, which
-runs it for you) points <code>core.hooksPath</code> at the in-repo <code>.githooks/</code> directory.
-The path is relative, so it resolves correctly in the main checkout and every
-linked worktree. Bypass the hook for a single commit with <code>git commit --no-verify</code>.</p>
+<p>Installation: <code>make hooks</code> (or <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/setup.sh"><code>scripts/dev/setup.sh</code></a>, which runs it for you) points <code>core.hooksPath</code> at the in-repo <code>.githooks/</code> directory.
+The path is relative, so it resolves correctly in the main checkout and every linked worktree.
+Bypass the hook for a single commit with <code>git commit --no-verify</code>.</p>
 <h2 id="mechanisms-by-category">Mechanisms by category<a class="headerlink" href="#mechanisms-by-category" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2824,35 +2814,23 @@ linked worktree. Bypass the hook for a single commit with <code>git commit --no-
 </tr>
 </tbody>
 </table>
-<p>Real-CNI / kube-proxy / kubelet / TLS-over-tunnel behaviours are only observable
-at the e2e tier — see <a href="../testing/">testing.md</a> and <a href="../../design/07-test-plan/">07-test-plan.md</a>
-§7.3 for why unit and envtest tiers cannot prove them.</p>
+<p>Real-CNI / kube-proxy / kubelet / TLS-over-tunnel behaviours are only observable at the e2e tier — see <a href="../testing/">testing.md</a> and <a href="../../design/07-test-plan/">07-test-plan.md</a> §7.3 for why unit and envtest tiers cannot prove them.</p>
 <h2 id="compress-success-expand-failure">Compress success, expand failure<a class="headerlink" href="#compress-success-expand-failure" title="Permanent link">&para;</a></h2>
-<p>Test output is non-verbose by default. <code>go test</code> without <code>-v</code> prints one
-<code>ok &lt;pkg&gt;</code> line per passing package and the <strong>full</strong> output of any package that
-fails — so passing runs stay quiet and failures keep all their detail. Add
-<code>V=1</code> (<code>make check V=1</code> or <code>make test V=1</code>) to stream output live when debugging
-a slow or hanging test: without <code>-v</code>, <code>go test</code> buffers each package's output
-until the package completes, so a hung test shows nothing — not even its
-<code>t.Log</code> lines — until it finishes or hits <code>-timeout</code>; with <code>-v</code> the output
-streams as it is produced. See <a href="../testing/#the-make-check-pre-review-gate">testing.md</a>.</p>
+<p>Test output is non-verbose by default. <code>go test</code> without <code>-v</code> prints one <code>ok &lt;pkg&gt;</code> line per passing package and the <strong>full</strong> output of any package that fails — so passing runs stay quiet and failures keep all their detail.
+Add <code>V=1</code> (<code>make check V=1</code> or <code>make test V=1</code>) to stream output live when debugging a slow or hanging test: without <code>-v</code>, <code>go test</code> buffers each package's output until the package completes, so a hung test shows nothing — not even its <code>t.Log</code> lines — until it finishes or hits <code>-timeout</code>; with <code>-v</code> the output streams as it is produced.
+See <a href="../testing/#the-make-check-pre-review-gate">testing.md</a>.</p>
 <h2 id="assessment">Assessment<a class="headerlink" href="#assessment" title="Permanent link">&para;</a></h2>
-<p>Graded against the article's rubric on 2026-06-06. Overall: <strong>A</strong>.</p>
+<p>Graded against the article's rubric on 2026-06-06.
+Overall: <strong>A</strong>.</p>
 <p>Each dimension below lists the grade and the concrete evidence behind it.</p>
 <h3 id="sensor-coverage--a">Sensor coverage — A<a class="headerlink" href="#sensor-coverage--a" title="Permanent link">&para;</a></h3>
-<p>Type checking (Go compiler + <code>go vet</code>), three test tiers (unit/integration/e2e),
-formatting and linting (<code>gofmt -s</code>, <code>golangci-lint</code> with govet/staticcheck/
-ineffassign/unused per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a>), supply-chain
-scanning (<code>govulncheck</code>, <code>trivy</code>), and custom structural eval scripts
-(<code>scripts/docs/lint-backlog.sh</code>, <code>scripts/docs/queue-unblock.sh</code>). Browser/screenshot
-sensors are correctly absent — there is no user interface.</p>
+<p>Type checking (Go compiler + <code>go vet</code>), three test tiers (unit/integration/e2e), formatting and linting (<code>gofmt -s</code>, <code>golangci-lint</code> with govet/staticcheck/ ineffassign/unused per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a>), supply-chain scanning (<code>govulncheck</code>, <code>trivy</code>), and custom structural eval scripts (<code>scripts/docs/lint-backlog.sh</code>, <code>scripts/docs/queue-unblock.sh</code>).
+Browser/screenshot sensors are correctly absent — there is no user interface.</p>
 <h3 id="layer-by-speed--a">Layer by speed — A<a class="headerlink" href="#layer-by-speed--a" title="Permanent link">&para;</a></h3>
-<p>A clean three-rung ladder, fastest first: pre-commit hook (~0.5s) →
-<code>make check</code> (lint + unit tests) → CI (adds integration, e2e, <code>govulncheck</code>,
-<code>trivy</code>). Slow tiers are path-gated (<code>dorny/paths-filter</code>) and use
-<code>cancel-in-progress</code> to reclaim superseded runs. The e2e suite carries
-<code>--poll-progress-after 30s</code> so a long-running spec reports progress without full
-verbosity. CLAUDE.md tells contributors which tier proves which bug class.</p>
+<p>A clean three-rung ladder, fastest first: pre-commit hook (~0.5s) → <code>make check</code> (lint + unit tests) → CI (adds integration, e2e, <code>govulncheck</code>, <code>trivy</code>).
+Slow tiers are path-gated (<code>dorny/paths-filter</code>) and use <code>cancel-in-progress</code> to reclaim superseded runs.
+The e2e suite carries <code>--poll-progress-after 30s</code> so a long-running spec reports progress without full verbosity.
+CLAUDE.md tells contributors which tier proves which bug class.</p>
 <h3 id="actionable--trustworthy-feedback--a">Actionable + trustworthy feedback — A<a class="headerlink" href="#actionable--trustworthy-feedback--a" title="Permanent link">&para;</a></h3>
 <p>Local verdict equals CI verdict by deliberate construction:
 - <code>make trivy-scan</code> is "mirrored exactly by the CI <code>trivy</code> job so local and CI verdicts match" (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>Makefile</code></a>).
@@ -2860,36 +2838,20 @@ verbosity. CLAUDE.md tells contributors which tier proves which bug class.</p>
 - <code>make check</code> runs the same gofmt + <code>golangci-lint</code> + <code>STATUS.md</code> lint + unit tests as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a> (plus additional gates it supersets — <code>shellcheck</code>, chart CRD/RBAC/webhook drift, plan-index/no-plan-refs, doc link/anchor check, and the coverage ratchet — each mirrored by its own CI workflow), so a green <code>make check</code> means a green unit-test workflow.</p>
 <p>This parity is what makes the fast local signal worth trusting.</p>
 <h3 id="document-expectations--a">Document expectations — A−<a class="headerlink" href="#document-expectations--a" title="Permanent link">&para;</a></h3>
-<p>CLAUDE.md carries a doc-update matrix, a test-tier selection guide, and an
-agent-reference table mapping task → doc; <a href="../testing/">testing.md</a> is the
-canonical run-command source; <code>make check</code> is the single "run before review"
-command. Held just short of A because expectations are spread across prose plus
-the one command rather than a single consolidated checklist.</p>
+<p>CLAUDE.md carries a doc-update matrix, a test-tier selection guide, and an agent-reference table mapping task → doc; <a href="../testing/">testing.md</a> is the canonical run-command source; <code>make check</code> is the single "run before review" command.
+Held just short of A because expectations are spread across prose plus the one command rather than a single consolidated checklist.</p>
 <h3 id="self-reinforcing-correct-twice--automate--a">Self-reinforcing (correct twice → automate) — A<a class="headerlink" href="#self-reinforcing-correct-twice--automate--a" title="Permanent link">&para;</a></h3>
-<p>The article's core principle is visibly practiced. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a>
-states its scope is to "catch regressions of the bugs and idiom violations
-tracked in Queue items 38–41." <code>scripts/docs/lint-backlog.sh</code> exists solely because
-the <code>docs/STATUS.md</code> format (e.g. the 250-char Notes cap) kept getting violated.
-The workspace-guard PreToolUse hook is real-time backpressure on file
-operations, and branch-guard is the same on git operations — prompting
-before commits, pushes, or destructive commands on a protected branch. (These
-two guards are harness/<code>CLAUDE.md</code>-level, not repo-tracked hook scripts; the
-repo does track two PreToolUse hooks of its own, <code>scripts/agent/claude-go-throttle-hook.sh</code>
-and <code>scripts/agent/claude-no-subagent-workers-hook.sh</code>.) Each is a repeated correction
-turned into an automated gate.</p>
+<p>The article's core principle is visibly practiced.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a> states its scope is to "catch regressions of the bugs and idiom violations tracked in Queue items 38–41." <code>scripts/docs/lint-backlog.sh</code> exists solely because the <code>docs/STATUS.md</code> format (e.g. the 250-char Notes cap) kept getting violated.
+The workspace-guard PreToolUse hook is real-time backpressure on file operations, and branch-guard is the same on git operations — prompting before commits, pushes, or destructive commands on a protected branch.
+(These two guards are harness/<code>CLAUDE.md</code>-level, not repo-tracked hook scripts; the repo does track two PreToolUse hooks of its own, <code>scripts/agent/claude-go-throttle-hook.sh</code> and <code>scripts/agent/claude-no-subagent-workers-hook.sh</code>.)
+Each is a repeated correction turned into an automated gate.</p>
 <h3 id="compress-success-expand-failure--a">Compress success, expand failure — A−<a class="headerlink" href="#compress-success-expand-failure--a" title="Permanent link">&para;</a></h3>
-<p>The agent-loop path is non-verbose by default (native compress-success /
-expand-failure from <code>go test</code>), with a <code>V=1</code> opt-in for live streaming when
-debugging a hang. Minor deduction: <code>integration-test.yml</code> hard-codes <code>-v</code>, so
-its passing runs are noisy — a deliberate CI-only choice (envtest failures are
-opaque and those logs are read only when a run fails, exactly when verbosity
-helps).</p>
+<p>The agent-loop path is non-verbose by default (native compress-success / expand-failure from <code>go test</code>), with a <code>V=1</code> opt-in for live streaming when debugging a hang.
+Minor deduction: <code>integration-test.yml</code> hard-codes <code>-v</code>, so its passing runs are noisy — a deliberate CI-only choice (envtest failures are opaque and those logs are read only when a run fails, exactly when verbosity helps).</p>
 <h3 id="fast-inner-loop-enforcement--a">Fast inner-loop enforcement — A−<a class="headerlink" href="#fast-inner-loop-enforcement--a" title="Permanent link">&para;</a></h3>
-<p>Backpressure now fires at commit latency, not only CI latency: a tracked,
-auto-installable, sub-second pre-commit hook plus the <code>make check</code> aggregate
-gate. The only deduction is that git cannot set <code>core.hooksPath</code> automatically
-on clone, so installation is a one-time <code>make hooks</code> / <code>scripts/dev/setup.sh</code> step
-rather than truly automatic.</p>
+<p>Backpressure now fires at commit latency, not only CI latency: a tracked, auto-installable, sub-second pre-commit hook plus the <code>make check</code> aggregate gate.
+The only deduction is that git cannot set <code>core.hooksPath</code> automatically on clone, so installation is a one-time <code>make hooks</code> / <code>scripts/dev/setup.sh</code> step rather than truly automatic.</p>
 <h2 id="remaining-nits">Remaining nits<a class="headerlink" href="#remaining-nits" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Hook install is one-time, not automatic on clone</strong> — a git limitation; <code>make hooks</code> / <code>scripts/dev/setup.sh</code> is the workaround.</li>

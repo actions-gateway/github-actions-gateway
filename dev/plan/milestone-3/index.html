@@ -3094,20 +3094,11 @@
 <li><a href="#11-investigation-findings">11. Investigation Findings</a></li>
 </ul>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
-<p>Last refreshed 2026-05-30. The provisioner, decryption, ceiling
-enforcement, eviction retry, GC, and RBAC are all in code. Investigation A
-(Named Pipe protocol) is complete. Q5h (worker proxy-CA trust)
-shipped 2026-05-30. <strong>Q6 (live-GitHub <code>E2E_GitHub_RealDispatch</code>)
-re-ran successfully on 2026-05-30</strong> against real GitHub
-(<code>actions-gateway/gateway-test</code>, workflow <code>test-job.yml</code>, run
-<a href="https://github.com/actions-gateway/gateway-test/actions/runs/26685844172">26685844172</a>):
-both specs (<code>E2E_GitHub_ActionsGatewayReachesReady</code> and
-<code>E2E_GitHub_WorkflowCompletesGreen</code>) pass, GitHub-side run concludes
-<code>success</code> — the first green checkmark from this system. The re-run
-also surfaced an unrelated GMC readiness-probe bug (<code>/readyz</code> returned
-OK before the webhook server bound, racing every rollout); fixed
-separately in <code>cmd/gmc/cmd/main.go</code> by gating readyz on
-<code>mgr.GetWebhookServer().StartedChecker()</code>.</p>
+<p>Last refreshed 2026-05-30.
+The provisioner, decryption, ceiling enforcement, eviction retry, GC, and RBAC are all in code.
+Investigation A (Named Pipe protocol) is complete.
+Q5h (worker proxy-CA trust) shipped 2026-05-30. <strong>Q6 (live-GitHub <code>E2E_GitHub_RealDispatch</code>) re-ran successfully on 2026-05-30</strong> against real GitHub (<code>actions-gateway/gateway-test</code>, workflow <code>test-job.yml</code>, run <a href="https://github.com/actions-gateway/gateway-test/actions/runs/26685844172">26685844172</a>): both specs (<code>E2E_GitHub_ActionsGatewayReachesReady</code> and <code>E2E_GitHub_WorkflowCompletesGreen</code>) pass, GitHub-side run concludes <code>success</code> — the first green checkmark from this system.
+The re-run also surfaced an unrelated GMC readiness-probe bug (<code>/readyz</code> returned OK before the webhook server bound, racing every rollout); fixed separately in <code>cmd/gmc/cmd/main.go</code> by gating readyz on <code>mgr.GetWebhookServer().StartedChecker()</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3180,17 +3171,16 @@ separately in <code>cmd/gmc/cmd/main.go</code> by gating readyz on
 </tbody>
 </table>
 <h3 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h3>
-<p>All M3 criteria are met. Q6 (<code>E2E_GitHub_RealDispatch</code>)
-passed end-to-end on 2026-05-30 with a green checkmark on the
-GitHub-side run, unblocking items 7 (egress-proxy live curl) and
-11 (Ed25519 live probe) which both share the live-kind-cluster
-dependency.</p>
+<p>All M3 criteria are met.
+Q6 (<code>E2E_GitHub_RealDispatch</code>) passed end-to-end on 2026-05-30 with a green checkmark on the GitHub-side run, unblocking items 7 (egress-proxy live curl) and 11 (Ed25519 live probe) which both share the live-kind-cluster dependency.</p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p><strong>Goal:</strong> Replace the M2 stub job handler with a real pod provisioner, build the worker container image and entrypoint wrapper, and wire the full <code>AcquireJob</code> → pod-create → pipe handoff → garbage-collection sequence so that a real GitHub workflow job executes end-to-end inside a Kubernetes pod.</p>
 <p><strong>Duration:</strong> Days 11–16</p>
-<p><strong>Foundation:</strong> All packages from Milestones 1–2 (<code>broker</code>, <code>githubapp</code>, <code>cmd/agc/</code>) are consumed unchanged except for targeted additions. No new module is introduced unless the worker entrypoint binary requires its own Go module (see §2).</p>
-<p><strong>Key constraint from the design doc:</strong> validate the Named Pipe handoff with the static <code>testdata/job_payload.json</code> fixture <em>before</em> wiring it into the live pod creation path. Named Pipes are the underdocumented interface between the entrypoint wrapper and <code>Runner.Worker</code>; debugging them without a live GitHub trigger in the loop is significantly easier.</p>
+<p><strong>Foundation:</strong> All packages from Milestones 1–2 (<code>broker</code>, <code>githubapp</code>, <code>cmd/agc/</code>) are consumed unchanged except for targeted additions.
+No new module is introduced unless the worker entrypoint binary requires its own Go module (see §2).</p>
+<p><strong>Key constraint from the design doc:</strong> validate the Named Pipe handoff with the static <code>testdata/job_payload.json</code> fixture <em>before</em> wiring it into the live pod creation path.
+Named Pipes are the underdocumented interface between the entrypoint wrapper and <code>Runner.Worker</code>; debugging them without a live GitHub trigger in the loop is significantly easier.</p>
 <p><strong>Definition of Done:</strong></p>
 <ul>
 <li>A real workflow job dispatched from GitHub appears in the Actions UI with correct step output, timing, and a green checkmark.</li>
@@ -3208,16 +3198,19 @@ dependency.</p>
 <p><code>goroutine.go:274</code> contains:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// TODO(milestone-3): decrypt body using session key before parsing.</span>
 </code></pre></div>
-<p><strong>What is needed:</strong> <code>CreateSession</code> returns an <code>encryptionKey.value</code> field — a base64-encoded RSA-encrypted AES-256 session key. The message body returned by <code>GetMessage</code> is AES-256-CBC encrypted with that key. <code>broker.DecryptSessionKey</code> and <code>broker.DecryptMessageBody</code> already implement both steps (<code>broker/crypto.go</code>).</p>
+<p><strong>What is needed:</strong> <code>CreateSession</code> returns an <code>encryptionKey.value</code> field — a base64-encoded RSA-encrypted AES-256 session key.
+The message body returned by <code>GetMessage</code> is AES-256-CBC encrypted with that key. <code>broker.DecryptSessionKey</code> and <code>broker.DecryptMessageBody</code> already implement both steps (<code>broker/crypto.go</code>).</p>
 <p><strong>Changes required:</strong></p>
 <ol>
 <li>
-<p><strong><code>broker/client.go</code> — <code>CreateSessionResponse</code>:</strong> Confirm that <code>CreateSessionResponse</code> already exposes <code>EncryptionKey.Value</code> (base64 RSA-encrypted key). If not, add the field.</p>
+<p><strong><code>broker/client.go</code> — <code>CreateSessionResponse</code>:</strong> Confirm that <code>CreateSessionResponse</code> already exposes <code>EncryptionKey.Value</code> (base64 RSA-encrypted key).
+   If not, add the field.</p>
 </li>
 <li>
 <p><strong><code>cmd/agc/internal/listener/goroutine.go</code>:</strong></p>
 </li>
-<li>Change <code>createSession</code> to return both the <code>sessionID</code> string and the decoded AES session key (<code>[]byte</code>). Call <code>broker.DecryptSessionKey</code> inside <code>createSession</code> using the agent's RSA private key.</li>
+<li>Change <code>createSession</code> to return both the <code>sessionID</code> string and the decoded AES session key (<code>[]byte</code>).
+     Call <code>broker.DecryptSessionKey</code> inside <code>createSession</code> using the agent's RSA private key.</li>
 <li>Pass the session key into <code>handleJob</code> and use <code>broker.DecryptMessageBody(msg.Body, sessionKey)</code> before unmarshalling <code>RunnerJobRequestBody</code>.</li>
 <li>
 <p>On session recreation (expired-session path), re-derive the session key from the new <code>CreateSession</code> response.</p>
@@ -3227,7 +3220,9 @@ dependency.</p>
 </li>
 </ol>
 <h3 id="12-todomilestone-3-enforce-maxworkers-ceiling-cmdagcinternalcontrollerrunnergroup_controllergo161">1.2 <code>TODO(milestone-3): enforce maxWorkers ceiling</code> (<code>cmd/agc/internal/controller/runnergroup_controller.go:161</code>)<a class="headerlink" href="#12-todomilestone-3-enforce-maxworkers-ceiling-cmdagcinternalcontrollerrunnergroup_controllergo161" title="Permanent link">&para;</a></h3>
-<p>This TODO is resolved by the pod provisioner in §3. The reconciler calls the provisioner via the <code>JobHandlerFunc</code>; the provisioner itself performs the pod-count check before creating a pod. No separate change is needed in the reconciler beyond wiring the new provisioner (replacing <code>stubJobHandler</code>).</p>
+<p>This TODO is resolved by the pod provisioner in §3.
+The reconciler calls the provisioner via the <code>JobHandlerFunc</code>; the provisioner itself performs the pod-count check before creating a pod.
+No separate change is needed in the reconciler beyond wiring the new provisioner (replacing <code>stubJobHandler</code>).</p>
 <h3 id="13-rbac-markers-cmdagcinternalcontrollerrunnergroup_controllergo">1.3 RBAC markers (<code>cmd/agc/internal/controller/runnergroup_controller.go</code>)<a class="headerlink" href="#13-rbac-markers-cmdagcinternalcontrollerrunnergroup_controllergo" title="Permanent link">&para;</a></h3>
 <p>Add kubebuilder RBAC markers for pod and pod/status access:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// +kubebuilder:rbac:groups=&quot;&quot;,resources=pods,verbs=get;list;watch;create;delete</span>
@@ -3269,7 +3264,8 @@ dependency.</p>
 </table>
 <hr />
 <h2 id="2-worker-entrypoint-wrapper-cmdworker">2. Worker Entrypoint Wrapper (<code>cmd/worker/</code>)<a class="headerlink" href="#2-worker-entrypoint-wrapper-cmdworker" title="Permanent link">&para;</a></h2>
-<p>The entrypoint wrapper is a small Go binary that acts as <code>ENTRYPOINT</code> in the worker container image. Its responsibilities:</p>
+<p>The entrypoint wrapper is a small Go binary that acts as <code>ENTRYPOINT</code> in the worker container image.
+Its responsibilities:</p>
 <ol>
 <li>Read the job payload JSON from a mounted Kubernetes Secret (path configurable via <code>RUNNER_PAYLOAD_PATH</code> env var; default <code>/run/secrets/runner/payload</code>).</li>
 <li>Write the payload into Named Pipes consumed by <code>Runner.Worker</code>.</li>
@@ -3277,7 +3273,8 @@ dependency.</p>
 <li>Forward <code>Runner.Worker</code>'s exit code.</li>
 </ol>
 <h3 id="21-module-placement">2.1 Module placement<a class="headerlink" href="#21-module-placement" title="Permanent link">&para;</a></h3>
-<p>The wrapper is simple enough to live in the root module (<code>cmd/worker/main.go</code>) rather than a new Go module, keeping the workspace flat. Add it alongside <code>cmd/probe/</code>:</p>
+<p>The wrapper is simple enough to live in the root module (<code>cmd/worker/main.go</code>) rather than a new Go module, keeping the workspace flat.
+Add it alongside <code>cmd/probe/</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>github-actions-gateway/
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>└── cmd/
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    ├── probe/       # Milestone 1
@@ -3287,7 +3284,8 @@ dependency.</p>
 </code></pre></div>
 <p>No new <code>go.mod</code> is needed; the root <code>go.mod</code> already hosts the <code>broker</code> and <code>githubapp</code> packages and is the right home for a small utility binary.</p>
 <h3 id="22-named-pipe-protocol-investigation-task-a--see-5a">2.2 Named Pipe protocol (Investigation Task A — see §5.A)<a class="headerlink" href="#22-named-pipe-protocol-investigation-task-a--see-5a" title="Permanent link">&para;</a></h3>
-<p><code>Runner.Worker</code> reads its job payload through Named Pipes (Linux FIFOs). The exact pipe paths and payload format are not confirmed from the existing codebase. <strong>This is the underdocumented part of the milestone.</strong> Investigation Task §5.A defines how to determine the pipe names and sequencing before writing this binary.</p>
+<p><code>Runner.Worker</code> reads its job payload through Named Pipes (Linux FIFOs).
+The exact pipe paths and payload format are not confirmed from the existing codebase. <strong>This is the underdocumented part of the milestone.</strong> Investigation Task §5.A defines how to determine the pipe names and sequencing before writing this binary.</p>
 <p><strong>Provisional implementation</strong> (to be updated after §5.A):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1">// main.go — skeletal structure, pipe names TBD from Investigation A</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
@@ -3316,7 +3314,8 @@ dependency.</p>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>cp testdata/job_payload.json /tmp/runner-secret/payload
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>RUNNER_PAYLOAD_PATH=/tmp/runner-secret/payload /tmp/worker-wrapper
 </code></pre></div>
-<p>The wrapper should create the Named Pipes, write the payload, and then attempt to exec <code>Runner.Worker</code>. Use a stub <code>Runner.Worker</code> script (e.g. a shell script that reads from the pipes and prints the payload) for the fixture validation step so the full pipe protocol can be confirmed without a licensed GitHub Actions runner binary.</p>
+<p>The wrapper should create the Named Pipes, write the payload, and then attempt to exec <code>Runner.Worker</code>.
+Use a stub <code>Runner.Worker</code> script (e.g. a shell script that reads from the pipes and prints the payload) for the fixture validation step so the full pipe protocol can be confirmed without a licensed GitHub Actions runner binary.</p>
 <h3 id="24-dockerfile">2.4 Dockerfile<a class="headerlink" href="#24-dockerfile" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">FROM</span><span class="w"> </span><span class="s">golang:1.24</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">builder</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">WORKDIR</span><span class="w"> </span><span class="s">/src</span>
@@ -3339,7 +3338,8 @@ dependency.</p>
 <p><strong>Note:</strong> The exact image from which <code>Runner.Worker</code> can be harvested and the correct path (<code>/opt/runner/externals</code> vs. another directory) must be confirmed as part of Investigation §5.A.</p>
 <hr />
 <h2 id="3-pod-provisioner-cmdagcinternalprovisioner">3. Pod Provisioner (<code>cmd/agc/internal/provisioner/</code>)<a class="headerlink" href="#3-pod-provisioner-cmdagcinternalprovisioner" title="Permanent link">&para;</a></h2>
-<p>The pod provisioner replaces <code>stubJobHandler</code> in the reconciler. It is a new package implementing <code>listener.JobHandlerFunc</code>.</p>
+<p>The pod provisioner replaces <code>stubJobHandler</code> in the reconciler.
+It is a new package implementing <code>listener.JobHandlerFunc</code>.</p>
 <h3 id="31-directory-layout">3.1 Directory layout<a class="headerlink" href="#31-directory-layout" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>cmd/agc/internal/
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>└── provisioner/
@@ -3393,11 +3393,17 @@ dependency.</p>
 <a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span><span class="p">}</span>
 <a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="p">}</span>
 </code></pre></div>
-<p><strong><code>maxWorkers</code> only (no <code>priorityTiers</code>):</strong> If <code>activeCount &gt;= maxWorkers</code>, log a warning and return <code>nil</code> (the job was acquired but not dispatched to a pod — it will timeout and be redelivered). The RenewJob loop continues keeping the lock until the provisioner returns. A tight hold-and-wait loop here would be wrong; instead, return early and let GitHub redeliver when capacity frees up.</p>
+<p><strong><code>maxWorkers</code> only (no <code>priorityTiers</code>):</strong> If <code>activeCount &gt;= maxWorkers</code>, log a warning and return <code>nil</code> (the job was acquired but not dispatched to a pod — it will timeout and be redelivered).
+The RenewJob loop continues keeping the lock until the provisioner returns.
+A tight hold-and-wait loop here would be wrong; instead, return early and let GitHub redeliver when capacity frees up.</p>
 <blockquote>
-<p><strong>Note:</strong> The design acknowledges a benign race at the ceiling boundary (§2.2). The namespace ResourceQuota is the hard enforcement layer. The pod-count check here is a best-effort soft ceiling.</p>
+<p><strong>Note:</strong> The design acknowledges a benign race at the ceiling boundary (§2.2).
+The namespace ResourceQuota is the hard enforcement layer.
+The pod-count check here is a best-effort soft ceiling.</p>
 </blockquote>
-<p><strong><code>priorityTiers</code> set:</strong> Walk the tier list in ascending threshold order. If <code>activeCount</code> is below <code>tier.Threshold</code>, set the pod's <code>priorityClassName</code> to <code>tier.PriorityClassName</code>. If <code>activeCount &gt;= lastTier.Threshold</code>, hold (return <code>nil</code>) as above.</p>
+<p><strong><code>priorityTiers</code> set:</strong> Walk the tier list in ascending threshold order.
+If <code>activeCount</code> is below <code>tier.Threshold</code>, set the pod's <code>priorityClassName</code> to <code>tier.PriorityClassName</code>.
+If <code>activeCount &gt;= lastTier.Threshold</code>, hold (return <code>nil</code>) as above.</p>
 <h3 id="34-pod-builder-pod_buildergo">3.4 Pod builder (<code>pod_builder.go</code>)<a class="headerlink" href="#34-pod-builder-pod_buildergo" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1">// BuildPod constructs the worker Pod spec for a job acquisition.</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1">// It starts from the tenant&#39;s PodTemplateSpec, injects the runner container</span>
@@ -3493,7 +3499,9 @@ dependency.</p>
 <a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="nt">data</span><span class="p">:</span>
 <a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span><span class="nt">payload</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;base64(rawAcquireJobBytes)&gt;</span>
 </code></pre></div>
-<p>Secret creation must happen before pod creation. If Secret creation fails, return the error without creating a pod. If pod creation fails after Secret creation, delete the Secret before returning the error (best-effort cleanup).</p>
+<p>Secret creation must happen before pod creation.
+If Secret creation fails, return the error without creating a pod.
+If pod creation fails after Secret creation, delete the Secret before returning the error (best-effort cleanup).</p>
 <h3 id="36-pod-watch-and-garbage-collection">3.6 Pod watch and garbage collection<a class="headerlink" href="#36-pod-watch-and-garbage-collection" title="Permanent link">&para;</a></h3>
 <p>After pod creation, the provisioner enters a watch loop using <code>controller-runtime</code>'s typed watch:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nx">watcher</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">p</span><span class="p">.</span><span class="nx">cfg</span><span class="p">.</span><span class="nx">Client</span><span class="p">.</span><span class="nx">Watch</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">corev1</span><span class="p">.</span><span class="nx">PodList</span><span class="p">{},</span>
@@ -3503,44 +3511,66 @@ dependency.</p>
 </code></pre></div>
 <p>On each event, check <code>pod.Status.Phase</code>:</p>
 <ul>
-<li><code>Succeeded</code> or <code>Failed</code> (non-eviction): delete the Secret and the pod. Emit <code>actions_gateway_job_duration_seconds</code>. Return <code>nil</code>.</li>
-<li><code>Failed</code> with <code>pod.Status.Reason == "Evicted"</code>: trigger eviction retry logic (§3.7). Return <code>nil</code>.</li>
+<li><code>Succeeded</code> or <code>Failed</code> (non-eviction): delete the Secret and the pod.
+  Emit <code>actions_gateway_job_duration_seconds</code>.
+  Return <code>nil</code>.</li>
+<li><code>Failed</code> with <code>pod.Status.Reason == "Evicted"</code>: trigger eviction retry logic (§3.7).
+  Return <code>nil</code>.</li>
 </ul>
-<p>On context cancellation: stop watching. The RenewJob loop will have already been stopped by the goroutine defer. The pod and Secret are <strong>not</strong> deleted on context cancellation — they may still be running. The AGC will reconcile and garbage-collect orphaned pods on restart via a pod ownership label scan.</p>
+<p>On context cancellation: stop watching.
+The RenewJob loop will have already been stopped by the goroutine defer.
+The pod and Secret are <strong>not</strong> deleted on context cancellation — they may still be running.
+The AGC will reconcile and garbage-collect orphaned pods on restart via a pod ownership label scan.</p>
 <h3 id="37-eviction-auto-retry">3.7 Eviction auto-retry<a class="headerlink" href="#37-eviction-auto-retry" title="Permanent link">&para;</a></h3>
 <p>When a pod enters <code>Failed/Evicted</code>:</p>
 <ol>
 <li>Stop the RenewJob loop immediately (call <code>stopRenewLoop()</code>) so GitHub can cancel the job promptly.</li>
-<li>Check the retry counter for this <code>run_id</code>. If <code>retries &gt;= maxEvictionRetries</code>, emit <code>actions_gateway_eviction_retries_exhausted_total</code> and return without re-queuing.</li>
+<li>Check the retry counter for this <code>run_id</code>.
+   If <code>retries &gt;= maxEvictionRetries</code>, emit <code>actions_gateway_eviction_retries_exhausted_total</code> and return without re-queuing.</li>
 <li>Otherwise increment the retry counter, emit <code>actions_gateway_eviction_retries_total</code>, wait <code>evictionRetryDelay</code> (default 5s), then call:
    <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs
 <a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>Authorization: Bearer {installation_token}
 </code></pre></div>
    using the AGC's installation access token from the Token Manager.</li>
 </ol>
-<p><strong><code>run_id</code> extraction:</strong> The <code>AcquireJob</code> response body (<code>job_payload.json</code>) contains <code>contextData.github.run_id</code> (a string). The provisioner extracts it on entry by doing a minimal JSON unmarshal of just that field.</p>
-<p><strong>In-memory retry counter:</strong> A <code>sync.Map</code> in the <code>Provisioner</code> struct keyed by <code>run_id</code> (<code>string → int32</code>). This state is lost on AGC restart; GitHub's own retry limits prevent unbounded re-queuing in the crash-loop case.</p>
+<p><strong><code>run_id</code> extraction:</strong> The <code>AcquireJob</code> response body (<code>job_payload.json</code>) contains <code>contextData.github.run_id</code> (a string).
+The provisioner extracts it on entry by doing a minimal JSON unmarshal of just that field.</p>
+<p><strong>In-memory retry counter:</strong> A <code>sync.Map</code> in the <code>Provisioner</code> struct keyed by <code>run_id</code> (<code>string → int32</code>).
+This state is lost on AGC restart; GitHub's own retry limits prevent unbounded re-queuing in the crash-loop case.</p>
 <hr />
 <h2 id="4-job-lock-renewer-enhancements-cmdagcinternallistenergoroutinego">4. Job Lock Renewer Enhancements (<code>cmd/agc/internal/listener/goroutine.go</code>)<a class="headerlink" href="#4-job-lock-renewer-enhancements-cmdagcinternallistenergoroutinego" title="Permanent link">&para;</a></h2>
-<p>The existing <code>StartRenewLoop</code> ticks every 60s and calls <code>RenewJob</code>. For M3, two changes:</p>
+<p>The existing <code>StartRenewLoop</code> ticks every 60s and calls <code>RenewJob</code>.
+For M3, two changes:</p>
 <h3 id="41-stop-function-returned-to-provisioner">4.1 Stop function returned to provisioner<a class="headerlink" href="#41-stop-function-returned-to-provisioner" title="Permanent link">&para;</a></h3>
-<p><code>StartRenewLoop</code> already returns a <code>stop()</code> function. The provisioner calls it when the pod reaches a terminal state (§3.6) or is evicted (§3.7). No structural change needed — this is already wired correctly in <code>handleJob</code>'s <code>defer stop()</code>.</p>
+<p><code>StartRenewLoop</code> already returns a <code>stop()</code> function.
+The provisioner calls it when the pod reaches a terminal state (§3.6) or is evicted (§3.7).
+No structural change needed — this is already wired correctly in <code>handleJob</code>'s <code>defer stop()</code>.</p>
 <h3 id="42-renewer-receives-pod-terminal-signal">4.2 Renewer receives pod terminal signal<a class="headerlink" href="#42-renewer-receives-pod-terminal-signal" title="Permanent link">&para;</a></h3>
-<p>The current design uses <code>defer stop()</code> on the renewer inside <code>handleJob</code>. The provisioner blocks until the pod exits (§3.6), at which point <code>handleJob</code> returns and <code>defer stop()</code> fires. This is correct — no additional change to the renewer is needed in M3. The eviction path calls <code>stopRenewLoop()</code> <em>before</em> calling the rerun API (§3.7), which requires the provisioner to hold a reference to the stop function and call it early. Pass <code>stopRenewLoop func()</code> into <code>Provision</code> so the provisioner can call it on eviction detection.</p>
+<p>The current design uses <code>defer stop()</code> on the renewer inside <code>handleJob</code>.
+The provisioner blocks until the pod exits (§3.6), at which point <code>handleJob</code> returns and <code>defer stop()</code> fires.
+This is correct — no additional change to the renewer is needed in M3.
+The eviction path calls <code>stopRenewLoop()</code> <em>before</em> calling the rerun API (§3.7), which requires the provisioner to hold a reference to the stop function and call it early.
+Pass <code>stopRenewLoop func()</code> into <code>Provision</code> so the provisioner can call it on eviction detection.</p>
 <p>Revised <code>Provision</code> signature:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Provisioner</span><span class="p">)</span><span class="w"> </span><span class="nx">Provision</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">runServiceURL</span><span class="p">,</span><span class="w"> </span><span class="nx">planID</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">payload</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
 </code></pre></div>
-<p>The provisioner is called from <code>handleJob</code>, which calls <code>defer stop()</code> after <code>JobHandler</code> returns. For early stop on eviction, restructure <code>handleJob</code> to pass the <code>stop</code> function into the provisioner:</p>
+<p>The provisioner is called from <code>handleJob</code>, which calls <code>defer stop()</code> after <code>JobHandler</code> returns.
+For early stop on eviction, restructure <code>handleJob</code> to pass the <code>stop</code> function into the provisioner:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1">// In handleJob, after starting the renew loop:</span>
 <a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">if</span><span class="w"> </span><span class="nx">cfg</span><span class="p">.</span><span class="nx">JobHandler</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">cfg</span><span class="p">.</span><span class="nx">JobHandler</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">runServiceURL</span><span class="p">,</span><span class="w"> </span><span class="nx">planID</span><span class="p">,</span><span class="w"> </span><span class="nx">payload</span><span class="p">)</span>
 <a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="p">}</span>
 </code></pre></div>
-<p>Add a new <code>JobHandlerFuncWithStop</code> type if needed, or have the provisioner wrap the stop function internally. Simplest approach: add an <code>OnEviction func()</code> callback to <code>provisioner.Config</code> that is set to <code>stop</code> by the reconciler when constructing the provisioner per-job. This keeps the <code>listener.JobHandlerFunc</code> signature unchanged.</p>
+<p>Add a new <code>JobHandlerFuncWithStop</code> type if needed, or have the provisioner wrap the stop function internally.
+Simplest approach: add an <code>OnEviction func()</code> callback to <code>provisioner.Config</code> that is set to <code>stop</code> by the reconciler when constructing the provisioner per-job.
+This keeps the <code>listener.JobHandlerFunc</code> signature unchanged.</p>
 <hr />
 <h2 id="5-investigation-tasks">5. Investigation Tasks<a class="headerlink" href="#5-investigation-tasks" title="Permanent link">&para;</a></h2>
 <h3 id="5a--named-pipe-protocol-runnerworker-handoff">5.A — Named Pipe Protocol (Runner.Worker handoff)<a class="headerlink" href="#5a--named-pipe-protocol-runnerworker-handoff" title="Permanent link">&para;</a></h3>
-<p><strong>Context:</strong> <code>Runner.Worker</code> is the .NET binary from <code>actions/runner</code>. Its source is open and lives in the repo at <code>src/Runner.Worker/</code>. The entrypoint wrapper must feed it the job payload via Named Pipes before <code>Runner.Worker</code> can begin executing steps. The exact pipe names, write ordering, and payload format are the unknown.</p>
+<p><strong>Context:</strong> <code>Runner.Worker</code> is the .NET binary from <code>actions/runner</code>.
+Its source is open and lives in the repo at <code>src/Runner.Worker/</code>.
+The entrypoint wrapper must feed it the job payload via Named Pipes before <code>Runner.Worker</code> can begin executing steps.
+The exact pipe names, write ordering, and payload format are the unknown.</p>
 <p><strong>How to investigate:</strong></p>
 <ol>
 <li>Clone <code>actions/runner</code> and search for named-pipe creation in the Worker startup code:
@@ -3562,17 +3592,21 @@ dependency.</p>
 </ul>
 <p><strong>Document findings:</strong> Add §8.A to the Investigation Findings section at the bottom of this file before closing the milestone.</p>
 <h3 id="5b--worker-image-source">5.B — Worker Image Source<a class="headerlink" href="#5b--worker-image-source" title="Permanent link">&para;</a></h3>
-<p><strong>Context:</strong> The Dockerfile in §2.4 references <code>ghcr.io/actions/actions-runner:2.327.1</code> (ARC-aligned base) as a source for <code>Runner.Worker</code>. Confirmed via local <code>docker pull</code> + <code>docker run</code>:</p>
+<p><strong>Context:</strong> The Dockerfile in §2.4 references <code>ghcr.io/actions/actions-runner:2.327.1</code> (ARC-aligned base) as a source for <code>Runner.Worker</code>.
+Confirmed via local <code>docker pull</code> + <code>docker run</code>:</p>
 <ol>
 <li><code>Runner.Worker</code> is present in the image (no tarball extraction needed).</li>
-<li>Path: <code>/home/runner/bin/Runner.Worker</code>. This directory is <strong>not</strong> on the default <code>$PATH</code>, so the worker Dockerfile sets <code>ENV PATH=/home/runner/bin:$PATH</code> to keep <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go#L91">cmd/worker/main.go:91</a>'s <code>exec.LookPath("Runner.Worker")</code> resolving correctly.</li>
+<li>Path: <code>/home/runner/bin/Runner.Worker</code>.
+   This directory is <strong>not</strong> on the default <code>$PATH</code>, so the worker Dockerfile sets <code>ENV PATH=/home/runner/bin:$PATH</code> to keep <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go#L91">cmd/worker/main.go:91</a>'s <code>exec.LookPath("Runner.Worker")</code> resolving correctly.</li>
 <li>.NET runtime + shared libraries ship inside the image (no host dependency on <code>ubuntu:24.04</code>).</li>
-<li>Image runs as <code>USER runner</code> (UID 1001) — tenants need <code>runAsUser: 1001</code> in the RunnerGroup <code>podTemplate</code> for PSA <code>restricted</code> admission. Already documented in <a href="../security/">security.md D-2</a>.</li>
+<li>Image runs as <code>USER runner</code> (UID 1001) — tenants need <code>runAsUser: 1001</code> in the RunnerGroup <code>podTemplate</code> for PSA <code>restricted</code> admission.
+   Already documented in <a href="../security/">security.md D-2</a>.</li>
 </ol>
 <p><strong>Document findings:</strong> Add §8.B to the Investigation Findings section.</p>
 <hr />
 <h2 id="6-reconciler-wiring">6. Reconciler Wiring<a class="headerlink" href="#6-reconciler-wiring" title="Permanent link">&para;</a></h2>
-<p>The reconciler's <code>getOrCreateMultiplexer</code> currently uses <code>stubJobHandler</code>. Replace it with a real provisioner instance:</p>
+<p>The reconciler's <code>getOrCreateMultiplexer</code> currently uses <code>stubJobHandler</code>.
+Replace it with a real provisioner instance:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1">// In getOrCreateMultiplexer, replace:</span>
 <a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nx">JobHandler</span><span class="p">:</span><span class="w"> </span><span class="nx">stubJobHandler</span><span class="p">,</span>
 <a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
@@ -3591,7 +3625,8 @@ dependency.</p>
 <a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="p">})</span>
 <a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="nx">JobHandler</span><span class="p">:</span><span class="w"> </span><span class="nx">prov</span><span class="p">.</span><span class="nx">Provision</span><span class="p">,</span>
 </code></pre></div>
-<p>Because the provisioner config is derived from the RunnerGroup spec, it must be rebuilt whenever <code>maxWorkers</code>, <code>priorityTiers</code>, <code>podTemplate</code>, or <code>workerImage</code> change. The simplest approach: store the provisioner inside the <code>Multiplexer</code> and rebuild it (alongside <code>SetMaxListeners</code>) on each reconcile, since <code>Provision</code> is called per-job and the config fields are read at call time.</p>
+<p>Because the provisioner config is derived from the RunnerGroup spec, it must be rebuilt whenever <code>maxWorkers</code>, <code>priorityTiers</code>, <code>podTemplate</code>, or <code>workerImage</code> change.
+The simplest approach: store the provisioner inside the <code>Multiplexer</code> and rebuild it (alongside <code>SetMaxListeners</code>) on each reconcile, since <code>Provision</code> is called per-job and the config fields are read at call time.</p>
 <hr />
 <h2 id="7-test-plan">7. Test Plan<a class="headerlink" href="#7-test-plan" title="Permanent link">&para;</a></h2>
 <h3 id="71-unit-tests-go-test--race-">7.1 Unit Tests (<code>go test -race ./...</code>)<a class="headerlink" href="#71-unit-tests-go-test--race-" title="Permanent link">&para;</a></h3>
@@ -3824,11 +3859,13 @@ dependency.</p>
 <hr />
 <h2 id="10-deferred-to-later-milestones">10. Deferred to Later Milestones<a class="headerlink" href="#10-deferred-to-later-milestones" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Worker ServiceAccount</strong> (a dedicated minimally-scoped SA) — created by the GMC in Milestone 4. In M3, the pod uses the namespace default SA with <code>automountServiceAccountToken: false</code>.</li>
+<li><strong>Worker ServiceAccount</strong> (a dedicated minimally-scoped SA) — created by the GMC in Milestone 4.
+  In M3, the pod uses the namespace default SA with <code>automountServiceAccountToken: false</code>.</li>
 <li><strong><code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code> injection into worker pods</strong> — Milestone 4 (GMC injects proxy config into the AGC Deployment env; the AGC reads and forwards these to worker pod templates).</li>
 <li><strong><code>NetworkPolicy</code> restricting worker pod egress to the proxy pool</strong> — Milestone 4.</li>
 <li><strong>Admission webhook for reserved PodTemplate fields</strong> — Milestone 4 (CRD CEL rules can flag obvious misuse; the webhook gives a better UX error).</li>
-<li><strong>Hardened pod spec</strong> (read-only root filesystem, dropped capabilities, non-root user) — Milestone 5. M3 focuses on correctness; security hardening is Milestone 5.</li>
+<li><strong>Hardened pod spec</strong> (read-only root filesystem, dropped capabilities, non-root user) — Milestone 5.
+  M3 focuses on correctness; security hardening is Milestone 5.</li>
 <li><strong><code>gVisor</code>/Kata <code>RuntimeClass</code></strong> — Milestone 5 (optional hardening).</li>
 <li><strong>Multi-tenant load test</strong> — Milestone 5.</li>
 </ul>
@@ -3837,60 +3874,39 @@ dependency.</p>
 <h3 id="11a--named-pipe-protocol">11.A — Named Pipe Protocol<a class="headerlink" href="#11a--named-pipe-protocol" title="Permanent link">&para;</a></h3>
 <p><strong>Source:</strong> <code>src/Runner.Common/ProcessChannel.cs</code> and <code>src/Runner.Common/StreamString.cs</code> in the actions/runner repository (<code>.context/src/github-actions-runner</code>).</p>
 <p><strong>Findings:</strong></p>
-<p>The protocol uses <strong>OS anonymous pipes</strong> (not named pipes / FIFOs). The Listener (parent process) creates two <code>AnonymousPipeServerStream</code> instances and passes their client handle strings as positional arguments to Runner.Worker:</p>
+<p>The protocol uses <strong>OS anonymous pipes</strong> (not named pipes / FIFOs).
+The Listener (parent process) creates two <code>AnonymousPipeServerStream</code> instances and passes their client handle strings as positional arguments to Runner.Worker:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>Runner.Worker --startuptype workerprocess &lt;read-fd&gt; &lt;write-fd&gt;
 </code></pre></div>
-<p>On Linux, <code>.GetClientHandleAsString()</code> returns the integer file descriptor number as a string. The wrapper creates two anonymous pipes with <code>os.Pipe()</code>, passes the read end of pipe-in and the write end of pipe-out via <code>cmd.ExtraFiles</code> (which maps to fd 3 and fd 4 in the child), then passes "3" and "4" as the positional args.</p>
+<p>On Linux, <code>.GetClientHandleAsString()</code> returns the integer file descriptor number as a string.
+The wrapper creates two anonymous pipes with <code>os.Pipe()</code>, passes the read end of pipe-in and the write end of pipe-out via <code>cmd.ExtraFiles</code> (which maps to fd 3 and fd 4 in the child), then passes "3" and "4" as the positional args.</p>
 <p><strong>Wire format</strong> (<code>StreamString.WriteInt32Async</code> + <code>WriteStringAsync</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>[4 bytes] MessageType as little-endian int32 (1 = NewJobRequest)
 <a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>[4 bytes] byte-length of body as little-endian int32
 <a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>[N bytes] body encoded as UTF-16LE  (C# UnicodeEncoding = UTF-16LE)
 </code></pre></div>
-<p><code>BitConverter.GetBytes</code> on x86/x64 Linux is little-endian. The string encoding is <code>UnicodeEncoding</code> (UTF-16LE, no BOM). The previous implementation had three errors: it used FIFOs instead of anonymous pipes, big-endian instead of little-endian, and UTF-8 instead of UTF-16LE.</p>
+<p><code>BitConverter.GetBytes</code> on x86/x64 Linux is little-endian.
+The string encoding is <code>UnicodeEncoding</code> (UTF-16LE, no BOM).
+The previous implementation had three errors: it used FIFOs instead of anonymous pipes, big-endian instead of little-endian, and UTF-8 instead of UTF-16LE.</p>
 <p><strong>Process arguments</strong> (corrected during M3/M4 live-cluster dry-run, 2026-05-27):</p>
-<p>The initial draft of this section claimed the invocation is
-<code>Runner.Worker --startuptype workerprocess &lt;readFD&gt; &lt;writeFD&gt;</code> (4 args). That
-is wrong. Runner.Worker's <code>Program.MainAsync</code> asserts <code>args.Length == 3</code> and
-<code>args[0].ToLowerInvariant() == "spawnclient"</code>
-(<a href="https://github.com/actions/runner/blob/v2.327.1/src/Runner.Worker/Program.cs">Program.cs</a>),
-so the correct invocation is:</p>
+<p>The initial draft of this section claimed the invocation is <code>Runner.Worker --startuptype workerprocess &lt;readFD&gt; &lt;writeFD&gt;</code> (4 args).
+That is wrong.
+Runner.Worker's <code>Program.MainAsync</code> asserts <code>args.Length == 3</code> and <code>args[0].ToLowerInvariant() == "spawnclient"</code> (<a href="https://github.com/actions/runner/blob/v2.327.1/src/Runner.Worker/Program.cs">Program.cs</a>), so the correct invocation is:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>Runner.Worker spawnclient &lt;readFD&gt; &lt;writeFD&gt;
 </code></pre></div>
-<p><code>args[1]</code> is <code>pipeIn</code> (the wrapper's read-end FD as seen in the child), <code>args[2]</code>
-is <code>pipeOut</code>. The wrapper passes "3" and "4" (Go's <code>cmd.ExtraFiles[0]</code> maps to
-fd 3 and <code>[1]</code> to fd 4 in the child).</p>
-<p><strong>Outstanding gap (resolved 2026-05-27 — Q5a):</strong> Runner.Worker also
-reads its runner configuration from <code>/home/runner/.runner</code>,
-<code>/home/runner/.credentials</code>, and <code>/home/runner/.credentials_rsaparams</code> (see
-<code>Runner.Common/ConfigurationStore.cs</code> — <code>GetSettings()</code> enforces non-null
-settings). Without them Runner.Worker fails at job start with
-<code>ArgumentNullException: configuredSettings</code>.</p>
+<p><code>args[1]</code> is <code>pipeIn</code> (the wrapper's read-end FD as seen in the child), <code>args[2]</code> is <code>pipeOut</code>.
+The wrapper passes "3" and "4" (Go's <code>cmd.ExtraFiles[0]</code> maps to fd 3 and <code>[1]</code> to fd 4 in the child).</p>
+<p><strong>Outstanding gap (resolved 2026-05-27 — Q5a):</strong> Runner.Worker also reads its runner configuration from <code>/home/runner/.runner</code>, <code>/home/runner/.credentials</code>, and <code>/home/runner/.credentials_rsaparams</code> (see <code>Runner.Common/ConfigurationStore.cs</code> — <code>GetSettings()</code> enforces non-null settings).
+Without them Runner.Worker fails at job start with <code>ArgumentNullException: configuredSettings</code>.</p>
 <p>The end-to-end plumbing is now:</p>
 <ol>
-<li><code>GithubRegistrar.Register</code> retains the raw <code>encoded_jit_config</code> it
-   already parsed and exposes it on <code>AgentCredentials</code>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go">github_registrar.go</a>).</li>
-<li><code>Pool.createAgent</code> writes the blob into the agent Secret under
-   <code>encodedJITConfig</code>; <code>secretToAgent</code> restores it onto the <code>Agent</code> struct so
-   the AGC reconciler picks it up on restart
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go">pool.go</a>).</li>
-<li>The listener passes <code>cfg.Agent.EncodedJITConfig</code> into <code>JobHandlerFunc</code>,
-   which the provisioner forwards into the worker Secret under the
-   <code>jitconfig</code> key
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go</a>,
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>).</li>
-<li>The wrapper reads <code>&lt;payloadDir&gt;/jitconfig</code>, base64-decodes the outer blob,
-   JSON-unmarshals the file map, base64-decodes each entry, and writes the
-   three runner-config files into <code>$RUNNER_HOME_DIR</code> (default <code>/home/runner</code>)
-   with mode 0600 before exec'ing Runner.Worker
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">worker/main.go</a> — <code>materializeJITConfig</code>).</li>
+<li><code>GithubRegistrar.Register</code> retains the raw <code>encoded_jit_config</code> it already parsed and exposes it on <code>AgentCredentials</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go">github_registrar.go</a>).</li>
+<li><code>Pool.createAgent</code> writes the blob into the agent Secret under <code>encodedJITConfig</code>; <code>secretToAgent</code> restores it onto the <code>Agent</code> struct so the AGC reconciler picks it up on restart (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go">pool.go</a>).</li>
+<li>The listener passes <code>cfg.Agent.EncodedJITConfig</code> into <code>JobHandlerFunc</code>, which the provisioner forwards into the worker Secret under the <code>jitconfig</code> key (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>).</li>
+<li>The wrapper reads <code>&lt;payloadDir&gt;/jitconfig</code>, base64-decodes the outer blob, JSON-unmarshals the file map, base64-decodes each entry, and writes the three runner-config files into <code>$RUNNER_HOME_DIR</code> (default <code>/home/runner</code>) with mode 0600 before exec'ing Runner.Worker (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">worker/main.go</a> — <code>materializeJITConfig</code>).</li>
 </ol>
-<p>Unit tests pin: the agent Secret round-trip
-(<code>TestPool_EnsureAgents_StoresEncodedJITConfig</code>), the worker Secret hand-off
-(<code>TestProvisioner_ForwardsJITConfigIntoSecret</code> /
-<code>TestProvisioner_OmitsJITKeyWhenEmpty</code>), and the wrapper-side
-materialization (<code>TestMaterializeJITConfig_*</code>). Live-cluster validation
-remains gated on Q5c.</p>
+<p>Unit tests pin: the agent Secret round-trip (<code>TestPool_EnsureAgents_StoresEncodedJITConfig</code>), the worker Secret hand-off (<code>TestProvisioner_ForwardsJITConfigIntoSecret</code> / <code>TestProvisioner_OmitsJITKeyWhenEmpty</code>), and the wrapper-side materialization (<code>TestMaterializeJITConfig_*</code>).
+Live-cluster validation remains gated on Q5c.</p>
 <p><strong>Implementation:</strong> <code>cmd/worker/main.go</code> — <code>writeJobMessage</code> and <code>encodeUTF16LE</code>.</p>
 <hr />
 <h3 id="11b--worker-image-source">11.B — Worker Image Source<a class="headerlink" href="#11b--worker-image-source" title="Permanent link">&para;</a></h3>
@@ -3898,25 +3914,15 @@ remains gated on Q5c.</p>
 <p><strong>Findings:</strong> TBD</p>
 <hr />
 <h3 id="11c--worker-pod-must-trust-the-per-tenant-egress-proxy-ca">11.C — Worker pod must trust the per-tenant egress proxy CA<a class="headerlink" href="#11c--worker-pod-must-trust-the-per-tenant-egress-proxy-ca" title="Permanent link">&para;</a></h3>
-<p><strong>Surfaced by:</strong> 2026-05-29 live kind dry-run of <code>E2E_GitHub_RealDispatch</code>
-(live-GitHub <code>Label("github-real")</code>) against the <code>actions-gateway-test</code> GitHub
-App and the <code>actions-gateway/gateway-test</code> workflow.</p>
+<p><strong>Surfaced by:</strong> 2026-05-29 live kind dry-run of <code>E2E_GitHub_RealDispatch</code> (live-GitHub <code>Label("github-real")</code>) against the <code>actions-gateway-test</code> GitHub App and the <code>actions-gateway/gateway-test</code> workflow.</p>
 <p><strong>Symptom:</strong></p>
 <ul>
-<li>Worker pod is scheduled with
-  <code>HTTPS_PROXY=https://actions-gateway-proxy.&lt;ns&gt;.svc.cluster.local:8080</code>
-  (and matching <code>HTTP_PROXY</code>). Volume mounts: only the <code>job-payload</code>
-  Secret. No mount for the per-tenant <code>actions-gateway-proxy-tls</code> Secret.</li>
-<li>Wrapper executes, payload + JIT config are materialized
-  (<code>/home/runner/.runner</code>, <code>/home/runner/.credentials</code>,
-  <code>/home/runner/.credentials_rsaparams</code>), Runner.Worker 2.327.1 starts and
-  reads the job message from the pipe (<code>Message received</code> /
-  <code>Job message: ...</code>).</li>
-<li>Every outbound HTTPS call from Runner.Worker via the proxy fails the
-  outer TLS handshake with
-  <code>System.Security.Authentication.AuthenticationException: The remote
-  certificate is invalid because of errors in the certificate chain:
-  UntrustedRoot</code>. Affected paths observed in the same run:<ul>
+<li>Worker pod is scheduled with <code>HTTPS_PROXY=https://actions-gateway-proxy.&lt;ns&gt;.svc.cluster.local:8080</code> (and matching <code>HTTP_PROXY</code>).
+  Volume mounts: only the <code>job-payload</code> Secret.
+  No mount for the per-tenant <code>actions-gateway-proxy-tls</code> Secret.</li>
+<li>Wrapper executes, payload + JIT config are materialized (<code>/home/runner/.runner</code>, <code>/home/runner/.credentials</code>, <code>/home/runner/.credentials_rsaparams</code>), Runner.Worker 2.327.1 starts and reads the job message from the pipe (<code>Message received</code> / <code>Job message: ...</code>).</li>
+<li>Every outbound HTTPS call from Runner.Worker via the proxy fails the outer TLS handshake with <code>System.Security.Authentication.AuthenticationException: The remote certificate is invalid because of errors in the certificate chain: UntrustedRoot</code>.
+  Affected paths observed in the same run:<ul>
 <li><code>JobExtension</code> connectivity check</li>
 <li><code>ResultServer</code> init</li>
 <li><code>JobServerQueue</code> log uploads</li>
@@ -3924,160 +3930,81 @@ App and the <code>actions-gateway/gateway-test</code> workflow.</p>
 <li><code>RunServer.CompleteJobAsync</code> (final completion)</li>
 </ul>
 </li>
-<li>Runner exits 1 after ~3m of retries. AGC observes
-  <code>worker pod completed phase=Failed reason="" duration=3m50s</code>.</li>
-<li>RenewJob from the AGC starts returning <code>401 Not authorized for this job</code>
-  ~60s in (the run-service revokes the lock once the runner abandons).</li>
+<li>Runner exits 1 after ~3m of retries.
+  AGC observes <code>worker pod completed phase=Failed reason="" duration=3m50s</code>.</li>
+<li>RenewJob from the AGC starts returning <code>401 Not authorized for this job</code> ~60s in (the run-service revokes the lock once the runner abandons).</li>
 <li>GitHub-side run concludes <code>cancelled</code>.</li>
 </ul>
 <p><strong>Root cause:</strong></p>
-<p>The .NET HttpClient validates the proxy's TLS certificate before sending
-<code>CONNECT</code>. The proxy's cert is signed by a cert-manager-issued
-self-signed CA (the <code>actions-gateway-proxy-tls</code> Secret in the tenant
-namespace). The runner image's default OS trust store
-(<code>/etc/ssl/certs/ca-certificates.crt</code>) does not contain that CA, so the
-outer TLS handshake fails before any traffic ever reaches GitHub.</p>
-<p>The GMC already mounts this Secret into the AGC pod (cert only, via
-<code>Items: [tls.crt]</code>) at <code>/etc/actions-gateway/proxy-tls/tls.crt</code> — see
-<code>buildAGCDeployment</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go</a>
-~lines 494-509 — and the AGC code path reads it via the
-<code>appendProxyCAToSystemPool</code> helper landed under Q5f. Worker
-pods need the symmetric treatment, but the AGC provisioner's <code>BuildPod</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go</a>)
-never adds that volume.</p>
+<p>The .NET HttpClient validates the proxy's TLS certificate before sending <code>CONNECT</code>.
+The proxy's cert is signed by a cert-manager-issued self-signed CA (the <code>actions-gateway-proxy-tls</code> Secret in the tenant namespace).
+The runner image's default OS trust store (<code>/etc/ssl/certs/ca-certificates.crt</code>) does not contain that CA, so the outer TLS handshake fails before any traffic ever reaches GitHub.</p>
+<p>The GMC already mounts this Secret into the AGC pod (cert only, via <code>Items: [tls.crt]</code>) at <code>/etc/actions-gateway/proxy-tls/tls.crt</code> — see <code>buildAGCDeployment</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go</a> ~lines 494-509 — and the AGC code path reads it via the <code>appendProxyCAToSystemPool</code> helper landed under Q5f.
+Worker pods need the symmetric treatment, but the AGC provisioner's <code>BuildPod</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go</a>) never adds that volume.</p>
 <p><strong>Fix sketch (tracked as Q5h):</strong></p>
 <ol>
-<li><strong>AGC provisioner pod builder:</strong> Mount <code>actions-gateway-proxy-tls</code>
-   (cert only, <code>Items: [{Key: tls.crt, Path: tls.crt}]</code>) into the runner
-   container at a fixed path (e.g.
-   <code>/etc/actions-gateway/proxy-tls/tls.crt</code>). Symmetric to the AGC
-   mount.</li>
-<li><strong>GMC <code>AGC_EXTRA_*</code> plumbing:</strong> Thread the proxy-TLS Secret name into
-   the AGC deployment as an env var (or hard-code the canonical name —
-   the Secret name is deterministic per tenant). AGC reads it when
-   building the worker pod spec.</li>
-<li><strong>Worker entrypoint wrapper:</strong> After payload + JIT materialization
-   and before exec'ing Runner.Worker, read the mounted CA cert and:<ul>
-<li>If the OS trust dir is writable (it should be under
-  <code>runAsUser: 1001</code> + <code>fsGroup</code> in the actions-runner base image),
-  append the cert to <code>/etc/ssl/certs/ca-certificates.crt</code>
-  (or drop into <code>/usr/local/share/ca-certificates/</code> and call
-  <code>update-ca-certificates</code>). .NET on Linux uses OpenSSL's bundle by
-  default, so this is sufficient for both the wrapper and
-  Runner.Worker.</li>
-<li>As a fallback, build a combined PEM at a writable path and export
-  <code>SSL_CERT_FILE</code> + <code>SSL_CERT_DIR</code> to both wrapper and child env.</li>
+<li><strong>AGC provisioner pod builder:</strong> Mount <code>actions-gateway-proxy-tls</code> (cert only, <code>Items: [{Key: tls.crt, Path: tls.crt}]</code>) into the runner container at a fixed path (e.g. <code>/etc/actions-gateway/proxy-tls/tls.crt</code>).
+   Symmetric to the AGC mount.</li>
+<li><strong>GMC <code>AGC_EXTRA_*</code> plumbing:</strong> Thread the proxy-TLS Secret name into the AGC deployment as an env var (or hard-code the canonical name — the Secret name is deterministic per tenant).
+   AGC reads it when building the worker pod spec.</li>
+<li><strong>Worker entrypoint wrapper:</strong> After payload + JIT materialization and before exec'ing Runner.Worker, read the mounted CA cert and:<ul>
+<li>If the OS trust dir is writable (it should be under <code>runAsUser: 1001</code> + <code>fsGroup</code> in the actions-runner base image), append the cert to <code>/etc/ssl/certs/ca-certificates.crt</code> (or drop into <code>/usr/local/share/ca-certificates/</code> and call <code>update-ca-certificates</code>). .NET on Linux uses OpenSSL's bundle by default, so this is sufficient for both the wrapper and Runner.Worker.</li>
+<li>As a fallback, build a combined PEM at a writable path and export <code>SSL_CERT_FILE</code> + <code>SSL_CERT_DIR</code> to both wrapper and child env.</li>
 </ul>
 </li>
 <li><strong>Tests:</strong><ul>
-<li><code>pod_builder_test.go</code>: assert the runner container has the
-  <code>actions-gateway-proxy-tls</code> Secret volume + mount, cert-only
-  (no <code>tls.key</code>).</li>
-<li><code>cmd/worker/worker_test.go</code>: stage a fake CA at the mount path,
-  run the wrapper against a stub <code>Runner.Worker</code>, assert the CA was
-  appended to the bundle (or <code>SSL_CERT_FILE</code> set) before the child
-  ran.</li>
+<li><code>pod_builder_test.go</code>: assert the runner container has the <code>actions-gateway-proxy-tls</code> Secret volume + mount, cert-only (no <code>tls.key</code>).</li>
+<li><code>cmd/worker/worker_test.go</code>: stage a fake CA at the mount path, run the wrapper against a stub <code>Runner.Worker</code>, assert the CA was appended to the bundle (or <code>SSL_CERT_FILE</code> set) before the child ran.</li>
 </ul>
 </li>
 <li><strong>Doc updates:</strong><ul>
-<li><code>docs/design/02-architecture.md</code> — call out the worker proxy-CA
-  trust requirement in the egress-proxy section.</li>
-<li><code>docs/design/05-security.md</code> — note that the proxy CA is
-  tenant-scoped and the worker trust-store install is per-pod.</li>
-<li><code>docs/operations/troubleshooting.md</code> — add a runbook entry keyed
-  on the <code>UntrustedRoot</code> log line.</li>
+<li><code>docs/design/02-architecture.md</code> — call out the worker proxy-CA trust requirement in the egress-proxy section.</li>
+<li><code>docs/design/05-security.md</code> — note that the proxy CA is tenant-scoped and the worker trust-store install is per-pod.</li>
+<li><code>docs/operations/troubleshooting.md</code> — add a runbook entry keyed on the <code>UntrustedRoot</code> log line.</li>
 </ul>
 </li>
 </ol>
 <p><strong>Why this matters for the green-checkmark criterion:</strong></p>
-<p>Without 5h, no real workflow can complete: the runner cannot post step
-logs, cannot upload step results, and cannot call <code>CompleteJob</code> against
-the run-service. The job runs (the <code>echo</code> step probably succeeds in
-the container) but is invisible to GitHub, which times out the lock and
-marks the run <code>cancelled</code>. Once Q5h ships, Q6 can be re-run against
-the same kind cluster and should reach the green checkmark.</p>
+<p>Without 5h, no real workflow can complete: the runner cannot post step logs, cannot upload step results, and cannot call <code>CompleteJob</code> against the run-service.
+The job runs (the <code>echo</code> step probably succeeds in the container) but is invisible to GitHub, which times out the lock and marks the run <code>cancelled</code>.
+Once Q5h ships, Q6 can be re-run against the same kind cluster and should reach the green checkmark.</p>
 <p><strong>Resolution (Q5h shipped):</strong></p>
 <ul>
-<li>AGC pod provisioner gained <code>Provisioner.ProxyTLSSecretName</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go</a>).
+<li>AGC pod provisioner gained <code>Provisioner.ProxyTLSSecretName</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go</a>).
   When non-empty, <code>buildPod</code> adds an <code>Items: [tls.crt]</code> Secret volume</li>
-<li>read-only mount at <code>/etc/actions-gateway/proxy-ca/tls.crt</code> and
-  exports <code>PROXY_CA_CERT_PATH</code> on the runner container.
-  <code>tls.key</code> is never projected, keeping the proxy private key off
-  worker pods. Two new unit tests pin the mount shape and the
-  empty-secret-name no-op path
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner_test.go">provisioner_test.go</a> —
-  <code>TestBuildPod_MountsProxyCASecret</code>, <code>TestBuildPod_NoProxyCAWhenSecretNameEmpty</code>).</li>
-<li>AGC <code>main.go</code> reads <code>PROXY_TLS_SECRET_NAME</code> and plumbs it into the
-  provisioner.</li>
-<li>GMC <code>buildAGCDeployment</code> sets <code>PROXY_TLS_SECRET_NAME=
-  actions-gateway-proxy-tls</code> on the AGC Deployment so each tenant's AGC
-  finds the right Secret automatically
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go</a>);
-  <code>TestBuildAGCDeployment_PlumbsProxyTLSSecretName</code> guards the env.</li>
-<li>Worker entrypoint wrapper installs the CA into a combined trust
-  bundle and sets <code>SSL_CERT_FILE</code> on the child Runner.Worker env before
-  exec'ing (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a> —
-  <code>installProxyCATrust</code> / <code>readSystemCABundle</code>). System bundle missing,
-  CA file missing, CA file empty, and <code>PROXY_CA_CERT_PATH=""</code> are all
-  tolerated as no-ops so unit-test and non-proxied deployments keep
-  working. Five unit tests cover the helper plus an end-to-end test
-  (<code>TestWrapper_PropagatesProxyTrustEnvToChild</code>) that asserts the child
-  process sees <code>SSL_CERT_FILE</code> pointing at the combined bundle.</li>
+<li>read-only mount at <code>/etc/actions-gateway/proxy-ca/tls.crt</code> and exports <code>PROXY_CA_CERT_PATH</code> on the runner container. <code>tls.key</code> is never projected, keeping the proxy private key off worker pods.
+    Two new unit tests pin the mount shape and the empty-secret-name no-op path (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner_test.go">provisioner_test.go</a> — <code>TestBuildPod_MountsProxyCASecret</code>, <code>TestBuildPod_NoProxyCAWhenSecretNameEmpty</code>).</li>
+<li>AGC <code>main.go</code> reads <code>PROXY_TLS_SECRET_NAME</code> and plumbs it into the provisioner.</li>
+<li>GMC <code>buildAGCDeployment</code> sets <code>PROXY_TLS_SECRET_NAME= actions-gateway-proxy-tls</code> on the AGC Deployment so each tenant's AGC finds the right Secret automatically (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go</a>); <code>TestBuildAGCDeployment_PlumbsProxyTLSSecretName</code> guards the env.</li>
+<li>Worker entrypoint wrapper installs the CA into a combined trust bundle and sets <code>SSL_CERT_FILE</code> on the child Runner.Worker env before exec'ing (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a> — <code>installProxyCATrust</code> / <code>readSystemCABundle</code>).
+  System bundle missing, CA file missing, CA file empty, and <code>PROXY_CA_CERT_PATH=""</code> are all tolerated as no-ops so unit-test and non-proxied deployments keep working.
+  Five unit tests cover the helper plus an end-to-end test (<code>TestWrapper_PropagatesProxyTrustEnvToChild</code>) that asserts the child process sees <code>SSL_CERT_FILE</code> pointing at the combined bundle.</li>
 </ul>
-<p>The next live dry-run of Q6 should reach the green checkmark
-without <code>UntrustedRoot</code> log lines. M-11b (Ed25519 live probe) and Q7
-(egress-proxy live curl validation) are unblocked at the same time.</p>
+<p>The next live dry-run of Q6 should reach the green checkmark without <code>UntrustedRoot</code> log lines.
+M-11b (Ed25519 live probe) and Q7 (egress-proxy live curl validation) are unblocked at the same time.</p>
 <hr />
 <h3 id="11d--gmc-readiness-probe-did-not-gate-on-webhook-server-start">11.D — GMC readiness probe did not gate on webhook server start<a class="headerlink" href="#11d--gmc-readiness-probe-did-not-gate-on-webhook-server-start" title="Permanent link">&para;</a></h3>
-<p><strong>Surfaced by:</strong> 2026-05-30 re-run of <code>E2E_GitHub_RealDispatch</code> (Queue
-Q6). The test's <code>BeforeAll</code> does <code>kubectl set env</code> on the GMC
-Deployment to swap fakegithub→real-GitHub env vars, which triggers a
-rolling update. It then waits for <code>kubectl rollout status</code> to settle
-and immediately applies the tenant <code>ActionsGateway</code> CR. Every attempt
-failed in <code>kubectl apply</code> with:</p>
+<p><strong>Surfaced by:</strong> 2026-05-30 re-run of <code>E2E_GitHub_RealDispatch</code> (Queue Q6).
+The test's <code>BeforeAll</code> does <code>kubectl set env</code> on the GMC Deployment to swap fakegithub→real-GitHub env vars, which triggers a rolling update.
+It then waits for <code>kubectl rollout status</code> to settle and immediately applies the tenant <code>ActionsGateway</code> CR.
+Every attempt failed in <code>kubectl apply</code> with:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>Internal error occurred: failed calling webhook
 <a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>&quot;vactionsgateway-v1alpha1.kb.io&quot;: failed to call webhook:
 <a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>Post &quot;https://gmc-webhook-service.gmc-system.svc:443/...?timeout=10s&quot;:
 <a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>context deadline exceeded
 </code></pre></div>
-<p><strong>Root cause:</strong> <code>cmd/gmc/cmd/main.go</code> only registered
-<code>mgr.AddReadyzCheck("readyz", healthz.Ping)</code> — a probe that returns OK
-as soon as the manager process is up. controller-runtime starts the
-webhook listener on port 9443 in a separate goroutine that races
-against the readiness probe. Once readyz returns 200, the kubelet
-marks the pod Ready and the EndpointSlice for <code>gmc-webhook-service</code>
-adds the new pod IP. The kube-apiserver routes admission calls to that
-pod — but its webhook listener may not yet be bound, so every
-<code>kubectl apply ActionsGateway</code> racing a GMC rollout hangs for the
-admission <code>timeout=10s</code> and fails.</p>
-<p><strong>Fix:</strong> Added a second readyz check gated on
-<code>mgr.GetWebhookServer().StartedChecker()</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">cmd/gmc/cmd/main.go</a>) — the
-controller-runtime helper returns nil only after the webhook listener
-is bound <em>and</em> a TLS self-dial succeeds. Conditional on
-<code>ENABLE_WEBHOOKS != "false"</code> so envtest runs that disable webhooks
-keep marking themselves Ready.</p>
-<p><strong>Production impact:</strong> This race affected every GMC rolling update in
-production, not just the e2e suite. Any concurrent <code>kubectl apply</code> of
-an <code>ActionsGateway</code> CR during a GMC image roll or env-var change had a
-1–2s window where it could time out. The fix is a one-line addition
-and ships in the same branch as the Q6 re-run.</p>
-<p><strong>Follow-up identified — resolved by Q42.</strong> The egress proxy
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go">cmd/proxy/proxy.go</a>) had the same class of
-bug — its <code>/healthz</code> returned OK as soon as the health-port server
-bound, but the CONNECT listener on port 8080 was started in a separate
-goroutine. The GMC's per-tenant proxy Deployment
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go</a>)
-used <code>/healthz</code> for both liveness and readiness, so worker pods could
-hit <code>connection refused</code> on <code>HTTPS_PROXY</code> traffic during a proxy
-rollout or HPA scale-up.</p>
-<p>Fixed by Q42: <code>ListenAndServe</code> now pre-binds both listeners
-synchronously before either serve goroutine starts, then closes a
-<code>ready</code> channel. A new <code>/readyz</code> endpoint returns 200 only after the
-channel closes, and the proxy <code>Deployment</code>'s <code>readinessProbe</code> was
-re-pointed to <code>/readyz</code>. <code>/healthz</code> remains the liveness probe.
+<p><strong>Root cause:</strong> <code>cmd/gmc/cmd/main.go</code> only registered <code>mgr.AddReadyzCheck("readyz", healthz.Ping)</code> — a probe that returns OK as soon as the manager process is up. controller-runtime starts the webhook listener on port 9443 in a separate goroutine that races against the readiness probe.
+Once readyz returns 200, the kubelet marks the pod Ready and the EndpointSlice for <code>gmc-webhook-service</code> adds the new pod IP.
+The kube-apiserver routes admission calls to that pod — but its webhook listener may not yet be bound, so every <code>kubectl apply ActionsGateway</code> racing a GMC rollout hangs for the admission <code>timeout=10s</code> and fails.</p>
+<p><strong>Fix:</strong> Added a second readyz check gated on <code>mgr.GetWebhookServer().StartedChecker()</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">cmd/gmc/cmd/main.go</a>) — the controller-runtime helper returns nil only after the webhook listener is bound <em>and</em> a TLS self-dial succeeds.
+Conditional on <code>ENABLE_WEBHOOKS != "false"</code> so envtest runs that disable webhooks keep marking themselves Ready.</p>
+<p><strong>Production impact:</strong> This race affected every GMC rolling update in production, not just the e2e suite.
+Any concurrent <code>kubectl apply</code> of an <code>ActionsGateway</code> CR during a GMC image roll or env-var change had a 1–2s window where it could time out.
+The fix is a one-line addition and ships in the same branch as the Q6 re-run.</p>
+<p><strong>Follow-up identified — resolved by Q42.</strong> The egress proxy (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go">cmd/proxy/proxy.go</a>) had the same class of bug — its <code>/healthz</code> returned OK as soon as the health-port server bound, but the CONNECT listener on port 8080 was started in a separate goroutine.
+The GMC's per-tenant proxy Deployment (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go</a>) used <code>/healthz</code> for both liveness and readiness, so worker pods could hit <code>connection refused</code> on <code>HTTPS_PROXY</code> traffic during a proxy rollout or HPA scale-up.</p>
+<p>Fixed by Q42: <code>ListenAndServe</code> now pre-binds both listeners synchronously before either serve goroutine starts, then closes a <code>ready</code> channel.
+A new <code>/readyz</code> endpoint returns 200 only after the channel closes, and the proxy <code>Deployment</code>'s <code>readinessProbe</code> was re-pointed to <code>/readyz</code>. <code>/healthz</code> remains the liveness probe.
 Runbook: <a href="../../operations/troubleshooting/#worker-https_proxy-returns-connection-refused-during-proxy-rollout">troubleshooting.md — Worker <code>HTTPS_PROXY</code> Returns <code>connection refused</code> During Proxy Rollout</a>.</p>
 
 

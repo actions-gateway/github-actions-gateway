@@ -2642,77 +2642,41 @@
 
 
 <h1 id="q197--workload-identity-credentials-external-signer">Q197 — Workload-identity credentials (external signer)<a class="headerlink" href="#q197--workload-identity-credentials-external-signer" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> add the second <code>spec.credentials</code> union member — <code>workloadIdentity</code> —
-so a gateway can authenticate to GitHub by having an <strong>external</strong> signer sign the
-App JWT, with <strong>no GitHub App private key ever in the cluster</strong>.</p>
-<p><strong>Approach:</strong> (1) extend the Q196 discriminated union with a <code>WorkloadIdentity</code>
-member + CEL <code>iff</code>; (2) introduce a <code>githubapp.Signer</code> interface so JWT signing is
-pluggable; (3) ship the MVP external signer — HashiCorp Vault transit (sign op) +
-Vault Kubernetes auth — behind that interface so cloud KMS slots in later without
-another breaking change.</p>
-<p>This builds directly on Q196 (merged): the discriminated <code>spec.credentials</code> union
-already exists with <code>githubApp</code> as the first member. We <strong>do not reshape the
-parent</strong> — we add a second member per the existing <code>+unionDiscriminator</code>.</p>
+<p><strong>Goal:</strong> add the second <code>spec.credentials</code> union member — <code>workloadIdentity</code> — so a gateway can authenticate to GitHub by having an <strong>external</strong> signer sign the App JWT, with <strong>no GitHub App private key ever in the cluster</strong>.</p>
+<p><strong>Approach:</strong> (1) extend the Q196 discriminated union with a <code>WorkloadIdentity</code> member + CEL <code>iff</code>; (2) introduce a <code>githubapp.Signer</code> interface so JWT signing is pluggable; (3) ship the MVP external signer — HashiCorp Vault transit (sign op) + Vault Kubernetes auth — behind that interface so cloud KMS slots in later without another breaking change.</p>
+<p>This builds directly on Q196 (merged): the discriminated <code>spec.credentials</code> union already exists with <code>githubApp</code> as the first member.
+We <strong>do not reshape the parent</strong> — we add a second member per the existing <code>+unionDiscriminator</code>.</p>
 <h2 id="why-now-the-v2beta1-freeze">Why now (the v2beta1 freeze)<a class="headerlink" href="#why-now-the-v2beta1-freeze" title="Permanent link">&para;</a></h2>
-<p><code>alpha → beta</code> is the last free breaking change. Q196 fixed the union <em>shape</em>;
-Q197 validates it against a <em>real</em> second consumer (the signer interface + a Vault
-impl), so the beta shape ships with both auth methods designed-and-built, not
-designed-and-unbuilt. See <a href="../../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">appendix-h §H.15</a>
-and <a href="../../v2beta1/">v2beta1.md</a>.</p>
+<p><code>alpha → beta</code> is the last free breaking change.
+Q196 fixed the union <em>shape</em>; Q197 validates it against a <em>real</em> second consumer (the signer interface + a Vault impl), so the beta shape ships with both auth methods designed-and-built, not designed-and-unbuilt.
+See <a href="../../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">appendix-h §H.15</a> and <a href="../../v2beta1/">v2beta1.md</a>.</p>
 <h2 id="security-invariants-non-negotiable">Security invariants (non-negotiable)<a class="headerlink" href="#security-invariants-non-negotiable" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Secure-by-default unchanged.</strong> In-cluster PEM (<code>githubApp</code>) stays the default;
-  the external signer is an explicit opt-in union member. No existing validation or
-  default is relaxed. See <a href="../../../design/05-security/">05-security.md</a> and
-  [[feedback_secure_by_default]].</li>
-<li><strong>No private key in the cluster, ever.</strong> The whole point: the App JWT is signed
-  by an external trust anchor (Vault transit) that the AGC reaches by proving its
-  pod identity (Vault Kubernetes auth). The AGC never reads, holds, or mounts the
-  App private key under this method.</li>
-<li><strong>No secret in logs/env/process args.</strong> The pod's projected ServiceAccount
-  token (the Vault login credential) and the Vault client token are read from
-  files / response bodies and never logged, never placed in an env var, never
-  interpolated into an error. The HTTPS-for-credential-channel rule that guards
-  the GitHub token exchange applies equally to the Vault address (HTTPS by
-  default; plaintext only under an explicit dev/test opt-in).</li>
+<li><strong>Secure-by-default unchanged.</strong> In-cluster PEM (<code>githubApp</code>) stays the default; the external signer is an explicit opt-in union member.
+  No existing validation or default is relaxed.
+  See <a href="../../../design/05-security/">05-security.md</a> and [[feedback_secure_by_default]].</li>
+<li><strong>No private key in the cluster, ever.</strong> The whole point: the App JWT is signed by an external trust anchor (Vault transit) that the AGC reaches by proving its pod identity (Vault Kubernetes auth).
+  The AGC never reads, holds, or mounts the App private key under this method.</li>
+<li><strong>No secret in logs/env/process args.</strong> The pod's projected ServiceAccount token (the Vault login credential) and the Vault client token are read from files / response bodies and never logged, never placed in an env var, never interpolated into an error.
+  The HTTPS-for-credential-channel rule that guards the GitHub token exchange applies equally to the Vault address (HTTPS by default; plaintext only under an explicit dev/test opt-in).</li>
 </ul>
 <h2 id="scope-of-this-pr-and-the-deferred-follow-up">Scope of THIS PR (and the deferred follow-up)<a class="headerlink" href="#scope-of-this-pr-and-the-deferred-follow-up" title="Permanent link">&para;</a></h2>
 <p><strong>In this PR (the API shape + the signer machinery + tests/docs):</strong></p>
 <ol>
-<li><strong>API</strong> (<code>api/v2alpha1</code>): <code>CredentialTypeWorkloadIdentity</code> enum value;
-   <code>WorkloadIdentity</code> member on <code>GitHubCredentials</code>; <code>ExternalSigner</code> (provider
-   discriminator) + <code>VaultSigner</code> + <code>VaultKubernetesAuth</code> types; a per-member CEL
-   <code>iff</code> rule that <em>extends</em> the union (never an N-way "exactly one of"); a
-   per-provider CEL <code>iff</code> on <code>ExternalSigner</code>. Regenerate deepcopy + CRDs + sync
-   Helm chart CRDs.</li>
-<li><strong><code>githubapp.Signer</code> interface</strong>: pluggable JWT signing. <code>pemSigner</code> wraps the
-   existing in-cluster crypto path (RS256/EdDSA) with <strong>zero behavior change</strong>.
-   <code>NewInstallationTokenProviderWithSigner</code> builds a provider around any <code>Signer</code>.</li>
-<li><strong><code>githubapp/vaultsigner</code></strong>: the MVP external signer. Vault Kubernetes auth
-   login (projected SA token → Vault client token, cached to its lease) + Vault
-   transit <code>sign</code> (RSA pkcs1v15 + sha2-256 = RS256). HTTPS-by-default with an
-   explicit dev/test opt-in. Unit-tested against an <code>httptest</code> Vault mock — no
-   real Vault, no real secret.</li>
-<li><strong>GMC v2 controller guard</strong>: a <code>workloadIdentity</code> gateway must not error-loop
-   on the absent GitHub App Secret. The controller branches on
-   <code>credentials.type</code>: for <code>GitHubApp</code> the existing Secret check runs; for
-   <code>WorkloadIdentity</code> it skips the Secret check and fails closed with an honest
-   <code>CredentialUnavailable</code>/<code>WorkloadIdentityProvisioningPending</code> condition (the
-   runtime AGC provisioning lands in the follow-up below).</li>
-<li><strong>envtest</strong> (<code>v2alpha1_crd_test.go</code>): the union accepts a well-formed
-   <code>workloadIdentity</code>, and rejects type/member mismatches and a <code>vault</code>-less
-   <code>Vault</code> provider.</li>
-<li><strong>Docs</strong>: appendix-h §H.15, 05-security.md (new threat-model row + the no-PEM
-   delegation model), v2beta1.md (shipped shape), and operator docs
-   (tenant-onboarding: how to configure workload identity).</li>
+<li><strong>API</strong> (<code>api/v2alpha1</code>): <code>CredentialTypeWorkloadIdentity</code> enum value; <code>WorkloadIdentity</code> member on <code>GitHubCredentials</code>; <code>ExternalSigner</code> (provider discriminator) + <code>VaultSigner</code> + <code>VaultKubernetesAuth</code> types; a per-member CEL <code>iff</code> rule that <em>extends</em> the union (never an N-way "exactly one of"); a per-provider CEL <code>iff</code> on <code>ExternalSigner</code>.
+   Regenerate deepcopy + CRDs + sync Helm chart CRDs.</li>
+<li><strong><code>githubapp.Signer</code> interface</strong>: pluggable JWT signing. <code>pemSigner</code> wraps the existing in-cluster crypto path (RS256/EdDSA) with <strong>zero behavior change</strong>. <code>NewInstallationTokenProviderWithSigner</code> builds a provider around any <code>Signer</code>.</li>
+<li><strong><code>githubapp/vaultsigner</code></strong>: the MVP external signer.
+   Vault Kubernetes auth login (projected SA token → Vault client token, cached to its lease) + Vault transit <code>sign</code> (RSA pkcs1v15 + sha2-256 = RS256).
+   HTTPS-by-default with an explicit dev/test opt-in.
+   Unit-tested against an <code>httptest</code> Vault mock — no real Vault, no real secret.</li>
+<li><strong>GMC v2 controller guard</strong>: a <code>workloadIdentity</code> gateway must not error-loop on the absent GitHub App Secret.
+   The controller branches on <code>credentials.type</code>: for <code>GitHubApp</code> the existing Secret check runs; for <code>WorkloadIdentity</code> it skips the Secret check and fails closed with an honest <code>CredentialUnavailable</code>/<code>WorkloadIdentityProvisioningPending</code> condition (the runtime AGC provisioning lands in the follow-up below).</li>
+<li><strong>envtest</strong> (<code>v2alpha1_crd_test.go</code>): the union accepts a well-formed <code>workloadIdentity</code>, and rejects type/member mismatches and a <code>vault</code>-less <code>Vault</code> provider.</li>
+<li><strong>Docs</strong>: appendix-h §H.15, 05-security.md (new threat-model row + the no-PEM delegation model), v2beta1.md (shipped shape), and operator docs (tenant-onboarding: how to configure workload identity).</li>
 </ol>
-<p><strong>Deferred to a follow-up (Q201), the kind-e2e tier per <a href="../../v2beta1/#testing">v2beta1.md</a>:</strong>
-full GMC provisioning of a <code>workloadIdentity</code> AGC Deployment (stamp the signer
-env, project the SA token volume, bind the AGC ServiceAccount to its Vault role),
-the AGC <code>main.go</code> consumption branch (build the vault-signer provider), and the
-in-cluster Vault + transit + k8s-auth kind e2e that exercises the live no-PEM
-round-trip. That tier needs a kind cluster; the signer interface + Vault impl it
-will consume are fully built and unit-tested here.</p>
+<p><strong>Deferred to a follow-up (Q201), the kind-e2e tier per <a href="../../v2beta1/#testing">v2beta1.md</a>:</strong> full GMC provisioning of a <code>workloadIdentity</code> AGC Deployment (stamp the signer env, project the SA token volume, bind the AGC ServiceAccount to its Vault role), the AGC <code>main.go</code> consumption branch (build the vault-signer provider), and the in-cluster Vault + transit + k8s-auth kind e2e that exercises the live no-PEM round-trip.
+That tier needs a kind cluster; the signer interface + Vault impl it will consume are fully built and unit-tested here.</p>
 <h2 id="signer-design-cloud-kms-ready">Signer design (cloud-KMS-ready)<a class="headerlink" href="#signer-design-cloud-kms-ready" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// githubapp.Signer signs the GitHub App JWT. Two trust models implement it:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1">//   - pemSigner: in-cluster, holds the App private key (the possession model).</span>
@@ -2723,22 +2687,14 @@ will consume are fully built and unit-tested here.</p>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nx">Sign</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">signingInput</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="c1">// raw signature</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">}</span>
 </code></pre></div>
-<p>The provider builds the JWS <code>header.payload</code> via golang-jwt's <code>SigningString()</code>,
-hands it to <code>Signer.Sign</code>, and assembles <code>header.payload.base64url(sig)</code>. This
-keeps JWT assembly in one place and lets each signer own only the cryptographic
-sign. Adding GCP/AWS/Azure KMS = a new <code>Signer</code> impl + a new <code>ExternalSigner</code>
-provider enum value + member — additive, no breaking change.</p>
+<p>The provider builds the JWS <code>header.payload</code> via golang-jwt's <code>SigningString()</code>, hands it to <code>Signer.Sign</code>, and assembles <code>header.payload.base64url(sig)</code>.
+This keeps JWT assembly in one place and lets each signer own only the cryptographic sign.
+Adding GCP/AWS/Azure KMS = a new <code>Signer</code> impl + a new <code>ExternalSigner</code> provider enum value + member — additive, no breaking change.</p>
 <h2 id="test-plan">Test plan<a class="headerlink" href="#test-plan" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>make check</code> (gofmt/lint/shellcheck/unit) green.</li>
-<li><code>githubapp</code>: unit tests for <code>pemSigner</code> (RS256 + EdDSA, signature verifies),
-  the signer-backed provider (mints a token end-to-end against an httptest GitHub
-  mock using a fake signer), and <code>vaultsigner</code> (login + sign happy path; login
-  cache reuse + re-login on expiry; HTTPS enforcement + opt-in; Vault error
-  bodies surfaced without leaking the SA/client token; signature decodes to a
-  valid RS256 signature verifiable with the public key).</li>
-<li>gmc envtest (<code>v2alpha1_crd_test.go</code>): workload-identity union accept/reject
-  cases under real-apiserver CEL.</li>
+<li><code>githubapp</code>: unit tests for <code>pemSigner</code> (RS256 + EdDSA, signature verifies), the signer-backed provider (mints a token end-to-end against an httptest GitHub mock using a fake signer), and <code>vaultsigner</code> (login + sign happy path; login cache reuse + re-login on expiry; HTTPS enforcement + opt-in; Vault error bodies surfaced without leaking the SA/client token; signature decodes to a valid RS256 signature verifiable with the public key).</li>
+<li>gmc envtest (<code>v2alpha1_crd_test.go</code>): workload-identity union accept/reject cases under real-apiserver CEL.</li>
 </ul>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>

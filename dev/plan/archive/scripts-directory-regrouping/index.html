@@ -2604,15 +2604,12 @@
 
 
 <h1 id="regrouping-scripts-so-a-path-prefix-carries-the-blast-radius">Regrouping <code>scripts/</code> so a path prefix carries the blast radius<a class="headerlink" href="#regrouping-scripts-so-a-path-prefix-carries-the-blast-radius" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ Complete (2026-08-01, Q571). All 99 top-level files moved into ten
-groups, 762 references rewritten across 190 files, every filter that named a
-script converted to a prefix glob, and the interim <code>nondocs</code> filter deleted. What
-the implementation changed about the plan is in <a href="#what-shipped">What shipped</a>.</p>
+<p><strong>Status:</strong> ✅ Complete (2026-08-01, Q571).
+All 99 top-level files moved into ten groups, 762 references rewritten across 190 files, every filter that named a script converted to a prefix glob, and the interim <code>nondocs</code> filter deleted.
+What the implementation changed about the plan is in <a href="#what-shipped">What shipped</a>.</p>
 <h2 id="the-problem">The problem<a class="headerlink" href="#the-problem" title="Permanent link">&para;</a></h2>
-<p><code>scripts/</code> is a flat namespace of 100 top-level files plus three subdirectories
-(<code>dogfood/</code>, <code>lib/</code>, <code>updatecli/</code>). Nothing about a script's path says which CI
-gate cares about it, so every path filter that wants "the scripts this tier runs"
-has to either enumerate them or take the whole directory.</p>
+<p><code>scripts/</code> is a flat namespace of 100 top-level files plus three subdirectories (<code>dogfood/</code>, <code>lib/</code>, <code>updatecli/</code>).
+Nothing about a script's path says which CI gate cares about it, so every path filter that wants "the scripts this tier runs" has to either enumerate them or take the whole directory.</p>
 <p>Both choices are bad, and the repo has one of each:</p>
 <table>
 <thead>
@@ -2640,46 +2637,28 @@ has to either enumerate them or take the whole directory.</p>
 </tr>
 </tbody>
 </table>
-<p>The two e2e lanes <strong>run the same <code>e2e-reusable.yml</code></strong> yet disagree about which
-scripts matter by roughly 60×. They cannot both be right. <code>e2e-reusable.yml</code>
-directly references six scripts — <code>bake-with-retry.sh</code>, <code>download-verified.sh</code>,
-<code>free-runner-disk.sh</code>, <code>kind-with-registry.sh</code>, <code>prepull-manifest-images.sh</code>,
-<code>pull-image-with-retry.sh</code> — and reaches more through the <code>make</code> targets it
-invokes, so the calico list looks like a latent Q400-class false negative: a
-change to <code>free-runner-disk.sh</code> skips the lane that would exercise it.</p>
+<p>The two e2e lanes <strong>run the same <code>e2e-reusable.yml</code></strong> yet disagree about which scripts matter by roughly 60×.
+They cannot both be right. <code>e2e-reusable.yml</code> directly references six scripts — <code>bake-with-retry.sh</code>, <code>download-verified.sh</code>, <code>free-runner-disk.sh</code>, <code>kind-with-registry.sh</code>, <code>prepull-manifest-images.sh</code>, <code>pull-image-with-retry.sh</code> — and reaches more through the <code>make</code> targets it invokes, so the calico list looks like a latent Q400-class false negative: a change to <code>free-runner-disk.sh</code> skips the lane that would exercise it.</p>
 <p><code>scripts/dogfood/</code> is the tell that this is structural rather than a filter bug.
-It exists precisely so the e2e filter can exclude it, and excluding it needs an
-extglob (<code>scripts/!(dogfood)/**</code>) with a nine-line comment explaining why a
-leading <code>!</code> does not subtract in <code>dorny/paths-filter</code>.</p>
+It exists precisely so the e2e filter can exclude it, and excluding it needs an extglob (<code>scripts/!(dogfood)/**</code>) with a nine-line comment explaining why a leading <code>!</code> does not subtract in <code>dorny/paths-filter</code>.</p>
 <h3 id="what-it-cost-concretely">What it cost, concretely<a class="headerlink" href="#what-it-cost-concretely" title="Permanent link">&para;</a></h3>
 <p>Measured during Q561 (2026-08-01):</p>
 <ul>
-<li>PRs #1066 and #1071 changed a MkDocs hook, its unit test, and a doc page.
-  <code>docs/**</code> and <code>hooks/**</code> are absent from the e2e filter, so the sole match was
-  <code>scripts/*</code> catching what was then <code>scripts/source-links-hook-test.sh</code> (now
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/source-links-hook-test.sh"><code>scripts/docs/source-links-hook-test.sh</code></a>,
-  where it cannot match).</li>
+<li>PRs #1066 and #1071 changed a MkDocs hook, its unit test, and a doc page. <code>docs/**</code> and <code>hooks/**</code> are absent from the e2e filter, so the sole match was <code>scripts/*</code> catching what was then <code>scripts/source-links-hook-test.sh</code> (now <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/source-links-hook-test.sh"><code>scripts/docs/source-links-hook-test.sh</code></a>, where it cannot match).</li>
 <li>
-<h1 id="1063-is-the-control-docs--hooksbacklog_linkpy--mkdocsyml-no-script">1063 is the control: docs + <code>hooks/backlog_link.py</code> + <code>mkdocs.yml</code>, no script<a class="headerlink" href="#1063-is-the-control-docs--hooksbacklog_linkpy--mkdocsyml-no-script" title="Permanent link">&para;</a></h1>
-  — e2e correctly skipped.</li>
-<li>On #1071 the unnecessary run <strong>failed</strong> <code>E2E_Migration_MigratedTenantReconciles‑
-  IntoAWorkingControlPlane</code> (timeout; 61 of 62 specs passed) while <code>main</code> was
-  green across the 8 preceding runs. A documentation change was blocked by a
-  flake it had no business meeting (<a href="../../../STATUS/#Q570">Q570</a>).</li>
+<h1 id="1063-is-the-control-docs--hooksbacklog_linkpy--mkdocsyml-no-script--e2e-correctly-skipped">1063 is the control: docs + <code>hooks/backlog_link.py</code> + <code>mkdocs.yml</code>, no script — e2e correctly skipped.<a class="headerlink" href="#1063-is-the-control-docs--hooksbacklog_linkpy--mkdocsyml-no-script--e2e-correctly-skipped" title="Permanent link">&para;</a></h1>
+</li>
+<li>On #1071 the unnecessary run <strong>failed</strong> <code>E2E_Migration_MigratedTenantReconciles‑ IntoAWorkingControlPlane</code> (timeout; 61 of 62 specs passed) while <code>main</code> was green across the 8 preceding runs.
+  A documentation change was blocked by a flake it had no business meeting (<a href="../../../STATUS/#Q570">Q570</a>).</li>
 </ul>
 <h3 id="prior-art">Prior art<a class="headerlink" href="#prior-art" title="Permanent link">&para;</a></h3>
-<p><a href="../../structural-debt-audit-2026-07/">structural-debt-audit-2026-07.md</a>'s <strong>F10</strong>
-(shipped as Q370) covered <em>script-layer</em> sprawl — oversized scripts and
-<code>scripts/lib/common.sh</code> adoption. That is a different axis: it made individual
-scripts smaller and more uniform, and left the flat namespace alone. Nothing in
-it addresses which gate a script belongs to.</p>
-<p>Its own numbers show the namespace growing rather than settling: the audit
-counted <strong>69</strong> scripts on 2026-07-20; <code>shellcheck-scripts.sh</code> reports <strong>122</strong>
-today. Filters that already had to enumerate or over-match are covering a set
-that nearly doubled in under two weeks.</p>
+<p><a href="../../structural-debt-audit-2026-07/">structural-debt-audit-2026-07.md</a>'s <strong>F10</strong> (shipped as Q370) covered <em>script-layer</em> sprawl — oversized scripts and <code>scripts/lib/common.sh</code> adoption.
+That is a different axis: it made individual scripts smaller and more uniform, and left the flat namespace alone.
+Nothing in it addresses which gate a script belongs to.</p>
+<p>Its own numbers show the namespace growing rather than settling: the audit counted <strong>69</strong> scripts on 2026-07-20; <code>shellcheck-scripts.sh</code> reports <strong>122</strong> today.
+Filters that already had to enumerate or over-match are covering a set that nearly doubled in under two weeks.</p>
 <h2 id="the-approach">The approach<a class="headerlink" href="#the-approach" title="Permanent link">&para;</a></h2>
-<p>Group by <strong>blast radius</strong> — which gate consumes the script — so every filter
-becomes a plain prefix glob and the extglob disappears:</p>
+<p>Group by <strong>blast radius</strong> — which gate consumes the script — so every filter becomes a plain prefix glob and the extglob disappears:</p>
 <table>
 <thead>
 <tr>
@@ -2734,12 +2713,10 @@ becomes a plain prefix glob and the extglob disappears:</p>
 <p>Two properties make this worth the churn:</p>
 <ol>
 <li><strong>A filter becomes <code>scripts/e2e/**</code>.</strong> No enumeration to drift, no extglob.</li>
-<li><strong>A <code>*-test.sh</code> inherits its subject's gate</strong> by sitting beside it. That is
-   the specific defect above: <code>source-links-hook-test.sh</code> belongs to the docs
-   site, and in <code>scripts/docs/</code> it could never have triggered e2e.</li>
+<li><strong>A <code>*-test.sh</code> inherits its subject's gate</strong> by sitting beside it.
+   That is the specific defect above: <code>source-links-hook-test.sh</code> belongs to the docs site, and in <code>scripts/docs/</code> it could never have triggered e2e.</li>
 </ol>
-<p>Nothing stays at the top level except <code>README.md</code>, so "which gate cares?" has to
-be answered when a script is added rather than defaulting to the catch-all.</p>
+<p>Nothing stays at the top level except <code>README.md</code>, so "which gate cares?" has to be answered when a script is added rather than defaulting to the catch-all.</p>
 <h2 id="scope-and-cost">Scope and cost<a class="headerlink" href="#scope-and-cost" title="Permanent link">&para;</a></h2>
 <p>The move itself is mechanical; the references are the work.</p>
 <table>
@@ -2760,44 +2737,32 @@ be answered when a script is added rather than defaulting to the catch-all.</p>
 </tr>
 </tbody>
 </table>
-<p>The 102 files are not only workflows and the <code>Makefile</code>: they include
-<code>CLAUDE.md</code>, <code>CONTRIBUTING.md</code>, <code>.githooks/pre-commit</code>, <code>.claude/settings.json</code>,
-<code>.golangci.yml</code>, <code>.gitignore</code>, chart READMEs, generated CRD YAML, and Go godoc
-comments. Every one has to move with its file.</p>
-<p>Runners need almost no change — <code>shellcheck-scripts.sh</code> and <code>make scripts-test</code>
-already recurse (they pick up <code>scripts/dogfood/*</code> and <code>scripts/updatecli/*</code>
-today).</p>
+<p>The 102 files are not only workflows and the <code>Makefile</code>: they include <code>CLAUDE.md</code>, <code>CONTRIBUTING.md</code>, <code>.githooks/pre-commit</code>, <code>.claude/settings.json</code>, <code>.golangci.yml</code>, <code>.gitignore</code>, chart READMEs, generated CRD YAML, and Go godoc comments.
+Every one has to move with its file.</p>
+<p>Runners need almost no change — <code>shellcheck-scripts.sh</code> and <code>make scripts-test</code> already recurse (they pick up <code>scripts/dogfood/*</code> and <code>scripts/updatecli/*</code> today).</p>
 <h2 id="risks">Risks<a class="headerlink" href="#risks" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Conflict blast radius.</strong> A ~100-file rename conflicts with any concurrent
-  branch touching <code>scripts/</code>. Land it in a quiet window, in one PR, rebased
-  immediately before merge.</li>
-<li><strong>A missed reference is a broken gate, not a compile error.</strong> Shell resolves
-  paths at run time. <code>make check</code> plus the CI matrix covers most of it; the
-  residual risk is a path referenced only by a rarely-triggered workflow.</li>
-<li><strong>Filter narrowing is the Q400 hazard.</strong> Rewriting <code>scripts/*</code> to
-  <code>scripts/e2e/**</code> is a <em>narrowing</em> — the exact move <code>check-path-filters.sh</code>
-  exists to police. Classify every script deliberately; when unsure, put it where
-  the broader gate sees it.</li>
+<li><strong>Conflict blast radius.</strong> A ~100-file rename conflicts with any concurrent branch touching <code>scripts/</code>.
+  Land it in a quiet window, in one PR, rebased immediately before merge.</li>
+<li><strong>A missed reference is a broken gate, not a compile error.</strong> Shell resolves paths at run time. <code>make check</code> plus the CI matrix covers most of it; the residual risk is a path referenced only by a rarely-triggered workflow.</li>
+<li><strong>Filter narrowing is the Q400 hazard.</strong> Rewriting <code>scripts/*</code> to <code>scripts/e2e/**</code> is a <em>narrowing</em> — the exact move <code>check-path-filters.sh</code> exists to police.
+  Classify every script deliberately; when unsure, put it where the broader gate sees it.</li>
 <li><strong><code>git log --follow</code> / blame continuity</strong> degrades for 100 files.</li>
 </ul>
 <h2 id="success-criteria">Success criteria<a class="headerlink" href="#success-criteria" title="Permanent link">&para;</a></h2>
 <ol>
 <li>No top-level <code>scripts/*.sh</code> remains; <code>scripts/README.md</code> documents the groups.</li>
-<li><code>e2e-test.yml</code>'s scripts patterns are prefix globs; the <code>scripts/!(dogfood)/**</code>
-   extglob and its comment are gone.</li>
-<li><code>e2e-test.yml</code> and <code>e2e-calico.yml</code> agree on the script set behind
-   <code>e2e-reusable.yml</code>, with a <code>check-path-filters.sh</code> assertion holding them to it.</li>
+<li><code>e2e-test.yml</code>'s scripts patterns are prefix globs; the <code>scripts/!(dogfood)/**</code> extglob and its comment are gone.</li>
+<li><code>e2e-test.yml</code> and <code>e2e-calico.yml</code> agree on the script set behind <code>e2e-reusable.yml</code>, with a <code>check-path-filters.sh</code> assertion holding them to it.</li>
 <li>The interim <code>nondocs</code> filter in <code>e2e-test.yml</code> is deleted.</li>
-<li><code>make check</code>, <code>make path-filters-check</code>, and a full CI matrix are green, and a
-   docs-only PR is observed skipping e2e.</li>
+<li><code>make check</code>, <code>make path-filters-check</code>, and a full CI matrix are green, and a docs-only PR is observed skipping e2e.</li>
 </ol>
 <h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
-<p>All five criteria met. Three things the plan got wrong, and one it did not
-anticipate.</p>
+<p>All five criteria met.
+Three things the plan got wrong, and one it did not anticipate.</p>
 <h3 id="the-group-table-needed-three-more-directories">The group table needed three more directories<a class="headerlink" href="#the-group-table-needed-three-more-directories" title="Permanent link">&para;</a></h3>
-<p>The plan's seven groups left four gates with nowhere to put their scripts. The
-shipped set is ten:</p>
+<p>The plan's seven groups left four gates with nowhere to put their scripts.
+The shipped set is ten:</p>
 <table>
 <thead>
 <tr>
@@ -2824,42 +2789,26 @@ shipped set is ten:</p>
 </tr>
 </tbody>
 </table>
-<p><code>ci/</code> also came out narrower than the plan implied: it holds the meta-gates and
-<code>run-parallel.sh</code>, not the shared CI plumbing, which is the whole point of
-<code>fetch/</code> existing separately. <code>ci/**</code> is in no heavy tier's filter; <code>fetch/**</code> is
-in all of them.</p>
+<p><code>ci/</code> also came out narrower than the plan implied: it holds the meta-gates and <code>run-parallel.sh</code>, not the shared CI plumbing, which is the whole point of <code>fetch/</code> existing separately. <code>ci/**</code> is in no heavy tier's filter; <code>fetch/**</code> is in all of them.</p>
 <h3 id="autoscaler-driftyml-was-not-in-the-table-either"><code>autoscaler-drift.yml</code> was not in the table either<a class="headerlink" href="#autoscaler-driftyml-was-not-in-the-table-either" title="Permanent link">&para;</a></h3>
-<p><code>autoscaler-cluster.sh</code> and <code>karpenter-cluster.sh</code> are live-cluster bring-up, so
-they went to <code>e2e/</code>. That makes <code>scripts/e2e/**</code> over-trigger the kindnet e2e
-lane on a change to either — accepted deliberately: both files are touched only
-by the weekly updatecli pin bump, and over-triggering is the safe direction.</p>
+<p><code>autoscaler-cluster.sh</code> and <code>karpenter-cluster.sh</code> are live-cluster bring-up, so they went to <code>e2e/</code>.
+That makes <code>scripts/e2e/**</code> over-trigger the kindnet e2e lane on a change to either — accepted deliberately: both files are touched only by the weekly updatecli pin bump, and over-triggering is the safe direction.</p>
 <h3 id="filters-got-wider-not-narrower-wherever-a-group-maps-to-a-gate">Filters got <em>wider</em>, not narrower, wherever a group maps to a gate<a class="headerlink" href="#filters-got-wider-not-narrower-wherever-a-group-maps-to-a-gate" title="Permanent link">&para;</a></h3>
-<p>The plan's stated risk was narrowing. In practice the enumerated filters were the
-ones at risk, and collapsing them to a prefix glob widened them:
-<code>unit-test.yml:code</code> went from five named scripts to <code>scripts/go/**</code>,
-<code>security-scan.yml</code> from one to <code>scripts/security/**</code> + <code>scripts/fetch/**</code>,
-<code>manifest-validate.yml</code> from four to <code>scripts/manifest/**</code> + <code>scripts/fetch/**</code>.
-Only <code>e2e-test.yml</code> narrowed, and only there does criterion 3's new assertion
-apply. <code>autoscaler-drift.yml</code> gained <code>scripts/fetch/**</code> outright — it runs
-<code>download-verified.sh</code> and had never listed it.</p>
+<p>The plan's stated risk was narrowing.
+In practice the enumerated filters were the ones at risk, and collapsing them to a prefix glob widened them: <code>unit-test.yml:code</code> went from five named scripts to <code>scripts/go/**</code>, <code>security-scan.yml</code> from one to <code>scripts/security/**</code> + <code>scripts/fetch/**</code>, <code>manifest-validate.yml</code> from four to <code>scripts/manifest/**</code> + <code>scripts/fetch/**</code>.
+Only <code>e2e-test.yml</code> narrowed, and only there does criterion 3's new assertion apply. <code>autoscaler-drift.yml</code> gained <code>scripts/fetch/**</code> outright — it runs <code>download-verified.sh</code> and had never listed it.</p>
 <h3 id="the-move-breaks-two-things-a-rename-normally-does-not">The move breaks two things a rename normally does not<a class="headerlink" href="#the-move-breaks-two-things-a-rename-normally-does-not" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Nine scripts computed <code>REPO_ROOT</code> as <code>dirname "$BASH_SOURCE"/..</code></strong>, which is
-  now one level short. Shell resolves that at run time, so nothing failed until
-  the script ran — exactly the residual risk the plan named. Grep for the form
-  before moving a script, not after.</li>
-<li><strong><code>git-merge-status.sh</code> resolved its awk rules through <code>$SCRIPT_DIR/lib/</code></strong>,
-  and <code>make merge-driver</code> writes the driver's path into per-clone git config. A
-  clone that installed the driver before this change has a dead path in its
-  config and must re-run <code>make merge-driver</code>; <code>scripts/README.md</code> says so.</li>
+<li><strong>Nine scripts computed <code>REPO_ROOT</code> as <code>dirname "$BASH_SOURCE"/..</code></strong>, which is now one level short.
+  Shell resolves that at run time, so nothing failed until the script ran — exactly the residual risk the plan named.
+  Grep for the form before moving a script, not after.</li>
+<li><strong><code>git-merge-status.sh</code> resolved its awk rules through <code>$SCRIPT_DIR/lib/</code></strong>, and <code>make merge-driver</code> writes the driver's path into per-clone git config.
+  A clone that installed the driver before this change has a dead path in its config and must re-run <code>make merge-driver</code>; <code>scripts/README.md</code> says so.</li>
 </ul>
 <h3 id="the-new-assertion-verified-by-breaking-it">The new assertion, verified by breaking it<a class="headerlink" href="#the-new-assertion-verified-by-breaking-it" title="Permanent link">&para;</a></h3>
-<p><code>check-path-filters.sh</code> assertion 4 pairs <code>e2e-test.yml:e2e</code> with
-<code>e2e-calico.yml:calico</code> and compares their <code>scripts/</code> patterns as a set. Deleting
-<code>scripts/fetch/**</code> from the Calico lane and re-running the gate reproduces the
-exact historical defect and fails with a diff of the two sets; restoring it
-returns green. Four fixture cases cover subset, superset, order-insensitivity and
-the non-<code>scripts/</code> patterns the two lanes are meant to differ on.</p>
+<p><code>check-path-filters.sh</code> assertion 4 pairs <code>e2e-test.yml:e2e</code> with <code>e2e-calico.yml:calico</code> and compares their <code>scripts/</code> patterns as a set.
+Deleting <code>scripts/fetch/**</code> from the Calico lane and re-running the gate reproduces the exact historical defect and fails with a diff of the two sets; restoring it returns green.
+Four fixture cases cover subset, superset, order-insensitivity and the non-<code>scripts/</code> patterns the two lanes are meant to differ on.</p>
 
 
 

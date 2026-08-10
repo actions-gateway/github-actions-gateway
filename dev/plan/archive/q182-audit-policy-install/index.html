@@ -2609,56 +2609,27 @@
 
 
 <h1 id="q182--auto-install--document-the-api-server-audit-policy">Q182 — Auto-install / document the API-server audit policy<a class="headerlink" href="#q182--auto-install--document-the-api-server-audit-policy" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> Make the compromised-Secret and Pod-Security-Admission (PSA) escalation
-signals reachable without operators hand-copying a static file into
-<code>kube-apiserver</code> — by shipping the policy as an applyable/installable asset with
-an auto-install path where the project genuinely controls the API-server config,
-and documenting the realistic per-provider managed-cluster path everywhere else.</p>
+<p><strong>Goal:</strong> Make the compromised-Secret and Pod-Security-Admission (PSA) escalation signals reachable without operators hand-copying a static file into <code>kube-apiserver</code> — by shipping the policy as an applyable/installable asset with an auto-install path where the project genuinely controls the API-server config, and documenting the realistic per-provider managed-cluster path everywhere else.</p>
 <p><strong>Approach:</strong>
-1. Keep the existing policy asset
-   <a href="../../../operations/examples/apiserver-audit-policy.yaml"><code>docs/operations/examples/apiserver-audit-policy.yaml</code></a>.
-   Its rules were written against the security model (§5.1 GMC Secret-read
-   residual; the <code>gmc-tenant-resource-guard</code> and <code>namespace-psa-guard</code> VAPs) and
-   match the detection table in <code>security-operations.md</code> — <strong>do not invent new
-   rules.</strong> Verified unchanged.
-2. Ship an <strong>installer</strong> for existing self-managed kubeadm clusters
-   (<code>docs/operations/examples/install-apiserver-audit-policy.sh</code>): run once per
-   control-plane node, it validates the policy, installs it, and idempotently
-   patches the <code>kube-apiserver</code> static-pod manifest (timestamped backup; <code>yq</code>
-   for the structured edit so the manifest can't be corrupted).
-3. Ship a <strong>kind cluster config</strong>
-   (<code>docs/operations/examples/kind-cluster-audit.yaml</code>) that wires the policy via
-   <code>extraMounts</code> + <code>kubeadmConfigPatches</code> — the one place auto-install is
-   genuinely possible because you provision the control plane.
-4. Restructure <code>security-operations.md</code> § <em>Install the audit policy</em> into honest
-   paths: self-provisioned (kind / kubeadm ClusterConfiguration), existing
-   kubeadm (the installer), and <strong>per-provider</strong> EKS / GKE / AKS subsections —
-   each with where the same signals surface and the exact filter query.</p>
+1. Keep the existing policy asset <a href="../../../operations/examples/apiserver-audit-policy.yaml"><code>docs/operations/examples/apiserver-audit-policy.yaml</code></a>.
+   Its rules were written against the security model (§5.1 GMC Secret-read residual; the <code>gmc-tenant-resource-guard</code> and <code>namespace-psa-guard</code> VAPs) and match the detection table in <code>security-operations.md</code> — <strong>do not invent new rules.</strong> Verified unchanged.
+2. Ship an <strong>installer</strong> for existing self-managed kubeadm clusters (<code>docs/operations/examples/install-apiserver-audit-policy.sh</code>): run once per control-plane node, it validates the policy, installs it, and idempotently patches the <code>kube-apiserver</code> static-pod manifest (timestamped backup; <code>yq</code> for the structured edit so the manifest can't be corrupted).
+3. Ship a <strong>kind cluster config</strong> (<code>docs/operations/examples/kind-cluster-audit.yaml</code>) that wires the policy via <code>extraMounts</code> + <code>kubeadmConfigPatches</code> — the one place auto-install is genuinely possible because you provision the control plane.
+4. Restructure <code>security-operations.md</code> § <em>Install the audit policy</em> into honest paths: self-provisioned (kind / kubeadm ClusterConfiguration), existing kubeadm (the installer), and <strong>per-provider</strong> EKS / GKE / AKS subsections — each with where the same signals surface and the exact filter query.</p>
 <h2 id="honest-boundary-where-auto-install-is-not-possible">Honest boundary: where auto-install is <em>not</em> possible<a class="headerlink" href="#honest-boundary-where-auto-install-is-not-possible" title="Permanent link">&para;</a></h2>
-<p>The audit config is a <strong>node-level <code>kube-apiserver</code> flag</strong>, not a Kubernetes
-object — there is no <code>kubectl apply</code> for it, and Helm (which deploys workloads,
-not control-plane node files) cannot install it either. Full automation is only
-possible for clusters whose control plane the operator provisions (kind,
-kubeadm-from-scratch). On EKS / GKE / AKS the provider owns the API-server flags
-and ships a <strong>fixed</strong> audit configuration to its own managed log sink — a custom
-<code>--audit-policy-file</code> cannot be supplied. There the path is: enable the
-provider's control-plane audit logging and translate the same predicates
-(requester <code>user.username</code>, <code>verb</code>, <code>objectRef.resource=secrets</code>; VAP <code>403</code>
-denials) into filters against the managed stream.</p>
+<p>The audit config is a <strong>node-level <code>kube-apiserver</code> flag</strong>, not a Kubernetes object — there is no <code>kubectl apply</code> for it, and Helm (which deploys workloads, not control-plane node files) cannot install it either.
+Full automation is only possible for clusters whose control plane the operator provisions (kind, kubeadm-from-scratch).
+On EKS / GKE / AKS the provider owns the API-server flags and ships a <strong>fixed</strong> audit configuration to its own managed log sink — a custom <code>--audit-policy-file</code> cannot be supplied.
+There the path is: enable the provider's control-plane audit logging and translate the same predicates (requester <code>user.username</code>, <code>verb</code>, <code>objectRef.resource=secrets</code>; VAP <code>403</code> denials) into filters against the managed stream.</p>
 <h2 id="per-provider-facts-verified-june-2026">Per-provider facts (verified June 2026)<a class="headerlink" href="#per-provider-facts-verified-june-2026" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>EKS</strong> — enable the <code>audit</code> control-plane log type per cluster; events land in
-  CloudWatch log group <code>/aws/eks/&lt;cluster&gt;/cluster</code>, streams
-  <code>kube-apiserver-audit-*</code>. EKS's fixed policy logs Secret access at <code>Metadata</code>.
+<li><strong>EKS</strong> — enable the <code>audit</code> control-plane log type per cluster; events land in CloudWatch log group <code>/aws/eks/&lt;cluster&gt;/cluster</code>, streams <code>kube-apiserver-audit-*</code>.
+  EKS's fixed policy logs Secret access at <code>Metadata</code>.
   Query with CloudWatch Logs Insights.</li>
-<li><strong>GKE</strong> — Secret <strong>reads</strong> are Cloud Audit Logs <strong>Data Access</strong> logs
-  (<code>DATA_READ</code>/<code>ADMIN_READ</code>), <strong>off by default</strong> — enable them for the Kubernetes
-  Engine API. Writes are Admin Activity logs (always on). <code>methodName</code> is
-  <code>io.k8s.core.v1.secrets.get</code> etc.; query in Logs Explorer.</li>
-<li><strong>AKS</strong> — forward the <strong><code>kube-audit</code></strong> diagnostic category to Log Analytics /
-  storage / Event Hub. <strong><code>kube-audit-admin</code> excludes <code>get</code>/<code>list</code></strong> — so it
-  cannot see Secret reads; the compromised-Secret detection requires the full
-  <code>kube-audit</code> category. Query with KQL.</li>
+<li><strong>GKE</strong> — Secret <strong>reads</strong> are Cloud Audit Logs <strong>Data Access</strong> logs (<code>DATA_READ</code>/<code>ADMIN_READ</code>), <strong>off by default</strong> — enable them for the Kubernetes Engine API.
+  Writes are Admin Activity logs (always on). <code>methodName</code> is <code>io.k8s.core.v1.secrets.get</code> etc.; query in Logs Explorer.</li>
+<li><strong>AKS</strong> — forward the <strong><code>kube-audit</code></strong> diagnostic category to Log Analytics / storage / Event Hub. <strong><code>kube-audit-admin</code> excludes <code>get</code>/<code>list</code></strong> — so it cannot see Secret reads; the compromised-Secret detection requires the full <code>kube-audit</code> category.
+  Query with KQL.</li>
 </ul>
 <h2 id="acceptance">Acceptance<a class="headerlink" href="#acceptance" title="Permanent link">&para;</a></h2>
 <ul>

@@ -2692,96 +2692,58 @@
 
 
 <h1 id="q497--recover-preempted-workers-off-preemptionbyscheduler">Q497 — recover preempted workers off <code>PreemptionByScheduler</code><a class="headerlink" href="#q497--recover-preempted-workers-off-preemptionbyscheduler" title="Permanent link">&para;</a></h1>
-<p>Close the preemption slice of the graceful-removal recovery gap: when kube-scheduler
-preempts a worker pod to make room for a higher-priority tier, re-run the displaced
-workflow run automatically, on both acquisition tiers.</p>
+<p>Close the preemption slice of the graceful-removal recovery gap: when kube-scheduler preempts a worker pod to make room for a higher-priority tier, re-run the displaced workflow run automatically, on both acquisition tiers.</p>
 <h2 id="why-this-is-closable-now-and-why-only-this-slice">Why this is closable now, and why only this slice<a class="headerlink" href="#why-this-is-closable-now-and-why-only-this-slice" title="Permanent link">&para;</a></h2>
-<p><a href="../../eviction-oversubscription-validation/#result-measured-2026-07-29-preemption-is-not-eviction">Q423 measured</a>
-that a <code>priorityTiers</code> preemption reaches no recovery at all. The scheduler removes its
-victim by <strong>deleting</strong> it, so the pod never carries the <code>PodFailed</code>/<code>Evicted</code> shape both
-tiers key on, and the displaced job is left needing a manual re-run.</p>
+<p><a href="../../eviction-oversubscription-validation/#result-measured-2026-07-29-preemption-is-not-eviction">Q423 measured</a> that a <code>priorityTiers</code> preemption reaches no recovery at all.
+The scheduler removes its victim by <strong>deleting</strong> it, so the pod never carries the <code>PodFailed</code>/<code>Evicted</code> shape both tiers key on, and the displaced job is left needing a manual re-run.</p>
 <p>Two findings from that experiment decide the design here:</p>
 <ol>
-<li><strong>The terminal phase cannot discriminate.</strong> A preempted worker lands in <code>Pending</code>,
-   <code>Succeeded</code> or <code>Failed</code> depending on what its container was doing and what it exited
-   with. No phase/reason pair separates a disruption from an ordinary outcome.</li>
-<li><strong>The scheduler leaves an unambiguous marker.</strong> The victim carries a
-   <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code>. Only kube-scheduler
-   writes it — not a human <code>kubectl delete pod</code>, not a drain, not a job failing on its
-   own.</li>
+<li><strong>The terminal phase cannot discriminate.</strong> A preempted worker lands in <code>Pending</code>, <code>Succeeded</code> or <code>Failed</code> depending on what its container was doing and what it exited with.
+   No phase/reason pair separates a disruption from an ordinary outcome.</li>
+<li><strong>The scheduler leaves an unambiguous marker.</strong> The victim carries a <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code>.
+   Only kube-scheduler writes it — not a human <code>kubectl delete pod</code>, not a drain, not a job failing on its own.</li>
 </ol>
-<p>That second point is what let this slice close first. The <em>drain / plain delete</em> slice
-must key on <code>deletionTimestamp</code>, which a human cancel might also set, so it could not be
-switched on without measuring whether a cancel is distinguishable — the risk being a
-re-run of a run an operator deliberately stopped. <code>PreemptionByScheduler</code> carries no such
-ambiguity and needed no such measurement, so this plan deliberately covers <strong>only</strong> the
-preemption cause and leaves the rest of the graceful-removal path exactly as it is.</p>
-<p>(That measurement landed the same day, while this work was in flight: a cancelled run's
-worker publishes no deletion mark, so the drain slice is decided as well; Q502 carried
-its implementation, since shipped
-(<a href="../q459-drained-worker-recovery/">q459-drained-worker-recovery.md</a>). It did not change anything here
-— the two slices key on different signals and ship independently — but it does mean the
-"stays open" framing this plan was written against is now only true of the code, not of
-the decision.)</p>
+<p>That second point is what let this slice close first.
+The <em>drain / plain delete</em> slice must key on <code>deletionTimestamp</code>, which a human cancel might also set, so it could not be switched on without measuring whether a cancel is distinguishable — the risk being a re-run of a run an operator deliberately stopped. <code>PreemptionByScheduler</code> carries no such ambiguity and needed no such measurement, so this plan deliberately covers <strong>only</strong> the preemption cause and leaves the rest of the graceful-removal path exactly as it is.</p>
+<p>(That measurement landed the same day, while this work was in flight: a cancelled run's worker publishes no deletion mark, so the drain slice is decided as well; Q502 carried its implementation, since shipped (<a href="../q459-drained-worker-recovery/">q459-drained-worker-recovery.md</a>).
+It did not change anything here — the two slices key on different signals and ship independently — but it does mean the "stays open" framing this plan was written against is now only true of the code, not of the decision.)</p>
 <h2 id="is-a-re-run-the-right-answer-here">Is a re-run the right answer here?<a class="headerlink" href="#is-a-re-run-the-right-answer-here" title="Permanent link">&para;</a></h2>
-<p>The existing exclusion comment on <code>evictedAwaitingRecovery</code> argues that graceful deletion
-must not be recovered, because the Q385 SIGTERM relay lets the runner report its own
-outcome and a re-run would double-report. That argument does not carry to preemption:</p>
+<p>The existing exclusion comment on <code>evictedAwaitingRecovery</code> argues that graceful deletion must not be recovered, because the Q385 SIGTERM relay lets the runner report its own outcome and a re-run would double-report.
+That argument does not carry to preemption:</p>
 <ul>
 <li>The relay makes the job <strong>conclude</strong> at GitHub; it does not make the job <strong>succeed</strong>.
-  Q459 measured the conclusion at live-GitHub — <code>failure</code> in 15–26s, and <code>rerun-failed-jobs</code>
-  accepted with <code>201</code>. So the run really is left failed, and re-running it is the
-  intended repair rather than a duplicate report.</li>
-<li><code>rerun-failed-jobs</code> re-runs only the <em>failed</em> jobs of a run. A run whose jobs all
-  finished before the preemption landed has nothing to re-run and GitHub rejects the
-  call, which the existing error path already logs and drops.</li>
+  Q459 measured the conclusion at live-GitHub — <code>failure</code> in 15–26s, and <code>rerun-failed-jobs</code> accepted with <code>201</code>.
+  So the run really is left failed, and re-running it is the intended repair rather than a duplicate report.</li>
+<li><code>rerun-failed-jobs</code> re-runs only the <em>failed</em> jobs of a run.
+  A run whose jobs all finished before the preemption landed has nothing to re-run and GitHub rejects the call, which the existing error path already logs and drops.</li>
 </ul>
-<p>The retry budget is unchanged and shared: <code>maxEvictionRetries</code> remains a hard lifetime
-cap per <code>run_id</code> across both tiers <strong>and</strong> both causes together, so a run that is
-alternately evicted and preempted cannot spend two budgets.</p>
+<p>The retry budget is unchanged and shared: <code>maxEvictionRetries</code> remains a hard lifetime cap per <code>run_id</code> across both tiers <strong>and</strong> both causes together, so a run that is alternately evicted and preempted cannot spend two budgets.</p>
 <h2 id="design">Design<a class="headerlink" href="#design" title="Permanent link">&para;</a></h2>
-<p>One new discriminator, wired into the two detection mechanisms that already exist —
-mirroring exactly how eviction is split, for the same reason the split exists (the
-classic goroutine holds the payload; the scale-set tier has neither goroutine nor
-payload, so it recovers from the owning reconciler off pod annotations).</p>
+<p>One new discriminator, wired into the two detection mechanisms that already exist — mirroring exactly how eviction is split, for the same reason the split exists (the classic goroutine holds the payload; the scale-set tier has neither goroutine nor payload, so it recovers from the owning reconciler off pod annotations).</p>
 <h3 id="shared">Shared<a class="headerlink" href="#shared" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>preemption.go</code>: <code>preemptedByScheduler(pod)</code> — true when the pod carries
-  <code>DisruptionTarget=True</code> with reason <code>corev1.PodReasonPreemptionByScheduler</code>.</li>
-<li><code>handleEviction</code> gains a <code>cause</code> argument (<code>eviction</code> | <code>preemption</code>) that flows into
-  the log line, the Kubernetes Event, and a new <code>cause</code> label on the eviction counters.
+<li><code>preemption.go</code>: <code>preemptedByScheduler(pod)</code> — true when the pod carries <code>DisruptionTarget=True</code> with reason <code>corev1.PodReasonPreemptionByScheduler</code>.</li>
+<li><code>handleEviction</code> gains a <code>cause</code> argument (<code>eviction</code> | <code>preemption</code>) that flows into the log line, the Kubernetes Event, and a new <code>cause</code> label on the eviction counters.
   The budget itself is untouched — it is keyed by <code>run_id</code> alone.</li>
 </ul>
 <h3 id="classic-tier">Classic tier<a class="headerlink" href="#classic-tier" title="Permanent link">&para;</a></h3>
 <p><code>provision()</code> already holds a goroutine on the worker pod through <code>waitForCompletion</code>.
-The condition is set by the scheduler <em>before</em> the delete, so the pod object that
-resolves the wait — whether via a terminal-phase event or via the informer's delete
-event, which carries the last-known pod — still carries it.</p>
-<p><code>PodWaiter.WaitForCompletion</code> therefore returns a <code>PodOutcome</code> struct rather than a
-<code>(phase, reason)</code> pair, so the preemption marker travels with the phase it was observed
-alongside. Step 7 of <code>provision()</code> branches on eviction first, then preemption.</p>
+The condition is set by the scheduler <em>before</em> the delete, so the pod object that resolves the wait — whether via a terminal-phase event or via the informer's delete event, which carries the last-known pod — still carries it.</p>
+<p><code>PodWaiter.WaitForCompletion</code> therefore returns a <code>PodOutcome</code> struct rather than a <code>(phase, reason)</code> pair, so the preemption marker travels with the phase it was observed alongside.
+Step 7 of <code>provision()</code> branches on eviction first, then preemption.</p>
 <h3 id="scale-set-tier">Scale-set tier<a class="headerlink" href="#scale-set-tier" title="Permanent link">&para;</a></h3>
-<p><code>RecoverEvictedScaleSetWorkers</code> already scans this owner's worker pods every reconcile
-and claims each recoverable one under an optimistic lock. The scan's filter widens from
-"<code>PodFailed</code>/<code>Evicted</code> and unhandled" to "unhandled <strong>and</strong> (evicted <strong>or</strong> preempted)".
-Claim, identity lookup, at-most-once semantics and the reaper ordering are all reused
-unchanged.</p>
-<p><strong>One new requirement: the reconcile must happen while the victim still exists.</strong> Unlike
-an evicted pod — which sits in <code>PodFailed</code> until the reaper takes it — a preempted pod is
-being deleted, and is readable only for its termination grace period (30s by default).
-The worker-pod watch predicate currently admits an update <strong>only on a phase change</strong>, and
-a preemption of a <code>Pending</code> victim changes no phase, so today's predicate would enqueue
-nothing until the delete event, by which point the pod is gone from the cache.</p>
-<p>The predicate therefore also admits an update where the pod <strong>newly becomes</strong> a
-preemption victim. That is a strictly additive edge — it fires at most once per pod, only
-for pods carrying the worker label.</p>
+<p><code>RecoverEvictedScaleSetWorkers</code> already scans this owner's worker pods every reconcile and claims each recoverable one under an optimistic lock.
+The scan's filter widens from "<code>PodFailed</code>/<code>Evicted</code> and unhandled" to "unhandled <strong>and</strong> (evicted <strong>or</strong> preempted)".
+Claim, identity lookup, at-most-once semantics and the reaper ordering are all reused unchanged.</p>
+<p><strong>One new requirement: the reconcile must happen while the victim still exists.</strong> Unlike an evicted pod — which sits in <code>PodFailed</code> until the reaper takes it — a preempted pod is being deleted, and is readable only for its termination grace period (30s by default).
+The worker-pod watch predicate currently admits an update <strong>only on a phase change</strong>, and a preemption of a <code>Pending</code> victim changes no phase, so today's predicate would enqueue nothing until the delete event, by which point the pod is gone from the cache.</p>
+<p>The predicate therefore also admits an update where the pod <strong>newly becomes</strong> a preemption victim.
+That is a strictly additive edge — it fires at most once per pod, only for pods carrying the worker label.</p>
 <h3 id="the-residual-stated-plainly">The residual, stated plainly<a class="headerlink" href="#the-residual-stated-plainly" title="Permanent link">&para;</a></h3>
-<p>Scale-set recovery of a preemption is <strong>not</strong> restart-safe, and cannot be made so: the
-evidence is the pod, and the scheduler deletes it. An AGC that is down for the whole
-grace period loses the marker and the displaced run needs a manual re-run. Eviction
-recovery keeps its restart-safety (an <code>Evicted</code> pod persists until reaped). This is a
-property of the signal, not of the implementation, and is documented rather than worked
-around.</p>
+<p>Scale-set recovery of a preemption is <strong>not</strong> restart-safe, and cannot be made so: the evidence is the pod, and the scheduler deletes it.
+An AGC that is down for the whole grace period loses the marker and the displaced run needs a manual re-run.
+Eviction recovery keeps its restart-safety (an <code>Evicted</code> pod persists until reaped).
+This is a property of the signal, not of the implementation, and is documented rather than worked around.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2839,25 +2801,19 @@ around.</p>
 </tr>
 </tbody>
 </table>
-<p>Out of scope, deliberately: the drain / plain-delete slice (Q459), and re-measuring the
-wrapper's SIGTERM relay against real GitHub (inherited from Q459's live-GitHub result, as the
-experiment's "what is not measured here" already records).</p>
+<p>Out of scope, deliberately: the drain / plain-delete slice (Q459), and re-measuring the wrapper's SIGTERM relay against real GitHub (inherited from Q459's live-GitHub result, as the experiment's "what is not measured here" already records).</p>
 <h2 id="docs-to-update">Docs to update<a class="headerlink" href="#docs-to-update" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>docs/design/04-operational-flows.md</code> §"Worker Pod Eviction and Auto-Retry" — the
-  deletion-is-excluded paragraph now has a carve-out; the Q423 paragraph's verdict moves
-  from "no re-run fires" to "recovered as of Q497".</li>
-<li><code>docs/design/01-executive-summary.md</code> — the oversubscription claim's <em>safety</em> half is
-  restored for preemption (three bullets plus the two "what the displaced job costs"
-  paragraphs).</li>
+<li><code>docs/design/04-operational-flows.md</code> §"Worker Pod Eviction and Auto-Retry" — the deletion-is-excluded paragraph now has a carve-out; the Q423 paragraph's verdict moves from "no re-run fires" to "recovered as of Q497".</li>
+<li><code>docs/design/01-executive-summary.md</code> — the oversubscription claim's <em>safety</em> half is restored for preemption (three bullets plus the two "what the displaced job costs" paragraphs).</li>
 <li><code>README.md</code> — the <code>priorityTiers</code> and eviction-retry bullets.</li>
-<li><code>docs/operations/troubleshooting.md</code> — the drain/preempt section splits: preemption
-  recovers, drain still does not.</li>
+<li><code>docs/operations/troubleshooting.md</code> — the drain/preempt section splits: preemption recovers, drain still does not.</li>
 <li><code>docs/operations/observability-metrics.md</code>, <code>-dashboards.md</code> — the <code>cause</code> label.</li>
 <li><code>docs/plan/eviction-oversubscription-validation.md</code> — finding 2 gets its outcome.</li>
 </ul>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>Done 2026-07-29.</strong> Every scope row shipped. Verified:</p>
+<p><strong>Done 2026-07-29.</strong> Every scope row shipped.
+Verified:</p>
 <table>
 <thead>
 <tr>
@@ -2899,16 +2855,11 @@ experiment's "what is not measured here" already records).</p>
 </tr>
 </tbody>
 </table>
-<p>The e2e is what closes the argument. Every other tier stamps the <code>DisruptionTarget</code>
-condition by hand, so only this one converts "the AGC recovers a pod carrying this
-condition" into "the AGC recovers a real preemption" — it is the sole venue with a real
-kube-scheduler. It also found <a href="../../../STATUS/">Q504</a> on its first run: the rerun call
-ignored <code>GITHUB_API_BASE_URL</code> and was refused a <code>401</code> by <code>api.github.com</code>, so recovery had
-never been able to work on GHES either. That is the value of asserting a <em>successful</em>
-re-run rather than an absence — every prior spec on this path asserted absence, which
-passes whether the call goes nowhere or to the wrong host.</p>
-<p>Metric labels changed (<code>cause</code> on three counters); the migration note is in
-<a href="../../../operations/observability-metrics/#breaking-observability-changes-q417">observability-metrics.md</a>.</p>
+<p>The e2e is what closes the argument.
+Every other tier stamps the <code>DisruptionTarget</code> condition by hand, so only this one converts "the AGC recovers a pod carrying this condition" into "the AGC recovers a real preemption" — it is the sole venue with a real kube-scheduler.
+It also found <a href="../../../STATUS/">Q504</a> on its first run: the rerun call ignored <code>GITHUB_API_BASE_URL</code> and was refused a <code>401</code> by <code>api.github.com</code>, so recovery had never been able to work on GHES either.
+That is the value of asserting a <em>successful</em> re-run rather than an absence — every prior spec on this path asserted absence, which passes whether the call goes nowhere or to the wrong host.</p>
+<p>Metric labels changed (<code>cause</code> on three counters); the migration note is in <a href="../../../operations/observability-metrics/#breaking-observability-changes-q417">observability-metrics.md</a>.</p>
 
 
 

@@ -2549,6 +2549,135 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#background--why-this-isnt-built-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background — why this isn't built yet
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approach
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-posture-secure-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security posture (secure-by-default)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trade-offs-why-this-needs-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trade-offs (why this needs sign-off)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-path-in-cluster-caching-mirror-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended path: in-cluster caching mirror first
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-we-accept--and-the-scope-creep-we-decline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope we accept — and the scope-creep we decline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deliverables-when-approved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deliverables (when approved)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-for-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions for sign-off
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#provider-fqdn-egress-fragmentation-post-implementation-finding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provider FQDN-egress fragmentation (post-implementation finding)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2569,64 +2698,29 @@
 
 <h1 id="q242--g1-proxy-enforced-destination-allowlist-worker-dependency-egress">Q242 — G.1 Proxy-Enforced Destination Allowlist (worker dependency egress)<a class="headerlink" href="#q242--g1-proxy-enforced-destination-allowlist-worker-dependency-egress" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>**Status: DONE (closed 2026-07-12). All deliverables shipped: #460 CRD fields,</p>
-<h1 id="461-proxy-connect-check-462-gmc-injection-463-platform-allowlist--admission">461 proxy CONNECT check, #462 GMC injection, #463 platform allowlist + admission<a class="headerlink" href="#461-proxy-connect-check-462-gmc-injection-463-platform-allowlist--admission" title="Permanent link">&para;</a></h1>
-<p>webhook, and the design/operator docs. Deliverable 7 (dogfood turn-on) is moot —
-Q224 was ultimately closed via the ScaleSet-default acquisition path (Q264 P4,</p>
-<h1 id="545-and-on-the-direct-egress-dogfood-the-q242-allowlist-is-a-designed-no-op">545), and on the direct-egress dogfood the Q242 allowlist is a designed no-op<a class="headerlink" href="#545-and-on-the-direct-egress-dogfood-the-q242-allowlist-is-a-designed-no-op" title="Permanent link">&para;</a></h1>
-<p>(the mirror-first Athens cache, Q244, is the path used there). The Q259 burst
-concurrency blocker that once held this open is resolved. The remaining
-per-tenant egress-IP <em>attribution</em> validation is not a Q242 deliverable; it is
-carried by <a href="../../q243-egress-ip-reference-arch/">Q243</a> (egress-IP reference architecture).<strong> This
-promotes <a href="../../../design/appendix-g-future-enhancements/#g1-proxy-enforced-destination-allowlist">Appendix G.1</a>
-(tracked under the non-committed Q19 bundle) to committed work, because it is
-the attribution-preserving answer to the single most common operator ask:
-letting CI jobs reach their build dependencies (package registries, module
-proxies, test-asset hosts) without forfeiting the per-tenant egress model. The
-core go/no-go was </strong>decided (accept)** with the <a href="#trade-offs-why-this-needs-sign-off">Trade-offs</a>
-recorded, a <a href="#scope-we-accept--and-the-scope-creep-we-decline">bounded scope</a>,
-and the <a href="#recommended-path-in-cluster-caching-mirror-first">in-cluster mirror recommended first</a>.</p>
+<p><strong>Status: DONE (closed 2026-07-12).
+All deliverables shipped: #460 CRD fields, #461 proxy CONNECT check, #462 GMC injection, #463 platform allowlist + admission webhook, and the design/operator docs.
+Deliverable 7 (dogfood turn-on) is moot — Q224 was ultimately closed via the ScaleSet-default acquisition path (Q264 P4, #545), and on the direct-egress dogfood the Q242 allowlist is a designed no-op (the mirror-first Athens cache, Q244, is the path used there).
+The Q259 burst concurrency blocker that once held this open is resolved.
+The remaining per-tenant egress-IP <em>attribution</em> validation is not a Q242 deliverable; it is carried by <a href="../../q243-egress-ip-reference-arch/">Q243</a> (egress-IP reference architecture).</strong> This promotes <a href="../../../design/appendix-g-future-enhancements/#g1-proxy-enforced-destination-allowlist">Appendix G.1</a> (tracked under the non-committed Q19 bundle) to committed work, because it is the attribution-preserving answer to the single most common operator ask: letting CI jobs reach their build dependencies (package registries, module proxies, test-asset hosts) without forfeiting the per-tenant egress model.
+The core go/no-go was <strong>decided (accept)</strong> with the <a href="#trade-offs-why-this-needs-sign-off">Trade-offs</a> recorded, a <a href="#scope-we-accept--and-the-scope-creep-we-decline">bounded scope</a>, and the <a href="#recommended-path-in-cluster-caching-mirror-first">in-cluster mirror recommended first</a>.</p>
 </blockquote>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Let an operator allow a <strong>per-tenant egress proxy</strong> to forward worker traffic to
-a small, explicit set of <strong>non-GitHub</strong> destinations — by <strong>DNS host suffix</strong>
-(e.g. <code>proxy.golang.org</code>) and by <strong>CIDR</strong> (an internal subnet with no DNS, or a
-cloud private-API range) — so jobs that fetch dependencies work, while keeping
-every property the GitHub-only egress posture provides: per-tenant egress-IP
-attribution, the DNS-exfil containment, and "no direct worker egress hole."</p>
-<p><strong>Concrete driver (Q224 / Q239).</strong> On the GKE dogfood the offline-capable jobs
-(<code>lint</code>, <code>shellcheck</code>, <code>unit-test</code>, <code>coverage</code>) now run green on the Q239
-build-capable image, but <code>vendor-check</code> and <code>tidy-check</code> re-fetch modules from
-<code>proxy.golang.org</code> on a cold cache. The worker egress <code>NetworkPolicy</code> allows TCP
-443 only to the ~7400 GitHub CIDRs, so those two jobs fail — not on toolchain, on
-egress. This feature is what makes them green the <em>right</em> way (rather than
-punting them to <code>ubuntu-latest</code>, which forfeits the isolation the dogfood exists
-to demonstrate, or widening the CIDR allowlist, which erodes it).</p>
+<p>Let an operator allow a <strong>per-tenant egress proxy</strong> to forward worker traffic to a small, explicit set of <strong>non-GitHub</strong> destinations — by <strong>DNS host suffix</strong> (e.g. <code>proxy.golang.org</code>) and by <strong>CIDR</strong> (an internal subnet with no DNS, or a cloud private-API range) — so jobs that fetch dependencies work, while keeping every property the GitHub-only egress posture provides: per-tenant egress-IP attribution, the DNS-exfil containment, and "no direct worker egress hole."</p>
+<p><strong>Concrete driver (Q224 / Q239).</strong> On the GKE dogfood the offline-capable jobs (<code>lint</code>, <code>shellcheck</code>, <code>unit-test</code>, <code>coverage</code>) now run green on the Q239 build-capable image, but <code>vendor-check</code> and <code>tidy-check</code> re-fetch modules from <code>proxy.golang.org</code> on a cold cache.
+The worker egress <code>NetworkPolicy</code> allows TCP 443 only to the ~7400 GitHub CIDRs, so those two jobs fail — not on toolchain, on egress.
+This feature is what makes them green the <em>right</em> way (rather than punting them to <code>ubuntu-latest</code>, which forfeits the isolation the dogfood exists to demonstrate, or widening the CIDR allowlist, which erodes it).</p>
 <h2 id="background--why-this-isnt-built-yet">Background — why this isn't built yet<a class="headerlink" href="#background--why-this-isnt-built-yet" title="Permanent link">&para;</a></h2>
-<p>The egress proxy (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go"><code>cmd/proxy/proxy.go</code></a>) is a
-deliberately <strong>transport-only</strong> HTTPS <code>CONNECT</code> tunneler: <code>handleConnect</code>
-(proxy.go:309) dials <code>r.Host</code> (proxy.go:320) with no inspection. Destination
-policy lives entirely in the proxy pod's egress <code>NetworkPolicy</code>
-(<code>buildEgressProxyNetworkPolicy</code>,
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go:308</code></a>),
-which permits 443 only to the GitHub CIDR feed (or, under Q208, the GitHub
-FQDNs). Appendix G left a proxy-side allowlist out for two reasons: a single
-policy surface (NetworkPolicy) is simpler to reason about, and a byte-forwarding
-proxy with no policy code is trivial to audit.</p>
-<p>This design keeps that spirit by deriving <strong>both</strong> surfaces from <strong>one</strong> field
-(see Approach), so there are not two overlapping policies to keep in sync.</p>
+<p>The egress proxy (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go"><code>cmd/proxy/proxy.go</code></a>) is a deliberately <strong>transport-only</strong> HTTPS <code>CONNECT</code> tunneler: <code>handleConnect</code> (proxy.go:309) dials <code>r.Host</code> (proxy.go:320) with no inspection.
+Destination policy lives entirely in the proxy pod's egress <code>NetworkPolicy</code> (<code>buildEgressProxyNetworkPolicy</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go:308</code></a>), which permits 443 only to the GitHub CIDR feed (or, under Q208, the GitHub FQDNs).
+Appendix G left a proxy-side allowlist out for two reasons: a single policy surface (NetworkPolicy) is simpler to reason about, and a byte-forwarding proxy with no policy code is trivial to audit.</p>
+<p>This design keeps that spirit by deriving <strong>both</strong> surfaces from <strong>one</strong> field (see Approach), so there are not two overlapping policies to keep in sync.</p>
 <h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
-<p>Add one field to <code>EgressProxySpec</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/egressproxy_types.go"><code>api/v2alpha1/egressproxy_types.go</code></a>),
-alongside the existing <code>egressPolicyMode</code> / <code>managedNetworkPolicy</code> / <code>noProxyCIDRs</code>:</p>
-<p><strong>Two destination forms</strong> — host suffixes (DNS names) <strong>and</strong> CIDR blocks — because
-real CI dependencies need both: package/module hosts resolve by DNS
-(<code>proxy.golang.org</code>), but internal services are often reachable only by <strong>IP with
-no internal DNS</strong>, and cloud private API endpoints resolve into known <strong>CIDR
-ranges</strong> on a private network (e.g. GCP Private Google Access →
-<code>private.googleapis.com</code> is <code>199.36.153.8/30</code>, <code>restricted.googleapis.com</code>
-<code>199.36.153.4/30</code>). An FQDN-only allowlist would force operators to invent DNS or
-give up; a CIDR-only one can't express a moving package host. So:</p>
+<p>Add one field to <code>EgressProxySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/egressproxy_types.go"><code>api/v2alpha1/egressproxy_types.go</code></a>), alongside the existing <code>egressPolicyMode</code> / <code>managedNetworkPolicy</code> / <code>noProxyCIDRs</code>:</p>
+<p><strong>Two destination forms</strong> — host suffixes (DNS names) <strong>and</strong> CIDR blocks — because real CI dependencies need both: package/module hosts resolve by DNS (<code>proxy.golang.org</code>), but internal services are often reachable only by <strong>IP with no internal DNS</strong>, and cloud private API endpoints resolve into known <strong>CIDR ranges</strong> on a private network (e.g.
+GCP Private Google Access → <code>private.googleapis.com</code> is <code>199.36.153.8/30</code>, <code>restricted.googleapis.com</code> <code>199.36.153.4/30</code>).
+An FQDN-only allowlist would force operators to invent DNS or give up; a CIDR-only one can't express a moving package host.
+So:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes this proxy may</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1">// forward worker CONNECT traffic to (e.g. proxy.golang.org). Host-suffix entries</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// REQUIRE an FQDN egressPolicyMode, since the pod-egress layer expresses them as</span>
@@ -2640,198 +2734,97 @@ give up; a CIDR-only one can't express a moving package host. So:</p>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1">// +kubebuilder:validation:MaxItems=64</span>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nx">DestinationCIDRs</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;destinationCIDRs,omitempty&quot;`</span>
 </code></pre></div>
-<p>Both default empty (GitHub-only — today's behavior). GitHub is always allowed;
-the lists only add.</p>
-<p><strong>Who governs the destinations — the critical point.</strong> The <code>EgressProxy</code> is a
-<strong>namespace-scoped, tenant-authorable</strong> CR (only the cluster-scoped
-<code>ClusterRunnerTemplate</code> is platform-only — appendix-h §H). So these fields cannot
-be trusted as "admin-only" just because they sit on the <code>EgressProxy</code>: a tenant
-with write access to their namespace could otherwise open their own egress to
-anywhere, which the egress sign-off (Q168) and Appendix G forbid ("never
-tenant-openable by default"; "no mode in which a worker can reach arbitrary
-internet"). The fields are therefore <strong>gated by a platform-owned allowlist</strong>,
-exactly mirroring the <code>--allowed-priority-classes</code> model (Q132/Q188) for the
-other security-relevant tenant-settable field:</p>
+<p>Both default empty (GitHub-only — today's behavior).
+GitHub is always allowed; the lists only add.</p>
+<p><strong>Who governs the destinations — the critical point.</strong> The <code>EgressProxy</code> is a <strong>namespace-scoped, tenant-authorable</strong> CR (only the cluster-scoped <code>ClusterRunnerTemplate</code> is platform-only — appendix-h §H).
+So these fields cannot be trusted as "admin-only" just because they sit on the <code>EgressProxy</code>: a tenant with write access to their namespace could otherwise open their own egress to anywhere, which the egress sign-off (Q168) and Appendix G forbid ("never tenant-openable by default"; "no mode in which a worker can reach arbitrary internet").
+The fields are therefore <strong>gated by a platform-owned allowlist</strong>, exactly mirroring the <code>--allowed-priority-classes</code> model (Q132/Q188) for the other security-relevant tenant-settable field:</p>
 <ul>
-<li><strong>Two allowlist surfaces, mirroring the two CR fields</strong> — because the two forms
-  match differently and a single flat list would have to type-detect each entry:</li>
-<li><code>--allowed-egress-fqdns</code> — permitted FQDN suffixes. A request matches if it is
-    equal to, or a subdomain of, a permitted entry (so allowing <code>golang.org</code>
-    permits <code>proxy.golang.org</code>); <code>destinationFQDNs</code> is validated against this.</li>
-<li><code>--allowed-egress-cidrs</code> — permitted IP ranges. A request matches by
-    <strong>subnet containment</strong> (allowing <code>10.0.0.0/8</code> permits a requested
-    <code>10.1.0.0/16</code>); <code>destinationCIDRs</code> is validated against this.
-  Both may also be sourced from a <strong>single</strong> watched ConfigMap with two keys
-  (<code>fqdns:</code> / <code>cidrs:</code>) — named by one <code>--egress-destination-allowlist-configmap</code>
-  flag, one object / one watch / one RBAC grant, <strong>not</strong> two ConfigMaps —
-  additive + fail-safe, exactly like the single <code>--priority-class-allowlist-configmap</code>.</li>
-<li>The GMC validating webhook <strong>rejects</strong> any <code>destinationFQDNs</code> entry not covered
-  by <code>--allowed-egress-fqdns</code>, and any <code>destinationCIDRs</code> entry not contained in
-  <code>--allowed-egress-cidrs</code>.</li>
-<li><strong>Both empty forbids every non-GitHub destination</strong> (secure default) — out of
-  the box no tenant can open egress at all, identical to how an empty
-  <code>--allowed-priority-classes</code> forbids every <code>priorityClassName</code>.</li>
+<li><strong>Two allowlist surfaces, mirroring the two CR fields</strong> — because the two forms match differently and a single flat list would have to type-detect each entry:</li>
+<li><code>--allowed-egress-fqdns</code> — permitted FQDN suffixes.
+    A request matches if it is equal to, or a subdomain of, a permitted entry (so allowing <code>golang.org</code> permits <code>proxy.golang.org</code>); <code>destinationFQDNs</code> is validated against this.</li>
+<li><code>--allowed-egress-cidrs</code> — permitted IP ranges.
+    A request matches by <strong>subnet containment</strong> (allowing <code>10.0.0.0/8</code> permits a requested <code>10.1.0.0/16</code>); <code>destinationCIDRs</code> is validated against this.
+    Both may also be sourced from a <strong>single</strong> watched ConfigMap with two keys (<code>fqdns:</code> / <code>cidrs:</code>) — named by one <code>--egress-destination-allowlist-configmap</code> flag, one object / one watch / one RBAC grant, <strong>not</strong> two ConfigMaps — additive + fail-safe, exactly like the single <code>--priority-class-allowlist-configmap</code>.</li>
+<li>The GMC validating webhook <strong>rejects</strong> any <code>destinationFQDNs</code> entry not covered by <code>--allowed-egress-fqdns</code>, and any <code>destinationCIDRs</code> entry not contained in <code>--allowed-egress-cidrs</code>.</li>
+<li><strong>Both empty forbids every non-GitHub destination</strong> (secure default) — out of the box no tenant can open egress at all, identical to how an empty <code>--allowed-priority-classes</code> forbids every <code>priorityClassName</code>.</li>
 </ul>
-<p><em>(Alternative rejected: one flat <code>--allowed-egress-destinations</code> that
-  parse-detects CIDR-vs-FQDN per entry, as the <code>noProxyCIDRs</code> field already does.
-  Simpler — one flag — but it loses CRD symmetry and conflates two different match
-  rules; we go with the two typed flags above.)</em></p>
-<p>A tenant can thus <em>request</em> a destination on their <code>EgressProxy</code> for GitOps
-ergonomics, but only the platform decides what is actually permitted; a request
-outside the allowlist fails admission.</p>
+<p><em>(Alternative rejected: one flat <code>--allowed-egress-destinations</code> that parse-detects CIDR-vs-FQDN per entry, as the <code>noProxyCIDRs</code> field already does.
+  Simpler — one flag — but it loses CRD symmetry and conflates two different match rules; we go with the two typed flags above.)</em></p>
+<p>A tenant can thus <em>request</em> a destination on their <code>EgressProxy</code> for GitOps ergonomics, but only the platform decides what is actually permitted; a request outside the allowlist fails admission.</p>
 <p>Two enforcement surfaces, one source of truth:</p>
 <ol>
-<li><strong>Pod-egress layer (the hard gate).</strong> The GMC adds the destinations to the
-   proxy pod's egress policy:</li>
-<li><strong>Host suffixes</strong> → <code>toFQDNs</code> / destination-domains, which <strong>requires</strong> a
-     CNI-native FQDN <code>egressPolicyMode</code> (<code>CiliumFQDN</code> / <code>CalicoFQDN</code>, already built
-     for Q208 — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_fqdn.go"><code>egressproxy_fqdn.go</code></a>).</li>
-<li><strong>CIDRs</strong> → native <code>ipBlock</code> peers on the standard NetworkPolicy
-     (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>buildEgressProxyNetworkPolicy</code></a>,
-     same shape as the GitHub-CIDR rule) or Cilium <code>toCIDR</code> in FQDN mode — so CIDRs
-     work in <strong>every</strong> mode, no DNS-aware CNI needed.
-   If the CNI can't enforce, egress stays denied (fail-closed, same Q208 guarantee).</li>
-<li><strong>Proxy CONNECT check (defense-in-depth).</strong> The GMC passes the proxy the
-   <strong>full</strong> permitted set via two env vars — <code>PROXY_ALLOWED_HOST_SUFFIXES</code> and
-   <code>PROXY_ALLOWED_CIDRS</code> (read in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/main.go"><code>cmd/proxy/main.go</code></a>
-   into <code>Server.AllowedHostSuffixes</code> / <code>Server.AllowedCIDRs</code>). The full set is the
-   implicit GitHub hostnames <strong>plus</strong> the operator's <code>destinationFQDNs</code>
-   (host-suffix env) and <code>destinationCIDRs</code> (CIDR env); GitHub is carried as host
-   suffixes regardless of <code>egressPolicyMode</code> since workers always reach it by name,
-   and the bulky GitHub CIDR feed is <em>not</em> injected. The GMC injects this env <strong>only
-   when the EgressProxy lists at least one extra destination</strong> — with none, both env
-   vars are absent and the proxy stays transport-only (byte-for-byte today's
-   behavior; the NetworkPolicy is the sole gate). <code>checkDestination</code> (proxy.go),
-   before the dial in <code>handleConnect</code>:</li>
+<li><strong>Pod-egress layer (the hard gate).</strong> The GMC adds the destinations to the proxy pod's egress policy:</li>
+<li><strong>Host suffixes</strong> → <code>toFQDNs</code> / destination-domains, which <strong>requires</strong> a CNI-native FQDN <code>egressPolicyMode</code> (<code>CiliumFQDN</code> / <code>CalicoFQDN</code>, already built for Q208 — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_fqdn.go"><code>egressproxy_fqdn.go</code></a>).</li>
+<li><strong>CIDRs</strong> → native <code>ipBlock</code> peers on the standard NetworkPolicy (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>buildEgressProxyNetworkPolicy</code></a>, same shape as the GitHub-CIDR rule) or Cilium <code>toCIDR</code> in FQDN mode — so CIDRs work in <strong>every</strong> mode, no DNS-aware CNI needed.
+     If the CNI can't enforce, egress stays denied (fail-closed, same Q208 guarantee).</li>
+<li><strong>Proxy CONNECT check (defense-in-depth).</strong> The GMC passes the proxy the <strong>full</strong> permitted set via two env vars — <code>PROXY_ALLOWED_HOST_SUFFIXES</code> and <code>PROXY_ALLOWED_CIDRS</code> (read in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/main.go"><code>cmd/proxy/main.go</code></a> into <code>Server.AllowedHostSuffixes</code> / <code>Server.AllowedCIDRs</code>).
+   The full set is the implicit GitHub hostnames <strong>plus</strong> the operator's <code>destinationFQDNs</code> (host-suffix env) and <code>destinationCIDRs</code> (CIDR env); GitHub is carried as host suffixes regardless of <code>egressPolicyMode</code> since workers always reach it by name, and the bulky GitHub CIDR feed is <em>not</em> injected.
+   The GMC injects this env <strong>only when the EgressProxy lists at least one extra destination</strong> — with none, both env vars are absent and the proxy stays transport-only (byte-for-byte today's behavior; the NetworkPolicy is the sole gate). <code>checkDestination</code> (proxy.go), before the dial in <code>handleConnect</code>:</li>
 <li>with no allowlist env, permits every destination (transport-only);</li>
-<li>otherwise matches the CONNECT host (normalized, port-stripped) against the
-     allowed host suffixes (GitHub + <code>destinationFQDNs</code>); and</li>
-<li>for the allowed CIDRs (<code>destinationCIDRs</code>), <strong>resolves the host and checks the
-     resolved IP is in range</strong> (a literal-IP target is checked directly), then dials
-     <strong>that validated IP</strong> rather than re-resolving by name — closing the
-     DNS-rebinding window, so resolve-and-revalidate is <em>built in</em> for the CIDR path.
-     Anything matching neither is rejected <code>403</code> and counted on
-     <code>actions_gateway_proxy_connect_denied_total</code>.</li>
+<li>otherwise matches the CONNECT host (normalized, port-stripped) against the allowed host suffixes (GitHub + <code>destinationFQDNs</code>); and</li>
+<li>for the allowed CIDRs (<code>destinationCIDRs</code>), <strong>resolves the host and checks the resolved IP is in range</strong> (a literal-IP target is checked directly), then dials <strong>that validated IP</strong> rather than re-resolving by name — closing the DNS-rebinding window, so resolve-and-revalidate is <em>built in</em> for the CIDR path.
+     Anything matching neither is rejected <code>403</code> and counted on <code>actions_gateway_proxy_connect_denied_total</code>.</li>
 </ol>
-<p>Worker traffic already flows through the proxy for proxied tenants — the AGC
-provisioner injects <code>HTTPS_PROXY</code> into worker containers
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go:1143</code></a>) — so
-no worker-side change is needed; this only widens what that proxy will carry.</p>
+<p>Worker traffic already flows through the proxy for proxied tenants — the AGC provisioner injects <code>HTTPS_PROXY</code> into worker containers (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go:1143</code></a>) — so no worker-side change is needed; this only widens what that proxy will carry.</p>
 <h2 id="security-posture-secure-by-default">Security posture (secure-by-default)<a class="headerlink" href="#security-posture-secure-by-default" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Empty default = no change.</strong> <code>destinationFQDNs: []</code> is GitHub-only,
-  byte-for-byte today's behavior. The feature is purely additive opt-in.</li>
-<li><strong>Platform-governed, not tenant-openable — via an allowlist, not ownership.</strong>
-  The <code>EgressProxy</code> is tenant-authorable, so governance comes from the GMC
-  <code>--allowed-egress-fqdns</code> / <code>--allowed-egress-cidrs</code> allowlists +
-  validating-webhook rejection (see above), not from the CR's ownership. Both
-  empty = deny-all-non-GitHub.
-  This is the same platform-ownership model the design already uses for the only
-  other security-relevant tenant-settable field — <code>priorityClassName</code> /
-  <code>--allowed-priority-classes</code> (Q132/Q188) — and satisfies Appendix G's "never
-  tenant-openable by default" without pretending the CR is admin-only.</li>
-<li><strong>Attribution + containment preserved.</strong> Traffic still exits the per-tenant
-  proxy IPs (attribution intact) and DNS still resolves on the in-cluster path
-  (no new exfil channel) — the two things a direct worker-egress hole would
-  destroy.</li>
-<li><strong>Fail-closed mode coupling.</strong> A host-suffix entry without an FQDN
-  <code>egressPolicyMode</code> is rejected by admission (CEL): the standard NetworkPolicy
-  can't express a hostname, so we refuse rather than silently no-op. CIDR entries
-  carry no such constraint — they're native <code>ipBlock</code>/<code>toCIDR</code> peers in any mode.</li>
-<li><strong>CIDRs are precise, not rot-prone.</strong> Operators allowlist <em>internal</em> or
-  <em>cloud-private</em> ranges (a <code>10.x</code> subnet, a Private-Google-Access block) that are
-  stable and operator-owned — unlike trying to hand-maintain a public CDN's
-  (Fastly/Google) shifting CIDRs, which is why the <em>public</em> package hosts use the
-  FQDN form instead.</li>
-<li><strong>GitHub stays implicit.</strong> GitHub is always allowed; the lists only add
-  destinations, so they can never <em>remove</em> GitHub access.</li>
-<li><strong>Allowlisting opens the <em>policy</em>, not the <em>route</em>.</strong> A <code>destinationCIDRs</code> entry
-  lifts the egress-policy block; it does not make the destination reachable.
-  The Private-Google-Access VIPs (<code>199.36.153.x/30</code>) in particular are <strong>not
-  reachable by default</strong> — they require subnet-level Private Google Access enabled
-  plus Cloud DNS + a route, and they exist for nodes <em>without</em> external IPs;
-  GKE nodes that have an external IP reach Google APIs over public IPs instead.
-  So the operator's cluster networking (PGA/DNS/routes) is a prerequisite G.1 does
-  not configure. (Not relevant to the dogfood: its nodes have external IPs and it
-  allowlists only <code>proxy.golang.org</code>/<code>sum.golang.org</code>, no Google-API access.)</li>
+<li><strong>Empty default = no change.</strong> <code>destinationFQDNs: []</code> is GitHub-only, byte-for-byte today's behavior.
+  The feature is purely additive opt-in.</li>
+<li><strong>Platform-governed, not tenant-openable — via an allowlist, not ownership.</strong> The <code>EgressProxy</code> is tenant-authorable, so governance comes from the GMC <code>--allowed-egress-fqdns</code> / <code>--allowed-egress-cidrs</code> allowlists + validating-webhook rejection (see above), not from the CR's ownership.
+  Both empty = deny-all-non-GitHub.
+  This is the same platform-ownership model the design already uses for the only other security-relevant tenant-settable field — <code>priorityClassName</code> / <code>--allowed-priority-classes</code> (Q132/Q188) — and satisfies Appendix G's "never tenant-openable by default" without pretending the CR is admin-only.</li>
+<li><strong>Attribution + containment preserved.</strong> Traffic still exits the per-tenant proxy IPs (attribution intact) and DNS still resolves on the in-cluster path (no new exfil channel) — the two things a direct worker-egress hole would destroy.</li>
+<li><strong>Fail-closed mode coupling.</strong> A host-suffix entry without an FQDN <code>egressPolicyMode</code> is rejected by admission (CEL): the standard NetworkPolicy can't express a hostname, so we refuse rather than silently no-op.
+  CIDR entries carry no such constraint — they're native <code>ipBlock</code>/<code>toCIDR</code> peers in any mode.</li>
+<li><strong>CIDRs are precise, not rot-prone.</strong> Operators allowlist <em>internal</em> or <em>cloud-private</em> ranges (a <code>10.x</code> subnet, a Private-Google-Access block) that are stable and operator-owned — unlike trying to hand-maintain a public CDN's (Fastly/Google) shifting CIDRs, which is why the <em>public</em> package hosts use the FQDN form instead.</li>
+<li><strong>GitHub stays implicit.</strong> GitHub is always allowed; the lists only add destinations, so they can never <em>remove</em> GitHub access.</li>
+<li><strong>Allowlisting opens the <em>policy</em>, not the <em>route</em>.</strong> A <code>destinationCIDRs</code> entry lifts the egress-policy block; it does not make the destination reachable.
+  The Private-Google-Access VIPs (<code>199.36.153.x/30</code>) in particular are <strong>not reachable by default</strong> — they require subnet-level Private Google Access enabled plus Cloud DNS + a route, and they exist for nodes <em>without</em> external IPs; GKE nodes that have an external IP reach Google APIs over public IPs instead.
+  So the operator's cluster networking (PGA/DNS/routes) is a prerequisite G.1 does not configure.
+  (Not relevant to the dogfood: its nodes have external IPs and it allowlists only <code>proxy.golang.org</code>/<code>sum.golang.org</code>, no Google-API access.)</li>
 </ul>
 <h2 id="trade-offs-why-this-needs-sign-off">Trade-offs (why this needs sign-off)<a class="headerlink" href="#trade-offs-why-this-needs-sign-off" title="Permanent link">&para;</a></h2>
-<p>Accepting this feature is accepting a <strong>deliberate, bounded relaxation</strong> of the
-GitHub-only egress posture. It is worth it because the alternative is forcing
-every operator who needs a dependency off-platform or off-isolation — but the
-costs are real and permanent, so they are recorded here.</p>
+<p>Accepting this feature is accepting a <strong>deliberate, bounded relaxation</strong> of the GitHub-only egress posture.
+It is worth it because the alternative is forcing every operator who needs a dependency off-platform or off-isolation — but the costs are real and permanent, so they are recorded here.</p>
 <p><strong>What we gain</strong></p>
 <ul>
-<li>Solves the single most common operator ask (worker dependency egress) while
-  keeping per-tenant egress-IP <strong>attribution</strong> and DNS-exfil <strong>containment</strong> —
-  the properties the cheap alternatives (punt to GitHub-hosted, widen worker
-  CIDRs, <code>managedNetworkPolicy: false</code>) each throw away.</li>
+<li>Solves the single most common operator ask (worker dependency egress) while keeping per-tenant egress-IP <strong>attribution</strong> and DNS-exfil <strong>containment</strong> — the properties the cheap alternatives (punt to GitHub-hosted, widen worker CIDRs, <code>managedNetworkPolicy: false</code>) each throw away.</li>
 <li>Secure-by-default: empty allowlist = today's behavior, byte-for-byte.</li>
-<li>Reuses the already-signed-off <code>--allowed-priority-classes</code> governance shape — no
-  new paradigm.</li>
-<li>Defense-in-depth (proxy CONNECT check + CNI/NetworkPolicy from one field; the
-  CIDR path folds in DNS-rebinding revalidation).</li>
+<li>Reuses the already-signed-off <code>--allowed-priority-classes</code> governance shape — no new paradigm.</li>
+<li>Defense-in-depth (proxy CONNECT check + CNI/NetworkPolicy from one field; the CIDR path folds in DNS-rebinding revalidation).</li>
 </ul>
 <p><strong>What we pay</strong></p>
 <ul>
-<li><strong>A real hole, however narrow.</strong> A compromised worker (malicious dependency,
-  job RCE) can now exfiltrate to any allowlisted destination. The allowlist
-  bounds it; it does not eliminate it. This is the core trade.</li>
-<li><strong>The proxy is no longer purely transport-only.</strong> Appendix G kept it
-  byte-forwarding on purpose ("every conditional in the data path is a future
-  bug"). We add host parsing, allowlist matching, and a <strong>DNS resolve per CONNECT</strong>
-  for CIDR entries — more code, more latency, more CVE surface in a
-  security-critical hot path.</li>
-<li><strong>DNS-based allowlisting is inherently leaky.</strong> <code>toFQDNs</code> depends on DNS
-  interception + CNI enforcement, a resolve/connect TOCTOU window, and blurs on
-  CDN/shared-IP hosts. It looks more precise than it is.</li>
-<li><strong>A new admin footgun.</strong> A too-broad entry (<code>*.googleapis.com</code>, a wide CIDR, a
-  CDN that hosts arbitrary content) silently reopens broad egress. The guardrail
-  is only as good as the entries.</li>
-<li><strong>Maintenance cost</strong> of the proxy data-path code and the webhook, for an
-  opt-in feature, on an adoption-only project's finite maintainer budget.</li>
+<li><strong>A real hole, however narrow.</strong> A compromised worker (malicious dependency, job RCE) can now exfiltrate to any allowlisted destination.
+  The allowlist bounds it; it does not eliminate it.
+  This is the core trade.</li>
+<li><strong>The proxy is no longer purely transport-only.</strong> Appendix G kept it byte-forwarding on purpose ("every conditional in the data path is a future bug").
+  We add host parsing, allowlist matching, and a <strong>DNS resolve per CONNECT</strong> for CIDR entries — more code, more latency, more CVE surface in a security-critical hot path.</li>
+<li><strong>DNS-based allowlisting is inherently leaky.</strong> <code>toFQDNs</code> depends on DNS interception + CNI enforcement, a resolve/connect TOCTOU window, and blurs on CDN/shared-IP hosts.
+  It looks more precise than it is.</li>
+<li><strong>A new admin footgun.</strong> A too-broad entry (<code>*.googleapis.com</code>, a wide CIDR, a CDN that hosts arbitrary content) silently reopens broad egress.
+  The guardrail is only as good as the entries.</li>
+<li><strong>Maintenance cost</strong> of the proxy data-path code and the webhook, for an opt-in feature, on an adoption-only project's finite maintainer budget.</li>
 </ul>
 <h2 id="recommended-path-in-cluster-caching-mirror-first">Recommended path: in-cluster caching mirror first<a class="headerlink" href="#recommended-path-in-cluster-caching-mirror-first" title="Permanent link">&para;</a></h2>
-<p>We do <strong>not</strong> force operators onto an in-cluster mirror — G.1 exists so they
-don't have to — but the docs must <strong>lead with the mirror as the recommended,
-more-secure, lower-maintenance option</strong> for <em>remote third-party dependencies</em>
-(Go modules, npm, PyPI, crates, container layers), and present the destination
-allowlist as the escape hatch for what a mirror can't cover. The reasoning,
-which the operator guide must state plainly:</p>
+<p>We do <strong>not</strong> force operators onto an in-cluster mirror — G.1 exists so they don't have to — but the docs must <strong>lead with the mirror as the recommended, more-secure, lower-maintenance option</strong> for <em>remote third-party dependencies</em> (Go modules, npm, PyPI, crates, container layers), and present the destination allowlist as the escape hatch for what a mirror can't cover.
+The reasoning, which the operator guide must state plainly:</p>
 <ul>
-<li><strong>More secure.</strong> Workers egress only to a stable <strong>in-cluster</strong> pod; the
-  worker NetworkPolicy never has to name an external destination at all. The
-  mirror — not every worker — holds the (narrow, auditable) outbound path, and it
-  can be pre-populated and run air-gapped.</li>
-<li><strong>Lower-maintenance / less breakage.</strong> Remote dependency IPs and even hostnames
-  churn; a CIDR/FQDN allowlist of <em>public</em> hosts rots and breaks builds when a
-  registry shifts ranges. A mirror's address is stable forever, so the egress
-  policy never changes when upstreams move.</li>
-<li><strong>Better behavior.</strong> Caching cuts repeat fetches, survives upstream outages, and
-  gives a single audit point.</li>
+<li><strong>More secure.</strong> Workers egress only to a stable <strong>in-cluster</strong> pod; the worker NetworkPolicy never has to name an external destination at all.
+  The mirror — not every worker — holds the (narrow, auditable) outbound path, and it can be pre-populated and run air-gapped.</li>
+<li><strong>Lower-maintenance / less breakage.</strong> Remote dependency IPs and even hostnames churn; a CIDR/FQDN allowlist of <em>public</em> hosts rots and breaks builds when a registry shifts ranges.
+  A mirror's address is stable forever, so the egress policy never changes when upstreams move.</li>
+<li><strong>Better behavior.</strong> Caching cuts repeat fetches, survives upstream outages, and gives a single audit point.</li>
 </ul>
-<p>So the allowlist is <strong>best reserved for what a mirror genuinely cannot proxy</strong>:
-a <em>specific</em> live cloud-provider API (a single host like <code>kms.&lt;region&gt;.amazonaws.com</code>,
-or a Private-Google-Access CIDR like <code>199.36.153.8/30</code> — <strong>never</strong> a wildcard like
-<code>*.googleapis.com</code>, which would cover <code>storage.googleapis.com/&lt;any-bucket&gt;</code> and
-reopen broad exfil; and <strong>not</strong> the metadata/IMDS endpoint, which workers should
-stay blocked from), internal services reachable only by IP, and one-off stable
-endpoints. Public package
-ecosystems should be steered to a mirror (Athens for Go, Verdaccio for npm, a
-registry pull-through for images) — and the dogfood itself should ultimately
-demonstrate <em>both</em> (the allowlist for the immediate fix, a Go module proxy as the
-"do it the durable way" follow-up). This guidance is a <strong>required</strong> part of the
-docs deliverable, not a footnote.</p>
+<p>So the allowlist is <strong>best reserved for what a mirror genuinely cannot proxy</strong>: a <em>specific</em> live cloud-provider API (a single host like <code>kms.&lt;region&gt;.amazonaws.com</code>, or a Private-Google-Access CIDR like <code>199.36.153.8/30</code> — <strong>never</strong> a wildcard like <code>*.googleapis.com</code>, which would cover <code>storage.googleapis.com/&lt;any-bucket&gt;</code> and reopen broad exfil; and <strong>not</strong> the metadata/IMDS endpoint, which workers should stay blocked from), internal services reachable only by IP, and one-off stable endpoints.
+Public package ecosystems should be steered to a mirror (Athens for Go, Verdaccio for npm, a registry pull-through for images) — and the dogfood itself should ultimately demonstrate <em>both</em> (the allowlist for the immediate fix, a Go module proxy as the "do it the durable way" follow-up).
+This guidance is a <strong>required</strong> part of the docs deliverable, not a footnote.</p>
 <h2 id="scope-we-accept--and-the-scope-creep-we-decline">Scope we accept — and the scope-creep we decline<a class="headerlink" href="#scope-we-accept--and-the-scope-creep-we-decline" title="Permanent link">&para;</a></h2>
-<p>Accepting G.1 is a <strong>bounded</strong> commitment. To keep the proxy auditable and the
-maintenance load finite, the following are explicitly <strong>in scope</strong> now, and the
-rest are <strong>declined by default</strong> (each with the trigger that would reopen it).</p>
-<p><strong>In scope (this work):</strong> the two typed destination fields; the platform
-allowlist (two flags + one ConfigMap); admission gating; FQDN-suffix + CIDR-
-containment matching; the CONNECT check with CIDR resolve-and-revalidate; a
-<code>*_connect_denied_total</code> counter; the mirror-first operator guidance.</p>
-<p><strong>Declined by default</strong> (do <em>not</em> build as part of accepting G.1; revisit only on
-the stated trigger):</p>
+<p>Accepting G.1 is a <strong>bounded</strong> commitment.
+To keep the proxy auditable and the maintenance load finite, the following are explicitly <strong>in scope</strong> now, and the rest are <strong>declined by default</strong> (each with the trigger that would reopen it).</p>
+<p><strong>In scope (this work):</strong> the two typed destination fields; the platform allowlist (two flags + one ConfigMap); admission gating; FQDN-suffix + CIDR- containment matching; the CONNECT check with CIDR resolve-and-revalidate; a <code>*_connect_denied_total</code> counter; the mirror-first operator guidance.</p>
+<p><strong>Declined by default</strong> (do <em>not</em> build as part of accepting G.1; revisit only on the stated trigger):</p>
 <table>
 <thead>
 <tr>
@@ -2873,152 +2866,58 @@ the stated trigger):</p>
 </tr>
 </tbody>
 </table>
-<p>The principle: G.1 adds <strong>destination allowlisting and nothing else</strong> to the
-proxy. Anything that wants inspection, mutation, statefulness, or tenant-level
-egress authority is out of band and routes to a mirror, a mesh, or its own design.</p>
+<p>The principle: G.1 adds <strong>destination allowlisting and nothing else</strong> to the proxy.
+Anything that wants inspection, mutation, statefulness, or tenant-level egress authority is out of band and routes to a mirror, a mesh, or its own design.</p>
 <h2 id="deliverables-when-approved">Deliverables (when approved)<a class="headerlink" href="#deliverables-when-approved" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>api/v2alpha1/egressproxy_types.go</code> — <code>DestinationFQDNs</code> (host suffixes) +
-   <code>DestinationCIDRs</code> (IP ranges) fields + CEL <code>XValidation</code> (host-suffix entries
-   require an FQDN mode; entries are valid host suffixes / CIDRs respectively);
-   regenerate deepcopy + CRD.</li>
-<li><code>cmd/proxy/proxy.go</code> + <code>cmd/proxy/main.go</code> — <code>Server.AllowedHostSuffixes</code> +
-   <code>Server.AllowedCIDRs</code>, fed from the <code>PROXY_ALLOWED_HOST_SUFFIXES</code> /
-   <code>PROXY_ALLOWED_CIDRS</code> env vars. These hold the <strong>full</strong> GMC-injected allowed set
-   (GitHub hosts + the operator's extras), not just the extras; <strong>both empty ⇒
-   transport-only</strong> (any CONNECT tunneled, NetworkPolicy is the gate). The CONNECT
-   check (<code>checkDestination</code>: host-suffix match + resolve-and-check-IP-in-CIDR,
-   dialing the validated IP) + a <code>actions_gateway_proxy_connect_denied_total</code>
-   counter; unit tests. <strong>(Merged: #461.)</strong></li>
-<li><code>cmd/gmc/internal/controller/egressproxy_builder.go</code> + <code>egressproxy_fqdn.go</code> —
-   inject <code>PROXY_ALLOWED_HOST_SUFFIXES</code> (GitHub hostnames + <code>destinationFQDNs</code>) and
-   <code>PROXY_ALLOWED_CIDRS</code> (<code>destinationCIDRs</code>) into the proxy Deployment <strong>only when
-   the EgressProxy lists ≥1 extra destination</strong> (else no env ⇒ transport-only,
-   backward-compatible); append <code>destinationFQDNs</code> to the FQDN policy's
-   <code>toFQDNs</code>/domains and <code>destinationCIDRs</code> as <code>ipBlock</code> peers on the standard
-   NetworkPolicy (applied in every mode, so CIDRs need no DNS-aware CNI). The bulky
-   GitHub CIDR feed is not injected into the proxy env — GitHub is reachable by
-   hostname via the suffix list. <strong>(Merged: #460 for the CRD fields; this PR for the
-   GMC plumbing.)</strong></li>
-<li><strong>Platform allowlist (the governance gate).</strong> GMC <code>--allowed-egress-fqdns</code> +
-   <code>--allowed-egress-cidrs</code> flags + one optional watched ConfigMap with two keys
-   (<code>fqdns:</code>/<code>cidrs:</code>), named by <code>--egress-destination-allowlist-configmap</code>
-   (additive, fail-safe — mirror <code>--priority-class-allowlist-configmap</code>);
-   GMC validating webhook rejects any <code>destinationFQDNs</code> not covered by the FQDN
-   allowlist (suffix match), any <code>destinationCIDRs</code> not contained in the CIDR
-   allowlist (subnet containment). The host-suffix-without-FQDN-mode rejection is
-   handled by the CRD CEL rule (#460). Both empty = deny-all-non-GitHub.
-   <strong>(Done:</strong> <code>allowlist.EgressDestinationAllowlist</code> + <code>EgressDestinationAllowlistReconciler</code></li>
-<li><code>EgressProxyCustomValidator</code>; chart flags/ConfigMap/Role wiring; envtest admission
-   tests. Operator how-to in <code>security-operations.md</code> shipped with this deliverable.<strong>)</strong></li>
-<li>Docs: <a href="../../../design/05-security/"><code>05-security.md</code></a> (threat-model row + the
-   trade-offs above + move G.1 out of Appendix G),
-   <a href="../../../design/network-architecture/"><code>network-architecture.md</code></a>,
-   <a href="../../../operations/security-operations/"><code>security-operations.md</code></a> (operator
-   how-to for the allowlist flags/ConfigMap <strong>that leads with the in-cluster-mirror
-   recommendation</strong> and presents the allowlist as the escape hatch — required, not
-   a footnote; include per-ecosystem mirror pointers: Athens/Verdaccio/registry
-   pull-through), CRD reference; flip the Appendix G.1 entry to "implemented."
-   <strong>(Done:</strong> 05-security threat row + Q242 blockquote; network-architecture
-   "Worker egress to allowlisted non-GitHub destinations" subsection; the
-   security-operations operator how-to shipped with deliverable 4 (#463);
-   Appendix G.1 flipped to "✅ Implemented" stub. CRD field reference is the godoc
-   on the <code>EgressProxySpec</code> fields (#460).<strong>)</strong></li>
-<li>Tests: unit (host-suffix + CIDR allow/deny, resolve-check, GitHub-implicit,
-   normalization) + GMC envtest (env propagation, FQDN policy carries the hosts,
-   NetworkPolicy carries the CIDRs, admission <strong>rejects an off-allowlist entry</strong>
-   and a host-suffix-without-FQDN-mode, empty allowlist denies all non-GitHub).</li>
-<li><strong>Dogfood application (closes Q224) — turn-up performed 2026-07-01; concurrent
-   green still blocked (Q259).</strong> CiliumFQDN was correctly avoided: GKE Dataplane V2's
-   <em>managed</em> Cilium does <strong>not</strong> expose the <code>cilium.io/v2 CiliumNetworkPolicy</code> CRD
-   (dropped since GKE 1.21.5-gke.1300; verified 2026-06-29 — an EgressProxy with
-   <code>egressPolicyMode: CiliumFQDN</code> went <code>Degraded</code>/fail-closed), and <code>destinationCIDRs</code>
-   is no substitute for <code>proxy.golang.org</code>/<code>sum.golang.org</code> (Google-fronted ⇒ a CIDR
-   allowlist would open all of Google's frontend). So the dogfood runs <strong>direct egress +
-   the in-cluster Athens Go-module cache (Q244)</strong> — the design-recommended mirror-first
-   path, which works on GKE today. The Q242 allowlist is therefore a <strong>designed no-op</strong>
-   on this direct-egress dogfood; the merged Q242 code (CRD <code>destinationFQDNs</code>/
-   <code>destinationCIDRs</code>, GMC injection, validating webhook) is nonetheless in place on the
-   rc.6 control plane (<code>ghcr.io/actions-gateway/{gmc,agc}:v1.1.0-rc.6</code>). The GKEFQDN
-   enforcement backend stays a separate item (<a href="#provider-fqdn-egress-fragmentation-post-implementation-finding">Q245</a>).</li>
+<li><code>api/v2alpha1/egressproxy_types.go</code> — <code>DestinationFQDNs</code> (host suffixes) + <code>DestinationCIDRs</code> (IP ranges) fields + CEL <code>XValidation</code> (host-suffix entries require an FQDN mode; entries are valid host suffixes / CIDRs respectively); regenerate deepcopy + CRD.</li>
+<li><code>cmd/proxy/proxy.go</code> + <code>cmd/proxy/main.go</code> — <code>Server.AllowedHostSuffixes</code> + <code>Server.AllowedCIDRs</code>, fed from the <code>PROXY_ALLOWED_HOST_SUFFIXES</code> / <code>PROXY_ALLOWED_CIDRS</code> env vars.
+   These hold the <strong>full</strong> GMC-injected allowed set (GitHub hosts + the operator's extras), not just the extras; <strong>both empty ⇒ transport-only</strong> (any CONNECT tunneled, NetworkPolicy is the gate).
+   The CONNECT check (<code>checkDestination</code>: host-suffix match + resolve-and-check-IP-in-CIDR, dialing the validated IP) + a <code>actions_gateway_proxy_connect_denied_total</code> counter; unit tests. <strong>(Merged: #461.)</strong></li>
+<li><code>cmd/gmc/internal/controller/egressproxy_builder.go</code> + <code>egressproxy_fqdn.go</code> — inject <code>PROXY_ALLOWED_HOST_SUFFIXES</code> (GitHub hostnames + <code>destinationFQDNs</code>) and <code>PROXY_ALLOWED_CIDRS</code> (<code>destinationCIDRs</code>) into the proxy Deployment <strong>only when the EgressProxy lists ≥1 extra destination</strong> (else no env ⇒ transport-only, backward-compatible); append <code>destinationFQDNs</code> to the FQDN policy's <code>toFQDNs</code>/domains and <code>destinationCIDRs</code> as <code>ipBlock</code> peers on the standard NetworkPolicy (applied in every mode, so CIDRs need no DNS-aware CNI).
+   The bulky GitHub CIDR feed is not injected into the proxy env — GitHub is reachable by hostname via the suffix list. <strong>(Merged: #460 for the CRD fields; this PR for the GMC plumbing.)</strong></li>
+<li><strong>Platform allowlist (the governance gate).</strong> GMC <code>--allowed-egress-fqdns</code> + <code>--allowed-egress-cidrs</code> flags + one optional watched ConfigMap with two keys (<code>fqdns:</code>/<code>cidrs:</code>), named by <code>--egress-destination-allowlist-configmap</code> (additive, fail-safe — mirror <code>--priority-class-allowlist-configmap</code>); GMC validating webhook rejects any <code>destinationFQDNs</code> not covered by the FQDN allowlist (suffix match), any <code>destinationCIDRs</code> not contained in the CIDR allowlist (subnet containment).
+   The host-suffix-without-FQDN-mode rejection is handled by the CRD CEL rule (#460).
+   Both empty = deny-all-non-GitHub. <strong>(Done:</strong> <code>allowlist.EgressDestinationAllowlist</code> + <code>EgressDestinationAllowlistReconciler</code></li>
+<li><code>EgressProxyCustomValidator</code>; chart flags/ConfigMap/Role wiring; envtest admission tests.
+     Operator how-to in <code>security-operations.md</code> shipped with this deliverable.<strong>)</strong></li>
+<li>Docs: <a href="../../../design/05-security/"><code>05-security.md</code></a> (threat-model row + the trade-offs above + move G.1 out of Appendix G), <a href="../../../design/network-architecture/"><code>network-architecture.md</code></a>, <a href="../../../operations/security-operations/"><code>security-operations.md</code></a> (operator how-to for the allowlist flags/ConfigMap <strong>that leads with the in-cluster-mirror recommendation</strong> and presents the allowlist as the escape hatch — required, not a footnote; include per-ecosystem mirror pointers: Athens/Verdaccio/registry pull-through), CRD reference; flip the Appendix G.1 entry to "implemented." <strong>(Done:</strong> 05-security threat row + Q242 blockquote; network-architecture "Worker egress to allowlisted non-GitHub destinations" subsection; the security-operations operator how-to shipped with deliverable 4 (#463); Appendix G.1 flipped to "✅ Implemented" stub.
+   CRD field reference is the godoc on the <code>EgressProxySpec</code> fields (#460).<strong>)</strong></li>
+<li>Tests: unit (host-suffix + CIDR allow/deny, resolve-check, GitHub-implicit, normalization) + GMC envtest (env propagation, FQDN policy carries the hosts, NetworkPolicy carries the CIDRs, admission <strong>rejects an off-allowlist entry</strong> and a host-suffix-without-FQDN-mode, empty allowlist denies all non-GitHub).</li>
+<li><strong>Dogfood application (closes Q224) — turn-up performed 2026-07-01; concurrent green still blocked (Q259).</strong> CiliumFQDN was correctly avoided: GKE Dataplane V2's <em>managed</em> Cilium does <strong>not</strong> expose the <code>cilium.io/v2 CiliumNetworkPolicy</code> CRD (dropped since GKE 1.21.5-gke.1300; verified 2026-06-29 — an EgressProxy with <code>egressPolicyMode: CiliumFQDN</code> went <code>Degraded</code>/fail-closed), and <code>destinationCIDRs</code> is no substitute for <code>proxy.golang.org</code>/<code>sum.golang.org</code> (Google-fronted ⇒ a CIDR allowlist would open all of Google's frontend).
+   So the dogfood runs <strong>direct egress + the in-cluster Athens Go-module cache (Q244)</strong> — the design-recommended mirror-first path, which works on GKE today.
+   The Q242 allowlist is therefore a <strong>designed no-op</strong> on this direct-egress dogfood; the merged Q242 code (CRD <code>destinationFQDNs</code>/ <code>destinationCIDRs</code>, GMC injection, validating webhook) is nonetheless in place on the rc.6 control plane (<code>ghcr.io/actions-gateway/{gmc,agc}:v1.1.0-rc.6</code>).
+   The GKEFQDN enforcement backend stays a separate item (<a href="#provider-fqdn-egress-fragmentation-post-implementation-finding">Q245</a>).</li>
 </ol>
 <p><strong>Validated 2026-07-01 (<code>gag-dogfood</code>, direct egress, rc.6 GMC/AGC):</strong>
-   - Every migrated CI job — <code>vendor-check</code>, <code>tidy-check</code>, <code>unit-test</code> (<code>-race</code>),
-     <code>coverage</code>, <code>integration-test</code>, plus <code>lint</code>/<code>shellcheck</code> — runs <strong>green on
-     <code>gag-ci</code></strong> when given a worker (verified per-job via single-job reruns).
-   - <strong>Q246 holds:</strong> the <code>dogfood-workload</code> NetworkPolicy carried the full GitHub
-     allowlist (<strong>7340</strong> CIDR egress peers) throughout, never blanked; no release-asset
-     download timeout (shellcheck's release tarball → <code>objects.githubusercontent.com</code>
-     and setup-go's toolchain both fetched successfully).
-   - <strong>Q247 holds for jobs that run:</strong> <code>integration-test</code> (~12 min, the longest job)
-     renewed its lock and completed green; the RunnerSet recovered to baseline after
-     every disruption with no orphaned worker pods.</p>
-<p><strong>Still blocked — the <em>concurrent</em> full matrix (Q259).</strong> Bursting the whole CI
-   matrix onto <code>gag-ci</code> at once does <strong>not</strong> go green, even with ample node capacity
-   (confirmed: after lowering worker CPU requests 2→1 and pre-scaling the <code>workers</code>
-   pool, nodes sat at 35%/9% CPU with zero Pending pods). Under the burst the AGC
-   agent-pool cannot recycle consumed runners (GitHub <code>422 "Runner … is currently
-   running a job and cannot be deleted"</code>), so online listeners are not replenished,
-   GitHub dispatches ~1 job at a time, and the queued jobs hit GitHub's ~15-min
-   unstarted-job timeout (cancelled) while a stuck job's token is invalidated
-   (<code>RenewJob 401 "Not authorized for this job"</code> → 600s death). This is an <strong>AGC
-   concurrency / agent-pool recycling issue under burst load</strong> (Q247/Q249/Q254 family),
-   tracked as <strong>Q259</strong> — <strong>not</strong> node capacity (Q248) and <strong>not</strong> a Q242/Q246 defect.
-   Evidence: run 28513106734 (unit-test.yml), run 28510907609 (integration-test.yml);
-   full diagnosis in the <a href="../gke-dogfood-turnup-findings/">GKE dogfood runbook</a>. Until Q259 is fixed,
-   Q224's "route production CI green" is not met, so <strong>Q224 and this deliverable stay
-   open</strong>. First run also hit a one-off <strong>spot-VM preemption</strong> (transient) — the
-   <code>workers</code> pool is spot.</p>
+   - Every migrated CI job — <code>vendor-check</code>, <code>tidy-check</code>, <code>unit-test</code> (<code>-race</code>), <code>coverage</code>, <code>integration-test</code>, plus <code>lint</code>/<code>shellcheck</code> — runs <strong>green on <code>gag-ci</code></strong> when given a worker (verified per-job via single-job reruns).
+   - <strong>Q246 holds:</strong> the <code>dogfood-workload</code> NetworkPolicy carried the full GitHub allowlist (<strong>7340</strong> CIDR egress peers) throughout, never blanked; no release-asset download timeout (shellcheck's release tarball → <code>objects.githubusercontent.com</code> and setup-go's toolchain both fetched successfully).
+   - <strong>Q247 holds for jobs that run:</strong> <code>integration-test</code> (~12 min, the longest job) renewed its lock and completed green; the RunnerSet recovered to baseline after every disruption with no orphaned worker pods.</p>
+<p><strong>Still blocked — the <em>concurrent</em> full matrix (Q259).</strong> Bursting the whole CI matrix onto <code>gag-ci</code> at once does <strong>not</strong> go green, even with ample node capacity (confirmed: after lowering worker CPU requests 2→1 and pre-scaling the <code>workers</code> pool, nodes sat at 35%/9% CPU with zero Pending pods).
+   Under the burst the AGC agent-pool cannot recycle consumed runners (GitHub <code>422 "Runner … is currently running a job and cannot be deleted"</code>), so online listeners are not replenished, GitHub dispatches ~1 job at a time, and the queued jobs hit GitHub's ~15-min unstarted-job timeout (cancelled) while a stuck job's token is invalidated (<code>RenewJob 401 "Not authorized for this job"</code> → 600s death).
+   This is an <strong>AGC concurrency / agent-pool recycling issue under burst load</strong> (Q247/Q249/Q254 family), tracked as <strong>Q259</strong> — <strong>not</strong> node capacity (Q248) and <strong>not</strong> a Q242/Q246 defect.
+   Evidence: run 28513106734 (unit-test.yml), run 28510907609 (integration-test.yml); full diagnosis in the <a href="../gke-dogfood-turnup-findings/">GKE dogfood runbook</a>.
+   Until Q259 is fixed, Q224's "route production CI green" is not met, so <strong>Q224 and this deliverable stay open</strong>.
+   First run also hit a one-off <strong>spot-VM preemption</strong> (transient) — the <code>workers</code> pool is spot.</p>
 <h2 id="open-questions-for-sign-off">Open questions for sign-off<a class="headerlink" href="#open-questions-for-sign-off" title="Permanent link">&para;</a></h2>
 <ol>
-<li>~~Approve the feature / platform-allowlist governance model at all?~~
-   <strong>Decided: accept</strong>, with the Trade-offs recorded above, the bounded scope
-   below, and the in-cluster-mirror recommended first. We will not force operators
-   onto a mirror, but the docs steer them there for remote third-party deps and
-   reserve the allowlist for what a mirror can't proxy. Governance is the
-   <code>--allowed-priority-classes</code> shape (two flags + one ConfigMap, both empty =
-   deny-all-non-GitHub, admission-gated). <strong>Sub-decision resolved: two typed flags</strong>
-   (<code>--allowed-egress-fqdns</code> + <code>--allowed-egress-cidrs</code>) — CRD-symmetric and
-   unambiguous, over the one-flat-flag variant.</li>
-<li>~~FQDN-only vs CIDR variant~~ <strong>Resolved: support both</strong> (host-suffix +
-   <code>destinationCIDRs</code>), per review — internal IP-only hosts and cloud private-API
-   CIDRs need the IP form; public package hosts need the FQDN form.</li>
-<li>~~envtest assets — does <code>unit-test</code> need an egress hole for them?~~ <strong>Resolved:
-   no, not for the four offline jobs.</strong> <code>cmd/agc/Makefile</code> is explicit —
-   <code>test: ## Run unit tests (no envtest required)</code>; only <code>test-integration</code> uses
-   envtest, via <code>setup-envtest use</code> (which <em>downloads</em> the kube-apiserver/etcd
-   binaries — the <code>setup-envtest</code> <em>tool</em> is vendored, the binaries are not). They
-   can't be "vendored as source": they're prebuilt binaries of external projects
-   (<code>k8s.io/kubernetes</code>' apiserver isn't buildable as a library dep; etcd is its
-   own binary), and the suites <em>deliberately</em> use a real apiserver — a vendored
-   fake client can't reproduce the defaulting/no-op-dedup/CEL/<code>IsConflict</code>
-   semantics the integration tier exists to test. So envtest is irrelevant to
-   lint/shellcheck/unit-test/coverage. <strong>When the heavier
-   <code>integration-test</code> job is later migrated</strong>, bake the version-pinned binaries
-   into the runner image at build time (run <code>setup-envtest use</code> during
-   <code>docker build</code>, set <code>KUBEBUILDER_ASSETS</code>) — reproducible, zero runtime egress —
-   rather than allowlisting the download host. <strong>Caveat:</strong> envtest locates the
-   binaries via the <code>KUBEBUILDER_ASSETS</code> <em>directory</em> env var, not <code>$PATH</code>, and
-   <code>make test-integration</code> recomputes it by running <code>setup-envtest use</code> against a
-   repo-relative <code>--bin-dir</code> that is empty on a fresh checkout — so a plain <code>COPY</code>
-   into the image isn't enough; the integration target must be pointed at the
-   baked dir (pre-set <code>KUBEBUILDER_ASSETS</code>, or seed <code>setup-envtest</code>'s store /
-   <code>--bin-dir</code> there) or it re-downloads. Tracked with that migration, not this
-   feature.</li>
-<li>~~DNS-rebinding revalidation in v1 or defer?~~ <strong>Resolved: in v1</strong> — it falls
-   out of the <code>destinationCIDRs</code> resolve-and-dial-the-validated-IP path.</li>
-<li><strong>Scope:</strong> EgressProxy only (v2), matching Q208? v1 / v2-direct-egress out of
-   scope.</li>
+<li>~~Approve the feature / platform-allowlist governance model at all?~~ <strong>Decided: accept</strong>, with the Trade-offs recorded above, the bounded scope below, and the in-cluster-mirror recommended first.
+   We will not force operators onto a mirror, but the docs steer them there for remote third-party deps and reserve the allowlist for what a mirror can't proxy.
+   Governance is the <code>--allowed-priority-classes</code> shape (two flags + one ConfigMap, both empty = deny-all-non-GitHub, admission-gated). <strong>Sub-decision resolved: two typed flags</strong> (<code>--allowed-egress-fqdns</code> + <code>--allowed-egress-cidrs</code>) — CRD-symmetric and unambiguous, over the one-flat-flag variant.</li>
+<li>~~FQDN-only vs CIDR variant~~ <strong>Resolved: support both</strong> (host-suffix + <code>destinationCIDRs</code>), per review — internal IP-only hosts and cloud private-API CIDRs need the IP form; public package hosts need the FQDN form.</li>
+<li>~~envtest assets — does <code>unit-test</code> need an egress hole for them?~~ <strong>Resolved: no, not for the four offline jobs.</strong> <code>cmd/agc/Makefile</code> is explicit — <code>test: ## Run unit tests (no envtest required)</code>; only <code>test-integration</code> uses envtest, via <code>setup-envtest use</code> (which <em>downloads</em> the kube-apiserver/etcd binaries — the <code>setup-envtest</code> <em>tool</em> is vendored, the binaries are not).
+   They can't be "vendored as source": they're prebuilt binaries of external projects (<code>k8s.io/kubernetes</code>' apiserver isn't buildable as a library dep; etcd is its own binary), and the suites <em>deliberately</em> use a real apiserver — a vendored fake client can't reproduce the defaulting/no-op-dedup/CEL/<code>IsConflict</code> semantics the integration tier exists to test.
+   So envtest is irrelevant to lint/shellcheck/unit-test/coverage. <strong>When the heavier <code>integration-test</code> job is later migrated</strong>, bake the version-pinned binaries into the runner image at build time (run <code>setup-envtest use</code> during <code>docker build</code>, set <code>KUBEBUILDER_ASSETS</code>) — reproducible, zero runtime egress — rather than allowlisting the download host. <strong>Caveat:</strong> envtest locates the binaries via the <code>KUBEBUILDER_ASSETS</code> <em>directory</em> env var, not <code>$PATH</code>, and <code>make test-integration</code> recomputes it by running <code>setup-envtest use</code> against a repo-relative <code>--bin-dir</code> that is empty on a fresh checkout — so a plain <code>COPY</code> into the image isn't enough; the integration target must be pointed at the baked dir (pre-set <code>KUBEBUILDER_ASSETS</code>, or seed <code>setup-envtest</code>'s store / <code>--bin-dir</code> there) or it re-downloads.
+   Tracked with that migration, not this feature.</li>
+<li>~~DNS-rebinding revalidation in v1 or defer?~~ <strong>Resolved: in v1</strong> — it falls out of the <code>destinationCIDRs</code> resolve-and-dial-the-validated-IP path.</li>
+<li><strong>Scope:</strong> EgressProxy only (v2), matching Q208? v1 / v2-direct-egress out of scope.</li>
 </ol>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
-<p><code>make check</code> (gofmt + lint + unit, incl. the new proxy + builder unit tests) +
-the GMC envtest integration suite (env propagation, FQDN-policy emission,
-admission rejection). Final end-to-end proof on the GKE dogfood per deliverable 6.</p>
+<p><code>make check</code> (gofmt + lint + unit, incl. the new proxy + builder unit tests) + the GMC envtest integration suite (env propagation, FQDN-policy emission, admission rejection).
+Final end-to-end proof on the GKE dogfood per deliverable 6.</p>
 <h2 id="provider-fqdn-egress-fragmentation-post-implementation-finding">Provider FQDN-egress fragmentation (post-implementation finding)<a class="headerlink" href="#provider-fqdn-egress-fragmentation-post-implementation-finding" title="Permanent link">&para;</a></h2>
-<p>The dogfood turn-on (deliverable 7) surfaced that <code>egressPolicyMode</code>'s FQDN
-variants encode a <strong>CNI-native object kind</strong>, and that kind is fragmented per CNI
-<em>and per managed platform</em> — a managed offering branded "Cilium" does not
-necessarily accept the upstream <code>CiliumNetworkPolicy</code> CRD. Researched 2026-06-29:</p>
+<p>The dogfood turn-on (deliverable 7) surfaced that <code>egressPolicyMode</code>'s FQDN variants encode a <strong>CNI-native object kind</strong>, and that kind is fragmented per CNI <em>and per managed platform</em> — a managed offering branded "Cilium" does not necessarily accept the upstream <code>CiliumNetworkPolicy</code> CRD.
+Researched 2026-06-29:</p>
 <table>
 <thead>
 <tr>
@@ -3076,26 +2975,14 @@ necessarily accept the upstream <code>CiliumNetworkPolicy</code> CRD. Researched
 </table>
 <p>Three consequences:</p>
 <ol>
-<li><strong>The per-CNI enum doesn't scale.</strong> Adding GKE means a 4th <code>egressPolicyMode</code>
-   value, AKS a 5th, etc. The enum conflates <em>intent</em> ("allow by FQDN") with
-   <em>mechanism</em> ("emit kind X") and is tenant-facing — a tenant should not have to
-   know the cluster's CNI. The space also moves fast (EKS shipped Dec 2025; GKE is
-   still <code>v1alpha1</code>).</li>
-<li><strong>Scope divergence breaks the per-namespace model.</strong> AKS-FQDN
-   (<code>CiliumClusterwideNetworkPolicy</code>) and EKS (<code>ClusterNetworkPolicy</code>) are
-   <strong>cluster-scoped</strong>, which the GMC's namespaced per-<code>EgressProxy</code> ownership cannot
-   express directly — those backends need the GMC to own/merge a cluster-scoped
-   object (a different ownership/GC model). This is fine for the security model
-   (the allowlist is platform-governed anyway), but it changes who owns the object.</li>
-<li><strong>Proposed API split (decide before adding a 4th backend).</strong> Collapse the
-   tenant-facing field to <code>egressPolicyMode: CIDR | FQDN</code> (intent only), and add a
-   platform-set GMC flag <code>--fqdn-policy-backend=cilium|calico|gke|none</code> (same
-   governance shape as <code>--allowed-egress-fqdns</code>). Adding a provider becomes a new
-   emitter + flag value — no tenant-facing enum churn, no CEL changes, and an
-   unsupported/<code>none</code> backend is an explicit fail-closed answer rather than a
-   <code>Degraded</code> surprise. The existing <code>CiliumFQDN</code>/<code>CalicoFQDN</code> values would be
-   deprecated/aliased into <code>FQDN</code> + the backend flag during the v2beta1 graduation
-   (Q74), where conversion machinery already lands. Tracked on the Queue:</li>
+<li><strong>The per-CNI enum doesn't scale.</strong> Adding GKE means a 4th <code>egressPolicyMode</code> value, AKS a 5th, etc. The enum conflates <em>intent</em> ("allow by FQDN") with <em>mechanism</em> ("emit kind X") and is tenant-facing — a tenant should not have to know the cluster's CNI.
+   The space also moves fast (EKS shipped Dec 2025; GKE is still <code>v1alpha1</code>).</li>
+<li><strong>Scope divergence breaks the per-namespace model.</strong> AKS-FQDN (<code>CiliumClusterwideNetworkPolicy</code>) and EKS (<code>ClusterNetworkPolicy</code>) are <strong>cluster-scoped</strong>, which the GMC's namespaced per-<code>EgressProxy</code> ownership cannot express directly — those backends need the GMC to own/merge a cluster-scoped object (a different ownership/GC model).
+   This is fine for the security model (the allowlist is platform-governed anyway), but it changes who owns the object.</li>
+<li><strong>Proposed API split (decide before adding a 4th backend).</strong> Collapse the tenant-facing field to <code>egressPolicyMode: CIDR | FQDN</code> (intent only), and add a platform-set GMC flag <code>--fqdn-policy-backend=cilium|calico|gke|none</code> (same governance shape as <code>--allowed-egress-fqdns</code>).
+   Adding a provider becomes a new emitter + flag value — no tenant-facing enum churn, no CEL changes, and an unsupported/<code>none</code> backend is an explicit fail-closed answer rather than a <code>Degraded</code> surprise.
+   The existing <code>CiliumFQDN</code>/<code>CalicoFQDN</code> values would be deprecated/aliased into <code>FQDN</code> + the backend flag during the v2beta1 graduation (Q74), where conversion machinery already lands.
+   Tracked on the Queue:</li>
 <li>the FQDN intent/mechanism API split (this proposal);</li>
 <li>a <code>gke</code> backend emitting <code>networking.gke.io/v1alpha1 FQDNNetworkPolicy</code>;</li>
 <li>the in-cluster Go-module cache (Athens) to close Q224 without waiting on either.</li>

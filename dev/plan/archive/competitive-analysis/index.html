@@ -2675,134 +2675,87 @@
 
 
 <h1 id="competitive-analysis-notes--gag-vs-arc-working-notes-for-q60">Competitive analysis notes — GAG vs ARC (working notes for Q60)<a class="headerlink" href="#competitive-analysis-notes--gag-vs-arc-working-notes-for-q60" title="Permanent link">&para;</a></h1>
-<p><strong>Status: unverified working notes.</strong> Distilled from a product discussion on
-2026-06-13 while reworking the website benefits. These are the claims we <em>think</em>
-are true; <a href="../../../STATUS/">Q60</a> is the place to verify each against ARC's current
-behavior/docs and fold confirmed conclusions into
-<a href="../../../design/appendix-d-alternatives-considered/">appendix-d</a>. The website states
-only the high-confidence subset (flagged below); everything marked <strong>VERIFY</strong>
-stays off the site until checked.</p>
+<p><strong>Status: unverified working notes.</strong> Distilled from a product discussion on 2026-06-13 while reworking the website benefits.
+These are the claims we <em>think</em> are true; <a href="../../../STATUS/">Q60</a> is the place to verify each against ARC's current behavior/docs and fold confirmed conclusions into <a href="../../../design/appendix-d-alternatives-considered/">appendix-d</a>.
+The website states only the high-confidence subset (flagged below); everything marked <strong>VERIFY</strong> stays off the site until checked.</p>
 <h2 id="the-overarching-theme-cost">The overarching theme: cost<a class="headerlink" href="#the-overarching-theme-cost" title="Permanent link">&para;</a></h2>
 <p>The single most important framing is <strong>lower cost</strong>, reached three ways:</p>
 <ul>
-<li><strong>Fewer always-on resources</strong> — combined goroutine listeners instead of a pod
-  per scale set (memory).</li>
-<li><strong>No idle pods</strong> — scale to zero between jobs, which matters most for
-  expensive GPU and e2e runners.</li>
-<li><strong>Guaranteed throughput instead of blocked critical jobs</strong> — minimum
-  per-type thresholds keep critical work moving rather than stalling on a full
-  cluster.</li>
+<li><strong>Fewer always-on resources</strong> — combined goroutine listeners instead of a pod per scale set (memory).</li>
+<li><strong>No idle pods</strong> — scale to zero between jobs, which matters most for expensive GPU and e2e runners.</li>
+<li><strong>Guaranteed throughput instead of blocked critical jobs</strong> — minimum per-type thresholds keep critical work moving rather than stalling on a full cluster.</li>
 </ul>
-<p>Most individual benefits below ladder up to this. Lead the website with it.</p>
+<p>Most individual benefits below ladder up to this.
+Lead the website with it.</p>
 <h2 id="automatic-eviction-retry--likely-the-strongest-differentiator">Automatic eviction retry — likely the strongest differentiator<a class="headerlink" href="#automatic-eviction-retry--likely-the-strongest-differentiator" title="Permanent link">&para;</a></h2>
 <ul>
-<li>ARC plays poorly with Kubernetes namespace <code>ResourceQuota</code>: when a job can't
-  schedule because quota is exhausted, the runner stalls and the job ultimately
-  needs a <strong>manual</strong> rerun.</li>
-<li>That makes <code>ResourceQuota</code> risky to use with ARC, which in turn makes it risky
-  to let tenants self-manage their own max-runner counts.</li>
-<li>GAG fast-cancels the GitHub job lock and reruns automatically. Solving this one
-  problem is what unlocks <strong>platform-level quota management</strong> → safe, true
-  <strong>tenant self-service</strong> without compromising cluster-level allocations.</li>
-<li><strong>VERIFIED (2026-06-16):</strong> ARC scale-set mode retries pod creation on the
-  <em>same</em> EphemeralRunner (~30s interval, <a href="https://github.com/actions/actions-runner-controller/pull/4305">PR #4305</a>
-  fixing <a href="https://github.com/actions/actions-runner-controller/issues/3629">#3629</a>);
-  after a hardcoded 5 pod-creation failures the runner goes <code>Failed</code>
-  (<code>TooManyPodFailures</code>) and is not auto-replaced in older versions. There is
-  <strong>no</strong> mechanism to release the GitHub job and reassign it to a runner that can
-  run — the load-bearing "no fast lock-cancel + rerun" claim holds. Correction:
-  the relevant GitHub-side timeouts are <strong>60s</strong> (assigned runner doesn't pick up →
-  re-queue) and <strong>24h</strong> (queued with no runner → fail), per the
-  <a href="https://docs.github.com/en/actions/reference/runners/self-hosted-runners">self-hosted runners reference</a>;
-  there is <strong>no "~10 minute" lock-expiry</strong> — that figure conflated GAG's own
-  RenewJob window and was corrected in <code>docs/why-gag.md</code>. OOM/eviction mid-job is
-  worse than stated: zombie runner, job stuck <code>Queued</code> until manual cleanup
-  (<a href="https://github.com/actions/actions-runner-controller/issues/4155">#4155</a>,
-  <a href="https://github.com/actions/actions-runner-controller/issues/4203">#4203</a>).
+<li>ARC plays poorly with Kubernetes namespace <code>ResourceQuota</code>: when a job can't schedule because quota is exhausted, the runner stalls and the job ultimately needs a <strong>manual</strong> rerun.</li>
+<li>That makes <code>ResourceQuota</code> risky to use with ARC, which in turn makes it risky to let tenants self-manage their own max-runner counts.</li>
+<li>GAG fast-cancels the GitHub job lock and reruns automatically.
+  Solving this one problem is what unlocks <strong>platform-level quota management</strong> → safe, true <strong>tenant self-service</strong> without compromising cluster-level allocations.</li>
+<li><strong>VERIFIED (2026-06-16):</strong> ARC scale-set mode retries pod creation on the <em>same</em> EphemeralRunner (~30s interval, <a href="https://github.com/actions/actions-runner-controller/pull/4305">PR #4305</a> fixing <a href="https://github.com/actions/actions-runner-controller/issues/3629">#3629</a>); after a hardcoded 5 pod-creation failures the runner goes <code>Failed</code> (<code>TooManyPodFailures</code>) and is not auto-replaced in older versions.
+  There is <strong>no</strong> mechanism to release the GitHub job and reassign it to a runner that can run — the load-bearing "no fast lock-cancel + rerun" claim holds.
+  Correction: the relevant GitHub-side timeouts are <strong>60s</strong> (assigned runner doesn't pick up → re-queue) and <strong>24h</strong> (queued with no runner → fail), per the <a href="https://docs.github.com/en/actions/reference/runners/self-hosted-runners">self-hosted runners reference</a>; there is <strong>no "~10 minute" lock-expiry</strong> — that figure conflated GAG's own RenewJob window and was corrected in <code>docs/why-gag.md</code>.
+  OOM/eviction mid-job is worse than stated: zombie runner, job stuck <code>Queued</code> until manual cleanup (<a href="https://github.com/actions/actions-runner-controller/issues/4155">#4155</a>, <a href="https://github.com/actions/actions-runner-controller/issues/4203">#4203</a>).
   "Teams avoid enforcing <code>ResourceQuota</code>" is reasonable inference, not sourced.
-  GAG's two distinct paths both cover this: (a) the provisioner's in-place
-  <strong>quota-rejection retry</strong> (<code>maxQuotaRetries</code>, holds the lock) and (b) the Job
-  Lock Renewer's <strong>eviction retry</strong> (rerun-failed-jobs). Cross-ref <a href="../../../STATUS/">Q59</a>
-  (pre-acquire capacity gate).</li>
+  GAG's two distinct paths both cover this: (a) the provisioner's in-place <strong>quota-rejection retry</strong> (<code>maxQuotaRetries</code>, holds the lock) and (b) the Job Lock Renewer's <strong>eviction retry</strong> (rerun-failed-jobs).
+  Cross-ref <a href="../../../STATUS/">Q59</a> (pre-acquire capacity gate).</li>
 <li><strong>Website: high confidence</strong> (our design) — state the quota→self-service story.</li>
 </ul>
 <h2 id="priority-tiered-scheduling">Priority-tiered scheduling<a class="headerlink" href="#priority-tiered-scheduling" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Reserve "at least N" of each runner type so none gets completely blocked on a
-  full cluster. You can burn down many heterogeneous queues at once (short/long,
-  big/small) so a PR's full test battery finishes, instead of big expensive tests
-  starving behind a flood of small queued ones.</li>
+<li>Reserve "at least N" of each runner type so none gets completely blocked on a full cluster.
+  You can burn down many heterogeneous queues at once (short/long, big/small) so a PR's full test battery finishes, instead of big expensive tests starving behind a flood of small queued ones.</li>
 <li>Critical because <strong>most repos run a battery of different tests on each PR.</strong></li>
-<li><strong>VERIFY:</strong> ARC has no per-quota "floor" primitive (confirm). Whether the
-  effect is approximable in ARC via separate scale sets + <code>PriorityClass</code>es, and
-  how Kueue compares (borrowing/quota/priority) — cross-ref the Kueue angle in
-  <a href="../../../STATUS/">Q60</a>/<a href="../../../STATUS/">Q59</a>.</li>
-<li><strong>Website: high confidence</strong> — state the "at least N, no blocked critical
-  jobs, PRs still finish" framing.</li>
+<li><strong>VERIFY:</strong> ARC has no per-quota "floor" primitive (confirm).
+  Whether the effect is approximable in ARC via separate scale sets + <code>PriorityClass</code>es, and how Kueue compares (borrowing/quota/priority) — cross-ref the Kueue angle in <a href="../../../STATUS/">Q60</a>/<a href="../../../STATUS/">Q59</a>.</li>
+<li><strong>Website: high confidence</strong> — state the "at least N, no blocked critical jobs, PRs still finish" framing.</li>
 </ul>
 <h2 id="scale-to-zero-esp-gpu--e2e">Scale to zero (esp. GPU / e2e)<a class="headerlink" href="#scale-to-zero-esp-gpu--e2e" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Most valuable for <strong>expensive GPU jobs and e2e tests</strong> — return the node to the
-  scheduler the moment a job finishes.</li>
+<li>Most valuable for <strong>expensive GPU jobs and e2e tests</strong> — return the node to the scheduler the moment a job finishes.</li>
 <li><strong>ARC can also scale to zero</strong> (<code>minRunners: 0</code>) — but not everyone knows that.
-  GAG's edge is that it's the default and you don't pin idle runners to mask
-  cold-start latency (which silently reintroduces idle GPUs).</li>
-<li>So this is a <strong>shared capability framed better</strong>, not a unique moat. Be honest.</li>
-<li><strong>VERIFY:</strong> real-world cold-start latency ARC vs GAG; how often teams actually
-  pin <code>minRunners &gt; 0</code> on GPU pools.</li>
+  GAG's edge is that it's the default and you don't pin idle runners to mask cold-start latency (which silently reintroduces idle GPUs).</li>
+<li>So this is a <strong>shared capability framed better</strong>, not a unique moat.
+  Be honest.</li>
+<li><strong>VERIFY:</strong> real-world cold-start latency ARC vs GAG; how often teams actually pin <code>minRunners &gt; 0</code> on GPU pools.</li>
 <li><strong>Website: high confidence, stated honestly</strong> (acknowledge ARC can too).</li>
 </ul>
 <h2 id="lower-listener-overhead">Lower listener overhead<a class="headerlink" href="#lower-listener-overhead" title="Permanent link">&para;</a></h2>
 <ul>
-<li>~60 KiB goroutine per runner group in one shared pod vs ~256 MiB .NET listener
-  pod per scale set (~600 KiB vs ~2.5 GiB across ten groups). Matters with
-  today's high memory cost — but <strong>far less important than avoiding idle GPUs.</strong></li>
-<li>Subtle extra angle: combined listeners mean you don't schedule a <strong>new listener
-  pod per scale set</strong>, which could help latency — especially if the cluster is
-  full and a fresh ARC listener would go <code>Pending</code>.</li>
-<li><strong>Counterpoint (investigate):</strong> if the cluster is too full for a listener pod,
-  it's probably too full for a runner pod too, so the latency win may be
-  marginal. <strong>VERIFY</strong> whether ARC puts listener scheduling on the critical path
-  under contention in a way that actually adds job latency.</li>
-<li><strong>Website: memory numbers only</strong> (high confidence). Keep the latency hypothesis
-  off the site until investigated.</li>
+<li>~60 KiB goroutine per runner group in one shared pod vs ~256 MiB .NET listener pod per scale set (~600 KiB vs ~2.5 GiB across ten groups).
+  Matters with today's high memory cost — but <strong>far less important than avoiding idle GPUs.</strong></li>
+<li>Subtle extra angle: combined listeners mean you don't schedule a <strong>new listener pod per scale set</strong>, which could help latency — especially if the cluster is full and a fresh ARC listener would go <code>Pending</code>.</li>
+<li><strong>Counterpoint (investigate):</strong> if the cluster is too full for a listener pod, it's probably too full for a runner pod too, so the latency win may be marginal. <strong>VERIFY</strong> whether ARC puts listener scheduling on the critical path under contention in a way that actually adds job latency.</li>
+<li><strong>Website: memory numbers only</strong> (high confidence).
+  Keep the latency hypothesis off the site until investigated.</li>
 </ul>
 <h2 id="per-tenant-egress-ip-pool">Per-tenant egress IP pool<a class="headerlink" href="#per-tenant-egress-ip-pool" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Enables <strong>allow-listing with GitHub EMU</strong>: only your runners can reach the EMU
-  servers, without allow-listing the entire cluster or standing up a NAT gateway.
+<li>Enables <strong>allow-listing with GitHub EMU</strong>: only your runners can reach the EMU servers, without allow-listing the entire cluster or standing up a NAT gateway.
   Put proxies on a small node pool with known IPs and allow-list just those.</li>
-<li>Especially useful when the allow-list has a <strong>max IP count</strong> and the nodes'
-  public IPs aren't contiguous (so a simple CIDR won't work).</li>
-<li><strong>Noisy-neighbor isolation:</strong> if one tenant's runners get flagged as spam or
-  throttled, tenants with their own egress IPs (own egress node pool / separate
-  public IPs) are unaffected.</li>
-<li>Ambitious extension: per-tenant proxies on specific node pools → <strong>separate NAT
-  gateways per tenant</strong> when using private node IPs.</li>
-<li><strong>VERIFY:</strong> EMU allow-list mechanics and any max-IP limit; confirm ARC has no
-  native egress-isolation story. Document the node-pool / NAT patterns.</li>
-<li><strong>Website: high confidence for the EMU allow-list + noisy-neighbor framing;</strong>
-  keep the NAT-per-tenant pattern as a docs detail, not a landing claim.</li>
+<li>Especially useful when the allow-list has a <strong>max IP count</strong> and the nodes' public IPs aren't contiguous (so a simple CIDR won't work).</li>
+<li><strong>Noisy-neighbor isolation:</strong> if one tenant's runners get flagged as spam or throttled, tenants with their own egress IPs (own egress node pool / separate public IPs) are unaffected.</li>
+<li>Ambitious extension: per-tenant proxies on specific node pools → <strong>separate NAT gateways per tenant</strong> when using private node IPs.</li>
+<li><strong>VERIFY:</strong> EMU allow-list mechanics and any max-IP limit; confirm ARC has no native egress-isolation story.
+  Document the node-pool / NAT patterns.</li>
+<li><strong>Website: high confidence for the EMU allow-list + noisy-neighbor framing;</strong> keep the NAT-per-tenant pattern as a docs detail, not a landing claim.</li>
 </ul>
 <h2 id="self-service-onboarding">Self-service onboarding<a class="headerlink" href="#self-service-onboarding" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Mostly a consequence of the quota unlock above</strong>, not a standalone win — ARC
-  already has namespace-scoped autoscaling runner sets.</li>
+<li><strong>Mostly a consequence of the quota unlock above</strong>, not a standalone win — ARC already has namespace-scoped autoscaling runner sets.</li>
 <li>Mild convenience: manage a <em>group</em> of runner sets with a single CR.</li>
-<li><strong>Caveat / VERIFY:</strong> many complex <code>podTemplate</code>s in one CR could hit the etcd
-  object size cap (~1.5 MiB). May need sharding guidance (we already advise
-  sharding across CRs beyond ~250 sessions — see appendix-a). Call this out as a
-  known scaling limit.</li>
+<li><strong>Caveat / VERIFY:</strong> many complex <code>podTemplate</code>s in one CR could hit the etcd object size cap (~1.5 MiB).
+  May need sharding guidance (we already advise sharding across CRs beyond ~250 sessions — see appendix-a).
+  Call this out as a known scaling limit.</li>
 <li><strong>Website: fold into the quota/self-service tile</strong>, don't feature separately.</li>
 </ul>
 <h2 id="per-tenant-utilization-metrics">Per-tenant utilization metrics<a class="headerlink" href="#per-tenant-utilization-metrics" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Prometheus metrics scoped per tenant and runner group.</li>
-<li><strong>Uncertain moat.</strong> ARC should be able to do this too — <strong>VERIFY</strong> whether ARC
-  already exposes per-scale-set/per-tenant metrics, or could with a flag. Decide:
-  real moat, just easier in GAG, or temporary until ARC adds parity.</li>
-<li><strong>Website: state modestly</strong> ("scoped per tenant out of the box"); do not claim
-  ARC can't.</li>
+<li><strong>Uncertain moat.</strong> ARC should be able to do this too — <strong>VERIFY</strong> whether ARC already exposes per-scale-set/per-tenant metrics, or could with a flag.
+  Decide: real moat, just easier in GAG, or temporary until ARC adds parity.</li>
+<li><strong>Website: state modestly</strong> ("scoped per tenant out of the box"); do not claim ARC can't.</li>
 </ul>
 <h2 id="cross-cutting-open-questions-for-q60">Cross-cutting open questions (for Q60)<a class="headerlink" href="#cross-cutting-open-questions-for-q60" title="Permanent link">&para;</a></h2>
 <ul>

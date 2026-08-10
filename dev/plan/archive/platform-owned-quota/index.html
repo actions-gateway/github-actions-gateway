@@ -2681,116 +2681,71 @@
 
 
 <h1 id="platform-owned-resourcequota--remove-tenant-authored-quota-from-the-cr">Platform-owned ResourceQuota — remove tenant-authored quota from the CR<a class="headerlink" href="#platform-owned-resourcequota--remove-tenant-authored-quota-from-the-cr" title="Permanent link">&para;</a></h1>
-<p><strong>Decision (2026-06-13):</strong> the platform admin owns the <code>Namespace</code>,
-<code>ResourceQuota</code>, and <code>LimitRange</code>; GAG operates <em>within</em> them and never creates
-or mutates them. Remove <code>spec.namespaceQuota</code> from the <code>ActionsGateway</code> CRD and
-drop the GMC's <code>resourcequotas</code>/<code>limitranges</code> write RBAC. A breaking CRD change,
-done <strong>pre-1.0 while it is free</strong> (post-1.0 it would need a conversion webhook —
-see deferred <a href="../../../STATUS/">Q74</a>).</p>
-<p>Tracked as STATUS Queue Q130. <strong>Implemented (2026-06-14):</strong> the
-CRD/RBAC/controller/docs edits landed; see the Status section below.</p>
+<p><strong>Decision (2026-06-13):</strong> the platform admin owns the <code>Namespace</code>, <code>ResourceQuota</code>, and <code>LimitRange</code>; GAG operates <em>within</em> them and never creates or mutates them.
+Remove <code>spec.namespaceQuota</code> from the <code>ActionsGateway</code> CRD and drop the GMC's <code>resourcequotas</code>/<code>limitranges</code> write RBAC.
+A breaking CRD change, done <strong>pre-1.0 while it is free</strong> (post-1.0 it would need a conversion webhook — see deferred <a href="../../../STATUS/">Q74</a>).</p>
+<p>Tracked as STATUS Queue Q130. <strong>Implemented (2026-06-14):</strong> the CRD/RBAC/controller/docs edits landed; see the Status section below.</p>
 <h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
-<p>The website rework surfaced that the implementation contradicts the core value
-prop. The site (correctly) says "the platform team caps each tenant," but today:</p>
+<p>The website rework surfaced that the implementation contradicts the core value prop.
+The site (correctly) says "the platform team caps each tenant," but today:</p>
 <ul>
-<li><code>ActionsGateway.spec.namespaceQuota</code> is <strong>tenant-authored</strong> — a tenant can set
-  <code>requests.cpu: "10000"</code> in their own CR, so it is not a platform-enforced cap.
+<li><code>ActionsGateway.spec.namespaceQuota</code> is <strong>tenant-authored</strong> — a tenant can set <code>requests.cpu: "10000"</code> in their own CR, so it is not a platform-enforced cap.
   Quotas are a platform resource-allocation control; the tenant must not own them.</li>
-<li>The GMC <strong>creates</strong> the <code>ResourceQuota</code> from the spec, which <strong>conflicts with
-  existing investments</strong> — platform teams already manage namespaces + quotas via
-  GitOps or a tenant operator (Capsule, HNC, vCluster, kiosk). GAG either fights
-  them or silently overrides their allocation.</li>
-<li>Owning quotas forces broad GMC RBAC. Dropping it is <strong>least privilege</strong> and
-  shrinks the cluster-wide-write surface flagged in <a href="../../../STATUS/">Q122</a>.</li>
+<li>The GMC <strong>creates</strong> the <code>ResourceQuota</code> from the spec, which <strong>conflicts with existing investments</strong> — platform teams already manage namespaces + quotas via GitOps or a tenant operator (Capsule, HNC, vCluster, kiosk).
+  GAG either fights them or silently overrides their allocation.</li>
+<li>Owning quotas forces broad GMC RBAC.
+  Dropping it is <strong>least privilege</strong> and shrinks the cluster-wide-write surface flagged in <a href="../../../STATUS/">Q122</a>.</li>
 </ul>
-<p>The corrected model: the platform provisions the namespace + quota (+ optional
-<code>LimitRange</code>) — it already creates and labels the namespace per
-<a href="../../../getting-started/">getting-started</a> — and GAG provisions pods/deployments
-<em>within</em> them, reading remaining quota but never setting it.</p>
+<p>The corrected model: the platform provisions the namespace + quota (+ optional <code>LimitRange</code>) — it already creates and labels the namespace per <a href="../../../getting-started/">getting-started</a> — and GAG provisions pods/deployments <em>within</em> them, reading remaining quota but never setting it.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="api--crd">API / CRD<a class="headerlink" href="#api--crd" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Remove <code>NamespaceQuota corev1.ResourceList</code> from <code>ActionsGatewaySpec</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go#L133">actionsgateway_types.go:133</a>);
-  regenerate with <code>make manifests generate</code>.</li>
-<li>Confirm + document that structural-schema pruning drops the field from
-  existing CRs silently (no apply rejection) pre-1.0.</li>
+<li>Remove <code>NamespaceQuota corev1.ResourceList</code> from <code>ActionsGatewaySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go#L133">actionsgateway_types.go:133</a>); regenerate with <code>make manifests generate</code>.</li>
+<li>Confirm + document that structural-schema pruning drops the field from existing CRs silently (no apply rejection) pre-1.0.</li>
 </ul>
 <h3 id="controller--builder">Controller / builder<a class="headerlink" href="#controller--builder" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Remove <code>ResourceQuota</code> construction in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a> and its
-  reconcile/teardown in the controller; drop it from the owned-resource set.</li>
-<li><strong>Keep</strong> <code>maxQuotaRetries</code> / <code>quotaRetryDelay</code> — those are the AGC reacting to
-  a <em>full</em> quota (operating within it), not owning it.</li>
+<li>Remove <code>ResourceQuota</code> construction in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a> and its reconcile/teardown in the controller; drop it from the owned-resource set.</li>
+<li><strong>Keep</strong> <code>maxQuotaRetries</code> / <code>quotaRetryDelay</code> — those are the AGC reacting to a <em>full</em> quota (operating within it), not owning it.</li>
 </ul>
 <h3 id="rbac">RBAC<a class="headerlink" href="#rbac" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Remove <code>resourcequotas</code> (and <code>limitranges</code> if present) verbs from
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/rbac/role.yaml#L27">role.yaml:27</a> and
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml#L33">charts rbac.yaml:33</a>;
-  <code>make manifests</code>.</li>
-<li>Partially subsumes <a href="../../../STATUS/">Q122</a>: its proposed quota-write <em>confinement</em>
-  becomes moot once we drop the write entirely.</li>
+<li>Remove <code>resourcequotas</code> (and <code>limitranges</code> if present) verbs from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/rbac/role.yaml#L27">role.yaml:27</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml#L33">charts rbac.yaml:33</a>; <code>make manifests</code>.</li>
+<li>Partially subsumes <a href="../../../STATUS/">Q122</a>: its proposed quota-write <em>confinement</em> becomes moot once we drop the write entirely.</li>
 </ul>
 <h3 id="docs-operator-facing--design--website">Docs (operator-facing + design + website)<a class="headerlink" href="#docs-operator-facing--design--website" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>getting-started.md</code> step 2: platform creates the namespace <strong>and</strong> a
-  <code>ResourceQuota</code> (+ optional <code>LimitRange</code>); remove <code>namespaceQuota</code> from the CR
-  example in step 4.</li>
-<li><code>02-architecture.md</code> (Tenant Provisioner, ~line 69): GAG operates within a
-  platform-provided quota; no longer derives/creates it.</li>
-<li><code>operations/tenant-onboarding.md</code>: platform provisions namespace + quota;
-  tenant supplies only the CR.</li>
-<li><code>05-security.md</code> / <code>operations/security-operations.md</code>: reduced GMC RBAC; ties
-  <a href="../../../STATUS/">Q121</a>/<a href="../../../STATUS/">Q122</a>.</li>
-<li><code>appendix-a</code> / <code>appendix-e</code> capacity planning: <code>priorityTiers</code> / <code>maxWorkers</code>
-  soft ceilings pair with the platform-owned quota.</li>
-<li><strong>Website</strong> CR examples (<code>index.md</code> is fine; <code>why-gag.md</code> shows the CR) drop
-  <code>namespaceQuota</code>. This also removes the live inconsistency where the site
-  frames "platform caps the tenant" beside a tenant-authored quota — tracked
-  under <a href="../../../STATUS/">Q129</a>, fix alongside this change.</li>
+<li><code>getting-started.md</code> step 2: platform creates the namespace <strong>and</strong> a <code>ResourceQuota</code> (+ optional <code>LimitRange</code>); remove <code>namespaceQuota</code> from the CR example in step 4.</li>
+<li><code>02-architecture.md</code> (Tenant Provisioner, ~line 69): GAG operates within a platform-provided quota; no longer derives/creates it.</li>
+<li><code>operations/tenant-onboarding.md</code>: platform provisions namespace + quota; tenant supplies only the CR.</li>
+<li><code>05-security.md</code> / <code>operations/security-operations.md</code>: reduced GMC RBAC; ties <a href="../../../STATUS/">Q121</a>/<a href="../../../STATUS/">Q122</a>.</li>
+<li><code>appendix-a</code> / <code>appendix-e</code> capacity planning: <code>priorityTiers</code> / <code>maxWorkers</code> soft ceilings pair with the platform-owned quota.</li>
+<li><strong>Website</strong> CR examples (<code>index.md</code> is fine; <code>why-gag.md</code> shows the CR) drop <code>namespaceQuota</code>.
+  This also removes the live inconsistency where the site frames "platform caps the tenant" beside a tenant-authored quota — tracked under <a href="../../../STATUS/">Q129</a>, fix alongside this change.</li>
 </ul>
 <h3 id="migration-pre-10">Migration (pre-1.0)<a class="headerlink" href="#migration-pre-10" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Operators must ensure a platform-managed <code>ResourceQuota</code> exists in each tenant
-  namespace <strong>before</strong> upgrading; GAG stops managing it.</li>
-<li>A previously GAG-created <code>ResourceQuota</code> (ownerRef → the <code>ActionsGateway</code>) is
-  left orphaned on upgrade. Document adopt/replace with a platform-managed one
-  (strip the ownerRef, or delete + recreate under platform management).</li>
+<li>Operators must ensure a platform-managed <code>ResourceQuota</code> exists in each tenant namespace <strong>before</strong> upgrading; GAG stops managing it.</li>
+<li>A previously GAG-created <code>ResourceQuota</code> (ownerRef → the <code>ActionsGateway</code>) is left orphaned on upgrade.
+  Document adopt/replace with a platform-managed one (strip the ownerRef, or delete + recreate under platform management).</li>
 </ul>
 <h2 id="open-question--roles--rolebindings-ownership">Open question — Roles / RoleBindings ownership<a class="headerlink" href="#open-question--roles--rolebindings-ownership" title="Permanent link">&para;</a></h2>
-<p>Same principle, one layer over: should GAG keep minting the AGC's
-namespace-scoped <code>Role</code>/<code>RoleBinding</code>, or should the platform grant them? GAG
-self-wiring is convenient; platform-granted is stricter "don't touch
-platform-owned in-namespace RBAC." Captured here; may split into its own item
-after the quota change lands.</p>
+<p>Same principle, one layer over: should GAG keep minting the AGC's namespace-scoped <code>Role</code>/<code>RoleBinding</code>, or should the platform grant them?
+GAG self-wiring is convenient; platform-granted is stricter "don't touch platform-owned in-namespace RBAC."
+Captured here; may split into its own item after the quota change lands.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <p><strong>Implemented (2026-06-14, Q130).</strong> Delivered:</p>
 <ul>
-<li><strong>API/CRD:</strong> removed <code>NamespaceQuota</code> from <code>ActionsGatewaySpec</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">actionsgateway_types.go</a>);
-  regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
-  Structural-schema pruning silently drops the now-unknown field from existing CRs
-  (no apply rejection) pre-1.0.</li>
-<li><strong>Controller/builder:</strong> removed <code>buildResourceQuota</code>, the reconcile apply path,
-  the teardown delete, and the <code>applyResourceQuota</code> helper. <code>maxQuotaRetries</code> /
-  <code>quotaRetryDelay</code> (AGC reacting to a <em>full</em> quota) are kept — those are operating
-  <em>within</em> a quota, not owning it.</li>
-<li><strong>RBAC:</strong> dropped the <code>resourcequotas</code> verbs from
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/rbac/role.yaml">role.yaml</a> and the chart
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml">rbac.yaml</a>. No <code>limitranges</code>
-  grant existed. Partially subsumes <a href="../../security-audit-2026-06/#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved">Q122</a>.</li>
-<li><strong>Tests:</strong> <code>TestGMC_TenantProvisioning_NoResourceQuotaCreated</code> (envtest) asserts the
-  GMC creates no quota and leaves a pre-existing platform quota untouched; the
-  <code>TestBuildResourceQuota_PassesThrough</code> unit test was removed.</li>
-<li><strong>Docs:</strong> getting-started, tenant-onboarding, runbook, troubleshooting,
-  security-operations, 01/02/03/04/05/07 design docs, appendix-a/e, why-gag, README,
-  and the breaking-change migration note in
-  <a href="../../../operations/upgrade/">upgrade.md</a>.</li>
+<li><strong>API/CRD:</strong> removed <code>NamespaceQuota</code> from <code>ActionsGatewaySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">actionsgateway_types.go</a>); regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
+  Structural-schema pruning silently drops the now-unknown field from existing CRs (no apply rejection) pre-1.0.</li>
+<li><strong>Controller/builder:</strong> removed <code>buildResourceQuota</code>, the reconcile apply path, the teardown delete, and the <code>applyResourceQuota</code> helper. <code>maxQuotaRetries</code> / <code>quotaRetryDelay</code> (AGC reacting to a <em>full</em> quota) are kept — those are operating <em>within</em> a quota, not owning it.</li>
+<li><strong>RBAC:</strong> dropped the <code>resourcequotas</code> verbs from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/rbac/role.yaml">role.yaml</a> and the chart <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml">rbac.yaml</a>.
+  No <code>limitranges</code> grant existed.
+  Partially subsumes <a href="../../security-audit-2026-06/#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved">Q122</a>.</li>
+<li><strong>Tests:</strong> <code>TestGMC_TenantProvisioning_NoResourceQuotaCreated</code> (envtest) asserts the GMC creates no quota and leaves a pre-existing platform quota untouched; the <code>TestBuildResourceQuota_PassesThrough</code> unit test was removed.</li>
+<li><strong>Docs:</strong> getting-started, tenant-onboarding, runbook, troubleshooting, security-operations, 01/02/03/04/05/07 design docs, appendix-a/e, why-gag, README, and the breaking-change migration note in <a href="../../../operations/upgrade/">upgrade.md</a>.</li>
 </ul>
-<p>The open question below (Role/RoleBinding ownership) is unaddressed and may split
-into its own item.</p>
+<p>The open question below (Role/RoleBinding ownership) is unaddressed and may split into its own item.</p>
 
 
 

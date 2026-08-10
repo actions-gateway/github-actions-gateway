@@ -2693,26 +2693,16 @@
 
 <h1 id="competitive-analysis-august-2026">Competitive analysis, August 2026<a class="headerlink" href="#competitive-analysis-august-2026" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: research complete 2026-08-06, corrections shipped, several findings
-still unactioned.</strong> This is the evidence behind the marketing changes made on
-that date. The decisions live in <a href="../release-1.4/">release-1.4</a>,
-<a href="../release-1.5/">release-1.5</a>, and
-<a href="../../design/appendix-d-alternatives-considered/">Appendix D.9–D.14</a>; this
-records what was measured, what it means, and what has not been done yet.</p>
+<p><strong>Status: research complete 2026-08-06, corrections shipped, several findings still unactioned.</strong> This is the evidence behind the marketing changes made on that date.
+The decisions live in <a href="../release-1.4/">release-1.4</a>, <a href="../release-1.5/">release-1.5</a>, and <a href="../../design/appendix-d-alternatives-considered/">Appendix D.9–D.14</a>; this records what was measured, what it means, and what has not been done yet.</p>
 </blockquote>
 <h2 id="method-so-it-can-be-re-checked">Method, so it can be re-checked<a class="headerlink" href="#method-so-it-can-be-re-checked" title="Permanent link">&para;</a></h2>
-<p>Everything below was measured on <strong>2026-08-06</strong> against <strong>ARC 0.14.2</strong> (released
-2026-05-22) and its <code>master</code> branch, by reading controller source, chart values,
-release notes, and issue state rather than documentation. GitHub popularity came
-from the API, not from prose.</p>
-<p>Two measurements in the original research failed verification and were dropped
-rather than used: a claimed assertion in the broker stub about rate-limit
-headers, and a GitLab <code>retry_limits</code> example. <strong>Treat any file-and-line citation
-that cannot be reproduced as a lead, not a fact.</strong></p>
+<p>Everything below was measured on <strong>2026-08-06</strong> against <strong>ARC 0.14.2</strong> (released 2026-05-22) and its <code>master</code> branch, by reading controller source, chart values, release notes, and issue state rather than documentation.
+GitHub popularity came from the API, not from prose.</p>
+<p>Two measurements in the original research failed verification and were dropped rather than used: a claimed assertion in the broker stub about rate-limit headers, and a GitLab <code>retry_limits</code> example. <strong>Treat any file-and-line citation that cannot be reproduced as a lead, not a fact.</strong></p>
 <h2 id="which-differentiators-are-durable">Which differentiators are durable<a class="headerlink" href="#which-differentiators-are-durable" title="Permanent link">&para;</a></h2>
-<p>The most strategically useful output, and the one most likely to be wrong in six
-months. Rated by what a competitor would have to change, not by how good the
-feature is.</p>
+<p>The most strategically useful output, and the one most likely to be wrong in six months.
+Rated by what a competitor would have to change, not by how good the feature is.</p>
 <table>
 <thead>
 <tr>
@@ -2770,46 +2760,33 @@ feature is.</p>
 </tbody>
 </table>
 <h3 id="the-pre-claim-seat-is-not-structural-and-the-docs-must-stop-implying-it-is">The pre-claim seat is not structural, and the docs must stop implying it is<a class="headerlink" href="#the-pre-claim-seat-is-not-structural-and-the-docs-must-stop-implying-it-is" title="Permanent link">&para;</a></h3>
-<p>This corrected an earlier conclusion in this same research, and it is the single
-most important thing on this page.</p>
+<p>This corrected an earlier conclusion in this same research, and it is the single most important thing on this page.</p>
 <ol>
-<li><strong>ARC's listener already holds a Kubernetes clientset.</strong> <code>scaler.New()</code> builds
-   one from <code>rest.InClusterConfig()</code>. It has the client and lacks the
-   permissions: <code>rulesForListenerRole()</code> grants three rules, all <code>patch</code>, zero
-   read verbs. Adding <code>get</code>/<code>list</code>/<code>watch</code> on <code>resourcequotas</code> and <code>pods</code> is a
-   small change, not a redesign.</li>
-<li><strong><code>actions/scaleset</code> already exposes <code>Listener.SetMaxRunners(count)</code></strong>,
-   documented as safe to call during <code>Run</code>. Nothing in ARC calls it.</li>
-<li><strong>Open PR <code>actions/scaleset#113</code></strong> removes <code>acquireAvailableJobs</code> from the
-   library and hands acquisition to the consumer, making selective acquisition a
-   first-class extension point in GitHub's own client.</li>
+<li><strong>ARC's listener already holds a Kubernetes clientset.</strong> <code>scaler.New()</code> builds one from <code>rest.InClusterConfig()</code>.
+   It has the client and lacks the permissions: <code>rulesForListenerRole()</code> grants three rules, all <code>patch</code>, zero read verbs.
+   Adding <code>get</code>/<code>list</code>/<code>watch</code> on <code>resourcequotas</code> and <code>pods</code> is a small change, not a redesign.</li>
+<li><strong><code>actions/scaleset</code> already exposes <code>Listener.SetMaxRunners(count)</code></strong>, documented as safe to call during <code>Run</code>.
+   Nothing in ARC calls it.</li>
+<li><strong>Open PR <code>actions/scaleset#113</code></strong> removes <code>acquireAvailableJobs</code> from the library and hands acquisition to the consumer, making selective acquisition a first-class extension point in GitHub's own client.</li>
 </ol>
-<p><strong>What is not commoditising is the signal</strong>: computing live quota headroom and
-putting <em>that</em> number in the capacity header. Claim the measurement, never the
-seat.</p>
-<p>It also will not close soon. Of the 25 most-reacted open ARC issues, <strong>zero</strong>
-concern quota safety, capacity gating, or intake backpressure.</p>
-<p><strong>The exception, and the one place the seat is structurally defensible:</strong>
-gang scheduling. A multi-node job needs N co-scheduled pods in one topology
-domain, and the scale-set protocol advertises capacity as a single integer. A
-gang requirement is a placement predicate, not a count, so the <code>SetMaxRunners</code>
-workaround does not exist for it. That is why <a href="../../STATUS/#Q718">Q718</a> matters
-beyond GPUs.</p>
+<p><strong>What is not commoditising is the signal</strong>: computing live quota headroom and putting <em>that</em> number in the capacity header.
+Claim the measurement, never the seat.</p>
+<p>It also will not close soon.
+Of the 25 most-reacted open ARC issues, <strong>zero</strong> concern quota safety, capacity gating, or intake backpressure.</p>
+<p><strong>The exception, and the one place the seat is structurally defensible:</strong> gang scheduling.
+A multi-node job needs N co-scheduled pods in one topology domain, and the scale-set protocol advertises capacity as a single integer.
+A gang requirement is a placement predicate, not a count, so the <code>SetMaxRunners</code> workaround does not exist for it.
+That is why <a href="../../STATUS/#Q718">Q718</a> matters beyond GPUs.</p>
 <h2 id="what-buyers-actually-evaluate-on">What buyers actually evaluate on<a class="headerlink" href="#what-buyers-actually-evaluate-on" title="Permanent link">&para;</a></h2>
-<p>A 31-criterion framework came out of the research. The subset worth keeping is
-the part <strong>no existing comparison in this space covers</strong>, because that is both
-the opening and the checklist for future positioning work:</p>
+<p>A 31-criterion framework came out of the research.
+The subset worth keeping is the part <strong>no existing comparison in this space covers</strong>, because that is both the opening and the checklist for future positioning work:</p>
 <ul>
-<li>admission-time capacity arbitration: is a job claimed only if the cluster can
-  place it, or claimed then retried;</li>
-<li>disruption recovery semantics: what happens to an in-flight job on eviction,
-  preemption, drain, or spot reclaim;</li>
-<li>cross-tenant fairness: reserved floors, and whether one tenant's burst starves
-  another;</li>
+<li>admission-time capacity arbitration: is a job claimed only if the cluster can place it, or claimed then retried;</li>
+<li>disruption recovery semantics: what happens to an in-flight job on eviction, preemption, drain, or spot reclaim;</li>
+<li>cross-tenant fairness: reserved floors, and whether one tenant's burst starves another;</li>
 <li>control-plane idle footprint per tenant and per runner shape;</li>
 <li>per-tenant egress identity, not just inbound reachability;</li>
-<li>credential blast radius and whether tenants share one GitHub API rate-limit
-  budget;</li>
+<li>credential blast radius and whether tenants share one GitHub API rate-limit budget;</li>
 <li>per-tenant observability partitioning and cost attribution;</li>
 <li>runner agent version currency against GitHub's enforced minimum;</li>
 <li>who manages the GitHub-side runner-group binding;</li>
@@ -2818,90 +2795,61 @@ the opening and the checklist for future positioning work:</p>
 <li>support-scope <em>exclusions</em>, not just whether support exists;</li>
 <li>debug ergonomics after a failed job.</li>
 </ul>
-<p>Criteria rated <strong>decisive</strong> where GAG is weak: install base and production
-evidence, commercial support entitlement, and the container-job path. Those
-decide real evaluations and no capability offsets them.</p>
+<p>Criteria rated <strong>decisive</strong> where GAG is weak: install base and production evidence, commercial support entitlement, and the container-job path.
+Those decide real evaluations and no capability offsets them.</p>
 <h2 id="under-claims-not-yet-fixed">Under-claims not yet fixed<a class="headerlink" href="#under-claims-not-yet-fixed" title="Permanent link">&para;</a></h2>
-<p>Nine capabilities reach <code>features.md</code> and no other marketing surface. Five were
-addressed on 2026-08-06 (workload identity, per-tenant egress validation,
-Q683 fast-cancel, the <code>PriorityClassAllowlist</code> CR, and the paved-road framing).
+<p>Nine capabilities reach <code>features.md</code> and no other marketing surface.
+Five were addressed on 2026-08-06 (workload identity, per-tenant egress validation, Q683 fast-cancel, the <code>PriorityClassAllowlist</code> CR, and the paved-road framing).
 These remain:</p>
 <ol>
-<li><strong>The scale-set message-queue correctness body</strong>
-   (<code>design/02-architecture.md</code>): write-ahead conclusion persistence, deletes
-   withheld until every named job concludes, drain-before-flush measured over 60
-   stops at maximum pressure. Nothing sells it.</li>
-<li><strong>The ten-PR durability programme</strong> (Q435, Q438, Q583, Q606, Q436, Q550,
-   Q547, Q497/Q459/Q502, Q603). The motivating incident was five worker pods
-   running 16 hours on 82 spot node-hours. This is a <em>maturity</em> claim backed by
-   artifacts, in exactly the register where the comparison page concedes
-   maturity.</li>
-<li><strong>Worker-quota footprint arithmetic</strong> matching Kubernetes' own evaluator,
-   pinned by envtest.</li>
-<li><strong>The two disjoint PriorityClass allowlists</strong> and their four-point
-   disjointness enforcement.</li>
-<li><strong>The GitHub protocol dependency register</strong>, which is risk transparency a
-   skeptical architect would value.</li>
+<li><strong>The scale-set message-queue correctness body</strong> (<code>design/02-architecture.md</code>): write-ahead conclusion persistence, deletes withheld until every named job concludes, drain-before-flush measured over 60 stops at maximum pressure.
+   Nothing sells it.</li>
+<li><strong>The ten-PR durability programme</strong> (Q435, Q438, Q583, Q606, Q436, Q550, Q547, Q497/Q459/Q502, Q603).
+   The motivating incident was five worker pods running 16 hours on 82 spot node-hours.
+   This is a <em>maturity</em> claim backed by artifacts, in exactly the register where the comparison page concedes maturity.</li>
+<li><strong>Worker-quota footprint arithmetic</strong> matching Kubernetes' own evaluator, pinned by envtest.</li>
+<li><strong>The two disjoint PriorityClass allowlists</strong> and their four-point disjointness enforcement.</li>
+<li><strong>The GitHub protocol dependency register</strong>, which is risk transparency a skeptical architect would value.</li>
 </ol>
 <h2 id="ideas-deliberately-rejected">Ideas deliberately rejected<a class="headerlink" href="#ideas-deliberately-rejected" title="Permanent link">&para;</a></h2>
-<p>Recorded so they are not re-proposed. All were generated as moat candidates and
-killed on review:</p>
+<p>Recorded so they are not re-proposed.
+All were generated as moat candidates and killed on review:</p>
 <ul>
-<li><strong>Cross-tenant capacity arbitration</strong> (a <code>SharedCapacityPool</code> CRD): a moat
-  nobody asked for, L-sized, no demand evidence.</li>
-<li><strong>Scheduled or priced intake windows</strong>: off-peak and spot routing is a cost
-  play for an audience <a href="../go-to-market/">go-to-market</a> §1 explicitly disclaims.</li>
-<li><strong>GitHub API budget instrumentation and throttling</strong>: speculative
-  instrumentation of a limit nobody has hit.</li>
-<li><strong>Job provenance classification before the worker exists</strong>: its own evidence
-  deflated the premise, since the backend auto-assigns on dotcom.</li>
-<li><strong>A signed per-job isolation record</strong>: category-creating in theory, zero
-  demand.</li>
-<li><strong>A time-boxed debug hold</strong>: regresses a security property that
-  <code>CLAUDE.md</code> makes non-negotiable.</li>
-<li><strong>Brokering <code>container:</code>/<code>services:</code> step pods through the AGC</strong>: invents a
-  bespoke protocol to reach parity with a capability ARC already ships. Kept as
-  <a href="../../STATUS/#Q727">Q727</a> framed as a <em>decision</em> rather than that design.</li>
+<li><strong>Cross-tenant capacity arbitration</strong> (a <code>SharedCapacityPool</code> CRD): a moat nobody asked for, L-sized, no demand evidence.</li>
+<li><strong>Scheduled or priced intake windows</strong>: off-peak and spot routing is a cost play for an audience <a href="../go-to-market/">go-to-market</a> §1 explicitly disclaims.</li>
+<li><strong>GitHub API budget instrumentation and throttling</strong>: speculative instrumentation of a limit nobody has hit.</li>
+<li><strong>Job provenance classification before the worker exists</strong>: its own evidence deflated the premise, since the backend auto-assigns on dotcom.</li>
+<li><strong>A signed per-job isolation record</strong>: category-creating in theory, zero demand.</li>
+<li><strong>A time-boxed debug hold</strong>: regresses a security property that <code>CLAUDE.md</code> makes non-negotiable.</li>
+<li><strong>Brokering <code>container:</code>/<code>services:</code> step pods through the AGC</strong>: invents a bespoke protocol to reach parity with a capability ARC already ships.
+  Kept as <a href="../../STATUS/#Q727">Q727</a> framed as a <em>decision</em> rather than that design.</li>
 </ul>
 <h2 id="why-the-marketing-drifted-and-the-fix">Why the marketing drifted, and the fix<a class="headerlink" href="#why-the-marketing-drifted-and-the-fix" title="Permanent link">&para;</a></h2>
-<p>The comparison table's errors were not authoring mistakes. <code>#308</code> (2026-06-19)
-converted a hedged prose comparison into a green-check/red-X <strong>verdict table</strong>,
-and a verdict table requires a definite cell in every row. The working notes it
-was built from had marked most competitor-side facts <code>VERIFY</code>. The format had
-nowhere to put "we believe this but have not checked it", so <strong>11 unverified
-ARC-side facts shipped as red X's</strong>, none of them citing an ARC version or a
-measurement date.</p>
-<p>Two went false at datable releases without anyone noticing: 0.13.1 changed
-quota-blocked pod retry, and 0.14.0 added multi-label scale sets.</p>
-<p>The structural fix is the dated measurement stamp now under the table, and the
-recurring pre-flight step in
-<a href="../../operations/release/#1-pre-flight">release.md</a>. Patching cells alone would
-have reproduced the failure.</p>
-<p><strong>A related process defect:</strong> <code>plan/README.md</code> recorded Q60 as "verified +
-folded into appendix-d". The Q60-closing commit added 34 lines about Kueue and
-Exostellar and contained zero ARC per-claim verification. A row asserting
-verification that did not happen is worse than an open row: an open row invites
-the work, a falsely-closed one forecloses it. The rule this produced is
-<a href="../../development/maintaining-backlog/#a-completion-note-is-a-claim-too-and-it-is-the-one-nobody-re-checks">maintaining-backlog.md § A completion note is a claim too</a>.</p>
+<p>The comparison table's errors were not authoring mistakes. <code>#308</code> (2026-06-19) converted a hedged prose comparison into a green-check/red-X <strong>verdict table</strong>, and a verdict table requires a definite cell in every row.
+The working notes it was built from had marked most competitor-side facts <code>VERIFY</code>.
+The format had nowhere to put "we believe this but have not checked it", so <strong>11 unverified ARC-side facts shipped as red X's</strong>, none of them citing an ARC version or a measurement date.</p>
+<p>Two went false at datable releases without anyone noticing: 0.13.1 changed quota-blocked pod retry, and 0.14.0 added multi-label scale sets.</p>
+<p>The structural fix is the dated measurement stamp now under the table, and the recurring pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.
+Patching cells alone would have reproduced the failure.</p>
+<p><strong>A related process defect:</strong> <code>plan/README.md</code> recorded Q60 as "verified + folded into appendix-d".
+The Q60-closing commit added 34 lines about Kueue and Exostellar and contained zero ARC per-claim verification.
+A row asserting verification that did not happen is worse than an open row: an open row invites the work, a falsely-closed one forecloses it.
+The rule this produced is <a href="../../development/maintaining-backlog/#a-completion-note-is-a-claim-too-and-it-is-the-one-nobody-re-checks">maintaining-backlog.md § A completion note is a claim too</a>.</p>
 <h2 id="verification-lessons">Verification lessons<a class="headerlink" href="#verification-lessons" title="Permanent link">&para;</a></h2>
-<p>Two confident findings in this research were wrong, and both had the same shape:
-a conclusion drawn from one surface without establishing what the author meant
-or what the full surface said.</p>
+<p>Two confident findings in this research were wrong, and both had the same shape: a conclusion drawn from one surface without establishing what the author meant or what the full surface said.</p>
 <ul>
 <li><strong>"No 48-hour figure exists"</strong> came from fetching a single GitHub docs page.
-  The figure was correctly sourced from the GHES usage-limits page when written;
-  GitHub had since rewritten it.</li>
-<li><strong>"<code>cluster IP</code> is fabricated"</strong> came from reading the term as
-  <code>Service.spec.clusterIP</code>. The docs meant a pod IP from the cluster address
-  space, which is true. The fix was terminology, not substance.</li>
+  The figure was correctly sourced from the GHES usage-limits page when written; GitHub had since rewritten it.</li>
+<li><strong>"<code>cluster IP</code> is fabricated"</strong> came from reading the term as <code>Service.spec.clusterIP</code>.
+  The docs meant a pod IP from the cluster address space, which is true.
+  The fix was terminology, not substance.</li>
 </ul>
 <p>Both would have been caught by reading the claim's own surrounding prose first.
 Every negative assertion here carries a positive control for that reason.</p>
 <h2 id="raw-research-artifacts">Raw research artifacts<a class="headerlink" href="#raw-research-artifacts" title="Permanent link">&para;</a></h2>
 <p>The full evidence lives under <code>tmp/compete/</code> in the worktree this was run from.
-It is <strong>gitignored and workstation-local</strong>, so it survives a session but not a
-fresh clone, and nobody else has it. This page is the distillation; those files
-are the working notes behind it.</p>
+It is <strong>gitignored and workstation-local</strong>, so it survives a session but not a fresh clone, and nobody else has it.
+This page is the distillation; those files are the working notes behind it.</p>
 <table>
 <thead>
 <tr>
@@ -2940,33 +2888,18 @@ are the working notes behind it.</p>
 </tr>
 </tbody>
 </table>
-<p>If those files are gone and a claim here needs re-verifying, the method section
-above has the dates and versions to reproduce it against.</p>
+<p>If those files are gone and a claim here needs re-verifying, the method section above has the dates and versions to reproduce it against.</p>
 <h2 id="still-open">Still open<a class="headerlink" href="#still-open" title="Permanent link">&para;</a></h2>
 <ul>
-<li>~~<code>go-to-market.md</code> §2 and the two-tier positioning~~ ✅ reconciled 2026-08-06.
-  §2 is now three lanes with the location filter, §4 carries both tiers (site
-  claims versus the thesis the strategy plays for), and §11 records that Q60's
-  closure was a false record.</li>
-<li>~~<code>README.md</code> scannability pass~~ ✅ done 2026-08-06. It now leads with the
-  measured numbers and an "Is this for you?" router, and both its problem and
-  solution sections follow the validated messaging order rather than opening on
-  priority tiers. One finding fell out of it:
-  <a href="../../STATUS/#Q728">Q728</a>, since <code>check-release-pins.sh</code> reads any bare
-  <code>X.Y.Z</code> in a pin-bearing doc as a GAG release pin, so the README cannot name
-  the ARC version its comparison was measured against.</li>
-<li>~~Caching and GPU umbrella goals~~ ✅ written 2026-08-07 as
-  <a href="../caching-and-worker-storage/">caching-and-worker-storage</a> and
-  <a href="../gpu-and-accelerated-ci/">gpu-and-accelerated-ci</a>. Each surfaced a collision
-  the individual rows do not state: closing untrusted-PR egress removes the
-  <code>actions/cache</code> path that works today, and GPU plus Kata do not compose on
-  managed cloud (not for want of nested virtualization, which A2/A3/G2 have, but
-  because the Kata passthrough path needs BIOS and host-driver control a node
-  pool does not expose). Both corrected a published claim in passing.</li>
+<li>~~<code>go-to-market.md</code> §2 and the two-tier positioning~~ ✅ reconciled 2026-08-06. §2 is now three lanes with the location filter, §4 carries both tiers (site claims versus the thesis the strategy plays for), and §11 records that Q60's closure was a false record.</li>
+<li>~~<code>README.md</code> scannability pass~~ ✅ done 2026-08-06.
+  It now leads with the measured numbers and an "Is this for you?" router, and both its problem and solution sections follow the validated messaging order rather than opening on priority tiers.
+  One finding fell out of it: <a href="../../STATUS/#Q728">Q728</a>, since <code>check-release-pins.sh</code> reads any bare <code>X.Y.Z</code> in a pin-bearing doc as a GAG release pin, so the README cannot name the ARC version its comparison was measured against.</li>
+<li>~~Caching and GPU umbrella goals~~ ✅ written 2026-08-07 as <a href="../caching-and-worker-storage/">caching-and-worker-storage</a> and <a href="../gpu-and-accelerated-ci/">gpu-and-accelerated-ci</a>.
+  Each surfaced a collision the individual rows do not state: closing untrusted-PR egress removes the <code>actions/cache</code> path that works today, and GPU plus Kata do not compose on managed cloud (not for want of nested virtualization, which A2/A3/G2 have, but because the Kata passthrough path needs BIOS and host-driver control a node pool does not expose).
+  Both corrected a published claim in passing.</li>
 </ul>
-<p><strong>Nothing from the 2026-08-06 research is unactioned.</strong> Findings that became
-work are on the Queue; findings that became positioning are in
-<a href="../go-to-market/">go-to-market</a> §2 and §4.</p>
+<p><strong>Nothing from the 2026-08-06 research is unactioned.</strong> Findings that became work are on the Queue; findings that became positioning are in <a href="../go-to-market/">go-to-market</a> §2 and §4.</p>
 
 
 

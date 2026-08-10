@@ -2686,13 +2686,8 @@
 
 
 <h1 id="test-progress-visibility">Test Progress Visibility<a class="headerlink" href="#test-progress-visibility" title="Permanent link">&para;</a></h1>
-<p>Make a long test run legible while it is still running — which tests are
-executing, which have finished, how many remain — for every audience that waits
-on one: a human at a terminal, a reviewer reading a CI log, and an agent running
-the job in a background task and reporting back.</p>
-<p>The end state is that <strong>release validation is run as a background task by
-default</strong>, with the agent reporting progress to the operator as it goes, and the
-same run is equally legible if a human runs it in their own terminal instead.</p>
+<p>Make a long test run legible while it is still running — which tests are executing, which have finished, how many remain — for every audience that waits on one: a human at a terminal, a reviewer reading a CI log, and an agent running the job in a background task and reporting back.</p>
+<p>The end state is that <strong>release validation is run as a background task by default</strong>, with the agent reporting progress to the operator as it goes, and the same run is equally legible if a human runs it in their own terminal instead.</p>
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="#why-this-is-a-milestone-and-not-a-task">Why this is a milestone and not a task</a></li>
@@ -2706,19 +2701,16 @@ same run is equally legible if a human runs it in their own terminal instead.</p
 <li><a href="#open-decisions">Open decisions</a></li>
 </ul>
 <h2 id="why-this-is-a-milestone-and-not-a-task">Why this is a milestone and not a task<a class="headerlink" href="#why-this-is-a-milestone-and-not-a-task" title="Permanent link">&para;</a></h2>
-<p>Each piece is small. What makes them one body of work is a shared shape that
-only becomes visible once you have built two of them:</p>
+<p>Each piece is small.
+What makes them one body of work is a shared shape that only becomes visible once you have built two of them:</p>
 <blockquote>
-<p>A long-running job emits a structured event stream to a file. Renderers read
-that file. The renderers are cheap and disposable; the stream is the contract.</p>
+<p>A long-running job emits a structured event stream to a file.
+Renderers read that file.
+The renderers are cheap and disposable; the stream is the contract.</p>
 </blockquote>
-<p>Phase 0 shipped that shape for the e2e suite. Everything after it is another
-producer or another renderer over the same idea, and the value compounds — the
-release-validation view in Phase 1 is largely <em>relaying</em> the stream Phase 0
-already produces, and the agent-facing view in Phase 2 is a third renderer over
-the stream Phase 1 adds.</p>
-<p>Building these as isolated tasks would have produced three incompatible progress
-formats and three polling loops.</p>
+<p>Phase 0 shipped that shape for the e2e suite.
+Everything after it is another producer or another renderer over the same idea, and the value compounds — the release-validation view in Phase 1 is largely <em>relaying</em> the stream Phase 0 already produces, and the agent-facing view in Phase 2 is a third renderer over the stream Phase 1 adds.</p>
+<p>Building these as isolated tasks would have produced three incompatible progress formats and three polling loops.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2762,118 +2754,54 @@ formats and three polling loops.</p>
 </tbody>
 </table>
 <h2 id="phase-0--the-e2e-run-reports-itself">Phase 0 — the e2e run reports itself<a class="headerlink" href="#phase-0--the-e2e-run-reports-itself" title="Permanent link">&para;</a></h2>
-<p>Shipped. The suite appends spec start/end events to <code>E2E_PROGRESS_FILE</code>;
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch.sh"><code>progress-watch.sh</code></a> renders one heartbeat
-line per 30 s; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/e2e-report-summary.sh"><code>e2e-report-summary.sh</code></a>
-renders the JUnit report into the job summary plus per-failure annotations.
-Covers the <code>e2e</code> and <code>e2e-calico</code> lanes and both the hosted and GKE dogfood
-runners, because all four resolve to the same <code>e2e-reusable.yml</code> job.</p>
-<p>Full rationale, measurements, and the three things the build changed from its
-plan: <a href="../archive/e2e-progress-visibility/">archive/e2e-progress-visibility.md</a>.</p>
+<p>Shipped.
+The suite appends spec start/end events to <code>E2E_PROGRESS_FILE</code>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch.sh"><code>progress-watch.sh</code></a> renders one heartbeat line per 30 s; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/e2e-report-summary.sh"><code>e2e-report-summary.sh</code></a> renders the JUnit report into the job summary plus per-failure annotations.
+Covers the <code>e2e</code> and <code>e2e-calico</code> lanes and both the hosted and GKE dogfood runners, because all four resolve to the same <code>e2e-reusable.yml</code> job.</p>
+<p>Full rationale, measurements, and the three things the build changed from its plan: <a href="../archive/e2e-progress-visibility/">archive/e2e-progress-visibility.md</a>.</p>
 <h2 id="phase-1--release-validation-reports-itself">Phase 1 — release validation reports itself<a class="headerlink" href="#phase-1--release-validation-reports-itself" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh"><code>validate-release.sh</code></a> is an
-~hour-long, billable, prod-touching gate that runs eight phases and then watches
-a dispatched e2e run. Today it prints a line per phase and then goes quiet
-behind <code>gh run watch</code>, which renders job-level status only — the spec-level
-heartbeat Phase 0 produces is in the dispatched run's log, which the operator
-has to leave the terminal to see.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh"><code>validate-release.sh</code></a> is an ~hour-long, billable, prod-touching gate that runs eight phases and then watches a dispatched e2e run.
+Today it prints a line per phase and then goes quiet behind <code>gh run watch</code>, which renders job-level status only — the spec-level heartbeat Phase 0 produces is in the dispatched run's log, which the operator has to leave the terminal to see.</p>
 <p>Three pieces:</p>
 <ol>
-<li><strong>A phase event stream.</strong> The script appends <code>{"phase":…,"state":…}</code> events
-   to a status file as it moves through deploy → route CI → e2e tenant → dispatch
-   → e2e run → sizing assertion → CRD smoke → teardown. Same JSONL shape as
-   Phase 0, so one renderer can consume both.</li>
-<li><strong>Relay the remote heartbeat.</strong> The dispatched run's log already carries the
-   <code>[e2e t+…]</code> lines. <code>gh run view --log</code> refuses on an in-progress run, but
-   <code>gh api repos/…/actions/jobs/&lt;id&gt;/logs</code> returns partial logs for a running
-   job — measured, and the mechanism that makes this phase possible at all.
-   Poll it on the existing <code>E2E_POLL_INTERVAL</code> and re-emit new heartbeat lines
-   locally.</li>
-<li><strong>Render the JUnit report on the way out.</strong> After the watch returns, download
-   the run's <code>e2e-junit-report-*</code> artifact and pipe it through
-   <code>e2e-report-summary.sh</code>, so a red gate names the failing specs in the
-   operator's terminal instead of handing them a URL.</li>
+<li><strong>A phase event stream.</strong> The script appends <code>{"phase":…,"state":…}</code> events to a status file as it moves through deploy → route CI → e2e tenant → dispatch → e2e run → sizing assertion → CRD smoke → teardown.
+   Same JSONL shape as Phase 0, so one renderer can consume both.</li>
+<li><strong>Relay the remote heartbeat.</strong> The dispatched run's log already carries the <code>[e2e t+…]</code> lines. <code>gh run view --log</code> refuses on an in-progress run, but <code>gh api repos/…/actions/jobs/&lt;id&gt;/logs</code> returns partial logs for a running job — measured, and the mechanism that makes this phase possible at all.
+   Poll it on the existing <code>E2E_POLL_INTERVAL</code> and re-emit new heartbeat lines locally.</li>
+<li><strong>Render the JUnit report on the way out.</strong> After the watch returns, download the run's <code>e2e-junit-report-*</code> artifact and pipe it through <code>e2e-report-summary.sh</code>, so a red gate names the failing specs in the operator's terminal instead of handing them a URL.</li>
 </ol>
 <p>Plus a one-liner worth taking regardless: print the run URL before the watch.</p>
-<p><strong>Measured 2026-08-02: <code>gh run watch</code> emits no ANSI when stdout is not a TTY.</strong>
-Piped, it degrades to plain append-only text with UTF-8 status glyphs — so
-background-task capture was <strong>not</strong> garbled, and there was no pre-existing bug
-to fix. Replacing it is therefore justified by the relay requirement alone: gh's
-watch <em>blocks</em>, and a heartbeat cannot be interleaved from inside it. Recorded
-because the opposite conclusion was the tempting one and would have shipped an
-overstated claim.</p>
+<p><strong>Measured 2026-08-02: <code>gh run watch</code> emits no ANSI when stdout is not a TTY.</strong> Piped, it degrades to plain append-only text with UTF-8 status glyphs — so background-task capture was <strong>not</strong> garbled, and there was no pre-existing bug to fix.
+Replacing it is therefore justified by the relay requirement alone: gh's watch <em>blocks</em>, and a heartbeat cannot be interleaved from inside it.
+Recorded because the opposite conclusion was the tempting one and would have shipped an overstated claim.</p>
 <h2 id="phase-2--background-task-mode-becomes-the-standard">Phase 2 — background-task mode becomes the standard<a class="headerlink" href="#phase-2--background-task-mode-becomes-the-standard" title="Permanent link">&para;</a></h2>
-<p>The goal: <code>run release validation</code> means the agent launches the gate in the
-background and keeps the operator informed, and this is the documented default
-rather than a power-user trick.</p>
-<p><strong>Periodic reporting must be event-driven, not clock-driven.</strong> The literal ask
-is "report status periodically", but a fixed-interval poll is the wrong
-implementation: it burns tokens on every tick whether or not anything changed,
-and this repo forbids foreground polling outright. The meaningful cadence is
-<em>phase transitions</em> — eight of them across the run, each a real thing the
-operator wants to hear about — plus a long fallback so a wedged phase still
-surfaces. That yields roughly the same reporting frequency with none of the
-idle cost.</p>
-<p>The pattern already exists in this repo and should be copied rather than
-reinvented: <strong>pr-sentinel</strong> sleeps at zero token cost and wakes the session on
-meaningful events. A <code>release-sentinel</code> doing the same for a validation run is
-the natural sibling.</p>
+<p>The goal: <code>run release validation</code> means the agent launches the gate in the background and keeps the operator informed, and this is the documented default rather than a power-user trick.</p>
+<p><strong>Periodic reporting must be event-driven, not clock-driven.</strong> The literal ask is "report status periodically", but a fixed-interval poll is the wrong implementation: it burns tokens on every tick whether or not anything changed, and this repo forbids foreground polling outright.
+The meaningful cadence is <em>phase transitions</em> — eight of them across the run, each a real thing the operator wants to hear about — plus a long fallback so a wedged phase still surfaces.
+That yields roughly the same reporting frequency with none of the idle cost.</p>
+<p>The pattern already exists in this repo and should be copied rather than reinvented: <strong>pr-sentinel</strong> sleeps at zero token cost and wakes the session on meaningful events.
+A <code>release-sentinel</code> doing the same for a validation run is the natural sibling.</p>
 <p>Three deliverables:</p>
 <ul>
-<li>✅ <strong>A status file</strong> (<code>tmp/release-validation-status.json</code>) holding current
-  phase, elapsed, the latest e2e heartbeat, and any failure — a single read
-  that answers "where is it" without replaying the whole stream. This is the
-  agent-facing renderer; the human-facing one is the terminal stream from
-  Phase 1. Shipped in Q616 as <code>progress_status_json</code> in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/progress.sh"><code>lib/progress.sh</code></a>, rewritten
-  atomically after every event and also available as
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-status.sh"><code>release-status.sh</code></a>.</li>
-<li>✅ <strong><code>release-sentinel</code></strong>, modeled on pr-sentinel: sleeps, wakes the session on
-  phase transition, failure, or completion, and prints a status block on wake.
-  Shipped in Q616 as
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel.sh"><code>release-sentinel.sh</code></a>.</li>
-<li>✅ <strong><a href="../../operations/release/#validate-the-release-candidate-on-dogfood"><code>docs/operations/release.md</code> § Validate the release candidate on
-  dogfood</a></strong>
-  rewritten so the background-task flow is the documented default path, with the
-  terminal invocation kept as the alternative. Per the <a href="../../development/doc-update-matrix/">doc-update
-  matrix</a> this is an operator-facing change
-  and the docs move with it, not after — Q616 documented the two new commands
-  where the gate's other knobs already live; Q617 is the restructure that makes
-  the flow the default. It also surfaced a requirement the mechanism half had
-  not: <strong>a detached run must carry <code>ASSUME_YES=1</code></strong>, because the gate's
-  target-confirmation reads stdin and a detached run has none — measured, it
-  exits 1 before spending anything. The default path is unusable without it.</li>
+<li>✅ <strong>A status file</strong> (<code>tmp/release-validation-status.json</code>) holding current phase, elapsed, the latest e2e heartbeat, and any failure — a single read that answers "where is it" without replaying the whole stream.
+  This is the agent-facing renderer; the human-facing one is the terminal stream from Phase 1.
+  Shipped in Q616 as <code>progress_status_json</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/progress.sh"><code>lib/progress.sh</code></a>, rewritten atomically after every event and also available as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-status.sh"><code>release-status.sh</code></a>.</li>
+<li>✅ <strong><code>release-sentinel</code></strong>, modeled on pr-sentinel: sleeps, wakes the session on phase transition, failure, or completion, and prints a status block on wake.
+  Shipped in Q616 as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel.sh"><code>release-sentinel.sh</code></a>.</li>
+<li>✅ <strong><a href="../../operations/release/#validate-the-release-candidate-on-dogfood"><code>docs/operations/release.md</code> § Validate the release candidate on dogfood</a></strong> rewritten so the background-task flow is the documented default path, with the terminal invocation kept as the alternative.
+  Per the <a href="../../development/doc-update-matrix/">doc-update matrix</a> this is an operator-facing change and the docs move with it, not after — Q616 documented the two new commands where the gate's other knobs already live; Q617 is the restructure that makes the flow the default.
+  It also surfaced a requirement the mechanism half had not: <strong>a detached run must carry <code>ASSUME_YES=1</code></strong>, because the gate's target-confirmation reads stdin and a detached run has none — measured, it exits 1 before spending anything.
+  The default path is unusable without it.</li>
 </ul>
 <p><strong>Three things the build settled that the plan did not anticipate.</strong></p>
 <ol>
-<li><strong>The e2e heartbeat had to enter the stream, not just the terminal.</strong> The e2e
-   leg is one ~25-minute phase, so a status object built from phase events alone
-   reports "e2e, 18 minutes" for the whole of it — the phase is the only thing
-   that does not change. <code>e2e-run-watch.sh</code> now folds the newest relayed line
-   into the stream as a <code>heartbeat</code> record. <strong>This was also load-bearing for the
-   stall detector, and that part was wrong</strong> (Q630): the heartbeat needs a
-   fetchable job log, GitHub served <code>BlobNotFound</code> for a whole 30-minute run that
-   passed, and since the stall threshold is shorter than a healthy leg the
-   detector then reported a false stall on every poll. The stream cannot be the
-   only witness to a phase whose only writer depends on someone else's storage —
-   the detector now reconciles silence against the run's own status.</li>
-<li><strong>A gate's failure is reported by its first failing phase, not its last.</strong>
-   The teardown trap records <code>gate fail</code> after the phase that actually broke
-   records its own, so taking the newest failure would answer every failed run
-   with "the gate exited 1".</li>
-<li><strong>A wedge is the absence of events, so the sentinel needs a stall event.</strong>
-   Waking only on transitions cannot report a gate that stops transitioning —
-   which is exactly the failure a walk-away command hides. <code>idle</code> (age of the
-   newest event) crossing <code>RELEASE_SENTINEL_STALL</code> is a wake in its own right,
-   and only for a <code>running</code> gate: preflight has no stream to be quiet on and a
-   finished gate is expected to be silent. Q630 added the other half: absence of
-   events is a <em>hypothesis</em> of a wedge, confirmed against the run status before
-   it is reported, and remembered afterwards so a relaunched watcher does not
-   re-report the same silence the instant it starts.</li>
+<li><strong>The e2e heartbeat had to enter the stream, not just the terminal.</strong> The e2e leg is one ~25-minute phase, so a status object built from phase events alone reports "e2e, 18 minutes" for the whole of it — the phase is the only thing that does not change. <code>e2e-run-watch.sh</code> now folds the newest relayed line into the stream as a <code>heartbeat</code> record. <strong>This was also load-bearing for the stall detector, and that part was wrong</strong> (Q630): the heartbeat needs a fetchable job log, GitHub served <code>BlobNotFound</code> for a whole 30-minute run that passed, and since the stall threshold is shorter than a healthy leg the detector then reported a false stall on every poll.
+   The stream cannot be the only witness to a phase whose only writer depends on someone else's storage — the detector now reconciles silence against the run's own status.</li>
+<li><strong>A gate's failure is reported by its first failing phase, not its last.</strong> The teardown trap records <code>gate fail</code> after the phase that actually broke records its own, so taking the newest failure would answer every failed run with "the gate exited 1".</li>
+<li><strong>A wedge is the absence of events, so the sentinel needs a stall event.</strong> Waking only on transitions cannot report a gate that stops transitioning — which is exactly the failure a walk-away command hides. <code>idle</code> (age of the newest event) crossing <code>RELEASE_SENTINEL_STALL</code> is a wake in its own right, and only for a <code>running</code> gate: preflight has no stream to be quiet on and a finished gate is expected to be silent.
+   Q630 added the other half: absence of events is a <em>hypothesis</em> of a wedge, confirmed against the run status before it is reported, and remembered afterwards so a relaunched watcher does not re-report the same silence the instant it starts.</li>
 </ol>
 <h2 id="phase-3--the-remaining-tiers-by-measurement">Phase 3 — the remaining tiers, by measurement<a class="headerlink" href="#phase-3--the-remaining-tiers-by-measurement" title="Permanent link">&para;</a></h2>
-<p>Measured output density and longest silence, isolated to the actual test steps
-rather than whole jobs:</p>
+<p>Measured output density and longest silence, isolated to the actual test steps rather than whole jobs:</p>
 <table>
 <thead>
 <tr>
@@ -2922,47 +2850,26 @@ rather than whole jobs:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Integration is excluded on evidence, not oversight.</strong> At 30–64 % density the
-log already narrates itself continuously; GMC's single 75 s gap is one slow test
-in an otherwise dense stream. A 30 s heartbeat there would compete with real
-output instead of replacing silence.</p>
-<p><strong>Unit <code>-race</code> earns it for the pathological case, not the happy path.</strong> On a
-healthy 3.3-minute run the heartbeat adds ~7 lines nobody needs. Its value is
-the deadlock: today a hung <code>-race</code> run emits nothing until the timeout fires and
-leaves you inferring which test hung.</p>
-<p>The mechanism is different and <em>simpler</em> than Phase 0's — plain Go tests are
-already visible to <code>go test -json</code>, so this is a wrapper over the existing
-event stream with <strong>no test-code changes at all</strong>.</p>
-<p>Shipped as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/gotest/progress/main.go"><code>devtools/gotest/progress</code></a>,
-which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh"><code>go-test.sh</code></a> pipes <code>go test -json</code> through.
-It reconstructs the plain test log and interleaves the heartbeat. Full
-behaviour, the three measured properties of the <code>-json</code> stream it stands on, and
-the two deliberate differences from plain <code>go test</code> output:
-<a href="../../development/testing/#watching-a-unit-run-in-progress">testing.md § Watching a unit run in progress</a>.</p>
+<p><strong>Integration is excluded on evidence, not oversight.</strong> At 30–64 % density the log already narrates itself continuously; GMC's single 75 s gap is one slow test in an otherwise dense stream.
+A 30 s heartbeat there would compete with real output instead of replacing silence.</p>
+<p><strong>Unit <code>-race</code> earns it for the pathological case, not the happy path.</strong> On a healthy 3.3-minute run the heartbeat adds ~7 lines nobody needs.
+Its value is the deadlock: today a hung <code>-race</code> run emits nothing until the timeout fires and leaves you inferring which test hung.</p>
+<p>The mechanism is different and <em>simpler</em> than Phase 0's — plain Go tests are already visible to <code>go test -json</code>, so this is a wrapper over the existing event stream with <strong>no test-code changes at all</strong>.</p>
+<p>Shipped as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/gotest/progress/main.go"><code>devtools/gotest/progress</code></a>, which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh"><code>go-test.sh</code></a> pipes <code>go test -json</code> through.
+It reconstructs the plain test log and interleaves the heartbeat.
+Full behaviour, the three measured properties of the <code>-json</code> stream it stands on, and the two deliberate differences from plain <code>go test</code> output: <a href="../../development/testing/#watching-a-unit-run-in-progress">testing.md § Watching a unit run in progress</a>.</p>
 <p>Two things the build changed from this plan:</p>
 <ul>
-<li><strong>The renderer had to reconstruct <code>go test</code>'s output, not just add to it.</strong>
-  <code>-json</code> replaces the plain log rather than accompanying it, so the wrapper
-  owns what a green package and a failing package print. That is what makes it
-  a Go program in <code>devtools/</code> rather than the bash+jq the earlier phases used —
-  <code>Output</code> fields are JSON-escaped free text, and getting a compile error's
-  bytes back intact is not a job for awk.</li>
-<li><strong>The denominator arrived at the package level, not the test level</strong> — see
-  <a href="#open-decisions">Open decisions</a> #2.</li>
+<li><strong>The renderer had to reconstruct <code>go test</code>'s output, not just add to it.</strong> <code>-json</code> replaces the plain log rather than accompanying it, so the wrapper owns what a green package and a failing package print.
+  That is what makes it a Go program in <code>devtools/</code> rather than the bash+jq the earlier phases used — <code>Output</code> fields are JSON-escaped free text, and getting a compile error's bytes back intact is not a job for awk.</li>
+<li><strong>The denominator arrived at the package level, not the test level</strong> — see <a href="#open-decisions">Open decisions</a> #2.</li>
 </ul>
-<p>A property worth recording, because it was not the reason for the change and is
-larger than the heartbeat: plain <code>go test</code> releases package output <strong>in
-command-line order</strong>, so a slow early package holds back every package behind
-it. <code>-json</code> has no such barrier (measured), so package results now appear as
-they complete.</p>
-<p>Not covered: <code>make check</code> reaches the unit tests through <code>coverage.sh</code>, a
-separate invocation that still runs plain <code>go test</code>. Its silence has not been
-measured, and design rule 5 says that measurement comes before the fix.</p>
+<p>A property worth recording, because it was not the reason for the change and is larger than the heartbeat: plain <code>go test</code> releases package output <strong>in command-line order</strong>, so a slow early package holds back every package behind it. <code>-json</code> has no such barrier (measured), so package results now appear as they complete.</p>
+<p>Not covered: <code>make check</code> reaches the unit tests through <code>coverage.sh</code>, a separate invocation that still runs plain <code>go test</code>.
+Its silence has not been measured, and design rule 5 says that measurement comes before the fix.</p>
 <h2 id="evaluated-and-rejected-migrating-other-suites-to-ginkgo">Evaluated and rejected: migrating other suites to Ginkgo<a class="headerlink" href="#evaluated-and-rejected-migrating-other-suites-to-ginkgo" title="Permanent link">&para;</a></h2>
-<p><strong>Conclusion: no. For progress reporting specifically, migrating to Ginkgo would
-make things materially worse, which is the opposite of the intuition.</strong></p>
-<p>The measurement. <code>go test -json</code> against the e2e suite in dry-run, and against
-one plain package:</p>
+<p><strong>Conclusion: no. For progress reporting specifically, migrating to Ginkgo would make things materially worse, which is the opposite of the intuition.</strong></p>
+<p>The measurement. <code>go test -json</code> against the e2e suite in dry-run, and against one plain package:</p>
 <table>
 <thead>
 <tr>
@@ -2981,14 +2888,11 @@ one plain package:</p>
 </tr>
 </tbody>
 </table>
-<p>Ginkgo specs are closures executed inside a single Go test function, so the
-toolchain sees one test no matter how many specs run. That is precisely why
-Phase 0 needed bespoke reporter instrumentation: there was no <code>-json</code> stream to
-consume. Plain Go tests hand you per-test run/pass/fail events for free.</p>
-<p>The repo today is <strong>1 Ginkgo suite against 1,832 plain test functions</strong>. A
-migration would convert 1,832 individually-visible tests into a handful of
-opaque suite functions, then require per-suite instrumentation to claw back
-what the toolchain was already giving away.</p>
+<p>Ginkgo specs are closures executed inside a single Go test function, so the toolchain sees one test no matter how many specs run.
+That is precisely why Phase 0 needed bespoke reporter instrumentation: there was no <code>-json</code> stream to consume.
+Plain Go tests hand you per-test run/pass/fail events for free.</p>
+<p>The repo today is <strong>1 Ginkgo suite against 1,832 plain test functions</strong>.
+A migration would convert 1,832 individually-visible tests into a handful of opaque suite functions, then require per-suite instrumentation to claw back what the toolchain was already giving away.</p>
 <p>The non-progress arguments, assessed honestly:</p>
 <table>
 <thead>
@@ -3020,31 +2924,20 @@ what the toolchain was already giving away.</p>
 </tr>
 </tbody>
 </table>
-<p>Against that: the coverage ratchet, the <code>-race</code> gate, <code>-count</code> soak runs, and
-ordinary <code>-run</code> and IDE workflows all assume plain Go tests.</p>
-<p><strong>Where Ginkgo does earn its place — and keeps it — is the e2e suite:</strong> a shared
-expensive cluster fixture, <code>Serial</code>/<code>Ordered</code> constraints, label-filtered
-subsets, and parallel process isolation are exactly its strengths. Keep it
-there; do not spread it.</p>
+<p>Against that: the coverage ratchet, the <code>-race</code> gate, <code>-count</code> soak runs, and ordinary <code>-run</code> and IDE workflows all assume plain Go tests.</p>
+<p><strong>Where Ginkgo does earn its place — and keeps it — is the e2e suite:</strong> a shared expensive cluster fixture, <code>Serial</code>/<code>Ordered</code> constraints, label-filtered subsets, and parallel process isolation are exactly its strengths.
+Keep it there; do not spread it.</p>
 <h2 id="design-rules-this-milestone-commits-to">Design rules this milestone commits to<a class="headerlink" href="#design-rules-this-milestone-commits-to" title="Permanent link">&para;</a></h2>
-<p>Derived from Phase 0 and from the <a href="#phase-3--the-remaining-tiers-by-measurement">30 s cadence
-discussion</a>; they bind later
-phases.</p>
+<p>Derived from Phase 0 and from the <a href="#phase-3--the-remaining-tiers-by-measurement">30 s cadence discussion</a>; they bind later phases.</p>
 <ol>
-<li><strong>The event stream is the contract; renderers are disposable.</strong> Never parse a
-   human-readable log to derive progress — reporter output is not a stable
-   interface and a scraper over it drifts silently.</li>
-<li><strong>Append-only, no ANSI cursor control.</strong> It is correct in the CI log
-   (append-only by nature), in a captured background-task file (where escape
-   sequences become garbage), and under <code>grep</code>/<code>awk</code>. And at a 30 s cadence the
-   accumulated history <em>is</em> the diagnostic signal — three identical counts in a
-   row is how a stall becomes visible. Redraw would delete that.</li>
+<li><strong>The event stream is the contract; renderers are disposable.</strong> Never parse a human-readable log to derive progress — reporter output is not a stable interface and a scraper over it drifts silently.</li>
+<li><strong>Append-only, no ANSI cursor control.</strong> It is correct in the CI log (append-only by nature), in a captured background-task file (where escape sequences become garbage), and under <code>grep</code>/<code>awk</code>.
+   And at a 30 s cadence the accumulated history <em>is</em> the diagnostic signal — three identical counts in a row is how a stall becomes visible.
+   Redraw would delete that.</li>
 <li><strong>One default interval, one knob.</strong> 30 s across tiers, overridable by env.
    No per-tier defaults without a measurement demanding one.</li>
-<li><strong>Progress reporting never fails the job it reports on.</strong> Every writer is
-   best-effort; a torn read skips a tick rather than killing the watcher.</li>
-<li><strong>Measure the silence before building a fix for it.</strong> Every tier in this plan
-   was included or excluded on a density number, not on intuition.</li>
+<li><strong>Progress reporting never fails the job it reports on.</strong> Every writer is best-effort; a torn read skips a tick rather than killing the watcher.</li>
+<li><strong>Measure the silence before building a fix for it.</strong> Every tier in this plan was included or excluded on a density number, not on intuition.</li>
 </ol>
 <h2 id="open-decisions">Open decisions<a class="headerlink" href="#open-decisions" title="Permanent link">&para;</a></h2>
 <table>

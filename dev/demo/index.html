@@ -2695,14 +2695,12 @@
 
 
 <h1 id="demo-a-real-job-on-a-local-cluster">Demo: a real job on a local cluster<a class="headerlink" href="#demo-a-real-job-on-a-local-cluster" title="Permanent link">&para;</a></h1>
-<p>GitHub Actions Gateway (GAG) in 30 seconds: a real GitHub Actions job runs in a
-<strong>worker pod that exists only while the job runs</strong>, then disappears. No runner
-sits idle. Nothing here is staged; every line was captured from a real run on a
-local <a href="https://kind.sigs.k8s.io/">kind</a> cluster against <strong>real GitHub</strong> (a
-self-hosted <code>runs-on: e2e</code> workflow).</p>
+<p>GitHub Actions Gateway (GAG) in 30 seconds: a real GitHub Actions job runs in a <strong>worker pod that exists only while the job runs</strong>, then disappears.
+No runner sits idle.
+Nothing here is staged; every line was captured from a real run on a local <a href="https://kind.sigs.k8s.io/">kind</a> cluster against <strong>real GitHub</strong> (a self-hosted <code>runs-on: e2e</code> workflow).</p>
 <p><img alt="Terminal recording: a GitHub Actions job running on GAG. No idle pods, then one job spins up a worker pod that runs and is deleted on completion, green on GitHub." src="../assets/demo-local-kind.svg" /></p>
-<p>The recording assumes GAG is already installed and shows only the payoff. See
-<a href="#try-it-yourself">Try it yourself</a> to run it on your own cluster.</p>
+<p>The recording assumes GAG is already installed and shows only the payoff.
+See <a href="#try-it-yourself">Try it yourself</a> to run it on your own cluster.</p>
 <h2 id="what-the-demo-shows">What the demo shows<a class="headerlink" href="#what-the-demo-shows" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2732,13 +2730,8 @@ self-hosted <code>runs-on: e2e</code> workflow).</p>
 </table>
 <h2 id="try-it-yourself">Try it yourself<a class="headerlink" href="#try-it-yourself" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Install GAG on your cluster.</strong> <a href="../getting-started/">Getting Started</a> covers
-  the Helm chart, a tenant namespace and quota, the GitHub App credential Secret,
-  and the <code>ActionsGateway</code> resource.</li>
-<li><strong>Reproduce this exact demo for free on a local kind cluster.</strong> A step-by-step
-  from-source guide (build the images, stand up kind, onboard a tenant, run one
-  job) lives in the repository:
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/local-kind-demo.md">Reproduce the local-kind demo</a>.</li>
+<li><strong>Install GAG on your cluster.</strong> <a href="../getting-started/">Getting Started</a> covers the Helm chart, a tenant namespace and quota, the GitHub App credential Secret, and the <code>ActionsGateway</code> resource.</li>
+<li><strong>Reproduce this exact demo for free on a local kind cluster.</strong> A step-by-step from-source guide (build the images, stand up kind, onboard a tenant, run one job) lives in the repository: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/local-kind-demo.md">Reproduce the local-kind demo</a>.</li>
 </ul>
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2746,12 +2739,8 @@ self-hosted <code>runs-on: e2e</code> workflow).</p>
 <li><a href="../design/02-architecture/">Architecture</a>: the four-tier design behind what the demo shows.</li>
 </ul>
 <hr />
-<p><em>The recording is a hand-authored <a href="https://asciinema.org/">asciinema</a> cast (v2)
-assembled from the real command outputs of a run on a local kind cluster against
-real GitHub, then rendered to a self-contained animated SVG. The cast and its
-generator live in
-<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/docs/assets"><code>docs/assets/</code></a>
-(<code>demo-local-kind.cast</code>, <code>generate-demo-cast.py</code>).</em></p>
+<p><em>The recording is a hand-authored <a href="https://asciinema.org/">asciinema</a> cast (v2) assembled from the real command outputs of a run on a local kind cluster against real GitHub, then rendered to a self-contained animated SVG.
+The cast and its generator live in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/docs/assets"><code>docs/assets/</code></a> (<code>demo-local-kind.cast</code>, <code>generate-demo-cast.py</code>).</em></p>
 
 
 

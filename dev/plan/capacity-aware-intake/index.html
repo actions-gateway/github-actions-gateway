@@ -2897,31 +2897,16 @@
 
 <h1 id="capacity-aware-job-intake">Capacity-Aware Job Intake<a class="headerlink" href="#capacity-aware-job-intake" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: ✅ Complete (2026-07-31).</strong> Every build item (0a–2d) and every
-measurement row (V1–V3) is done. The one residual is item 3 — the
-<code>ProvisioningRequest</code> probe — deferred as <a href="../../STATUS/#Q407">Q407</a> with its
-triggers in <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>;
-<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> supplies the
-number its trigger (a) reads against (~1 probe claim per window).</p>
+<p><strong>Status: ✅ Complete (2026-07-31).</strong> Every build item (0a–2d) and every measurement row (V1–V3) is done.
+The one residual is item 3 — the <code>ProvisioningRequest</code> probe — deferred as <a href="../../STATUS/#Q407">Q407</a> with its triggers in <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>; <a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> supplies the number its trigger (a) reads against (~1 probe claim per window).</p>
 </blockquote>
-<p>The admission ladder in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>cmd/agc/internal/provisioner/admission.go</code></a>
-gates job acquisition on two rungs today: observed namespace-ResourceQuota
-headroom (#784) and the owner's declared worker ceiling (Q59). Neither rung knows
-whether the cluster can actually <em>place</em> the worker pod the job needs. A tenant
-whose worker shape has become unplaceable (a drained GPU pool, a changed taint,
-spot capacity gone) keeps claiming jobs, and each claim spends a single-use JIT
-runner record, holds a GitHub job lock until <code>pendingPodDeadline</code>, and ends in a
-reaped pod plus a cancelled workflow run. This plan closes that rung, in three
-increments ordered cheapest-first, each independently shippable and off by
-default.</p>
-<p>The reason it takes three increments rather than one is that "can this pod be
-placed" is not one question. The safe answer depends on <strong>whether another actor
-is waiting on the unplaceable pod to make capacity appear</strong>, i.e. a cluster
-autoscaler that would add a node. That principle, and why it makes the quota rung
-safe to gate on while the scheduler's verdict is conditional, is recorded as
-durable rationale in
-<a href="../../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">Appendix D §D.8</a>.</p>
+<p>The admission ladder in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>cmd/agc/internal/provisioner/admission.go</code></a> gates job acquisition on two rungs today: observed namespace-ResourceQuota headroom (#784) and the owner's declared worker ceiling (Q59).
+Neither rung knows whether the cluster can actually <em>place</em> the worker pod the job needs.
+A tenant whose worker shape has become unplaceable (a drained GPU pool, a changed taint, spot capacity gone) keeps claiming jobs, and each claim spends a single-use JIT runner record, holds a GitHub job lock until <code>pendingPodDeadline</code>, and ends in a reaped pod plus a cancelled workflow run.
+This plan closes that rung, in three increments ordered cheapest-first, each independently shippable and off by default.</p>
+<p>The reason it takes three increments rather than one is that "can this pod be placed" is not one question.
+The safe answer depends on <strong>whether another actor is waiting on the unplaceable pod to make capacity appear</strong>, i.e. a cluster autoscaler that would add a node.
+That principle, and why it makes the quota rung safe to gate on while the scheduler's verdict is conditional, is recorded as durable rationale in <a href="../../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">Appendix D §D.8</a>.</p>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3007,147 +2992,70 @@ durable rationale in
 </tr>
 </tbody>
 </table>
-<p>A numbered row means code shipped; a <code>V</code> row means that code's effect was
-measured where it runs. <strong>All V rows have run — item 3's deferral is the plan's
-only residual.</strong> A ✅ on 0a, 1 or 2 records an envtest proof of the
-<em>mechanism</em>, never a measurement of what it removes.</p>
-<p><strong>V2 ran twice.</strong> The first run (<a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>)
-measured <strong>no reduction</strong> on the ScaleSet tier — the integer expression of the
-rung could not bound waste while its bound was the set's own in-flight pods and
-the reaper deleted those. The remedy — the latch, item 2d — shipped as
-<a href="#9g-the-latch--a-bound-that-survives-the-reap-q512">§9g</a> (Q512), and the re-run
-(<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a>, Q513) measured
-it working as designed: steady-state waste fell from 7 per window to <strong>exactly
-1 probe claim per ~5-min window</strong>, the condition held <code>True/AwaitingProbe</code>
-across reap cycles, and the advertisement stayed pinned at the probe slot
-instead of sawtoothing to the full ceiling. <strong>The effectiveness claim this
-supports is scale-set-tier-specific and rate-shaped</strong> — a burst's first batch is
-still claimed whole, and the classic tier remains unmeasured live.</p>
-<p>§8's trigger (a) now has its number: residual burn under rate-bounding is ~1
-claim per window (<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a>),
-which arms item 3 only for operators (GPU/spot) for whom even that rate is
-expensive. What item 2b added is narrower and does not substitute for V2:
-phase 2's <em>input</em> — the strings a real cluster-autoscaler emits — is now asserted
-against a live autoscaler on every run of the drift gate (<a href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474">§9c</a>).</p>
+<p>A numbered row means code shipped; a <code>V</code> row means that code's effect was measured where it runs. <strong>All V rows have run — item 3's deferral is the plan's only residual.</strong> A ✅ on 0a, 1 or 2 records an envtest proof of the <em>mechanism</em>, never a measurement of what it removes.</p>
+<p><strong>V2 ran twice.</strong> The first run (<a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>) measured <strong>no reduction</strong> on the ScaleSet tier — the integer expression of the rung could not bound waste while its bound was the set's own in-flight pods and the reaper deleted those.
+The remedy — the latch, item 2d — shipped as <a href="#9g-the-latch--a-bound-that-survives-the-reap-q512">§9g</a> (Q512), and the re-run (<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a>, Q513) measured it working as designed: steady-state waste fell from 7 per window to <strong>exactly 1 probe claim per ~5-min window</strong>, the condition held <code>True/AwaitingProbe</code> across reap cycles, and the advertisement stayed pinned at the probe slot instead of sawtoothing to the full ceiling. <strong>The effectiveness claim this supports is scale-set-tier-specific and rate-shaped</strong> — a burst's first batch is still claimed whole, and the classic tier remains unmeasured live.</p>
+<p>§8's trigger (a) now has its number: residual burn under rate-bounding is ~1 claim per window (<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a>), which arms item 3 only for operators (GPU/spot) for whom even that rate is expensive.
+What item 2b added is narrower and does not substitute for V2: phase 2's <em>input</em> — the strings a real cluster-autoscaler emits — is now asserted against a live autoscaler on every run of the drift gate (<a href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474">§9c</a>).</p>
 <hr />
 <h2 id="1-the-gap">1. The gap<a class="headerlink" href="#1-the-gap" title="Permanent link">&para;</a></h2>
-<p><code>WorkersUnschedulable</code> (Q157 for v1, Q303 for v2) already reads the scheduler's
-verdict off worker pods:
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_unschedulable.go"><code>runnergroup_unschedulable.go</code></a>
-computes it from <code>PodScheduled=False</code>/<code>Reason=Unschedulable</code>, and
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_capacity.go"><code>runnerset_capacity.go</code></a>
-publishes the v2 counterpart. It is pure observability: it reaches a condition, an
-Event, and a gauge, and never reaches <code>Provisioner.Admit</code>. The <code>WorkerQuota</code> ladder
-and <code>WorkersUnschedulable</code> are gauged on both owners — v1 via
-<code>actions_gateway_worker_*</code>, v2 via the <code>actions_gateway_runnerset_*</code> twins Q319
-added; <code>WorkerCapacityDeclined</code> joined them in Q643, with a <code>reason</code> label.</p>
-<p>So the intake path has no capacity awareness at all, and the per-claim cost of
-that is:</p>
+<p><code>WorkersUnschedulable</code> (Q157 for v1, Q303 for v2) already reads the scheduler's verdict off worker pods: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_unschedulable.go"><code>runnergroup_unschedulable.go</code></a> computes it from <code>PodScheduled=False</code>/<code>Reason=Unschedulable</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_capacity.go"><code>runnerset_capacity.go</code></a> publishes the v2 counterpart.
+It is pure observability: it reaches a condition, an Event, and a gauge, and never reaches <code>Provisioner.Admit</code>.
+The <code>WorkerQuota</code> ladder and <code>WorkersUnschedulable</code> are gauged on both owners — v1 via <code>actions_gateway_worker_*</code>, v2 via the <code>actions_gateway_runnerset_*</code> twins Q319 added; <code>WorkerCapacityDeclined</code> joined them in Q643, with a <code>reason</code> label.</p>
+<p>So the intake path has no capacity awareness at all, and the per-claim cost of that is:</p>
 <ul>
 <li>one single-use JIT runner record spent (Q114), unrecoverable,</li>
 <li>one GitHub job lock held from <code>AcquireJob</code> until the pod is reaped,</li>
 <li>up to <code>pendingPodDeadline</code> of wall-clock latency for that job, and</li>
-<li>a <strong>cancelled</strong> workflow run rather than a redelivered one, because a lock that
-  lapses without renewal cancels.</li>
+<li>a <strong>cancelled</strong> workflow run rather than a redelivered one, because a lock that lapses without renewal cancels.</li>
 </ul>
-<p>That cost repeats per delivered job, so it scales with burst size. The existing
-backstops (<code>pendingPodDeadline</code> plus the reaper, with <code>WorkersUnschedulable</code>
-warning at half the deadline) bound the damage <em>per job</em>; nothing bounds the
-number of jobs.</p>
+<p>That cost repeats per delivered job, so it scales with burst size.
+The existing backstops (<code>pendingPodDeadline</code> plus the reaper, with <code>WorkersUnschedulable</code> warning at half the deadline) bound the damage <em>per job</em>; nothing bounds the number of jobs.</p>
 <h2 id="2-why-build-it-rather-than-only-document-it">2. Why build it rather than only document it<a class="headerlink" href="#2-why-build-it-rather-than-only-document-it" title="Permanent link">&para;</a></h2>
-<p><strong>No CI runner controller does capacity-aware intake.</strong> ARC's
-<a href="https://github.com/actions/actions-runner-controller/issues/3647">#3647</a> asks
-for a <em>longer wait after claiming</em>, never for fewer claims. GitLab documents
-over-claiming as intentional (<code>poll_timeout</code>: "Use this setting for queueing more
-builds than the cluster can handle at a time"). Kueue does consume
-<code>ProvisioningRequest</code>, but as an <code>AdmissionCheck</code> below the claim boundary, and it
-needs cluster-admin (<a href="../../design/appendix-d-alternatives-considered/#d5-kueue-and-kubernetes-job-queue--quota-managers">§D.5</a>).</p>
-<p><strong>GAG is structurally positioned to do it and ARC is not.</strong> The decision point
-has to exist before the claim, and in GAG it already does: the admission gate is
-called at
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/job.go"><code>job.go:50</code></a>, before <code>AcquireJob</code>. ARC
-has no equivalent seam, because the runner process itself claims the job. This is
-the same shape of durable differentiator as worker right-sizing
-(<a href="../../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">§D.7</a>):
-a capability that must live inside the control plane that owns the boundary.</p>
-<p><strong>The marginal cost is low because #793 built the machinery.</strong> The rung pattern,
-the <code>reason</code>-labelled rejection metric, the fail-open <code>Target</code> contract, the
-condition/gauge plumbing, and the operator-doc pattern all exist. Phase 1 adds a
-third rung to a ladder that already has two.</p>
-<p><strong>Where a tenant feels it.</strong> Two shapes, and they are the shapes GAG targets:
-GPU/spot tenants, where one wrongly claimed job costs a cancelled run on
-expensive hardware, and burst tenants, where a fan-out of <em>N</em> jobs currently
-becomes <em>N</em> wasted claims.</p>
-<p><strong>The honest bound on the value.</strong> None of the three phases eliminates the first
-wasted claim, and none removes the need for <code>pendingPodDeadline</code> and the reaper.
-Phases 1 and 2 bound the <em>rate</em> of wasted claims (§5, the trickle property);
-phase 3 removes most of the claims but buys a dependency. That bound is the
-reason this is worth doing incrementally rather than as one large feature.</p>
+<p><strong>No CI runner controller does capacity-aware intake.</strong> ARC's <a href="https://github.com/actions/actions-runner-controller/issues/3647">#3647</a> asks for a <em>longer wait after claiming</em>, never for fewer claims.
+GitLab documents over-claiming as intentional (<code>poll_timeout</code>: "Use this setting for queueing more builds than the cluster can handle at a time").
+Kueue does consume <code>ProvisioningRequest</code>, but as an <code>AdmissionCheck</code> below the claim boundary, and it needs cluster-admin (<a href="../../design/appendix-d-alternatives-considered/#d5-kueue-and-kubernetes-job-queue--quota-managers">§D.5</a>).</p>
+<p><strong>GAG is structurally positioned to do it and ARC is not.</strong> The decision point has to exist before the claim, and in GAG it already does: the admission gate is called at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/job.go"><code>job.go:50</code></a>, before <code>AcquireJob</code>.
+ARC has no equivalent seam, because the runner process itself claims the job.
+This is the same shape of durable differentiator as worker right-sizing (<a href="../../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">§D.7</a>): a capability that must live inside the control plane that owns the boundary.</p>
+<p><strong>The marginal cost is low because #793 built the machinery.</strong> The rung pattern, the <code>reason</code>-labelled rejection metric, the fail-open <code>Target</code> contract, the condition/gauge plumbing, and the operator-doc pattern all exist.
+Phase 1 adds a third rung to a ladder that already has two.</p>
+<p><strong>Where a tenant feels it.</strong> Two shapes, and they are the shapes GAG targets: GPU/spot tenants, where one wrongly claimed job costs a cancelled run on expensive hardware, and burst tenants, where a fan-out of <em>N</em> jobs currently becomes <em>N</em> wasted claims.</p>
+<p><strong>The honest bound on the value.</strong> None of the three phases eliminates the first wasted claim, and none removes the need for <code>pendingPodDeadline</code> and the reaper.
+Phases 1 and 2 bound the <em>rate</em> of wasted claims (§5, the trickle property); phase 3 removes most of the claims but buys a dependency.
+That bound is the reason this is worth doing incrementally rather than as one large feature.</p>
 <h2 id="3-what-changes-on-a-fixed-size-cluster">3. What changes on a fixed-size cluster<a class="headerlink" href="#3-what-changes-on-a-fixed-size-cluster" title="Permanent link">&para;</a></h2>
-<p>An on-prem cluster with a contracted node count is not a degenerate case of the
-elastic one, it is the case where <strong>the complexity mostly collapses</strong>, and it is
-a core deployment shape for self-hosted runners, so the plan is ordered around
-it.</p>
-<p>With no autoscaler running, no actor is waiting on the unplaceable pod. The
-Pending pod is not a request for anything; it is pure waste. The rung the
-<a href="https://github.com/actions-gateway/github-actions-gateway/issues/785">issue</a>
-rejected as "simplest and wrong" (gate directly on <code>WorkersUnschedulable</code>) is
-simply <strong>right</strong> there, and it needs no new signal, no new CRD, and no new
-dependency, because the condition is already computed in the tree.</p>
-<p>The corollary matters for the other two phases: on a fixed-size cluster,
-the autoscaler-declination signal would never fire (no autoscaler, no event) and
-<code>Probe</code>/<code>Provision</code> would fail open (no CRD, nothing to answer), so both degrade
-to today's behavior. A plan that shipped only those two would deliver <strong>nothing</strong>
-to the fixed-size deployment. Hence the ordering below.</p>
+<p>An on-prem cluster with a contracted node count is not a degenerate case of the elastic one, it is the case where <strong>the complexity mostly collapses</strong>, and it is a core deployment shape for self-hosted runners, so the plan is ordered around it.</p>
+<p>With no autoscaler running, no actor is waiting on the unplaceable pod.
+The Pending pod is not a request for anything; it is pure waste.
+The rung the <a href="https://github.com/actions-gateway/github-actions-gateway/issues/785">issue</a> rejected as "simplest and wrong" (gate directly on <code>WorkersUnschedulable</code>) is simply <strong>right</strong> there, and it needs no new signal, no new CRD, and no new dependency, because the condition is already computed in the tree.</p>
+<p>The corollary matters for the other two phases: on a fixed-size cluster, the autoscaler-declination signal would never fire (no autoscaler, no event) and <code>Probe</code>/<code>Provision</code> would fail open (no CRD, nothing to answer), so both degrade to today's behavior.
+A plan that shipped only those two would deliver <strong>nothing</strong> to the fixed-size deployment.
+Hence the ordering below.</p>
 <p>Two nuances worth keeping straight:</p>
 <ul>
-<li><strong>"Fixed-size" is a property of the cluster, not of the signal.</strong> Soundness
-  therefore has to be established out of band. This plan takes it as an operator
-  assertion — the gateway's <code>clusterCapacity.nodeAutoscaling</code> IS that assertion (§5a) — not an auto-detection: a
-  wrong auto-detection starves a tenant, and the operator knows their node
-  contract. §10 keeps a detected-autoscaler <em>warning</em> as an open question.</li>
-<li><strong>An elastic cluster at its contracted ceiling reports itself.</strong> Cluster
-  autoscaler's declination message includes <code>max total nodes in cluster reached</code>
-  and per-pool <code>max node group size reached</code>, so the on-prem-with-a-bounded-CA
-  case is covered by Phase 2's mechanism without asserting anything.</li>
+<li><strong>"Fixed-size" is a property of the cluster, not of the signal.</strong> Soundness therefore has to be established out of band.
+  This plan takes it as an operator assertion — the gateway's <code>clusterCapacity.nodeAutoscaling</code> IS that assertion (§5a) — not an auto-detection: a wrong auto-detection starves a tenant, and the operator knows their node contract. §10 keeps a detected-autoscaler <em>warning</em> as an open question.</li>
+<li><strong>An elastic cluster at its contracted ceiling reports itself.</strong> Cluster autoscaler's declination message includes <code>max total nodes in cluster reached</code> and per-pool <code>max node group size reached</code>, so the on-prem-with-a-bounded-CA case is covered by Phase 2's mechanism without asserting anything.</li>
 </ul>
 <h2 id="4-what-changes-when-runnersets-target-different-node-pools">4. What changes when RunnerSets target different node pools<a class="headerlink" href="#4-what-changes-when-runnersets-target-different-node-pools" title="Permanent link">&para;</a></h2>
-<p>Placeability is a property of the pod shape, so a verdict is only ever valid for
-the shape that produced it: a RunnerSet pinned to <code>gpu-a100</code> being unplaceable
-says nothing about one on <code>cpu-standard</code>.</p>
-<p>The design gets this right by construction rather than by extra machinery,
-because <strong>the verdict is keyed to the RunnerSet</strong>, and a RunnerSet resolves to
-exactly one worker template at a time (its own <code>templateRef</code>, or the gateway or
-cluster default it inherits, §H.4), and therefore one pod shape and one set of
-pools that shape can land on. Each set computes its condition from its own
-worker pods (<code>LabelRunnerSet</code>), so a drained GPU pool gates the GPU sets while CPU sets keep
-claiming. Per-pool behavior falls out of per-object keying; there is no need for
-the per-template granularity the issue proposed, and no cluster-wide gate to
-blast-radius.</p>
+<p>Placeability is a property of the pod shape, so a verdict is only ever valid for the shape that produced it: a RunnerSet pinned to <code>gpu-a100</code> being unplaceable says nothing about one on <code>cpu-standard</code>.</p>
+<p>The design gets this right by construction rather than by extra machinery, because <strong>the verdict is keyed to the RunnerSet</strong>, and a RunnerSet resolves to exactly one worker template at a time (its own <code>templateRef</code>, or the gateway or cluster default it inherits, §H.4), and therefore one pod shape and one set of pools that shape can land on.
+Each set computes its condition from its own worker pods (<code>LabelRunnerSet</code>), so a drained GPU pool gates the GPU sets while CPU sets keep claiming.
+Per-pool behavior falls out of per-object keying; there is no need for the per-template granularity the issue proposed, and no cluster-wide gate to blast-radius.</p>
 <p>Consequences to record:</p>
 <ul>
-<li><strong>Quota cannot substitute for this rung on a multi-pool cluster.</strong> Namespace
-  <code>ResourceQuota</code> is namespace-wide and pool-blind: it answers "does the
-  namespace have room", not "does the pool this shape needs have room". On a
-  contracted on-prem cluster with separate CPU and GPU pools, those two answers
-  routinely disagree, which is exactly the gap Phase 1 closes.</li>
-<li><strong>Residual: a shared, genuinely full pool.</strong> Every set targeting it gates and
-  trickles independently, so aggregate wasted claims scale with the number of
-  gated RunnerSets (≈1 per set per deadline window) rather than with burst size.
-  A large improvement, not a total one. Cross-set coordination is a non-goal
-  (§10); it would need a namespace-level shared verdict and is not worth the
-  coupling until measured.</li>
-<li><strong>The autoscaler's message is per-pool and worth surfacing.</strong> CA aggregates
-  rejection reasons per node group ("1 node(s) had untolerated taint(s)", "1 max
-  node group size reached" — measured, <a href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474">§9c</a>),
-  which is what makes the Phase 2 condition <em>actionable</em> rather than merely true.
-  Put it in the condition message. Note what the sample does <em>not</em> contain: the
-  taint's key and value stay in CA's logs, so the condition names the ceiling but
-  only the category of taint.</li>
+<li><strong>Quota cannot substitute for this rung on a multi-pool cluster.</strong> Namespace <code>ResourceQuota</code> is namespace-wide and pool-blind: it answers "does the namespace have room", not "does the pool this shape needs have room".
+  On a contracted on-prem cluster with separate CPU and GPU pools, those two answers routinely disagree, which is exactly the gap Phase 1 closes.</li>
+<li><strong>Residual: a shared, genuinely full pool.</strong> Every set targeting it gates and trickles independently, so aggregate wasted claims scale with the number of gated RunnerSets (≈1 per set per deadline window) rather than with burst size.
+  A large improvement, not a total one.
+  Cross-set coordination is a non-goal (§10); it would need a namespace-level shared verdict and is not worth the coupling until measured.</li>
+<li><strong>The autoscaler's message is per-pool and worth surfacing.</strong> CA aggregates rejection reasons per node group ("1 node(s) had untolerated taint(s)", "1 max node group size reached" — measured, <a href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474">§9c</a>), which is what makes the Phase 2 condition <em>actionable</em> rather than merely true.
+  Put it in the condition message.
+  Note what the sample does <em>not</em> contain: the taint's key and value stay in CA's logs, so the condition names the ceiling but only the category of taint.</li>
 </ul>
 <h2 id="5-design-shared-by-all-phases">5. Design shared by all phases<a class="headerlink" href="#5-design-shared-by-all-phases" title="Permanent link">&para;</a></h2>
-<p><strong>Two fields on two objects, one axis each.</strong> Revised by Q470; the original
-single-enum design and why it was wrong are in <a href="#5a-the-single-enum-was-two-axes-q470">§5a</a>.</p>
+<p><strong>Two fields on two objects, one axis each.</strong> Revised by Q470; the original single-enum design and why it was wrong are in <a href="#5a-the-single-enum-was-two-axes-q470">§5a</a>.</p>
 <p><code>RunnerSet.spec.capacityGate.mode</code> — the tenant's policy:</p>
 <table>
 <thead>
@@ -3175,13 +3083,9 @@ single-enum design and why it was wrong are in <a href="#5a-the-single-enum-was-
 </tr>
 </tbody>
 </table>
-<p>Every value but <code>Off</code> refuses jobs; they differ in <em>how the AGC learns</em> the cluster
-cannot place the pod, which is why they are named for the method (Q476). <code>Observe</code>
-reads evidence that already exists; <code>Probe</code>/<code>Provision</code> solicit an answer. A bare
-<code>On</code> stopped distinguishing those the moment the axis grew, and it was renamed while
-the value was days old and unreleased.</p>
-<p><code>ActionsGateway.spec.clusterCapacity.nodeAutoscaling</code> — the platform operator's fact,
-which selects the signal:</p>
+<p>Every value but <code>Off</code> refuses jobs; they differ in <em>how the AGC learns</em> the cluster cannot place the pod, which is why they are named for the method (Q476). <code>Observe</code> reads evidence that already exists; <code>Probe</code>/<code>Provision</code> solicit an answer.
+A bare <code>On</code> stopped distinguishing those the moment the axis grew, and it was renamed while the value was days old and unreleased.</p>
+<p><code>ActionsGateway.spec.clusterCapacity.nodeAutoscaling</code> — the platform operator's fact, which selects the signal:</p>
 <table>
 <thead>
 <tr>
@@ -3206,185 +3110,86 @@ which selects the signal:</p>
 <p>v2 only: v1 <code>RunnerGroup</code> is terminal (Q273/Q264), so its adapter gets a no-op method.</p>
 <p><strong>One rung, one condition, one metric label.</strong></p>
 <ul>
-<li><code>Target.CapacityDeclined(ctx) (declined bool, detail string)</code> joins
-  <code>Ceiling</code>/<code>QuotaExhausted</code>/<code>QuotaCapacity</code> in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/target.go"><code>target.go</code></a>, fail-open by
-  contract like <code>QuotaExhausted</code>.</li>
-<li><strong>And its integer counterpart, in the same change.</strong> Q443 established that a rung
-  reaches the default acquisition tier only if it is also expressed in
-  <code>AdvertiseCapacity</code> — as a bound on the advertised total, the way <code>QuotaCapacity</code>
-  expresses rung 1 (<a href="#9b-what-the-port-shipped">§9b</a>). A phase that ships only
-  <code>CapacityDeclined</code> ships classic-only and inherits the exact defect Q443 fixed. The
-  arithmetic is the same shape: <code>declined</code> ⇒ contribute a bound of the set's own
-  in-flight worker pods (no room for more), otherwise no bound.</li>
-<li><code>Admit</code> gains a third rung, ordered <strong>after</strong> quota and <strong>before</strong> the ceiling
-  (like quota it reserves nothing, so the reservation arithmetic is untouched),
-  rejecting with a new <code>runnercore.AdmitReasonCapacity = "capacity"</code> on the
-  existing <code>actions_gateway_jobs_admission_rejected_total{reason}</code> metric.</li>
-<li>A new <code>WorkerCapacityDeclined</code> condition in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apiconditions/conditions.go"><code>api/apiconditions/conditions.go</code></a> with
-  one-line re-exports per version (<code>check-v2-api-sync.sh</code> gates every shared v2
-  file, and <code>conditions_test.go</code>'s exhaustive name list must be extended).
-  Reasons name the source: <code>PodsUnschedulable</code>, <code>ScaleUpDeclined</code>,
-  <code>CapacityUnavailable</code>, cleared by <code>CapacityAvailable</code>.</li>
-<li><strong>Not</strong> added to <code>ImpairingConditionTypes()</code>: <code>WorkersUnschedulable</code> is already
-  in that rollup and is derived from the same underlying fact, so adding this one
-  would double-count into the GMC's <code>RunnerSetsDegraded</code> summary (Q304).</li>
+<li><code>Target.CapacityDeclined(ctx) (declined bool, detail string)</code> joins <code>Ceiling</code>/<code>QuotaExhausted</code>/<code>QuotaCapacity</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/target.go"><code>target.go</code></a>, fail-open by contract like <code>QuotaExhausted</code>.</li>
+<li><strong>And its integer counterpart, in the same change.</strong> Q443 established that a rung reaches the default acquisition tier only if it is also expressed in <code>AdvertiseCapacity</code> — as a bound on the advertised total, the way <code>QuotaCapacity</code> expresses rung 1 (<a href="#9b-what-the-port-shipped">§9b</a>).
+  A phase that ships only <code>CapacityDeclined</code> ships classic-only and inherits the exact defect Q443 fixed.
+  The arithmetic is the same shape: <code>declined</code> ⇒ contribute a bound of the set's own in-flight worker pods (no room for more), otherwise no bound.</li>
+<li><code>Admit</code> gains a third rung, ordered <strong>after</strong> quota and <strong>before</strong> the ceiling (like quota it reserves nothing, so the reservation arithmetic is untouched), rejecting with a new <code>runnercore.AdmitReasonCapacity = "capacity"</code> on the existing <code>actions_gateway_jobs_admission_rejected_total{reason}</code> metric.</li>
+<li>A new <code>WorkerCapacityDeclined</code> condition in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apiconditions/conditions.go"><code>api/apiconditions/conditions.go</code></a> with one-line re-exports per version (<code>check-v2-api-sync.sh</code> gates every shared v2 file, and <code>conditions_test.go</code>'s exhaustive name list must be extended).
+  Reasons name the source: <code>PodsUnschedulable</code>, <code>ScaleUpDeclined</code>, <code>CapacityUnavailable</code>, cleared by <code>CapacityAvailable</code>.</li>
+<li><strong>Not</strong> added to <code>ImpairingConditionTypes()</code>: <code>WorkersUnschedulable</code> is already in that rollup and is derived from the same underlying fact, so adding this one would double-count into the GMC's <code>RunnerSetsDegraded</code> summary (Q304).</li>
 </ul>
-<p>A separate condition rather than gating on <code>WorkersUnschedulable</code> itself, for
-three reasons: it means something different to an operator ("intake is being
-refused" versus "pods are stuck"), it stays stable across all three phases while
-the source underneath it changes, and <code>WorkersUnschedulable</code> is already an
-impairing rollup input, so overloading it would tangle the gateway-level Degraded
-summary with an intake decision.</p>
-<p><strong>The trickle property, and why gating stays safe.</strong> The gate reads a condition
-that is <em>derived from the existence of a stuck pod</em>, which makes it
-self-clearing and self-probing: condition True stops intake, the reaper deletes
-the pod at <code>pendingPodDeadline</code>, the condition clears, one job is claimed, and if
-capacity is still absent the new pod trips it again. A burst of <em>N</em> wasted claims
-becomes roughly one per deadline window, and a Pending pod is present for much of
-that window, so an autoscaler (if any) keeps being asked. This is what makes even
-the Phase 1 mode non-suppressing in practice, and it is also the recovery
-mechanism on a fixed-size cluster, where capacity returns silently when in-flight
-jobs finish. <strong>It must be asserted by a test, not assumed.</strong> As originally
-shipped this property held only on the classic tier — clearing the condition
-restored the scale-set tier's whole advertisement, measured as a no-op in
-<a href="#9e-what-the-dogfood-run-measured-q469">§9e</a> — until
-<a href="#9g-the-latch--a-bound-that-survives-the-reap-q512">§9g</a>'s latch gave both
-tiers a true one-probe-per-window trickle (Q512).</p>
-<p><strong>Fail-open everywhere.</strong> Mode <code>Off</code>, an unreadable owner, an unresolved template
-chain, an unreadable pod list, an absent autoscaler, a missing CRD: all yield
-<code>declined=false</code>, leaving <code>ceilingCheck</code> and the <code>pendingPodDeadline</code> reaper as
-the backstops. The gate may under-gate freely (that is today's behavior); it must
-never over-gate, because over-gating starves a tenant.</p>
+<p>A separate condition rather than gating on <code>WorkersUnschedulable</code> itself, for three reasons: it means something different to an operator ("intake is being refused" versus "pods are stuck"), it stays stable across all three phases while the source underneath it changes, and <code>WorkersUnschedulable</code> is already an impairing rollup input, so overloading it would tangle the gateway-level Degraded summary with an intake decision.</p>
+<p><strong>The trickle property, and why gating stays safe.</strong> The gate reads a condition that is <em>derived from the existence of a stuck pod</em>, which makes it self-clearing and self-probing: condition True stops intake, the reaper deletes the pod at <code>pendingPodDeadline</code>, the condition clears, one job is claimed, and if capacity is still absent the new pod trips it again.
+A burst of <em>N</em> wasted claims becomes roughly one per deadline window, and a Pending pod is present for much of that window, so an autoscaler (if any) keeps being asked.
+This is what makes even the Phase 1 mode non-suppressing in practice, and it is also the recovery mechanism on a fixed-size cluster, where capacity returns silently when in-flight jobs finish. <strong>It must be asserted by a test, not assumed.</strong> As originally shipped this property held only on the classic tier — clearing the condition restored the scale-set tier's whole advertisement, measured as a no-op in <a href="#9e-what-the-dogfood-run-measured-q469">§9e</a> — until <a href="#9g-the-latch--a-bound-that-survives-the-reap-q512">§9g</a>'s latch gave both tiers a true one-probe-per-window trickle (Q512).</p>
+<p><strong>Fail-open everywhere.</strong> Mode <code>Off</code>, an unreadable owner, an unresolved template chain, an unreadable pod list, an absent autoscaler, a missing CRD: all yield <code>declined=false</code>, leaving <code>ceilingCheck</code> and the <code>pendingPodDeadline</code> reaper as the backstops.
+The gate may under-gate freely (that is today's behavior); it must never over-gate, because over-gating starves a tenant.</p>
 <h2 id="5a-the-single-enum-was-two-axes-q470">5a. The single enum was two axes (Q470)<a class="headerlink" href="#5a-the-single-enum-was-two-axes-q470" title="Permanent link">&para;</a></h2>
-<p>Shipped 2026-07-27, immediately after phase 2, while the field was still pre-GA and
-one day old. Recorded rather than silently rewritten, because §5's original decision
-was deliberate and the reason it was wrong is the durable part.</p>
-<p><strong>What §5 chose.</strong> One growing enum on the <code>RunnerSet</code>: <code>Off</code> |
-<code>SchedulerVerdict</code> | <code>AutoscalerVerdict</code> | <code>Probe</code> | <code>Provision</code>. The stated rationale
-— avoid a second field, keep the choice mutually exclusive — is true as far as it goes.</p>
+<p>Shipped 2026-07-27, immediately after phase 2, while the field was still pre-GA and one day old.
+Recorded rather than silently rewritten, because §5's original decision was deliberate and the reason it was wrong is the durable part.</p>
+<p><strong>What §5 chose.</strong> One growing enum on the <code>RunnerSet</code>: <code>Off</code> | <code>SchedulerVerdict</code> | <code>AutoscalerVerdict</code> | <code>Probe</code> | <code>Provision</code>.
+The stated rationale — avoid a second field, keep the choice mutually exclusive — is true as far as it goes.</p>
 <p><strong>Why it was the wrong cut.</strong> The enum was carrying two independent things:</p>
 <ol>
 <li><em>Should this set refuse work it cannot run?</em> — a policy choice, and the tenant's.</li>
-<li><em>Which signal may be trusted here?</em> — a consequence of whether the cluster can
-   grow, which is a property of the <strong>cluster</strong>, identical for every set in it.</li>
+<li><em>Which signal may be trusted here?</em> — a consequence of whether the cluster can grow, which is a property of the <strong>cluster</strong>, identical for every set in it.</li>
 </ol>
-<p>Conflating them has three costs, in ascending order of seriousness. It multiplies
-values (phase 3 adds two more on axis 1, and <code>ProvisioningRequest</code> availability is a
-third fact on axis 2). It makes two of the values the same policy with different
-evidence, which reads as redundancy. And — the one that actually matters — it asks
-each <strong>tenant</strong> to assert a fact about infrastructure they may not own. In a
-multi-tenant gateway the person writing the <code>RunnerSet</code> is routinely not the person who
-knows the node contract, and <code>SchedulerVerdict</code> on an elastic cluster is the single
-genuinely harmful misconfiguration this feature has. Under the enum it was reachable by
-exactly the party least equipped to avoid it, prevented only by documentation.</p>
-<p><strong>The cut Q470 made.</strong> Axis 1 stays on the <code>RunnerSet</code> as <code>mode: Off|On</code>. Axis 2 moves
-to <code>ActionsGateway.spec.clusterCapacity.nodeAutoscaling</code> (<code>Present</code>|<code>Absent</code>, default
-<code>Present</code>), the object the platform operator owns. The AGC picks the signal from the
-fact. The harmful combination is now <strong>unrepresentable</strong>: no value a tenant can write
-produces scheduler-verdict gating where a node may still arrive
-(<code>TestCapacityGate_TheDangerousCombinationIsUnrepresentable</code>).</p>
-<p><strong>What it cost.</strong> Almost nothing, because the gateway is already resolved on both call
-sites of <code>applyWorkerCapacityConditions</code> — it was a parameter, not a new lookup — and
-the mechanism (matcher, condition, rung, metric) was untouched. The API break was free
-too: pre-GA on two alpha/beta versions, default <code>Off</code>, and <code>SchedulerVerdict</code> had
-existed for one day. Doing it later would have meant a conversion shim and a
-deprecation window.</p>
-<p><strong>What it costs going forward.</strong> A <code>RunnerSet</code> is no longer self-describing — reading
-one no longer tells you which signal gates it, and an operator has to look at the
-gateway too. That is a real loss, mitigated by the condition's <code>reason</code> naming the
-signal on the set itself, and it is the price of putting the assertion where the
-knowledge is.</p>
-<p><strong>Constraint on Q407.</strong> <code>Probe</code>/<code>Provision</code> extend axis 1 (solicit rather than observe),
-not axis 2. Their cluster-side prerequisite — whether the <code>ProvisioningRequest</code> API is
-available — is another <code>clusterCapacity</code> fact, not another mode. And the mode dispatch
-is an explicit switch whose default fails open on an unknown value, so phase 3 must add
-its own arm rather than rely on a fallthrough.</p>
-<p><strong>Rejected on the way.</strong> Deleting axis 2 entirely by inferring elasticity — gate on the
-scheduler's verdict unless an autoscaler is acting, treating <em>silence</em> from any
-autoscaler as "no autoscaler here". It looks like the bigger simplification and is a
-trap: cluster-autoscaler is legitimately silent during backoff, during a cooldown after
-a failed scale-up, and for pods it filters out of its evaluation, so silence is absence
-of evidence. Gating on it would starve a tenant, and it would invert the rule the rest
-of this rung follows — an unreadable pod list, a missing Event, an unrecognized
-vocabulary all resolve to <em>don't gate</em>. §10 already ruled auto-detection out of scope;
-this is the same call, restated because the collapsed enum makes it tempting again.</p>
+<p>Conflating them has three costs, in ascending order of seriousness.
+It multiplies values (phase 3 adds two more on axis 1, and <code>ProvisioningRequest</code> availability is a third fact on axis 2).
+It makes two of the values the same policy with different evidence, which reads as redundancy.
+And — the one that actually matters — it asks each <strong>tenant</strong> to assert a fact about infrastructure they may not own.
+In a multi-tenant gateway the person writing the <code>RunnerSet</code> is routinely not the person who knows the node contract, and <code>SchedulerVerdict</code> on an elastic cluster is the single genuinely harmful misconfiguration this feature has.
+Under the enum it was reachable by exactly the party least equipped to avoid it, prevented only by documentation.</p>
+<p><strong>The cut Q470 made.</strong> Axis 1 stays on the <code>RunnerSet</code> as <code>mode: Off|On</code>.
+Axis 2 moves to <code>ActionsGateway.spec.clusterCapacity.nodeAutoscaling</code> (<code>Present</code>|<code>Absent</code>, default <code>Present</code>), the object the platform operator owns.
+The AGC picks the signal from the fact.
+The harmful combination is now <strong>unrepresentable</strong>: no value a tenant can write produces scheduler-verdict gating where a node may still arrive (<code>TestCapacityGate_TheDangerousCombinationIsUnrepresentable</code>).</p>
+<p><strong>What it cost.</strong> Almost nothing, because the gateway is already resolved on both call sites of <code>applyWorkerCapacityConditions</code> — it was a parameter, not a new lookup — and the mechanism (matcher, condition, rung, metric) was untouched.
+The API break was free too: pre-GA on two alpha/beta versions, default <code>Off</code>, and <code>SchedulerVerdict</code> had existed for one day.
+Doing it later would have meant a conversion shim and a deprecation window.</p>
+<p><strong>What it costs going forward.</strong> A <code>RunnerSet</code> is no longer self-describing — reading one no longer tells you which signal gates it, and an operator has to look at the gateway too.
+That is a real loss, mitigated by the condition's <code>reason</code> naming the signal on the set itself, and it is the price of putting the assertion where the knowledge is.</p>
+<p><strong>Constraint on Q407.</strong> <code>Probe</code>/<code>Provision</code> extend axis 1 (solicit rather than observe), not axis 2.
+Their cluster-side prerequisite — whether the <code>ProvisioningRequest</code> API is available — is another <code>clusterCapacity</code> fact, not another mode.
+And the mode dispatch is an explicit switch whose default fails open on an unknown value, so phase 3 must add its own arm rather than rely on a fallthrough.</p>
+<p><strong>Rejected on the way.</strong> Deleting axis 2 entirely by inferring elasticity — gate on the scheduler's verdict unless an autoscaler is acting, treating <em>silence</em> from any autoscaler as "no autoscaler here".
+It looks like the bigger simplification and is a trap: cluster-autoscaler is legitimately silent during backoff, during a cooldown after a failed scale-up, and for pods it filters out of its evaluation, so silence is absence of evidence.
+Gating on it would starve a tenant, and it would invert the rule the rest of this rung follows — an unreadable pod list, a missing Event, an unrecognized vocabulary all resolve to <em>don't gate</em>. §10 already ruled auto-detection out of scope; this is the same call, restated because the collapsed enum makes it tempting again.</p>
 <h2 id="6-phase-1--the-scheduler-verdict-signal-q405">6. Phase 1 — the scheduler-verdict signal (Q405)<a class="headerlink" href="#6-phase-1--the-scheduler-verdict-signal-q405" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p>The mode name <code>SchedulerVerdict</code> in this section is historical: Q470 replaced it with
-<code>mode: Observe</code> plus <code>clusterCapacity.nodeAutoscaling: Absent</code> on the gateway (<a href="#5a-the-single-enum-was-two-axes-q470">§5a</a>).
+<p>The mode name <code>SchedulerVerdict</code> in this section is historical: Q470 replaced it with <code>mode: Observe</code> plus <code>clusterCapacity.nodeAutoscaling: Absent</code> on the gateway (<a href="#5a-the-single-enum-was-two-axes-q470">§5a</a>).
 The signal, the rung, and the condition are unchanged.</p>
 </blockquote>
-<p>The gateable signal already exists as a published condition, so this phase is
-mostly API surface and wiring.</p>
+<p>The gateable signal already exists as a published condition, so this phase is mostly API surface and wiring.</p>
 <p><strong>Scope</strong></p>
 <ol>
-<li><code>spec.capacityGate.mode</code> on <code>RunnerSet</code> (<code>Off</code>|<code>SchedulerVerdict</code>), with the
-   remaining values reserved and documented as not-yet-implemented; CRD +
-   deepcopy + the two chart copies + the GMC-bundled copy (see
-   <a href="../../development/code-generation/">reference</a>).</li>
-<li><code>WorkerCapacityDeclined</code> condition + reasons (§5), computed alongside the
-   existing evaluations in <code>applyWorkerCapacityConditions</code>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_capacity.go"><code>runnerset_capacity.go</code></a>),
-   reusing <code>evalWorkersUnschedulableForPods</code> rather than re-deriving. Skipped
-   entirely when mode is <code>Off</code> so there is no cost for the default.</li>
-<li><code>runnerSetTarget.CapacityDeclined</code> reading the condition off the cached
-   RunnerSet (a cheap per-delivery read, matching <code>Ceiling</code>/<code>QuotaExhausted</code>);
-   <code>runnerGroupTarget.CapacityDeclined</code> returning false.</li>
-<li>The <code>Admit</code> rung + reason constant + the Debug log line, mirroring the quota
-   rung's shape — <strong>and the matching <code>AdvertiseCapacity</code> rung</strong>, or the mode is
-   inert on the default tier (§5, <a href="#9b-what-the-port-shipped">§9b</a>). A
-   <code>SchedulerVerdict</code> that only lands in <code>Admit</code> is not Phase 1 shipped, it is
-   Phase 1 shipped to the deprecated tier.</li>
-<li>Field doc <strong>and</strong> operator doc stating the soundness precondition in the same
-   words: this mode assumes no autoscaler will act on the pods, and an elastic
-   cluster wants <code>AutoscalerVerdict</code> instead.</li>
+<li><code>spec.capacityGate.mode</code> on <code>RunnerSet</code> (<code>Off</code>|<code>SchedulerVerdict</code>), with the remaining values reserved and documented as not-yet-implemented; CRD + deepcopy + the two chart copies + the GMC-bundled copy (see <a href="../../development/code-generation/">reference</a>).</li>
+<li><code>WorkerCapacityDeclined</code> condition + reasons (§5), computed alongside the existing evaluations in <code>applyWorkerCapacityConditions</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_capacity.go"><code>runnerset_capacity.go</code></a>), reusing <code>evalWorkersUnschedulableForPods</code> rather than re-deriving.
+   Skipped entirely when mode is <code>Off</code> so there is no cost for the default.</li>
+<li><code>runnerSetTarget.CapacityDeclined</code> reading the condition off the cached RunnerSet (a cheap per-delivery read, matching <code>Ceiling</code>/<code>QuotaExhausted</code>); <code>runnerGroupTarget.CapacityDeclined</code> returning false.</li>
+<li>The <code>Admit</code> rung + reason constant + the Debug log line, mirroring the quota rung's shape — <strong>and the matching <code>AdvertiseCapacity</code> rung</strong>, or the mode is inert on the default tier (§5, <a href="#9b-what-the-port-shipped">§9b</a>).
+   A <code>SchedulerVerdict</code> that only lands in <code>Admit</code> is not Phase 1 shipped, it is Phase 1 shipped to the deprecated tier.</li>
+<li>Field doc <strong>and</strong> operator doc stating the soundness precondition in the same words: this mode assumes no autoscaler will act on the pods, and an elastic cluster wants <code>AutoscalerVerdict</code> instead.</li>
 </ol>
-<p><strong>Tests.</strong> Unit: the rung's ordering and fail-open paths in
-<code>admission_internal_test.go</code>; the mode-<code>Off</code> no-op; the trickle cycle
-(gate closes, pod reaped, condition clears, exactly one claim admitted, gate
-closes again). Integration (envtest, <code>cmd/agc/internal/controller/integration/</code>):
-a Pending worker pod with <code>PodScheduled=False/Unschedulable</code> produces the
-condition, and the admission metric increments with <code>reason="capacity"</code>.</p>
-<p><strong>Docs.</strong> <code>03-api-contracts</code> (field), <code>04-operational-flows</code> (the ladder now has
-three rungs), <code>operations/observability-metrics</code> (the new reason label value),
-<code>operations/troubleshooting</code> (what an operator sees, why claims stopped, how to
-turn it off), plus the website positioning page in the same PR per the standing
-rule.</p>
-<p><strong>Estimate.</strong> ~450–700 lines net across ~25 files, 1–2 PRs, Sz M. The v2 gauge
-for the new condition was deliberately out of scope here, and Q319 left it out of
-the <code>actions_gateway_runnerset_*</code> family for the same reason: the condition is
-conditionally <em>absent</em> rather than False when the gate is off, which is its own
-design question. Q643 settled it — the gauge follows the condition, so an ungated
-set emits no series at all, and a <code>reason</code> label carries which of the five reasons
-is current so the latched <code>AwaitingProbe</code> state is distinguishable from a live
-decline.</p>
+<p><strong>Tests.</strong> Unit: the rung's ordering and fail-open paths in <code>admission_internal_test.go</code>; the mode-<code>Off</code> no-op; the trickle cycle (gate closes, pod reaped, condition clears, exactly one claim admitted, gate closes again).
+Integration (envtest, <code>cmd/agc/internal/controller/integration/</code>): a Pending worker pod with <code>PodScheduled=False/Unschedulable</code> produces the condition, and the admission metric increments with <code>reason="capacity"</code>.</p>
+<p><strong>Docs.</strong> <code>03-api-contracts</code> (field), <code>04-operational-flows</code> (the ladder now has three rungs), <code>operations/observability-metrics</code> (the new reason label value), <code>operations/troubleshooting</code> (what an operator sees, why claims stopped, how to turn it off), plus the website positioning page in the same PR per the standing rule.</p>
+<p><strong>Estimate.</strong> ~450–700 lines net across ~25 files, 1–2 PRs, Sz M. The v2 gauge for the new condition was deliberately out of scope here, and Q319 left it out of the <code>actions_gateway_runnerset_*</code> family for the same reason: the condition is conditionally <em>absent</em> rather than False when the gate is off, which is its own design question.
+Q643 settled it — the gauge follows the condition, so an ungated set emits no series at all, and a <code>reason</code> label carries which of the five reasons is current so the latched <code>AwaitingProbe</code> state is distinguishable from a live decline.</p>
 <h2 id="7-phase-2--the-autoscaler-declination-signal-q406">7. Phase 2 — the autoscaler-declination signal (Q406)<a class="headerlink" href="#7-phase-2--the-autoscaler-declination-signal-q406" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p>The mode name <code>AutoscalerVerdict</code> in this section is historical: Q470 replaced it with
-<code>mode: Observe</code> plus the gateway default <code>clusterCapacity.nodeAutoscaling: Present</code>
-(<a href="#5a-the-single-enum-was-two-axes-q470">§5a</a>). The signal is unchanged.</p>
+<p>The mode name <code>AutoscalerVerdict</code> in this section is historical: Q470 replaced it with <code>mode: Observe</code> plus the gateway default <code>clusterCapacity.nodeAutoscaling: Present</code> (<a href="#5a-the-single-enum-was-two-axes-q470">§5a</a>).
+The signal is unchanged.</p>
 </blockquote>
-<p>Same rung, different source: the autoscaler's own declination, read from Events
-on the stuck pod. Verified upstream 2026-07-25:</p>
+<p>Same rung, different source: the autoscaler's own declination, read from Events on the stuck pod.
+Verified upstream 2026-07-25:</p>
 <ul>
-<li><strong>Cluster autoscaler</strong> emits <code>Normal NotTriggerScaleUp</code>, "pod didn't trigger
-  scale-up: <code>&lt;per-node-group reasons&gt;</code>", from
-  <code>cluster-autoscaler/processors/status/eventing_scale_up_processor.go</code>, only when
-  a loop concluded <em>without</em> attempting a scale-up. GKE's autoscaler is
-  CA-derived and emits it, so this is verifiable on the existing dogfood cluster
-  with no new node-pool configuration.</li>
-<li><strong>Karpenter</strong> emits <code>Warning FailedScheduling</code>, "Failed to schedule pod,
-  <code>&lt;err&gt;</code>", from <code>pkg/controllers/provisioning/scheduling/events.go</code>, plus
-  <code>NoCompatibleInstanceTypes</code> on the NodePool. <strong><code>FailedScheduling</code> is also
-  kube-scheduler's own reason</strong>, so the discriminator must be the reporting
-  controller, never the reason string alone.</li>
+<li><strong>Cluster autoscaler</strong> emits <code>Normal NotTriggerScaleUp</code>, "pod didn't trigger scale-up: <code>&lt;per-node-group reasons&gt;</code>", from <code>cluster-autoscaler/processors/status/eventing_scale_up_processor.go</code>, only when a loop concluded <em>without</em> attempting a scale-up.
+  GKE's autoscaler is CA-derived and emits it, so this is verifiable on the existing dogfood cluster with no new node-pool configuration.</li>
+<li><strong>Karpenter</strong> emits <code>Warning FailedScheduling</code>, "Failed to schedule pod, <code>&lt;err&gt;</code>", from <code>pkg/controllers/provisioning/scheduling/events.go</code>, plus <code>NoCompatibleInstanceTypes</code> on the NodePool. <strong><code>FailedScheduling</code> is also kube-scheduler's own reason</strong>, so the discriminator must be the reporting controller, never the reason string alone.</li>
 </ul>
-<p><strong>One matcher per autoscaler project, not per cloud provider, and no plugin
-interface.</strong> The obvious worry is a combinatorial integration surface, and the
-counts say otherwise, because both projects emit their events from shared core
-code that every provider vendors (verified 2026-07-25):</p>
+<p><strong>One matcher per autoscaler project, not per cloud provider, and no plugin interface.</strong> The obvious worry is a combinatorial integration surface, and the counts say otherwise, because both projects emit their events from shared core code that every provider vendors (verified 2026-07-25):</p>
 <table>
 <thead>
 <tr>
@@ -3406,398 +3211,176 @@ code that every provider vendors (verified 2026-07-25):</p>
 </tr>
 </tbody>
 </table>
-<p>Searching either organization's provider code for those event reasons returns
-zero hits: CA emits from <code>processors/status/eventing_scale_up_processor.go</code> and
-Karpenter from <code>pkg/controllers/provisioning/scheduling/events.go</code>. So ~46
-providers collapse to two string matchers. The managed offerings are not a third
-vocabulary either: GKE's autoscaler is CA-derived, EKS runs upstream CA or
-Karpenter, AKS runs CA or Node Auto Provisioning (which is Karpenter), and
-OpenShift's MachineAutoscaler wraps CA.</p>
-<p>A provider abstraction is therefore not warranted, and the distinguishing rule is
-worth stating because this repo has legitimately built one before: <strong>pluggable
-backends earn their keep when the <em>behavior</em> differs per provider, not when only
-the recognized input differs.</strong> Q245's <code>--fqdn-policy-backend=cilium|calico|gke</code>
-needed real backends because each CNI requires emitting a different CRD. Here
-every autoscaler yields the same boolean and the same action, so a registry plus
-an interface plus a config field would be pure overhead over two <code>case</code> arms.</p>
-<p><strong>The proprietary tail is handled by the fail-open contract, not by research.</strong>
-Commercial optimizers (CAST AI, Spot Ocean, Zesty) may emit their own events or
-none, and cannot be enumerated. An unrecognized autoscaler produces no match,
-which yields <code>declined=false</code>, which is exactly today's behavior. That asymmetry
-is the safety argument: a missed match costs nothing, a wrong match starves a
-tenant, so the matcher stays deliberately narrow and broad coverage is explicitly
-not a goal. If demand for a specific proprietary autoscaler ever appears, the
-extension point is data rather than code (an operator-settable list of extra
-<code>(reason, reportingController)</code> pairs, following the
-<code>--allowed-infra-priority-classes</code> allowlist pattern, ~20 lines and no per-vendor
-code). Documented here as an extension point; not built until asked for.</p>
-<p><strong>Scope.</strong> A matcher over pod Events (new
-<code>cmd/agc/internal/controller/autoscaler_verdict.go</code>), read with a live
-(uncached) client <strong>only</strong> for pods already Pending past the scheduling grace and
-only when mode is <code>AutoscalerVerdict</code>, so there is no event informer and no
-steady-state cost; the aggregated reason text into the condition message; <code>events</code>
-<code>get;list;watch</code> added to
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/doc.go"><code>doc.go</code></a>'s markers <strong>and</strong> the
-chart's hand-maintained <code>charts/actions-gateway/files/agc-*-rules.yaml</code>.</p>
-<p><strong>Tests.</strong> Table-driven matcher unit tests: the CA message matches, the Karpenter
-message matches, a <code>FailedScheduling</code> from <code>default-scheduler</code> does <strong>not</strong> match,
-no events and unreadable events fail open. Plus the envtest counterpart stamping
-a real Event.</p>
+<p>Searching either organization's provider code for those event reasons returns zero hits: CA emits from <code>processors/status/eventing_scale_up_processor.go</code> and Karpenter from <code>pkg/controllers/provisioning/scheduling/events.go</code>.
+So ~46 providers collapse to two string matchers.
+The managed offerings are not a third vocabulary either: GKE's autoscaler is CA-derived, EKS runs upstream CA or Karpenter, AKS runs CA or Node Auto Provisioning (which is Karpenter), and OpenShift's MachineAutoscaler wraps CA.</p>
+<p>A provider abstraction is therefore not warranted, and the distinguishing rule is worth stating because this repo has legitimately built one before: <strong>pluggable backends earn their keep when the <em>behavior</em> differs per provider, not when only the recognized input differs.</strong> Q245's <code>--fqdn-policy-backend=cilium|calico|gke</code> needed real backends because each CNI requires emitting a different CRD.
+Here every autoscaler yields the same boolean and the same action, so a registry plus an interface plus a config field would be pure overhead over two <code>case</code> arms.</p>
+<p><strong>The proprietary tail is handled by the fail-open contract, not by research.</strong> Commercial optimizers (CAST AI, Spot Ocean, Zesty) may emit their own events or none, and cannot be enumerated.
+An unrecognized autoscaler produces no match, which yields <code>declined=false</code>, which is exactly today's behavior.
+That asymmetry is the safety argument: a missed match costs nothing, a wrong match starves a tenant, so the matcher stays deliberately narrow and broad coverage is explicitly not a goal.
+If demand for a specific proprietary autoscaler ever appears, the extension point is data rather than code (an operator-settable list of extra <code>(reason, reportingController)</code> pairs, following the <code>--allowed-infra-priority-classes</code> allowlist pattern, ~20 lines and no per-vendor code).
+Documented here as an extension point; not built until asked for.</p>
+<p><strong>Scope.</strong> A matcher over pod Events (new <code>cmd/agc/internal/controller/autoscaler_verdict.go</code>), read with a live (uncached) client <strong>only</strong> for pods already Pending past the scheduling grace and only when mode is <code>AutoscalerVerdict</code>, so there is no event informer and no steady-state cost; the aggregated reason text into the condition message; <code>events</code> <code>get;list;watch</code> added to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/doc.go"><code>doc.go</code></a>'s markers <strong>and</strong> the chart's hand-maintained <code>charts/actions-gateway/files/agc-*-rules.yaml</code>.</p>
+<p><strong>Tests.</strong> Table-driven matcher unit tests: the CA message matches, the Karpenter message matches, a <code>FailedScheduling</code> from <code>default-scheduler</code> does <strong>not</strong> match, no events and unreadable events fail open.
+Plus the envtest counterpart stamping a real Event.</p>
 <p><strong>Estimate.</strong> ~350–550 lines net across ~12 files, 1 PR, Sz M.</p>
-<p><strong>Risks.</strong> Events expire (<code>--event-ttl</code>, commonly 1h), which is acceptable: the
-signal is only consulted inside the <code>pendingPodDeadline</code> window and absence fails
-open. <code>max total nodes in cluster reached</code> is a cluster-wide verdict that will
-trip every set at once; correct (no node is coming) but worth calling out in the
-operator doc. Unknown until measured: how often CA emits the event for a
-<em>transient</em> condition it would have resolved on its next loop.</p>
+<p><strong>Risks.</strong> Events expire (<code>--event-ttl</code>, commonly 1h), which is acceptable: the signal is only consulted inside the <code>pendingPodDeadline</code> window and absence fails open. <code>max total nodes in cluster reached</code> is a cluster-wide verdict that will trip every set at once; correct (no node is coming) but worth calling out in the operator doc.
+Unknown until measured: how often CA emits the event for a <em>transient</em> condition it would have resolved on its next loop.</p>
 <h2 id="7a-what-phase-2-shipped">7a. What phase 2 shipped<a class="headerlink" href="#7a-what-phase-2-shipped" title="Permanent link">&para;</a></h2>
-<p>Shipped 2026-07-27. §7's scope landed as specified; four things were decided during
-implementation that the spec did not settle, and each is a constraint on Q407 rather
-than a local choice.</p>
-<p><strong>The verdict is the newest relevant event, not the presence of a declination.</strong> §7
-specified two declination matchers and stopped there, which would have let a stale
-<code>NotTriggerScaleUp</code> gate a set the autoscaler had since started scaling for — the
-transient-declination risk §7 flagged as "unknown until measured", turned from a
-measurement question into a correctness one. So the matcher also recognizes each
-project's <em>acting</em> signal (CA <code>TriggeredScaleUp</code>, Karpenter <code>Nominated</code>) and returns
-the class of the newest event by timestamp, with same-instant ties resolving open
-(generalized to a one-second concurrency window by <a href="#9d-the-concurrency-window-q478">§9d</a>,
-once a live autoscaler was seen emitting both verdicts inside one loop).
-Ordering reads every timestamp field an Event may carry, because the two recorder
-generations populate different ones and reading only <code>LastTimestamp</code> would sort every
-new-style event at the zero time. This costs nothing — the events are already in hand —
-and removes the failure mode outright rather than deferring it to §9.</p>
-<p><strong>An unrecognized mode fails open, with its own reason.</strong> Q405's condition writer
-treated any non-<code>Off</code> mode as <code>SchedulerVerdict</code>, which was safe while the enum held
-exactly those two values and is not once it holds three. The CRDs ship as their own
-chart and can be upgraded ahead of the AGC, so a <code>Probe</code> selected against an AGC that
-predates Q407 would have silently applied <code>SchedulerVerdict</code>'s semantics — on an
-elastic cluster, precisely the tenant-starving outcome the mode split exists to
-prevent. The mode dispatch is now an explicit switch whose default publishes
-<code>WorkerCapacityDeclined=False/GateModeUnsupported</code>. <strong>Q407 must add its arm to that
-switch</strong>, not rely on a fallthrough.</p>
-<p><strong>A re-check interval, because nothing watches Events.</strong> The gate's signal lives in
-objects the AGC deliberately does not cache, so neither a declination arriving nor a
-later scale-up would re-trigger a reconcile on its own. A set in <code>AutoscalerVerdict</code>
-mode with any stuck pod therefore requeues every 30s while stuck. Both directions
-matter and the second is the safety one: without it the gate would stay closed after
-the autoscaler started acting, which is exactly what §9 step 3 checks for.</p>
-<p><strong>The read budget is bounded and doubly scoped.</strong> Events are read only for pods the
-<code>WorkersUnschedulable</code> evaluation already found stuck past the scheduling grace
-(carried out of that evaluation rather than re-derived, so the two cannot disagree),
-oldest-first, field-selected server-side to one pod by name and UID, and capped at 8
-pods per reconcile with the truncation stated in the condition message. A healthy set
-costs zero reads. RBAC is <code>get</code>/<code>list</code> on core <code>events</code> only — <strong>not</strong> <code>watch</code>, which
-§7 listed: there is no informer, and granting a verb the code does not use would be a
-gratuitous widening.</p>
+<p>Shipped 2026-07-27. §7's scope landed as specified; four things were decided during implementation that the spec did not settle, and each is a constraint on Q407 rather than a local choice.</p>
+<p><strong>The verdict is the newest relevant event, not the presence of a declination.</strong> §7 specified two declination matchers and stopped there, which would have let a stale <code>NotTriggerScaleUp</code> gate a set the autoscaler had since started scaling for — the transient-declination risk §7 flagged as "unknown until measured", turned from a measurement question into a correctness one.
+So the matcher also recognizes each project's <em>acting</em> signal (CA <code>TriggeredScaleUp</code>, Karpenter <code>Nominated</code>) and returns the class of the newest event by timestamp, with same-instant ties resolving open (generalized to a one-second concurrency window by <a href="#9d-the-concurrency-window-q478">§9d</a>, once a live autoscaler was seen emitting both verdicts inside one loop).
+Ordering reads every timestamp field an Event may carry, because the two recorder generations populate different ones and reading only <code>LastTimestamp</code> would sort every new-style event at the zero time.
+This costs nothing — the events are already in hand — and removes the failure mode outright rather than deferring it to §9.</p>
+<p><strong>An unrecognized mode fails open, with its own reason.</strong> Q405's condition writer treated any non-<code>Off</code> mode as <code>SchedulerVerdict</code>, which was safe while the enum held exactly those two values and is not once it holds three.
+The CRDs ship as their own chart and can be upgraded ahead of the AGC, so a <code>Probe</code> selected against an AGC that predates Q407 would have silently applied <code>SchedulerVerdict</code>'s semantics — on an elastic cluster, precisely the tenant-starving outcome the mode split exists to prevent.
+The mode dispatch is now an explicit switch whose default publishes <code>WorkerCapacityDeclined=False/GateModeUnsupported</code>. <strong>Q407 must add its arm to that switch</strong>, not rely on a fallthrough.</p>
+<p><strong>A re-check interval, because nothing watches Events.</strong> The gate's signal lives in objects the AGC deliberately does not cache, so neither a declination arriving nor a later scale-up would re-trigger a reconcile on its own.
+A set in <code>AutoscalerVerdict</code> mode with any stuck pod therefore requeues every 30s while stuck.
+Both directions matter and the second is the safety one: without it the gate would stay closed after the autoscaler started acting, which is exactly what §9 step 3 checks for.</p>
+<p><strong>The read budget is bounded and doubly scoped.</strong> Events are read only for pods the <code>WorkersUnschedulable</code> evaluation already found stuck past the scheduling grace (carried out of that evaluation rather than re-derived, so the two cannot disagree), oldest-first, field-selected server-side to one pod by name and UID, and capped at 8 pods per reconcile with the truncation stated in the condition message.
+A healthy set costs zero reads.
+RBAC is <code>get</code>/<code>list</code> on core <code>events</code> only — <strong>not</strong> <code>watch</code>, which §7 listed: there is no informer, and granting a verb the code does not use would be a gratuitous widening.</p>
 <p><strong>Not measured yet.</strong> §9 owns the live validation and none of it has run for this mode.
-Specifically unmeasured: the event's latency from pod creation (§9 step 4), which sizes
-the condition's staleness bound and is the number that says whether 30s is the right
-re-check; and how often CA emits <code>NotTriggerScaleUp</code> for a condition it resolves on its
-next loop — the recency rule bounds the damage of that case but does not tell us how
-common it is.</p>
+Specifically unmeasured: the event's latency from pod creation (§9 step 4), which sizes the condition's staleness bound and is the number that says whether 30s is the right re-check; and how often CA emits <code>NotTriggerScaleUp</code> for a condition it resolves on its next loop — the recency rule bounds the damage of that case but does not tell us how common it is.</p>
 <h2 id="8-phase-3--probeprovision-q407-deferred">8. Phase 3 — <code>Probe</code>/<code>Provision</code> (Q407, deferred)<a class="headerlink" href="#8-phase-3--probeprovision-q407-deferred" title="Permanent link">&para;</a></h2>
-<p>Full cost, correctness landmines (the <code>PodTemplate</code> object each <code>podSet</code> must
-reference, booking/<code>BookingExpired</code> semantics, the <code>CapacityAvailable</code> vs
-<code>Provisioned</code> condition-name drift, provider support), and the triggers that
-would revive it are recorded in
-<a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>.
+<p>Full cost, correctness landmines (the <code>PodTemplate</code> object each <code>podSet</code> must reference, booking/<code>BookingExpired</code> semantics, the <code>CapacityAvailable</code> vs <code>Provisioned</code> condition-name drift, provider support), and the triggers that would revive it are recorded in <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>.
 Not duplicated here.</p>
-<p>The decision rule: build it only when at least one of (a) Phase 1/2 measurement
-shows residual burn that rate-bounding cannot make acceptable (the GPU/spot case,
-where even one wasted claim per window is expensive), (b) an operator asks with a
-cluster that already runs CA with provisioning requests enabled, or (c) provider
-support broadens enough that the fail-open path stops being the common one.
-Phases 1 and 2 are not throwaway work under any of those: phase 3 swaps the
-rung's data source from an observed verdict to a solicited answer and reuses the
-field, the condition, the metric label, the trickle, and the fail-open contract
-unchanged.</p>
+<p>The decision rule: build it only when at least one of (a) Phase 1/2 measurement shows residual burn that rate-bounding cannot make acceptable (the GPU/spot case, where even one wasted claim per window is expensive), (b) an operator asks with a cluster that already runs CA with provisioning requests enabled, or (c) provider support broadens enough that the fail-open path stops being the common one.
+Phases 1 and 2 are not throwaway work under any of those: phase 3 swaps the rung's data source from an observed verdict to a solicited answer and reuses the field, the condition, the metric label, the trickle, and the fail-open contract unchanged.</p>
 <h2 id="9-validation-to-be-measured-not-asserted">9. Validation (to be measured, not asserted)<a class="headerlink" href="#9-validation-to-be-measured-not-asserted" title="Permanent link">&para;</a></h2>
 <p>On the GKE dogfood cluster, per phase:</p>
 <ol>
-<li>Induce unplaceability with a template the cluster cannot satisfy (a
-   <code>nodeSelector</code> for a nonexistent pool, or a CPU request beyond any machine
-   type). Dispatch a burst of <em>N</em> jobs.</li>
-<li>Count wasted claims as
-   <code>actions_gateway_worker_pods_reaped_total{reason="pending_deadline"}</code> over the
-   burst, which is exactly one per claim that could not be placed. Compare
-   <code>mode: Off</code> against the phase's mode; with the mode on, the drop should be
-   accounted for by
-   <code>actions_gateway_jobs_admission_rejected_total{reason="capacity"}</code>, and the
-   residual should be ≈1 per deadline window (the trickle). Both counters are on
-   the admission/reaper paths, not on job completion.</li>
-<li><strong>The check that actually matters:</strong> with a shape the autoscaler <em>can</em>
-   satisfy, confirm a scale-up still happens and the jobs still run, i.e. the
-   gate did not suppress the trigger. A pass on step 2 with a fail here is a
-   regression, not a win.</li>
-<li>Measure the event's latency from pod creation (Phase 2) to size the condition's
-   staleness bound honestly in the operator doc.</li>
+<li>Induce unplaceability with a template the cluster cannot satisfy (a <code>nodeSelector</code> for a nonexistent pool, or a CPU request beyond any machine type).
+   Dispatch a burst of <em>N</em> jobs.</li>
+<li>Count wasted claims as <code>actions_gateway_worker_pods_reaped_total{reason="pending_deadline"}</code> over the burst, which is exactly one per claim that could not be placed.
+   Compare <code>mode: Off</code> against the phase's mode; with the mode on, the drop should be accounted for by <code>actions_gateway_jobs_admission_rejected_total{reason="capacity"}</code>, and the residual should be ≈1 per deadline window (the trickle).
+   Both counters are on the admission/reaper paths, not on job completion.</li>
+<li><strong>The check that actually matters:</strong> with a shape the autoscaler <em>can</em> satisfy, confirm a scale-up still happens and the jobs still run, i.e. the gate did not suppress the trigger.
+   A pass on step 2 with a fail here is a regression, not a win.</li>
+<li>Measure the event's latency from pod creation (Phase 2) to size the condition's staleness bound honestly in the operator doc.</li>
 </ol>
-<p>Q399 (most dogfood jobs started but never completed) would have perturbed burst
-runs. It is fixed: the tenant moved off the Classic protocol to a single-label
-ScaleSet. The counters above come from the admission path rather than from
-completions, so they were never blocked by it either way. Detail:
-<a href="../gke-dogfood/#b7-create-the-v2-tenant-objects">gke-dogfood B7</a>.</p>
+<p>Q399 (most dogfood jobs started but never completed) would have perturbed burst runs.
+It is fixed: the tenant moved off the Classic protocol to a single-label ScaleSet.
+The counters above come from the admission path rather than from completions, so they were never blocked by it either way.
+Detail: <a href="../gke-dogfood/#b7-create-the-v2-tenant-objects">gke-dogfood B7</a>.</p>
 <h2 id="9a-the-shipped-quota-rung-was-classic-only-q443">9a. The shipped quota rung was classic-only (Q443)<a class="headerlink" href="#9a-the-shipped-quota-rung-was-classic-only-q443" title="Permanent link">&para;</a></h2>
-<p>Found while qualifying the eviction-recovery claims for Q419 (shipped
-2026-07-26) — same defect class, same public sentences, other half. Recorded here
-rather than fixed there, because the two capabilities have different owners and
-different remedies. The copy correction shipped 2026-07-26 (Q439); the port it
-revealed is Q443, specified below and shipped the same day.</p>
-<p><strong>Shipped 2026-07-26.</strong> The port described below is in; what remains of this section
-is the finding, the decision, and the design it settled on, which §6/§7 inherit. What
-shipped is recorded in <a href="#9b-what-the-port-shipped">§9b</a>.</p>
-<p>The rung this plan builds on — rung 1, live namespace-<code>ResourceQuota</code> headroom
-checked <em>before</em> the claim — is wired into <code>Provisioner.Admit</code>, and <code>Admit</code> is
-reached from two call sites: <code>AdmitFor</code> (v1 <code>RunnerGroup</code>) and the classic branch
-of the v2 <code>RunnerSet</code> reconciler. <code>reconcileScaleSetListener</code> returns before that
-wiring. What a <code>ScaleSet</code> set advertises instead is
-<code>scaleSetCapacityFunc</code> → <code>X-ScaleSetMaxCapacity</code> → <code>target.Ceiling</code>: the set's
-configured worker ceiling (max tier threshold, else <code>maxWorkers</code>, else the
-default). That is the Q59 concurrency rung, not the quota rung. Nothing on that
-tier consults quota headroom before a job is assigned.</p>
-<p>So on the default acquisition tier a quota-blocked job <strong>is</strong> claimed. It then
-falls to <code>createPodWithQuotaRetry</code>, the in-place backstop this plan's §1 calls
-out as the failure mode the gate exists to prevent: the job lock is held across
-up to <code>maxQuotaRetries × quotaRetryDelay</code>, and on exhaustion the pod is abandoned
-with the lock held.</p>
-<p>Two doc claims were wrong as a result, both in public copy. Both are corrected as
-of 2026-07-26; recorded here because the second was a fabricated mechanism, not a
-scope error, and that distinction should survive:</p>
+<p>Found while qualifying the eviction-recovery claims for Q419 (shipped 2026-07-26) — same defect class, same public sentences, other half.
+Recorded here rather than fixed there, because the two capabilities have different owners and different remedies.
+The copy correction shipped 2026-07-26 (Q439); the port it revealed is Q443, specified below and shipped the same day.</p>
+<p><strong>Shipped 2026-07-26.</strong> The port described below is in; what remains of this section is the finding, the decision, and the design it settled on, which §6/§7 inherit.
+What shipped is recorded in <a href="#9b-what-the-port-shipped">§9b</a>.</p>
+<p>The rung this plan builds on — rung 1, live namespace-<code>ResourceQuota</code> headroom checked <em>before</em> the claim — is wired into <code>Provisioner.Admit</code>, and <code>Admit</code> is reached from two call sites: <code>AdmitFor</code> (v1 <code>RunnerGroup</code>) and the classic branch of the v2 <code>RunnerSet</code> reconciler. <code>reconcileScaleSetListener</code> returns before that wiring.
+What a <code>ScaleSet</code> set advertises instead is <code>scaleSetCapacityFunc</code> → <code>X-ScaleSetMaxCapacity</code> → <code>target.Ceiling</code>: the set's configured worker ceiling (max tier threshold, else <code>maxWorkers</code>, else the default).
+That is the Q59 concurrency rung, not the quota rung.
+Nothing on that tier consults quota headroom before a job is assigned.</p>
+<p>So on the default acquisition tier a quota-blocked job <strong>is</strong> claimed.
+It then falls to <code>createPodWithQuotaRetry</code>, the in-place backstop this plan's §1 calls out as the failure mode the gate exists to prevent: the job lock is held across up to <code>maxQuotaRetries × quotaRetryDelay</code>, and on exhaustion the pod is abandoned with the lock held.</p>
+<p>Two doc claims were wrong as a result, both in public copy.
+Both are corrected as of 2026-07-26; recorded here because the second was a fabricated mechanism, not a scope error, and that distinction should survive:</p>
 <ul>
-<li><em>"won't claim a job it can't place … live quota headroom checked before the
-  claim"</em> (<a href="../../why-gag/">why-gag</a> comparison table; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md">README</a>
-  "The Solution") — true on classic, not on the default tier. <strong>Scoped</strong>, not
-  removed.</li>
-<li><em>"if headroom is lost after the claim, auto lock-cancel + re-queue"</em>
-  (why-gag, same row; also <a href="../../operations/runbook/">runbook.md</a>) — no code path
-  did this, on any tier. <code>createPodWithQuotaRetry</code> retries in place and abandons
-  the pod on budget exhaustion; there is no rerun call. The
-  lock-cancel-and-re-queue language was borrowed from the eviction path, which is
-  itself classic-only. <strong>Replaced</strong> with what the code does.</li>
+<li><em>"won't claim a job it can't place … live quota headroom checked before the claim"</em> (<a href="../../why-gag/">why-gag</a> comparison table; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md">README</a> "The Solution") — true on classic, not on the default tier. <strong>Scoped</strong>, not removed.</li>
+<li><em>"if headroom is lost after the claim, auto lock-cancel + re-queue"</em> (why-gag, same row; also <a href="../../operations/runbook/">runbook.md</a>) — no code path did this, on any tier. <code>createPodWithQuotaRetry</code> retries in place and abandons the pod on budget exhaustion; there is no rerun call.
+  The lock-cancel-and-re-queue language was borrowed from the eviction path, which is itself classic-only. <strong>Replaced</strong> with what the code does.</li>
 </ul>
-<p><code>actions_gateway_jobs_admission_rejected_total</code> is emitted from the same classic
-call site (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/job.go">listener/job.go</a>), so both its
-<code>reason="quota"</code> and <code>reason="ceiling"</code> series read a flat zero on the default
-tier — the same "healthy dashboard, lost jobs" shape Q419 found on the eviction
-counters.</p>
+<p><code>actions_gateway_jobs_admission_rejected_total</code> is emitted from the same classic call site (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/job.go">listener/job.go</a>), so both its <code>reason="quota"</code> and <code>reason="ceiling"</code> series read a flat zero on the default tier — the same "healthy dashboard, lost jobs" shape Q419 found on the eviction counters.</p>
 <h3 id="the-decision-port-the-rung-and-treat-it-as-a-20-gate-q443">The decision: port the rung, and treat it as a 2.0 gate (Q443)<a class="headerlink" href="#the-decision-port-the-rung-and-treat-it-as-a-20-gate-q443" title="Permanent link">&para;</a></h3>
-<p>Settled 2026-07-26, because the copy fix could not be written honestly without
-it.</p>
-<p><strong>Port it.</strong> The mechanism is expressible on the scale-set tier and the cost of
-not porting is losing a headline capability at <code>v2.0.0</code>.</p>
-<p>Expressible, because <code>X-ScaleSetMaxCapacity</code> is not a free-slot delta but a
-<em>total</em> ceiling — GitHub holds <code>totalAssignedJobs</code> at or below the advertised
-value — so a quota-derived bound composes with the Q59 ceiling as a <code>min()</code> on
-the integer <code>scaleSetCapacityFunc</code> already returns. Jobs beyond it stay queued
-server-side, which is precisely the classic rung's outcome.</p>
-<p>Three things make it more than a one-line change, and they are the design work
-this phase owns:</p>
+<p>Settled 2026-07-26, because the copy fix could not be written honestly without it.</p>
+<p><strong>Port it.</strong> The mechanism is expressible on the scale-set tier and the cost of not porting is losing a headline capability at <code>v2.0.0</code>.</p>
+<p>Expressible, because <code>X-ScaleSetMaxCapacity</code> is not a free-slot delta but a <em>total</em> ceiling — GitHub holds <code>totalAssignedJobs</code> at or below the advertised value — so a quota-derived bound composes with the Q59 ceiling as a <code>min()</code> on the integer <code>scaleSetCapacityFunc</code> already returns.
+Jobs beyond it stay queued server-side, which is precisely the classic rung's outcome.</p>
+<p>Three things make it more than a one-line change, and they are the design work this phase owns:</p>
 <ul>
-<li><strong>Delta-to-total conversion.</strong> Headroom answers "how many <em>more</em> pods fit";
-  the advertisement wants a total. That is roughly <code>activeWorkers + headroom</code>,
-  and the AGC's count of its own in-flight pods is not GitHub's
-  <code>totalAssignedJobs</code> — the two diverge across an assignment the AGC has not yet
-  provisioned. Under-advertising merely delays jobs; over-advertising reproduces
-  today's claim-and-stall. Bias low, and measure the divergence.</li>
-<li><strong>Granularity loss.</strong> Classic re-decides per delivered job. Scale-set decides
-  once per long-poll, for the whole set. Recovery from a stale read is a poll
-  interval, not a job.</li>
-<li><strong>Interaction with §6/§7.</strong> The <code>SchedulerVerdict</code> and <code>AutoscalerVerdict</code>
-  rungs are specified as per-delivery <code>Admit</code> rungs. If the scale-set tier gets
-  a capacity-integer expression of rung 1, those two need the same treatment or
-  they ship classic-only and inherit this exact defect on arrival. Design the
-  integer path once, for all three rungs.</li>
+<li><strong>Delta-to-total conversion.</strong> Headroom answers "how many <em>more</em> pods fit"; the advertisement wants a total.
+  That is roughly <code>activeWorkers + headroom</code>, and the AGC's count of its own in-flight pods is not GitHub's <code>totalAssignedJobs</code> — the two diverge across an assignment the AGC has not yet provisioned.
+  Under-advertising merely delays jobs; over-advertising reproduces today's claim-and-stall.
+  Bias low, and measure the divergence.</li>
+<li><strong>Granularity loss.</strong> Classic re-decides per delivered job.
+  Scale-set decides once per long-poll, for the whole set.
+  Recovery from a stale read is a poll interval, not a job.</li>
+<li><strong>Interaction with §6/§7.</strong> The <code>SchedulerVerdict</code> and <code>AutoscalerVerdict</code> rungs are specified as per-delivery <code>Admit</code> rungs.
+  If the scale-set tier gets a capacity-integer expression of rung 1, those two need the same treatment or they ship classic-only and inherit this exact defect on arrival.
+  Design the integer path once, for all three rungs.</li>
 </ul>
-<p><strong>Why it is a 2.0 gate.</strong> Classic acquisition is removed in <code>v2.0.0</code>
-(<a href="../v2-ga/#phase-3--the-coupled-removals">v2-ga.md</a>). Rung 1 exists only on
-classic. So the removal deletes the pre-claim quota gate outright unless this
-lands first — structurally identical to Q417 for eviction recovery, which cleared
-the same risk on 2026-07-26, and until now undeclared. Two of the four capabilities the README
-leads with were in this position. Tracked as Q443, labelled <code>2.0-gate</code> to match, and
-shipped 2026-07-26 (<a href="#9b-what-the-port-shipped">§9b</a>).</p>
-<p><strong>What ships without waiting:</strong> the copy correction. Every claim above is now
-scoped to the classic tier, and the "auto lock-cancel + re-queue" sentence is
-removed rather than qualified, since no code path implements it on any tier.</p>
+<p><strong>Why it is a 2.0 gate.</strong> Classic acquisition is removed in <code>v2.0.0</code> (<a href="../v2-ga/#phase-3--the-coupled-removals">v2-ga.md</a>).
+Rung 1 exists only on classic.
+So the removal deletes the pre-claim quota gate outright unless this lands first — structurally identical to Q417 for eviction recovery, which cleared the same risk on 2026-07-26, and until now undeclared.
+Two of the four capabilities the README leads with were in this position.
+Tracked as Q443, labelled <code>2.0-gate</code> to match, and shipped 2026-07-26 (<a href="#9b-what-the-port-shipped">§9b</a>).</p>
+<p><strong>What ships without waiting:</strong> the copy correction.
+Every claim above is now scoped to the classic tier, and the "auto lock-cancel + re-queue" sentence is removed rather than qualified, since no code path implements it on any tier.</p>
 <h2 id="9b-what-the-port-shipped">9b. What the port shipped<a class="headerlink" href="#9b-what-the-port-shipped" title="Permanent link">&para;</a></h2>
-<p>Shipped 2026-07-26. The three design questions §9a raised were answered as follows;
-each answer is a constraint on Q405/Q406, not a local choice.</p>
-<p><strong>One ladder, two shapes.</strong> <code>Provisioner.AdvertiseCapacity(target, unboundedDefault)</code>
-sits beside <code>Provisioner.Admit(target)</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>admission.go</code></a>, walks the same rungs
-against the same <code>Target</code>, and returns a <code>CapacityAdvertisement</code> — the integer plus the
-per-rung accounting that produced it. Both godoc comments state the invariant that
-caused this bug: <strong>a rung added to one and not the other ships to one tier.</strong> §6/§7
-therefore each land in both, which is the "design the integer path once, for all three
-rungs" requirement discharged rather than deferred.</p>
-<p><strong>Delta-to-total, biased low.</strong> <code>Target.QuotaCapacity(ctx, max)</code> joins
-<code>Ceiling</code>/<code>QuotaExhausted</code> with the same fail-open contract. The v2 adapter converts
-observed headroom to a total as <code>own non-terminal worker pods + headroom</code>, capped at
-<code>max</code>; v1 returns unbounded (it is terminal, and <code>Admit</code>'s boolean is its authoritative
-form). The pod count, not GitHub's <code>totalAssignedJobs</code>, is deliberate and is the
-bias-low choice §9a asked for: an assignment the AGC has not provisioned yet is inside
-<code>totalAssignedJobs</code> but not inside the quota's <code>used</code>, so counting assignments would
-over-advertise by exactly the in-flight gap.</p>
-<p><strong>The integer arithmetic reuses the boolean's.</strong> <code>QuotaHeadroomPods</code> binary-searches
-<code>WorkerFootprint</code>/<code>QuotaHeadroomViolations</code> for the largest fitting count rather than
-dividing headroom by a per-pod footprint. Division would have been a second
-implementation of a multi-resource, multi-format comparison, free to drift from the
-rung it is supposed to mirror; the search is exact, bounded by the caller's ceiling, and
-<code>TestQuotaHeadroomPods_AgreesWithTheBooleanRung</code> asserts the two answers cannot
-disagree.</p>
-<p><strong>Observability.</strong> <code>actions_gateway_scaleset_advertised_capacity</code> and
-<code>actions_gateway_scaleset_capacity_withheld{reason}</code> are the tier's counterpart to
-<code>jobs_admission_rejected_total{reason}</code>, which is structurally unreachable here — a
-declined job is never assigned, so there is no rejected delivery to count. Gauges, not
-counters, for the same reason, and every evaluated rung publishes an explicit zero each
-poll so a series never freezes at its last non-zero reading. Both are dropped when the
-set is deleted.</p>
-<p><strong>Measured 2026-07-31 (<a href="#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462">§9f</a>).</strong>
-Both quantities this section left open came back inside their intended bounds: the
-bias-low margin between the AGC's pod count and GitHub's <code>totalAssignedJobs</code> was
-0–2 jobs and never inverted, and recovery from freed quota mid-burst was ~30s
-rather than a painful poll interval. The rung binds continuously on the scale-set
-tier — unlike the capacity rung, whose live result was null
-(<a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>). Still unmeasured: a CPU/memory-shaped
-quota, where <code>QuotaHeadroomPods</code>' binary search does the real work, and the classic
-tier's boolean rung on a live cluster.</p>
+<p>Shipped 2026-07-26.
+The three design questions §9a raised were answered as follows; each answer is a constraint on Q405/Q406, not a local choice.</p>
+<p><strong>One ladder, two shapes.</strong> <code>Provisioner.AdvertiseCapacity(target, unboundedDefault)</code> sits beside <code>Provisioner.Admit(target)</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>admission.go</code></a>, walks the same rungs against the same <code>Target</code>, and returns a <code>CapacityAdvertisement</code> — the integer plus the per-rung accounting that produced it.
+Both godoc comments state the invariant that caused this bug: <strong>a rung added to one and not the other ships to one tier.</strong> §6/§7 therefore each land in both, which is the "design the integer path once, for all three rungs" requirement discharged rather than deferred.</p>
+<p><strong>Delta-to-total, biased low.</strong> <code>Target.QuotaCapacity(ctx, max)</code> joins <code>Ceiling</code>/<code>QuotaExhausted</code> with the same fail-open contract.
+The v2 adapter converts observed headroom to a total as <code>own non-terminal worker pods + headroom</code>, capped at <code>max</code>; v1 returns unbounded (it is terminal, and <code>Admit</code>'s boolean is its authoritative form).
+The pod count, not GitHub's <code>totalAssignedJobs</code>, is deliberate and is the bias-low choice §9a asked for: an assignment the AGC has not provisioned yet is inside <code>totalAssignedJobs</code> but not inside the quota's <code>used</code>, so counting assignments would over-advertise by exactly the in-flight gap.</p>
+<p><strong>The integer arithmetic reuses the boolean's.</strong> <code>QuotaHeadroomPods</code> binary-searches <code>WorkerFootprint</code>/<code>QuotaHeadroomViolations</code> for the largest fitting count rather than dividing headroom by a per-pod footprint.
+Division would have been a second implementation of a multi-resource, multi-format comparison, free to drift from the rung it is supposed to mirror; the search is exact, bounded by the caller's ceiling, and <code>TestQuotaHeadroomPods_AgreesWithTheBooleanRung</code> asserts the two answers cannot disagree.</p>
+<p><strong>Observability.</strong> <code>actions_gateway_scaleset_advertised_capacity</code> and <code>actions_gateway_scaleset_capacity_withheld{reason}</code> are the tier's counterpart to <code>jobs_admission_rejected_total{reason}</code>, which is structurally unreachable here — a declined job is never assigned, so there is no rejected delivery to count.
+Gauges, not counters, for the same reason, and every evaluated rung publishes an explicit zero each poll so a series never freezes at its last non-zero reading.
+Both are dropped when the set is deleted.</p>
+<p><strong>Measured 2026-07-31 (<a href="#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462">§9f</a>).</strong> Both quantities this section left open came back inside their intended bounds: the bias-low margin between the AGC's pod count and GitHub's <code>totalAssignedJobs</code> was 0–2 jobs and never inverted, and recovery from freed quota mid-burst was ~30s rather than a painful poll interval.
+The rung binds continuously on the scale-set tier — unlike the capacity rung, whose live result was null (<a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>).
+Still unmeasured: a CPU/memory-shaped quota, where <code>QuotaHeadroomPods</code>' binary search does the real work, and the classic tier's boolean rung on a live cluster.</p>
 <h2 id="9c-the-live-autoscaler-harness-and-what-it-measured-q474">9c. The live-autoscaler harness, and what it measured (Q474)<a class="headerlink" href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474" title="Permanent link">&para;</a></h2>
-<p>Shipped 2026-07-28. §9 above is about the gate's <em>effect</em>, since measured by a
-real burst on dogfood (<a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>). This is the other half, and it is
-about the gate's <em>input</em>: phase 2 recognizes cluster-autoscaler by strings
-upstream owns, pinned in <code>autoscaler_verdict_test.go</code> from recorded samples.</p>
-<p><strong>Why a reword is the dangerous kind of drift.</strong> Everywhere else in this rung,
-fail-open is the safety property. Here it is also the concealment: an
-unrecognized vocabulary yields <code>declined=false</code>, which is exactly today's
-ungated behavior, so a reword does not break a test, raise an alarm, or change a
-metric — it silently turns the mode into a no-op on every elastic cluster. No
-tier that runs against recorded samples can notice, by construction.</p>
-<p><strong>The harness.</strong> <code>make autoscaler-cluster</code> stands up a throwaway kind cluster
-running a real upstream cluster-autoscaler on its
-<a href="https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok">kwok cloud provider</a>,
-whose stated purpose is exactly this: real CA, real scheduler-framework
-evaluation, real events, fake machines. <code>make test-autoscaler</code> then drives three
-pods through it and asserts the matcher's verdict on the events that come back
-(<code>autoscaler_verdict_live_test.go</code>, build tag <code>autoscaler</code>). It is its own
-cluster rather than the e2e one because an autoscaler creating and deleting
-nodes underneath the e2e suite would perturb every spec in it. Run cadence and
-commands: <a href="../../development/testing/#the-live-autoscaler-drift-gate">testing.md</a>.</p>
+<p>Shipped 2026-07-28. §9 above is about the gate's <em>effect</em>, since measured by a real burst on dogfood (<a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>).
+This is the other half, and it is about the gate's <em>input</em>: phase 2 recognizes cluster-autoscaler by strings upstream owns, pinned in <code>autoscaler_verdict_test.go</code> from recorded samples.</p>
+<p><strong>Why a reword is the dangerous kind of drift.</strong> Everywhere else in this rung, fail-open is the safety property.
+Here it is also the concealment: an unrecognized vocabulary yields <code>declined=false</code>, which is exactly today's ungated behavior, so a reword does not break a test, raise an alarm, or change a metric — it silently turns the mode into a no-op on every elastic cluster.
+No tier that runs against recorded samples can notice, by construction.</p>
+<p><strong>The harness.</strong> <code>make autoscaler-cluster</code> stands up a throwaway kind cluster running a real upstream cluster-autoscaler on its <a href="https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok">kwok cloud provider</a>, whose stated purpose is exactly this: real CA, real scheduler-framework evaluation, real events, fake machines. <code>make test-autoscaler</code> then drives three pods through it and asserts the matcher's verdict on the events that come back (<code>autoscaler_verdict_live_test.go</code>, build tag <code>autoscaler</code>).
+It is its own cluster rather than the e2e one because an autoscaler creating and deleting nodes underneath the e2e suite would perturb every spec in it.
+Run cadence and commands: <a href="../../development/testing/#the-live-autoscaler-drift-gate">testing.md</a>.</p>
 <p>Three cases, chosen so each asserts something the recorded table cannot:</p>
 <ol>
-<li><strong>A declination is still recognized</strong> — and the kube-scheduler
-   <code>FailedScheduling</code> that always accompanies a stuck pod is in the same list, so
-   the pass also shows the matcher picking the autoscaler's verdict out of a list
-   it does not control, rather than matching "some event exists".</li>
-<li><strong>A scale-up still keeps the gate open</strong> — §9 step 3 in miniature, and the
-   only case here whose failure would be a regression rather than a stale sample.
-   It asserts the outcome, not just the event: the pod must land on a node that
-   did not exist when it was created.</li>
-<li><strong>The node-group ceiling is still named</strong> — the one part of the message body
-   the operator docs promise by name.</li>
+<li><strong>A declination is still recognized</strong> — and the kube-scheduler <code>FailedScheduling</code> that always accompanies a stuck pod is in the same list, so the pass also shows the matcher picking the autoscaler's verdict out of a list it does not control, rather than matching "some event exists".</li>
+<li><strong>A scale-up still keeps the gate open</strong> — §9 step 3 in miniature, and the only case here whose failure would be a regression rather than a stale sample.
+   It asserts the outcome, not just the event: the pod must land on a node that did not exist when it was created.</li>
+<li><strong>The node-group ceiling is still named</strong> — the one part of the message body the operator docs promise by name.</li>
 </ol>
 <p><strong>Measured against cluster-autoscaler v1.36.1 / Kubernetes 1.36.1, 2026-07-28.</strong></p>
 <ul>
-<li><strong>The vocabulary holds.</strong> <code>NotTriggerScaleUp</code>, <code>TriggeredScaleUp</code>, the
-  <code>pod didn't trigger scale-up:</code> / <code>pod triggered scale-up:</code> prefixes, and
-  <code>max node group size reached</code> are all intact.</li>
-<li><strong>The reporter is attributed on both fields.</strong> CA sets <code>source.component</code> <em>and</em>
-  <code>reportingComponent</code> to <code>cluster-autoscaler</code>, so <code>reportedByScheduler</code>'s
-  new-style-then-legacy fallback reads the same answer either way.</li>
-<li><strong>CA still records through the legacy recorder</strong> — <code>firstTimestamp</code>/
-  <code>lastTimestamp</code> set, <code>eventTime</code> null. <code>eventTime()</code>'s decision to take the
-  latest of <em>every</em> timestamp field is therefore load-bearing today, not
-  defensive: reading only <code>EventTime</code> would sort every CA event at the zero time.</li>
-<li><strong>The taint is no longer named, the ceiling still is.</strong> v1.36.1 emits
-  <code>1 node(s) had untolerated taint(s)</code> — the key and value are in CA's <em>logs</em>
-  (<code>debugInfo</code>), not in the event. The recorded sample in the unit table said
-  <code>2 node(s) had untolerated taint {dedicated: gpu}</code>; both spellings are now
-  rows, because the matcher never parses a body and must classify them
-  identically. No operator-doc claim had to be withdrawn: the troubleshooting
-  page promises the <em>category</em>, and §4's parenthetical sample is now the
-  measured one.</li>
-<li><strong>A real autoscaler emitted both verdicts for one pod inside one loop.</strong> With
-  three pods contending for a two-node group, CA recorded <code>TriggeredScaleUp</code> for
-  pod <code>big-a</code> at <code>14:05:19.348</code> and <code>NotTriggerScaleUp</code> for the <em>same</em> pod at
-  <code>14:05:19.352</code> — the first scale-up round found a plan, and a second round with
-  the upcoming node still could not place it. §7a introduced the newest-wins rule
-  precisely for a declination the autoscaler had superseded; this is the case it
-  did not anticipate, where the <em>declination is the later one</em> and a node is
-  nonetheless arriving. Today it resolves correctly, but only because CA's legacy
-  recorder has one-second resolution, so the two events tie and the tie resolves
-  open. The recency rule alone would have said "declined". That makes the
-  tie-break the thing carrying correctness here, and it does not carry it for a
-  microsecond-resolution recorder — believed at the time to be the generation
-  Karpenter uses (<a href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a>
-  later measured that belief wrong: Karpenter records legacy too).
-  Not fixed here, because Q474 is a test and the fix is a behavior change to a
-  shipped gate that wants its own negative control; tracked as Q478 and shipped
-  the same day as <strong><a href="#9d-the-concurrency-window-q478">§9d</a></strong>, which replaces the
-  tie-break with a concurrency window.</li>
+<li><strong>The vocabulary holds.</strong> <code>NotTriggerScaleUp</code>, <code>TriggeredScaleUp</code>, the <code>pod didn't trigger scale-up:</code> / <code>pod triggered scale-up:</code> prefixes, and <code>max node group size reached</code> are all intact.</li>
+<li><strong>The reporter is attributed on both fields.</strong> CA sets <code>source.component</code> <em>and</em> <code>reportingComponent</code> to <code>cluster-autoscaler</code>, so <code>reportedByScheduler</code>'s new-style-then-legacy fallback reads the same answer either way.</li>
+<li><strong>CA still records through the legacy recorder</strong> — <code>firstTimestamp</code>/ <code>lastTimestamp</code> set, <code>eventTime</code> null. <code>eventTime()</code>'s decision to take the latest of <em>every</em> timestamp field is therefore load-bearing today, not defensive: reading only <code>EventTime</code> would sort every CA event at the zero time.</li>
+<li><strong>The taint is no longer named, the ceiling still is.</strong> v1.36.1 emits <code>1 node(s) had untolerated taint(s)</code> — the key and value are in CA's <em>logs</em> (<code>debugInfo</code>), not in the event.
+  The recorded sample in the unit table said <code>2 node(s) had untolerated taint {dedicated: gpu}</code>; both spellings are now rows, because the matcher never parses a body and must classify them identically.
+  No operator-doc claim had to be withdrawn: the troubleshooting page promises the <em>category</em>, and §4's parenthetical sample is now the measured one.</li>
+<li><strong>A real autoscaler emitted both verdicts for one pod inside one loop.</strong> With three pods contending for a two-node group, CA recorded <code>TriggeredScaleUp</code> for pod <code>big-a</code> at <code>14:05:19.348</code> and <code>NotTriggerScaleUp</code> for the <em>same</em> pod at <code>14:05:19.352</code> — the first scale-up round found a plan, and a second round with the upcoming node still could not place it. §7a introduced the newest-wins rule precisely for a declination the autoscaler had superseded; this is the case it did not anticipate, where the <em>declination is the later one</em> and a node is nonetheless arriving.
+  Today it resolves correctly, but only because CA's legacy recorder has one-second resolution, so the two events tie and the tie resolves open.
+  The recency rule alone would have said "declined".
+  That makes the tie-break the thing carrying correctness here, and it does not carry it for a microsecond-resolution recorder — believed at the time to be the generation Karpenter uses (<a href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a> later measured that belief wrong: Karpenter records legacy too).
+  Not fixed here, because Q474 is a test and the fix is a behavior change to a shipped gate that wants its own negative control; tracked as Q478 and shipped the same day as <strong><a href="#9d-the-concurrency-window-q478">§9d</a></strong>, which replaces the tie-break with a concurrency window.</li>
 </ul>
-<p><strong>What this initially did not cover.</strong> Karpenter — the arm that genuinely needs
-reporter discrimination, since it shares kube-scheduler's reason string. Its
-harness landed as
-<a href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a> (Q479).
-This CA harness is also the thing <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">G.16</a>
-named as the local-half prerequisite for ever validating <code>Probe</code>/<code>Provision</code>
-(Q407): a cluster with a real CA in it is where <code>--enable-provisioning-requests</code>
-could be turned on.</p>
+<p><strong>What this initially did not cover.</strong> Karpenter — the arm that genuinely needs reporter discrimination, since it shares kube-scheduler's reason string.
+Its harness landed as <a href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a> (Q479).
+This CA harness is also the thing <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">G.16</a> named as the local-half prerequisite for ever validating <code>Probe</code>/<code>Provision</code> (Q407): a cluster with a real CA in it is where <code>--enable-provisioning-requests</code> could be turned on.</p>
 <h2 id="9d-the-concurrency-window-q478">9d. The concurrency window (Q478)<a class="headerlink" href="#9d-the-concurrency-window-q478" title="Permanent link">&para;</a></h2>
-<p>Shipped 2026-07-28. <a href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474">§9c</a>
-measured a real cluster-autoscaler emitting <code>TriggeredScaleUp</code> and then
-<code>NotTriggerScaleUp</code> for the same pod 4ms apart, and observed that §7a's
-newest-wins rule reads the later declination — so the pair resolved correctly
-only because CA's legacy recorder quantizes both events into one second and ties
-already resolved open. This replaces that accident with a rule.</p>
-<p><strong>The rule.</strong> Recency is asymmetric. A scale-up supersedes a declination the
-instant it is newer, as before; a declination supersedes a scale-up only from
-more than <code>autoscalerConcurrencyWindow</code> (one second) later. A closer pair is one
-loop's own output rather than a sequence, and resolves not-declined.</p>
-<p><strong>Why one second.</strong> It has to exceed the spread of one loop's own events —
-milliseconds, measured — and stay well below the gap <em>between</em> loops, so a
-declination on a later loop still gates. Both projects leave a wide margin: CA's
-default <code>--scan-interval</code> is 10s and Karpenter's provisioning batch is bounded at
-10s. One second is also the legacy recorder's own quantum, so the generation
-running today decides identically with the window as without it; what changes is
-the microsecond generation — believed then to be Karpenter's, measured otherwise
-in <a href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a>.</p>
-<p><strong>The direction of the error, in both readings.</strong> The window can only <em>open</em> a
-gate that recency would have closed, which is the fail-open direction the whole
-rung is built around — and it opens it for at most one second past a scale-up
-that a genuinely-later declination will re-close on the next loop.</p>
-<p><strong>What it is tested by, and what it is not.</strong> Six unit rows: the measured 4ms
-pair in the recorder generation that can resolve it, its Karpenter-vocabulary
-twin, both sides of the boundary, a declination a full CA loop later that must
-still gate, and an old scale-up that must not shelter a later declination (the
-window is measured from the newest <em>acting</em> event, not the newest event). No
-live harness covers it, and today none can: CA records at second resolution, so
-its harness cannot produce a pair the rule would decide differently — and the
-Karpenter harness (<a href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a>,
-Q479) measured that Karpenter records at second resolution too, despite what
-this section assumed when it shipped. The microsecond arm is therefore asserted
-only against synthetic events by the nature of what ships upstream, not by a
-coverage gap; §9i's recorder-generation case is what will notice if either
-project migrates.</p>
+<p>Shipped 2026-07-28.
+<a href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474">§9c</a> measured a real cluster-autoscaler emitting <code>TriggeredScaleUp</code> and then <code>NotTriggerScaleUp</code> for the same pod 4ms apart, and observed that §7a's newest-wins rule reads the later declination — so the pair resolved correctly only because CA's legacy recorder quantizes both events into one second and ties already resolved open.
+This replaces that accident with a rule.</p>
+<p><strong>The rule.</strong> Recency is asymmetric.
+A scale-up supersedes a declination the instant it is newer, as before; a declination supersedes a scale-up only from more than <code>autoscalerConcurrencyWindow</code> (one second) later.
+A closer pair is one loop's own output rather than a sequence, and resolves not-declined.</p>
+<p><strong>Why one second.</strong> It has to exceed the spread of one loop's own events — milliseconds, measured — and stay well below the gap <em>between</em> loops, so a declination on a later loop still gates.
+Both projects leave a wide margin: CA's default <code>--scan-interval</code> is 10s and Karpenter's provisioning batch is bounded at 10s.
+One second is also the legacy recorder's own quantum, so the generation running today decides identically with the window as without it; what changes is the microsecond generation — believed then to be Karpenter's, measured otherwise in <a href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a>.</p>
+<p><strong>The direction of the error, in both readings.</strong> The window can only <em>open</em> a gate that recency would have closed, which is the fail-open direction the whole rung is built around — and it opens it for at most one second past a scale-up that a genuinely-later declination will re-close on the next loop.</p>
+<p><strong>What it is tested by, and what it is not.</strong> Six unit rows: the measured 4ms pair in the recorder generation that can resolve it, its Karpenter-vocabulary twin, both sides of the boundary, a declination a full CA loop later that must still gate, and an old scale-up that must not shelter a later declination (the window is measured from the newest <em>acting</em> event, not the newest event).
+No live harness covers it, and today none can: CA records at second resolution, so its harness cannot produce a pair the rule would decide differently — and the Karpenter harness (<a href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a>, Q479) measured that Karpenter records at second resolution too, despite what this section assumed when it shipped.
+The microsecond arm is therefore asserted only against synthetic events by the nature of what ships upstream, not by a coverage gap; §9i's recorder-generation case is what will notice if either project migrates.</p>
 <h2 id="9e-what-the-dogfood-run-measured-q469">9e. What the dogfood run measured (Q469)<a class="headerlink" href="#9e-what-the-dogfood-run-measured-q469" title="Permanent link">&para;</a></h2>
-<p>Measured 2026-07-30/31 on <code>gag-dogfood</code> (GKE, Dataplane V2, cluster-autoscaler
-present), against a control plane built from <code>45670972</code> — the first time any of
-this rung has run outside envtest. <strong>The headline is negative: on the ScaleSet
-tier the gate did not reduce wasted claims at all.</strong> It is not a harness
-artifact; the rung evaluated, published its condition, and withheld capacity,
-and the arithmetic that makes it a no-op is in the shipped code.</p>
-<p><strong>The harness.</strong> Two ScaleSet RunnerSets differing <em>only</em> in
-<code>capacityGate.mode</code>, both on a <code>RunnerTemplate</code> whose <code>nodeSelector</code> names a node
-pool that does not exist, <code>maxWorkers: 8</code>, and <code>pendingPodDeadline: 2m</code> —
-shortened from the 10m default so the trickle is observable inside a session.
-The deadline is part of the result, not a detail: the residual §5 predicts is
-<em>per deadline window</em>. One burst = one <code>unit-test.yml</code> dispatch = <strong>7</strong>
-GAG-routed jobs. The gateway leaves <code>clusterCapacity.nodeAutoscaling</code> unset
-(default <code>Present</code>), which is truthful here, so the signal under test is phase
-2's autoscaler declination, not phase 1's scheduler verdict.</p>
-<p>Phase B ran on a <strong>new</strong> set rather than a re-mode of Phase A's: after Phase A's
-run was cancelled the set still reported <code>7 job(s) assigned</code> for minutes with
-zero worker pods, and reusing the name would have replayed its unacked
-<code>JobAssigned</code> messages (gke-dogfood B7). Both sets were otherwise identical.</p>
+<p>Measured 2026-07-30/31 on <code>gag-dogfood</code> (GKE, Dataplane V2, cluster-autoscaler present), against a control plane built from <code>45670972</code> — the first time any of this rung has run outside envtest. <strong>The headline is negative: on the ScaleSet tier the gate did not reduce wasted claims at all.</strong> It is not a harness artifact; the rung evaluated, published its condition, and withheld capacity, and the arithmetic that makes it a no-op is in the shipped code.</p>
+<p><strong>The harness.</strong> Two ScaleSet RunnerSets differing <em>only</em> in <code>capacityGate.mode</code>, both on a <code>RunnerTemplate</code> whose <code>nodeSelector</code> names a node pool that does not exist, <code>maxWorkers: 8</code>, and <code>pendingPodDeadline: 2m</code> — shortened from the 10m default so the trickle is observable inside a session.
+The deadline is part of the result, not a detail: the residual §5 predicts is <em>per deadline window</em>.
+One burst = one <code>unit-test.yml</code> dispatch = <strong>7</strong> GAG-routed jobs.
+The gateway leaves <code>clusterCapacity.nodeAutoscaling</code> unset (default <code>Present</code>), which is truthful here, so the signal under test is phase 2's autoscaler declination, not phase 1's scheduler verdict.</p>
+<p>Phase B ran on a <strong>new</strong> set rather than a re-mode of Phase A's: after Phase A's run was cancelled the set still reported <code>7 job(s) assigned</code> for minutes with zero worker pods, and reusing the name would have replayed its unacked <code>JobAssigned</code> messages (gke-dogfood B7).
+Both sets were otherwise identical.</p>
 <h3 id="step-2--no-reduction">Step 2 — no reduction<a class="headerlink" href="#step-2--no-reduction" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3825,132 +3408,67 @@ zero worker pods, and reusing the name would have replayed its unacked
 </tr>
 </tbody>
 </table>
-<p>The gate was not inert — it reached <code>WorkerCapacityDeclined=True</code> with reason
-<code>ScaleUpDeclined</code> (so the phase 2 matcher recognized a live GKE autoscaler's
-declination, unprompted) and it withheld capacity. It withheld <strong>1 slot</strong>.</p>
-<p><strong>Why 1, and why that is structural.</strong>
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_target.go"><code>DeclinedCapacity</code></a>
-returns <code>(active, true)</code> when the gate declines and <code>(0, false)</code> when it does
-not, where <code>active</code> is the set's own non-terminal worker pods. So the bound is
-only ever <em>the batch already in flight</em>: with 7 pods against a ceiling of 8 it
-withheld <code>8 − 7 = 1</code>. Its godoc says "the advertisement falls to zero once those
-drain" — <strong>that state is unreachable</strong>, because the gate's evidence is the stuck
-pod itself. One measured cycle, sampled every 10s:</p>
+<p>The gate was not inert — it reached <code>WorkerCapacityDeclined=True</code> with reason <code>ScaleUpDeclined</code> (so the phase 2 matcher recognized a live GKE autoscaler's declination, unprompted) and it withheld capacity.
+It withheld <strong>1 slot</strong>.</p>
+<p><strong>Why 1, and why that is structural.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_target.go"><code>DeclinedCapacity</code></a> returns <code>(active, true)</code> when the gate declines and <code>(0, false)</code> when it does not, where <code>active</code> is the set's own non-terminal worker pods.
+So the bound is only ever <em>the batch already in flight</em>: with 7 pods against a ceiling of 8 it withheld <code>8 − 7 = 1</code>.
+Its godoc says "the advertisement falls to zero once those drain" — <strong>that state is unreachable</strong>, because the gate's evidence is the stuck pod itself.
+One measured cycle, sampled every 10s:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>00:14:51  adv=7  withheld{capacity}=1  pods=7  WorkerCapacityDeclined=True/ScaleUpDeclined
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>00:15:02  adv=7  withheld{capacity}=1  pods=0  WorkerCapacityDeclined=False/CapacityAvailable   &lt;- reaper fires
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>00:15:35  adv=8  withheld{capacity}=0  pods=0  WorkerCapacityDeclined=False/CapacityAvailable   &lt;- full ceiling restored
 </code></pre></div>
-<p>The reap drains <code>active</code> to 0 and clears <code>declined</code> together — both were already
-true in the first sample after the reaper fired — so the advertisement returns to
-the <strong>full</strong> ceiling before the next assignment,
-and the next batch is claimed whole. §5's trickle property — "the condition
-clears, <em>one job</em> is claimed" — is the classic per-delivery behaviour. The
-integer tier has no per-job decision point to trickle through: clearing the
-condition restores the entire advertisement, so a burst of <em>N</em> becomes <em>N</em>
-again, every window.</p>
-<p>Two further timings, both measured, both making the window worse rather than
-better:</p>
+<p>The reap drains <code>active</code> to 0 and clears <code>declined</code> together — both were already true in the first sample after the reaper fired — so the advertisement returns to the <strong>full</strong> ceiling before the next assignment, and the next batch is claimed whole. §5's trickle property — "the condition clears, <em>one job</em> is claimed" — is the classic per-delivery behaviour.
+The integer tier has no per-job decision point to trickle through: clearing the condition restores the entire advertisement, so a burst of <em>N</em> becomes <em>N</em> again, every window.</p>
+<p>Two further timings, both measured, both making the window worse rather than better:</p>
 <ul>
-<li><strong>The gate closes ~60s after the first pod goes Pending</strong>, not immediately —
-  it waits the <code>WorkersUnschedulable</code> scheduling grace, which is
-  <code>pendingPodDeadline/2</code>. On the shipped 10m default that is <strong>5 minutes</strong>.</li>
-<li><strong>Assignment is batch-granular per long-poll</strong>, so all 7 jobs were assigned
-  before the gate could close under any grace. §5's "none of the phases
-  eliminates the first wasted claim" is, on this tier, the first <em>batch</em>.</li>
+<li><strong>The gate closes ~60s after the first pod goes Pending</strong>, not immediately — it waits the <code>WorkersUnschedulable</code> scheduling grace, which is <code>pendingPodDeadline/2</code>.
+  On the shipped 10m default that is <strong>5 minutes</strong>.</li>
+<li><strong>Assignment is batch-granular per long-poll</strong>, so all 7 jobs were assigned before the gate could close under any grace. §5's "none of the phases eliminates the first wasted claim" is, on this tier, the first <em>batch</em>.</li>
 </ul>
-<p><strong>What this does not say.</strong> It does not retract the mechanism: the condition,
-the reason, the matcher against a real GKE autoscaler, and the withheld gauge
-all behaved as specified. It says the integer expression of the rung cannot
-bound claim waste while its bound is coupled to the pods the reaper deletes.
-The fix was a design question, not a patch — a bound that survives the reap
-needs evidence that outlives the pod — and shipped as
-<a href="#9g-the-latch--a-bound-that-survives-the-reap-q512">§9g</a>'s latch (Q512); the
-re-measurement (<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a>,
-Q513) confirmed it bounds the rate to 1 per window.</p>
+<p><strong>What this does not say.</strong> It does not retract the mechanism: the condition, the reason, the matcher against a real GKE autoscaler, and the withheld gauge all behaved as specified.
+It says the integer expression of the rung cannot bound claim waste while its bound is coupled to the pods the reaper deletes.
+The fix was a design question, not a patch — a bound that survives the reap needs evidence that outlives the pod — and shipped as <a href="#9g-the-latch--a-bound-that-survives-the-reap-q512">§9g</a>'s latch (Q512); the re-measurement (<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a>, Q513) confirmed it bounds the rate to 1 per window.</p>
 <h3 id="step-3--scale-up-is-not-suppressed-pass">Step 3 — scale-up is not suppressed (pass)<a class="headerlink" href="#step-3--scale-up-is-not-suppressed-pass" title="Permanent link">&para;</a></h3>
-<p>The check §9 calls the one that actually matters. Same gate mode (<code>Observe</code>),
-same gateway, a shape the autoscaler <em>can</em> satisfy (the tenant's <code>default</code>
-template, tolerating the workers taint, 2 vCPU) against a <code>workers</code> pool sitting
-at <strong>0 nodes</strong>, so placement <em>required</em> a scale-up.</p>
+<p>The check §9 calls the one that actually matters.
+Same gate mode (<code>Observe</code>), same gateway, a shape the autoscaler <em>can</em> satisfy (the tenant's <code>default</code> template, tolerating the workers taint, 2 vCPU) against a <code>workers</code> pool sitting at <strong>0 nodes</strong>, so placement <em>required</em> a scale-up.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>00:25:40  pod created, FailedScheduling (0/2 nodes: Insufficient cpu)
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>00:25:41  TriggeredScaleUp                       &lt;- 1s, gate on
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>00:26:49  worker_nodes 0 -&gt; 2
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>00:28:10  2 worker pods Running
 </code></pre></div>
-<p><code>WorkerCapacityDeclined</code> stayed <code>False/CapacityAvailable</code> for the entire run —
-the newest event was CA's <em>acting</em> signal, and §7a's newest-wins rule kept the
-gate open, which is precisely the case §9d's concurrency window exists to
-protect. Jobs ran green (<code>unit-test</code>, <code>coverage</code>, <code>vendor-check</code>, <code>tidy-check</code>,
-<code>path-filters</code>; <code>shellcheck</code> was the unrelated Q482 red — the job lacked the
-<code>setup-go</code> step its <code>make scripts-test</code> step needs, since fixed).</p>
-<p>A pass here alongside a null step 2 is not a contradiction: the gate correctly
-declines to suppress a scale-up, it simply does not bound waste when no scale-up
-is coming.</p>
+<p><code>WorkerCapacityDeclined</code> stayed <code>False/CapacityAvailable</code> for the entire run — the newest event was CA's <em>acting</em> signal, and §7a's newest-wins rule kept the gate open, which is precisely the case §9d's concurrency window exists to protect.
+Jobs ran green (<code>unit-test</code>, <code>coverage</code>, <code>vendor-check</code>, <code>tidy-check</code>, <code>path-filters</code>; <code>shellcheck</code> was the unrelated Q482 red — the job lacked the <code>setup-go</code> step its <code>make scripts-test</code> step needs, since fixed).</p>
+<p>A pass here alongside a null step 2 is not a contradiction: the gate correctly declines to suppress a scale-up, it simply does not bound waste when no scale-up is coming.</p>
 <h3 id="step-4--the-autoscaler-events-latency-is-01s">Step 4 — the autoscaler event's latency is 0–1s<a class="headerlink" href="#step-4--the-autoscaler-events-latency-is-01s" title="Permanent link">&para;</a></h3>
-<p>Across all 7 pods of one burst, CA's <code>NotTriggerScaleUp</code> landed <strong>0–1s</strong> after
-pod creation (the spread is the legacy recorder's one-second quantum, §9c). The
-<code>TriggeredScaleUp</code> of step 3 landed at 1s. So the 30s re-check of §7a is
-conservative by more than an order of magnitude, and the condition's staleness
-is bounded by the re-check rather than by the autoscaler — the operator doc's
-staleness wording needs no change.</p>
-<p>Corroborating §9c on this cluster, unprompted: <code>reportingComponent</code> <em>and</em>
-<code>source.component</code> both read <code>cluster-autoscaler</code>, <code>eventTime</code> was null with
-<code>firstTimestamp</code>/<code>lastTimestamp</code> set (so <code>eventTime()</code>'s all-fields rule stays
-load-bearing), and the taint case again named only a category. One <strong>new</strong>
-message body not in the recorded table appeared, from the nonexistent-pool
-shape: <code>1 node(s) didn't match Pod's node affinity/selector</code>. The matcher never
-parses a body, so it classifies identically — recorded because the sample set is
-the thing Q474's drift gate pins.</p>
+<p>Across all 7 pods of one burst, CA's <code>NotTriggerScaleUp</code> landed <strong>0–1s</strong> after pod creation (the spread is the legacy recorder's one-second quantum, §9c).
+The <code>TriggeredScaleUp</code> of step 3 landed at 1s.
+So the 30s re-check of §7a is conservative by more than an order of magnitude, and the condition's staleness is bounded by the re-check rather than by the autoscaler — the operator doc's staleness wording needs no change.</p>
+<p>Corroborating §9c on this cluster, unprompted: <code>reportingComponent</code> <em>and</em> <code>source.component</code> both read <code>cluster-autoscaler</code>, <code>eventTime</code> was null with <code>firstTimestamp</code>/<code>lastTimestamp</code> set (so <code>eventTime()</code>'s all-fields rule stays load-bearing), and the taint case again named only a category.
+One <strong>new</strong> message body not in the recorded table appeared, from the nonexistent-pool shape: <code>1 node(s) didn't match Pod's node affinity/selector</code>.
+The matcher never parses a body, so it classifies identically — recorded because the sample set is the thing Q474's drift gate pins.</p>
 <h3 id="what-the-method-itself-got-wrong">What the method itself got wrong<a class="headerlink" href="#what-the-method-itself-got-wrong" title="Permanent link">&para;</a></h3>
-<p>§9 step 2 names <code>actions_gateway_jobs_admission_rejected_total{reason="capacity"}</code>
-as the counter that should account for the drop. <strong>That counter cannot fire on
-this tier.</strong> It is emitted from one site,
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/job.go"><code>listener/job.go</code></a>, on the classic path;
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/metrics.go"><code>scalesetlistener/metrics.go</code></a>
-states it is structurally unreachable for a scale set, because a job the ladder
-declines is never assigned rather than claimed and rejected. The scale-set
-counterparts are <code>actions_gateway_scaleset_advertised_capacity</code> and
-<code>actions_gateway_scaleset_capacity_withheld{reason}</code>, and those are what the
-table above reports. §9 was written before §9b's port and was never reconciled
-with it; read as written it would have produced a flat-zero series and the false
-reading that the gate never engaged.</p>
-<p>Two observability snags found on the way, since filed as their own Queue rows
-(Q514, Q515 — both since fixed):</p>
+<p>§9 step 2 names <code>actions_gateway_jobs_admission_rejected_total{reason="capacity"}</code> as the counter that should account for the drop. <strong>That counter cannot fire on this tier.</strong> It is emitted from one site, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/job.go"><code>listener/job.go</code></a>, on the classic path; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/metrics.go"><code>scalesetlistener/metrics.go</code></a> states it is structurally unreachable for a scale set, because a job the ladder declines is never assigned rather than claimed and rejected.
+The scale-set counterparts are <code>actions_gateway_scaleset_advertised_capacity</code> and <code>actions_gateway_scaleset_capacity_withheld{reason}</code>, and those are what the table above reports. §9 was written before §9b's port and was never reconciled with it; read as written it would have produced a flat-zero series and the false reading that the gate never engaged.</p>
+<p>Two observability snags found on the way, since filed as their own Queue rows (Q514, Q515 — both since fixed):</p>
 <ul>
-<li><code>worker_pods_reaped_total</code> is labelled <code>runner_group</code>, while every
-  <code>scaleset_*</code> gauge is labelled <code>runner_set</code>. A dashboard that joins the reaper
-  counter to the advertisement gauges by label silently returns nothing. Fixed
-  by Q514: the counter now also stamps a <code>runner_set</code> label on scale-set reaps
-  (empty on classic; <code>runner_group</code> unchanged on both tiers), so the join works
-  without breaking existing <code>runner_group</code>-keyed queries.</li>
-<li>The <code>v2alpha1 is deprecated</code> warning is logged at info level per API read. On
-  a set reconciling under a stuck burst it dominates the AGC log to the point of
-  making it unusable for diagnosis. Fixed (Q515): both managers install a
-  deduplicating warning handler — one line per unique message per process.</li>
+<li><code>worker_pods_reaped_total</code> is labelled <code>runner_group</code>, while every <code>scaleset_*</code> gauge is labelled <code>runner_set</code>.
+  A dashboard that joins the reaper counter to the advertisement gauges by label silently returns nothing.
+  Fixed by Q514: the counter now also stamps a <code>runner_set</code> label on scale-set reaps (empty on classic; <code>runner_group</code> unchanged on both tiers), so the join works without breaking existing <code>runner_group</code>-keyed queries.</li>
+<li>The <code>v2alpha1 is deprecated</code> warning is logged at info level per API read.
+  On a set reconciling under a stuck burst it dominates the AGC log to the point of making it unusable for diagnosis.
+  Fixed (Q515): both managers install a deduplicating warning handler — one line per unique message per process.</li>
 </ul>
 <h2 id="9f-what-the-dogfood-run-measured-for-the-quota-rung-q462">9f. What the dogfood run measured for the quota rung (Q462)<a class="headerlink" href="#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462" title="Permanent link">&para;</a></h2>
-<p>Same cluster and control plane as <a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>,
-2026-07-31. Unlike the capacity rung, <strong>the quota rung works on the scale-set
-tier</strong>, and both of the quantities <a href="#9b-what-the-port-shipped">§9b</a> left open came
-back inside their intended bounds.</p>
-<p><strong>The harness.</strong> The tenant <code>ResourceQuota</code> was tightened from <code>pods: 12</code> to
-<code>pods: 6</code> (restored afterwards) so the rung binds; the set used the tenant's
-normal placeable <code>default</code> template with <code>maxWorkers: 8</code> and
-<code>capacityGate.mode: Off</code>, so the <em>only</em> rung under test is quota. Two
-<code>unit-test.yml</code> dispatches plus one <code>integration-test.yml</code>, sampled every 5s for
-~11 min.</p>
-<p><strong>The rung binds, continuously and correctly.</strong> With 2 infrastructure pods
-against a hard limit of 6, the advertisement tracked <code>own active pods + headroom</code>
-capped at the ceiling, oscillating 3↔4 against a declared ceiling of 8:</p>
+<p>Same cluster and control plane as <a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>, 2026-07-31.
+Unlike the capacity rung, <strong>the quota rung works on the scale-set tier</strong>, and both of the quantities <a href="#9b-what-the-port-shipped">§9b</a> left open came back inside their intended bounds.</p>
+<p><strong>The harness.</strong> The tenant <code>ResourceQuota</code> was tightened from <code>pods: 12</code> to <code>pods: 6</code> (restored afterwards) so the rung binds; the set used the tenant's normal placeable <code>default</code> template with <code>maxWorkers: 8</code> and <code>capacityGate.mode: Off</code>, so the <em>only</em> rung under test is quota.
+Two <code>unit-test.yml</code> dispatches plus one <code>integration-test.yml</code>, sampled every 5s for ~11 min.</p>
+<p><strong>The rung binds, continuously and correctly.</strong> With 2 infrastructure pods against a hard limit of 6, the advertisement tracked <code>own active pods + headroom</code> capped at the ceiling, oscillating 3↔4 against a declared ceiling of 8:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>adv=4  withheld{quota}=4     adv=3  withheld{quota}=5
 </code></pre></div>
-<p><code>actions_gateway_scaleset_capacity_withheld{reason="quota"}</code> and
-<code>actions_gateway_scaleset_advertised_capacity</code> summed to the ceiling at every
-sample, which is the invariant §9b's "every evaluated rung publishes an explicit
-zero each poll" is there to keep readable.</p>
-<p><strong>The bias-low margin is 0–2 jobs and never inverted.</strong> Sampling GitHub's
-<code>totalAssignedJobs</code> against the set's own non-terminal worker pods across 75
-samples:</p>
+<p><code>actions_gateway_scaleset_capacity_withheld{reason="quota"}</code> and <code>actions_gateway_scaleset_advertised_capacity</code> summed to the ceiling at every sample, which is the invariant §9b's "every evaluated rung publishes an explicit zero each poll" is there to keep readable.</p>
+<p><strong>The bias-low margin is 0–2 jobs and never inverted.</strong> Sampling GitHub's <code>totalAssignedJobs</code> against the set's own non-terminal worker pods across 75 samples:</p>
 <table>
 <thead>
 <tr>
@@ -3973,118 +3491,59 @@ samples:</p>
 </tr>
 </tbody>
 </table>
-<p>It was <strong>never negative</strong>. That is the answer §9a asked for: counting the AGC's
-own pods rather than <code>totalAssignedJobs</code> under-advertises by at most 2 slots on
-this workload, and the over-advertising direction — the one that reproduces
-claim-and-stall — did not occur. The bias-low choice costs little and holds.</p>
-<p>Two readings that look like violations and are not, worth stating so the next
-person does not re-open them:</p>
+<p>It was <strong>never negative</strong>.
+That is the answer §9a asked for: counting the AGC's own pods rather than <code>totalAssignedJobs</code> under-advertises by at most 2 slots on this workload, and the over-advertising direction — the one that reproduces claim-and-stall — did not occur.
+The bias-low choice costs little and holds.</p>
+<p>Two readings that look like violations and are not, worth stating so the next person does not re-open them:</p>
 <ul>
-<li><strong><code>assigned</code> briefly exceeded <code>advertised</code></strong> (4 against 3, at 00:51:33). The
-  advertisement caps <em>new</em> assignment; GitHub does not un-assign work when the
-  number drops, so a ceiling lowered under existing assignments is transiently
-  below them by construction.</li>
-<li><strong>Terminal pods must be excluded from the AGC side.</strong> Counting them made the
-  margin read negative — <code>active</code> appeared to exceed <code>assigned</code> — purely because
-  <code>Succeeded</code> pods linger. Neither <code>AdvertiseCapacity</code> nor the <code>ResourceQuota</code>
-  counts them, so the margin must not either.</li>
+<li><strong><code>assigned</code> briefly exceeded <code>advertised</code></strong> (4 against 3, at 00:51:33).
+  The advertisement caps <em>new</em> assignment; GitHub does not un-assign work when the number drops, so a ceiling lowered under existing assignments is transiently below them by construction.</li>
+<li><strong>Terminal pods must be excluded from the AGC side.</strong> Counting them made the margin read negative — <code>active</code> appeared to exceed <code>assigned</code> — purely because <code>Succeeded</code> pods linger.
+  Neither <code>AdvertiseCapacity</code> nor the <code>ResourceQuota</code> counts them, so the margin must not either.</li>
 </ul>
-<p><strong>Recovery from freed quota is ~30s, not a poll interval of pain.</strong> §9b asked
-whether one poll interval of recovery latency is noticeable to a tenant whose
-quota frees mid-burst. Measured: quota fell to 4/6 at 00:51:03 with 2 active pods
-against 4 assigned, and the AGC was back to 3 active by 00:51:15 and 4 by
-00:51:33 — ~30s from headroom appearing to the pods existing. Against dogfood CI
-job durations that is not a tenant-visible delay.</p>
-<p><strong>What this does not cover.</strong> One tenant, one namespace quota on <code>pods</code> only —
-not a CPU/memory-shaped quota, where <code>QuotaHeadroomPods</code>' binary search over
-<code>WorkerFootprint</code> does the real work and this run exercised only its trivial
-case. And the classic tier's boolean rung remains unmeasured on a live cluster;
-this measures the integer form §9a ported.</p>
+<p><strong>Recovery from freed quota is ~30s, not a poll interval of pain.</strong> §9b asked whether one poll interval of recovery latency is noticeable to a tenant whose quota frees mid-burst.
+Measured: quota fell to 4/6 at 00:51:03 with 2 active pods against 4 assigned, and the AGC was back to 3 active by 00:51:15 and 4 by 00:51:33 — ~30s from headroom appearing to the pods existing.
+Against dogfood CI job durations that is not a tenant-visible delay.</p>
+<p><strong>What this does not cover.</strong> One tenant, one namespace quota on <code>pods</code> only — not a CPU/memory-shaped quota, where <code>QuotaHeadroomPods</code>' binary search over <code>WorkerFootprint</code> does the real work and this run exercised only its trivial case.
+And the classic tier's boolean rung remains unmeasured on a live cluster; this measures the integer form §9a ported.</p>
 <h2 id="9g-the-latch--a-bound-that-survives-the-reap-q512">9g. The latch — a bound that survives the reap (Q512)<a class="headerlink" href="#9g-the-latch--a-bound-that-survives-the-reap-q512" title="Permanent link">&para;</a></h2>
-<p><a href="#9e-what-the-dogfood-run-measured-q469">§9e</a> measured the capacity rung removing
-zero wasted claims on the ScaleSet tier and named the arithmetic: the gate's only
-evidence is the stuck pod itself, the reaper deletes that pod at
-<code>pendingPodDeadline</code>, and clearing the condition restores the <strong>full</strong>
-advertisement — so a burst of <em>N</em> becomes <em>N</em> again, every window. The classic
-tier survives the same clearing because it re-decides per delivered job; the
-integer tier has no per-job decision point, so the clearing must not mean "back
-to ceiling". This section is the design for the bound that survives the reap;
-<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> is its dogfood
-measurement.</p>
-<p><strong>The rule.</strong> When every stuck pod has vanished <em>without evidence that capacity
-returned</em>, the condition does not clear — it <strong>latches</strong>:
-<code>WorkerCapacityDeclined</code> stays <code>True</code> with a new reason, <code>AwaitingProbe</code>. The
-latch is broken only by evidence, in either direction:</p>
+<p><a href="#9e-what-the-dogfood-run-measured-q469">§9e</a> measured the capacity rung removing zero wasted claims on the ScaleSet tier and named the arithmetic: the gate's only evidence is the stuck pod itself, the reaper deletes that pod at <code>pendingPodDeadline</code>, and clearing the condition restores the <strong>full</strong> advertisement — so a burst of <em>N</em> becomes <em>N</em> again, every window.
+The classic tier survives the same clearing because it re-decides per delivered job; the integer tier has no per-job decision point, so the clearing must not mean "back to ceiling".
+This section is the design for the bound that survives the reap; <a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> is its dogfood measurement.</p>
+<p><strong>The rule.</strong> When every stuck pod has vanished <em>without evidence that capacity returned</em>, the condition does not clear — it <strong>latches</strong>: <code>WorkerCapacityDeclined</code> stays <code>True</code> with a new reason, <code>AwaitingProbe</code>.
+The latch is broken only by evidence, in either direction:</p>
 <ul>
-<li><strong>Capacity returned</strong> — a worker pod of this set has <em>scheduled</em> since the
-  condition became <code>True</code> (its <code>PodScheduled=True</code> transition post-dates the
-  condition's <code>lastTransitionTime</code>). The condition clears fully; the whole
-  advertisement is restored.</li>
-<li><strong>Capacity still absent</strong> — a new stuck pod re-earns the live verdict
-  (<code>PodsUnschedulable</code> / <code>ScaleUpDeclined</code>), and the gate is back where it
-  started, with fresh evidence.</li>
+<li><strong>Capacity returned</strong> — a worker pod of this set has <em>scheduled</em> since the condition became <code>True</code> (its <code>PodScheduled=True</code> transition post-dates the condition's <code>lastTransitionTime</code>).
+  The condition clears fully; the whole advertisement is restored.</li>
+<li><strong>Capacity still absent</strong> — a new stuck pod re-earns the live verdict (<code>PodsUnschedulable</code> / <code>ScaleUpDeclined</code>), and the gate is back where it started, with fresh evidence.</li>
 </ul>
-<p>Latch entry is deliberately narrow: only the <em>no-stuck-pods</em> outcome latches. A
-not-declined verdict reached <strong>with</strong> stuck pods present — the autoscaler's
-acting signal, an unreadable Event list, an unrecognized vocabulary — clears the
-condition exactly as today, because there the fail-open contract (§5) and the
-concurrency-window protection (<a href="#9d-the-concurrency-window-q478">§9d</a>) own the
-answer. Scheduling evidence is compared by the pod's <code>PodScheduled</code> transition
-time, not its creation time, so a burst pod that finally squeezes in also counts
-as capacity returning — whenever it was created.</p>
-<p><strong>The probe slot.</strong> While latched, the rung's two forms both allow exactly one
-job through per deadline window — the integer trickle the tier never had:</p>
+<p>Latch entry is deliberately narrow: only the <em>no-stuck-pods</em> outcome latches.
+A not-declined verdict reached <strong>with</strong> stuck pods present — the autoscaler's acting signal, an unreadable Event list, an unrecognized vocabulary — clears the condition exactly as today, because there the fail-open contract (§5) and the concurrency-window protection (<a href="#9d-the-concurrency-window-q478">§9d</a>) own the answer.
+Scheduling evidence is compared by the pod's <code>PodScheduled</code> transition time, not its creation time, so a burst pod that finally squeezes in also counts as capacity returning — whenever it was created.</p>
+<p><strong>The probe slot.</strong> While latched, the rung's two forms both allow exactly one job through per deadline window — the integer trickle the tier never had:</p>
 <ul>
-<li><code>DeclinedCapacity</code> (scale-set): bound = own non-terminal worker pods, <strong>plus
-  one</strong> when no <em>probe</em> — a non-terminal worker pod created since the condition
-  became <code>True</code> — is outstanding. The slot admits one job; the pod it produces
-  is the probe. If it schedules, the latch clears; if it sticks, the live
-  verdict returns and the bound drops back to <code>active</code>.</li>
-<li><code>CapacityDeclined</code> (classic): while latched, declined <em>iff</em> a probe is
-  outstanding — so exactly one delivery is admitted per window here too. This
-  is Q443's invariant applied to the latch itself: a latch expressed only in
-  the integer form would ship the fix to one tier, and it would also <em>starve</em>
-  the classic tier outright (a latched <code>True</code> with no probe path would refuse
-  every delivery, and no probe pod would ever exist to clear it).</li>
+<li><code>DeclinedCapacity</code> (scale-set): bound = own non-terminal worker pods, <strong>plus one</strong> when no <em>probe</em> — a non-terminal worker pod created since the condition became <code>True</code> — is outstanding.
+  The slot admits one job; the pod it produces is the probe.
+  If it schedules, the latch clears; if it sticks, the live verdict returns and the bound drops back to <code>active</code>.</li>
+<li><code>CapacityDeclined</code> (classic): while latched, declined <em>iff</em> a probe is outstanding — so exactly one delivery is admitted per window here too.
+  This is Q443's invariant applied to the latch itself: a latch expressed only in the integer form would ship the fix to one tier, and it would also <em>starve</em> the classic tier outright (a latched <code>True</code> with no probe path would refuse every delivery, and no probe pod would ever exist to clear it).</li>
 </ul>
-<p>Under a live (non-latched) decline both forms behave exactly as shipped: bound =
-<code>active</code>, declined = true. The probe slot exists only in the latched state.</p>
-<p><strong>Why this cannot starve a tenant.</strong> The latch never fully closes intake — its
-floor is one probe slot per window, which is the classic tier's designed trickle
-rate (§5). A wrongly-held latch costs at most one poll-plus-reconcile of delay:
-the probe schedules, the Pod watch fires on the phase change, and the reconciler
-clears the condition. That bounded cost is why the latch may hold on <em>absence</em>
-of evidence even though the rest of the rung fails open on it — the failure mode
-is a briefly-throttled tenant, never a starved one.</p>
-<p><strong>What this deliberately does not fix.</strong> The first batch is still wasted — the
-gate cannot close before the first pod sticks, and assignment is batch-granular
-per long-poll (§9e). Steady-state waste drops from <em>N</em> per window to ~1 per
-window, which is the rate §8's trigger (a) asks to re-measure before Phase 3 is
-armed. The ~<code>pendingPodDeadline/2</code> scheduling grace before the gate first closes
-is also unchanged: the grace is what keeps the sibling <code>WorkersUnschedulable</code>
-condition from flapping, and shortening it for the gate alone would re-split the
-"one stuck-set definition" §5 unified.</p>
-<p><strong>Operator surface.</strong> <code>AwaitingProbe</code> joins the condition vocabulary
-(<code>api/apiconditions</code>, re-exported per version): <code>True/AwaitingProbe</code> reads "the
-declined evidence was reaped; intake is limited to one probe job until a worker
-pod schedules". On an idle gated set whose shape stays unplaceable the
-condition now persists <code>True</code> indefinitely — truthfully — where it previously
-flapped with every reap cycle. The withheld gauge
-(<code>actions_gateway_scaleset_capacity_withheld{reason="capacity"}</code>) now shows
-sustained withholding (<code>ceiling − active − 1</code>) across windows instead of the
-§9e sawtooth that always returned to zero.</p>
+<p>Under a live (non-latched) decline both forms behave exactly as shipped: bound = <code>active</code>, declined = true.
+The probe slot exists only in the latched state.</p>
+<p><strong>Why this cannot starve a tenant.</strong> The latch never fully closes intake — its floor is one probe slot per window, which is the classic tier's designed trickle rate (§5).
+A wrongly-held latch costs at most one poll-plus-reconcile of delay: the probe schedules, the Pod watch fires on the phase change, and the reconciler clears the condition.
+That bounded cost is why the latch may hold on <em>absence</em> of evidence even though the rest of the rung fails open on it — the failure mode is a briefly-throttled tenant, never a starved one.</p>
+<p><strong>What this deliberately does not fix.</strong> The first batch is still wasted — the gate cannot close before the first pod sticks, and assignment is batch-granular per long-poll (§9e).
+Steady-state waste drops from <em>N</em> per window to ~1 per window, which is the rate §8's trigger (a) asks to re-measure before Phase 3 is armed.
+The ~<code>pendingPodDeadline/2</code> scheduling grace before the gate first closes is also unchanged: the grace is what keeps the sibling <code>WorkersUnschedulable</code> condition from flapping, and shortening it for the gate alone would re-split the "one stuck-set definition" §5 unified.</p>
+<p><strong>Operator surface.</strong> <code>AwaitingProbe</code> joins the condition vocabulary (<code>api/apiconditions</code>, re-exported per version): <code>True/AwaitingProbe</code> reads "the declined evidence was reaped; intake is limited to one probe job until a worker pod schedules".
+On an idle gated set whose shape stays unplaceable the condition now persists <code>True</code> indefinitely — truthfully — where it previously flapped with every reap cycle.
+The withheld gauge (<code>actions_gateway_scaleset_capacity_withheld{reason="capacity"}</code>) now shows sustained withholding (<code>ceiling − active − 1</code>) across windows instead of the §9e sawtooth that always returned to zero.</p>
 <h2 id="9h-what-the-dogfood-re-run-measured-for-the-latch-q513">9h. What the dogfood re-run measured for the latch (Q513)<a class="headerlink" href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513" title="Permanent link">&para;</a></h2>
-<p>Measured 2026-07-31 on <code>gag-dogfood</code>, against a control plane built from
-<code>2715e7f8</code> — the first post-latch (Q512) main. Same harness as
-<a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>: two ScaleSet RunnerSets differing
-only in <code>capacityGate.mode</code>, a <code>RunnerTemplate</code> naming a nonexistent node pool,
-<code>maxWorkers: 8</code>, <code>pendingPodDeadline: 2m</code>, one <code>unit-test.yml</code> dispatch (7
-GAG-routed jobs) per arm, arms run sequentially on fresh set names (per the
-gke-dogfood B7 replay rule). Sampled every 10s from the AGC's mTLS metrics
-endpoint plus the RunnerSet condition.</p>
-<p><strong>The headline: every §9g prediction held.</strong> Steady-state waste dropped from
-<em>N</em> per window to exactly 1, the condition latched instead of flapping, and the
-§9e sawtooth is gone.</p>
+<p>Measured 2026-07-31 on <code>gag-dogfood</code>, against a control plane built from <code>2715e7f8</code> — the first post-latch (Q512) main.
+Same harness as <a href="#9e-what-the-dogfood-run-measured-q469">§9e</a>: two ScaleSet RunnerSets differing only in <code>capacityGate.mode</code>, a <code>RunnerTemplate</code> naming a nonexistent node pool, <code>maxWorkers: 8</code>, <code>pendingPodDeadline: 2m</code>, one <code>unit-test.yml</code> dispatch (7 GAG-routed jobs) per arm, arms run sequentially on fresh set names (per the gke-dogfood B7 replay rule).
+Sampled every 10s from the AGC's mTLS metrics endpoint plus the RunnerSet condition.</p>
+<p><strong>The headline: every §9g prediction held.</strong> Steady-state waste dropped from <em>N</em> per window to exactly 1, the condition latched instead of flapping, and the §9e sawtooth is gone.</p>
 <table>
 <thead>
 <tr>
@@ -4116,8 +3575,7 @@ endpoint plus the RunnerSet condition.</p>
 </tr>
 </tbody>
 </table>
-<p>The Off control reproduced §9e exactly (21 reaps, 3×7, ~5 min batch period),
-so the delta is the latch, not a changed environment.</p>
+<p>The Off control reproduced §9e exactly (21 reaps, 3×7, ~5 min batch period), so the delta is the latch, not a changed environment.</p>
 <p>One measured cycle of the latch arm, from the sampler:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>07:20:48  adv=8  pods=7  cond=False/CapacityAvailable      &lt;- burst assigned whole (batch-granular)
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>07:21:45  adv=8  pods=7  cond=True/ScaleUpDeclined         &lt;- gate closes: deadline/2 grace (~60s)
@@ -4129,89 +3587,39 @@ so the delta is the latch, not a changed environment.</p>
 </code></pre></div>
 <p>Two timings worth recording:</p>
 <ul>
-<li><strong>The practical window is ~5 min, not the 2 m deadline</strong> — reap at 2 m plus
-  ~3 min of GitHub-side re-assignment latency before the probe job lands (the
-  same lag §9e's Off batches showed). The steady-state burn rate is therefore
-  ~1 claim / ~5 min at this deadline, and scales with <code>pendingPodDeadline</code>.</li>
-<li><strong>The condition never flapped through <code>False</code>.</strong> <code>WorkersUnschedulable</code>
-  cleared at each reap (its evidence is the pods) while <code>WorkerCapacityDeclined</code>
-  held <code>True</code> — the decoupling §9g designed. The <code>AwaitingProbe</code> message names
-  the reaped evidence and the reopening rule verbatim from the operator doc.</li>
+<li><strong>The practical window is ~5 min, not the 2 m deadline</strong> — reap at 2 m plus ~3 min of GitHub-side re-assignment latency before the probe job lands (the same lag §9e's Off batches showed).
+  The steady-state burn rate is therefore ~1 claim / ~5 min at this deadline, and scales with <code>pendingPodDeadline</code>.</li>
+<li><strong>The condition never flapped through <code>False</code>.</strong> <code>WorkersUnschedulable</code> cleared at each reap (its evidence is the pods) while <code>WorkerCapacityDeclined</code> held <code>True</code> — the decoupling §9g designed.
+  The <code>AwaitingProbe</code> message names the reaped evidence and the reopening rule verbatim from the operator doc.</li>
 </ul>
-<p>Corroborated in passing: CA's <code>NotTriggerScaleUp</code> again landed 0–1 s after pod
-creation, and the nonexistent-pool shape emitted a two-category body
-(<code>1 node(s) had untolerated taint(s), 1 node(s) didn't match Pod's node
-affinity/selector</code>) — classified by category, never parsed, per §9c.</p>
-<p><strong>What this hands the Phase 3 decision.</strong> §8's trigger (a) now has its number:
-residual burn under rate-bounding is ~1 claim per ~(deadline + reassignment)
-window, only while jobs are actually queued against an unplaceable shape. For
-this repo's CI that is acceptable; a GPU/spot operator for whom even that rate
-is expensive is trigger (a)'s remaining case. The first batch remains unbounded
-by design (assignment is batch-granular; the gate cannot close before the first
-pod sticks), and the classic tier's boolean rung remains unmeasured live.</p>
+<p>Corroborated in passing: CA's <code>NotTriggerScaleUp</code> again landed 0–1 s after pod creation, and the nonexistent-pool shape emitted a two-category body (<code>1 node(s) had untolerated taint(s), 1 node(s) didn't match Pod's node affinity/selector</code>) — classified by category, never parsed, per §9c.</p>
+<p><strong>What this hands the Phase 3 decision.</strong> §8's trigger (a) now has its number: residual burn under rate-bounding is ~1 claim per ~(deadline + reassignment) window, only while jobs are actually queued against an unplaceable shape.
+For this repo's CI that is acceptable; a GPU/spot operator for whom even that rate is expensive is trigger (a)'s remaining case.
+The first batch remains unbounded by design (assignment is batch-granular; the gate cannot close before the first pod sticks), and the classic tier's boolean rung remains unmeasured live.</p>
 <h2 id="9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">9i. The Karpenter arm of the drift gate, and what it measured (Q479)<a class="headerlink" href="#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479" title="Permanent link">&para;</a></h2>
-<p>Shipped 2026-07-31. <a href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474">§9c</a>
-covered cluster-autoscaler only; this is the arm §9c flagged as needing a live
-counterpart most. Karpenter's declination shares kube-scheduler's reason string
-(<code>FailedScheduling</code>), so the matcher's whole Karpenter arm <em>is</em> the reporter
-discrimination — and its failure mode is double-silent: an upstream attribution
-change makes every Karpenter declination read as scheduler noise, the gate never
-closes on any Karpenter cluster, and recorded samples carry the old attribution
-forever.</p>
-<p><strong>The harness.</strong> <code>make karpenter-cluster</code> stands up a throwaway kind cluster
-running a real upstream Karpenter on its
-<a href="https://github.com/kubernetes-sigs/karpenter/tree/main/kwok">kwok provider</a>.
-One structural difference from the CA arm: upstream publishes <strong>no image</strong> for
-this provider (its own workflow is <code>ko build</code> from a checkout), so
-<code>scripts/e2e/karpenter-cluster.sh</code> clones the pinned <code>KARPENTER_VERSION</code> tag, builds
-the binary with the repo's Go toolchain, and reproduces ko's output shape
-(static binary, empty base — <code>test/karpenter/Dockerfile</code>). <code>make test-karpenter</code>
-then drives three cases (<code>karpenter_verdict_live_test.go</code>, build tag
-<code>karpenter</code>): the declination read through the discrimination with the
-scheduler's identically-named event in the same list, a nomination that must
-leave the gate open and land the pod on a node that did not exist, and the
-recorder generation. CI runs it beside the CA arm in <code>autoscaler-drift.yml</code>;
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/karpenter.yaml"><code>updatecli.d/karpenter.yaml</code></a> moves the pin
-weekly to the latest upstream release (Q529).</p>
+<p>Shipped 2026-07-31.
+<a href="#9c-the-live-autoscaler-harness-and-what-it-measured-q474">§9c</a> covered cluster-autoscaler only; this is the arm §9c flagged as needing a live counterpart most.
+Karpenter's declination shares kube-scheduler's reason string (<code>FailedScheduling</code>), so the matcher's whole Karpenter arm <em>is</em> the reporter discrimination — and its failure mode is double-silent: an upstream attribution change makes every Karpenter declination read as scheduler noise, the gate never closes on any Karpenter cluster, and recorded samples carry the old attribution forever.</p>
+<p><strong>The harness.</strong> <code>make karpenter-cluster</code> stands up a throwaway kind cluster running a real upstream Karpenter on its <a href="https://github.com/kubernetes-sigs/karpenter/tree/main/kwok">kwok provider</a>.
+One structural difference from the CA arm: upstream publishes <strong>no image</strong> for this provider (its own workflow is <code>ko build</code> from a checkout), so <code>scripts/e2e/karpenter-cluster.sh</code> clones the pinned <code>KARPENTER_VERSION</code> tag, builds the binary with the repo's Go toolchain, and reproduces ko's output shape (static binary, empty base — <code>test/karpenter/Dockerfile</code>). <code>make test-karpenter</code> then drives three cases (<code>karpenter_verdict_live_test.go</code>, build tag <code>karpenter</code>): the declination read through the discrimination with the scheduler's identically-named event in the same list, a nomination that must leave the gate open and land the pod on a node that did not exist, and the recorder generation.
+CI runs it beside the CA arm in <code>autoscaler-drift.yml</code>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/karpenter.yaml"><code>updatecli.d/karpenter.yaml</code></a> moves the pin weekly to the latest upstream release (Q529).</p>
 <p><strong>Measured against Karpenter v1.14.0 / Kubernetes 1.36.1, 2026-07-31.</strong></p>
 <ul>
-<li><strong>The reason vocabulary and attribution hold.</strong> <code>FailedScheduling</code> and
-  <code>Nominated</code>, attributed on <em>both</em> fields (<code>source.component</code> and
-  <code>reportingComponent</code> read <code>karpenter</code>) — same double attribution §9c measured
-  for CA, so <code>reportedByScheduler</code>'s fallback reads the same answer either way.</li>
-<li><strong>Only the message prefix is stable.</strong> <code>Failed to schedule pod,</code> held, but
-  the recorded sample's body (<code>incompatible with nodepool "default", daemonset
-  overhead=…, no instance type satisfied resources</code>) no longer appears at
-  v1.14.0. The measured bodies vary by failure shape: <code>incompatible
-  requirements, key karpenter.sh/nodepool, …</code> for a pool-selector mismatch,
-  <code>no instance type has enough resources, requirements=…</code> for an oversized pod.
-  Both are now unit rows (classified identically — the matcher never parses a
-  body), the live test pins only the prefix, and the runbook's "which one" list
-  was reworded to match.</li>
-<li><strong>The microsecond-generation premise was wrong.</strong> Karpenter records through
-  the <strong>legacy</strong> recorder — <code>firstTimestamp</code>/<code>lastTimestamp</code> set, <code>eventTime</code>
-  null — the same generation as CA, at the same one-second resolution. §9c and
-  §9d shipped believing Karpenter used the microsecond generation (source
-  inspection, never measured; the operator runbook repeated it as "Karpenter
-  sets eventTime"). All three claims are now corrected. The §9d window loses
-  nothing: it was already justified as making the verdict independent of
-  recorder generation, and the live recorder-generation case is what will
-  notice when either project migrates.</li>
-<li><strong>Timing.</strong> Karpenter's declination lands 1–2 s after pod creation (its batch
-  idle window is 1 s — no CA-style 10 s scan to wait out), and
-  nomination→new-node→pod-scheduled completed in ~4 s under kwok's fast stages.</li>
+<li><strong>The reason vocabulary and attribution hold.</strong> <code>FailedScheduling</code> and <code>Nominated</code>, attributed on <em>both</em> fields (<code>source.component</code> and <code>reportingComponent</code> read <code>karpenter</code>) — same double attribution §9c measured for CA, so <code>reportedByScheduler</code>'s fallback reads the same answer either way.</li>
+<li><strong>Only the message prefix is stable.</strong> <code>Failed to schedule pod,</code> held, but the recorded sample's body (<code>incompatible with nodepool "default", daemonset overhead=…, no instance type satisfied resources</code>) no longer appears at v1.14.0.
+  The measured bodies vary by failure shape: <code>incompatible requirements, key karpenter.sh/nodepool, …</code> for a pool-selector mismatch, <code>no instance type has enough resources, requirements=…</code> for an oversized pod.
+  Both are now unit rows (classified identically — the matcher never parses a body), the live test pins only the prefix, and the runbook's "which one" list was reworded to match.</li>
+<li><strong>The microsecond-generation premise was wrong.</strong> Karpenter records through the <strong>legacy</strong> recorder — <code>firstTimestamp</code>/<code>lastTimestamp</code> set, <code>eventTime</code> null — the same generation as CA, at the same one-second resolution. §9c and §9d shipped believing Karpenter used the microsecond generation (source inspection, never measured; the operator runbook repeated it as "Karpenter sets eventTime").
+  All three claims are now corrected.
+  The §9d window loses nothing: it was already justified as making the verdict independent of recorder generation, and the live recorder-generation case is what will notice when either project migrates.</li>
+<li><strong>Timing.</strong> Karpenter's declination lands 1–2 s after pod creation (its batch idle window is 1 s — no CA-style 10 s scan to wait out), and nomination→new-node→pod-scheduled completed in ~4 s under kwok's fast stages.</li>
 </ul>
-<p><strong>Upstream finding, worked around in the recipe.</strong> The kwok chart at v1.14.0
-renders <code>featureGates.staticCapacity</code> and <code>.capacityBuffer</code> into the
-<code>FEATURE_GATES</code> env var, but its own <code>values.yaml</code> omits both keys — the empty
-string panics the controller at startup (<code>invalid value of StaticCapacity</code>).
-The harness sets both to their defaults explicitly (<a href="../../STATUS/#Q531">Q531</a>
-tracks reporting it upstream).</p>
+<p><strong>Upstream finding, worked around in the recipe.</strong> The kwok chart at v1.14.0 renders <code>featureGates.staticCapacity</code> and <code>.capacityBuffer</code> into the <code>FEATURE_GATES</code> env var, but its own <code>values.yaml</code> omits both keys — the empty string panics the controller at startup (<code>invalid value of StaticCapacity</code>).
+The harness sets both to their defaults explicitly (<a href="../../STATUS/#Q531">Q531</a> tracks reporting it upstream).</p>
 <h2 id="9j-the-gap-is-operator-visible-in-shipped-docs-q714">9j. The gap is operator-visible in shipped docs (Q714)<a class="headerlink" href="#9j-the-gap-is-operator-visible-in-shipped-docs-q714" title="Permanent link">&para;</a></h2>
-<p>Q714's mechanism was a source read. It is now measured. A pod running the exact
-placeholder the 1.4 DinD templates ship,
-<code>example.invalid/build-capable-runner:replace-me</code>, was applied to a kind cluster
-and its conditions read directly:</p>
+<p>Q714's mechanism was a source read.
+It is now measured.
+A pod running the exact placeholder the 1.4 DinD templates ship, <code>example.invalid/build-capable-runner:replace-me</code>, was applied to a kind cluster and its conditions read directly:</p>
 <table>
 <thead>
 <tr>
@@ -4238,45 +3646,25 @@ and its conditions read directly:</p>
 </tr>
 </tbody>
 </table>
-<p><code>PodScheduled=True</code> is the confirmation: <code>podUnschedulable()</code> requires
-<code>PodScheduled=False</code> with reason <code>Unschedulable</code>, so it returns false for the
-whole window. <code>WorkersUnschedulable</code> never trips, and neither
-<code>actions_gateway_workers_unschedulable</code> (v1) nor
-<code>actions_gateway_runnerset_workers_unschedulable</code> (v2) leaves 0. Both API
-versions share this,
-since <code>RunnerSetReconciler</code> reuses <code>evalWorkersUnschedulableForPods</code> and
-<code>PendingPodDeadlineOrDefault</code>.</p>
-<p>The pod is then reaped at <code>pendingPodDeadline</code> (default 10m) with a
-<code>WorkerPodStuckPending</code> Warning, which <code>E2E_AGC_StuckPendingPodReaped</code> already
-exercises on the same <code>.invalid</code> shape. Recovery does not loop tightly: the
-abandoned-run sweeper waits for capacity that an unpullable image never returns
-and expires after 30m.</p>
-<p><strong>Why this matters beyond intake.</strong> Both 1.4 DinD templates ship that
-placeholder and require the operator to replace it, so this is the failure a
-first-time user of the library hits, not a corner case.
-<a href="../../operations/runner-template-library/"><code>runner-template-library.md</code></a> and
-<a href="../../operations/kata-dind-workloads/"><code>kata-dind-workloads.md</code></a> now describe
-the real split: the pod says <code>ImagePullBackOff</code> within seconds, while the
-<code>RunnerSet</code> stays quiet until the deadline. Closing Q714 changes what an
-operator watches, so it must update both.</p>
+<p><code>PodScheduled=True</code> is the confirmation: <code>podUnschedulable()</code> requires <code>PodScheduled=False</code> with reason <code>Unschedulable</code>, so it returns false for the whole window. <code>WorkersUnschedulable</code> never trips, and neither <code>actions_gateway_workers_unschedulable</code> (v1) nor <code>actions_gateway_runnerset_workers_unschedulable</code> (v2) leaves 0.
+Both API versions share this, since <code>RunnerSetReconciler</code> reuses <code>evalWorkersUnschedulableForPods</code> and <code>PendingPodDeadlineOrDefault</code>.</p>
+<p>The pod is then reaped at <code>pendingPodDeadline</code> (default 10m) with a <code>WorkerPodStuckPending</code> Warning, which <code>E2E_AGC_StuckPendingPodReaped</code> already exercises on the same <code>.invalid</code> shape.
+Recovery does not loop tightly: the abandoned-run sweeper waits for capacity that an unpullable image never returns and expires after 30m.</p>
+<p><strong>Why this matters beyond intake.</strong> Both 1.4 DinD templates ship that placeholder and require the operator to replace it, so this is the failure a first-time user of the library hits, not a corner case.
+<a href="../../operations/runner-template-library/"><code>runner-template-library.md</code></a> and <a href="../../operations/kata-dind-workloads/"><code>kata-dind-workloads.md</code></a> now describe the real split: the pod says <code>ImagePullBackOff</code> within seconds, while the <code>RunnerSet</code> stays quiet until the deadline.
+Closing Q714 changes what an operator watches, so it must update both.</p>
 <h2 id="10-non-goals">10. Non-goals<a class="headerlink" href="#10-non-goals" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Predicting schedulability in-process from node allocatable. Rejected: it
-  reimplements the scheduler's filter plugins and will drift
-  (<a href="../../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8</a>).</li>
-<li>Pre-warmed placeholder/pause pods. That trade (idle compute for correct
-  optimism) is the warm-worker-pool item,
-  <a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">G.12</a>/<a href="../../STATUS/#Q268">Q268</a>.</li>
+<li>Predicting schedulability in-process from node allocatable.
+  Rejected: it reimplements the scheduler's filter plugins and will drift (<a href="../../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8</a>).</li>
+<li>Pre-warmed placeholder/pause pods.
+  That trade (idle compute for correct optimism) is the warm-worker-pool item, <a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">G.12</a>/<a href="../../STATUS/#Q268">Q268</a>.</li>
 <li>Cross-RunnerSet coordination on a shared pool (§4 residual).</li>
 <li>A pluggable autoscaler-provider interface, or coverage of every autoscaler.
-  Two matchers cover both open-source event vocabularies across ~46 provider
-  implementations, and fail-open covers the rest (§7).</li>
-<li>Auto-detecting cluster elasticity to pick a mode. Open question, not scope: a
-  reconcile-time <em>warning</em> when a mode's precondition looks violated (an
-  autoscaler is present but the set asked for <code>SchedulerVerdict</code>) is cheap and
-  would prevent the one real footgun here.</li>
-<li>Making any mode the default, in any phase. <code>Off</code> stays the default until live
-  measurement says otherwise, per the secure/conservative-default stance.</li>
+  Two matchers cover both open-source event vocabularies across ~46 provider implementations, and fail-open covers the rest (§7).</li>
+<li>Auto-detecting cluster elasticity to pick a mode.
+  Open question, not scope: a reconcile-time <em>warning</em> when a mode's precondition looks violated (an autoscaler is present but the set asked for <code>SchedulerVerdict</code>) is cheap and would prevent the one real footgun here.</li>
+<li>Making any mode the default, in any phase. <code>Off</code> stays the default until live measurement says otherwise, per the secure/conservative-default stance.</li>
 <li>v1 <code>RunnerGroup</code> support.</li>
 </ul>
 

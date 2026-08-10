@@ -2664,10 +2664,14 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
-<p>Every component exposes Prometheus metrics from the standard <code>controller-runtime</code> metrics server, so built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics documented in this guide. The serving posture differs by component:</p>
+<p>Every component exposes Prometheus metrics from the standard <code>controller-runtime</code> metrics server, so built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics documented in this guide.
+The serving posture differs by component:</p>
 <ul>
-<li><strong>GMC manager</strong> — <code>:8443/metrics</code>, served over TLS. How a scrape verifies the cert is controlled by <code>metrics.tls.certManager.enabled</code> (see <a href="../observability-metrics-access/#verifying-the-metrics-scrape-tls-gmc-manager">Verifying the metrics scrape TLS (GMC manager)</a>).</li>
-<li><strong>Per-tenant AGC and proxy</strong> — <code>:8443/metrics</code>, served over <strong>mutual TLS</strong>: a scraper must present a client certificate signed by that tenant's metrics CA. The GMC publishes the scraper's client bundle per tenant. See <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>.</li>
+<li><strong>GMC manager</strong> — <code>:8443/metrics</code>, served over TLS.
+  How a scrape verifies the cert is controlled by <code>metrics.tls.certManager.enabled</code> (see <a href="../observability-metrics-access/#verifying-the-metrics-scrape-tls-gmc-manager">Verifying the metrics scrape TLS (GMC manager)</a>).</li>
+<li><strong>Per-tenant AGC and proxy</strong> — <code>:8443/metrics</code>, served over <strong>mutual TLS</strong>: a scraper must present a client certificate signed by that tenant's metrics CA.
+  The GMC publishes the scraper's client bundle per tenant.
+  See <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>.</li>
 </ul>
 <p>For SLO targets associated with these metrics, see <a href="../../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a>.</p>
 <hr />

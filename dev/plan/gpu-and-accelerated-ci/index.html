@@ -2676,25 +2676,17 @@
 
 <h1 id="gpu-and-accelerated-ci">GPU and Accelerated CI<a class="headerlink" href="#gpu-and-accelerated-ci" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: goal stated 2026-08-07, foundations shipped, first-class support
-open.</strong> This is a map and a definition of done, not a design. Both open
-deliverables are deferred pending a concrete workload to design against, which
-is deliberate: the shapes below are guesses until a real GPU CI job exists to
-measure.</p>
+<p><strong>Status: goal stated 2026-08-07, foundations shipped, first-class support open.</strong> This is a map and a definition of done, not a design.
+Both open deliverables are deferred pending a concrete workload to design against, which is deliberate: the shapes below are guesses until a real GPU CI job exists to measure.</p>
 </blockquote>
 <h2 id="why-this-is-a-goal">Why this is a goal<a class="headerlink" href="#why-this-is-a-goal" title="Permanent link">&para;</a></h2>
-<p>GPU is the reason multi-tenancy is worth securing. The
-<a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> argument turns on
-nodes that are big and expensive enough that a cluster per tenant strands
-capacity, and accelerators are the sharpest version of that: an idle A100 costs
-more per hour than most teams' entire CPU fleet, and partitioned GPU capacity
-cannot be shifted to whoever needs it at 3am.</p>
-<p>So GPU is not one workload among many here. It is the case that makes the whole
-product's economics work, and the case where the competition is thinnest,
-because a managed runner service cannot run on the accelerators you already
-bought.</p>
+<p>GPU is the reason multi-tenancy is worth securing.
+The <a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> argument turns on nodes that are big and expensive enough that a cluster per tenant strands capacity, and accelerators are the sharpest version of that: an idle A100 costs more per hour than most teams' entire CPU fleet, and partitioned GPU capacity cannot be shifted to whoever needs it at 3am.</p>
+<p>So GPU is not one workload among many here.
+It is the case that makes the whole product's economics work, and the case where the competition is thinnest, because a managed runner service cannot run on the accelerators you already bought.</p>
 <h2 id="what-ships-today">What ships today<a class="headerlink" href="#what-ships-today" title="Permanent link">&para;</a></h2>
-<p>More than the roadmap implies. These are foundations, not placeholders:</p>
+<p>More than the roadmap implies.
+These are foundations, not placeholders:</p>
 <table>
 <thead>
 <tr>
@@ -2736,153 +2728,79 @@ bought.</p>
 </tr>
 </tbody>
 </table>
-<p>What is missing is not the plumbing. It is the conventions that make a GPU
-runner set feel native (<a href="../../STATUS/#Q216">Q216</a>) and the ability to express a
-job that needs more than one node at once (<a href="../../STATUS/#Q718">Q718</a>).</p>
+<p>What is missing is not the plumbing.
+It is the conventions that make a GPU runner set feel native (<a href="../../STATUS/#Q216">Q216</a>) and the ability to express a job that needs more than one node at once (<a href="../../STATUS/#Q718">Q718</a>).</p>
 <h2 id="the-collision-with-the-security-goal">The collision with the security goal<a class="headerlink" href="#the-collision-with-the-security-goal" title="Permanent link">&para;</a></h2>
-<p><strong>On managed cloud GPU, isolation and the accelerator do not compose the way
-GAG's defaults assume</strong>, and no Queue row says so.</p>
-<p>Kata micro-VM workers are the shipped answer for giving a job root without a
-shared kernel, and they are the default in GAG's own end-to-end CI. Nested
-virtualization is <em>not</em> what blocks them on GPU nodes: A2, A3, and G2 all take
-<code>--enable-nested-virtualization</code> (measured 2026-08-02, <a href="../../operations/kata-dind-workloads/#prerequisite--nested-virtualization-nodes">machine-family
-row</a>).
+<p><strong>On managed cloud GPU, isolation and the accelerator do not compose the way GAG's defaults assume</strong>, and no Queue row says so.</p>
+<p>Kata micro-VM workers are the shipped answer for giving a job root without a shared kernel, and they are the default in GAG's own end-to-end CI.
+Nested virtualization is <em>not</em> what blocks them on GPU nodes: A2, A3, and G2 all take <code>--enable-nested-virtualization</code> (measured 2026-08-02, <a href="../../operations/kata-dind-workloads/#prerequisite--nested-virtualization-nodes">machine-family row</a>).
 The constraint sits one layer down, and it leaves an operator two real options.</p>
-<p><strong>gVisor runs on cloud GPU, and stops at the driver.</strong> GKE Sandbox supports
-GPUs: GA on H100 80GB, A100 80GB/40GB, L4, and T4, preview on H200, B200,
-GB200, and RTX PRO 6000. Google bounds its own claim, "GKE Sandbox doesn't
-mitigate all NVIDIA driver vulnerabilities, but retains protection against Linux
-kernel vulnerabilities", and gVisor says the same from the other side: it "is
-much less effective at mitigating vulnerabilities within the NVIDIA GPU drivers
-themselves, because gVisor passes through calls to be handled by the kernel
-module"
-(<a href="https://docs.cloud.google.com/kubernetes-engine/docs/concepts/sandbox-pods">GKE Sandbox</a>,
-<a href="https://gvisor.dev/docs/user_guide/gpu/">gVisor GPU support</a>, both fetched
-2026-08-08).</p>
-<p>That uncovered half is where the recent critical escapes are. CVE-2024-0132
-(2024-09) is a time-of-check/time-of-use race in the NVIDIA Container Toolkit
-that lets a crafted image reach the host filesystem; CVE-2025-23359 (2025-02,
-CVSS 9.0) is its incomplete fix, reopening the same race; CVE-2025-23266
-"NVIDIAScape" (2025-07, CVSS 9.0) makes the privileged <code>createContainer</code> OCI
-hook inherit environment from the image, so an <code>LD_PRELOAD</code> pointing into the
-container's own filesystem loads inside a host process, in three lines of
-Dockerfile (fixed in Container Toolkit 1.17.8). All three are toolkit bugs
-rather than kernel bugs, which is exactly the half a sandbox does not take. That
-is a statement about coverage boundaries, not a claim that gVisor is unsafe or
-that any of these was exploited against a GAG deployment.</p>
-<p><strong>Kata covers the driver and asks for hardware you control.</strong> NVIDIA documents
-the Kata passthrough path as needing hardware virtualization and Access Control
-Services (ACS) enabled in BIOS, IOMMU groups, <em>no</em> NVIDIA driver installed on
-the host (the GPU binds to <code>vfio-pci</code> instead), and every GPU on the node
-assigned to one Kata VM. vGPU is unsupported, containerd only, and "support for
-Kata Containers is limited to the implementation described on this page"
-(<a href="https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/deploy-kata-containers.html">NVIDIA GPU Operator</a>,
-fetched 2026-08-08). A managed node pool exposes none of those knobs, which is
-why <a href="../../design/appendix-b-worker-isolation/">appendix-b</a> rates device
-passthrough as limited under a micro-VM.</p>
-<p>The consequence is a positioning constraint, not just an engineering one. The
-strongest audience for GAG's security story and the strongest audience for its
-GPU story are the same people, and on managed cloud they still have to choose
-between a sandbox that stops at the driver and a VM boundary they cannot
-configure. On-premises and reserved hardware is where both hold at once, which
-is also where the
-<a href="../../alternatives/#location-location-location">location filter</a> already removes
-most of the competition. That is a coherent story, but only if it is stated
-rather than discovered by an operator after they buy A3 nodes.</p>
+<p><strong>gVisor runs on cloud GPU, and stops at the driver.</strong> GKE Sandbox supports GPUs: GA on H100 80GB, A100 80GB/40GB, L4, and T4, preview on H200, B200, GB200, and RTX PRO 6000.
+Google bounds its own claim, "GKE Sandbox doesn't mitigate all NVIDIA driver vulnerabilities, but retains protection against Linux kernel vulnerabilities", and gVisor says the same from the other side: it "is much less effective at mitigating vulnerabilities within the NVIDIA GPU drivers themselves, because gVisor passes through calls to be handled by the kernel module" (<a href="https://docs.cloud.google.com/kubernetes-engine/docs/concepts/sandbox-pods">GKE Sandbox</a>, <a href="https://gvisor.dev/docs/user_guide/gpu/">gVisor GPU support</a>, both fetched 2026-08-08).</p>
+<p>That uncovered half is where the recent critical escapes are.
+CVE-2024-0132 (2024-09) is a time-of-check/time-of-use race in the NVIDIA Container Toolkit that lets a crafted image reach the host filesystem; CVE-2025-23359 (2025-02, CVSS 9.0) is its incomplete fix, reopening the same race; CVE-2025-23266 "NVIDIAScape" (2025-07, CVSS 9.0) makes the privileged <code>createContainer</code> OCI hook inherit environment from the image, so an <code>LD_PRELOAD</code> pointing into the container's own filesystem loads inside a host process, in three lines of Dockerfile (fixed in Container Toolkit 1.17.8).
+All three are toolkit bugs rather than kernel bugs, which is exactly the half a sandbox does not take.
+That is a statement about coverage boundaries, not a claim that gVisor is unsafe or that any of these was exploited against a GAG deployment.</p>
+<p><strong>Kata covers the driver and asks for hardware you control.</strong> NVIDIA documents the Kata passthrough path as needing hardware virtualization and Access Control Services (ACS) enabled in BIOS, IOMMU groups, <em>no</em> NVIDIA driver installed on the host (the GPU binds to <code>vfio-pci</code> instead), and every GPU on the node assigned to one Kata VM. vGPU is unsupported, containerd only, and "support for Kata Containers is limited to the implementation described on this page" (<a href="https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/deploy-kata-containers.html">NVIDIA GPU Operator</a>, fetched 2026-08-08).
+A managed node pool exposes none of those knobs, which is why <a href="../../design/appendix-b-worker-isolation/">appendix-b</a> rates device passthrough as limited under a micro-VM.</p>
+<p>The consequence is a positioning constraint, not just an engineering one.
+The strongest audience for GAG's security story and the strongest audience for its GPU story are the same people, and on managed cloud they still have to choose between a sandbox that stops at the driver and a VM boundary they cannot configure.
+On-premises and reserved hardware is where both hold at once, which is also where the <a href="../../alternatives/#location-location-location">location filter</a> already removes most of the competition.
+That is a coherent story, but only if it is stated rather than discovered by an operator after they buy A3 nodes.</p>
 <h2 id="why-gang-scheduling-is-structurally-hard-and-why-that-matters">Why gang scheduling is structurally hard, and why that matters<a class="headerlink" href="#why-gang-scheduling-is-structurally-hard-and-why-that-matters" title="Permanent link">&para;</a></h2>
-<p><a href="../../STATUS/#Q718">Q718</a> is not a bigger version of Q216. A multi-node training
-or distributed-test job needs <strong>N pods co-scheduled in one topology domain</strong>
-(NVLink, InfiniBand). The runner-scale-set protocol advertises capacity to
-GitHub as <strong>a single integer</strong>. A gang requirement is a placement predicate, not
-a count, so there is no integer that expresses "four pods, same domain, or none".</p>
-<p>This is the one place GAG's pre-claim admission gate is <strong>structurally</strong>
-defensible rather than merely ahead. Elsewhere, an implementation that wanted to
-gate intake could reach the same outcome by capping the advertised number
-(<a href="../competitive-analysis-2026-08/#the-pre-claim-seat-is-not-structural-and-the-docs-must-stop-implying-it-is">competitive-analysis-2026-08</a>
-sets out why that makes the seat contested rather than a moat). A gang has no
-such workaround: the decision has to be made where the placement information
-lives, which is the control plane, before the claim.</p>
-<p>So Q718 is worth more than its GPU utility. It is the deliverable that turns a
-contested differentiator into an uncontested one, and it should be weighed that
-way when it competes for priority.</p>
+<p><a href="../../STATUS/#Q718">Q718</a> is not a bigger version of Q216.
+A multi-node training or distributed-test job needs <strong>N pods co-scheduled in one topology domain</strong> (NVLink, InfiniBand).
+The runner-scale-set protocol advertises capacity to GitHub as <strong>a single integer</strong>.
+A gang requirement is a placement predicate, not a count, so there is no integer that expresses "four pods, same domain, or none".</p>
+<p>This is the one place GAG's pre-claim admission gate is <strong>structurally</strong> defensible rather than merely ahead.
+Elsewhere, an implementation that wanted to gate intake could reach the same outcome by capping the advertised number (<a href="../competitive-analysis-2026-08/#the-pre-claim-seat-is-not-structural-and-the-docs-must-stop-implying-it-is">competitive-analysis-2026-08</a> sets out why that makes the seat contested rather than a moat).
+A gang has no such workaround: the decision has to be made where the placement information lives, which is the control plane, before the claim.</p>
+<p>So Q718 is worth more than its GPU utility.
+It is the deliverable that turns a contested differentiator into an uncontested one, and it should be weighed that way when it competes for priority.</p>
 <h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <p>Each demonstrated rather than argued:</p>
 <ol>
-<li>A GPU runner set is declared without hand-writing <code>nodeSelector</code>,
-   tolerations, and <code>runtimeClassName</code>, and the declaration is checked at
-   admission rather than failing at schedule time.</li>
-<li>A GPU node's accelerators are discovered rather than declared, so a set does
-   not silently request a resource the node pool cannot serve.</li>
-<li>A multi-node job either gets all its pods in one topology domain or is not
-   claimed, and the run stays queued at GitHub rather than being claimed and
-   cancelled.</li>
-<li>An isolated GPU job runs under Kata on a validated bare-metal or dedicated
-   reference architecture, with the kernel and machine family named.</li>
-<li>The quota model answers what a GPU gang costs a tenant, since a partially
-   admitted gang consumes quota while doing no work.</li>
-<li>A tenant can see its own accelerator utilization and idle time, because the
-   entire economic argument is that idle accelerator time approaches zero, and
-   an unmeasured claim is not one an operator can act on.</li>
+<li>A GPU runner set is declared without hand-writing <code>nodeSelector</code>, tolerations, and <code>runtimeClassName</code>, and the declaration is checked at admission rather than failing at schedule time.</li>
+<li>A GPU node's accelerators are discovered rather than declared, so a set does not silently request a resource the node pool cannot serve.</li>
+<li>A multi-node job either gets all its pods in one topology domain or is not claimed, and the run stays queued at GitHub rather than being claimed and cancelled.</li>
+<li>An isolated GPU job runs under Kata on a validated bare-metal or dedicated reference architecture, with the kernel and machine family named.</li>
+<li>The quota model answers what a GPU gang costs a tenant, since a partially admitted gang consumes quota while doing no work.</li>
+<li>A tenant can see its own accelerator utilization and idle time, because the entire economic argument is that idle accelerator time approaches zero, and an unmeasured claim is not one an operator can act on.</li>
 </ol>
 <h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Scheduling research.</strong> If Kueue or Volcano can gang-schedule and place by
-  topology, the deliverable is integrating one, not writing a scheduler. GAG's
-  contribution is the intake decision, which is upstream of both.</li>
-<li><strong>GPU sharing between jobs</strong> (MIG partitioning, time-slicing, MPS). A worker
-  runs one job and is deleted; a shared accelerator crosses that boundary and
-  crosses a tenant boundary with it. Not without the isolation review
-  <a href="../caching-and-worker-storage/">caching-and-worker-storage.md</a> reframes for
-  the cache.</li>
-<li><strong>Cloud GPU under Kata.</strong> Not a gap to close, a platform fact to state: the
-  BIOS, host-driver, and whole-GPU-per-guest requirements above are not knobs a
-  managed node pool exposes. It reopens if a managed cloud offers Kata with GPU
-  passthrough, or if gVisor gains meaningful coverage of the NVIDIA driver
-  surface.</li>
-<li><strong>Non-NVIDIA accelerators as a first target.</strong> TPUs, Gaudi, and AMD are the
-  same shape of problem and none of them has a workload asking.</li>
-<li><strong>Benchmarking against managed GPU CI.</strong> Those services do not run on
-  hardware you already own, which is the entire premise here.</li>
+<li><strong>Scheduling research.</strong> If Kueue or Volcano can gang-schedule and place by topology, the deliverable is integrating one, not writing a scheduler.
+  GAG's contribution is the intake decision, which is upstream of both.</li>
+<li><strong>GPU sharing between jobs</strong> (MIG partitioning, time-slicing, MPS).
+  A worker runs one job and is deleted; a shared accelerator crosses that boundary and crosses a tenant boundary with it.
+  Not without the isolation review <a href="../caching-and-worker-storage/">caching-and-worker-storage.md</a> reframes for the cache.</li>
+<li><strong>Cloud GPU under Kata.</strong> Not a gap to close, a platform fact to state: the BIOS, host-driver, and whole-GPU-per-guest requirements above are not knobs a managed node pool exposes.
+  It reopens if a managed cloud offers Kata with GPU passthrough, or if gVisor gains meaningful coverage of the NVIDIA driver surface.</li>
+<li><strong>Non-NVIDIA accelerators as a first target.</strong> TPUs, Gaudi, and AMD are the same shape of problem and none of them has a workload asking.</li>
+<li><strong>Benchmarking against managed GPU CI.</strong> Those services do not run on hardware you already own, which is the entire premise here.</li>
 </ul>
 <h2 id="what-the-site-may-claim-today">What the site may claim today<a class="headerlink" href="#what-the-site-may-claim-today" title="Permanent link">&para;</a></h2>
 <p>Current state only:</p>
 <blockquote>
-<p>Workers exist only while a job runs, so a GPU node returns to the scheduler
-the moment a job ends, and priority tiers keep cheap CPU jobs from starving
-expensive GPU work under a shared quota. Both are measured. First-class GPU
-conventions and multi-node gang scheduling are on the roadmap and are not
-claimed.</p>
+<p>Workers exist only while a job runs, so a GPU node returns to the scheduler the moment a job ends, and priority tiers keep cheap CPU jobs from starving expensive GPU work under a shared quota.
+Both are measured.
+First-class GPU conventions and multi-node gang scheduling are on the roadmap and are not claimed.</p>
 </blockquote>
-<p>Do not claim GPU Operator or Node Feature Discovery awareness, gang scheduling,
-topology-aware placement, or isolated GPU workers on cloud.</p>
+<p>Do not claim GPU Operator or Node Feature Discovery awareness, gang scheduling, topology-aware placement, or isolated GPU workers on cloud.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: scale-to-zero workers, priority tiers with reserved floors,
-disruption re-run for preempted GPU jobs, GPU-safe right-sizing, per-tenant
-utilization metrics, mixed-shape capacity planning.</p>
-<p>Open, with rows: <a href="../../STATUS/#Q216">Q216</a> (first-class GPU conventions, GPU
-Operator and NFD awareness), <a href="../../STATUS/#Q718">Q718</a> (gang scheduling and
-topology-aware placement), <a href="../../STATUS/#Q407">Q407</a> (<code>ProvisioningRequest</code>
-capacity probe, which is how a gang would ask an autoscaler whether it can be
-placed before the claim).</p>
-<p>Both open rows are <strong>demand-gated on purpose</strong>: they need a real GPU CI workload
-to design against, and Q216's own note says so. Designing them against an
-imagined one is how the wrong abstraction ships.</p>
+<p>Shipped: scale-to-zero workers, priority tiers with reserved floors, disruption re-run for preempted GPU jobs, GPU-safe right-sizing, per-tenant utilization metrics, mixed-shape capacity planning.</p>
+<p>Open, with rows: <a href="../../STATUS/#Q216">Q216</a> (first-class GPU conventions, GPU Operator and NFD awareness), <a href="../../STATUS/#Q718">Q718</a> (gang scheduling and topology-aware placement), <a href="../../STATUS/#Q407">Q407</a> (<code>ProvisioningRequest</code> capacity probe, which is how a gang would ask an autoscaler whether it can be placed before the claim).</p>
+<p>Both open rows are <strong>demand-gated on purpose</strong>: they need a real GPU CI workload to design against, and Q216's own note says so.
+Designing them against an imagined one is how the wrong abstraction ships.</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
 <p>Each needs a decision before it needs a row:</p>
 <ol>
-<li><strong>What a GPU gang costs against a tenant quota.</strong> Kubernetes <code>ResourceQuota</code>
-   counts pods that exist. A gang that is admitted but unplaceable consumes
-   quota while doing nothing, and the pre-claim gate has no concept of a
-   reservation it holds across several pods.</li>
-<li><strong>Whether isolated GPU CI is a supported configuration or a documented
-   one.</strong> The bare-metal Kata path is described but has never been run. Claiming
-   it as a reference architecture requires actually standing one up, which needs
-   hardware nobody has allocated.</li>
-<li><strong>How a GPU set expresses its accelerator requirement.</strong> Today it is a raw
-   <code>nvidia.com/gpu</code> request inside a pod template. Whether the CRD should carry
-   a first-class field is an API-surface decision with a compatibility cost, and
-   <a href="../../development/api-review/">api-review.md</a> is the gate it has not been
-   through.</li>
+<li><strong>What a GPU gang costs against a tenant quota.</strong> Kubernetes <code>ResourceQuota</code> counts pods that exist.
+   A gang that is admitted but unplaceable consumes quota while doing nothing, and the pre-claim gate has no concept of a reservation it holds across several pods.</li>
+<li><strong>Whether isolated GPU CI is a supported configuration or a documented one.</strong> The bare-metal Kata path is described but has never been run.
+   Claiming it as a reference architecture requires actually standing one up, which needs hardware nobody has allocated.</li>
+<li><strong>How a GPU set expresses its accelerator requirement.</strong> Today it is a raw <code>nvidia.com/gpu</code> request inside a pod template.
+   Whether the CRD should carry a first-class field is an API-surface decision with a compatibility cost, and <a href="../../development/api-review/">api-review.md</a> is the gate it has not been through.</li>
 </ol>
 
 

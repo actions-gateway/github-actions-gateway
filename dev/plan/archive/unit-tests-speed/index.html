@@ -2853,8 +2853,10 @@
 
 
 <h1 id="unit-test-speed-improvements">Unit Test Speed Improvements<a class="headerlink" href="#unit-test-speed-improvements" title="Permanent link">&para;</a></h1>
-<p><strong>Status: Complete (Q17).</strong> Items 1–4 below all shipped together in <code>c4660ea</code> (2026-05-23, the same commit that wrote this doc). The Q17 revival (2026-07-20) re-baselined against CI and shipped the single-invocation change described in <a href="#2026-07-20-re-baseline-q17-revival">the re-baseline section</a>; the remaining CI-latency levers (lint, coverage) are parked as <a href="../../../STATUS/#Q361">Q361</a>.</p>
-<p>This document analyses where time is spent in the unit test suite and describes four concrete improvements, in order of estimated impact. Each section covers motivation, implementation steps, files affected, and estimated savings.</p>
+<p><strong>Status: Complete (Q17).</strong> Items 1–4 below all shipped together in <code>c4660ea</code> (2026-05-23, the same commit that wrote this doc).
+The Q17 revival (2026-07-20) re-baselined against CI and shipped the single-invocation change described in <a href="#2026-07-20-re-baseline-q17-revival">the re-baseline section</a>; the remaining CI-latency levers (lint, coverage) are parked as <a href="../../../STATUS/#Q361">Q361</a>.</p>
+<p>This document analyses where time is spent in the unit test suite and describes four concrete improvements, in order of estimated impact.
+Each section covers motivation, implementation steps, files affected, and estimated savings.</p>
 <hr />
 <h2 id="background--where-time-goes-today">Background — where time goes today<a class="headerlink" href="#background--where-time-goes-today" title="Permanent link">&para;</a></h2>
 <p>A typical <code>go test ./...</code> run (excluding e2e and integration suites) breaks down roughly as follows:</p>
@@ -2912,7 +2914,8 @@
 </tr>
 </tbody>
 </table>
-<p>The listener package dominates. Within it, the slowest individual tests are:</p>
+<p>The listener package dominates.
+Within it, the slowest individual tests are:</p>
 <table>
 <thead>
 <tr>
@@ -2947,7 +2950,8 @@
 <hr />
 <h2 id="1-renewloop-fake-clock-advancement--34s-saved">1. RenewLoop fake-clock advancement — ~3.4s saved<a class="headerlink" href="#1-renewloop-fake-clock-advancement--34s-saved" title="Permanent link">&para;</a></h2>
 <h3 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h3>
-<p><code>TestRenewLoop_TicksAt60s</code> and <code>TestRenewLoop_NonOKContinues</code> each take ~1.8s despite using a <code>fakeClock</code>. <code>StartRenewLoop</code> waits for <code>clk.After(60 * time.Second)</code>. The tests verify each of 3 RenewJob calls in a loop:</p>
+<p><code>TestRenewLoop_TicksAt60s</code> and <code>TestRenewLoop_NonOKContinues</code> each take ~1.8s despite using a <code>fakeClock</code>. <code>StartRenewLoop</code> waits for <code>clk.After(60 * time.Second)</code>.
+The tests verify each of 3 RenewJob calls in a loop:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">for</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="o">++</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nx">assert</span><span class="p">.</span><span class="nx">Eventually</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">        </span><span class="nx">clk</span><span class="p">.</span><span class="nx">Advance</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span><span class="w">        </span><span class="c1">// advance 1s per 10ms poll</span>
@@ -2955,9 +2959,11 @@
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="p">},</span><span class="w"> </span><span class="mi">5</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">,</span><span class="w"> </span><span class="o">...</span><span class="p">)</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
 </code></pre></div>
-<p>To trigger a single 60s tick, the loop must advance 60 times × 10ms real time = 0.6s. Across 3 iterations that is ~1.8s of real wall time per test.</p>
+<p>To trigger a single 60s tick, the loop must advance 60 times × 10ms real time = 0.6s.
+Across 3 iterations that is ~1.8s of real wall time per test.</p>
 <h3 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h3>
-<p>Advance the clock by a large step (enough to pass the 60s threshold) before entering the <code>Eventually</code> poll. The poll then only needs one or two iterations to observe the call.</p>
+<p>Advance the clock by a large step (enough to pass the 60s threshold) before entering the <code>Eventually</code> poll.
+The poll then only needs one or two iterations to observe the call.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">for</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="o">++</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nx">clk</span><span class="p">.</span><span class="nx">Advance</span><span class="p">(</span><span class="mi">65</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span><span class="w"> </span><span class="c1">// jump past the tick in one step</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nx">assert</span><span class="p">.</span><span class="nx">Eventually</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">{</span>
@@ -2980,11 +2986,13 @@
 </code></pre></div>
 <p>Two tests are directly slowed by this:</p>
 <ul>
-<li><code>TestMultiplexer_NonRetriableNoRestart</code> calls <code>assert.Never(..., 2*time.Second, 50*time.Millisecond)</code> to confirm no restart occurs. The 2s window is necessary only to hold past the 1s backoff.</li>
+<li><code>TestMultiplexer_NonRetriableNoRestart</code> calls <code>assert.Never(..., 2*time.Second, 50*time.Millisecond)</code> to confirm no restart occurs.
+  The 2s window is necessary only to hold past the 1s backoff.</li>
 <li><code>TestMultiplexer_RestartOnCrash</code> must wait for the goroutine to exit, sleep 1s, then restart and reach <code>ActiveCount == 1</code>.</li>
 </ul>
 <h3 id="fix_1">Fix<a class="headerlink" href="#fix_1" title="Permanent link">&para;</a></h3>
-<p>Add a <code>restartDelay time.Duration</code> field to <code>Multiplexer</code>. Production code defaults to <code>time.Second</code> when zero; tests set it to 0 (or 1ms) via a new <code>WithRestartDelay</code> option or an exported field.</p>
+<p>Add a <code>restartDelay time.Duration</code> field to <code>Multiplexer</code>.
+Production code defaults to <code>time.Second</code> when zero; tests set it to 0 (or 1ms) via a new <code>WithRestartDelay</code> option or an exported field.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1">// multiplexer.go</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Multiplexer</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="c1">// ...</span>
@@ -3022,7 +3030,8 @@
 - <code>githubapp/runner_auth_test.go</code> — 5 direct calls</p>
 <p>Total: ~20 key generations × ~50–100ms each = ~1–2s spread across packages.</p>
 <h3 id="fix_2">Fix<a class="headerlink" href="#fix_2" title="Permanent link">&para;</a></h3>
-<p>Declare a package-level test key generated once. Tests that only need a valid key (i.e., not testing key parsing) share it.</p>
+<p>Declare a package-level test key generated once.
+Tests that only need a valid key (i.e., not testing key parsing) share it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">// goroutine_test.go (package-level)</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kd">var</span><span class="w"> </span><span class="nx">testRSAKey</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="nx">rsa</span><span class="p">.</span><span class="nx">PrivateKey</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">k</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">rsa</span><span class="p">.</span><span class="nx">GenerateKey</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="mi">2048</span><span class="p">)</span>
@@ -3040,7 +3049,8 @@
 <a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="p">}</span>
 <a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="p">}</span>
 </code></pre></div>
-<p>For tests that explicitly test key generation or parsing (e.g., <code>TestParseRunnerRSAKey_RoundTrip</code>), keep per-test generation where correctness requires it. Alternatively, use 1024-bit keys in tests where key strength is irrelevant — they generate ~4× faster.</p>
+<p>For tests that explicitly test key generation or parsing (e.g., <code>TestParseRunnerRSAKey_RoundTrip</code>), keep per-test generation where correctness requires it.
+Alternatively, use 1024-bit keys in tests where key strength is irrelevant — they generate ~4× faster.</p>
 <h3 id="files-affected_2">Files affected<a class="headerlink" href="#files-affected_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>cmd/agc/internal/listener/goroutine_test.go</code></li>
@@ -3054,9 +3064,12 @@
 <hr />
 <h2 id="4-add-tparallel-to-independent-tests--variable-savings">4. Add <code>t.Parallel()</code> to independent tests — variable savings<a class="headerlink" href="#4-add-tparallel-to-independent-tests--variable-savings" title="Permanent link">&para;</a></h2>
 <h3 id="problem_3">Problem<a class="headerlink" href="#problem_3" title="Permanent link">&para;</a></h3>
-<p>No test in the entire codebase calls <code>t.Parallel()</code>. Within a package, Go runs tests sequentially by default. Several packages contain tests that are fully independent (separate HTTP servers, no shared global state) and would parallelize cleanly.</p>
+<p>No test in the entire codebase calls <code>t.Parallel()</code>.
+Within a package, Go runs tests sequentially by default.
+Several packages contain tests that are fully independent (separate HTTP servers, no shared global state) and would parallelize cleanly.</p>
 <h3 id="fix_3">Fix<a class="headerlink" href="#fix_3" title="Permanent link">&para;</a></h3>
-<p>Add <code>t.Parallel()</code> at the top of tests in packages where tests do not share mutable globals. Safe candidates:</p>
+<p>Add <code>t.Parallel()</code> at the top of tests in packages where tests do not share mutable globals.
+Safe candidates:</p>
 <ul>
 <li><code>broker/</code> — all tests use local <code>httptest.Server</code> instances</li>
 <li><code>githubapp/</code> — same pattern</li>
@@ -3072,7 +3085,9 @@
 <li><code>cmd/agc/internal/listener/goroutine_test.go</code>, <code>multiplexer_test.go</code></li>
 </ul>
 <h3 id="estimated-saving_3">Estimated saving<a class="headerlink" href="#estimated-saving_3" title="Permanent link">&para;</a></h3>
-<p>Depends on CPU count. On a 4-core machine the listener package alone (currently ~11.5s sequential) could drop to ~4–5s if the top independent tests run in parallel. Total across all packages: <strong>~5–8s</strong> on typical CI hardware.</p>
+<p>Depends on CPU count.
+On a 4-core machine the listener package alone (currently ~11.5s sequential) could drop to ~4–5s if the top independent tests run in parallel.
+Total across all packages: <strong>~5–8s</strong> on typical CI hardware.</p>
 <hr />
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <table>
@@ -3111,10 +3126,12 @@
 </tr>
 </tbody>
 </table>
-<p>Implementing 1–3 alone saves ~6–7s (reducing total suite time from ~22s to ~15s) with minimal risk. Adding parallelism (4) could cut the total further by half on multi-core CI runners.</p>
+<p>Implementing 1–3 alone saves ~6–7s (reducing total suite time from ~22s to ~15s) with minimal risk.
+Adding parallelism (4) could cut the total further by half on multi-core CI runners.</p>
 <hr />
 <h2 id="2026-07-20-re-baseline-q17-revival">2026-07-20 re-baseline (Q17 revival)<a class="headerlink" href="#2026-07-20-re-baseline-q17-revival" title="Permanent link">&para;</a></h2>
-<p>Items 1–4 had all shipped in <code>c4660ea</code>, so the revival re-measured where CI unit-workflow time actually goes. From <code>unit-test.yml</code> run 29722162250 (jobs run in parallel; workflow wall ≈ 270 s):</p>
+<p>Items 1–4 had all shipped in <code>c4660ea</code>, so the revival re-measured where CI unit-workflow time actually goes.
+From <code>unit-test.yml</code> run 29722162250 (jobs run in parallel; workflow wall ≈ 270 s):</p>
 <table>
 <thead>
 <tr>
@@ -3142,12 +3159,18 @@
 </tbody>
 </table>
 <p>Inside the 189 s unit-test job, <strong>compilation dominates, not test execution</strong>: the sequential per-module loop spent ~39 s on <code>./api</code>, ~93 s on <code>./cmd/agc</code>, and ~35 s on <code>./cmd/gmc</code>, and within <code>cmd/agc</code> only ~20 s was actual test packages running — the rest was the <code>-race</code> compile of the controller-runtime/k8s dependency graph, serialized behind the smaller modules.</p>
-<p><strong>Change shipped by the Q17 revival PR:</strong> <code>scripts/go/go-test.sh</code> now issues <strong>one</strong> <code>go test</code> invocation over every <code>./&lt;module&gt;/...</code> pattern (a repo-root <code>./...</code> still does not work in a workspace, but explicit multi-module patterns do). Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big <code>cmd/agc</code>/<code>cmd/gmc</code> compiles instead of queueing behind them. Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged. Applies to both <code>make test</code> and the CI <code>-race</code> gate (<code>make test-race</code>).</p>
-<p><strong>Measured outcome (first PR run):</strong> the <code>-race</code> unit gate dropped 189s → 163s (−14%). Smaller than the compile-serialization arithmetic suggests because the 4-vCPU CI runner was already near CPU-bound during the <code>cmd/agc</code>/<code>cmd/gmc</code> compiles — the win is the removal of the inter-module barriers (small-module idle time), not extra parallelism during the big compiles.</p>
+<p><strong>Change shipped by the Q17 revival PR:</strong> <code>scripts/go/go-test.sh</code> now issues <strong>one</strong> <code>go test</code> invocation over every <code>./&lt;module&gt;/...</code> pattern (a repo-root <code>./...</code> still does not work in a workspace, but explicit multi-module patterns do).
+Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big <code>cmd/agc</code>/<code>cmd/gmc</code> compiles instead of queueing behind them.
+Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged.
+Applies to both <code>make test</code> and the CI <code>-race</code> gate (<code>make test-race</code>).</p>
+<p><strong>Measured outcome (first PR run):</strong> the <code>-race</code> unit gate dropped 189s → 163s (−14%).
+Smaller than the compile-serialization arithmetic suggests because the 4-vCPU CI runner was already near CPU-bound during the <code>cmd/agc</code>/<code>cmd/gmc</code> compiles — the win is the removal of the inter-module barriers (small-module idle time), not extra parallelism during the big compiles.</p>
 <p><strong>Remaining levers (parked as <a href="../../../STATUS/#Q361">Q361</a>):</strong></p>
 <ul>
-<li><strong>lint</strong> is now the workflow critical path: the per-module <code>golangci-lint</code> loop re-loads the shared dependency graph per module. Levers: a workspace-aware golangci-lint invocation, cross-run analysis cache tuning, or running the module loop concurrently on CI.</li>
-<li><strong>coverage</strong> re-runs the suite per module for the ratchet's per-module floors. Levers: run the module loop concurrently, or a single multi-module <code>-coverprofile</code> run split per module by package prefix before <code>go tool cover -func</code>.</li>
+<li><strong>lint</strong> is now the workflow critical path: the per-module <code>golangci-lint</code> loop re-loads the shared dependency graph per module.
+  Levers: a workspace-aware golangci-lint invocation, cross-run analysis cache tuning, or running the module loop concurrently on CI.</li>
+<li><strong>coverage</strong> re-runs the suite per module for the ratchet's per-module floors.
+  Levers: run the module loop concurrently, or a single multi-module <code>-coverprofile</code> run split per module by package prefix before <code>go tool cover -func</code>.</li>
 </ul>
 
 

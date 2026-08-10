@@ -2945,45 +2945,29 @@
 <p>← <a href="../milestone-4/">Milestone 4</a> | <a href="../../design/06-implementation-phases/">Back to implementation phases</a></p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><strong>Goal:</strong> Make the system production-deployable. Two themes:</p>
+<p><strong>Goal:</strong> Make the system production-deployable.
+Two themes:</p>
 <ol>
-<li><strong>Packaging and posture</strong> — ship the operator and proxy via a
-   reproducible install path (Helm chart, per §1.1) with
-   hardened defaults that pass an automated posture audit.</li>
-<li><strong>Load validation</strong> — prove the design's headline capacity claim
-   (1,000 concurrent virtual runner sessions across 10 tenants) on a
-   staging cluster, with no dropped jobs, no cross-tenant leakage, and
-   correct HPA behavior under burst.</li>
+<li><strong>Packaging and posture</strong> — ship the operator and proxy via a reproducible install path (Helm chart, per §1.1) with hardened defaults that pass an automated posture audit.</li>
+<li><strong>Load validation</strong> — prove the design's headline capacity claim (1,000 concurrent virtual runner sessions across 10 tenants) on a staging cluster, with no dropped jobs, no cross-tenant leakage, and correct HPA behavior under burst.</li>
 </ol>
 <p><strong>Duration:</strong> Days 23–26 (per design)</p>
-<p><strong>Foundation:</strong> Everything in Milestones 1–4. Several of the M5
-"hardening" sub-items overlap with workstreams in
-<a href="../security/">security.md</a> and have already landed there; this plan
-inherits those and concentrates on what remains.</p>
+<p><strong>Foundation:</strong> Everything in Milestones 1–4.
+Several of the M5 "hardening" sub-items overlap with workstreams in <a href="../security/">security.md</a> and have already landed there; this plan inherits those and concentrates on what remains.</p>
 <p><strong>Definition of Done:</strong></p>
 <ul>
-<li>A reproducible install artifact (Helm chart, per D-M5-1 §1.1) exists
-  under <code>charts/actions-gateway/</code> and produces a working tenant from a
-  single <code>helm install</code>.</li>
-<li><code>kube-bench</code> or <code>polaris</code> scan against the installed stack returns
-  zero critical findings.</li>
-<li><code>test/load/</code> harness simulates 1,000 concurrent sessions across 10
-  tenants; load report committed with results.</li>
-<li>Proxy HPA verified at scale: scales up under burst, returns to
-  <code>minReplicas</code> within 5 minutes of load subsiding, zero dropped jobs.</li>
-<li>gVisor <code>RuntimeClass</code> documented as a supported opt-in, with at
-  least one staging tenant configured under it.</li>
+<li>A reproducible install artifact (Helm chart, per D-M5-1 §1.1) exists under <code>charts/actions-gateway/</code> and produces a working tenant from a single <code>helm install</code>.</li>
+<li><code>kube-bench</code> or <code>polaris</code> scan against the installed stack returns zero critical findings.</li>
+<li><code>test/load/</code> harness simulates 1,000 concurrent sessions across 10 tenants; load report committed with results.</li>
+<li>Proxy HPA verified at scale: scales up under burst, returns to <code>minReplicas</code> within 5 minutes of load subsiding, zero dropped jobs.</li>
+<li>gVisor <code>RuntimeClass</code> documented as a supported opt-in, with at least one staging tenant configured under it.</li>
 </ul>
 <hr />
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
-<p>Last refreshed 2026-06-28. The "security" half of M5 landed inside
-<a href="../security/">security.md</a> workstreams W2/W7/W8 — the GMC already
-stamps PSA labels, provisions per-tenant ResourceQuotas, and ships
-hardened pod specs for AGC + proxy. Packaging is now <strong>live-validated</strong>
-end-to-end (Q219, §1.5); load-testing (Q13) and the posture audit (Q14)
-already landed. The only remaining M5 items are intentionally deferred
-to a staging cluster: the 1,000-session proxy-HPA-under-burst run and
-gVisor isolation validation (<a href="../../STATUS/#Q15">Q15</a>).</p>
+<p>Last refreshed 2026-06-28.
+The "security" half of M5 landed inside <a href="../security/">security.md</a> workstreams W2/W7/W8 — the GMC already stamps PSA labels, provisions per-tenant ResourceQuotas, and ships hardened pod specs for AGC + proxy.
+Packaging is now <strong>live-validated</strong> end-to-end (Q219, §1.5); load-testing (Q13) and the posture audit (Q14) already landed.
+The only remaining M5 items are intentionally deferred to a staging cluster: the 1,000-session proxy-HPA-under-burst run and gVisor isolation validation (<a href="../../STATUS/#Q15">Q15</a>).</p>
 <table>
 <thead>
 <tr>
@@ -3051,83 +3035,49 @@ gVisor isolation validation (<a href="../../STATUS/#Q15">Q15</a>).</p>
 </tbody>
 </table>
 <h3 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h3>
-<p>The packaging artifact and the load harness are independent — both can
-land in parallel. The posture scan depends on packaging existing
-(something to install and scan). The 1,000-session run depends on the
-harness. gVisor validation depends on a cluster with the runtime
-installed (operator concern, not code).</p>
+<p>The packaging artifact and the load harness are independent — both can land in parallel.
+The posture scan depends on packaging existing (something to install and scan).
+The 1,000-session run depends on the harness. gVisor validation depends on a cluster with the runtime installed (operator concern, not code).</p>
 <hr />
 <h2 id="1-packaging-helm-chart">1. Packaging (Helm chart)<a class="headerlink" href="#1-packaging-helm-chart" title="Permanent link">&para;</a></h2>
 <h3 id="11-install-vehicle--decided-helm-chart">1.1 Install vehicle — decided: Helm chart<a class="headerlink" href="#11-install-vehicle--decided-helm-chart" title="Permanent link">&para;</a></h3>
-<p><strong>Decision (D-M5-1): ship a Helm chart</strong> under
-<code>charts/actions-gateway/</code> as the 1.0 install artifact. The existing
-<code>cmd/gmc/config/</code> and <code>cmd/agc/config/</code> kustomize bases are <strong>retained
-as the dev/CI source of truth</strong> (they back <code>make manifests</code> and the
-envtest/e2e tiers) — they are <em>not</em> a second shipped distribution path.</p>
-<p><strong>Why Helm over a Kustomize overlay.</strong> The original plan defaulted to
-Kustomize on author-effort grounds ("the bases already exist"). That is
-the wrong axis for a <em>distribution</em> vehicle. GAG is a third-party-
-installed platform operator — the same category as
-actions-runner-controller, cert-manager, and prometheus-operator, all
-of which ship Helm as their primary artifact. The reasons that matters
-here:</p>
+<p><strong>Decision (D-M5-1): ship a Helm chart</strong> under <code>charts/actions-gateway/</code> as the 1.0 install artifact.
+The existing <code>cmd/gmc/config/</code> and <code>cmd/agc/config/</code> kustomize bases are <strong>retained as the dev/CI source of truth</strong> (they back <code>make manifests</code> and the envtest/e2e tiers) — they are <em>not</em> a second shipped distribution path.</p>
+<p><strong>Why Helm over a Kustomize overlay.</strong> The original plan defaulted to Kustomize on author-effort grounds ("the bases already exist").
+That is the wrong axis for a <em>distribution</em> vehicle.
+GAG is a third-party- installed platform operator — the same category as actions-runner-controller, cert-manager, and prometheus-operator, all of which ship Helm as their primary artifact.
+The reasons that matters here:</p>
 <ul>
-<li><strong>Versioned, named releases.</strong> "Install GAG 1.0" becomes one OCI
-  chart ref, not "clone the repo and <code>apply</code> this overlay at this SHA."</li>
-<li><strong>Real day-2 lifecycle.</strong> <code>helm upgrade</code> / <code>rollback --atomic</code> track
-  what was installed. Kustomize has no installed-state notion; upgrades
-  are <code>apply</code> + manual prune, and removed resources orphan silently.</li>
-<li><strong>A values UX for the axes operators actually tune</strong> (<code>gmc.image</code>,
-  <code>proxy.image</code>, <code>agc.image</code>, <code>leaderElection.enabled</code>,
-  <code>metrics.enabled</code>, default <code>securityProfile</code>, <code>certManager.enabled</code>)
-  instead of patch overlays each operator has to fork and re-base.</li>
+<li><strong>Versioned, named releases.</strong> "Install GAG 1.0" becomes one OCI chart ref, not "clone the repo and <code>apply</code> this overlay at this SHA."</li>
+<li><strong>Real day-2 lifecycle.</strong> <code>helm upgrade</code> / <code>rollback --atomic</code> track what was installed.
+  Kustomize has no installed-state notion; upgrades are <code>apply</code> + manual prune, and removed resources orphan silently.</li>
+<li><strong>A values UX for the axes operators actually tune</strong> (<code>gmc.image</code>, <code>proxy.image</code>, <code>agc.image</code>, <code>leaderElection.enabled</code>, <code>metrics.enabled</code>, default <code>securityProfile</code>, <code>certManager.enabled</code>) instead of patch overlays each operator has to fork and re-base.</li>
 </ul>
-<p>Kustomize's genuine edge — GitOps where you own the repo — is an
-in-house pattern; it is the weaker fit for an artifact handed to other
-orgs.</p>
-<p><strong>Effort is smaller than it looks.</strong> The repo is on kubebuilder 4.14,
-whose <code>helm/v1-alpha</code> plugin scaffolds a chart from the existing
-<code>config/</code> bases (<code>kubebuilder edit --plugins=helm/v1-alpha</code>) rather
-than hand-authoring templates. Keep the kustomize bases authoritative
-for dev; generate and then maintain the chart as the shipped artifact.</p>
+<p>Kustomize's genuine edge — GitOps where you own the repo — is an in-house pattern; it is the weaker fit for an artifact handed to other orgs.</p>
+<p><strong>Effort is smaller than it looks.</strong> The repo is on kubebuilder 4.14, whose <code>helm/v1-alpha</code> plugin scaffolds a chart from the existing <code>config/</code> bases (<code>kubebuilder edit --plugins=helm/v1-alpha</code>) rather than hand-authoring templates.
+Keep the kustomize bases authoritative for dev; generate and then maintain the chart as the shipped artifact.</p>
 <p><strong>Two gotchas this introduces (both must be handled in §1.2):</strong></p>
 <ol>
-<li><strong>cert-manager dependency.</strong> The validating webhook's serving cert
-   comes from kubebuilder's <code>config/certmanager/</code> today (CA injected
-   via cert-manager annotation), so cert-manager is already an install
-   prerequisite under <em>either</em> vehicle. Helm handles it better: expose
-   a <code>certManager.enabled</code> value and ship a self-signed-cert hook as
-   the fallback so operators without cert-manager can still install.</li>
-<li><strong>Helm never upgrades CRDs.</strong> Charts' <code>crds/</code> directory installs CRDs
-   but skips them on <code>helm upgrade</code>. For an API still on <code>v1alpha1</code>
-   with field changes ahead, that breaks day-2. Template the two CRDs
-   into <code>templates/</code> with <code>helm.sh/resource-policy: keep</code> so they
-   upgrade — accepting the trade-off that Helm no longer delete-protects
-   them. Record this in <a href="../../operations/upgrade/">upgrade.md</a>.</li>
+<li><strong>cert-manager dependency.</strong> The validating webhook's serving cert comes from kubebuilder's <code>config/certmanager/</code> today (CA injected via cert-manager annotation), so cert-manager is already an install prerequisite under <em>either</em> vehicle.
+   Helm handles it better: expose a <code>certManager.enabled</code> value and ship a self-signed-cert hook as the fallback so operators without cert-manager can still install.</li>
+<li><strong>Helm never upgrades CRDs.</strong> Charts' <code>crds/</code> directory installs CRDs but skips them on <code>helm upgrade</code>.
+   For an API still on <code>v1alpha1</code> with field changes ahead, that breaks day-2.
+   Template the two CRDs into <code>templates/</code> with <code>helm.sh/resource-policy: keep</code> so they upgrade — accepting the trade-off that Helm no longer delete-protects them.
+   Record this in <a href="../../operations/upgrade/">upgrade.md</a>.</li>
 </ol>
 <h3 id="12-contents-of-the-chart">1.2 Contents of the chart<a class="headerlink" href="#12-contents-of-the-chart" title="Permanent link">&para;</a></h3>
 <p>The chart must produce:</p>
 <ul>
-<li>The two CRDs (<code>ActionsGateway</code>, <code>RunnerGroup</code>) — in <code>templates/</code> with
-  <code>helm.sh/resource-policy: keep</code> (per §1.1 gotcha 2), not <code>crds/</code>, so
-  they upgrade.</li>
+<li>The two CRDs (<code>ActionsGateway</code>, <code>RunnerGroup</code>) — in <code>templates/</code> with <code>helm.sh/resource-policy: keep</code> (per §1.1 gotcha 2), not <code>crds/</code>, so they upgrade.</li>
 <li>The GMC Deployment + RBAC + webhook configuration in <code>gmc-system</code>.</li>
-<li>The webhook serving cert: cert-manager-issued when
-  <code>certManager.enabled=true</code> (default), self-signed-cert hook otherwise
-  (per §1.1 gotcha 1).</li>
+<li>The webhook serving cert: cert-manager-issued when <code>certManager.enabled=true</code> (default), self-signed-cert hook otherwise (per §1.1 gotcha 1).</li>
 <li>The IP-range refresh schedule and proxy image references.</li>
-<li>An optional sample <code>ActionsGateway</code> CR with safe defaults
-  (<code>values.yaml</code>-gated, off by default).</li>
-<li>Image references pinned by digest (per security plan image-digest
-  pinning recommendation) — chart <code>appVersion</code> tracks the release tag,
-  <code>values.yaml</code> carries the digests.</li>
+<li>An optional sample <code>ActionsGateway</code> CR with safe defaults (<code>values.yaml</code>-gated, off by default).</li>
+<li>Image references pinned by digest (per security plan image-digest pinning recommendation) — chart <code>appVersion</code> tracks the release tag, <code>values.yaml</code> carries the digests.</li>
 </ul>
 <h3 id="13-operator-facing-values">1.3 Operator-facing values<a class="headerlink" href="#13-operator-facing-values" title="Permanent link">&para;</a></h3>
-<p>Enumerate every value an operator might tune in <code>values.yaml</code>:
-<code>gmc.image</code>, <code>proxy.image</code>, <code>agc.image</code>, <code>leaderElection.enabled</code>,
-<code>metrics.enabled</code>, <code>securityProfile</code> (default), <code>certManager.enabled</code>,
-and <code>sampleGateway.create</code>. Each gets a documented default and a comment
-in <code>values.yaml</code>; the README table mirrors them.</p>
+<p>Enumerate every value an operator might tune in <code>values.yaml</code>: <code>gmc.image</code>, <code>proxy.image</code>, <code>agc.image</code>, <code>leaderElection.enabled</code>, <code>metrics.enabled</code>, <code>securityProfile</code> (default), <code>certManager.enabled</code>, and <code>sampleGateway.create</code>.
+Each gets a documented default and a comment in <code>values.yaml</code>; the README table mirrors them.</p>
 <h3 id="14-files">1.4 Files<a class="headerlink" href="#14-files" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>charts/actions-gateway/
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── Chart.yaml                       # appVersion = release tag
@@ -3143,104 +3093,40 @@ in <code>values.yaml</code>; the README table mirrors them.</p>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   └── sample-gateway.yaml          # gated on .Values.sampleGateway.create
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>└── README.md                        # values reference + install/upgrade flow
 </code></pre></div>
-<p>The kustomize bases under <code>cmd/*/config/</code> stay in place as the dev/CI
-source of truth and the scaffolding input for the chart (§1.1); they are
-not published.</p>
+<p>The kustomize bases under <code>cmd/*/config/</code> stay in place as the dev/CI source of truth and the scaffolding input for the chart (§1.1); they are not published.</p>
 <h3 id="15-live-validation-q219--2026-06-28">1.5 Live validation (Q219) — 2026-06-28<a class="headerlink" href="#15-live-validation-q219--2026-06-28" title="Permanent link">&para;</a></h3>
-<p>The DoD's "produces a working tenant from a single <code>helm install</code>" gate was
-proven on a 3-node kind cluster (kindnet, cert-manager) against the real GitHub
-App <code>actions-gateway-test</code> (App ID 3752347, installation 135739122) and repo
-<code>actions-gateway/gateway-test</code>. This run is distinct from the two prior partial
-proofs: the <a href="../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12 run</a>
-needed four manual workarounds (Q114–Q117, since fixed) on an older API, and the
-<a href="../gke-dogfood/">GKE rc.4 dogfood</a> ran in <strong>dev posture</strong> (floating tags +
-self-signed cert) and <strong>direct egress</strong>. Q219 closes the remaining gap: the
-<strong>production posture</strong> on the <strong>proxied</strong> primary API.</p>
-<p><strong>Install (secure default, no dev opt-outs).</strong> <code>helm install</code> of the current chart
-with <code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code> all pinned by <strong>digest</strong> (published <code>v1.1.0-rc.4</code>
-images) — no <code>allowFloatingImageTags</code> — and <code>certManager.enabled=true</code>. cert-manager
-issued <code>webhook-server-cert</code>; the GMC rolled out 2/2. The <code>actions-gateway-crds-v2</code>
-chart was installed at the matching tag so the GMC's v2 controllers had their kinds.</p>
-<p><strong>Tenant (clean path, zero workarounds).</strong> A namespace marked
-<code>actions-gateway.github.com/tenant=true</code>, a <code>github-app-creds</code> Secret
-(<code>appId</code>/<code>installationId</code>/<code>privateKey</code>), and a <code>v1alpha1</code> <code>ActionsGateway</code> carrying
-just <code>gitHubAppRef</code> + <code>gitHubURL</code> + a <code>runnerGroups[0]</code> with <code>runnerLabels: ["e2e"]</code>.
-<strong>No <code>--allow-agc-extra-env</code></strong> (Q116 made <code>gitHubURL</code> first-class) and <strong>no
-per-tenant <code>runAsUser</code></strong> (Q115 gap-fills it) — confirming both earlier workarounds
-are retired. The gateway reached <code>Ready=True</code>, proxy 2/2, AGC 1/1.</p>
-<p><strong>Bug found and fixed (the headline result).</strong> On the proxied secure-default path the
-AGC could fetch its installation token but <strong>failed every runner registration</strong> with
-<code>proxyconnect tcp: tls: failed to verify certificate: x509: certificate signed by
-unknown authority</code> — so no runner ever came online. Root cause: the AGC's
-registration/provisioner fallback HTTP clients were package-level vars built at
-package-init, <strong>before</strong> <code>main()</code> installs the egress-proxy CA into
-<code>http.DefaultTransport</code>, so they trusted only the system roots. Fixed by building
-them lazily (<code>sync.OnceValue</code>), with an <code>httpx</code> regression test and an operator
-<a href="../../operations/troubleshooting/#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy">troubleshooting entry</a>.
-This bug shipped in <code>v1.1.0-rc.4</code> and breaks every proxied (v1, or v2-with-EgressProxy)
-install; the dogfood missed it by running direct-egress. <strong>Q219's live install is
-exactly what surfaced it.</strong></p>
-<p><strong>End-to-end after the fix.</strong> With the patched AGC image the runner registered
-(<code>ActiveSessions ≥ 1</code>) and appeared <code>online</code> in the repo runner list; a real
-<code>workflow_dispatch</code> job acquired a worker pod and concluded <strong>success</strong>
-(<a href="https://github.com/actions-gateway/gateway-test/actions/runs/28350404745">run 28350404745</a>),
-with all worker log/result uploads routed through the proxy at 4/4. The post-job
-agent re-registered (Q114 self-heal), deleting the tenant CR deregistered its
-runners, and <code>helm uninstall</code> <strong>retained both CRDs</strong> (<code>helm.sh/resource-policy:
-keep</code>). One secondary observation filed separately: the worker pod ends in <code>Failed</code>
-phase (runner container exit 100) despite the job succeeding.</p>
+<p>The DoD's "produces a working tenant from a single <code>helm install</code>" gate was proven on a 3-node kind cluster (kindnet, cert-manager) against the real GitHub App <code>actions-gateway-test</code> (App ID 3752347, installation 135739122) and repo <code>actions-gateway/gateway-test</code>.
+This run is distinct from the two prior partial proofs: the <a href="../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12 run</a> needed four manual workarounds (Q114–Q117, since fixed) on an older API, and the <a href="../gke-dogfood/">GKE rc.4 dogfood</a> ran in <strong>dev posture</strong> (floating tags + self-signed cert) and <strong>direct egress</strong>.
+Q219 closes the remaining gap: the <strong>production posture</strong> on the <strong>proxied</strong> primary API.</p>
+<p><strong>Install (secure default, no dev opt-outs).</strong> <code>helm install</code> of the current chart with <code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code> all pinned by <strong>digest</strong> (published <code>v1.1.0-rc.4</code> images) — no <code>allowFloatingImageTags</code> — and <code>certManager.enabled=true</code>. cert-manager issued <code>webhook-server-cert</code>; the GMC rolled out 2/2.
+The <code>actions-gateway-crds-v2</code> chart was installed at the matching tag so the GMC's v2 controllers had their kinds.</p>
+<p><strong>Tenant (clean path, zero workarounds).</strong> A namespace marked <code>actions-gateway.github.com/tenant=true</code>, a <code>github-app-creds</code> Secret (<code>appId</code>/<code>installationId</code>/<code>privateKey</code>), and a <code>v1alpha1</code> <code>ActionsGateway</code> carrying just <code>gitHubAppRef</code> + <code>gitHubURL</code> + a <code>runnerGroups[0]</code> with <code>runnerLabels: ["e2e"]</code>. <strong>No <code>--allow-agc-extra-env</code></strong> (Q116 made <code>gitHubURL</code> first-class) and <strong>no per-tenant <code>runAsUser</code></strong> (Q115 gap-fills it) — confirming both earlier workarounds are retired.
+The gateway reached <code>Ready=True</code>, proxy 2/2, AGC 1/1.</p>
+<p><strong>Bug found and fixed (the headline result).</strong> On the proxied secure-default path the AGC could fetch its installation token but <strong>failed every runner registration</strong> with <code>proxyconnect tcp: tls: failed to verify certificate: x509: certificate signed by unknown authority</code> — so no runner ever came online.
+Root cause: the AGC's registration/provisioner fallback HTTP clients were package-level vars built at package-init, <strong>before</strong> <code>main()</code> installs the egress-proxy CA into <code>http.DefaultTransport</code>, so they trusted only the system roots.
+Fixed by building them lazily (<code>sync.OnceValue</code>), with an <code>httpx</code> regression test and an operator <a href="../../operations/troubleshooting/#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy">troubleshooting entry</a>.
+This bug shipped in <code>v1.1.0-rc.4</code> and breaks every proxied (v1, or v2-with-EgressProxy) install; the dogfood missed it by running direct-egress. <strong>Q219's live install is exactly what surfaced it.</strong></p>
+<p><strong>End-to-end after the fix.</strong> With the patched AGC image the runner registered (<code>ActiveSessions ≥ 1</code>) and appeared <code>online</code> in the repo runner list; a real <code>workflow_dispatch</code> job acquired a worker pod and concluded <strong>success</strong> (<a href="https://github.com/actions-gateway/gateway-test/actions/runs/28350404745">run 28350404745</a>), with all worker log/result uploads routed through the proxy at 4/4.
+The post-job agent re-registered (Q114 self-heal), deleting the tenant CR deregistered its runners, and <code>helm uninstall</code> <strong>retained both CRDs</strong> (<code>helm.sh/resource-policy: keep</code>).
+One secondary observation filed separately: the worker pod ends in <code>Failed</code> phase (runner container exit 100) despite the job succeeding.</p>
 <hr />
 <h2 id="2-load-testing-harness-cmdagctestload--implemented-q13">2. Load testing harness (<code>cmd/agc/test/load/</code>) — IMPLEMENTED (Q13)<a class="headerlink" href="#2-load-testing-harness-cmdagctestload--implemented-q13" title="Permanent link">&para;</a></h2>
 <h3 id="20-what-the-headline-claim-actually-is-and-which-tier-pins-it">2.0 What the headline claim actually is, and which tier pins it<a class="headerlink" href="#20-what-the-headline-claim-actually-is-and-which-tier-pins-it" title="Permanent link">&para;</a></h3>
-<p>The pitch is <strong>thousands of virtual runner sessions per AGC</strong>: the AGC
-multiplexes each runner session as a goroutine that long-polls the
-broker, and spawns an ephemeral worker pod <em>only</em> when a job is
-acquired. The capacity risk in that claim is entirely inside one AGC
-process — goroutine, memory, connection, and per-job re-registration
-scaling — <strong>not</strong> in the cluster's ability to schedule pods (that is a
-node-count question, separate from the AGC). So the tier that observes
-the claim is an <strong>in-process Go load test</strong> that drives the AGC's real
-listener-multiplexing core (<code>listener.Multiplexer</code> + <code>agentpool.Pool</code> +
-a per-goroutine <code>broker.Client</code>) at scale against an in-process broker,
-<strong>not</strong> a kind e2e standing up 1,000 real worker pods. A pod-per-session
-e2e would mostly measure kind/kubelet, would not run on a dev box, and
-would not isolate the AGC's own scaling — the property under test.</p>
-<p>The harness therefore lives under <code>cmd/agc/test/load/</code> (it must, to
-import the <code>agc/internal/...</code> listener and agentpool packages) behind a
-<code>//go:build load</code> tag — the same tier-isolation pattern the envtest
-suites use with <code>//go:build integration</code>. It needs <strong>no cluster and no
-real GitHub credentials</strong>: agent Secrets go through a controller-runtime
-fake client, registration through an in-memory registrar, and the broker
-through an in-process stub.</p>
+<p>The pitch is <strong>thousands of virtual runner sessions per AGC</strong>: the AGC multiplexes each runner session as a goroutine that long-polls the broker, and spawns an ephemeral worker pod <em>only</em> when a job is acquired.
+The capacity risk in that claim is entirely inside one AGC process — goroutine, memory, connection, and per-job re-registration scaling — <strong>not</strong> in the cluster's ability to schedule pods (that is a node-count question, separate from the AGC).
+So the tier that observes the claim is an <strong>in-process Go load test</strong> that drives the AGC's real listener-multiplexing core (<code>listener.Multiplexer</code> + <code>agentpool.Pool</code> + a per-goroutine <code>broker.Client</code>) at scale against an in-process broker, <strong>not</strong> a kind e2e standing up 1,000 real worker pods.
+A pod-per-session e2e would mostly measure kind/kubelet, would not run on a dev box, and would not isolate the AGC's own scaling — the property under test.</p>
+<p>The harness therefore lives under <code>cmd/agc/test/load/</code> (it must, to import the <code>agc/internal/...</code> listener and agentpool packages) behind a <code>//go:build load</code> tag — the same tier-isolation pattern the envtest suites use with <code>//go:build integration</code>.
+It needs <strong>no cluster and no real GitHub credentials</strong>: agent Secrets go through a controller-runtime fake client, registration through an in-memory registrar, and the broker through an in-process stub.</p>
 <h3 id="21-architecture">2.1 Architecture<a class="headerlink" href="#21-architecture" title="Permanent link">&para;</a></h3>
-<p>The harness reconstructs, per tenant, exactly what
-<code>RunnerGroupReconciler.getOrCreateMultiplexer</code> wires in production —
-same factory shape, same <code>ClaimAgent</code>/<code>ReleaseAgent</code>/<code>MarkConsumed</code>/
-<code>Recycle</code> callbacks — then drives it under load. Three pieces:</p>
+<p>The harness reconstructs, per tenant, exactly what <code>RunnerGroupReconciler.getOrCreateMultiplexer</code> wires in production — same factory shape, same <code>ClaimAgent</code>/<code>ReleaseAgent</code>/<code>MarkConsumed</code>/ <code>Recycle</code> callbacks — then drives it under load.
+Three pieces:</p>
 <ul>
-<li><strong>Tenant generator</strong> — builds N independent RunnerGroups (default 10),
-  each with its own <code>agentpool.Pool</code> (fake-client Secrets, in-memory
-  registrar) and <code>listener.Multiplexer</code> sized to M listeners.</li>
-<li><strong>In-process broker stub</strong> (<code>broker_stub.go</code>) — implements the broker
-  v2 wire protocol (<code>/token</code>, <code>/session</code>, <code>/message</code>, <code>/acquirejob</code>,
-  <code>/renewjob</code>) with two production-faithful behaviours the load model
-  depends on: a <strong>long-poll hold</strong> on <code>GET /message</code> (so idle sessions
-  don't busy-spin to idle-shutdown, mirroring the real ~50s broker hold
-  — Q148) and the <strong>single-use JIT lifecycle</strong> (Q114): acquiring a job
-  consumes the delivering session's agent, so the goroutine must
-  re-register before it can poll again.</li>
-<li><strong>Job driver</strong> — keeps every session saturated so the pool ramps to M
-  listeners per tenant and stays there; each delivered job costs one
-  <code>AcquireJob</code> + one agent <strong>re-registration</strong> (the Q114 per-job cost
-  this harness exists to measure — it never assumes a long-lived
-  runner). <code>LOAD_JOB_DURATION</code> sets how long a session "holds" a job
-  (the simulated worker-pod runtime) before recycling, which tunes the
-  blend between concurrency-holding and re-registration churn.</li>
+<li><strong>Tenant generator</strong> — builds N independent RunnerGroups (default 10), each with its own <code>agentpool.Pool</code> (fake-client Secrets, in-memory registrar) and <code>listener.Multiplexer</code> sized to M listeners.</li>
+<li><strong>In-process broker stub</strong> (<code>broker_stub.go</code>) — implements the broker v2 wire protocol (<code>/token</code>, <code>/session</code>, <code>/message</code>, <code>/acquirejob</code>, <code>/renewjob</code>) with two production-faithful behaviours the load model depends on: a <strong>long-poll hold</strong> on <code>GET /message</code> (so idle sessions don't busy-spin to idle-shutdown, mirroring the real ~50s broker hold — Q148) and the <strong>single-use JIT lifecycle</strong> (Q114): acquiring a job consumes the delivering session's agent, so the goroutine must re-register before it can poll again.</li>
+<li><strong>Job driver</strong> — keeps every session saturated so the pool ramps to M listeners per tenant and stays there; each delivered job costs one <code>AcquireJob</code> + one agent <strong>re-registration</strong> (the Q114 per-job cost this harness exists to measure — it never assumes a long-lived runner). <code>LOAD_JOB_DURATION</code> sets how long a session "holds" a job (the simulated worker-pod runtime) before recycling, which tunes the blend between concurrency-holding and re-registration churn.</li>
 </ul>
-<p>A virtual runner session <strong>is</strong> a listener goroutine; sustained
-concurrent sessions = the sum of <code>Multiplexer.ActiveCount()</code> across
-tenants (cross-checked against <code>actions_gateway_active_sessions</code> and
-<code>runtime.NumGoroutine</code>).</p>
+<p>A virtual runner session <strong>is</strong> a listener goroutine; sustained concurrent sessions = the sum of <code>Multiplexer.ActiveCount()</code> across tenants (cross-checked against <code>actions_gateway_active_sessions</code> and <code>runtime.NumGoroutine</code>).</p>
 <h3 id="22-what-it-measures">2.2 What it measures<a class="headerlink" href="#22-what-it-measures" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3282,23 +3168,16 @@ tenants (cross-checked against <code>actions_gateway_active_sessions</code> and
 </table>
 <h3 id="23-run-modes">2.3 Run modes<a class="headerlink" href="#23-run-modes" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>make load-test-quick</code> — 10 tenants × 100 listeners = 1,000 concurrent
-  sessions, short steady window (smoke; ~1 min). Also the compile/lint
-  smoke for the <code>load</code>-tagged code.</li>
-<li><code>make load-test-full</code> — 10 tenants × 100 listeners = 1,000 concurrent,
-  longer window with a realistic job hold (acceptance; ~3–5 min).</li>
+<li><code>make load-test-quick</code> — 10 tenants × 100 listeners = 1,000 concurrent sessions, short steady window (smoke; ~1 min).
+  Also the compile/lint smoke for the <code>load</code>-tagged code.</li>
+<li><code>make load-test-full</code> — 10 tenants × 100 listeners = 1,000 concurrent, longer window with a realistic job hold (acceptance; ~3–5 min).</li>
 </ul>
-<p>Every knob is an env var (<code>LOAD_TENANTS</code>, <code>LOAD_LISTENERS_PER_TENANT</code>,
-<code>LOAD_DURATION</code>, <code>LOAD_JOB_DURATION</code>, <code>LOAD_REPORT</code>, …) so the same
-target scales up on a bigger box without code edits.</p>
+<p>Every knob is an env var (<code>LOAD_TENANTS</code>, <code>LOAD_LISTENERS_PER_TENANT</code>, <code>LOAD_DURATION</code>, <code>LOAD_JOB_DURATION</code>, <code>LOAD_REPORT</code>, …) so the same target scales up on a bigger box without code edits.</p>
 <h3 id="24-output">2.4 Output<a class="headerlink" href="#24-output" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Key metrics printed to the test log and asserted as pass/fail SLOs.</li>
-<li>A Markdown report (path from <code>LOAD_REPORT</code>) capturing host shape,
-  knobs, observed metrics, and SLO comparisons; a sample committed under
-  <code>cmd/agc/test/load/results/</code>.</li>
-<li><code>go test -json | go-junit-report</code> yields JUnit XML for CI (documented
-  in the README rather than hand-rolled).</li>
+<li>A Markdown report (path from <code>LOAD_REPORT</code>) capturing host shape, knobs, observed metrics, and SLO comparisons; a sample committed under <code>cmd/agc/test/load/results/</code>.</li>
+<li><code>go test -json | go-junit-report</code> yields JUnit XML for CI (documented in the README rather than hand-rolled).</li>
 </ul>
 <h3 id="25-files">2.5 Files<a class="headerlink" href="#25-files" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cmd/agc/test/load/
@@ -3314,67 +3193,39 @@ target scales up on a bigger box without code edits.</p>
 <h3 id="26-fidelity-boundaries-what-this-tier-does-not-measure">2.6 Fidelity boundaries (what this tier does <em>not</em> measure)<a class="headerlink" href="#26-fidelity-boundaries-what-this-tier-does-not-measure" title="Permanent link">&para;</a></h3>
 <p>Documented in the README so results are not over-read:</p>
 <ul>
-<li><strong>Apiserver Secret-write cost.</strong> Recycle writes an agent Secret; the
-  fake client makes that near-instant, so the harness counts
-  re-registrations and times the in-process recycle but <strong>understates</strong>
-  the real per-job apiserver write load. The recycle <em>rate</em> it reports
-  is the figure to carry into apiserver capacity planning.</li>
-<li><strong>Real worker pods, CNI, image pulls, cross-tenant network isolation.</strong>
-  Out of scope here; those belong to the cluster-only kind e2e (§5.1) and the
-  staging run below.</li>
-<li><strong>Proxy HPA under burst</strong> (§2.2 rows in the original plan) — an
-  HPA/Deployment-status behaviour that needs a real cluster; tracked
-  with the staging run, not this harness.</li>
+<li><strong>Apiserver Secret-write cost.</strong> Recycle writes an agent Secret; the fake client makes that near-instant, so the harness counts re-registrations and times the in-process recycle but <strong>understates</strong> the real per-job apiserver write load.
+  The recycle <em>rate</em> it reports is the figure to carry into apiserver capacity planning.</li>
+<li><strong>Real worker pods, CNI, image pulls, cross-tenant network isolation.</strong> Out of scope here; those belong to the cluster-only kind e2e (§5.1) and the staging run below.</li>
+<li><strong>Proxy HPA under burst</strong> (§2.2 rows in the original plan) — an HPA/Deployment-status behaviour that needs a real cluster; tracked with the staging run, not this harness.</li>
 </ul>
-<p>These are the multi-tenant-on-a-real-cluster items the original plan
-sketched; they remain the <strong>staging-cluster</strong> half of M5 (DoD bullets 3
-and 4) and are not regressed by landing the in-process harness — which
-pins the part of the headline claim that lives inside the AGC.</p>
+<p>These are the multi-tenant-on-a-real-cluster items the original plan sketched; they remain the <strong>staging-cluster</strong> half of M5 (DoD bullets 3 and 4) and are not regressed by landing the in-process harness — which pins the part of the headline claim that lives inside the AGC.</p>
 <hr />
 <h2 id="3-posture-audit-kube-bench--polaris">3. Posture audit (<code>kube-bench</code> / <code>polaris</code>)<a class="headerlink" href="#3-posture-audit-kube-bench--polaris" title="Permanent link">&para;</a></h2>
 <h3 id="31-tool-choice">3.1 Tool choice<a class="headerlink" href="#31-tool-choice" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>kube-bench</strong> — CIS benchmark; cluster-level (kubelet, control
-  plane). Useful but not the most relevant signal for <em>this</em> operator —
-  most CIS findings apply to cluster config, not workload manifests.</li>
+<li><strong>kube-bench</strong> — CIS benchmark; cluster-level (kubelet, control plane).
+  Useful but not the most relevant signal for <em>this</em> operator — most CIS findings apply to cluster config, not workload manifests.</li>
 <li><strong>polaris</strong> — workload-level (pod specs, NetworkPolicy, RBAC).
   Higher signal for finding regressions in our generated manifests.</li>
-<li><strong>kubescape</strong> — combines both; CI-friendly. Worth evaluating.</li>
+<li><strong>kubescape</strong> — combines both; CI-friendly.
+  Worth evaluating.</li>
 </ul>
-<p><strong>Recommended:</strong> polaris in CI for workload posture; kube-bench as a
-one-shot manual run against the staging cluster.</p>
+<p><strong>Recommended:</strong> polaris in CI for workload posture; kube-bench as a one-shot manual run against the staging cluster.</p>
 <h3 id="32-integration--implemented-q14">3.2 Integration — IMPLEMENTED (Q14)<a class="headerlink" href="#32-integration--implemented-q14" title="Permanent link">&para;</a></h3>
 <p>Both halves landed:</p>
 <ul>
-<li><strong>polaris (automated, gating).</strong> A <code>polaris</code> job in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>
-  renders the Helm chart (<code>helm template</code>, digest-pinned to reflect the
-  production posture) and runs
-  <code>polaris audit --merge-config --config charts/actions-gateway/polaris.yaml --set-exit-code-on-danger</code>.
-  It <strong>fails the PR on any <code>danger</code> finding</strong> (decision below) and runs on every
-  PR touching the chart or <code>Makefile</code>, plus every push to <code>main</code>.
+<li><strong>polaris (automated, gating).</strong> A <code>polaris</code> job in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a> renders the Helm chart (<code>helm template</code>, digest-pinned to reflect the production posture) and runs <code>polaris audit --merge-config --config charts/actions-gateway/polaris.yaml --set-exit-code-on-danger</code>.
+  It <strong>fails the PR on any <code>danger</code> finding</strong> (decision below) and runs on every PR touching the chart or <code>Makefile</code>, plus every push to <code>main</code>.
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>make polaris-scan</code></a> runs the identical gate locally.</li>
-<li><strong>kube-bench (manual, documented).</strong> kube-bench is a CIS scan against a
-  <strong>live node</strong>, so it cannot run in our manifest-only CI. The expected
-  pre-production procedure (run the upstream Job, triage <code>[FAIL]</code>s, which are
-  cluster-admin vs. chart concerns) is documented as an operator runbook in
-  <a href="../../operations/security-operations/#cis-benchmark-posture--kube-bench-manual-pre-production">security-operations.md</a>.</li>
+<li><strong>kube-bench (manual, documented).</strong> kube-bench is a CIS scan against a <strong>live node</strong>, so it cannot run in our manifest-only CI.
+  The expected pre-production procedure (run the upstream Job, triage <code>[FAIL]</code>s, which are cluster-admin vs. chart concerns) is documented as an operator runbook in <a href="../../operations/security-operations/#cis-benchmark-posture--kube-bench-manual-pre-production">security-operations.md</a>.</li>
 </ul>
-<p><strong>Decision — gate on <code>danger</code>, report <code>warning</code> (block vs. report-only).</strong>
-<code>danger</code> findings are real security regressions (privileged container, host
-namespace, dangerous capabilities, missing <code>securityContext</code>, a floating
-<code>:latest</code> image tag) — a chart change that introduces one must not merge, so the
-gate blocks. <code>warning</code> findings are heuristic and frequently false-positive
-against a Helm-packaged operator chart, so blocking on them would red-gate
-unrelated work; they are printed for visibility instead. The false-positive
-warnings are tuned to <code>ignore</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>
-(via <code>--merge-config</code>, so every default <code>danger</code> check stays active), each with
-a justifying comment. The digest-pinned default install scores <strong>100</strong> with zero
-danger findings.</p>
+<p><strong>Decision — gate on <code>danger</code>, report <code>warning</code> (block vs. report-only).</strong> <code>danger</code> findings are real security regressions (privileged container, host namespace, dangerous capabilities, missing <code>securityContext</code>, a floating <code>:latest</code> image tag) — a chart change that introduces one must not merge, so the gate blocks. <code>warning</code> findings are heuristic and frequently false-positive against a Helm-packaged operator chart, so blocking on them would red-gate unrelated work; they are printed for visibility instead.
+The false-positive warnings are tuned to <code>ignore</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a> (via <code>--merge-config</code>, so every default <code>danger</code> check stays active), each with a justifying comment.
+The digest-pinned default install scores <strong>100</strong> with zero danger findings.</p>
 <h3 id="33-findings-triaged-q14">3.3 Findings triaged (Q14)<a class="headerlink" href="#33-findings-triaged-q14" title="Permanent link">&para;</a></h3>
-<p>The audit surfaced one <code>danger</code> and five <code>warning</code>s. Triage (fix what the chart
-should fix; record justified exceptions — never regress a secure default):</p>
+<p>The audit surfaced one <code>danger</code> and five <code>warning</code>s.
+Triage (fix what the chart should fix; record justified exceptions — never regress a secure default):</p>
 <table>
 <thead>
 <tr>
@@ -3419,33 +3270,29 @@ should fix; record justified exceptions — never regress a secure default):</p>
 <p>No secure default was relaxed to silence a finding.</p>
 <hr />
 <h2 id="4-sandbox-runtime-gvisor--kata-validation">4. Sandbox runtime (gVisor / Kata) validation<a class="headerlink" href="#4-sandbox-runtime-gvisor--kata-validation" title="Permanent link">&para;</a></h2>
-<p><a href="../../design/appendix-b-worker-isolation/">Appendix B</a> documents the
-per-<code>RunnerGroup</code> opt-in. M5 adds: validate the path works on a real
-cluster with at least one of the two runtimes installed.</p>
+<p><a href="../../design/appendix-b-worker-isolation/">Appendix B</a> documents the per-<code>RunnerGroup</code> opt-in.
+M5 adds: validate the path works on a real cluster with at least one of the two runtimes installed.</p>
 <h3 id="41-what-to-test">4.1 What to test<a class="headerlink" href="#41-what-to-test" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Install gVisor on a staging cluster (operator concern, but pin the
-  exact version in <code>docs/operations/runbook.md</code>).</li>
+<li>Install gVisor on a staging cluster (operator concern, but pin the exact version in <code>docs/operations/runbook.md</code>).</li>
 <li>Configure a <code>RunnerGroup</code> with <code>podTemplate.spec.runtimeClassName: gvisor</code>.</li>
-<li>Dispatch a job through the load harness and confirm the worker pod
-  runs to completion under the sandbox.</li>
+<li>Dispatch a job through the load harness and confirm the worker pod runs to completion under the sandbox.</li>
 <li>Measure overhead (job duration delta vs. <code>runc</code>); document.</li>
 </ul>
 <h3 id="42-out-of-scope">4.2 Out of scope<a class="headerlink" href="#42-out-of-scope" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Kata Containers validation (parallel work; document as supported,
-  validate when there's demand)</li>
+<li>Kata Containers validation (parallel work; document as supported, validate when there's demand)</li>
 <li>GMC-side <code>RuntimeClass</code> installation (cluster-admin concern)</li>
 </ul>
 <hr />
 <h2 id="5-test-plan">5. Test plan<a class="headerlink" href="#5-test-plan" title="Permanent link">&para;</a></h2>
 <h3 id="51-existing-coverage-to-inherit">5.1 Existing coverage to inherit<a class="headerlink" href="#51-existing-coverage-to-inherit" title="Permanent link">&para;</a></h3>
-<p>The following e2e §7.3 specs already exist; M5 reuses them at higher
-scale rather than reimplementing:</p>
+<p>The following e2e §7.3 specs already exist; M5 reuses them at higher scale rather than reimplementing:</p>
 <ul>
-<li>"Resource cleanup under load" — 50 sequential jobs across 5
-  tenants. M5 scales to 1,000 / 10.</li>
-<li>"Proxy HPA scaling" — 50 concurrent. M5 scales to 100+ per tenant.</li>
+<li>"Resource cleanup under load" — 50 sequential jobs across 5 tenants.
+  M5 scales to 1,000 / 10.</li>
+<li>"Proxy HPA scaling" — 50 concurrent.
+  M5 scales to 100+ per tenant.</li>
 </ul>
 <h3 id="52-new-tests">5.2 New tests<a class="headerlink" href="#52-new-tests" title="Permanent link">&para;</a></h3>
 <table>
@@ -3571,17 +3418,11 @@ scale rather than reimplementing:</p>
 <hr />
 <h2 id="8-deferred--out-of-scope">8. Deferred / out of scope<a class="headerlink" href="#8-deferred--out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Cost benchmarking</strong> under realistic load — covered by
-  <a href="../docs/">docs/plan/docs.md §3.4</a> and
-  <a href="../../design/appendix-f-cost-model/">docs/design/appendix-f-cost-model.md</a>.
+<li><strong>Cost benchmarking</strong> under realistic load — covered by <a href="../docs/">docs/plan/docs.md §3.4</a> and <a href="../../design/appendix-f-cost-model/">docs/design/appendix-f-cost-model.md</a>.
   Use the M5 harness as data source once it lands.</li>
-<li><strong>Long-running soak test</strong> (24h+) — useful but separate; not in the
-  4-day design budget.</li>
-<li><strong>Chaos testing</strong> (pod kill, network partition) — defer to a future
-  hardening pass.</li>
-<li><strong>Cluster autoscaler interactions</strong> — operator concern; document
-  recommended cluster-autoscaler settings in the runbook, do not test
-  in M5.</li>
+<li><strong>Long-running soak test</strong> (24h+) — useful but separate; not in the 4-day design budget.</li>
+<li><strong>Chaos testing</strong> (pod kill, network partition) — defer to a future hardening pass.</li>
+<li><strong>Cluster autoscaler interactions</strong> — operator concern; document recommended cluster-autoscaler settings in the runbook, do not test in M5.</li>
 </ul>
 
 

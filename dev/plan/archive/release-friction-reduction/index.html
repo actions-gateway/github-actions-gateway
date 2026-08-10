@@ -2643,123 +2643,67 @@
 
 <h1 id="release-friction-reduction">Release friction reduction<a class="headerlink" href="#release-friction-reduction" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status:</strong> Complete (all buckets shipped — Q293/Q294/Q295/Q296). Motivated by
-the <code>v1.1.0-rc.7 → v1.1.0</code> cut (2026-07-12), which exercised the full release +
-pre-GA dogfood validation gate end-to-end for the first time and surfaced
-repeated manual friction and several footguns. This plan captures where the
-friction <em>structurally</em> comes from and the highest-leverage fixes, so we stop
-patching individual footguns. Bucket 2's wrapper is code-complete + gate-clean;
-end-to-end validation against dogfood is a human pre-GA-gate step (see Validation).</p>
+<p><strong>Status:</strong> Complete (all buckets shipped — Q293/Q294/Q295/Q296).
+Motivated by the <code>v1.1.0-rc.7 → v1.1.0</code> cut (2026-07-12), which exercised the full release + pre-GA dogfood validation gate end-to-end for the first time and surfaced repeated manual friction and several footguns.
+This plan captures where the friction <em>structurally</em> comes from and the highest-leverage fixes, so we stop patching individual footguns.
+Bucket 2's wrapper is code-complete + gate-clean; end-to-end validation against dogfood is a human pre-GA-gate step (see Validation).</p>
 </blockquote>
 <h2 id="motivation--friction-observed-during-the-v110-cut">Motivation — friction observed during the v1.1.0 cut<a class="headerlink" href="#motivation--friction-observed-during-the-v110-cut" title="Permanent link">&para;</a></h2>
 <p>Two distinct buckets, each with a single high-leverage root cause.</p>
-<p><strong>Publish ceremony.</strong> <code>publish.yml</code> produces the signed artifacts but hands back a
-<em>broken, minimal</em> GitHub Release and a chart whose prerelease state depends on a
-human-run PR. So every cut repeats:
-- A manual <strong>prerelease-flag flip PR</strong> (<code>artifacthub.io/prerelease</code> <code>true</code>↔<code>false</code>)
-  that must land <em>before</em> the tag and be flipped back for the next RC — pure
-  ceremony, easy to forget.
-- <strong>Fixing the auto-created Release by hand</strong>: it defaults <code>prerelease=false</code> (wrong
-  for an RC) and auto-generates notes from the wrong base tag.
+<p><strong>Publish ceremony.</strong> <code>publish.yml</code> produces the signed artifacts but hands back a <em>broken, minimal</em> GitHub Release and a chart whose prerelease state depends on a human-run PR.
+So every cut repeats:
+- A manual <strong>prerelease-flag flip PR</strong> (<code>artifacthub.io/prerelease</code> <code>true</code>↔<code>false</code>) that must land <em>before</em> the tag and be flipped back for the next RC — pure ceremony, easy to forget.
+- <strong>Fixing the auto-created Release by hand</strong>: it defaults <code>prerelease=false</code> (wrong for an RC) and auto-generates notes from the wrong base tag.
 - <strong>Copying the five image digests</strong> into the release notes by hand.</p>
-<p><strong>Validation orchestration.</strong> The pre-GA dogfood gate
-(<a href="../../../operations/release/#validate-the-release-candidate-on-dogfood">release.md § Validate the release candidate on dogfood</a>)
-is correct in intent but was written from source-reading; running it revealed the
-runbook is missing required env and ordering, and <code>setup.sh</code> has a silent footgun:
-- <code>setup.sh</code> needs <code>APP_ID</code>, <code>INSTALLATION_ID</code>, <code>ASSUME_YES=1</code> (reads the App PEM
-  from the macOS keychain) — undocumented in the gate steps.
-- <strong><code>DOGFOOD_RUNNER_IMAGE</code> footgun</strong>: re-running <code>setup.sh</code> <em>without</em> it silently
-  resets the tenant's <code>RunnerTemplate</code> <code>workerImage</code> to the toolchain-less upstream
-  default, so <code>make</code>/Go vanish and CI jobs fail <code>make: command not found</code>. Cost a
-  full failed validation cycle.
-- The cluster is at <strong>0 nodes at rest</strong> — <code>setup.sh</code>'s GMC-rollout wait times out
-  until <code>start.sh</code> scales the system pool up.
-- The <strong>e2e leg is triggered by <code>gh run rerun</code></strong> (+ the <code>GAG_E2E_RUNNER</code> variable),
-  not by <code>e2e-start.sh</code> (which only wires routing).
-- The single <code>e2-standard-2</code> system node <strong>can't fit the on-demand e2e AGC</strong>
-  alongside the always-on CI AGCs — needs a temporary +1 node.</p>
+<p><strong>Validation orchestration.</strong> The pre-GA dogfood gate (<a href="../../../operations/release/#validate-the-release-candidate-on-dogfood">release.md § Validate the release candidate on dogfood</a>) is correct in intent but was written from source-reading; running it revealed the runbook is missing required env and ordering, and <code>setup.sh</code> has a silent footgun:
+- <code>setup.sh</code> needs <code>APP_ID</code>, <code>INSTALLATION_ID</code>, <code>ASSUME_YES=1</code> (reads the App PEM from the macOS keychain) — undocumented in the gate steps.
+- <strong><code>DOGFOOD_RUNNER_IMAGE</code> footgun</strong>: re-running <code>setup.sh</code> <em>without</em> it silently resets the tenant's <code>RunnerTemplate</code> <code>workerImage</code> to the toolchain-less upstream default, so <code>make</code>/Go vanish and CI jobs fail <code>make: command not found</code>.
+  Cost a full failed validation cycle.
+- The cluster is at <strong>0 nodes at rest</strong> — <code>setup.sh</code>'s GMC-rollout wait times out until <code>start.sh</code> scales the system pool up.
+- The <strong>e2e leg is triggered by <code>gh run rerun</code></strong> (+ the <code>GAG_E2E_RUNNER</code> variable), not by <code>e2e-start.sh</code> (which only wires routing).
+- The single <code>e2-standard-2</code> system node <strong>can't fit the on-demand e2e AGC</strong> alongside the always-on CI AGCs — needs a temporary +1 node.</p>
 <h2 id="bucket-1--make-publishyml-own-the-whole-release-highest-leverage--done-q293">Bucket 1 — make <code>publish.yml</code> own the whole Release (highest leverage) — DONE (Q293)<a class="headerlink" href="#bucket-1--make-publishyml-own-the-whole-release-highest-leverage--done-q293" title="Permanent link">&para;</a></h2>
-<p>Implemented in <code>publish.yml</code>'s <code>chart-publish</code> job: the tag-resolution step now
-emits a <code>prerelease</code> output (0.x or a <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> suffix ⇒ true), both
-chart-package steps <code>yq</code>-stamp <code>artifacthub.io/prerelease</code> from it before
-<code>helm package</code>, and a new "Compose and create the GitHub Release" step writes the
-five index digests + <code>make verify-release</code> line + generated changelog and sets
-<code>--prerelease</code>, guarded to create only when the tag has no Release yet. First
-exercised on the next real <code>v*</code> tag (see Validation).</p>
+<p>Implemented in <code>publish.yml</code>'s <code>chart-publish</code> job: the tag-resolution step now emits a <code>prerelease</code> output (0.x or a <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> suffix ⇒ true), both chart-package steps <code>yq</code>-stamp <code>artifacthub.io/prerelease</code> from it before <code>helm package</code>, and a new "Compose and create the GitHub Release" step writes the five index digests + <code>make verify-release</code> line + generated changelog and sets <code>--prerelease</code>, guarded to create only when the tag has no Release yet.
+First exercised on the next real <code>v*</code> tag (see Validation).</p>
 <p>The pipeline already has every piece of data; it just doesn't finish the job.</p>
 <ol>
-<li><strong>Derive <code>artifacthub.io/prerelease</code> from the tag at package time.</strong> <code>publish.yml</code>
-   already overrides the chart's <code>version</code>/<code>appVersion</code> from the tag; setting the
-   annotation from whether the tag matches <code>-rc</code>/<code>0.</code> is the same mechanism (a <code>yq</code>
-   edit before <code>helm package</code>). <strong>Eliminates the flip PR entirely</strong> — both
-   directions. Update release.md § Chart version &amp; metadata to match (it currently
-   states the annotation is baked as-is and must be flipped by hand).</li>
-<li><strong>Generate complete, correct release notes and set <code>--prerelease</code> on the
-   Release.</strong> Emit the five multi-arch <strong>index</strong> digests (already recorded to the run
-   summary), the <code>make verify-release VERSION=&lt;tag&gt;</code> line, and a
-   <code>compare/&lt;prev&gt;...&lt;tag&gt;</code> changelog into the Release body, with <code>--prerelease</code> set
-   from the tag. <strong>Eliminates</strong> the manual <code>gh release edit</code>, the wrong-base notes,
-   and the digest copy. Keep the "create only if absent, never clobber curated
-   notes" guard.</li>
+<li><strong>Derive <code>artifacthub.io/prerelease</code> from the tag at package time.</strong> <code>publish.yml</code> already overrides the chart's <code>version</code>/<code>appVersion</code> from the tag; setting the annotation from whether the tag matches <code>-rc</code>/<code>0.</code> is the same mechanism (a <code>yq</code> edit before <code>helm package</code>). <strong>Eliminates the flip PR entirely</strong> — both directions.
+   Update release.md § Chart version &amp; metadata to match (it currently states the annotation is baked as-is and must be flipped by hand).</li>
+<li><strong>Generate complete, correct release notes and set <code>--prerelease</code> on the Release.</strong> Emit the five multi-arch <strong>index</strong> digests (already recorded to the run summary), the <code>make verify-release VERSION=&lt;tag&gt;</code> line, and a <code>compare/&lt;prev&gt;...&lt;tag&gt;</code> changelog into the Release body, with <code>--prerelease</code> set from the tag. <strong>Eliminates</strong> the manual <code>gh release edit</code>, the wrong-base notes, and the digest copy.
+   Keep the "create only if absent, never clobber curated notes" guard.</li>
 </ol>
 <p>After Bucket 1, Phase A collapses to: <strong>push tag → verify.</strong></p>
 <h2 id="bucket-2--one-command-dogfood-validation-gate--footgun-fixes">Bucket 2 — one-command dogfood validation gate + footgun fixes<a class="headerlink" href="#bucket-2--one-command-dogfood-validation-gate--footgun-fixes" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong><code>scripts/dogfood/validate-release.sh &lt;rc-tag&gt;</code></strong> — DONE (Q294). A single wrapper
-   that runs setup → start → e2e-start → <code>gh run rerun</code> (e2e) → CRD artifact smoke →
-   teardown, with the correct env baked in (<code>APP_ID</code> defaulted / <code>INSTALLATION_ID</code>
-   auto-resolved via <code>gh api</code>, <code>ASSUME_YES=1</code> for the child scripts, <code>DOGFOOD_RUNNER_IMAGE</code>
-   left untouched so setup.sh's Q295 preserve wins, system-pool scaled 0→1 before setup
-   and +1 for the on-demand e2e AGC's contention window), idempotent and self-cleaning
-   (EXIT trap tears back down to 0 nodes on success and failure). release.md's gate
-   section now points at the one command. Turns an hour of footguns into a walk-away
-   command. End-to-end run against dogfood is a human pre-GA-gate step (see Validation).</li>
-<li><strong>Fix the <code>setup.sh</code> <code>DOGFOOD_RUNNER_IMAGE</code> footgun</strong> (agreed) — DONE (Q295): when
-   the env is unset, <code>apply_cr</code> now <strong>preserves</strong> the existing <code>RunnerTemplate</code> runner
-   image (reads it back from the cluster with <code>kubectl get … -o jsonpath</code>) instead of
-   resetting it, so an idempotent re-run can't silently regress the runner toolchain.
-   Independently valuable — done first; it protects every dogfood re-run, not just the
-   release gate.</li>
+<li><strong><code>scripts/dogfood/validate-release.sh &lt;rc-tag&gt;</code></strong> — DONE (Q294).
+   A single wrapper that runs setup → start → e2e-start → <code>gh run rerun</code> (e2e) → CRD artifact smoke → teardown, with the correct env baked in (<code>APP_ID</code> defaulted / <code>INSTALLATION_ID</code> auto-resolved via <code>gh api</code>, <code>ASSUME_YES=1</code> for the child scripts, <code>DOGFOOD_RUNNER_IMAGE</code> left untouched so setup.sh's Q295 preserve wins, system-pool scaled 0→1 before setup and +1 for the on-demand e2e AGC's contention window), idempotent and self-cleaning (EXIT trap tears back down to 0 nodes on success and failure). release.md's gate section now points at the one command.
+   Turns an hour of footguns into a walk-away command.
+   End-to-end run against dogfood is a human pre-GA-gate step (see Validation).</li>
+<li><strong>Fix the <code>setup.sh</code> <code>DOGFOOD_RUNNER_IMAGE</code> footgun</strong> (agreed) — DONE (Q295): when the env is unset, <code>apply_cr</code> now <strong>preserves</strong> the existing <code>RunnerTemplate</code> runner image (reads it back from the cluster with <code>kubectl get … -o jsonpath</code>) instead of resetting it, so an idempotent re-run can't silently regress the runner toolchain.
+   Independently valuable — done first; it protects every dogfood re-run, not just the release gate.</li>
 </ol>
 <h2 id="bucket-3--cleanups-from-the-same-session--done-q296">Bucket 3 — cleanups from the same session — DONE (Q296)<a class="headerlink" href="#bucket-3--cleanups-from-the-same-session--done-q296" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Correct release.md's gate section</strong> — DONE. The
-  <a href="../../../operations/release/#validate-the-release-candidate-on-dogfood">§ Validate the release candidate on dogfood</a>
-  steps now state the real <code>setup.sh</code> env (<code>APP_ID</code>, <code>INSTALLATION_ID</code>,
-  <code>ASSUME_YES=1</code>; App PEM read from the macOS keychain), the 0-nodes→<code>start.sh</code>
-  ordering (setup's GMC-rollout wait times out at rest and <code>start.sh</code> completes it),
-  the <code>gh run rerun</code> e2e trigger (<code>e2e-start.sh</code> only wires routing), and the
-  system-node +1-node contention note.</li>
-<li><strong>Narrow the Calico e2e path filter</strong> — DONE. Both the <code>push.paths</code> list and the
-  <code>changes</code> <code>calico</code> filter in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-calico.yml"><code>e2e-calico.yml</code></a>
-  now watch <code>charts/actions-gateway/templates/**</code> instead of <code>charts/actions-gateway/**</code>,
-  so a metadata-only <code>Chart.yaml</code> edit no longer fires the expensive, flaky (Q291)
-  Calico lane while a NetworkPolicy-template change still does. Used a positive
-  <code>templates/**</code> include (which simply doesn't match <code>Chart.yaml</code>) rather than a
-  <code>!Chart.yaml</code> exclude, since dorny/paths-filter items are OR'd and a leading-<code>!</code>
-  does not subtract.</li>
+<li><strong>Correct release.md's gate section</strong> — DONE.
+  The <a href="../../../operations/release/#validate-the-release-candidate-on-dogfood">§ Validate the release candidate on dogfood</a> steps now state the real <code>setup.sh</code> env (<code>APP_ID</code>, <code>INSTALLATION_ID</code>, <code>ASSUME_YES=1</code>; App PEM read from the macOS keychain), the 0-nodes→<code>start.sh</code> ordering (setup's GMC-rollout wait times out at rest and <code>start.sh</code> completes it), the <code>gh run rerun</code> e2e trigger (<code>e2e-start.sh</code> only wires routing), and the system-node +1-node contention note.</li>
+<li><strong>Narrow the Calico e2e path filter</strong> — DONE.
+  Both the <code>push.paths</code> list and the <code>changes</code> <code>calico</code> filter in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-calico.yml"><code>e2e-calico.yml</code></a> now watch <code>charts/actions-gateway/templates/**</code> instead of <code>charts/actions-gateway/**</code>, so a metadata-only <code>Chart.yaml</code> edit no longer fires the expensive, flaky (Q291) Calico lane while a NetworkPolicy-template change still does.
+  Used a positive <code>templates/**</code> include (which simply doesn't match <code>Chart.yaml</code>) rather than a <code>!Chart.yaml</code> exclude, since dorny/paths-filter items are OR'd and a leading-<code>!</code> does not subtract.</li>
 </ul>
 <h2 id="sequencing">Sequencing<a class="headerlink" href="#sequencing" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Q295</strong> ✅ DONE — <code>setup.sh</code> <code>apply_cr</code> now preserves the live RunnerTemplate's
-   runner-container image when <code>DOGFOOD_RUNNER_IMAGE</code> is unset (reads it back with
-   <code>kubectl get … -o jsonpath</code>), instead of resetting it to the image-less default.
+<li><strong>Q295</strong> ✅ DONE — <code>setup.sh</code> <code>apply_cr</code> now preserves the live RunnerTemplate's runner-container image when <code>DOGFOOD_RUNNER_IMAGE</code> is unset (reads it back with <code>kubectl get … -o jsonpath</code>), instead of resetting it to the image-less default.
    An idempotent re-run can no longer silently regress the runner toolchain.</li>
-<li><strong>Q293 — Bucket 1</strong> ✅ DONE — <code>yq</code> prerelease stamp + a <code>gh release</code> compose/create
-   step in <code>publish.yml</code>. Removed the flip PR and the by-hand Release fixups.</li>
-<li><strong>Q296 — Bucket 3</strong> ✅ DONE — release.md gate-section corrections + narrowed the
-   Calico path filter to <code>charts/actions-gateway/templates/**</code>.</li>
-<li><strong>Q294 — Bucket 2</strong> ✅ DONE — <code>scripts/dogfood/validate-release.sh &lt;rc-tag&gt;</code>: the
-   one-command, idempotent, self-cleaning wrapper for the whole pre-GA dogfood gate
-   (setup → start → e2e-start → <code>gh run rerun</code> → CRD smoke → teardown). release.md's
-   gate section points at it. End-to-end validation against dogfood is the human
-   pre-GA-gate step. Removes the scariest, prod-cluster friction.</li>
+<li><strong>Q293 — Bucket 1</strong> ✅ DONE — <code>yq</code> prerelease stamp + a <code>gh release</code> compose/create step in <code>publish.yml</code>.
+   Removed the flip PR and the by-hand Release fixups.</li>
+<li><strong>Q296 — Bucket 3</strong> ✅ DONE — release.md gate-section corrections + narrowed the Calico path filter to <code>charts/actions-gateway/templates/**</code>.</li>
+<li><strong>Q294 — Bucket 2</strong> ✅ DONE — <code>scripts/dogfood/validate-release.sh &lt;rc-tag&gt;</code>: the one-command, idempotent, self-cleaning wrapper for the whole pre-GA dogfood gate (setup → start → e2e-start → <code>gh run rerun</code> → CRD smoke → teardown). release.md's gate section points at it.
+   End-to-end validation against dogfood is the human pre-GA-gate step.
+   Removes the scariest, prod-cluster friction.</li>
 </ol>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
-<p>Bucket 1 is first exercised on the <em>next</em> real <code>v*</code> tag — verify the published chart
-carries the tag-derived prerelease flag and the Release has correct notes + flag,
-exactly as this plan's motivating cut had to be fixed by hand. Bucket 2's wrapper is
-validated by running the next pre-GA gate through it end-to-end.</p>
+<p>Bucket 1 is first exercised on the <em>next</em> real <code>v*</code> tag — verify the published chart carries the tag-derived prerelease flag and the Release has correct notes + flag, exactly as this plan's motivating cut had to be fixed by hand.
+Bucket 2's wrapper is validated by running the next pre-GA gate through it end-to-end.</p>
 
 
 

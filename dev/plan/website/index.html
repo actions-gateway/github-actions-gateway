@@ -2730,15 +2730,11 @@
 
 
 <h1 id="project-website-github-pages">Project website (GitHub Pages)<a class="headerlink" href="#project-website-github-pages" title="Permanent link">&para;</a></h1>
-<p>A public website for GitHub Actions Gateway (GAG): a marketing landing page that
-converts an evaluator in under a minute, plus a searchable rendering of the
-existing <code>docs/</code> tree. The goal is to do what GitHub's file browser cannot —
-real full-text search, rendered diagrams, a punchy "vs ARC" comparison, and a
-front door that answers <em>"is this worth replacing Actions Runner Controller
-(ARC) for?"</em> before the visitor leaves.</p>
-<p>This is net-new scope tracked as STATUS Queue <a href="../../STATUS/">Q129</a>. It is <strong>not</strong>
-a 1.0 gate. It depends on no code changes; it is additive tooling plus content
-assembled from docs that already exist.</p>
+<p>A public website for GitHub Actions Gateway (GAG): a marketing landing page that converts an evaluator in under a minute, plus a searchable rendering of the existing <code>docs/</code> tree.
+The goal is to do what GitHub's file browser cannot — real full-text search, rendered diagrams, a punchy "vs ARC" comparison, and a front door that answers <em>"is this worth replacing Actions Runner Controller (ARC) for?"</em> before the visitor leaves.</p>
+<p>This is net-new scope tracked as STATUS Queue <a href="../../STATUS/">Q129</a>.
+It is <strong>not</strong> a 1.0 gate.
+It depends on no code changes; it is additive tooling plus content assembled from docs that already exist.</p>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2791,28 +2787,20 @@ assembled from docs that already exist.</p>
 </tbody>
 </table>
 <h2 id="audience-and-the-one-job">Audience and the one job<a class="headerlink" href="#audience-and-the-one-job" title="Permanent link">&para;</a></h2>
-<p>The visitor is a <strong>platform / SRE lead already running or evaluating ARC</strong> who
-has hit one of GAG's four pain points: quota starvation, listener overhead, no
-eviction recovery, or egress isolation. They arrive with a single question —
-<em>"is this worth replacing ARC for?"</em> — and the front page must answer it fast,
-then funnel to either <strong>Get started</strong> (try it) or <strong>Why GAG / vs ARC</strong> (justify
-it to their team).</p>
-<p>The trap to avoid: a wall of prose that restates the README. The README is
-already strong. The site exists to do what GitHub markdown can't.</p>
+<p>The visitor is a <strong>platform / SRE lead already running or evaluating ARC</strong> who has hit one of GAG's four pain points: quota starvation, listener overhead, no eviction recovery, or egress isolation.
+They arrive with a single question — <em>"is this worth replacing ARC for?"</em> — and the front page must answer it fast, then funnel to either <strong>Get started</strong> (try it) or <strong>Why GAG / vs ARC</strong> (justify it to their team).</p>
+<p>The trap to avoid: a wall of prose that restates the README.
+The README is already strong.
+The site exists to do what GitHub markdown can't.</p>
 <h2 id="tooling-decision-mkdocs-material">Tooling decision: MkDocs Material<a class="headerlink" href="#tooling-decision-mkdocs-material" title="Permanent link">&para;</a></h2>
-<p>The <code>docs/</code> tree is already well-structured markdown with ASCII diagrams, a
-glossary, and design/operations/development sections — exactly what
-<a href="https://www.mkdocs.org/">MkDocs</a> + the
-<a href="https://squidfunk.github.io/mkdocs-material/">Material theme</a> renders well. It
-gives us, nearly for free:</p>
+<p>The <code>docs/</code> tree is already well-structured markdown with ASCII diagrams, a glossary, and design/operations/development sections — exactly what <a href="https://www.mkdocs.org/">MkDocs</a> + the <a href="https://squidfunk.github.io/mkdocs-material/">Material theme</a> renders well.
+It gives us, nearly for free:</p>
 <ul>
-<li>Instant client-side search across all docs (the single biggest upgrade over
-  browsing files on github.com).</li>
+<li>Instant client-side search across all docs (the single biggest upgrade over browsing files on github.com).</li>
 <li>Mermaid diagram rendering (convert the ASCII art blocks to real diagrams).</li>
 <li>Code copy buttons and tabbed code blocks (Helm vs <code>kubectl</code> install paths).</li>
 <li>Auto nav from the existing folder layout — minimal restructuring.</li>
-<li>Built-in dark mode, and versioning via <a href="https://github.com/jimporter/mike">mike</a>
-  once 1.0 is cut.</li>
+<li>Built-in dark mode, and versioning via <a href="https://github.com/jimporter/mike">mike</a> once 1.0 is cut.</li>
 <li>Deploys to GitHub Pages via a short Actions workflow.</li>
 </ul>
 <p>Alternatives considered and rejected:</p>
@@ -2842,45 +2830,33 @@ gives us, nearly for free:</p>
 </tr>
 </tbody>
 </table>
-<p>Chosen shape: a <strong>custom-styled landing page</strong> (the marketing surface, via a
-Material <code>home</code> template override) that links into the <strong>MkDocs-rendered docs</strong>
-for everything else. Best of both — designed front door, low-maintenance docs.</p>
+<p>Chosen shape: a <strong>custom-styled landing page</strong> (the marketing surface, via a Material <code>home</code> template override) that links into the <strong>MkDocs-rendered docs</strong> for everything else.
+Best of both — designed front door, low-maintenance docs.</p>
 <h2 id="domain-decision-affected-by-the-org-move">Domain decision (affected by the org move)<a class="headerlink" href="#domain-decision-affected-by-the-org-move" title="Permanent link">&para;</a></h2>
-<p>The project now lives at <code>github.com/actions-gateway/github-actions-gateway</code>
-(moved from a personal account). That changes the calculus:</p>
+<p>The project now lives at <code>github.com/actions-gateway/github-actions-gateway</code> (moved from a personal account).
+That changes the calculus:</p>
 <ul>
-<li><strong>Before</strong> (personal account): the only no-custom-domain URL was a
-  personal-handle project page, e.g. <code>karlkfi.github.io/github-actions-gateway</code>
-  — long and tied to an individual.</li>
-<li><strong>After</strong> (org): the org owns a branded namespace. The project page is now
-  <code>https://actions-gateway.github.io/github-actions-gateway/</code> — project-scoped
-  and brandable, no personal handle.</li>
+<li><strong>Before</strong> (personal account): the only no-custom-domain URL was a personal-handle project page, e.g. <code>karlkfi.github.io/github-actions-gateway</code> — long and tied to an individual.</li>
+<li><strong>After</strong> (org): the org owns a branded namespace.
+  The project page is now <code>https://actions-gateway.github.io/github-actions-gateway/</code> — project-scoped and brandable, no personal handle.</li>
 </ul>
 <p>Options, in order of preference:</p>
 <ol>
-<li><strong>Project page on this repo</strong> (recommended): serve at
-   <code>actions-gateway.github.io/github-actions-gateway/</code>. Zero new repos, site
-   lives beside the code so docs never drift. Set <code>site_url</code> accordingly and
-   use a relative base path.</li>
-<li><strong>Custom domain</strong> (e.g. <code>actions-gateway.dev</code>): a single <code>CNAME</code> file on this
-   repo plus DNS records. The org move makes this a clean <em>later</em> upgrade rather
-   than a need — no rebuild, no content change, just DNS. Recommend deferring
-   until/unless we want a vanity domain.</li>
-<li><strong>Bare org apex</strong> <code>actions-gateway.github.io/</code>: requires a <em>separate</em> repo
-   named <code>actions-gateway.github.io</code>. Cleanest URL, but it decouples the site
-   from the code repo and reinvites docs drift. Not worth it for a single
-   project — reconsider only if the org grows to host multiple projects.</li>
+<li><strong>Project page on this repo</strong> (recommended): serve at <code>actions-gateway.github.io/github-actions-gateway/</code>.
+   Zero new repos, site lives beside the code so docs never drift.
+   Set <code>site_url</code> accordingly and use a relative base path.</li>
+<li><strong>Custom domain</strong> (e.g. <code>actions-gateway.dev</code>): a single <code>CNAME</code> file on this repo plus DNS records.
+   The org move makes this a clean <em>later</em> upgrade rather than a need — no rebuild, no content change, just DNS.
+   Recommend deferring until/unless we want a vanity domain.</li>
+<li><strong>Bare org apex</strong> <code>actions-gateway.github.io/</code>: requires a <em>separate</em> repo named <code>actions-gateway.github.io</code>.
+   Cleanest URL, but it decouples the site from the code repo and reinvites docs drift.
+   Not worth it for a single project — reconsider only if the org grows to host multiple projects.</li>
 </ol>
-<p><strong>Decision:</strong> shipped initially as the project page (option 1), then upgraded to
-the <strong>custom domain</strong> (option 2) in 2026-06 once <code>actions-gateway.com</code> was
-purchased. The site now serves from the apex <code>https://actions-gateway.com/</code>: a
-<code>docs/CNAME</code> file (copied verbatim into the build output) plus
-<code>site_url: https://actions-gateway.com/</code> and the registrar DNS records (apex <code>A</code>
-→ <code>185.199.108–111.153</code>, <code>AAAA</code>, <code>www</code> <code>CNAME</code> → <code>actions-gateway.github.io</code>).
-As predicted, the move was DNS + two file changes — no rebuild or content
-rewrite. DNSSEC and org-level domain verification remain optional future
-hardening. See <a href="../../development/website/#custom-domain"><code>docs/development/website.md</code></a>
-for the durable how-to.</p>
+<p><strong>Decision:</strong> shipped initially as the project page (option 1), then upgraded to the <strong>custom domain</strong> (option 2) in 2026-06 once <code>actions-gateway.com</code> was purchased.
+The site now serves from the apex <code>https://actions-gateway.com/</code>: a <code>docs/CNAME</code> file (copied verbatim into the build output) plus <code>site_url: https://actions-gateway.com/</code> and the registrar DNS records (apex <code>A</code> → <code>185.199.108–111.153</code>, <code>AAAA</code>, <code>www</code> <code>CNAME</code> → <code>actions-gateway.github.io</code>).
+As predicted, the move was DNS + two file changes — no rebuild or content rewrite.
+DNSSEC and org-level domain verification remain optional future hardening.
+See <a href="../../development/website/#custom-domain"><code>docs/development/website.md</code></a> for the durable how-to.</p>
 <h2 id="site-map">Site map<a class="headerlink" href="#site-map" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>/                     Landing page (hero + 4 pillars + vs-ARC + quickstart)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>/why-gag/             The Problem -&gt; The Solution, the comparison table, cost model
@@ -2889,107 +2865,68 @@ for the durable how-to.</p>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>/docs/operations/     &lt;- install, upgrade, runbook, troubleshooting, observability
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>/capacity/            &lt;- appendix-a SLOs + appendix-f cost model, made visual
 </code></pre></div>
-<p><strong>Publication scope.</strong> Publish <code>docs/design/</code> and <code>docs/operations/</code> (plus the
-landing + comparison pages). Exclude <code>docs/plan/</code> and <code>docs/STATUS.md</code> (internal
-planning) and <code>docs/development/</code> (contributor docs) — see the decision below.</p>
+<p><strong>Publication scope.</strong> Publish <code>docs/design/</code> and <code>docs/operations/</code> (plus the landing + comparison pages).
+Exclude <code>docs/plan/</code> and <code>docs/STATUS.md</code> (internal planning) and <code>docs/development/</code> (contributor docs) — see the decision below.</p>
 <h2 id="page-by-page-content">Page-by-page content<a class="headerlink" href="#page-by-page-content" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Landing page.</strong> Hero line + subhead, the one-command <code>helm install</code>, the
-  four pillars as cards, and <em>one</em> hero stat that makes the value visceral — the
-  listener-overhead delta (10 always-on listener pods for ARC vs 1 shared pod for
-  GAG, at 10 runner groups), or a cost curve from
-  <a href="../../design/appendix-f-cost-model/">appendix-f-cost-model.md</a>. Footer CTAs.</li>
-<li><strong>Why GAG / vs ARC</strong> — the highest-leverage conversion page. A clean
-  comparison matrix (priority tiers / eviction retry / per-tenant egress /
-  listener cost / scale-to-zero), each row linking to the design doc that backs
-  the claim. This is what gets pasted into a team's decision doc. Relates to
-  <a href="../../STATUS/">Q60</a> (competitive analysis) — keep the marketing comparison
-  here and the rigorous analysis in
-  <a href="../../design/appendix-d-alternatives-considered/">appendix-d</a>.</li>
-<li><strong>Architecture</strong> — convert the README's ASCII four-tier diagram to a rendered
-  mermaid/SVG diagram (GMC → AGC → proxy → worker), each tier clickable into its
-  design section.</li>
-<li><strong>Annotated <code>ActionsGateway</code> CR</strong> — syntax-highlighted, commented YAML showing
-  how little a tenant writes to get a fully isolated gateway. The "one CR does
-  all this" demo moment.</li>
+<li><strong>Landing page.</strong> Hero line + subhead, the one-command <code>helm install</code>, the four pillars as cards, and <em>one</em> hero stat that makes the value visceral — the listener-overhead delta (10 always-on listener pods for ARC vs 1 shared pod for GAG, at 10 runner groups), or a cost curve from <a href="../../design/appendix-f-cost-model/">appendix-f-cost-model.md</a>.
+  Footer CTAs.</li>
+<li><strong>Why GAG / vs ARC</strong> — the highest-leverage conversion page.
+  A clean comparison matrix (priority tiers / eviction retry / per-tenant egress / listener cost / scale-to-zero), each row linking to the design doc that backs the claim.
+  This is what gets pasted into a team's decision doc.
+  Relates to <a href="../../STATUS/">Q60</a> (competitive analysis) — keep the marketing comparison here and the rigorous analysis in <a href="../../design/appendix-d-alternatives-considered/">appendix-d</a>.</li>
+<li><strong>Architecture</strong> — convert the README's ASCII four-tier diagram to a rendered mermaid/SVG diagram (GMC → AGC → proxy → worker), each tier clickable into its design section.</li>
+<li><strong>Annotated <code>ActionsGateway</code> CR</strong> — syntax-highlighted, commented YAML showing how little a tenant writes to get a fully isolated gateway.
+  The "one CR does all this" demo moment.</li>
 </ul>
 <h2 id="brand--visual-identity">Brand / visual identity<a class="headerlink" href="#brand--visual-identity" title="Permanent link">&para;</a></h2>
-<p>Reuse <a href="../../assets/social-preview.svg"><code>docs/assets/social-preview.svg</code></a> as the
-design language — palette and mark — so the social/OG card, favicon, and header
-logo stay consistent. Infra-tool convention: clean, monospace accents for
-commands, a single accent color, generous whitespace, dark mode. Set the
-OG/Twitter card to the existing social preview so shared links look intentional.</p>
+<p>Reuse <a href="../../assets/social-preview.svg"><code>docs/assets/social-preview.svg</code></a> as the design language — palette and mark — so the social/OG card, favicon, and header logo stay consistent.
+Infra-tool convention: clean, monospace accents for commands, a single accent color, generous whitespace, dark mode.
+Set the OG/Twitter card to the existing social preview so shared links look intentional.</p>
 <h2 id="implementation-notes-shipped">Implementation notes (shipped)<a class="headerlink" href="#implementation-notes-shipped" title="Permanent link">&para;</a></h2>
-<p>The scaffold builds locally and in CI with <code>mkdocs build</code> on pinned
-<code>mkdocs==1.6.1</code> + <code>mkdocs-material==9.7.6</code> (Material 9.x caps <code>mkdocs &lt; 2</code>; the
-new MkDocs 2.0 is incompatible — pin exact until that settles). Specifics:</p>
+<p>The scaffold builds locally and in CI with <code>mkdocs build</code> on pinned <code>mkdocs==1.6.1</code> + <code>mkdocs-material==9.7.6</code> (Material 9.x caps <code>mkdocs &lt; 2</code>; the new MkDocs 2.0 is incompatible — pin exact until that settles).
+Specifics:</p>
 <ul>
-<li><strong>Heading slugs.</strong> <code>toc.slugify</code> is set to the GitHub-compatible
-  <code>pymdownx.slugs.slugify(case=lower)</code> so the in-repo docs' GitHub-style anchor
-  links resolve on the site too. This cleared the bulk of the anchor mismatches.</li>
-<li><strong>Known broken links on the site (build warnings, not errors).</strong> Two classes
-  remain and are deliberately deferred: (1) ~19 stale intra-doc anchors that are
-  also wrong on github.com (pre-existing doc bugs); (2) links from docs into
-  repo files outside <code>docs/</code> (<code>../charts/…</code>, <code>../../.github/…</code>, <code>cmd/…</code>) that
-  resolve on github.com but 404 on the standalone site. The build is <strong>not</strong>
-  <code>--strict</code>, so these warn without failing. Reconciling them — and then flipping
-  the CI build to <code>--strict</code> as a link gate — folds into <a href="../../STATUS/">Q52</a>
-  (markdown link + anchor CI gate). Do this as part of the pre-launch pass.</li>
-<li><strong>Launch procedure (gated on Q99).</strong> The <code>pages.yml</code> deploy job only runs on
-  <code>workflow_dispatch</code>; <code>pull_request</code>/<code>push</code> merely validate the build. To
-  launch: land Q99's claim fixes, reconcile the landing/comparison copy, enable
-  Pages (Settings → Pages → Source: GitHub Actions), then run the workflow.</li>
+<li><strong>Heading slugs.</strong> <code>toc.slugify</code> is set to the GitHub-compatible <code>pymdownx.slugs.slugify(case=lower)</code> so the in-repo docs' GitHub-style anchor links resolve on the site too.
+  This cleared the bulk of the anchor mismatches.</li>
+<li><strong>Known broken links on the site (build warnings, not errors).</strong> Two classes remain and are deliberately deferred: (1) ~19 stale intra-doc anchors that are also wrong on github.com (pre-existing doc bugs); (2) links from docs into repo files outside <code>docs/</code> (<code>../charts/…</code>, <code>../../.github/…</code>, <code>cmd/…</code>) that resolve on github.com but 404 on the standalone site.
+  The build is <strong>not</strong> <code>--strict</code>, so these warn without failing.
+  Reconciling them — and then flipping the CI build to <code>--strict</code> as a link gate — folds into <a href="../../STATUS/">Q52</a> (markdown link + anchor CI gate).
+  Do this as part of the pre-launch pass.</li>
+<li><strong>Launch procedure (gated on Q99).</strong> The <code>pages.yml</code> deploy job only runs on <code>workflow_dispatch</code>; <code>pull_request</code>/<code>push</code> merely validate the build.
+  To launch: land Q99's claim fixes, reconcile the landing/comparison copy, enable Pages (Settings → Pages → Source: GitHub Actions), then run the workflow.</li>
 </ul>
 <h2 id="maintaining-the-site">Maintaining the site<a class="headerlink" href="#maintaining-the-site" title="Permanent link">&para;</a></h2>
-<p>Durable maintenance conventions — the brand-asset generator, the
-progressive-enhancement JS, and the persona/audience two-places sync rule — live
-in <a href="../../development/website/"><code>docs/development/website.md</code></a>, deliberately kept
-out of this plan doc so they survive its eventual archival.</p>
+<p>Durable maintenance conventions — the brand-asset generator, the progressive-enhancement JS, and the persona/audience two-places sync rule — live in <a href="../../development/website/"><code>docs/development/website.md</code></a>, deliberately kept out of this plan doc so they survive its eventual archival.</p>
 <h2 id="build-phases">Build phases<a class="headerlink" href="#build-phases" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Add <code>mkdocs.yml</code> + the Material dependency; point <code>docs_dir</code> at the existing
-   <code>docs/</code> tree; wire a <code>pages.yml</code> GitHub Actions workflow that deploys to
-   GitHub Pages on push to <code>main</code>. Set <code>site_url</code> to the project-page URL.</li>
+<li>Add <code>mkdocs.yml</code> + the Material dependency; point <code>docs_dir</code> at the existing <code>docs/</code> tree; wire a <code>pages.yml</code> GitHub Actions workflow that deploys to GitHub Pages on push to <code>main</code>.
+   Set <code>site_url</code> to the project-page URL.</li>
 <li>Convert the ASCII diagrams in README/architecture to mermaid.</li>
-<li>Build the custom landing page (Material <code>home</code> override) from the approved
-   mockup.</li>
+<li>Build the custom landing page (Material <code>home</code> override) from the approved mockup.</li>
 <li>Add the "vs ARC" comparison page and the annotated CR example.</li>
 <li>Add the OG card + favicon from the existing social asset.</li>
 </ol>
 <h2 id="decided">Decided<a class="headerlink" href="#decided" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>No contributor docs / "Contributing" section on the site (for now).</strong>
-  <code>docs/development/*</code> stays GitHub-only. Publishing contributor docs implies
-  inviting contributions, which needs a secure intake flow first — AI review and
-  implementation, with possible human gating — and that is a separate, non-trivial
-  design we have not done. Revisit when (and if) that contribution flow is
-  designed; until then the public site stays evaluator-focused.</li>
+<li><strong>No contributor docs / "Contributing" section on the site (for now).</strong> <code>docs/development/*</code> stays GitHub-only.
+  Publishing contributor docs implies inviting contributions, which needs a secure intake flow first — AI review and implementation, with possible human gating — and that is a separate, non-trivial design we have not done.
+  Revisit when (and if) that contribution flow is designed; until then the public site stays evaluator-focused.</li>
 </ul>
 <h2 id="decided-sequencing">Decided (sequencing)<a class="headerlink" href="#decided-sequencing" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Build in parallel with <a href="../../STATUS/">Q99</a>; gate only the public launch.</strong>
-  The site work (scaffold, tooling, nav, diagram conversion, page structure) has
-  no dependency on Q99 and proceeds now. The rendered docs pages render <code>docs/</code>
-  source directly, so they inherit Q99's claim fixes automatically with no
-  site-side change. The only surface that <em>duplicates</em> the claims Q99 flags
-  ("thousands of sessions", egress-blocked) is the hand-authored landing + "vs
-  ARC" copy — reconcile that against the corrected source as a final pass before
-  flipping Pages public / announcing. So Q99 gates the launch, not the work.</li>
+<li><strong>Build in parallel with <a href="../../STATUS/">Q99</a>; gate only the public launch.</strong> The site work (scaffold, tooling, nav, diagram conversion, page structure) has no dependency on Q99 and proceeds now.
+  The rendered docs pages render <code>docs/</code> source directly, so they inherit Q99's claim fixes automatically with no site-side change.
+  The only surface that <em>duplicates</em> the claims Q99 flags ("thousands of sessions", egress-blocked) is the hand-authored landing + "vs ARC" copy — reconcile that against the corrected source as a final pass before flipping Pages public / announcing.
+  So Q99 gates the launch, not the work.</li>
 </ul>
 <h2 id="open-decisions">Open decisions<a class="headerlink" href="#open-decisions" title="Permanent link">&para;</a></h2>
 <ul>
-<li>~~<strong>Pre-1.0 maturity banner.</strong>~~ <strong>Resolved:</strong> the alpha banner ran until 1.0;
-  on the GA launch (2026-06-16) it was replaced with a "v1.0.0 is here" notice
-  that still links the Q99 capacity caveat (<code>overrides/main.html</code>).</li>
-<li><strong>Analytics.</strong> <em>Lean:</em> none for v1 (avoids a privacy/consent surface); add
-  later if traffic matters.</li>
+<li>~~<strong>Pre-1.0 maturity banner.</strong>~~ <strong>Resolved:</strong> the alpha banner ran until 1.0; on the GA launch (2026-06-16) it was replaced with a "v1.0.0 is here" notice that still links the Q99 capacity caveat (<code>overrides/main.html</code>).</li>
+<li><strong>Analytics.</strong> <em>Lean:</em> none for v1 (avoids a privacy/consent surface); add later if traffic matters.</li>
 </ul>
 <h2 id="out-of-scope-defer">Out of scope (defer)<a class="headerlink" href="#out-of-scope-defer" title="Permanent link">&para;</a></h2>
-<p>Interactive cost calculator, versioned docs via <code>mike</code> (revisit when 1.0 is
-cut — see <a href="../release-1.0/">release-1.0.md</a>), and an architecture explainer
-animation are stretch ideas, parked in
-<a href="../../design/appendix-g-future-enhancements/">Appendix G</a> territory rather than
-this first build.</p>
+<p>Interactive cost calculator, versioned docs via <code>mike</code> (revisit when 1.0 is cut — see <a href="../release-1.0/">release-1.0.md</a>), and an architecture explainer animation are stretch ideas, parked in <a href="../../design/appendix-g-future-enhancements/">Appendix G</a> territory rather than this first build.</p>
 
 
 

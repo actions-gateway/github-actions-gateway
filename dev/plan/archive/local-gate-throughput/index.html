@@ -2859,21 +2859,13 @@
 
 
 <h1 id="local-make-check-throughput">Local <code>make check</code> throughput<a class="headerlink" href="#local-make-check-throughput" title="Permanent link">&para;</a></h1>
-<p><strong>Problem.</strong> <code>make check</code> is the one-command pre-review gate every session runs
-before opening a PR. On a small dev machine it costs ~21 minutes on a fresh
-worktree, and because the heavy phases hold a machine-wide <em>exclusive</em> lock, a
-second session cannot start its gate until the first finishes. With half a dozen
-parallel worktree sessions the gate, not the work, sets the pace — observed
-waits up to 5 h (Q376).</p>
-<p><strong>Goal.</strong> Cut both the cost of one run and the queue depth across concurrent
-runs, without weakening any gate and without regressing the desktop-safety
-properties the throttle exists to protect.</p>
+<p><strong>Problem.</strong> <code>make check</code> is the one-command pre-review gate every session runs before opening a PR.
+On a small dev machine it costs ~21 minutes on a fresh worktree, and because the heavy phases hold a machine-wide <em>exclusive</em> lock, a second session cannot start its gate until the first finishes.
+With half a dozen parallel worktree sessions the gate, not the work, sets the pace — observed waits up to 5 h (Q376).</p>
+<p><strong>Goal.</strong> Cut both the cost of one run and the queue depth across concurrent runs, without weakening any gate and without regressing the desktop-safety properties the throttle exists to protect.</p>
 <h2 id="baseline-measurement-2026-07-26">Baseline measurement (2026-07-26)<a class="headerlink" href="#baseline-measurement-2026-07-26" title="Permanent link">&para;</a></h2>
-<p>Machine: MacBook Pro, Intel i7-1068NG7, <strong>4 physical / 8 logical cores</strong>, 32 GB.
-<code>scripts/agent/local-throttle.sh</code> sizes parallelism at <code>physical - 2 = 2</code>, so one run
-uses ~2 of 8 hardware threads at <code>utility</code> QoS while holding the exclusive lock.</p>
-<p>Every <code>make check</code> prerequisite, timed individually, in a worktree checked out at
-<code>origin/main</code> with no local diff:</p>
+<p>Machine: MacBook Pro, Intel i7-1068NG7, <strong>4 physical / 8 logical cores</strong>, 32 GB. <code>scripts/agent/local-throttle.sh</code> sizes parallelism at <code>physical - 2 = 2</code>, so one run uses ~2 of 8 hardware threads at <code>utility</code> QoS while holding the exclusive lock.</p>
+<p>Every <code>make check</code> prerequisite, timed individually, in a worktree checked out at <code>origin/main</code> with no local diff:</p>
 <table>
 <thead>
 <tr>
@@ -2917,18 +2909,13 @@ uses ~2 of 8 hardware threads at <code>utility</code> QoS while holding the excl
 </table>
 <p>Two facts follow:</p>
 <ol>
-<li><strong><code>cover-check</code> is the gate.</strong> Everything else together is under 2.5 minutes
-   even cold.</li>
-<li><strong>The 13× cold/warm gap is cache residency, not test cost.</strong> Go's test-result
-   cache works fine — a second run in the same worktree replays it. The problem
-   is that a <em>new</em> worktree never inherits it.</li>
+<li><strong><code>cover-check</code> is the gate.</strong> Everything else together is under 2.5 minutes even cold.</li>
+<li><strong>The 13× cold/warm gap is cache residency, not test cost.</strong> Go's test-result cache works fine — a second run in the same worktree replays it.
+   The problem is that a <em>new</em> worktree never inherits it.</li>
 </ol>
 <h3 id="re-baseline-on-the-m5-max-2026-08-01">Re-baseline on the M5 Max (2026-08-01)<a class="headerlink" href="#re-baseline-on-the-m5-max-2026-08-01" title="Permanent link">&para;</a></h3>
-<p>The <code>~21 min</code> above is this document's most-cited number and it belongs to the
-Intel machine. On the replacement dev machine — Apple M5 Max, <strong>18 physical
-cores, 128 GB</strong> — one <code>make check</code> against an empty private <code>GOCACHE</code>, as the
-sole slot holder (no <code>heavy-build slot</code> waits in the log), exit 0 with every
-coverage floor green:</p>
+<p>The <code>~21 min</code> above is this document's most-cited number and it belongs to the Intel machine.
+On the replacement dev machine — Apple M5 Max, <strong>18 physical cores, 128 GB</strong> — one <code>make check</code> against an empty private <code>GOCACHE</code>, as the sole slot holder (no <code>heavy-build slot</code> waits in the log), exit 0 with every coverage floor green:</p>
 <table>
 <thead>
 <tr>
@@ -2950,9 +2937,7 @@ coverage floor green:</p>
 </tr>
 </tbody>
 </table>
-<p>The gap is an order of magnitude, so <strong>any wall-clock argument in this repo has
-to name its machine.</strong> <code>vendor/</code> was already on disk for the M5 Max run, making
-it a cold <em>build</em> cache rather than a cold worktree.</p>
+<p>The gap is an order of magnitude, so <strong>any wall-clock argument in this repo has to name its machine.</strong> <code>vendor/</code> was already on disk for the M5 Max run, making it a cold <em>build</em> cache rather than a cold worktree.</p>
 <p>Memory, sampled every 2 s across the same run:</p>
 <table>
 <thead>
@@ -2980,20 +2965,12 @@ it a cold <em>build</em> cache rather than a cold worktree.</p>
 </tr>
 </tbody>
 </table>
-<p>The peak-RSS figure is what sizes <code>local-throttle.sh workers</code>: it is charged once
-per heavy-build <em>slot</em> rather than per dispatch worker, because the slot
-semaphore bounds concurrent gates however many workers exist. With a worker
-session measured at 0.43 GB mean / 0.60 GB peak resident, RAM does not bind
-dispatch concurrency on this class of machine at any number worth running —
-128 GB leaves room for ~138 sessions past a desktop reserve and two gate holders.
+<p>The peak-RSS figure is what sizes <code>local-throttle.sh workers</code>: it is charged once per heavy-build <em>slot</em> rather than per dispatch worker, because the slot semaphore bounds concurrent gates however many workers exist.
+With a worker session measured at 0.43 GB mean / 0.60 GB peak resident, RAM does not bind dispatch concurrency on this class of machine at any number worth running — 128 GB leaves room for ~138 sessions past a desktop reserve and two gate holders.
 See <a href="../../../development/parallel-dispatch/#concurrency-and-contention">parallel-dispatch.md § Concurrency and contention</a>.</p>
 <h2 id="finding--trimpath-makes-the-test-result-cache-path-independent">Finding: <code>-trimpath</code> makes the test-result cache path-independent<a class="headerlink" href="#finding--trimpath-makes-the-test-result-cache-path-independent" title="Permanent link">&para;</a></h2>
-<p><a href="../../../development/testing/#build-and-lint-caches-across-worktrees">testing.md § Build and lint caches across worktrees</a>
-(Q343) recorded that the <code>go test</code> result cache is path-keyed and concluded
-"there is no supported knob to share test <em>results</em> across paths". That
-conclusion was measured at the default flags and is wrong once <code>-trimpath</code> is in
-play: the flag removes the absolute worktree path from the test binary, so the
-cache key becomes identical across checkouts of the same content.</p>
+<p><a href="../../../development/testing/#build-and-lint-caches-across-worktrees">testing.md § Build and lint caches across worktrees</a> (Q343) recorded that the <code>go test</code> result cache is path-keyed and concluded "there is no supported knob to share test <em>results</em> across paths".
+That conclusion was measured at the default flags and is wrong once <code>-trimpath</code> is in play: the flag removes the absolute worktree path from the test binary, so the cache key becomes identical across checkouts of the same content.</p>
 <p>Measured, <code>cmd/agc</code> with <code>-coverprofile</code>:</p>
 <table>
 <thead>
@@ -3019,57 +2996,32 @@ cache key becomes identical across checkouts of the same content.</p>
 </tr>
 </tbody>
 </table>
-<p>The cached run emits a byte-identical coverage profile, so the ratchet is
-unaffected. <code>broker</code> reproduces the same result: without <code>-trimpath</code> worktree B
-re-runs the suite; with it, B prints <code>(cached)</code> on its first invocation.</p>
-<p><strong><code>-trimpath</code> must not be set globally</strong> (<code>go env -w GOFLAGS</code>, or the e2e
-targets): <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>cmd/gmc/test/e2e/e2e_suite_test.go</code></a>
-resolves the v2 CRD chart directory from <code>runtime.Caller(0)</code>, which returns a
-trimmed, non-existent path under the flag. It is applied in the unit-tier
-scripts only (<code>scripts/go/go-test.sh</code>, <code>scripts/go/coverage.sh</code>), which the e2e and
-integration tiers do not use. The release images already build with <code>-trimpath</code>
-(<code>cmd/*/Dockerfile</code>), so the flag is not new to the repo.</p>
+<p>The cached run emits a byte-identical coverage profile, so the ratchet is unaffected. <code>broker</code> reproduces the same result: without <code>-trimpath</code> worktree B re-runs the suite; with it, B prints <code>(cached)</code> on its first invocation.</p>
+<p><strong><code>-trimpath</code> must not be set globally</strong> (<code>go env -w GOFLAGS</code>, or the e2e targets): <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>cmd/gmc/test/e2e/e2e_suite_test.go</code></a> resolves the v2 CRD chart directory from <code>runtime.Caller(0)</code>, which returns a trimmed, non-existent path under the flag.
+It is applied in the unit-tier scripts only (<code>scripts/go/go-test.sh</code>, <code>scripts/go/coverage.sh</code>), which the e2e and integration tiers do not use.
+The release images already build with <code>-trimpath</code> (<code>cmd/*/Dockerfile</code>), so the flag is not new to the repo.</p>
 <h2 id="changes">Changes<a class="headerlink" href="#changes" title="Permanent link">&para;</a></h2>
 <h3 id="1--trimpath-in-the-unit-tier-">1. <code>-trimpath</code> in the unit tier ✓<a class="headerlink" href="#1--trimpath-in-the-unit-tier-" title="Permanent link">&para;</a></h3>
-<p><code>scripts/go/go-test.sh</code> (backing <code>make test</code> and <code>make test-race</code>) and
-<code>scripts/go/coverage.sh</code> (backing <code>make cover*</code>) pass <code>-trimpath</code>. A fresh worktree
-at an already-tested commit pays ~0 for the unit suite instead of ~19 min; only
-the packages whose content actually changed re-run.</p>
-<p>This retires Q377's <em>original</em> framing (change-scope <code>make test</code>/coverage to
-affected modules): content-keyed caching skips unchanged modules <em>soundly</em>,
-where scoping has to reason about which module a diff can affect and leaves the
-unscoped modules' coverage floors ungated. What remained of Q377 — the coverage
-tier's shape — is <a href="#change-6-the-coverage-loop-adopts-make-tests-shape--q377">change 6</a>.</p>
+<p><code>scripts/go/go-test.sh</code> (backing <code>make test</code> and <code>make test-race</code>) and <code>scripts/go/coverage.sh</code> (backing <code>make cover*</code>) pass <code>-trimpath</code>.
+A fresh worktree at an already-tested commit pays ~0 for the unit suite instead of ~19 min; only the packages whose content actually changed re-run.</p>
+<p>This retires Q377's <em>original</em> framing (change-scope <code>make test</code>/coverage to affected modules): content-keyed caching skips unchanged modules <em>soundly</em>, where scoping has to reason about which module a diff can affect and leaves the unscoped modules' coverage floors ungated.
+What remained of Q377 — the coverage tier's shape — is <a href="#change-6-the-coverage-loop-adopts-make-tests-shape--q377">change 6</a>.</p>
 <h3 id="2-heavy-build-lock-becomes-an-n-slot-semaphore-">2. Heavy-build lock becomes an N-slot semaphore ✓<a class="headerlink" href="#2-heavy-build-lock-becomes-an-n-slot-semaphore-" title="Permanent link">&para;</a></h3>
-<p><code>serialize_heavy_build</code> held one exclusive lock, so exactly one session could run
-a heavy phase at a time — using <code>physical - 2</code> of the machine's threads while
-every sibling blocked. It now acquires one of <strong>N</strong> slots (default 2 on a machine
-with ≥ 4 physical cores, 1 below that; override with <code>GAG_HEAVY_BUILD_SLOTS</code>).</p>
-<p>Two holders at <code>jobs = physical - 2</code> each can oversubscribe the physical cores —
-deliberately. The desktop-safety property the throttle defends is the QoS
-demotion (CPU <strong>and</strong> I/O below the compositor), which every holder still
-carries; the parallelism cap is a secondary bound. Trading a bounded
-oversubscription for halved queue depth is the right side of that trade on a
-machine running several sessions, and the env override exists for anyone who
-wants the old strict serialization (<code>GAG_HEAVY_BUILD_SLOTS=1</code>).</p>
+<p><code>serialize_heavy_build</code> held one exclusive lock, so exactly one session could run a heavy phase at a time — using <code>physical - 2</code> of the machine's threads while every sibling blocked.
+It now acquires one of <strong>N</strong> slots (default 2 on a machine with ≥ 4 physical cores, 1 below that; override with <code>GAG_HEAVY_BUILD_SLOTS</code>).</p>
+<p>Two holders at <code>jobs = physical - 2</code> each can oversubscribe the physical cores — deliberately.
+The desktop-safety property the throttle defends is the QoS demotion (CPU <strong>and</strong> I/O below the compositor), which every holder still carries; the parallelism cap is a secondary bound.
+Trading a bounded oversubscription for halved queue depth is the right side of that trade on a machine running several sessions, and the env override exists for anyone who wants the old strict serialization (<code>GAG_HEAVY_BUILD_SLOTS=1</code>).</p>
 <h3 id="3-the-cheap-gates-run-in-parallel-">3. The cheap gates run in parallel ✓<a class="headerlink" href="#3-the-cheap-gates-run-in-parallel-" title="Permanent link">&para;</a></h3>
 <p>The 14 non-heavy <code>check</code> gates took no lock and ran strictly serially (~50 s).
-They now run through <code>scripts/ci/run-parallel.sh</code> (labeled, attributable output —
-GNU make 3.81 ships on macOS and has no <code>-O</code> output sync, so <code>make -j</code> would
-interleave failures unreadably). <code>scripts-test</code>'s 11 assertion scripts are
-parallelized the same way.</p>
+They now run through <code>scripts/ci/run-parallel.sh</code> (labeled, attributable output — GNU make 3.81 ships on macOS and has no <code>-O</code> output sync, so <code>make -j</code> would interleave failures unreadably). <code>scripts-test</code>'s 11 assertion scripts are parallelized the same way.</p>
 <h2 id="finding-the-qos-clamp-not-the-parallelism-knobs-sets-the-local-ceiling">Finding: the QoS clamp, not the parallelism knobs, sets the local ceiling<a class="headerlink" href="#finding-the-qos-clamp-not-the-parallelism-knobs-sets-the-local-ceiling" title="Permanent link">&para;</a></h2>
-<p>Measured 2026-07-26 on the replacement dev machine: Apple M5 Max, <strong>18 physical /
-18 logical cores</strong> (performance levels "Super" ×6 and "Performance" ×12), 128 GB.
-There <code>local-throttle.sh</code> sizes <code>jobs</code> at <code>physical - 2 = 16</code>, and <code>slots</code> stays
-at its hardcoded default of 2.</p>
-<p>The question was how far to raise those two numbers. Neither is the binding
-constraint.</p>
+<p>Measured 2026-07-26 on the replacement dev machine: Apple M5 Max, <strong>18 physical / 18 logical cores</strong> (performance levels "Super" ×6 and "Performance" ×12), 128 GB.
+There <code>local-throttle.sh</code> sizes <code>jobs</code> at <code>physical - 2 = 16</code>, and <code>slots</code> stays at its hardcoded default of 2.</p>
+<p>The question was how far to raise those two numbers.
+Neither is the binding constraint.</p>
 <h3 id="step-1--what-each-prefix-can-reach">Step 1 — what each prefix can reach<a class="headerlink" href="#step-1--what-each-prefix-can-reach" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/qos-cluster-probe.sh"><code>scripts/agent/qos-cluster-probe.sh</code></a> saturates one
-thread per logical CPU under a candidate prefix and samples per-cluster HW active
-residency and clock with <code>powermetrics</code>, reporting effective compute as
-<code>sum(residency × cores × clock)</code>:</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/qos-cluster-probe.sh"><code>scripts/agent/qos-cluster-probe.sh</code></a> saturates one thread per logical CPU under a candidate prefix and samples per-cluster HW active residency and clock with <code>powermetrics</code>, reporting effective compute as <code>sum(residency × cores × clock)</code>:</p>
 <table>
 <thead>
 <tr>
@@ -3112,42 +3064,25 @@ residency and clock with <code>powermetrics</code>, reporting effective compute 
 </tr>
 </tbody>
 </table>
-<p>Under <code>-c utility</code> every spin thread lands on a <strong>single 6-core performance
-cluster</strong> pinned to ~2.65 GHz against a 4.38 GHz ceiling. Two runs pegged
-<em>different</em> clusters (P1, then P0) and neither touched the Super cluster, ruling
-out incidental scheduler packing.</p>
-<p><code>-c</code> is a <em>clamp</em>: it only ratchets QoS down, so there is no higher tier to
-select. The alternative is <code>taskpolicy -d throttle</code>, which sets the disk I/O
-policy (<code>IOPOL_TYPE_DISK</code>) <strong>without</strong> a QoS clamp — preserving the property this
-design calls load-bearing, the I/O demotion <code>nice</code> cannot express on macOS, while
-returning the idle cores.</p>
-<p><strong>This table measures synthetic spin threads and overstates the confinement.</strong>
-Real compile workloads spill across clusters: under the cold-cache lint below,
-<code>-c utility</code> reaches 37–39% mean CPU, not 21%. Treat 21% as the floor for
-pure-CPU synthetic load, not as the ceiling for real builds.</p>
+<p>Under <code>-c utility</code> every spin thread lands on a <strong>single 6-core performance cluster</strong> pinned to ~2.65 GHz against a 4.38 GHz ceiling.
+Two runs pegged <em>different</em> clusters (P1, then P0) and neither touched the Super cluster, ruling out incidental scheduler packing.</p>
+<p><code>-c</code> is a <em>clamp</em>: it only ratchets QoS down, so there is no higher tier to select.
+The alternative is <code>taskpolicy -d throttle</code>, which sets the disk I/O policy (<code>IOPOL_TYPE_DISK</code>) <strong>without</strong> a QoS clamp — preserving the property this design calls load-bearing, the I/O demotion <code>nice</code> cannot express on macOS, while returning the idle cores.</p>
+<p><strong>This table measures synthetic spin threads and overstates the confinement.</strong> Real compile workloads spill across clusters: under the cold-cache lint below, <code>-c utility</code> reaches 37–39% mean CPU, not 21%.
+Treat 21% as the floor for pure-CPU synthetic load, not as the ceiling for real builds.</p>
 <h3 id="step-2--what-it-costs-the-desktop-under-a-real-build">Step 2 — what it costs the desktop, under a real build<a class="headerlink" href="#step-2--what-it-costs-the-desktop-under-a-real-build" title="Permanent link">&para;</a></h3>
-<p>Spin threads generate no I/O, no memory pressure, and no process churn, so the
-sweep cannot show whether a faster prefix keeps the desktop responsive — and
-<code>-d throttle</code> gives up CPU priority, which is the protection being traded.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/validate-throttle.sh"><code>scripts/agent/validate-throttle.sh</code></a> runs a real
-gate phase under each candidate while <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/uijitter.c"><code>scripts/agent/uijitter.c</code></a>
-samples scheduling latency at <code>QOS_CLASS_USER_INTERACTIVE</code>, where the compositor
-runs. Idle floor on this machine: p50 2.9 ms, p99 4.1 ms.</p>
-<p><strong>Picking a workload that can discriminate took three attempts, and the two
-failures are the reusable lesson.</strong> <code>cmd/agc</code> tests alone: all three candidates
-at an identical 14 s, jitter at the idle floor. The full workspace <code>-race</code> tier:
-all three at an identical 42 s and only 12–14% mean CPU — about 2.3 of 18 cores.
-Neither had loaded the machine, so neither could separate the candidates, yet
-both read as a clean bill of health. The harness now samples CPU busy% and marks
-a trial INVALID when no candidate reaches 50%.</p>
+<p>Spin threads generate no I/O, no memory pressure, and no process churn, so the sweep cannot show whether a faster prefix keeps the desktop responsive — and <code>-d throttle</code> gives up CPU priority, which is the protection being traded.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/validate-throttle.sh"><code>scripts/agent/validate-throttle.sh</code></a> runs a real gate phase under each candidate while <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/uijitter.c"><code>scripts/agent/uijitter.c</code></a> samples scheduling latency at <code>QOS_CLASS_USER_INTERACTIVE</code>, where the compositor runs.
+Idle floor on this machine: p50 2.9 ms, p99 4.1 ms.</p>
+<p><strong>Picking a workload that can discriminate took three attempts, and the two failures are the reusable lesson.</strong> <code>cmd/agc</code> tests alone: all three candidates at an identical 14 s, jitter at the idle floor.
+The full workspace <code>-race</code> tier: all three at an identical 42 s and only 12–14% mean CPU — about 2.3 of 18 cores.
+Neither had loaded the machine, so neither could separate the candidates, yet both read as a clean bill of health.
+The harness now samples CPU busy% and marks a trial INVALID when no candidate reaches 50%.</p>
 <p>Two corollaries worth keeping:</p>
 <ul>
 <li><strong><code>-race</code> is not the heavy tier here</strong> and is not part of <code>make check</code> at all.
-  The cost sits in lint and coverage, and <code>golangci-lint</code> is the component that
-  saturates — it fans out one worker per logical CPU and ignores <code>GOMAXPROCS</code>.</li>
-<li><strong><code>GOCACHE</code> is the load-bearing cache, not <code>GOLANGCI_LINT_CACHE</code>.</strong> Busting
-  only the latter leaves the linter reading type information from the warm Go
-  build cache, and a whole module then lints in ~1 s.</li>
+  The cost sits in lint and coverage, and <code>golangci-lint</code> is the component that saturates — it fans out one worker per logical CPU and ignores <code>GOMAXPROCS</code>.</li>
+<li><strong><code>GOCACHE</code> is the load-bearing cache, not <code>GOLANGCI_LINT_CACHE</code>.</strong> Busting only the latter leaves the linter reading type information from the warm Go build cache, and a whole module then lints in ~1 s.</li>
 </ul>
 <p>Cold-cache <code>golangci-lint</code> on <code>cmd/agc</code>, three trials, candidates interleaved:</p>
 <table>
@@ -3196,39 +3131,24 @@ a trial INVALID when no candidate reaches 50%.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>3.6× on the phase that actually costs, for ~1.4 ms of added p99 latency.</strong> The
-worst single wake was 12.1 ms — inside one 60 Hz frame — with no stutter events
-past 50 ms, no swapins, and no WindowServer reports in any of the nine runs.</p>
-<p><code>nice -n 10 taskpolicy -d throttle</code> was faster in all three trials <em>and</em> lower on
-p99 in all three, so there is no speed-versus-safety trade to adjudicate: the
-variant that keeps a CPU-priority demotion is also the quicker one.</p>
+<p><strong>3.6× on the phase that actually costs, for ~1.4 ms of added p99 latency.</strong> The worst single wake was 12.1 ms — inside one 60 Hz frame — with no stutter events past 50 ms, no swapins, and no WindowServer reports in any of the nine runs.</p>
+<p><code>nice -n 10 taskpolicy -d throttle</code> was faster in all three trials <em>and</em> lower on p99 in all three, so there is no speed-versus-safety trade to adjudicate: the variant that keeps a CPU-priority demotion is also the quicker one.</p>
 <h3 id="what-this-means-for-the-two-knobs">What this means for the two knobs<a class="headerlink" href="#what-this-means-for-the-two-knobs" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong><code>slots</code> was never adding hardware.</strong> Every holder's heavy phases share the
-   clamped band, so raising it divides a fixed ceiling rather than lifting it.</li>
-<li><strong><code>jobs = 16</code> was fictional</strong> against a 6-core confinement — 2.7×
-   oversubscription costing memory and context switches for no throughput.</li>
+<li><strong><code>slots</code> was never adding hardware.</strong> Every holder's heavy phases share the clamped band, so raising it divides a fixed ceiling rather than lifting it.</li>
+<li><strong><code>jobs = 16</code> was fictional</strong> against a 6-core confinement — 2.7× oversubscription costing memory and context switches for no throughput.</li>
 <li><strong>The prefix is the lever</strong>, worth 3.6× measured end to end.</li>
 </ol>
-<p>Both knobs should be re-derived <em>after</em> the prefix changes, against the ceiling
-that then exists. Done below.</p>
+<p>Both knobs should be re-derived <em>after</em> the prefix changes, against the ceiling that then exists.
+Done below.</p>
 <h2 id="change-4-the-prefix-switches-and-the-two-knobs-are-re-derived-">Change 4: the prefix switches, and the two knobs are re-derived ✓<a class="headerlink" href="#change-4-the-prefix-switches-and-the-two-knobs-are-re-derived-" title="Permanent link">&para;</a></h2>
-<p>The macOS prefix is now <code>nice -n 10 taskpolicy -d throttle</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh"><code>scripts/agent/local-throttle.sh</code></a>), on the evidence
-above. Linux is untouched — <code>nice -n 19</code> + <code>ionice -c 3</code> already expresses the
-two demotions separately, which is exactly what macOS was missing.</p>
+<p>The macOS prefix is now <code>nice -n 10 taskpolicy -d throttle</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh"><code>scripts/agent/local-throttle.sh</code></a>), on the evidence above.
+Linux is untouched — <code>nice -n 19</code> + <code>ionice -c 3</code> already expresses the two demotions separately, which is exactly what macOS was missing.</p>
 <p>With the ceiling lifted, both parallelism knobs were re-measured against it.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/validate-throttle.sh"><code>scripts/agent/validate-throttle.sh</code></a> grew the two
-axes needed for that: <code>GAG_THROTTLE_CANDIDATES</code> entries take <code>|jobs=N</code> (so a
-parallelism sweep interleaves within a trial, and thermal drift hits every level
-equally) and <code>|holders=M</code> (M copies run concurrently, as M sessions holding M
-semaphore slots would). A <code>test</code> workload was added alongside <code>lint</code>, because
-<code>jobs</code> is spent in two different places — <code>golangci-lint -j</code> in
-<code>scripts/go/go-lint.sh</code>, <code>go test -p</code> plus <code>GOMAXPROCS</code> in <code>scripts/go/go-test.sh</code> and
-<code>scripts/go/coverage.sh</code> — and a lint-only sweep cannot speak for the other.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/validate-throttle.sh"><code>scripts/agent/validate-throttle.sh</code></a> grew the two axes needed for that: <code>GAG_THROTTLE_CANDIDATES</code> entries take <code>|jobs=N</code> (so a parallelism sweep interleaves within a trial, and thermal drift hits every level equally) and <code>|holders=M</code> (M copies run concurrently, as M sessions holding M semaphore slots would).
+A <code>test</code> workload was added alongside <code>lint</code>, because <code>jobs</code> is spent in two different places — <code>golangci-lint -j</code> in <code>scripts/go/go-lint.sh</code>, <code>go test -p</code> plus <code>GOMAXPROCS</code> in <code>scripts/go/go-test.sh</code> and <code>scripts/go/coverage.sh</code> — and a lint-only sweep cannot speak for the other.</p>
 <h3 id="jobs-not-a-lever-for-lint-at-any-level-from-8-to-24"><code>jobs</code>: not a lever for lint at any level from 8 to 24<a class="headerlink" href="#jobs-not-a-lever-for-lint-at-any-level-from-8-to-24" title="Permanent link">&para;</a></h3>
-<p>Cold-cache <code>golangci-lint</code> on <code>cmd/agc</code> under the new prefix, 3 interleaved
-trials (wall seconds per trial, then the jitter range across all three):</p>
+<p>Cold-cache <code>golangci-lint</code> on <code>cmd/agc</code> under the new prefix, 3 interleaved trials (wall seconds per trial, then the jitter range across all three):</p>
 <table>
 <thead>
 <tr>
@@ -3295,43 +3215,21 @@ trials (wall seconds per trial, then the jitter range across all three):</p>
 </tr>
 </tbody>
 </table>
-<p>Every level lands in 18–23 s. <strong>The spread <em>within</em> one level (16: 18→23 s) is
-wider than the spread between the extremes</strong>, so there is no signal here to fit a
-curve to — <code>jobs</code> is simply not what bounds a per-module lint on this machine.
-Two things follow, and they point in opposite directions from the ones the
-section above anticipated:</p>
+<p>Every level lands in 18–23 s. <strong>The spread <em>within</em> one level (16: 18→23 s) is wider than the spread between the extremes</strong>, so there is no signal here to fit a curve to — <code>jobs</code> is simply not what bounds a per-module lint on this machine.
+Two things follow, and they point in opposite directions from the ones the section above anticipated:</p>
 <ul>
-<li>Raising it buys nothing. <code>go-lint.sh</code> lints modules <strong>serially</strong>, one
-  <code>golangci-lint -j jobs</code> per module, and a single module's lint stops scaling
-  below 8. CPU% climbs with <code>jobs</code> (59 % → 80 %) while wall time does not — that
-  is the oversubscription cost showing up with no throughput to pay for it.</li>
-<li>Lowering it costs nothing <em>here</em>, but <code>jobs</code> is not lint's alone (see the unit
-  tier below), so a cut would have to be justified against that consumer too.</li>
+<li>Raising it buys nothing. <code>go-lint.sh</code> lints modules <strong>serially</strong>, one <code>golangci-lint -j jobs</code> per module, and a single module's lint stops scaling below 8.
+  CPU% climbs with <code>jobs</code> (59 % → 80 %) while wall time does not — that is the oversubscription cost showing up with no throughput to pay for it.</li>
+<li>Lowering it costs nothing <em>here</em>, but <code>jobs</code> is not lint's alone (see the unit tier below), so a cut would have to be justified against that consumer too.</li>
 </ul>
-<p>Desktop cost is flat as well, and stays close to the idle floor (p50 3.16 ms,
-p99 4.17 ms) at every level: worst p99 7.29 ms, worst single wake 12.2 ms — still
-inside one 60 Hz frame — with zero stutter events past 50 ms, zero swapins and
-zero WindowServer reports in all 15 runs, including the 1.33× oversubscribed
-<code>jobs=24</code>.</p>
+<p>Desktop cost is flat as well, and stays close to the idle floor (p50 3.16 ms, p99 4.17 ms) at every level: worst p99 7.29 ms, worst single wake 12.2 ms — still inside one 60 Hz frame — with zero stutter events past 50 ms, zero swapins and zero WindowServer reports in all 15 runs, including the 1.33× oversubscribed <code>jobs=24</code>.</p>
 <h3 id="the-unit-tier-had-to-go-cold-too--the-fourth-null">The unit tier had to go cold too — the fourth null<a class="headerlink" href="#the-unit-tier-had-to-go-cold-too--the-fourth-null" title="Permanent link">&para;</a></h3>
-<p>The first attempt at the <code>test</code> workload kept the build cache <strong>warm</strong> and used
-<code>-count=1</code>, on the theory that this isolates <code>go test -p</code> from a compile storm.
-It reproduced the harness's signature failure exactly: 46/40/40/40 s at
-<code>jobs=4/8/16/24</code> and 18–36 % mean CPU, correctly marked <code>INVALID</code>. With the build
-cache warm, <code>-count=1</code> defeats only the <em>result</em> cache, so what remains is test
-execution — a handful of suites waiting on timers and envtest, which no amount of
-<code>-p</code> makes faster.</p>
-<p>That is now <strong>four</strong> undersized workloads across this investigation (<code>cmd/agc</code>
-alone, the warm <code>-race</code> tier, the warm unit tier, and — from the other
-direction — a <code>GOLANGCI_LINT_CACHE</code>-only bust). Every one of them returned
-identical numbers for every candidate and would have read as "the knob doesn't
-matter" without the saturation guard. <strong>The generalization: on this repo, warm
-caches make every tier execution-bound and unable to discriminate; <code>GOCACHE</code> is
-what has to be cold for a parallelism knob to show a curve at all.</strong> <code>run_test</code>
-therefore busts <code>GOCACHE</code> per run like <code>run_lint</code> does, which is also the regime
-that matters — a fresh worktree is exactly when the local gate is expensive.</p>
-<p>Cold, the unit tier does saturate (55–74 % CPU, <code>VALID</code>) and answers the other
-half of the <code>jobs</code> question — full workspace, <code>-count=1</code>, 2 interleaved trials:</p>
+<p>The first attempt at the <code>test</code> workload kept the build cache <strong>warm</strong> and used <code>-count=1</code>, on the theory that this isolates <code>go test -p</code> from a compile storm.
+It reproduced the harness's signature failure exactly: 46/40/40/40 s at <code>jobs=4/8/16/24</code> and 18–36 % mean CPU, correctly marked <code>INVALID</code>.
+With the build cache warm, <code>-count=1</code> defeats only the <em>result</em> cache, so what remains is test execution — a handful of suites waiting on timers and envtest, which no amount of <code>-p</code> makes faster.</p>
+<p>That is now <strong>four</strong> undersized workloads across this investigation (<code>cmd/agc</code> alone, the warm <code>-race</code> tier, the warm unit tier, and — from the other direction — a <code>GOLANGCI_LINT_CACHE</code>-only bust).
+Every one of them returned identical numbers for every candidate and would have read as "the knob doesn't matter" without the saturation guard. <strong>The generalization: on this repo, warm caches make every tier execution-bound and unable to discriminate; <code>GOCACHE</code> is what has to be cold for a parallelism knob to show a curve at all.</strong> <code>run_test</code> therefore busts <code>GOCACHE</code> per run like <code>run_lint</code> does, which is also the regime that matters — a fresh worktree is exactly when the local gate is expensive.</p>
+<p>Cold, the unit tier does saturate (55–74 % CPU, <code>VALID</code>) and answers the other half of the <code>jobs</code> question — full workspace, <code>-count=1</code>, 2 interleaved trials:</p>
 <table>
 <thead>
 <tr>
@@ -3378,28 +3276,18 @@ half of the <code>jobs</code> question — full workspace, <code>-count=1</code>
 </tr>
 </tbody>
 </table>
-<p>The trend is mildly <em>negative</em>: more parallelism is very slightly slower, which
-is the oversubscription cost again. But the whole range spans 57–66 s against a
-4–5 s within-level spread, so this is a weak signal at best — and it certainly
-contains no case for raising <code>jobs</code>.</p>
+<p>The trend is mildly <em>negative</em>: more parallelism is very slightly slower, which is the oversubscription cost again.
+But the whole range spans 57–66 s against a 4–5 s within-level spread, so this is a weak signal at best — and it certainly contains no case for raising <code>jobs</code>.</p>
 <h3 id="jobs-stays-at-physical---2"><code>jobs</code> stays at <code>physical - 2</code><a class="headerlink" href="#jobs-stays-at-physical---2" title="Permanent link">&para;</a></h3>
-<p>Neither consumer shows a throughput gain anywhere in 8–24, and the unit tier
-leans slightly <em>against</em> the high end. That is not, however, evidence for
-lowering it, because <strong><code>jobs</code> is a formula, not the number 16</strong>: on this 18-core
-machine <code>physical - 2</code> happens to yield 16, but on a 4-core laptop it yields 2,
-and that is the case where it actually binds. The measurements say the formula's
-exact output stops mattering once the machine is wide — not that its
-GUI-headroom rationale (leave two physical cores for the compositor) is wrong.
-Replacing it with a tuned constant would trade a rationale that scales for a
-number fitted to one machine, to buy an effect inside the noise.</p>
-<p>What did change is the reason it is safe. Before, <code>jobs = 16</code> was
-<a href="#what-this-means-for-the-two-knobs">fictional</a> — 2.7× oversubscription of a
-6-core confinement. Now the cores are really there, <code>jobs=24</code> genuinely
-oversubscribes them, and the desktop still never registered a stutter event.</p>
+<p>Neither consumer shows a throughput gain anywhere in 8–24, and the unit tier leans slightly <em>against</em> the high end.
+That is not, however, evidence for lowering it, because <strong><code>jobs</code> is a formula, not the number 16</strong>: on this 18-core machine <code>physical - 2</code> happens to yield 16, but on a 4-core laptop it yields 2, and that is the case where it actually binds.
+The measurements say the formula's exact output stops mattering once the machine is wide — not that its GUI-headroom rationale (leave two physical cores for the compositor) is wrong.
+Replacing it with a tuned constant would trade a rationale that scales for a number fitted to one machine, to buy an effect inside the noise.</p>
+<p>What did change is the reason it is safe.
+Before, <code>jobs = 16</code> was <a href="#what-this-means-for-the-two-knobs">fictional</a> — 2.7× oversubscription of a 6-core confinement.
+Now the cores are really there, <code>jobs=24</code> genuinely oversubscribes them, and the desktop still never registered a stutter event.</p>
 <h3 id="slots-stays-at-2--the-knee-is-exactly-there"><code>slots</code> stays at 2 — the knee is exactly there<a class="headerlink" href="#slots-stays-at-2--the-knee-is-exactly-there" title="Permanent link">&para;</a></h3>
-<p>M concurrent cold-cache lints, 3 interleaved trials. <code>WALL_S</code> is the time until
-the <strong>last</strong> holder finishes, so aggregate throughput is M/wall — that, not wall
-time, is what a slot count buys:</p>
+<p>M concurrent cold-cache lints, 3 interleaved trials. <code>WALL_S</code> is the time until the <strong>last</strong> holder finishes, so aggregate throughput is M/wall — that, not wall time, is what a slot count buys:</p>
 <table>
 <thead>
 <tr>
@@ -3461,98 +3349,51 @@ time, is what a slot count buys:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>The second slot earns its place; the third and fourth do not.</strong> Slot 2 adds
-25 % aggregate throughput for ~1.7 ms of p99. Slot 3 adds 4 %, slot 4 adds 1 % —
-both inside the noise — while the tail keeps growing, and at 4 holders the worst
-single wake (16.8 ms) finally crosses a 60 Hz frame. No configuration produced a
-stutter event past 50 ms, a swapin, or a WindowServer report.</p>
-<p>This confirms the current default, but it retires the reasoning that was
-<a href="#what-this-means-for-the-two-knobs">recorded for it</a>. That reasoning said
-<code>slots</code> "was never adding hardware" because every holder shared the clamped band.
-The band is gone, and the conclusion survives for the opposite reason: <strong>one
-holder now reaches 81–85 % CPU on its own</strong>, so there is genuinely little machine
-left for a second to claim. Under <code>-c utility</code> a single run took ~37 %, and the
-second slot was dividing a ceiling; now it is competing for a nearly-full one.</p>
-<p>The throughput column also understates what slot 2 is for. The problem it was
-added to solve (<a href="../../../STATUS/">Q376</a>) was <em>queue depth</em> — a sibling session
-blocked for a full run before it could start. Two holders finish in 36.7 s where
-strict serialization needs 23.0 + 23.0 = 46 s, so the second session both starts
-immediately and finishes sooner. That is the argument for slot 2, and it does not
-extend to slot 3.</p>
-<p><code>GAG_HEAVY_BUILD_SLOTS</code> still overrides the default in both directions for anyone
-whose machine or taste differs.</p>
+<p><strong>The second slot earns its place; the third and fourth do not.</strong> Slot 2 adds 25 % aggregate throughput for ~1.7 ms of p99.
+Slot 3 adds 4 %, slot 4 adds 1 % — both inside the noise — while the tail keeps growing, and at 4 holders the worst single wake (16.8 ms) finally crosses a 60 Hz frame.
+No configuration produced a stutter event past 50 ms, a swapin, or a WindowServer report.</p>
+<p>This confirms the current default, but it retires the reasoning that was <a href="#what-this-means-for-the-two-knobs">recorded for it</a>.
+That reasoning said <code>slots</code> "was never adding hardware" because every holder shared the clamped band.
+The band is gone, and the conclusion survives for the opposite reason: <strong>one holder now reaches 81–85 % CPU on its own</strong>, so there is genuinely little machine left for a second to claim.
+Under <code>-c utility</code> a single run took ~37 %, and the second slot was dividing a ceiling; now it is competing for a nearly-full one.</p>
+<p>The throughput column also understates what slot 2 is for.
+The problem it was added to solve (<a href="../../../STATUS/">Q376</a>) was <em>queue depth</em> — a sibling session blocked for a full run before it could start.
+Two holders finish in 36.7 s where strict serialization needs 23.0 + 23.0 = 46 s, so the second session both starts immediately and finishes sooner.
+That is the argument for slot 2, and it does not extend to slot 3.</p>
+<p><code>GAG_HEAVY_BUILD_SLOTS</code> still overrides the default in both directions for anyone whose machine or taste differs.</p>
 <h3 id="scope-of-these-numbers">Scope of these numbers<a class="headerlink" href="#scope-of-these-numbers" title="Permanent link">&para;</a></h3>
-<p>All of the above is one machine (M5 Max, 18 physical cores) and one repo. The
-<code>jobs</code> formula and the <code>MIN_CORES_FOR_MULTIPLE_SLOTS=4</code> floor exist for narrow
-machines, where both knobs actually bind — nothing here measures that case, and
-nothing here should be read as evidence about it.</p>
+<p>All of the above is one machine (M5 Max, 18 physical cores) and one repo.
+The <code>jobs</code> formula and the <code>MIN_CORES_FOR_MULTIPLE_SLOTS=4</code> floor exist for narrow machines, where both knobs actually bind — nothing here measures that case, and nothing here should be read as evidence about it.</p>
 <h3 id="scope-this-only-matters-cold">Scope: this only matters cold<a class="headerlink" href="#scope-this-only-matters-cold" title="Permanent link">&para;</a></h3>
-<p>Warm, the whole local gate runs at 12–14% CPU and no setting is load-bearing —
-<code>-trimpath</code> cache sharing made that the common case. The throttle is a
-fresh-worktree concern, which is also precisely when several sessions collide.</p>
+<p>Warm, the whole local gate runs at 12–14% CPU and no setting is load-bearing — <code>-trimpath</code> cache sharing made that the common case.
+The throttle is a fresh-worktree concern, which is also precisely when several sessions collide.</p>
 <h2 id="change-5-the-gate-moves-off-the-workers-critical-path--q376">Change 5: the gate moves off the worker's critical path ✓ (Q376)<a class="headerlink" href="#change-5-the-gate-moves-off-the-workers-critical-path--q376" title="Permanent link">&para;</a></h2>
 <p>Changes 2 and 4 shrank the queue and the service time; neither empties the queue.
-With <code>slots = 2</code> and a 6-worker dispatch batch, four of the six are queued
-whenever all are in a heavy phase — and change 4 measured why that stays true:
-the second slot is worth 1.25× aggregate and the third only 1.30×, so throughput
-is not where the remaining win is. It is in what the wait <em>costs</em>.</p>
-<p>Two remedies were on the table — <strong>stagger</strong> the workers' gate starts, or
-<strong>background</strong> the gate during each worker's docs/PR prep. Backgrounding wins,
-and the stagger is not merely weaker, it is inert:</p>
+With <code>slots = 2</code> and a 6-worker dispatch batch, four of the six are queued whenever all are in a heavy phase — and change 4 measured why that stays true: the second slot is worth 1.25× aggregate and the third only 1.30×, so throughput is not where the remaining win is.
+It is in what the wait <em>costs</em>.</p>
+<p>Two remedies were on the table — <strong>stagger</strong> the workers' gate starts, or <strong>background</strong> the gate during each worker's docs/PR prep.
+Backgrounding wins, and the stagger is not merely weaker, it is inert:</p>
 <ul>
-<li><strong>A stagger adds no service capacity.</strong> The semaphore is a fixed-throughput
-  server; spacing arrivals re-orders the queue without shortening it, and holding
-  a worker back while a slot sits idle is strictly worse than letting the
-  semaphore's own admission control admit it.</li>
-<li><strong>Its one real mechanism is already delivered.</strong> Spacing starts so that one
-  worker warms <code>GOCACHE</code> before the rest begin would matter if the caches were
-  time-ordered; they are content-keyed, and <code>-trimpath</code> (change 1) extended that
-  to the test-result cache. A sibling starting one second later at the same
-  content hits the same entries as one starting an hour later.</li>
-<li><strong>There is nothing for a stagger to preserve.</strong> <code>make check</code> acquires a slot
-  <strong>three separate times</strong> — <code>build-tags-check</code>, <code>lint</code>, <code>cover-check</code> — releasing
-  between them (<code>Makefile</code>, <code>CHECK_FAST_GATES</code> block). Each worker's queue
-  position is re-drawn at every heavy phase, so whatever spacing exists at <em>t=0</em>
-  is gone by the second acquisition.</li>
+<li><strong>A stagger adds no service capacity.</strong> The semaphore is a fixed-throughput server; spacing arrivals re-orders the queue without shortening it, and holding a worker back while a slot sits idle is strictly worse than letting the semaphore's own admission control admit it.</li>
+<li><strong>Its one real mechanism is already delivered.</strong> Spacing starts so that one worker warms <code>GOCACHE</code> before the rest begin would matter if the caches were time-ordered; they are content-keyed, and <code>-trimpath</code> (change 1) extended that to the test-result cache.
+  A sibling starting one second later at the same content hits the same entries as one starting an hour later.</li>
+<li><strong>There is nothing for a stagger to preserve.</strong> <code>make check</code> acquires a slot <strong>three separate times</strong> — <code>build-tags-check</code>, <code>lint</code>, <code>cover-check</code> — releasing between them (<code>Makefile</code>, <code>CHECK_FAST_GATES</code> block).
+  Each worker's queue position is re-drawn at every heavy phase, so whatever spacing exists at <em>t=0</em> is gone by the second acquisition.</li>
 </ul>
-<p>Backgrounding does not reduce contention either. It changes what the contention
-<em>costs</em>: the wait stops being dead time on the worker's critical path and becomes
-the docs / <code>docs/STATUS.md</code> / PR-body work the worker owes anyway and whose
-correctness the gate's verdict does not decide. What stays on the critical path
-is the confirming re-run over the final tree, and warm that is ~2 min against a
-cold gate's tens — because the gates that validate the docs work (<code>lint-backlog</code>, <code>doc-links</code>,
-<code>plan-index-check</code>, <code>no-plan-refs-check</code>, <code>shellcheck</code>) are in <code>CHECK_FAST_GATES</code>
-and take <strong>no</strong> heavy-build slot, while the three heavy phases re-queue cache-warm.</p>
-<p>Landed as process in
-<a href="../../../development/parallel-dispatch/#run-the-local-gate-in-the-background-not-on-the-critical-path">parallel-dispatch.md § Run the local gate in the background</a>
-(worker prompt skeleton and the <code>/goal</code> template, so future runs actually get it),
-plus one supporting code change: <code>serialize_heavy_build</code> now heartbeats every 30 s
-while queued and prints its total on acquire. A backgrounded gate's log is the
-only signal it has, and the previous single line followed by open-ended silence
-was indistinguishable from a hang — which is also why the <em>observed</em> waits this
-whole section exists to bound were only ever anecdotal (change 4 measured
-aggregate throughput at M holders, not what any one run actually waited). The
-change is stderr-only: lock paths, slot count, and the acquire protocol are
-untouched, so worktrees still on older code contend on the same files exactly as
-before.</p>
+<p>Backgrounding does not reduce contention either.
+It changes what the contention <em>costs</em>: the wait stops being dead time on the worker's critical path and becomes the docs / <code>docs/STATUS.md</code> / PR-body work the worker owes anyway and whose correctness the gate's verdict does not decide.
+What stays on the critical path is the confirming re-run over the final tree, and warm that is ~2 min against a cold gate's tens — because the gates that validate the docs work (<code>lint-backlog</code>, <code>doc-links</code>, <code>plan-index-check</code>, <code>no-plan-refs-check</code>, <code>shellcheck</code>) are in <code>CHECK_FAST_GATES</code> and take <strong>no</strong> heavy-build slot, while the three heavy phases re-queue cache-warm.</p>
+<p>Landed as process in <a href="../../../development/parallel-dispatch/#run-the-local-gate-in-the-background-not-on-the-critical-path">parallel-dispatch.md § Run the local gate in the background</a> (worker prompt skeleton and the <code>/goal</code> template, so future runs actually get it), plus one supporting code change: <code>serialize_heavy_build</code> now heartbeats every 30 s while queued and prints its total on acquire.
+A backgrounded gate's log is the only signal it has, and the previous single line followed by open-ended silence was indistinguishable from a hang — which is also why the <em>observed</em> waits this whole section exists to bound were only ever anecdotal (change 4 measured aggregate throughput at M holders, not what any one run actually waited).
+The change is stderr-only: lock paths, slot count, and the acquire protocol are untouched, so worktrees still on older code contend on the same files exactly as before.</p>
 <h2 id="change-6-the-coverage-loop-adopts-make-tests-shape--q377">Change 6: the coverage loop adopts <code>make test</code>'s shape ✓ (Q377)<a class="headerlink" href="#change-6-the-coverage-loop-adopts-make-tests-shape--q377" title="Permanent link">&para;</a></h2>
-<p><code>scripts/go/coverage.sh</code> ran its 10 modules one at a time, where <code>make test</code> issues
-a single workspace-wide invocation. It now issues the same single invocation —
-one <code>./&lt;module&gt;/...</code> pattern per go.work module — and <strong>splits the merged
-profile back per module by import path</strong> to recover the per-module numbers the
-ratchet is keyed by.</p>
-<p>The alternative on the table was to keep the per-module invocations and run C of
-them concurrently. Adopting <code>make test</code>'s shape wins on three counts and costs
-nothing the other buys: Go schedules the whole workspace as one build graph (so
-small modules overlap the big <code>cmd/agc</code>/<code>cmd/gmc</code> dependency compiles instead of
-queueing behind them, which a concurrent loop of independent invocations cannot
-do — each would recompile the shared dependencies in its own process); the
-throttle budget stays one <code>-p</code>/<code>GOMAXPROCS</code> pair rather than C of them
-multiplying against a cap that exists for desktop safety; and there is no new
-concurrency knob to size, so nothing here needs re-deriving on the next machine.</p>
+<p><code>scripts/go/coverage.sh</code> ran its 10 modules one at a time, where <code>make test</code> issues a single workspace-wide invocation.
+It now issues the same single invocation — one <code>./&lt;module&gt;/...</code> pattern per go.work module — and <strong>splits the merged profile back per module by import path</strong> to recover the per-module numbers the ratchet is keyed by.</p>
+<p>The alternative on the table was to keep the per-module invocations and run C of them concurrently.
+Adopting <code>make test</code>'s shape wins on three counts and costs nothing the other buys: Go schedules the whole workspace as one build graph (so small modules overlap the big <code>cmd/agc</code>/<code>cmd/gmc</code> dependency compiles instead of queueing behind them, which a concurrent loop of independent invocations cannot do — each would recompile the shared dependencies in its own process); the throttle budget stays one <code>-p</code>/<code>GOMAXPROCS</code> pair rather than C of them multiplying against a cap that exists for desktop safety; and there is no new concurrency knob to size, so nothing here needs re-deriving on the next machine.</p>
 <h3 id="what-it-measured">What it measured<a class="headerlink" href="#what-it-measured" title="Permanent link">&para;</a></h3>
-<p>M5 Max, 18 physical cores, <code>jobs = 16</code>, prefix <code>nice -n 10 taskpolicy -d
-throttle</code>. Candidates interleave within a trial, 2 trials per regime:</p>
+<p>M5 Max, 18 physical cores, <code>jobs = 16</code>, prefix <code>nice -n 10 taskpolicy -d throttle</code>.
+Candidates interleave within a trial, 2 trials per regime:</p>
 <table>
 <thead>
 <tr>
@@ -3599,22 +3440,16 @@ throttle</code>. Candidates interleave within a trial, 2 trials per regime:</p>
 </tr>
 </tbody>
 </table>
-<p>Both regimes gain, and the CPU column says why: the serial loop left the machine
-idle. Warm it ran at <strong>84 % mean CPU — under one core of eighteen</strong> — because
-each module's test binaries wait on timers and envtest while the next module's
-compile has not started. The single invocation fills that with other modules'
-work (129 %). The same holds cold at a higher absolute level (274 % → 439 %).
-This is one more regime in this document where the throttle knobs were not the
-binding constraint; here it was the inter-module barrier.</p>
-<p>Note the ordering against <a href="#the-unit-tier-had-to-go-cold-too--the-fourth-null">the <code>jobs</code> sweep</a>: that sweep found no throughput anywhere in 8–24 for the
-<em>unit tier</em>, and this change is why — with the modules serialized, <code>-p</code> had
-nothing to schedule across them. The barrier, not the cap, was the ceiling.</p>
+<p>Both regimes gain, and the CPU column says why: the serial loop left the machine idle.
+Warm it ran at <strong>84 % mean CPU — under one core of eighteen</strong> — because each module's test binaries wait on timers and envtest while the next module's compile has not started.
+The single invocation fills that with other modules' work (129 %).
+The same holds cold at a higher absolute level (274 % → 439 %).
+This is one more regime in this document where the throttle knobs were not the binding constraint; here it was the inter-module barrier.</p>
+<p>Note the ordering against <a href="#the-unit-tier-had-to-go-cold-too--the-fourth-null">the <code>jobs</code> sweep</a>: that sweep found no throughput anywhere in 8–24 for the <em>unit tier</em>, and this change is why — with the modules serialized, <code>-p</code> had nothing to schedule across them.
+The barrier, not the cap, was the ceiling.</p>
 <h3 id="the-split-agrees-three-blocks-in-the-suite-are-race-dependent">The split agrees; three blocks in the suite are race-dependent<a class="headerlink" href="#the-split-agrees-three-blocks-in-the-suite-are-race-dependent" title="Permanent link">&para;</a></h3>
-<p>Every module reported the same percentage as the per-module loop it replaced, and
-8 of 10 modules' filtered profiles are line-for-line identical. The other two
-differ on <strong>three individual blocks</strong>, and none of them is a split defect —
-each is a race the test deliberately tolerates, resolved differently on a
-busier machine:</p>
+<p>Every module reported the same percentage as the per-module loop it replaced, and 8 of 10 modules' filtered profiles are line-for-line identical.
+The other two differ on <strong>three individual blocks</strong>, and none of them is a split defect — each is a race the test deliberately tolerates, resolved differently on a busier machine:</p>
 <table>
 <thead>
 <tr>
@@ -3645,34 +3480,16 @@ busier machine:</p>
 </tr>
 </tbody>
 </table>
-<p>The <code>probe</code> one is self-documenting: <code>TestInvestigateJobDelivery_RealTimeoutNoJobArrives</code>'s
-own doc comment says it confirms a prompt exit "via <strong>either</strong> the top-of-loop
-deadline check <strong>or</strong> a deadline-exceeded GetMessage error". <code>manager.go:147</code>
-flips between two runs of the <em>same</em> shape, which is the cleanest evidence that
-this population is pre-existing. <code>renew.go:86</code> is the only one that tracked the
-shape across all four runs (n=2 each, so weak) — plausibly because the single
-invocation runs the machine at 439 % rather than 274 %, and a shutdown-mid-call
-race resolves differently under that load.</p>
-<p>Effect on the ratchet: <code>cmd/agc</code> did not move at all (78.9 % both ways — two
-statements against thousands), and <code>cmd/probe</code> moved 81.8 % → 82.0 % in one run
-of four. ±0.2 pp is well inside the 0.5 pp tolerance, and is exactly the benign
-drift that tolerance was sized for, so nothing here needs fixing. It is worth
-knowing that a few floors carry ±0.2 pp of load-dependent noise rather than
-being exact.</p>
-<p>The split rule (longest module import path, <code>/</code>-bounded, then the same
-<code>EXCLUDE_RE</code> filter) is asserted by
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage-test.sh"><code>scripts/go/coverage-test.sh</code></a> under <code>make
-scripts-test</code>: the per-module invocation could not get attribution wrong by
-construction, and the split can, so the boundary and exclusion cases are pinned
-rather than left to a full coverage run to notice.</p>
+<p>The <code>probe</code> one is self-documenting: <code>TestInvestigateJobDelivery_RealTimeoutNoJobArrives</code>'s own doc comment says it confirms a prompt exit "via <strong>either</strong> the top-of-loop deadline check <strong>or</strong> a deadline-exceeded GetMessage error". <code>manager.go:147</code> flips between two runs of the <em>same</em> shape, which is the cleanest evidence that this population is pre-existing. <code>renew.go:86</code> is the only one that tracked the shape across all four runs (n=2 each, so weak) — plausibly because the single invocation runs the machine at 439 % rather than 274 %, and a shutdown-mid-call race resolves differently under that load.</p>
+<p>Effect on the ratchet: <code>cmd/agc</code> did not move at all (78.9 % both ways — two statements against thousands), and <code>cmd/probe</code> moved 81.8 % → 82.0 % in one run of four. ±0.2 pp is well inside the 0.5 pp tolerance, and is exactly the benign drift that tolerance was sized for, so nothing here needs fixing.
+It is worth knowing that a few floors carry ±0.2 pp of load-dependent noise rather than being exact.</p>
+<p>The split rule (longest module import path, <code>/</code>-bounded, then the same <code>EXCLUDE_RE</code> filter) is asserted by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage-test.sh"><code>scripts/go/coverage-test.sh</code></a> under <code>make scripts-test</code>: the per-module invocation could not get attribution wrong by construction, and the split can, so the boundary and exclusion cases are pinned rather than left to a full coverage run to notice.</p>
 <h2 id="follow-ups-not-in-this-change">Follow-ups (not in this change)<a class="headerlink" href="#follow-ups-not-in-this-change" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Worktree hygiene</strong> (Q491, retired 2026-08-01 — not repo work). 58 live
-  worktrees × ~226 MB ≈ 13 GB, all Spotlight-indexed. Pruning is off the table:
-  the stale worktrees are kept deliberately as the corpus for Claude metrics and
-  friction reports. A Spotlight exclusion on <code>.claude/worktrees</code> still removes
-  the background I/O the QoS demotion cannot reach, and leaves them intact — a
-  workstation setting, not a backlog item.</li>
+<li><strong>Worktree hygiene</strong> (Q491, retired 2026-08-01 — not repo work).
+  58 live worktrees × ~226 MB ≈ 13 GB, all Spotlight-indexed.
+  Pruning is off the table: the stale worktrees are kept deliberately as the corpus for Claude metrics and friction reports.
+  A Spotlight exclusion on <code>.claude/worktrees</code> still removes the background I/O the QoS demotion cannot reach, and leaves them intact — a workstation setting, not a backlog item.</li>
 </ul>
 
 

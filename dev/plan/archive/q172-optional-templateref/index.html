@@ -2693,87 +2693,59 @@
 
 <h1 id="q172--v2-optional-templateref-default-clusterrunnertemplate">Q172 — v2 optional templateRef (default ClusterRunnerTemplate)<a class="headerlink" href="#q172--v2-optional-templateref-default-clusterrunnertemplate" title="Permanent link">&para;</a></h1>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Relax the v2 <code>RunnerSet.spec.templateRef</code> from <strong>required</strong> to <strong>optional</strong>, non-breaking:
-an unset <code>templateRef</code> resolves a worker pod shape via a fallback chain so minimal
-onboarding no longer has to name a template. The templateRef analog of the
-optional-proxy work (Q168). Design: appendix-h §H.4 (the "Why <code>templateRef</code> is required
-but <code>proxyRef</code> is optional" note marks this exact relaxation as deferred-but-planned)
-and §H.7 (runtime reference resolution, fail-closed).</p>
+<p>Relax the v2 <code>RunnerSet.spec.templateRef</code> from <strong>required</strong> to <strong>optional</strong>, non-breaking: an unset <code>templateRef</code> resolves a worker pod shape via a fallback chain so minimal onboarding no longer has to name a template.
+The templateRef analog of the optional-proxy work (Q168).
+Design: appendix-h §H.4 (the "Why <code>templateRef</code> is required but <code>proxyRef</code> is optional" note marks this exact relaxation as deferred-but-planned) and §H.7 (runtime reference resolution, fail-closed).</p>
 <h2 id="resolution-chain-agc-runnerset-reconciler-runtime-fail-closed-h7">Resolution chain (AGC <code>RunnerSet</code> reconciler, runtime, fail-closed §H.7)<a class="headerlink" href="#resolution-chain-agc-runnerset-reconciler-runtime-fail-closed-h7" title="Permanent link">&para;</a></h2>
 <ol>
 <li><code>rs.spec.templateRef</code> (explicit) — unchanged behavior; source <code>TemplateRef</code>.</li>
 <li>else <code>gateway.spec.defaultTemplateRef</code> — per-gateway default; source <code>GatewayDefault</code>.</li>
-<li>else the <strong>single</strong> cluster-default <code>ClusterRunnerTemplate</code> (marked by annotation);
-   source <code>ClusterDefault</code>.</li>
-<li>else <strong><code>TemplateNotFound</code></strong> — fail closed, no worker wiring. Never a phantom pod.</li>
+<li>else the <strong>single</strong> cluster-default <code>ClusterRunnerTemplate</code> (marked by annotation); source <code>ClusterDefault</code>.</li>
+<li>else <strong><code>TemplateNotFound</code></strong> — fail closed, no worker wiring.
+   Never a phantom pod.</li>
 </ol>
-<p>Each rung resolves at runtime via the existing watch + enqueue mappers, so a set
-flips Ready the moment a missing referent (or default) syncs — no apply ordering.</p>
+<p>Each rung resolves at runtime via the existing watch + enqueue mappers, so a set flips Ready the moment a missing referent (or default) syncs — no apply ordering.</p>
 <h2 id="decisions">Decisions<a class="headerlink" href="#decisions" title="Permanent link">&para;</a></h2>
 <h3 id="marker-for-the-cluster-default--annotation-storageclass-pattern">Marker for the cluster-default — annotation (StorageClass pattern)<a class="headerlink" href="#marker-for-the-cluster-default--annotation-storageclass-pattern" title="Permanent link">&para;</a></h3>
 <p><code>actions-gateway.com/is-default-template: "true"</code> on a <code>ClusterRunnerTemplate</code>.
-Mirrors <code>storageclass.kubernetes.io/is-default-class: "true"</code> exactly — the design
-explicitly invokes "the StorageClass pattern", and operators already know it. Value
-is the literal <code>"true"</code> to match that idiom (the key already reads "is-default", so a
-keyword value would be redundant). No template-spec CRD change for the marker itself;
-the constant lives in <code>api/v2alpha1/shared_types.go</code> with the other domain keys.</p>
-<p>Only the <strong>cluster-scoped</strong> <code>ClusterRunnerTemplate</code> carries the default marker: a
-cluster-default must be platform-authored (tenants cannot create cluster-scoped
-objects), so a tenant cannot self-elect a namespaced <code>RunnerTemplate</code> as the
-cluster-wide default. A <code>gateway.defaultTemplateRef</code> may still point at either kind.</p>
+Mirrors <code>storageclass.kubernetes.io/is-default-class: "true"</code> exactly — the design explicitly invokes "the StorageClass pattern", and operators already know it.
+Value is the literal <code>"true"</code> to match that idiom (the key already reads "is-default", so a keyword value would be redundant).
+No template-spec CRD change for the marker itself; the constant lives in <code>api/v2alpha1/shared_types.go</code> with the other domain keys.</p>
+<p>Only the <strong>cluster-scoped</strong> <code>ClusterRunnerTemplate</code> carries the default marker: a cluster-default must be platform-authored (tenants cannot create cluster-scoped objects), so a tenant cannot self-elect a namespaced <code>RunnerTemplate</code> as the cluster-wide default.
+A <code>gateway.defaultTemplateRef</code> may still point at either kind.</p>
 <h3 id="1-cluster-default--runtime-condition-not-admission">≤1 cluster-default — runtime condition, not admission<a class="headerlink" href="#1-cluster-default--runtime-condition-not-admission" title="Permanent link">&para;</a></h3>
 <p>Enforced at <strong>resolution time</strong> in the AGC reconciler, not at admission:
-- §H.7 already places existence/referential concerns at runtime, not in admission
-  (admission breaks GitOps apply-ordering, and CEL cannot express a cross-object
-  invariant — it would need a VAP-with-list or a webhook doing a <code>List</code>).
-- The ambiguity only <em>matters</em> when a <code>RunnerSet</code> actually falls through to the
-  cluster-default rung, so the natural place to surface it is the <strong>consumer</strong>
-  (the <code>RunnerSet</code>), at the moment it depends on the default.
-- When the cluster-default rung lists <strong>≥2</strong> marked templates, fail closed with a new
-  <code>AmbiguousDefault</code> reason (<code>Ready=False</code>) naming the conflicting templates — never
-  silently pick one (unlike upstream StorageClass, which picks newest-wins; we are
-  stricter per the secure-by-default invariant).</p>
-<p>Trade-off: admission rejection would give earlier feedback, but breaks apply-ordering
-and is not expressible in single-object CEL. Runtime-with-condition matches §H.7 and
-is fail-closed regardless.</p>
+- §H.7 already places existence/referential concerns at runtime, not in admission (admission breaks GitOps apply-ordering, and CEL cannot express a cross-object invariant — it would need a VAP-with-list or a webhook doing a <code>List</code>).
+- The ambiguity only <em>matters</em> when a <code>RunnerSet</code> actually falls through to the cluster-default rung, so the natural place to surface it is the <strong>consumer</strong> (the <code>RunnerSet</code>), at the moment it depends on the default.
+- When the cluster-default rung lists <strong>≥2</strong> marked templates, fail closed with a new <code>AmbiguousDefault</code> reason (<code>Ready=False</code>) naming the conflicting templates — never silently pick one (unlike upstream StorageClass, which picks newest-wins; we are stricter per the secure-by-default invariant).</p>
+<p>Trade-off: admission rejection would give earlier feedback, but breaks apply-ordering and is not expressible in single-object CEL.
+Runtime-with-condition matches §H.7 and is fail-closed regardless.</p>
 <h3 id="surfacing-which-rung-resolved">Surfacing which rung resolved<a class="headerlink" href="#surfacing-which-rung-resolved" title="Permanent link">&para;</a></h3>
-<p>New <code>RunnerSet.status.templateSource</code> enum (<code>TemplateRef</code> | <code>GatewayDefault</code> |
-<code>ClusterDefault</code>), mirroring the <code>status.proxyMode</code> precedent from Q168, plus the rung
-named in the <code>Ready=True</code> message. Auditable: an operator can see whether a set is on
-an explicit ref or a default without inspecting the gateway/cluster.</p>
+<p>New <code>RunnerSet.status.templateSource</code> enum (<code>TemplateRef</code> | <code>GatewayDefault</code> | <code>ClusterDefault</code>), mirroring the <code>status.proxyMode</code> precedent from Q168, plus the rung named in the <code>Ready=True</code> message.
+Auditable: an operator can see whether a set is on an explicit ref or a default without inspecting the gateway/cluster.</p>
 <h3 id="relaxing-required--optional">Relaxing required → optional<a class="headerlink" href="#relaxing-required--optional" title="Permanent link">&para;</a></h3>
-<p><code>RunnerSet.spec.templateRef</code> becomes <code>*ObjectRef</code> + <code>+optional</code> (was a required value
-type), matching <code>proxyRef</code>'s shape. Wire-compatible: a set that sets <code>templateRef</code>
-serializes and validates exactly as today; only the CRD <code>required</code> entry drops.</p>
+<p><code>RunnerSet.spec.templateRef</code> becomes <code>*ObjectRef</code> + <code>+optional</code> (was a required value type), matching <code>proxyRef</code>'s shape.
+Wire-compatible: a set that sets <code>templateRef</code> serializes and validates exactly as today; only the CRD <code>required</code> entry drops.</p>
 <h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>api/v2alpha1/runnerset_types.go</code> — <code>TemplateRef *ObjectRef</code> +optional; add
-  <code>status.TemplateSource</code>.</li>
+<li><code>api/v2alpha1/runnerset_types.go</code> — <code>TemplateRef *ObjectRef</code> +optional; add <code>status.TemplateSource</code>.</li>
 <li><code>api/v2alpha1/actionsgateway_types.go</code> — add <code>DefaultTemplateRef *ObjectRef</code>.</li>
 <li><code>api/v2alpha1/shared_types.go</code> — <code>IsDefaultTemplateAnnotation</code> / value.</li>
 <li><code>api/v2alpha1/conditions.go</code> — <code>ReasonAmbiguousDefault</code>; <code>TemplateSource*</code> consts.</li>
-<li><code>cmd/agc/internal/controller/runnerset_target.go</code> — the chain in
-  <code>resolveRunnerSetRefs</code> / a new <code>resolveTemplateChain</code>; <code>resolvedRefs.templateSource</code>.</li>
-<li><code>cmd/agc/internal/controller/runnerset_controller.go</code> — set <code>status.TemplateSource</code>;
-  Ready message names the rung; broaden the template watch mappers so a set on a
-  default re-reconciles when the default appears/changes.</li>
+<li><code>cmd/agc/internal/controller/runnerset_target.go</code> — the chain in <code>resolveRunnerSetRefs</code> / a new <code>resolveTemplateChain</code>; <code>resolvedRefs.templateSource</code>.</li>
+<li><code>cmd/agc/internal/controller/runnerset_controller.go</code> — set <code>status.TemplateSource</code>; Ready message names the rung; broaden the template watch mappers so a set on a default re-reconciles when the default appears/changes.</li>
 <li><code>cmd/gmc/internal/migrate/migrate.go</code> — <code>&amp;v2alpha1.ObjectRef{...}</code> (pointer).</li>
 <li>regen: <code>make -C api generate</code>, <code>make -C cmd/gmc manifests</code>, <code>make chart-crds</code>.</li>
 </ul>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Unit (<code>runnerset_test.go</code>, fake client): each rung; fail-closed when none; ≤1-default
-  (exactly-one resolves, ≥2 → AmbiguousDefault); namespaced RunnerTemplate is never
-  treated as a cluster-default.</li>
-<li>Envtest (<code>v2_runnerset_test.go</code>): unset templateRef resolves via gateway
-  defaultTemplateRef → Ready; via cluster-default → Ready; none → TemplateNotFound;
-  templateSource surfaced.</li>
+<li>Unit (<code>runnerset_test.go</code>, fake client): each rung; fail-closed when none; ≤1-default (exactly-one resolves, ≥2 → AmbiguousDefault); namespaced RunnerTemplate is never treated as a cluster-default.</li>
+<li>Envtest (<code>v2_runnerset_test.go</code>): unset templateRef resolves via gateway defaultTemplateRef → Ready; via cluster-default → Ready; none → TemplateNotFound; templateSource surfaced.</li>
 </ul>
 <h2 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h2>
 <ul>
 <li>appendix-h §H.4 — mark shipped; document the chain + the ≤1-default runtime choice.</li>
-<li><code>docs/operations/tenant-onboarding.md</code> — you may omit <code>templateRef</code> when a default
-  exists; how to mark a cluster-default.</li>
+<li><code>docs/operations/tenant-onboarding.md</code> — you may omit <code>templateRef</code> when a default exists; how to mark a cluster-default.</li>
 <li>CRD field comments (godoc) regenerated into the CRDs.</li>
 </ul>
 

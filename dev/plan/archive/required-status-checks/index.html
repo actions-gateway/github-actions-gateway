@@ -2670,50 +2670,30 @@
 
 
 <h1 id="make-the-ci-quality-gates-merge-blocking-required-status-checks">Make the CI quality gates merge-blocking (required status checks)<a class="headerlink" href="#make-the-ci-quality-gates-merge-blocking-required-status-checks" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ Complete — all nine workflow gate jobs are in place, and the
-ruleset has been updated to require them. CI failures now block merges.</p>
+<p><strong>Status:</strong> ✅ Complete — all nine workflow gate jobs are in place, and the ruleset has been updated to require them.
+CI failures now block merges.</p>
 <h2 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h2>
-<p>The CI workflows assert correctness, security, and hygiene on every PR, and
-their own headers claim a failure blocks the merge — e.g.
-<code>security-scan.yml</code>: <em>"Both fail the PR so a regression cannot merge
-silently."</em> That guarantee did not hold (until this plan shipped).</p>
+<p>The CI workflows assert correctness, security, and hygiene on every PR, and their own headers claim a failure blocks the merge — e.g. <code>security-scan.yml</code>: <em>"Both fail the PR so a regression cannot merge silently."</em> That guarantee did not hold (until this plan shipped).</p>
 <ul>
-<li><code>main</code> has <strong>no classic branch protection</strong> (<code>GET .../branches/main/protection</code>
-  → <code>404 Branch not protected</code>).</li>
-<li>Two active <strong>rulesets</strong> (<code>default</code>, <code>default-protect</code>) enforce only
-  <code>deletion</code>, <code>non_fast_forward</code>, and <code>required_linear_history</code>. Neither has any
-  <code>required_status_checks</code>, and there is no required-review rule.</li>
+<li><code>main</code> has <strong>no classic branch protection</strong> (<code>GET .../branches/main/protection</code> → <code>404 Branch not protected</code>).</li>
+<li>Two active <strong>rulesets</strong> (<code>default</code>, <code>default-protect</code>) enforce only <code>deletion</code>, <code>non_fast_forward</code>, and <code>required_linear_history</code>.
+  Neither has any <code>required_status_checks</code>, and there is no required-review rule.</li>
 </ul>
-<p>So a red <code>security-scan</code> (or <code>unit-test</code>, <code>integration-test</code>, <code>e2e</code>, …) turns
-the PR red but does <strong>not</strong> stop a merge. A reachable-CVE regression, a failing
-race test, or a broken manifest can merge silently — precisely the failure mode
-the workflow comments say is impossible.</p>
+<p>So a red <code>security-scan</code> (or <code>unit-test</code>, <code>integration-test</code>, <code>e2e</code>, …) turns the PR red but does <strong>not</strong> stop a merge.
+A reachable-CVE regression, a failing race test, or a broken manifest can merge silently — precisely the failure mode the workflow comments say is impossible.</p>
 <h2 id="why-it-isnt-a-one-line-ruleset-edit">Why it isn't a one-line ruleset edit<a class="headerlink" href="#why-it-isnt-a-one-line-ruleset-edit" title="Permanent link">&para;</a></h2>
-<p>Every gating workflow is <strong>path-gated</strong>: on a PR that doesn't touch its scope it
-either skips its jobs (internal <code>dorny/paths-filter</code> <code>changes</code> job) or does not
-trigger at all (top-level <code>on.&lt;event&gt;.paths</code> / <code>paths-ignore</code>).</p>
-<p>GitHub keeps a required status check <strong>Pending</strong> when the workflow that would
-report it is skipped by path/branch filtering, and a Pending required check
-<strong>blocks the merge forever</strong>. So you cannot simply mark <code>govulncheck</code> /
-<code>unit-test</code> / etc. as required — a docs-only PR would never report them and
-would wedge.</p>
-<p><code>e2e-calico.yml</code> already documents this exact tension and the fix: <em>"If it
-is ever made required, switch to the
-always-runs-then-skips <code>dorny/paths-filter</code> pattern <code>e2e-test.yml</code> uses so a
-non-matching PR still reports a green check."</em></p>
+<p>Every gating workflow is <strong>path-gated</strong>: on a PR that doesn't touch its scope it either skips its jobs (internal <code>dorny/paths-filter</code> <code>changes</code> job) or does not trigger at all (top-level <code>on.&lt;event&gt;.paths</code> / <code>paths-ignore</code>).</p>
+<p>GitHub keeps a required status check <strong>Pending</strong> when the workflow that would report it is skipped by path/branch filtering, and a Pending required check <strong>blocks the merge forever</strong>.
+So you cannot simply mark <code>govulncheck</code> / <code>unit-test</code> / etc. as required — a docs-only PR would never report them and would wedge.</p>
+<p><code>e2e-calico.yml</code> already documents this exact tension and the fix: <em>"If it is ever made required, switch to the always-runs-then-skips <code>dorny/paths-filter</code> pattern <code>e2e-test.yml</code> uses so a non-matching PR still reports a green check."</em></p>
 <h2 id="design-one-always-running-summary-gate-per-workflow">Design: one always-running summary gate per workflow<a class="headerlink" href="#design-one-always-running-summary-gate-per-workflow" title="Permanent link">&para;</a></h2>
 <p>Two coordinated pieces.</p>
 <h3 id="1-each-gating-workflow-always-triggers-and-exposes-a-single-summary-job">1. Each gating workflow always triggers, and exposes a single summary job<a class="headerlink" href="#1-each-gating-workflow-always-triggers-and-exposes-a-single-summary-job" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Remove the top-level path filter</strong> (<code>paths-ignore</code> / <code>on.&lt;event&gt;.paths</code>) so
-  the workflow triggers on <em>every</em> PR. Fine-grained skipping stays <em>inside</em> the
-  workflow via the <code>changes</code> job + each real job's <code>if:</code> guard (unchanged), so
-  the actual expensive jobs still don't run on unrelated PRs — only the cheap
-  <code>changes</code> job does.</li>
-<li>Add a summary job whose id is <strong><code>&lt;workflow&gt;-gate</code></strong> (e.g. <code>unit-test-gate</code>)
-  that <code>needs:</code> every real job and runs with <code>if: ${{ always() }}</code>. It passes
-  only when every needed job concluded <code>success</code> or <code>skipped</code>, and fails on
-  anything else (<code>failure</code>, <code>cancelled</code>):</li>
+<li><strong>Remove the top-level path filter</strong> (<code>paths-ignore</code> / <code>on.&lt;event&gt;.paths</code>) so the workflow triggers on <em>every</em> PR.
+  Fine-grained skipping stays <em>inside</em> the workflow via the <code>changes</code> job + each real job's <code>if:</code> guard (unchanged), so the actual expensive jobs still don't run on unrelated PRs — only the cheap <code>changes</code> job does.</li>
+<li>Add a summary job whose id is <strong><code>&lt;workflow&gt;-gate</code></strong> (e.g. <code>unit-test-gate</code>) that <code>needs:</code> every real job and runs with <code>if: ${{ always() }}</code>.
+  It passes only when every needed job concluded <code>success</code> or <code>skipped</code>, and fails on anything else (<code>failure</code>, <code>cancelled</code>):</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">unit-test-gate</span><span class="p">:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="c1"># Aggregate required-status gate. Mark THIS job&#39;s check context required in</span>
@@ -2739,19 +2719,13 @@ non-matching PR still reports a green check."</em></p>
 <a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">          </span><span class="no">esac</span>
 <a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">        </span><span class="no">done</span>
 </code></pre></div>
-<p>A matrix job (e.g. <code>trivy</code>) aggregates naturally: <code>needs: [trivy]</code> waits for
-  all legs and <code>needs.trivy.result</code> is <code>failure</code> if any leg failed.</p>
+<p>A matrix job (e.g. <code>trivy</code>) aggregates naturally: <code>needs: [trivy]</code> waits for all legs and <code>needs.trivy.result</code> is <code>failure</code> if any leg failed.</p>
 <h3 id="2-mark-the-gate-contexts-required-in-the-ruleset-admin">2. Mark the gate contexts required in the ruleset (admin)<a class="headerlink" href="#2-mark-the-gate-contexts-required-in-the-ruleset-admin" title="Permanent link">&para;</a></h3>
-<p>After this PR merges, a repo admin adds each workflow's gate context to the
-<code>default-protect</code> ruleset's <code>required_status_checks</code>. This is the only step that
-actually turns the gates merge-blocking, and it needs admin rights the CI branch
-does not have.</p>
-<p><strong>Each gate job must have a globally unique id</strong> — this is why they are
-<code>unit-test-gate</code>, <code>security-scan-gate</code>, … and not all just <code>gate</code>. A normal
-job's check-run <strong>name is its job id</strong> (only reusable-workflow-call jobs get the
-<code>&lt;caller&gt; / &lt;job&gt;</code> form). GitHub matches a required status check by that name and
-the ruleset UI dedupes candidates by name, so nine jobs all named <code>gate</code> collapse
-to a single indistinguishable <code>gate</code> entry that cannot be required per-workflow.
+<p>After this PR merges, a repo admin adds each workflow's gate context to the <code>default-protect</code> ruleset's <code>required_status_checks</code>.
+This is the only step that actually turns the gates merge-blocking, and it needs admin rights the CI branch does not have.</p>
+<p><strong>Each gate job must have a globally unique id</strong> — this is why they are <code>unit-test-gate</code>, <code>security-scan-gate</code>, … and not all just <code>gate</code>.
+A normal job's check-run <strong>name is its job id</strong> (only reusable-workflow-call jobs get the <code>&lt;caller&gt; / &lt;job&gt;</code> form).
+GitHub matches a required status check by that name and the ruleset UI dedupes candidates by name, so nine jobs all named <code>gate</code> collapse to a single indistinguishable <code>gate</code> entry that cannot be required per-workflow.
 Distinct ids give nine distinct, individually-requireable contexts.</p>
 <p>The required contexts to add (each is the gate job's id, verbatim):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unit-test-gate
@@ -2764,14 +2738,11 @@ Distinct ids give nine distinct, individually-requireable contexts.</p>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>e2e-gate
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>e2e-calico-gate
 </code></pre></div>
-<p>Type each into the ruleset's "Require status checks to pass" search box (they
-appear once each workflow has reported the context at least once — i.e. after
-this PR runs). Do <strong>not</strong> require the underlying jobs (<code>unit-test</code>, <code>e2e / e2e</code>,
-<code>trivy (…)</code>, …) directly — a path-skip leaves those Pending and wedges the merge;
-the gate is the skip-safe aggregate.</p>
+<p>Type each into the ruleset's "Require status checks to pass" search box (they appear once each workflow has reported the context at least once — i.e. after this PR runs).
+Do <strong>not</strong> require the underlying jobs (<code>unit-test</code>, <code>e2e / e2e</code>, <code>trivy (…)</code>, …) directly — a path-skip leaves those Pending and wedges the merge; the gate is the skip-safe aggregate.</p>
 <h2 id="per-workflow-edits">Per-workflow edits<a class="headerlink" href="#per-workflow-edits" title="Permanent link">&para;</a></h2>
-<p>The chosen scope is the <strong>full quality set</strong> (everything that asserts
-correctness / security / hygiene). Two shapes:</p>
+<p>The chosen scope is the <strong>full quality set</strong> (everything that asserts correctness / security / hygiene).
+Two shapes:</p>
 <table>
 <thead>
 <tr>
@@ -2838,22 +2809,16 @@ correctness / security / hygiene). Two shapes:</p>
 </tr>
 </tbody>
 </table>
-<p><code>push: branches: [main]</code> triggers are unchanged; on push the real jobs still run
-unconditionally (post-merge gate), and <code>gate</code> passes when they do.</p>
+<p><code>push: branches: [main]</code> triggers are unchanged; on push the real jobs still run unconditionally (post-merge gate), and <code>gate</code> passes when they do.</p>
 <h2 id="cost">Cost<a class="headerlink" href="#cost" title="Permanent link">&para;</a></h2>
-<p>Removing the coarse <code>paths-ignore</code> means a docs-only PR now spins the cheap
-<code>changes</code> job (and the trivial <code>gate</code> job) on the six always-changes workflows
-instead of skipping the workflow entirely — a few seconds of <code>ubuntu-latest</code> per
-workflow, no Go build, no image build, no cluster. This is the standard,
-GitHub-documented cost of making a path-gated workflow safe to require.</p>
+<p>Removing the coarse <code>paths-ignore</code> means a docs-only PR now spins the cheap <code>changes</code> job (and the trivial <code>gate</code> job) on the six always-changes workflows instead of skipping the workflow entirely — a few seconds of <code>ubuntu-latest</code> per workflow, no Go build, no image build, no cluster.
+This is the standard, GitHub-documented cost of making a path-gated workflow safe to require.</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>actionlint</code> clean on every edited workflow.</li>
-<li>On a docs-only PR: every <code>changes</code>/<code>gate</code> job runs, all real jobs skip, every
-  <code>gate</code> reports green → PR is mergeable (no wedge).</li>
+<li>On a docs-only PR: every <code>changes</code>/<code>gate</code> job runs, all real jobs skip, every <code>gate</code> reports green → PR is mergeable (no wedge).</li>
 <li>On a code PR that fails a real job: that workflow's <code>gate</code> goes red.</li>
-<li>Once the gates are required via the ruleset: a PR with a red <code>gate</code> cannot be
-  merged; a docs-only PR with all-green gates can.</li>
+<li>Once the gates are required via the ruleset: a PR with a red <code>gate</code> cannot be merged; a docs-only PR with all-green gates can.</li>
 </ul>
 
 

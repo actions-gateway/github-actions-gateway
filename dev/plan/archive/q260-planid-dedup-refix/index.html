@@ -2549,6 +2549,97 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#follow-up-post-3-close-the-residual-before-re-validating-green" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Follow-up (post-#3): close the residual before re-validating green
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#root-cause--wrong-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root cause — wrong key
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#decision-replace-not-complement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision: replace, not complement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-must-fail-against-c850764" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests (must fail against c850764)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docs
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2568,176 +2659,88 @@
 
 
 <h1 id="q260-re-fix--re-key-job-acquisition-dedup-on-planid">Q260 re-fix — re-key job-acquisition dedup on <code>planID</code><a class="headerlink" href="#q260-re-fix--re-key-job-acquisition-dedup-on-planid" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> the planID dedup is live-validated <strong>effective</strong> — the dedup fires on the shared
-<code>planID</code> and the burst-start Secret-collision collapse does <strong>not</strong> recur — and as of re-route</p>
-<h1 id="4-2026-07-04-the-capacity-q248-and-collision-residuals-are-both-fixed-3-non-preempted">4 (2026-07-04) the <strong>capacity (Q248) and collision residuals are both fixed</strong> (3 non-preempted<a class="headerlink" href="#4-2026-07-04-the-capacity-q248-and-collision-residuals-are-both-fixed-3-non-preempted" title="Permanent link">&para;</a></h1>
-<p>nodes; <strong>0 Secret/Pod <code>already exists</code> in two bursts</strong>). But the concurrent matrix is still
-<strong>not fully green</strong>: the remaining blocker has shifted to GitHub's broker <strong>fan-out
-completion/assignment accounting</strong>, which is distinct from and beyond this dedup, and which the</p>
-<h1 id="513-completejob-abandon-flag-does-not-resolve-it-makes-the-end-state-worse--keep-it-off">513 completejob-abandon flag does <strong>not</strong> resolve (it makes the end-state worse — keep it OFF).<a class="headerlink" href="#513-completejob-abandon-flag-does-not-resolve-it-makes-the-end-state-worse--keep-it-off" title="Permanent link">&para;</a></h1>
-<p>Full evidence in <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #4 (and the re-route #4 update
-block below). <strong>Q224/Q260/Q242 stay open.</strong></p>
+<p><strong>Status:</strong> the planID dedup is live-validated <strong>effective</strong> — the dedup fires on the shared <code>planID</code> and the burst-start Secret-collision collapse does <strong>not</strong> recur — and as of re-route #4 (2026-07-04) the <strong>capacity (Q248) and collision residuals are both fixed</strong> (3 non-preempted nodes; <strong>0 Secret/Pod <code>already exists</code> in two bursts</strong>).
+But the concurrent matrix is still <strong>not fully green</strong>: the remaining blocker has shifted to GitHub's broker <strong>fan-out completion/assignment accounting</strong>, which is distinct from and beyond this dedup, and which the #513 completejob-abandon flag does <strong>not</strong> resolve (it makes the end-state worse — keep it OFF).
+Full evidence in <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #4 (and the re-route #4 update block below). <strong>Q224/Q260/Q242 stay open.</strong></p>
 <blockquote>
-<p><strong>Update (redelivery residual code-complete).</strong> Residual (2) — the late-redelivery
-Pod-collision — is <strong>fixed in code</strong> (this PR): the released <code>planID</code> claim now <strong>lingers</strong>
-for the pod's <code>completedPodTTL</code> window, so a late redelivery is deduped instead of colliding
-on the winner's lingering Completed pod. See Follow-up item 1 below. The deeper
-completion-vs-15-min-cancel <em>accounting</em> gap (item 2) now has its run-service protocol call —
-<code>broker.CompleteJob</code> + a guarded loser-abandon path (a follow-up PR to #512) — but it stays
-<strong>off by default</strong> pending live confirmation of GitHub's per-delivery completion semantics.
-Residual (1) (Q248 capacity) is a cluster task for the combined re-route #4. Q224/Q260/Q242
-stay open until that turn-up reconfirms green (and, for item 2, confirms the semantics).</p>
-<p><strong>Update (re-route #4, 2026-07-04 — live-tested; #513 flag does NOT resolve, keep OFF).</strong>
-The combined capacity + flag-on/flag-off turn-up ran on stable non-preemptible capacity
-(full evidence in <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #4). Findings: <strong>capacity
-(Q248) and collisions (#512) are both FIXED</strong> — 3 non-preempted nodes, and <strong>0 Secret/Pod
-<code>already exists</code> collisions in both bursts</strong> (10 dedup events each). But <strong>neither flag state
-reaches green</strong>: the blocker is now GitHub's broker <strong>fan-out completion/assignment
-accounting</strong>, distinct from and beyond this dedup. With the flag <strong>ON</strong>, <code>completejob(result=
-skipped)</code> returns HTTP-OK (14/15; 1× <code>401 "Not authorized for this job"</code>) <strong>but does not
-conclude the job</strong> — a late redelivery re-assigns the already-run job to a replacement
-session and GitHub holds it <strong>indefinitely <code>in_progress</code></strong>; by acking the delivery it even
-<em>suppresses</em> the 15-min unstarted-cancel that would otherwise resolve it. With the flag
-<strong>OFF</strong> (control, only the completejob path differs) the same jobs reach <strong>terminal
-<code>failure</code>/<code>cancelled</code></strong> (the Q259 recycle 422 blocks listener reuse → trivial jobs cancelled
-at the unstarted-timeout). <strong>The flag makes the end-state worse, so it stays OFF by default.</strong>
-Semantics answered: the run service <strong>accepts</strong> the <code>skipped</code> serialization but does not
-finalize the job on that call, and job-scoped completion auth is unreliable (the 401).
-<strong>Item 2's completejob-abandon approach is therefore not the fix</strong> — the real work is
-reconciling GitHub's per-delivery fan-out with the AGC's one-runner-per-session model
-(runner recycle + job completion), tracked under Q260/Q224. Q224/Q260/Q242 stay open.</p>
+<p><strong>Update (redelivery residual code-complete).</strong> Residual (2) — the late-redelivery Pod-collision — is <strong>fixed in code</strong> (this PR): the released <code>planID</code> claim now <strong>lingers</strong> for the pod's <code>completedPodTTL</code> window, so a late redelivery is deduped instead of colliding on the winner's lingering Completed pod.
+See Follow-up item 1 below.
+The deeper completion-vs-15-min-cancel <em>accounting</em> gap (item 2) now has its run-service protocol call — <code>broker.CompleteJob</code> + a guarded loser-abandon path (a follow-up PR to #512) — but it stays <strong>off by default</strong> pending live confirmation of GitHub's per-delivery completion semantics.
+Residual (1) (Q248 capacity) is a cluster task for the combined re-route #4.
+Q224/Q260/Q242 stay open until that turn-up reconfirms green (and, for item 2, confirms the semantics).</p>
+<p><strong>Update (re-route #4, 2026-07-04 — live-tested; #513 flag does NOT resolve, keep OFF).</strong> The combined capacity + flag-on/flag-off turn-up ran on stable non-preemptible capacity (full evidence in <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a> re-route #4).
+Findings: <strong>capacity (Q248) and collisions (#512) are both FIXED</strong> — 3 non-preempted nodes, and <strong>0 Secret/Pod <code>already exists</code> collisions in both bursts</strong> (10 dedup events each).
+But <strong>neither flag state reaches green</strong>: the blocker is now GitHub's broker <strong>fan-out completion/assignment accounting</strong>, distinct from and beyond this dedup.
+With the flag <strong>ON</strong>, <code>completejob(result= skipped)</code> returns HTTP-OK (14/15; 1× <code>401 "Not authorized for this job"</code>) <strong>but does not conclude the job</strong> — a late redelivery re-assigns the already-run job to a replacement session and GitHub holds it <strong>indefinitely <code>in_progress</code></strong>; by acking the delivery it even <em>suppresses</em> the 15-min unstarted-cancel that would otherwise resolve it.
+With the flag <strong>OFF</strong> (control, only the completejob path differs) the same jobs reach <strong>terminal <code>failure</code>/<code>cancelled</code></strong> (the Q259 recycle 422 blocks listener reuse → trivial jobs cancelled at the unstarted-timeout). <strong>The flag makes the end-state worse, so it stays OFF by default.</strong> Semantics answered: the run service <strong>accepts</strong> the <code>skipped</code> serialization but does not finalize the job on that call, and job-scoped completion auth is unreliable (the 401). <strong>Item 2's completejob-abandon approach is therefore not the fix</strong> — the real work is reconciling GitHub's per-delivery fan-out with the AGC's one-runner-per-session model (runner recycle + job completion), tracked under Q260/Q224.
+Q224/Q260/Q242 stay open.</p>
 </blockquote>
 <h2 id="follow-up-post-3-close-the-residual-before-re-validating-green">Follow-up (post-#3): close the residual before re-validating green<a class="headerlink" href="#follow-up-post-3-close-the-residual-before-re-validating-green" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Release the <code>planID</code> claim only after the worker Pod is garbage-collected</strong>, not at job
-   completion — so a post-completion redelivery of a slow job is deduped rather than colliding
-   on the lingering Completed pod. ✅ <strong>DONE (code-complete, awaits re-route #4).</strong> The
-   Multiplexer's shared claim registry now <strong>retains</strong> a released <code>planID</code> claim for a linger
-   window sized to the owner's <code>completedPodTTL</code> (the exact window the winner's terminal pod
-   lingers before the reaper GCs it), instead of deleting it on completion. A late redelivery
-   arriving during that window is deduped at the post-acquire <code>planID</code> gate (counted on
-   <code>actions_gateway_jobs_duplicate_delivery_total</code>) and never re-enters the provisioner — so
-   there is <strong>no <code>create Pod … already exists</code></strong> and no error surfaced as a job cancel. Once
-   the linger elapses (pod reaped), the <code>planID</code> is reclaimable, so a genuine redelivery after
-   GC still provisions. Expired lingering entries are swept lazily, keeping the map bounded.</li>
-<li>Wiring: <code>Multiplexer.ClaimLinger</code> set from <code>provisioner.EffectiveCompletedPodTTL(rg)</code> (v1)
-     / <code>CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)</code> (v2). <code>ClaimLinger == 0</code> (owner reaps
-     terminal pods synchronously, so none linger) keeps the original delete-on-completion path.</li>
-<li>Regression: <code>TestAGC_Q260_LateRedeliveryAfterCompletionDedups</code> (envtest — winner completes,
-     its pod lingers, a late redelivery of the same planID must be deduped, not a 2nd <code>create
-     Pod</code>) + Multiplexer unit tests for the linger/sweep semantics. The envtest <strong>fails against
-     the pre-fix delete-on-completion behavior</strong> with the exact residual signature
-     (<code>create Pod runner-…-&lt;planid&gt;: pods "…" already exists</code>).</li>
-<li><strong>Reconcile GitHub's per-delivery job-assignment timeout with the dedup-to-one-delivery
-   model.</strong> ➜ <strong>Designed + repro landed in
-   <a href="../q260-fanout-completion-reconciliation/"><code>q260-fanout-completion-reconciliation.md</code></a>.</strong>
-   The #513 immediate-loser-<code>skipped</code> path below is a <strong>confirmed dead-end</strong> (re-route #4);
-   the recommended fix is instead a <strong>winner-driven completion fan-out</strong> to all sibling
-   deliveries on completion, gated pending a live re-route #5 (one unknown: does GitHub honour
-   a non-running delivery's completion?). An offline, deterministic repro of the accounting
-   gap now fails-today and gates that fix — no turn-up needed. The remainder of this item is
-   the superseded #513 record.</li>
+<li><strong>Release the <code>planID</code> claim only after the worker Pod is garbage-collected</strong>, not at job completion — so a post-completion redelivery of a slow job is deduped rather than colliding on the lingering Completed pod. ✅ <strong>DONE (code-complete, awaits re-route #4).</strong> The Multiplexer's shared claim registry now <strong>retains</strong> a released <code>planID</code> claim for a linger window sized to the owner's <code>completedPodTTL</code> (the exact window the winner's terminal pod lingers before the reaper GCs it), instead of deleting it on completion.
+   A late redelivery arriving during that window is deduped at the post-acquire <code>planID</code> gate (counted on <code>actions_gateway_jobs_duplicate_delivery_total</code>) and never re-enters the provisioner — so there is <strong>no <code>create Pod … already exists</code></strong> and no error surfaced as a job cancel.
+   Once the linger elapses (pod reaped), the <code>planID</code> is reclaimable, so a genuine redelivery after GC still provisions.
+   Expired lingering entries are swept lazily, keeping the map bounded.</li>
+<li>Wiring: <code>Multiplexer.ClaimLinger</code> set from <code>provisioner.EffectiveCompletedPodTTL(rg)</code> (v1) / <code>CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)</code> (v2). <code>ClaimLinger == 0</code> (owner reaps terminal pods synchronously, so none linger) keeps the original delete-on-completion path.</li>
+<li>Regression: <code>TestAGC_Q260_LateRedeliveryAfterCompletionDedups</code> (envtest — winner completes, its pod lingers, a late redelivery of the same planID must be deduped, not a 2nd <code>create Pod</code>) + Multiplexer unit tests for the linger/sweep semantics.
+     The envtest <strong>fails against the pre-fix delete-on-completion behavior</strong> with the exact residual signature (<code>create Pod runner-…-&lt;planid&gt;: pods "…" already exists</code>).</li>
+<li><strong>Reconcile GitHub's per-delivery job-assignment timeout with the dedup-to-one-delivery model.</strong> ➜ <strong>Designed + repro landed in <a href="../q260-fanout-completion-reconciliation/"><code>q260-fanout-completion-reconciliation.md</code></a>.</strong> The #513 immediate-loser-<code>skipped</code> path below is a <strong>confirmed dead-end</strong> (re-route #4); the recommended fix is instead a <strong>winner-driven completion fan-out</strong> to all sibling deliveries on completion, gated pending a live re-route #5 (one unknown: does GitHub honour a non-running delivery's completion?).
+   An offline, deterministic repro of the accounting gap now fails-today and gates that fix — no turn-up needed.
+   The remainder of this item is the superseded #513 record.</li>
 </ol>
-<p>A fanned-out job whose winner completes via one delivery can still be cancelled at
-   the 15-min unstarted-timeout on a <em>deduped</em> sibling delivery (observed: <code>tidy-check</code>'s pod
-   reported "Job completed" yet GitHub cancelled the job). Investigate whether the loser
-   should acknowledge/complete its delivery rather than silently skip.
-   - <strong>Mechanism landed, guarded (PR follow-up to #512).</strong> <code>broker.Client.CompleteJob</code>
-     (<code>POST {run_service_url}/completejob</code>, job-scoped auth like <code>renewjob</code>) was added, and the
-     <code>handleJob</code> loser path now — <em>when enabled</em> — releases its acquired-but-unrun assignment
-     via <code>completejob</code> on the loser's <strong>own</strong> <code>jobID</code> (<code>RunnerRequestID</code>, distinct per sibling)
-     with result <code>skipped</code>, tracked by <code>actions_gateway_abandoned_delivery_completions_total</code>.
-     Keying on the loser's own <code>jobID</code> (not the shared planID) is safe <strong>iff</strong> the run service
-     scopes completion per-delivery, which the <code>renewjob</code> per-<code>(planID, jobID)</code> model (Q247,
-     live-confirmed) strongly implies but does <strong>not</strong> prove for the <em>completion</em> path.
-   - <strong>OFF BY DEFAULT</strong> (<code>AGC_COMPLETE_ABANDONED_DELIVERIES=true</code>;
-     <code>listener.Config.CompleteAbandonedDeliveries</code>). Rationale: if completion is scoped by
-     <code>planID</code> (not <code>jobID</code>), the loser's call would finalize the winner's still-running job —
-     a strict regression on live workflows. Secure-by-default keeps it opt-in until confirmed.
-   - <strong>STILL NEEDS item 1 (a live dogfood turn-up)</strong> to confirm: (a) that a deduped
-     <code>acquirejob</code> really creates an independently-tracked assignment GitHub cancels at 15 min
-     even after the winner completes; (b) that <code>completejob</code> on the loser's own <code>jobID</code> resolves
-     <em>only</em> that assignment (not the winner's); and (c) the exact <code>result</code> wire serialization
-     (<code>skipped</code> lowercase vs PascalCase vs integer enum — currently modeled, unverified). The
-     turn-up that gathers this evidence should also flip the flag on and validate the fix — do
-     both in one turn-up. Capture the run-service request/response in <code>gke-dogfood.md</code>.
-3. <strong>Stable worker capacity for the re-validation</strong> (Q248): the spot pool preempted to 1 node,
-   confounding throughput. Re-run on non-spot or ≥3 held nodes so a non-green result can be
-   attributed cleanly. <em>(Cluster task; owned by the dispatcher's combined capacity + re-route #4
-   turn-up, not this code change.)</em></p>
+<p>A fanned-out job whose winner completes via one delivery can still be cancelled at the 15-min unstarted-timeout on a <em>deduped</em> sibling delivery (observed: <code>tidy-check</code>'s pod reported "Job completed" yet GitHub cancelled the job).
+   Investigate whether the loser should acknowledge/complete its delivery rather than silently skip.
+   - <strong>Mechanism landed, guarded (PR follow-up to #512).</strong> <code>broker.Client.CompleteJob</code> (<code>POST {run_service_url}/completejob</code>, job-scoped auth like <code>renewjob</code>) was added, and the <code>handleJob</code> loser path now — <em>when enabled</em> — releases its acquired-but-unrun assignment via <code>completejob</code> on the loser's <strong>own</strong> <code>jobID</code> (<code>RunnerRequestID</code>, distinct per sibling) with result <code>skipped</code>, tracked by <code>actions_gateway_abandoned_delivery_completions_total</code>.
+     Keying on the loser's own <code>jobID</code> (not the shared planID) is safe <strong>iff</strong> the run service scopes completion per-delivery, which the <code>renewjob</code> per-<code>(planID, jobID)</code> model (Q247, live-confirmed) strongly implies but does <strong>not</strong> prove for the <em>completion</em> path.
+   - <strong>OFF BY DEFAULT</strong> (<code>AGC_COMPLETE_ABANDONED_DELIVERIES=true</code>; <code>listener.Config.CompleteAbandonedDeliveries</code>).
+     Rationale: if completion is scoped by <code>planID</code> (not <code>jobID</code>), the loser's call would finalize the winner's still-running job — a strict regression on live workflows.
+     Secure-by-default keeps it opt-in until confirmed.
+   - <strong>STILL NEEDS item 1 (a live dogfood turn-up)</strong> to confirm: (a) that a deduped <code>acquirejob</code> really creates an independently-tracked assignment GitHub cancels at 15 min even after the winner completes; (b) that <code>completejob</code> on the loser's own <code>jobID</code> resolves <em>only</em> that assignment (not the winner's); and (c) the exact <code>result</code> wire serialization (<code>skipped</code> lowercase vs PascalCase vs integer enum — currently modeled, unverified).
+     The turn-up that gathers this evidence should also flip the flag on and validate the fix — do both in one turn-up.
+     Capture the run-service request/response in <code>gke-dogfood.md</code>.
+3. <strong>Stable worker capacity for the re-validation</strong> (Q248): the spot pool preempted to 1 node, confounding throughput.
+   Re-run on non-spot or ≥3 held nodes so a non-green result can be attributed cleanly. <em>(Cluster task; owned by the dispatcher's combined capacity + re-route #4 turn-up, not this code change.)</em></p>
 <h2 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h2>
-<p>The first Q260 fix (commit <code>c850764</code>, #503) deduped job acquisition by claiming the
-per-delivery <code>RunnerRequestID</code> <strong>before</strong> <code>AcquireJob</code>. Live turn-up #2 (2026-07-03,
-recorded in <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a>) proved it <strong>ineffective</strong>: GitHub's
-broker fan-out delivers one job to N sibling listener sessions as messages with
-<strong>distinct</strong> <code>RunnerRequestID</code>s. Each sibling's <code>claimJob(distinctReqID)</code> succeeds, all
-pass the gate, all acquire, and all collide on the <strong>shared</strong> per-job worker Secret
-<code>job-&lt;planID&gt;</code> (<code>secrets "…" already exists</code>). One wins; the rest burn their runner slot
-(busy but pod-less) and the pool collapses 8→2.</p>
+<p>The first Q260 fix (commit <code>c850764</code>, #503) deduped job acquisition by claiming the per-delivery <code>RunnerRequestID</code> <strong>before</strong> <code>AcquireJob</code>.
+Live turn-up #2 (2026-07-03, recorded in <a href="../gke-dogfood-turnup-findings/"><code>gke-dogfood.md</code></a>) proved it <strong>ineffective</strong>: GitHub's broker fan-out delivers one job to N sibling listener sessions as messages with <strong>distinct</strong> <code>RunnerRequestID</code>s.
+Each sibling's <code>claimJob(distinctReqID)</code> succeeds, all pass the gate, all acquire, and all collide on the <strong>shared</strong> per-job worker Secret <code>job-&lt;planID&gt;</code> (<code>secrets "…" already exists</code>).
+One wins; the rest burn their runner slot (busy but pod-less) and the pool collapses 8→2.</p>
 <h2 id="root-cause--wrong-key">Root cause — wrong key<a class="headerlink" href="#root-cause--wrong-key" title="Permanent link">&para;</a></h2>
 <ul>
-<li>The colliding Secret is named from the job's <strong><code>planID</code></strong> — <code>resp.Plan.PlanID</code>, from
-  the AcquireJob <strong>response</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go:541</code></a>
-  <code>secretName := "job-" + safeName(planID)</code>; the pod name too). <code>planID</code> is the
-  codebase's per-job unique identity.</li>
-<li>The pre-acquire broker message (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/types.go"><code>RunnerJobRequestBody</code></a>) carries
-  only <code>RunnerRequestID</code> + <code>RunServiceURL</code> + <code>BillingOwnerID</code> — <strong>no</strong> plan id. Siblings
-  get distinct <code>RunnerRequestID</code>s, so the pre-acquire gate never collapses the fan-out.</li>
-<li><code>planID</code> is only known <strong>post-acquire</strong>, so the dedup must move to a post-acquire,
-  pre-provision gate keyed on <code>planID</code>.</li>
+<li>The colliding Secret is named from the job's <strong><code>planID</code></strong> — <code>resp.Plan.PlanID</code>, from the AcquireJob <strong>response</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go:541</code></a> <code>secretName := "job-" + safeName(planID)</code>; the pod name too). <code>planID</code> is the codebase's per-job unique identity.</li>
+<li>The pre-acquire broker message (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/types.go"><code>RunnerJobRequestBody</code></a>) carries only <code>RunnerRequestID</code> + <code>RunServiceURL</code> + <code>BillingOwnerID</code> — <strong>no</strong> plan id.
+  Siblings get distinct <code>RunnerRequestID</code>s, so the pre-acquire gate never collapses the fan-out.</li>
+<li><code>planID</code> is only known <strong>post-acquire</strong>, so the dedup must move to a post-acquire, pre-provision gate keyed on <code>planID</code>.</li>
 </ul>
 <h2 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h2>
-<p>Re-key the Multiplexer's shared in-flight claim registry from <code>RunnerRequestID</code> to
-<code>planID</code>, and move the gate in <code>handleJob</code> from <strong>pre-</strong><code>AcquireJob</code> to <strong>post-acquire,
-pre-provision</strong>:</p>
+<p>Re-key the Multiplexer's shared in-flight claim registry from <code>RunnerRequestID</code> to <code>planID</code>, and move the gate in <code>handleJob</code> from <strong>pre-</strong><code>AcquireJob</code> to <strong>post-acquire, pre-provision</strong>:</p>
 <ol>
-<li>Parse job body → admission gate (Q59, unchanged) → <code>AcquireJob</code> (sets <code>planID</code>,
-   <code>acquired=true</code>, <code>MarkAgentConsumed</code>).</li>
+<li>Parse job body → admission gate (Q59, unchanged) → <code>AcquireJob</code> (sets <code>planID</code>, <code>acquired=true</code>, <code>MarkAgentConsumed</code>).</li>
 <li><strong>New gate:</strong> <code>release, ok := cfg.ClaimJob(planID)</code>.</li>
-<li><code>ok=false</code> (a sibling already owns this planID): increment
-     <code>jobs_duplicate_delivery_total</code>, skip <code>SpawnReplacement</code>/renew/provision, and
-     <code>return acquired /*true*/, nil</code> — the caller recycles the consumed single-use runner
-     back online, so the slot is reclaimed cleanly (no burned slot, no "already exists").</li>
-<li><code>ok=true</code>: <code>defer release()</code> (held for the whole job; released on completion or
-     abandonment so a later GitHub redelivery is provisionable).</li>
+<li><code>ok=false</code> (a sibling already owns this planID): increment <code>jobs_duplicate_delivery_total</code>, skip <code>SpawnReplacement</code>/renew/provision, and <code>return acquired /*true*/, nil</code> — the caller recycles the consumed single-use runner back online, so the slot is reclaimed cleanly (no burned slot, no "already exists").</li>
+<li><code>ok=true</code>: <code>defer release()</code> (held for the whole job; released on completion or abandonment so a later GitHub redelivery is provisionable).</li>
 <li><code>SpawnReplacement</code> → renew loop → provision (unchanged), for the winner only.</li>
 </ol>
 <h3 id="decision-replace-not-complement">Decision: replace, not complement<a class="headerlink" href="#decision-replace-not-complement" title="Permanent link">&para;</a></h3>
 <p>The pre-acquire <code>RunnerRequestID</code> gate is removed, not kept alongside the planID gate:
 - It never fired in production (siblings' ids differ — proven live).
-- The planID gate subsumes its only correct case: any two deliveries that would collide
-  on <code>job-&lt;planID&gt;</code> share a planID by definition, so identical-message redelivery is
-  deduped too.
+- The planID gate subsumes its only correct case: any two deliveries that would collide on <code>job-&lt;planID&gt;</code> share a planID by definition, so identical-message redelivery is deduped too.
 - One registry / one gate / one metric is simpler than two.</p>
-<p><strong>Accepted trade-off:</strong> planID is post-acquire, so losing siblings do briefly acquire
-(marking the runner busy) before deduping — one recycle reclaims the slot; the pool no
-longer collapses. A pre-acquire dedup would need a stable pre-acquire key;
-<code>RunServiceURL</code>'s cross-sibling stability is unproven in the live evidence, so it is not
-used (avoids shipping a third speculative key).</p>
+<p><strong>Accepted trade-off:</strong> planID is post-acquire, so losing siblings do briefly acquire (marking the runner busy) before deduping — one recycle reclaims the slot; the pool no longer collapses.
+A pre-acquire dedup would need a stable pre-acquire key; <code>RunServiceURL</code>'s cross-sibling stability is unproven in the live evidence, so it is not used (avoids shipping a third speculative key).</p>
 <h2 id="tests-must-fail-against-c850764">Tests (must fail against <code>c850764</code>)<a class="headerlink" href="#tests-must-fail-against-c850764" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer_test.go"><code>multiplexer_test.go</code></a>):
-  rework <code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> so each sibling gets a
-  <strong>distinct</strong> <code>RunnerRequestID</code> but AcquireJob returns a <strong>constant</strong> <code>planID</code>. Peak
-  concurrent provisions must be 1; N-1 deduped. Against <code>c850764</code> (reqID key) all N
-  provision → peak = N.</li>
-<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine_test.go"><code>goroutine_test.go</code></a>):
-  <code>TestListener_DuplicateJobDeliverySkipsAcquire</code> reworked to the post-acquire semantics —
-  the loser <strong>does</strong> acquire (post-acquire gate) but does <strong>not</strong> provision, increments
-  the metric, and returns <code>acquired=true</code> (runner recycles).</li>
-<li><strong>Integration/envtest</strong>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/agc/internal/controller/integration"><code>controller/integration</code></a>): real
-  provisioner + real apiserver. Fix the AcquireJob response to a constant planID; drive
-  the baseline session to win + hold the planID claim (blocked in <code>waitForCompletion</code>),
-  then deliver the <strong>same</strong> planID job (distinct reqID) to the replacement session —
-  assert exactly one <code>job-&lt;planID&gt;</code> Secret, the duplicate-delivery metric rises, and the
-  loser is not wedged. Against <code>c850764</code> the loser (distinct reqID) is not deduped and
-  hits the real <code>AlreadyExists</code>, so the metric stays flat → test fails.</li>
+<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer_test.go"><code>multiplexer_test.go</code></a>): rework <code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> so each sibling gets a <strong>distinct</strong> <code>RunnerRequestID</code> but AcquireJob returns a <strong>constant</strong> <code>planID</code>.
+  Peak concurrent provisions must be 1; N-1 deduped.
+  Against <code>c850764</code> (reqID key) all N provision → peak = N.</li>
+<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine_test.go"><code>goroutine_test.go</code></a>): <code>TestListener_DuplicateJobDeliverySkipsAcquire</code> reworked to the post-acquire semantics — the loser <strong>does</strong> acquire (post-acquire gate) but does <strong>not</strong> provision, increments the metric, and returns <code>acquired=true</code> (runner recycles).</li>
+<li><strong>Integration/envtest</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/agc/internal/controller/integration"><code>controller/integration</code></a>): real provisioner + real apiserver.
+  Fix the AcquireJob response to a constant planID; drive the baseline session to win + hold the planID claim (blocked in <code>waitForCompletion</code>), then deliver the <strong>same</strong> planID job (distinct reqID) to the replacement session — assert exactly one <code>job-&lt;planID&gt;</code> Secret, the duplicate-delivery metric rises, and the loser is not wedged.
+  Against <code>c850764</code> the loser (distinct reqID) is not deduped and hits the real <code>AlreadyExists</code>, so the metric stays flat → test fails.</li>
 </ul>
 <h2 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>metrics.go</code> help + <code>docs/operations/observability.md</code>: metric now counts a
-  post-acquire planID-claim skip (was pre-acquire).</li>
+<li><code>metrics.go</code> help + <code>docs/operations/observability.md</code>: metric now counts a post-acquire planID-claim skip (was pre-acquire).</li>
 <li><code>docs/operations/troubleshooting.md</code>: update the Q260 section to the planID key.</li>
 <li><code>docs/plan/gke-dogfood.md</code>: record the re-fix; Q224/Q260 stay open pending re-route.</li>
 </ul>

@@ -2723,16 +2723,19 @@
 <p>← <a href="../milestone-1/">Milestone 1</a></p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><strong>Goal:</strong> Fill the test gaps identified in a post-implementation coverage review of the Milestone 1 packages (<code>broker</code>, <code>githubapp</code>). Overall coverage sits at 72.6%; the gaps below are the meaningful ones — code paths that carry real production risk, not just syntactic line misses.</p>
-<p><strong>Status:</strong> All gaps implemented. Coverage improved from 72.6% → 80.3% (broker: 81.0%, githubapp: 79.4%).</p>
-<p>All tests are unit tests using <code>httptest</code> stubs and in-memory fixtures. No network access or credentials required.</p>
+<p><strong>Goal:</strong> Fill the test gaps identified in a post-implementation coverage review of the Milestone 1 packages (<code>broker</code>, <code>githubapp</code>).
+Overall coverage sits at 72.6%; the gaps below are the meaningful ones — code paths that carry real production risk, not just syntactic line misses.</p>
+<p><strong>Status:</strong> All gaps implemented.
+Coverage improved from 72.6% → 80.3% (broker: 81.0%, githubapp: 79.4%).</p>
+<p>All tests are unit tests using <code>httptest</code> stubs and in-memory fixtures.
+No network access or credentials required.</p>
 <hr />
 <h2 id="gaps">Gaps<a class="headerlink" href="#gaps" title="Permanent link">&para;</a></h2>
 <h3 id="gap-1--decryptsessionkey-completely-untested-">Gap 1 — <code>DecryptSessionKey</code> completely untested ✓<a class="headerlink" href="#gap-1--decryptsessionkey-completely-untested-" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>broker</code>
-<strong>Function:</strong> <code>DecryptSessionKey</code> in <code>crypto.go</code>
-<strong>Coverage:</strong> 0% → 100%</p>
-<p><code>DecryptSessionKey</code> unwraps the RSA-OAEP (SHA-1) encrypted AES session key returned in the <code>CreateSession</code> response. It is called by every listener before any message can be decrypted, yet has no test at all. A mismatched hash function or wrong key format would produce a silent failure only discovered during a live probe run.</p>
+<p><strong>Package:</strong> <code>broker</code> <strong>Function:</strong> <code>DecryptSessionKey</code> in <code>crypto.go</code> <strong>Coverage:</strong> 0% → 100%</p>
+<p><code>DecryptSessionKey</code> unwraps the RSA-OAEP (SHA-1) encrypted AES session key returned in the <code>CreateSession</code> response.
+It is called by every listener before any message can be decrypted, yet has no test at all.
+A mismatched hash function or wrong key format would produce a silent failure only discovered during a live probe run.</p>
 <p><strong>Tests to add in <code>crypto_test.go</code>:</strong></p>
 <table>
 <thead>
@@ -2757,10 +2760,9 @@
 - The test proves the SHA-1 OAEP pairing is correct, which is the only non-obvious constraint here (SHA-256 OAEP would silently fail against real GitHub sessions).</p>
 <hr />
 <h3 id="gap-2--v2-flow-paths-in-createsession-getmessage-deletesession-">Gap 2 — v2 flow paths in <code>CreateSession</code>, <code>GetMessage</code>, <code>DeleteSession</code> ✓<a class="headerlink" href="#gap-2--v2-flow-paths-in-createsession-getmessage-deletesession-" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>broker</code>
-<strong>Functions:</strong> <code>CreateSession</code>, <code>GetMessage</code>, <code>DeleteSession</code> in <code>client.go</code>
-<strong>Coverage impact:</strong> <code>GetMessage</code> 57% → 85.7%, <code>DeleteSession</code> 71% → 78.6%</p>
-<p>All three methods branch on <code>UseV2Flow</code>. The v1 VSTS pool paths are well-covered; the v2 paths (<code>{BrokerURL}/session</code>, <code>{BrokerURL}/message?sessionId=...&amp;status=online&amp;runnerVersion=...</code>, <code>{BrokerURL}/session</code> DELETE) are completely untested despite being the code path used by modern runner registrations.</p>
+<p><strong>Package:</strong> <code>broker</code> <strong>Functions:</strong> <code>CreateSession</code>, <code>GetMessage</code>, <code>DeleteSession</code> in <code>client.go</code> <strong>Coverage impact:</strong> <code>GetMessage</code> 57% → 85.7%, <code>DeleteSession</code> 71% → 78.6%</p>
+<p>All three methods branch on <code>UseV2Flow</code>.
+The v1 VSTS pool paths are well-covered; the v2 paths (<code>{BrokerURL}/session</code>, <code>{BrokerURL}/message?sessionId=...&amp;status=online&amp;runnerVersion=...</code>, <code>{BrokerURL}/session</code> DELETE) are completely untested despite being the code path used by modern runner registrations.</p>
 <p><strong>Tests to add in <code>client_test.go</code>:</strong></p>
 <table>
 <thead>
@@ -2793,10 +2795,10 @@
 - Use <code>r.URL.RawQuery</code> parsing in the handler to assert individual query params without brittle full-string matching.</p>
 <hr />
 <h3 id="gap-3--renewjobloop-error-propagation-">Gap 3 — <code>RenewJobLoop</code> error propagation ✓<a class="headerlink" href="#gap-3--renewjobloop-error-propagation-" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>broker</code>
-<strong>Function:</strong> <code>RenewJobLoop</code> in <code>client.go</code>
-<strong>Coverage:</strong> <code>errCh &lt;- err</code> path now exercised by <code>TestRenewJobLoop_ErrorPropagated</code></p>
-<p>When <code>RenewJob</code> returns an error, <code>RenewJobLoop</code> must send that error to the returned channel and then exit. The current test (<code>TestRenewJob_Interval</code>) only exercises the happy path; the error branch is untested. A regression here would cause the AGC's renewal goroutine to silently swallow job-expiry errors.</p>
+<p><strong>Package:</strong> <code>broker</code> <strong>Function:</strong> <code>RenewJobLoop</code> in <code>client.go</code> <strong>Coverage:</strong> <code>errCh &lt;- err</code> path now exercised by <code>TestRenewJobLoop_ErrorPropagated</code></p>
+<p>When <code>RenewJob</code> returns an error, <code>RenewJobLoop</code> must send that error to the returned channel and then exit.
+The current test (<code>TestRenewJob_Interval</code>) only exercises the happy path; the error branch is untested.
+A regression here would cause the AGC's renewal goroutine to silently swallow job-expiry errors.</p>
 <p><strong>Test to add in <code>client_test.go</code>:</strong></p>
 <table>
 <thead>
@@ -2817,10 +2819,10 @@
 - Assert <code>err.Error()</code> contains <code>"500"</code> to verify it is the RenewJob error, not a context error.</p>
 <hr />
 <h3 id="gap-4--parsersaprivatekey-pkcs8-path-">Gap 4 — <code>parseRSAPrivateKey</code> PKCS#8 path ✓<a class="headerlink" href="#gap-4--parsersaprivatekey-pkcs8-path-" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>githubapp</code>
-<strong>Function:</strong> <code>parseRSAPrivateKey</code> in <code>auth.go</code>
-<strong>Coverage:</strong> 38.5% → 92.3%</p>
-<p>GitHub App private keys are distributed as PKCS#1 PEM files today, but the PKCS#8 path (<code>PRIVATE KEY</code>) was added for forward-compatibility. It has two sub-branches: RSA key (success) and non-RSA key (error). Neither is tested.</p>
+<p><strong>Package:</strong> <code>githubapp</code> <strong>Function:</strong> <code>parseRSAPrivateKey</code> in <code>auth.go</code> <strong>Coverage:</strong> 38.5% → 92.3%</p>
+<p>GitHub App private keys are distributed as PKCS#1 PEM files today, but the PKCS#8 path (<code>PRIVATE KEY</code>) was added for forward-compatibility.
+It has two sub-branches: RSA key (success) and non-RSA key (error).
+Neither is tested.</p>
 <p><strong>Tests to add in <code>auth_test.go</code>:</strong></p>
 <table>
 <thead>
@@ -2852,8 +2854,8 @@
 <h3 id="gap-5--minor-gaps-">Gap 5 — Minor gaps ✓<a class="headerlink" href="#gap-5--minor-gaps-" title="Permanent link">&para;</a></h3>
 <p>These are lower-priority; each is a one-test fix.</p>
 <h4 id="5a--createsession-non-400-error-status-">5a — <code>CreateSession</code> non-400 error status ✓<a class="headerlink" href="#5a--createsession-non-400-error-status-" title="Permanent link">&para;</a></h4>
-<p><strong>Code path:</strong> <code>CreateSession</code> → <code>resp.StatusCode</code> is not 200, 201, or 400 (e.g. 503)
-<strong>Coverage:</strong> the <code>fmt.Errorf("unexpected status %d")</code> branch is untested.</p>
+<p><strong>Code path:</strong> <code>CreateSession</code> → <code>resp.StatusCode</code> is not 200, 201, or 400 (e.g.
+503) <strong>Coverage:</strong> the <code>fmt.Errorf("unexpected status %d")</code> branch is untested.</p>
 <table>
 <thead>
 <tr>
@@ -2869,8 +2871,7 @@
 </tbody>
 </table>
 <h4 id="5b--acquirejob-non-200-error-status-">5b — <code>AcquireJob</code> non-200 error status ✓<a class="headerlink" href="#5b--acquirejob-non-200-error-status-" title="Permanent link">&para;</a></h4>
-<p><strong>Code path:</strong> <code>AcquireJob</code> → <code>resp.StatusCode != 200</code> → error return
-<strong>Coverage:</strong> untested → covered.</p>
+<p><strong>Code path:</strong> <code>AcquireJob</code> → <code>resp.StatusCode != 200</code> → error return <strong>Coverage:</strong> untested → covered.</p>
 <table>
 <thead>
 <tr>
@@ -2886,8 +2887,7 @@
 </tbody>
 </table>
 <h4 id="5c--parserunnerrsakey-with-bom-prefixed-file-">5c — <code>ParseRunnerRSAKey</code> with BOM-prefixed file ✓<a class="headerlink" href="#5c--parserunnerrsakey-with-bom-prefixed-file-" title="Permanent link">&para;</a></h4>
-<p><strong>Code path:</strong> <code>ParseRunnerRSAKey</code> → <code>stripBOM</code> removes the <code>.NET</code> UTF-8 BOM before JSON parsing.
-<strong>Coverage:</strong> <code>stripBOM</code> is tested in <code>TestParseRunnerCredentials_DOTNETBOM</code> but not for the RSA params file.</p>
+<p><strong>Code path:</strong> <code>ParseRunnerRSAKey</code> → <code>stripBOM</code> removes the <code>.NET</code> UTF-8 BOM before JSON parsing. <strong>Coverage:</strong> <code>stripBOM</code> is tested in <code>TestParseRunnerCredentials_DOTNETBOM</code> but not for the RSA params file.</p>
 <table>
 <thead>
 <tr>
@@ -2903,8 +2903,7 @@
 </tbody>
 </table>
 <h4 id="5d--fetchrunneroauthtoken-missing-access_token-field-">5d — <code>FetchRunnerOAuthToken</code> missing <code>access_token</code> field ✓<a class="headerlink" href="#5d--fetchrunneroauthtoken-missing-access_token-field-" title="Permanent link">&para;</a></h4>
-<p><strong>Code path:</strong> server returns 200 with a JSON body that has an empty or missing <code>access_token</code> → error return.
-<strong>Coverage:</strong> untested → covered.</p>
+<p><strong>Code path:</strong> server returns 200 with a JSON body that has an empty or missing <code>access_token</code> → error return. <strong>Coverage:</strong> untested → covered.</p>
 <table>
 <thead>
 <tr>

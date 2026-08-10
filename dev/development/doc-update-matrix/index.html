@@ -2587,7 +2587,8 @@
 
 
 <h1 id="doc-update-matrix">Doc-update matrix<a class="headerlink" href="#doc-update-matrix" title="Permanent link">&para;</a></h1>
-<p>Which docs to update for each kind of change. Use this after making changes, before committing — update docs proactively rather than waiting to be asked.</p>
+<p>Which docs to update for each kind of change.
+Use this after making changes, before committing — update docs proactively rather than waiting to be asked.</p>
 <p>The <code>docs/</code> tree has two audiences: <code>docs/design/</code> explains how the system works (for contributors); <code>docs/operations/</code> explains what an operator does and sees (onboarding, runbooks, upgrades). <strong>Updating the design docs is not sufficient</strong> — if a change alters what an operator does, configures, or observes, the operator-facing docs must be updated too.</p>
 <table>
 <thead>
@@ -2644,31 +2645,19 @@
 </tbody>
 </table>
 <h2 id="name-the-acquisition-tier-when-a-capability-is-not-universal">Name the acquisition tier when a capability is not universal<a class="headerlink" href="#name-the-acquisition-tier-when-a-capability-is-not-universal" title="Permanent link">&para;</a></h2>
-<p>Applies across every row above. <strong>Before writing that the gateway does X, check
-which acquisition tier actually does X</strong> — and if it is not both, say so in the
-same sentence. Prose that reads as a property of the system is the failure mode;
-it is not repaired by being true of the tier the author had in mind.</p>
-<p>This has bitten three times (Q419 eviction recovery, Q439 the pre-claim quota
-gate, Q446 poll-error metrics), and once in a change whose whole purpose was to
-polish the same paragraphs. The claims are not wrong so much as unqualified, so
-review does not catch them — only checking the code does.</p>
-<p>How to check: the tier seams are the <code>ScaleSet</code> early return in
-<code>runnerset_controller.go</code> (everything after it is classic-only by construction),
-<code>provision()</code> versus <code>ProvisionScaleSetWorker</code>, and the <code>listener/</code> versus
-<code>scalesetlistener/</code> packages.</p>
+<p>Applies across every row above. <strong>Before writing that the gateway does X, check which acquisition tier actually does X</strong> — and if it is not both, say so in the same sentence.
+Prose that reads as a property of the system is the failure mode; it is not repaired by being true of the tier the author had in mind.</p>
+<p>This has bitten three times (Q419 eviction recovery, Q439 the pre-claim quota gate, Q446 poll-error metrics), and once in a change whose whole purpose was to polish the same paragraphs.
+The claims are not wrong so much as unqualified, so review does not catch them — only checking the code does.</p>
+<p>How to check: the tier seams are the <code>ScaleSet</code> early return in <code>runnerset_controller.go</code> (everything after it is classic-only by construction), <code>provision()</code> versus <code>ProvisionScaleSetWorker</code>, and the <code>listener/</code> versus <code>scalesetlistener/</code> packages.</p>
 <p>Two places it costs the most:</p>
 <ul>
-<li><strong>Metrics tables.</strong> A counter emitted from one tier reads a flat zero on the
-  other, and zero looks like "nothing happened" rather than "nothing is
-  watching". Say which tier emits it, and name the signal that substitutes.</li>
-<li><strong>Positioning copy</strong> (<code>README.md</code>, <code>why-gag.md</code>, <code>features.md</code>, <code>roadmap.md</code>). A capability
-  claimed for the system but implemented only on the deprecated tier is
-  scheduled for deletion, not shipped — it belongs in the parity table in
-  <a href="../../plan/v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a>,
-  which gates the <code>v2.0.0</code> removal on closing exactly this gap.</li>
+<li><strong>Metrics tables.</strong> A counter emitted from one tier reads a flat zero on the other, and zero looks like "nothing happened" rather than "nothing is watching".
+  Say which tier emits it, and name the signal that substitutes.</li>
+<li><strong>Positioning copy</strong> (<code>README.md</code>, <code>why-gag.md</code>, <code>features.md</code>, <code>roadmap.md</code>).
+  A capability claimed for the system but implemented only on the deprecated tier is scheduled for deletion, not shipped — it belongs in the parity table in <a href="../../plan/v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a>, which gates the <code>v2.0.0</code> removal on closing exactly this gap.</li>
 </ul>
-<p>This convention retires with the classic tier at <code>v2.0.0</code>; until then the parity
-table is the tracking mechanism, and anything found classic-only joins it.</p>
+<p>This convention retires with the classic tier at <code>v2.0.0</code>; until then the parity table is the tracking mechanism, and anything found classic-only joins it.</p>
 
 
 

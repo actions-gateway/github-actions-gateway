@@ -2864,18 +2864,13 @@
 </blockquote>
 <div class="admonition warning">
 <p class="admonition-title">Three deprecations, one removal release: <code>v2.0.0</code></p>
-<p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2beta1</code> (see
-<a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>),
-and author them as single-label <code>ScaleSet</code> runner sets. Everything named below
-stays <strong>fully served until <code>v2.0.0</code></strong>, so nothing is forced today. Migrate
-existing tenants with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> at your
-convenience: the move changes the API objects, not how jobs are acquired.</p>
+<p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2beta1</code> (see <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>), and author them as single-label <code>ScaleSet</code> runner sets.
+Everything named below stays <strong>fully served until <code>v2.0.0</code></strong>, so nothing is forced today.
+Migrate existing tenants with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> at your convenience: the move changes the API objects, not how jobs are acquired.</p>
 </div>
-<p>This page is the project's standing deprecation notice. It records what <code>v2.0.0</code>
-removes, what keeps working until then, and what an operator has to do before
-upgrading past it. One further deprecation runs on its own, later clock —
-<a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">the <code>CiliumFQDN</code> / <code>CalicoFQDN</code> egress modes</a>,
-removable no earlier than <code>v3.0.0</code>.</p>
+<p>This page is the project's standing deprecation notice.
+It records what <code>v2.0.0</code> removes, what keeps working until then, and what an operator has to do before upgrading past it.
+One further deprecation runs on its own, later clock — <a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">the <code>CiliumFQDN</code> / <code>CalicoFQDN</code> egress modes</a>, removable no earlier than <code>v3.0.0</code>.</p>
 <h2 id="what-v200-removes">What <code>v2.0.0</code> removes<a class="headerlink" href="#what-v200-removes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2907,97 +2902,58 @@ removable no earlier than <code>v3.0.0</code>.</p>
 </tr>
 </tbody>
 </table>
-<p><code>v2beta1</code> itself is <strong>not</strong> affected. Beta's contract is that a version will not be
-removed, and <code>v2.0.0</code> adds the GA <code>v2</code> version beside it rather than taking it away.</p>
+<p><code>v2beta1</code> itself is <strong>not</strong> affected.
+Beta's contract is that a version will not be removed, and <code>v2.0.0</code> adds the GA <code>v2</code> version beside it rather than taking it away.</p>
 <h3 id="why-the-three-are-coupled">Why the three are coupled<a class="headerlink" href="#why-the-three-are-coupled" title="Permanent link">&para;</a></h3>
-<p><code>v2beta1</code> is already ScaleSet-only, so classic acquisition exists <em>only</em> to serve
-<code>v1alpha1</code> and <code>v2alpha1</code> objects. Removing those two versions removes classic's
-entire reason to exist. Splitting the three removals across separate releases would
-buy nothing and would cost every operator a second breaking migration, so they land
-together on one major tag.</p>
+<p><code>v2beta1</code> is already ScaleSet-only, so classic acquisition exists <em>only</em> to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects.
+Removing those two versions removes classic's entire reason to exist.
+Splitting the three removals across separate releases would buy nothing and would cost every operator a second breaking migration, so they land together on one major tag.</p>
 <h2 id="a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">A fourth deprecation on a different clock: <code>CiliumFQDN</code> / <code>CalicoFQDN</code><a class="headerlink" href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" title="Permanent link">&para;</a></h2>
-<p>The <code>EgressProxy</code> field <code>spec.egressPolicyMode</code> accepts two deprecated per-Container
-Network Interface (CNI) values, <code>CiliumFQDN</code> and <code>CalicoFQDN</code>, superseded by the
-<code>FQDN</code> intent plus the operator's <code>--fqdn-policy-backend</code> selector
-(<a href="../security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">security-operations</a>).
+<p>The <code>EgressProxy</code> field <code>spec.egressPolicyMode</code> accepts two deprecated per-Container Network Interface (CNI) values, <code>CiliumFQDN</code> and <code>CalicoFQDN</code>, superseded by the <code>FQDN</code> intent plus the operator's <code>--fqdn-policy-backend</code> selector (<a href="../security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">security-operations</a>).
 They are <strong>not</strong> part of the <code>v2.0.0</code> bundle above.</p>
 <p><strong>The earliest release that may remove them is <code>v3.0.0</code>.</strong></p>
 <p>Why they cannot ride the <code>v2.0.0</code> clock:</p>
 <ol>
-<li><strong>They are elements of a beta version, not a version themselves.</strong> The two values
-   exist in <code>v2alpha1</code> <em>and</em> in <code>v2beta1</code>, which is the storage and hub version. The
-   <code>v2alpha1</code> copy disappears with <code>v2alpha1</code> at <code>v2.0.0</code>; the <code>v2beta1</code> copy does not,
-   because <code>v2.0.0</code> keeps serving <code>v2beta1</code> — it adds the General Availability (GA)
-   <code>v2</code> version beside it.</li>
-<li><strong>An API element is removed by incrementing the version, never by deleting it from
-   a served one.</strong> Deleting a value from a version already in the field would reject
-   objects an operator has stored and can still <code>kubectl apply</code> — the exact breakage
-   the versioning contract exists to prevent. So the values live for as long as
-   <code>v2beta1</code> is served.</li>
-<li><strong>Beta promises the version will not be removed without a migration path.</strong> Retiring
-   a served version is a breaking change, and this project lands breaking changes on a
-   major tag announced at least one release ahead (<a href="../../roadmap/">roadmap</a>). The next
-   major after <code>v2.0.0</code> is <code>v3.0.0</code>, so that is the earliest tag that can retire
-   <code>v2beta1</code> and, with it, these two values.</li>
+<li><strong>They are elements of a beta version, not a version themselves.</strong> The two values exist in <code>v2alpha1</code> <em>and</em> in <code>v2beta1</code>, which is the storage and hub version.
+   The <code>v2alpha1</code> copy disappears with <code>v2alpha1</code> at <code>v2.0.0</code>; the <code>v2beta1</code> copy does not, because <code>v2.0.0</code> keeps serving <code>v2beta1</code> — it adds the General Availability (GA) <code>v2</code> version beside it.</li>
+<li><strong>An API element is removed by incrementing the version, never by deleting it from a served one.</strong> Deleting a value from a version already in the field would reject objects an operator has stored and can still <code>kubectl apply</code> — the exact breakage the versioning contract exists to prevent.
+   So the values live for as long as <code>v2beta1</code> is served.</li>
+<li><strong>Beta promises the version will not be removed without a migration path.</strong> Retiring a served version is a breaking change, and this project lands breaking changes on a major tag announced at least one release ahead (<a href="../../roadmap/">roadmap</a>).
+   The next major after <code>v2.0.0</code> is <code>v3.0.0</code>, so that is the earliest tag that can retire <code>v2beta1</code> and, with it, these two values.</li>
 </ol>
-<p>Naming <code>v2.0.0</code> for them would have been a promise the API contract forbids keeping:
-the removal would have had to either break <code>v2beta1</code> objects or quietly not happen.</p>
+<p>Naming <code>v2.0.0</code> for them would have been a promise the API contract forbids keeping: the removal would have had to either break <code>v2beta1</code> objects or quietly not happen.</p>
 <p>Two consequences worth stating plainly:</p>
 <ul>
 <li><strong><code>v3.0.0</code> is not scheduled and carries no date</strong>, exactly as <code>v2.0.0</code> carries none.
-  It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak
-  (<a href="../../plan/v2-ga/">v2 GA plan</a>). The commitment here is a floor — <em>not
-  before</em> <code>v3.0.0</code> — and the removal still gets its own one-release-ahead announcement.</li>
-<li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open
-  question</strong>, settled by the graduation hop rather than by this notice. <code>v2</code> is a new
-  version, so it is free to omit them; if it does, an operator on <code>v2</code> simply cannot
-  set them, while an operator on <code>v2beta1</code> still can until <code>v3.0.0</code>. Either way the
-  removal release above is unchanged.</li>
+  It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak (<a href="../../plan/v2-ga/">v2 GA plan</a>).
+  The commitment here is a floor — <em>not before</em> <code>v3.0.0</code> — and the removal still gets its own one-release-ahead announcement.</li>
+<li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open question</strong>, settled by the graduation hop rather than by this notice. <code>v2</code> is a new version, so it is free to omit them; if it does, an operator on <code>v2</code> simply cannot set them, while an operator on <code>v2beta1</code> still can until <code>v3.0.0</code>.
+  Either way the removal release above is unchanged.</li>
 </ul>
-<p><strong>What to do now:</strong> nothing is forced, but migrate when convenient — set
-<code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the
-matching GMC <code>--fqdn-policy-backend</code>. The admission webhook already warns on every
-write that still names a deprecated value, and the warning names <code>v3.0.0</code>.</p>
+<p><strong>What to do now:</strong> nothing is forced, but migrate when convenient — set <code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the matching GMC <code>--fqdn-policy-backend</code>.
+The admission webhook already warns on every write that still names a deprecated value, and the warning names <code>v3.0.0</code>.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>All three are deprecated and still fully served.</strong> No release has removed any of
-  them. Existing tenants keep running unchanged until they upgrade past <code>v2.0.0</code>.</li>
+<li><strong>All three are deprecated and still fully served.</strong> No release has removed any of them.
+  Existing tenants keep running unchanged until they upgrade past <code>v2.0.0</code>.</li>
 <li>
-<p><strong>The apiserver says so too, on both deprecated versions.</strong> Every <code>v1alpha1</code> and
-  <code>v2alpha1</code> CRD carries <code>deprecated: true</code> plus a <code>deprecationWarning</code>, so <code>kubectl</code>
-  prints the notice on any read or write of one of those versions — it is no longer
-  something you have to have read this page to know:</p>
+<p><strong>The apiserver says so too, on both deprecated versions.</strong> Every <code>v1alpha1</code> and <code>v2alpha1</code> CRD carries <code>deprecated: true</code> plus a <code>deprecationWarning</code>, so <code>kubectl</code> prints the notice on any read or write of one of those versions — it is no longer something you have to have read this page to know:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Warning: actions-gateway.github.com/v1alpha1 RunnerGroup is deprecated; use actions-gateway.com/v2beta1 RunnerSet. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate.
 </code></pre></div>
-<p>The warning is advisory: it does not fail an <code>apply</code>, and both controllers
-deduplicate it to one log line per process
-(<a href="../observability-logging/#logging">observability-logging</a>). Classic acquisition
-carries no apiserver warning of its own — it is a <em>field value</em>, not a version, and
-the versions that admit it are the two that warn above.
-- <strong>New tenants should onboard on <code>v2beta1</code>.</strong> See
-  <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.
-- <strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong>
-  It carries the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs, which a
-  new tenant does not. Note that alpha's contract allows an alpha version to be
-  dropped without notice; naming <code>v2.0.0</code> for it is a stronger commitment than the
-  maturity level requires.
-- <strong>Existing tenants migrate with the tool</strong> on their own schedule: see
-  <a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a>. The migration is a one-shot
-  fan-out, not an automatic conversion, because one v1 object becomes several v2
-  objects.
-- <strong>Migrating preserves how your jobs are acquired.</strong> <code>gag-migrate</code> maps v1 runner
-  groups to v2 <code>RunnerSet</code>s that use the same job-acquisition path: it writes
-  <code>acquisitionProtocol: Classic</code> onto every emitted set, so the migration changes the
-  API objects, not the runtime behaviour, and is safe to do ahead of any other change.
-  Adopting <code>ScaleSet</code> for a migrated group is a distinct, later step (create a fresh
-  single-label set), never a side effect of migrating off <code>v1alpha1</code>.</p>
+<p>The warning is advisory: it does not fail an <code>apply</code>, and both controllers deduplicate it to one log line per process (<a href="../observability-logging/#logging">observability-logging</a>).
+Classic acquisition carries no apiserver warning of its own — it is a <em>field value</em>, not a version, and the versions that admit it are the two that warn above.
+- <strong>New tenants should onboard on <code>v2beta1</code>.</strong> See <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.
+- <strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong> It carries the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs, which a new tenant does not.
+  Note that alpha's contract allows an alpha version to be dropped without notice; naming <code>v2.0.0</code> for it is a stronger commitment than the maturity level requires.
+- <strong>Existing tenants migrate with the tool</strong> on their own schedule: see <a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a>.
+  The migration is a one-shot fan-out, not an automatic conversion, because one v1 object becomes several v2 objects.
+- <strong>Migrating preserves how your jobs are acquired.</strong> <code>gag-migrate</code> maps v1 runner groups to v2 <code>RunnerSet</code>s that use the same job-acquisition path: it writes <code>acquisitionProtocol: Classic</code> onto every emitted set, so the migration changes the API objects, not the runtime behaviour, and is safe to do ahead of any other change.
+  Adopting <code>ScaleSet</code> for a migrated group is a distinct, later step (create a fresh single-label set), never a side effect of migrating off <code>v1alpha1</code>.</p>
 </li>
 </ul>
 <h3 id="two-v1alpha1-fields-are-inert">Two <code>v1alpha1</code> fields are inert<a class="headerlink" href="#two-v1alpha1-fields-are-inert" title="Permanent link">&para;</a></h3>
-<p>Both are in the served schema, both do nothing, and neither gains a behaviour before
-<code>v2.0.0</code> removes the version. They are called out because the schema alone does not
-say so: one is rejected at admission despite reading like a supported knob, and the
-other is a status field the GMC never writes.</p>
+<p>Both are in the served schema, both do nothing, and neither gains a behaviour before <code>v2.0.0</code> removes the version.
+They are called out because the schema alone does not say so: one is rejected at admission despite reading like a supported knob, and the other is a status field the GMC never writes.</p>
 <table>
 <thead>
 <tr>
@@ -3019,42 +2975,25 @@ other is a status field the GMC never writes.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>An alert or dashboard reading <code>ActionsGateway.status.activeSessions</code> is reading a
-field no controller populates</strong>, so it reports absent (or zero) no matter how busy
-the gateway is. Point it at the per-<code>RunnerGroup</code> field or the metric instead.</p>
-<p>Neither field is carried into v2. <code>v2beta1</code> replaces <code>SecretReference</code> with the
-name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and
-<code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>. So migrating with
-<a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> needs no action for either: there is nothing
-to carry across.</p>
-<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="../../development/api-review/#removal-needs-a-version-increment-not-a-promise">removing a field from
-a served version is a breaking change</a>.
+<p><strong>An alert or dashboard reading <code>ActionsGateway.status.activeSessions</code> is reading a field no controller populates</strong>, so it reports absent (or zero) no matter how busy the gateway is.
+Point it at the per-<code>RunnerGroup</code> field or the metric instead.</p>
+<p>Neither field is carried into v2. <code>v2beta1</code> replaces <code>SecretReference</code> with the name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and <code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>.
+So migrating with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> needs no action for either: there is nothing to carry across.</p>
+<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="../../development/api-review/#removal-needs-a-version-increment-not-a-promise">removing a field from a served version is a breaking change</a>.
 The removal is the version's own, at <code>v2.0.0</code>.</p>
 <h2 id="why-v2-what-the-decomposition-buys">Why v2 (what the decomposition buys)<a class="headerlink" href="#why-v2-what-the-decomposition-buys" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Reusable pod templates.</strong> The large <code>PodTemplateSpec</code> moves to a referenced
-  <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code>, so one template is shared by many
-  <code>RunnerSet</code>s instead of being copied into every group.</li>
-<li><strong>Multiple gateways per namespace.</strong> The v1 one-gateway-per-namespace rule is
-  dropped.</li>
-<li><strong>Standalone / shareable egress proxy.</strong> The inline proxy becomes an <code>EgressProxy</code>
-  kind any number of <code>RunnerSet</code>s can point at.</li>
-<li><strong>Namespace-scoped Pod Security profile.</strong> <code>securityProfile</code> moves off the
-  per-gateway spec onto the namespace, matching how Pod Security Admission actually
-  works.</li>
-<li><strong>Single-acquirer job acquisition.</strong> <code>ScaleSet</code> holds one listener per runner set,
-  so GitHub never assigns beyond advertised capacity. Classic's many-acquirers model
-  can mark a job <code>in_progress</code> and then fail to provision a worker for it; measured
-  on this project's own dogfood tenant, that orphaned 81% of acquired jobs
-  (<a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">troubleshooting</a>).</li>
+<li><strong>Reusable pod templates.</strong> The large <code>PodTemplateSpec</code> moves to a referenced <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code>, so one template is shared by many <code>RunnerSet</code>s instead of being copied into every group.</li>
+<li><strong>Multiple gateways per namespace.</strong> The v1 one-gateway-per-namespace rule is dropped.</li>
+<li><strong>Standalone / shareable egress proxy.</strong> The inline proxy becomes an <code>EgressProxy</code> kind any number of <code>RunnerSet</code>s can point at.</li>
+<li><strong>Namespace-scoped Pod Security profile.</strong> <code>securityProfile</code> moves off the per-gateway spec onto the namespace, matching how Pod Security Admission actually works.</li>
+<li><strong>Single-acquirer job acquisition.</strong> <code>ScaleSet</code> holds one listener per runner set, so GitHub never assigns beyond advertised capacity.
+  Classic's many-acquirers model can mark a job <code>in_progress</code> and then fail to provision a worker for it; measured on this project's own dogfood tenant, that orphaned 81% of acquired jobs (<a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">troubleshooting</a>).</li>
 </ul>
 <p>Full rationale: <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H</a>.</p>
 <h2 id="the-dual-read-window-what-keeps-working-during-coexistence">The dual-read window (what keeps working during coexistence)<a class="headerlink" href="#the-dual-read-window-what-keeps-working-during-coexistence" title="Permanent link">&para;</a></h2>
-<p>The v2 cutover also aligns two grandfathered, boolean-looking label/annotation values
-and moves the project's domain-prefixed keys off <code>actions-gateway.github.com/</code> onto
-<code>actions-gateway.com/</code> (Q147 / the API-group rename). During coexistence both
-consumers of these values, the <code>ValidatingAdmissionPolicy</code> objects and the GMC
-validating webhook, <strong>dual-read both spellings</strong>:</p>
+<p>The v2 cutover also aligns two grandfathered, boolean-looking label/annotation values and moves the project's domain-prefixed keys off <code>actions-gateway.github.com/</code> onto <code>actions-gateway.com/</code> (Q147 / the API-group rename).
+During coexistence both consumers of these values, the <code>ValidatingAdmissionPolicy</code> objects and the GMC validating webhook, <strong>dual-read both spellings</strong>:</p>
 <table>
 <thead>
 <tr>
@@ -3091,43 +3030,24 @@ validating webhook, <strong>dual-read both spellings</strong>:</p>
 </tr>
 </tbody>
 </table>
-<p>The migration tool relabels these in one pass (additively: it adds the v2 keys and
-keeps the v1 keys). The dual-read <strong>only widens accepted spelling</strong>, it never relaxes
-an invariant. The window <strong>closes at <code>v2.0.0</code></strong>, when <code>v1alpha1</code> is removed and the
-legacy <code>"true"</code> arms and the <code>actions-gateway.github.com/*</code> keys are dropped from the
-policies and the webhook.</p>
+<p>The migration tool relabels these in one pass (additively: it adds the v2 keys and keeps the v1 keys).
+The dual-read <strong>only widens accepted spelling</strong>, it never relaxes an invariant.
+The window <strong>closes at <code>v2.0.0</code></strong>, when <code>v1alpha1</code> is removed and the legacy <code>"true"</code> arms and the <code>actions-gateway.github.com/*</code> keys are dropped from the policies and the webhook.</p>
 <h2 id="the-removal-release-and-what-it-is-gated-on">The removal release, and what it is gated on<a class="headerlink" href="#the-removal-release-and-what-it-is-gated-on" title="Permanent link">&para;</a></h2>
-<p><strong><code>v2.0.0</code> is the named removal release, announced with <code>v1.3.0</code>.</strong> The project's
-policy is that a removal lands on a named release announced at least one release
-ahead (<a href="../../roadmap/">roadmap</a>); <code>v1.3.0</code> carries that announcement for all three
-items above.</p>
-<p><code>v2.0.0</code> is a <strong>major</strong> tag because removing a served API version is a breaking
-change, and it is gated on the <strong><code>v2</code> (GA) API being available and validated</strong>, not on
-a date and not on an adopter census. Gating on v2 maturity is
-what lets the commitment be concrete: you are never asked to move onto an alpha to
-escape a removal, and there is no census to wait on. <code>v2beta1</code> is production-relyable
-today and converts to <code>v2</code> in place.</p>
-<p>There is deliberately <strong>no date</strong>. <code>v1.3.0</code> fixes <em>which</em> release removes these and
-<em>what</em> it removes; the GA soak that gates <code>v2.0.0</code> finishes when the evidence says
-the v2 shape is right.</p>
+<p><strong><code>v2.0.0</code> is the named removal release, announced with <code>v1.3.0</code>.</strong> The project's policy is that a removal lands on a named release announced at least one release ahead (<a href="../../roadmap/">roadmap</a>); <code>v1.3.0</code> carries that announcement for all three items above.</p>
+<p><code>v2.0.0</code> is a <strong>major</strong> tag because removing a served API version is a breaking change, and it is gated on the <strong><code>v2</code> (GA) API being available and validated</strong>, not on a date and not on an adopter census.
+Gating on v2 maturity is what lets the commitment be concrete: you are never asked to move onto an alpha to escape a removal, and there is no census to wait on. <code>v2beta1</code> is production-relyable today and converts to <code>v2</code> in place.</p>
+<p>There is deliberately <strong>no date</strong>. <code>v1.3.0</code> fixes <em>which</em> release removes these and <em>what</em> it removes; the GA soak that gates <code>v2.0.0</code> finishes when the evidence says the v2 shape is right.</p>
 <h2 id="before-you-upgrade-past-v200">Before you upgrade past <code>v2.0.0</code><a class="headerlink" href="#before-you-upgrade-past-v200" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, which also
-   relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code>
-   spellings. Do this <em>before</em> upgrading: after removal the legacy spellings and the
-   v1 finalizer names are no longer honored, and any remaining <code>v1alpha1</code> objects
-   have no served version.</li>
-<li><strong>Move <code>v2alpha1</code> objects to <code>v2beta1</code>.</strong> Re-apply them at <code>v2beta1</code> (or let the
-   conversion webhook serve them there and re-record your GitOps manifests at that
-   version) so nothing in Git still names a removed version.</li>
-<li><strong>Replace Classic runner sets with <code>ScaleSet</code> sets.</strong> One single-label
-   <code>RunnerSet</code> per <code>runs-on</code> target, created fresh, since <code>acquisitionProtocol</code> is
-   immutable. Split any multi-label group into one set per label, and drop
-   <code>maxListeners</code>, which <code>ScaleSet</code> ignores. See
-   <a href="../tenant-onboarding/#acquisition-protocol-v2alpha1-only">tenant onboarding</a>.</li>
+<li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, which also relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code> spellings.
+   Do this <em>before</em> upgrading: after removal the legacy spellings and the v1 finalizer names are no longer honored, and any remaining <code>v1alpha1</code> objects have no served version.</li>
+<li><strong>Move <code>v2alpha1</code> objects to <code>v2beta1</code>.</strong> Re-apply them at <code>v2beta1</code> (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.</li>
+<li><strong>Replace Classic runner sets with <code>ScaleSet</code> sets.</strong> One single-label <code>RunnerSet</code> per <code>runs-on</code> target, created fresh, since <code>acquisitionProtocol</code> is immutable.
+   Split any multi-label group into one set per label, and drop <code>maxListeners</code>, which <code>ScaleSet</code> ignores.
+   See <a href="../tenant-onboarding/#acquisition-protocol-v2alpha1-only">tenant onboarding</a>.</li>
 </ol>
-<p>Until that release, no action is forced: run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>
-when convenient, validate the v2 path, and decommission v1 at your own pace.</p>
+<p>Until that release, no action is forced: run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> when convenient, validate the v2 path, and decommission v1 at your own pace.</p>
 
 
 

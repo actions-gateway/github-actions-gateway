@@ -2676,55 +2676,30 @@
 
 
 <h1 id="q766-abandoned-run-recovery-on-the-scaleset-tier">Q766: abandoned-run recovery on the ScaleSet tier<a class="headerlink" href="#q766-abandoned-run-recovery-on-the-scaleset-tier" title="Permanent link">&para;</a></h1>
-<p>Port the Q683 force-cancel and the Q691 capacity-gated automatic re-run from the
-classic acquisition tier to the ScaleSet tier, so a worker removed before its
-container ever ran gets the same one-second <code>cancelled</code> ending and the same
-automatic re-run on both tiers.</p>
-<p>Design context: <a href="../../../design/04-operational-flows/#stuck-pending-worker-pod">04-operational-flows.md § Stuck-Pending Worker Pod</a>
-and <a href="../../../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">§ Which disruptions are recovered</a>.
-The two prior ports of the same shape are Q417 (eviction recovery) and Q443
-(the capacity ladder).</p>
+<p>Port the Q683 force-cancel and the Q691 capacity-gated automatic re-run from the classic acquisition tier to the ScaleSet tier, so a worker removed before its container ever ran gets the same one-second <code>cancelled</code> ending and the same automatic re-run on both tiers.</p>
+<p>Design context: <a href="../../../design/04-operational-flows/#stuck-pending-worker-pod">04-operational-flows.md § Stuck-Pending Worker Pod</a> and <a href="../../../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">§ Which disruptions are recovered</a>.
+The two prior ports of the same shape are Q417 (eviction recovery) and Q443 (the capacity ladder).</p>
 <h2 id="why-it-matters-now">Why it matters now<a class="headerlink" href="#why-it-matters-now" title="Permanent link">&para;</a></h2>
-<p><code>v2beta1</code> is ScaleSet-only and ScaleSet is the default <code>acquisitionProtocol</code>, so
-no v2 tenant has either recovery today. <a href="../../../STATUS/#Q264">Q264</a> deletes the
-classic machinery at <code>v2.0.0</code>, which would turn the gap into the silent
-capability deletion <a href="../../../design/04-operational-flows/">04-operational-flows.md</a>
-names, which is the outcome Q417 and Q443 were ported to avoid.</p>
+<p><code>v2beta1</code> is ScaleSet-only and ScaleSet is the default <code>acquisitionProtocol</code>, so no v2 tenant has either recovery today.
+<a href="../../../STATUS/#Q264">Q264</a> deletes the classic machinery at <code>v2.0.0</code>, which would turn the gap into the silent capability deletion <a href="../../../design/04-operational-flows/">04-operational-flows.md</a> names, which is the outcome Q417 and Q443 were ported to avoid.</p>
 <h2 id="what-the-classic-tier-actually-does">What the classic tier actually does<a class="headerlink" href="#what-the-classic-tier-actually-does" title="Permanent link">&para;</a></h2>
 <p>Measured from source 2026-08-09.</p>
-<p><code>provision()</code> holds a goroutine for the life of the job. <code>InformerPodWaiter</code>
-resolves that wait from the pod's <strong>informer delete event</strong>, whose payload is the
-last-known pod object, and stamps <code>PodOutcome.DeletedBeforeStart</code> from
-<code>!podEverStarted(pod)</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/podwaiter.go">podwaiter.go:342</a>).
-<code>provision()</code> then force-cancels the run and registers it for a capacity-gated
-re-run, using the <code>owner/repo/run_id</code> it parsed out of the AcquireJob payload it
-still holds (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:661</a>).</p>
+<p><code>provision()</code> holds a goroutine for the life of the job. <code>InformerPodWaiter</code> resolves that wait from the pod's <strong>informer delete event</strong>, whose payload is the last-known pod object, and stamps <code>PodOutcome.DeletedBeforeStart</code> from <code>!podEverStarted(pod)</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/podwaiter.go">podwaiter.go:342</a>). <code>provision()</code> then force-cancels the run and registers it for a capacity-gated re-run, using the <code>owner/repo/run_id</code> it parsed out of the AcquireJob payload it still holds (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:661</a>).</p>
 <p>Two properties of that trigger matter for the port:</p>
 <ul>
-<li><strong>It fires on the AGC's own deletes too.</strong> <code>DeletedBeforeStart</code> carries no
-  <code>AnnotationDeletionReason</code> exclusion, and the dominant cause is precisely an
-  AGC delete: the reaper's <code>pending_deadline</code> reap of a worker that never left
-  <code>Pending</code>. That is the flow the design doc's Stuck-Pending sequence draws.</li>
-<li><strong>It is not the <code>rerun-failed-jobs</code> path.</strong> A never-run job has no failed job
-  to re-run, which is why the run is force-cancelled <em>first</em>; the cancelled
-  conclusion is the state <code>rerun-failed-jobs</code> was measured to accept (Q683).</li>
+<li><strong>It fires on the AGC's own deletes too.</strong> <code>DeletedBeforeStart</code> carries no <code>AnnotationDeletionReason</code> exclusion, and the dominant cause is precisely an AGC delete: the reaper's <code>pending_deadline</code> reap of a worker that never left <code>Pending</code>.
+  That is the flow the design doc's Stuck-Pending sequence draws.</li>
+<li><strong>It is not the <code>rerun-failed-jobs</code> path.</strong> A never-run job has no failed job to re-run, which is why the run is force-cancelled <em>first</em>; the cancelled conclusion is the state <code>rerun-failed-jobs</code> was measured to accept (Q683).</li>
 </ul>
 <h2 id="why-a-fourth-arm-on-disruptionawaitingrecovery-is-the-wrong-shape">Why a fourth arm on <code>disruptionAwaitingRecovery</code> is the wrong shape<a class="headerlink" href="#why-a-fourth-arm-on-disruptionawaitingrecovery-is-the-wrong-shape" title="Permanent link">&para;</a></h2>
-<p><code>RecoverEvictedScaleSetWorkers</code> scans <strong>surviving</strong> pods
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go">eviction_scaleset.go:75</a>),
-and each arm of <code>disruptionAwaitingRecovery</code> returns a <code>cause</code> that feeds
-<code>handleEviction</code>, i.e. <code>rerun-failed-jobs</code> directly. Both facts rule the fourth
-arm out:</p>
+<p><code>RecoverEvictedScaleSetWorkers</code> scans <strong>surviving</strong> pods (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go">eviction_scaleset.go:75</a>), and each arm of <code>disruptionAwaitingRecovery</code> returns a <code>cause</code> that feeds <code>handleEviction</code>, i.e. <code>rerun-failed-jobs</code> directly.
+Both facts rule the fourth arm out:</p>
 <ul>
-<li>A pod reaped while <code>Pending</code> is <strong>gone</strong> by the time any later scan runs, so a
-  List-based predicate cannot see the common case at all.</li>
-<li>Routing a never-started pod into <code>handleEviction</code> is exactly the defect the
-  predicate's own doc comment excludes: it would re-run a job that never ran,
-  without the force-cancel that makes the re-run legal.</li>
+<li>A pod reaped while <code>Pending</code> is <strong>gone</strong> by the time any later scan runs, so a List-based predicate cannot see the common case at all.</li>
+<li>Routing a never-started pod into <code>handleEviction</code> is exactly the defect the predicate's own doc comment excludes: it would re-run a job that never ran, without the force-cancel that makes the re-run legal.</li>
 </ul>
-<p>The exclusion therefore stays. What is re-opened is narrower: the never-started
-shape gets its <strong>own</strong> detection and its <strong>own</strong> action (force-cancel, then
-register), and the two never overlap.</p>
+<p>The exclusion therefore stays.
+What is re-opened is narrower: the never-started shape gets its <strong>own</strong> detection and its <strong>own</strong> action (force-cancel, then register), and the two never overlap.</p>
 <h2 id="the-two-seams">The two seams<a class="headerlink" href="#the-two-seams" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2747,56 +2722,34 @@ register), and the two never overlap.</p>
 </tr>
 </tbody>
 </table>
-<p>The two are disjoint by construction: the reaper stamps
-<code>AnnotationDeletionReason</code> before it deletes, and the scan arm requires
-<code>!deletedByAGC(pod)</code>. The scan runs before the reaper in the same reconcile, and
-a still-<code>Pending</code> pod matches no arm of either predicate, so nothing double-fires.</p>
-<p>Run identity comes from the pod's <code>actions-gateway.com/run-id</code> and
-<code>actions-gateway.com/repository</code> annotations, the same <code>runIdentityFromPod</code>
-read the Q417 eviction port already relies on.</p>
+<p>The two are disjoint by construction: the reaper stamps <code>AnnotationDeletionReason</code> before it deletes, and the scan arm requires <code>!deletedByAGC(pod)</code>.
+The scan runs before the reaper in the same reconcile, and a still-<code>Pending</code> pod matches no arm of either predicate, so nothing double-fires.</p>
+<p>Run identity comes from the pod's <code>actions-gateway.com/run-id</code> and <code>actions-gateway.com/repository</code> annotations, the same <code>runIdentityFromPod</code> read the Q417 eviction port already relies on.</p>
 <h3 id="what-is-deliberately-out">What is deliberately out<a class="headerlink" href="#what-is-deliberately-out" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>completed_pending</code></strong> (Q575): the job is already terminal at GitHub, so
-  there is nothing to cancel and a re-run would re-run finished work. The
-  reaper's own branch already separates it from <code>pending_deadline</code> by the
-  <code>job-completed-at</code> stamp, so the exclusion costs nothing.</li>
-<li><strong>Gateway teardown</strong> (<code>reapAllWorkerPodsByLabel</code>): the owning
-  <code>ActionsGateway</code> is being deleted, so <code>Target.Resolve</code> is about to fail and
-  no later worker pod will ever bind to satisfy the capacity wait.</li>
-<li><strong>A never-started worker that simply vanishes</strong> with no transient <code>Failed</code>
-  publish. That is the same inherent residual the doc already records for
-  preemption and drain recovery on this tier: the evidence is the pod, and the
-  delete removes it.</li>
+<li><strong><code>completed_pending</code></strong> (Q575): the job is already terminal at GitHub, so there is nothing to cancel and a re-run would re-run finished work.
+  The reaper's own branch already separates it from <code>pending_deadline</code> by the <code>job-completed-at</code> stamp, so the exclusion costs nothing.</li>
+<li><strong>Gateway teardown</strong> (<code>reapAllWorkerPodsByLabel</code>): the owning <code>ActionsGateway</code> is being deleted, so <code>Target.Resolve</code> is about to fail and no later worker pod will ever bind to satisfy the capacity wait.</li>
+<li><strong>A never-started worker that simply vanishes</strong> with no transient <code>Failed</code> publish.
+  That is the same inherent residual the doc already records for preemption and drain recovery on this tier: the evidence is the pod, and the delete removes it.</li>
 </ul>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>pendingAbandonedRerun</code> carries its tier; <code>sweepAbandonedReruns</code> stops
-   hardcoding <code>evictionTierClassic</code>.</li>
+<li><code>pendingAbandonedRerun</code> carries its tier; <code>sweepAbandonedReruns</code> stops hardcoding <code>evictionTierClassic</code>.</li>
 <li><code>forceCancelAbandonedRun</code> takes a tier and labels its metric with it.</li>
-<li><code>RecoverAbandonedScaleSetWorker</code> — the shared action, gated on the pod
-   carrying <code>LabelAcquisitionProtocol: ScaleSet</code>.</li>
-<li><code>reapHooks.recoverAbandoned</code>, fired after a successful <code>pending_deadline</code>
-   delete, wired on the <code>RunnerSet</code> reaper only.</li>
+<li><code>RecoverAbandonedScaleSetWorker</code> — the shared action, gated on the pod carrying <code>LabelAcquisitionProtocol: ScaleSet</code>.</li>
+<li><code>reapHooks.recoverAbandoned</code>, fired after a successful <code>pending_deadline</code> delete, wired on the <code>RunnerSet</code> reaper only.</li>
 <li><code>abandonedAwaitingRecovery</code> arm in <code>RecoverEvictedScaleSetWorkers</code>.</li>
-<li><code>tier</code> label on <code>abandoned_run_force_cancels_total</code> and
-   <code>abandoned_run_rerun_waits_total</code>, matching the eviction metrics Q417 gave
-   the same treatment.</li>
-<li>Docs: the design boundary table and both prose blocks, the two observability
-   pages, <code>troubleshooting.md</code>'s WorkerPodStuckPending runbook and auto-re-run
-   matrix, and an <code>upgrade.md</code> migration note (which is what puts the change in
-   the curated release notes, since <code>operator-caveats-since.sh</code> reads the
-   <code>docs/operations/</code> diff).</li>
+<li><code>tier</code> label on <code>abandoned_run_force_cancels_total</code> and <code>abandoned_run_rerun_waits_total</code>, matching the eviction metrics Q417 gave the same treatment.</li>
+<li>Docs: the design boundary table and both prose blocks, the two observability pages, <code>troubleshooting.md</code>'s WorkerPodStuckPending runbook and auto-re-run matrix, and an <code>upgrade.md</code> migration note (which is what puts the change in the curated release notes, since <code>operator-caveats-since.sh</code> reads the <code>docs/operations/</code> diff).</li>
 </ol>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li>2026-08-09: mechanism confirmed from source; plan written; shipped.</li>
 </ul>
 <h3 id="why-this-does-not-touch-featuresmd-release-14md-or-the-v2-gap-docs">Why this does not touch <code>features.md</code>, <code>release-1.4.md</code>, or the v2 gap docs<a class="headerlink" href="#why-this-does-not-touch-featuresmd-release-14md-or-the-v2-gap-docs" title="Permanent link">&para;</a></h3>
-<p>The tier scope those four surfaces state was added by PR #1365, which is still
-open. On <code>main</code> they make no tier claim at all, so nothing there is falsified by
-this change and there is nothing to rewrite. #1365 rebases on top of this work
-and reconciles them in one place, rather than the two branches editing the same
-prose from opposite directions.</p>
+<p>The tier scope those four surfaces state was added by PR #1365, which is still open.
+On <code>main</code> they make no tier claim at all, so nothing there is falsified by this change and there is nothing to rewrite. #1365 rebases on top of this work and reconciles them in one place, rather than the two branches editing the same prose from opposite directions.</p>
 
 
 

@@ -2781,10 +2781,9 @@
 </ul>
 <p>Items are ranked by impact on bug detection.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>All High- and Medium-priority items are implemented and merged</strong> — H1 landed first,
-and H2–H5 plus M1–M4 landed together in commit <code>17a7f5c</code>
-("test: implement Milestone 3 test improvements from plan"). The Low-priority items
-are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.</p>
+<p><strong>All High- and Medium-priority items are implemented and merged</strong> — H1 landed first, and H2–H5 plus M1–M4 landed together in commit <code>17a7f5c</code> ("test: implement Milestone 3 test improvements from plan").
+The Low-priority items are resolved or obsolete (see L1/L2 below).
+Q9 is therefore complete.</p>
 <table>
 <thead>
 <tr>
@@ -2866,7 +2865,9 @@ are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.</p>
 </ul>
 <hr />
 <h3 id="h2--rerun-api-5xx-is-non-fatal-but-no-test-verifies-it--done">H2 — Rerun API 5xx is non-fatal but no test verifies it ✅ Done<a class="headerlink" href="#h2--rerun-api-5xx-is-non-fatal-but-no-test-verifies-it--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> <code>handleEviction</code> logs the error and continues when the GitHub rerun API returns a non-2xx status. No test verifies that: (a) <code>provision</code> still returns <code>nil</code> (non-fatal), (b) the retry budget counter is still incremented. A regression making the error fatal would go undetected.</p>
+<p><strong>What's missing:</strong> <code>handleEviction</code> logs the error and continues when the GitHub rerun API returns a non-2xx status.
+No test verifies that: (a) <code>provision</code> still returns <code>nil</code> (non-fatal), (b) the retry budget counter is still incremented.
+A regression making the error fatal would go undetected.</p>
 <p><strong>Proposed fix:</strong></p>
 <p>Add <code>TestProvisioner_EvictionRerunAPI5xx</code>:
 - Stub HTTP server returns <code>StatusInternalServerError</code>.
@@ -2876,7 +2877,9 @@ are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.</p>
 - Assert rerun was attempted (verify the request path was received).</p>
 <hr />
 <h3 id="h3--handlejob-decryption-failure-fallback-path-is-untested--done">H3 — <code>handleJob</code> decryption-failure fallback path is untested ✅ Done<a class="headerlink" href="#h3--handlejob-decryption-failure-fallback-path-is-untested--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> <code>goroutine.go</code> falls back to the raw <code>msg.Body</code> when <code>DecryptMessageBody</code> fails (wrong key produces bad PKCS#7 padding). No test exercises this branch. The contract — silent fallback vs. metric/log — is unverified, and a wrong-key scenario producing garbage is invisible to the test suite.</p>
+<p><strong>What's missing:</strong> <code>goroutine.go</code> falls back to the raw <code>msg.Body</code> when <code>DecryptMessageBody</code> fails (wrong key produces bad PKCS#7 padding).
+No test exercises this branch.
+The contract — silent fallback vs. metric/log — is unverified, and a wrong-key scenario producing garbage is invisible to the test suite.</p>
 <p><strong>Proposed fix:</strong></p>
 <p>Add <code>TestListener_DecryptFailureFallsBackToPlaintext</code>:
 - Return a valid RSA-encrypted session key K from <code>CreateSession</code>.
@@ -2884,7 +2887,8 @@ are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.</p>
 - Assert the desired contract: either <code>AcquireJob</code> is called via the fallback plaintext path, or it is not called and an appropriate warning metric fires.</p>
 <hr />
 <h3 id="h4--second-priority-tier-never-assigned-tier-boundary-off-by-one-untested--done">H4 — Second priority tier never assigned; tier boundary off-by-one untested ✅ Done<a class="headerlink" href="#h4--second-priority-tier-never-assigned-tier-boundary-off-by-one-untested--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> <code>TestProvisioner_PriorityTiersAssignment</code> tests only 3 active pods against thresholds of 5 and 10, so only tier 1 (<code>runner-critical</code>) is ever assigned. Flipping <code>&lt;</code> to <code>&lt;=</code> in <code>ceilingCheck</code> would silently mis-assign pods at the boundary without any test failing.</p>
+<p><strong>What's missing:</strong> <code>TestProvisioner_PriorityTiersAssignment</code> tests only 3 active pods against thresholds of 5 and 10, so only tier 1 (<code>runner-critical</code>) is ever assigned.
+Flipping <code>&lt;</code> to <code>&lt;=</code> in <code>ceilingCheck</code> would silently mis-assign pods at the boundary without any test failing.</p>
 <p><strong>Proposed fix:</strong></p>
 <ul>
 <li>Add <code>TestProvisioner_PriorityTiersSecondTier</code>: pre-populate 6 active pods (above threshold 5, below 10); assert the new pod receives <code>PriorityClassName == "runner-standard"</code>.</li>
@@ -2892,13 +2896,17 @@ are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.</p>
 </ul>
 <hr />
 <h3 id="h5--budget-exhaustion-negative-assertion-uses-a-100-ms-wall-clock-sleep--done">H5 — Budget-exhaustion negative assertion uses a 100 ms wall-clock sleep ✅ Done<a class="headerlink" href="#h5--budget-exhaustion-negative-assertion-uses-a-100-ms-wall-clock-sleep--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> <code>TestProvisioner_EvictionRetryBudgetExhausted</code> uses <code>time.After(100ms)</code> to assert "no API call made." This is racy on loaded CI machines (the handler may not have returned yet) and would silently pass if a bug introduced a &gt;100 ms delay before calling the API.</p>
+<p><strong>What's missing:</strong> <code>TestProvisioner_EvictionRetryBudgetExhausted</code> uses <code>time.After(100ms)</code> to assert "no API call made."
+This is racy on loaded CI machines (the handler may not have returned yet) and would silently pass if a bug introduced a &gt;100 ms delay before calling the API.</p>
 <p><strong>Proposed fix:</strong></p>
-<p>Replace the channel-based negative assertion with a synchronous metric counter check. Since <code>provision</code> returns only after <code>handleEviction</code> finishes, asserting <code>testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues(...)) == 1</code> and <code>rerunCount == 1</code> directly after <code>runCycle</code> returns is race-free with no sleep required.</p>
+<p>Replace the channel-based negative assertion with a synchronous metric counter check.
+Since <code>provision</code> returns only after <code>handleEviction</code> finishes, asserting <code>testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues(...)) == 1</code> and <code>rerunCount == 1</code> directly after <code>runCycle</code> returns is race-free with no sleep required.</p>
 <hr />
 <h2 id="medium-priority">Medium Priority<a class="headerlink" href="#medium-priority" title="Permanent link">&para;</a></h2>
 <h3 id="m1--createsession-raw-key-and-no-key-branches-untested--done">M1 — <code>createSession</code> raw-key and no-key branches untested ✅ Done<a class="headerlink" href="#m1--createsession-raw-key-and-no-key-branches-untested--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> <code>createSession</code> has three encryption branches: (a) <code>encrypted == true</code> — RSA decrypt (tested); (b) <code>encrypted == false</code> — use raw key bytes; (c) no <code>encryptionKey</code> field — <code>aesKey</code> stays <code>nil</code>, messages parsed as plaintext. Branches (b) and (c) are dead to the test suite. A bug that sets <code>aesKey</code> to an empty slice instead of <code>nil</code> in branch (b) would cause every subsequent <code>DecryptMessageBody</code> call to fail with a cipher error.</p>
+<p><strong>What's missing:</strong> <code>createSession</code> has three encryption branches: (a) <code>encrypted == true</code> — RSA decrypt (tested); (b) <code>encrypted == false</code> — use raw key bytes; (c) no <code>encryptionKey</code> field — <code>aesKey</code> stays <code>nil</code>, messages parsed as plaintext.
+Branches (b) and (c) are dead to the test suite.
+A bug that sets <code>aesKey</code> to an empty slice instead of <code>nil</code> in branch (b) would cause every subsequent <code>DecryptMessageBody</code> call to fail with a cipher error.</p>
 <p><strong>Proposed fix:</strong></p>
 <ul>
 <li>Add <code>TestListener_PlaintextSessionKey</code>: <code>CreateSession</code> returns <code>encryptionKey.encrypted == false</code> with the raw AES key; deliver an AES-CBC encrypted body; assert <code>AcquireJob</code> receives the correct <code>jobMessageId</code>.</li>
@@ -2906,7 +2914,8 @@ are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.</p>
 </ul>
 <hr />
 <h3 id="m2--writepayloadtopipe-with-an-empty-payload-is-untested--done">M2 — <code>writePayloadToPipe</code> with an empty payload is untested ✅ Done<a class="headerlink" href="#m2--writepayloadtopipe-with-an-empty-payload-is-untested--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> A misconfigured empty Kubernetes Secret produces a <code>[0,0,0,0]</code> wire message with no body bytes. <code>Runner.Worker</code> would then read zero bytes after the prefix, potentially hanging or erroring. No test covers this case or verifies the length prefix round-trips correctly for large payloads.</p>
+<p><strong>What's missing:</strong> A misconfigured empty Kubernetes Secret produces a <code>[0,0,0,0]</code> wire message with no body bytes. <code>Runner.Worker</code> would then read zero bytes after the prefix, potentially hanging or erroring.
+No test covers this case or verifies the length prefix round-trips correctly for large payloads.</p>
 <p><strong>Proposed fix:</strong></p>
 <ul>
 <li>Add <code>TestWrapper_EmptyPayload</code>: call <code>writePayloadToPipe</code> with <code>payload = []byte{}</code>; assert the reader receives exactly 4 bytes encoding value <code>0</code>.</li>
@@ -2914,12 +2923,15 @@ are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.</p>
 </ul>
 <hr />
 <h3 id="m3--activepodcount-pending-pod-branch-is-untested--done">M3 — <code>activePodCount</code> Pending-pod branch is untested ✅ Done<a class="headerlink" href="#m3--activepodcount-pending-pod-branch-is-untested--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> <code>activePodCount</code> counts both <code>PodRunning</code> and <code>PodPending</code> pods, but every ceiling test seeds only <code>PodRunning</code> pods. Removing the <code>PodPending</code> branch from the count would silently allow over-provisioning past the ceiling.</p>
+<p><strong>What's missing:</strong> <code>activePodCount</code> counts both <code>PodRunning</code> and <code>PodPending</code> pods, but every ceiling test seeds only <code>PodRunning</code> pods.
+Removing the <code>PodPending</code> branch from the count would silently allow over-provisioning past the ceiling.</p>
 <p><strong>Proposed fix:</strong></p>
 <p>Add <code>TestProvisioner_PendingPodsCountTowardCeiling</code>: pre-populate 2 Running + 1 Pending pod at <code>MaxWorkers: 3</code>; assert the new pod is held (ceiling enforced).</p>
 <hr />
 <h3 id="m4--externally-deleted-pod-path-untested--done">M4 — Externally deleted pod path untested ✅ Done<a class="headerlink" href="#m4--externally-deleted-pod-path-untested--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> <code>waitForPodCompletion</code> returns <code>(PodSucceeded, "", nil)</code> when a pod disappears (not-found), representing an operator manually deleting the pod mid-run. No test verifies this does not trigger eviction-retry handling. Inverting the not-found logic to return <code>PodFailed</code> would spuriously fire the rerun API.</p>
+<p><strong>What's missing:</strong> <code>waitForPodCompletion</code> returns <code>(PodSucceeded, "", nil)</code> when a pod disappears (not-found), representing an operator manually deleting the pod mid-run.
+No test verifies this does not trigger eviction-retry handling.
+Inverting the not-found logic to return <code>PodFailed</code> would spuriously fire the rerun API.</p>
 <p><strong>Proposed fix:</strong></p>
 <p>Add <code>TestProvisioner_PodDeletedExternallySucceeds</code>:
 - After the pod appears, call <code>fc.Delete(ctx, pod)</code> instead of using <code>completePod</code>.
@@ -2929,14 +2941,17 @@ are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.</p>
 <hr />
 <h2 id="low-priority">Low Priority<a class="headerlink" href="#low-priority" title="Permanent link">&para;</a></h2>
 <h3 id="l1--testwrapper_writestonamedpipes-has-no-timeout--obsolete">L1 — <code>TestWrapper_WritesToNamedPipes</code> has no timeout ❎ Obsolete<a class="headerlink" href="#l1--testwrapper_writestonamedpipes-has-no-timeout--obsolete" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> The reader goroutine has no deadline. A blocked FIFO open (e.g., <code>Mkfifo</code> fails silently and <code>writePayloadToPipe</code> never opens the write end) would hang the test indefinitely in CI rather than report a clear failure.</p>
+<p><strong>What's missing:</strong> The reader goroutine has no deadline.
+A blocked FIFO open (e.g., <code>Mkfifo</code> fails silently and <code>writePayloadToPipe</code> never opens the write end) would hang the test indefinitely in CI rather than report a clear failure.</p>
 <p><strong>Proposed fix:</strong></p>
 <p>Add a <code>context.WithTimeout(t.Context(), 5*time.Second)</code> and select on <code>ctx.Done()</code> in the reader goroutine, failing the test with a descriptive message on deadline exceeded.</p>
 <hr />
 <h3 id="l2--closehttp-uses-an-unconditional-50-ms-sleep-for-goroutine-drain--done">L2 — <code>closeHTTP</code> uses an unconditional 50 ms sleep for goroutine drain ✅ Done<a class="headerlink" href="#l2--closehttp-uses-an-unconditional-50-ms-sleep-for-goroutine-drain--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> <code>closeHTTP</code> in <code>goroutine_test.go</code> calls <code>time.Sleep(50ms)</code> before returning, and this pattern appears ~13 times in the file, adding ~650 ms of synthetic wait per test run. The sleep is undocumented and may be insufficient on slow hardware.</p>
+<p><strong>What's missing:</strong> <code>closeHTTP</code> in <code>goroutine_test.go</code> calls <code>time.Sleep(50ms)</code> before returning, and this pattern appears ~13 times in the file, adding ~650 ms of synthetic wait per test run.
+The sleep is undocumented and may be insufficient on slow hardware.</p>
 <p><strong>Proposed fix:</strong></p>
-<p>Call <code>srv.CloseClientConnections()</code> before <code>srv.Close()</code> to drain in-flight connections without a fixed wait. If a sleep is still required for a specific goroutine, document the race it guards against with a comment.</p>
+<p>Call <code>srv.CloseClientConnections()</code> before <code>srv.Close()</code> to drain in-flight connections without a fixed wait.
+If a sleep is still required for a specific goroutine, document the race it guards against with a comment.</p>
 
 
 

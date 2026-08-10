@@ -2820,111 +2820,61 @@
 
 
 <h1 id="kubernetes-api-conventions">Kubernetes API conventions<a class="headerlink" href="#kubernetes-api-conventions" title="Permanent link">&para;</a></h1>
-<p>Project-specific conventions for the Kubernetes surface we author: label and
-annotation keys/values, status conditions, Events, pod shutdown behaviour — and
-the gotchas that have bitten us. Read this before adding a new label,
-annotation, or CRD field that an operator sets by hand, or before writing the
-shutdown path of any binary that runs in a pod.</p>
+<p>Project-specific conventions for the Kubernetes surface we author: label and annotation keys/values, status conditions, Events, pod shutdown behaviour — and the gotchas that have bitten us.
+Read this before adding a new label, annotation, or CRD field that an operator sets by hand, or before writing the shutdown path of any binary that runs in a pod.</p>
 <h2 id="label--annotation-value-conventions">Label &amp; annotation value conventions<a class="headerlink" href="#label--annotation-value-conventions" title="Permanent link">&para;</a></h2>
 <h3 id="dont-use-boolean-looking-values-for-string-matched-labelsannotations">Don't use boolean-looking values for string-matched labels/annotations<a class="headerlink" href="#dont-use-boolean-looking-values-for-string-matched-labelsannotations" title="Permanent link">&para;</a></h3>
-<p>When a label or annotation value is <strong>matched as a string</strong> by our code (an
-admission webhook, a controller, a <code>ValidatingAdmissionPolicy</code>), use an explicit
-<strong>enum keyword</strong> — e.g. <code>allowed</code>, <code>enabled</code>, <code>managed</code> — never a
-boolean-looking value (<code>true</code>, <code>false</code>, <code>yes</code>, <code>no</code>, <code>on</code>, <code>off</code>).</p>
+<p>When a label or annotation value is <strong>matched as a string</strong> by our code (an admission webhook, a controller, a <code>ValidatingAdmissionPolicy</code>), use an explicit <strong>enum keyword</strong> — e.g. <code>allowed</code>, <code>enabled</code>, <code>managed</code> — never a boolean-looking value (<code>true</code>, <code>false</code>, <code>yes</code>, <code>no</code>, <code>on</code>, <code>off</code>).</p>
 <p>Why:</p>
 <ul>
-<li><strong>YAML coercion footgun.</strong> In a manifest, <code>my-label: true</code> parses as a YAML
-  boolean, not the string <code>"true"</code>. A Kubernetes label/annotation value must be
-  a string, so the unquoted form either errors or has to be remembered as
-  <code>"true"</code> (quoted) every time. YAML 1.1 coerces <code>yes</code>/<code>no</code>/<code>on</code>/<code>off</code> (and
-  their capitalised variants) the same way, so the trap is wider than just
-  <code>true</code>/<code>false</code>.</li>
-<li><strong>Self-documenting.</strong> <code>actions-gateway.github.com/privileged-profile: allowed</code>
-  reads as a deliberate grant. <code>…: "true"</code> carries no meaning and invites the
-  reader to drop the quotes.</li>
+<li><strong>YAML coercion footgun.</strong> In a manifest, <code>my-label: true</code> parses as a YAML boolean, not the string <code>"true"</code>.
+  A Kubernetes label/annotation value must be a string, so the unquoted form either errors or has to be remembered as <code>"true"</code> (quoted) every time.
+  YAML 1.1 coerces <code>yes</code>/<code>no</code>/<code>on</code>/<code>off</code> (and their capitalised variants) the same way, so the trap is wider than just <code>true</code>/<code>false</code>.</li>
+<li><strong>Self-documenting.</strong> <code>actions-gateway.github.com/privileged-profile: allowed</code> reads as a deliberate grant. <code>…: "true"</code> carries no meaning and invites the reader to drop the quotes.</li>
 </ul>
-<p>The value is always matched <strong>exactly</strong> and the check is <strong>fail-closed</strong>: any
-value other than the sentinel keyword (and an absent label) is treated as "not
-granted". So even if someone fat-fingers <code>true</code>, eligibility is denied rather
-than silently granted.</p>
+<p>The value is always matched <strong>exactly</strong> and the check is <strong>fail-closed</strong>: any value other than the sentinel keyword (and an absent label) is treated as "not granted".
+So even if someone fat-fingers <code>true</code>, eligibility is denied rather than silently granted.</p>
 <p><strong>Worked example.</strong> The privileged-profile eligibility gate (Q133) uses</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">actions-gateway.github.com/privileged-profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allowed</span><span class="w">   </span><span class="c1"># not &quot;true&quot;</span>
 </code></pre></div>
-<p>See <code>PrivilegedProfileLabel</code> / <code>PrivilegedProfileAllowed</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go"><code>cmd/gmc/api/v1alpha1/actionsgateway_types.go</code></a>
-and <a href="../../design/05-security/#privileged-eligibility-is-a-platform-decision">§5.3 of the security design</a>.</p>
-<p><strong>v2 operator-set label — namespace security profile.</strong> v2 relocates the Pod
-Security Admission level off the per-gateway <code>ActionsGateway.spec.securityProfile</code>
-(v1) onto the <strong>tenant namespace</strong> (Q175 / appendix-h §H.16 #7): the operator sets</p>
+<p>See <code>PrivilegedProfileLabel</code> / <code>PrivilegedProfileAllowed</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go"><code>cmd/gmc/api/v1alpha1/actionsgateway_types.go</code></a> and <a href="../../design/05-security/#privileged-eligibility-is-a-platform-decision">§5.3 of the security design</a>.</p>
+<p><strong>v2 operator-set label — namespace security profile.</strong> v2 relocates the Pod Security Admission level off the per-gateway <code>ActionsGateway.spec.securityProfile</code> (v1) onto the <strong>tenant namespace</strong> (Q175 / appendix-h §H.16 #7): the operator sets</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">actions-gateway.com/security-profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restricted</span><span class="w">   </span><span class="c1"># baseline | restricted | privileged</span>
 </code></pre></div>
-<p>on the namespace, and the GMC <code>NamespacePSAReconciler</code> stamps the
-<code>pod-security.kubernetes.io/*</code> labels from it. The value follows the enum-keyword
-convention above (not a boolean), and the <code>gmc-namespace-security-profile-guard</code>
-ValidatingAdmissionPolicy fail-closes on an invalid value, a silent downgrade, or a
-<code>privileged</code> selection without the <code>actions-gateway.com/privileged-profile=allowed</code>
-eligibility label. See <code>SecurityProfileLabel</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/shared_types.go"><code>api/v2alpha1/shared_types.go</code></a>.</p>
+<p>on the namespace, and the GMC <code>NamespacePSAReconciler</code> stamps the <code>pod-security.kubernetes.io/*</code> labels from it.
+The value follows the enum-keyword convention above (not a boolean), and the <code>gmc-namespace-security-profile-guard</code> ValidatingAdmissionPolicy fail-closes on an invalid value, a silent downgrade, or a <code>privileged</code> selection without the <code>actions-gateway.com/privileged-profile=allowed</code> eligibility label.
+See <code>SecurityProfileLabel</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/shared_types.go"><code>api/v2alpha1/shared_types.go</code></a>.</p>
 <h3 id="pre-existing-true-values-are-grandfathered">Pre-existing <code>"true"</code> values are grandfathered<a class="headerlink" href="#pre-existing-true-values-are-grandfathered" title="Permanent link">&para;</a></h3>
 <p>Two shipped keys predate this convention and still use <code>"true"</code>:</p>
 <ul>
 <li><code>actions-gateway.github.com/tenant: "true"</code> — the managed-tenant marker label.</li>
-<li><code>actions-gateway.github.com/allow-profile-downgrade: "true"</code> — the
-  downgrade opt-in annotation.</li>
+<li><code>actions-gateway.github.com/allow-profile-downgrade: "true"</code> — the downgrade opt-in annotation.</li>
 </ul>
-<p>These were <strong>not</strong> to be changed casually. The <code>tenant</code> marker in particular is
-load-bearing: the <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code>
-<code>ValidatingAdmissionPolicy</code> objects, the onboarding scripts, and operator
-runbooks all match it as <code>"true"</code>, so changing the value is a breaking change to
-deployed clusters. The convention above applies to <strong>new</strong> keys; the existing
-two stay as-is unless there is a separate, deliberate migration.</p>
-<p><strong>The v2 API cutover is that deliberate migration.</strong> v2 aligns both values to
-self-documenting keywords (<code>tenant: managed</code>, <code>allow-profile-downgrade: allowed</code>)
-on the renamed <code>actions-gateway.com/</code> domain (see <code>shared_types.go</code>). During the
-v1/v2 coexistence window every consumer <strong>dual-reads</strong> both spellings, so deployed
-clusters are not broken mid-cutover; the <a href="../../operations/migration-v1-to-v2/">M5 migration tool</a>
-relabels live namespaces additively, and the legacy <code>"true"</code> arms drop when
-<code>v1alpha1</code> is removed (design <a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>).</p>
+<p>These were <strong>not</strong> to be changed casually.
+The <code>tenant</code> marker in particular is load-bearing: the <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code> objects, the onboarding scripts, and operator runbooks all match it as <code>"true"</code>, so changing the value is a breaking change to deployed clusters.
+The convention above applies to <strong>new</strong> keys; the existing two stay as-is unless there is a separate, deliberate migration.</p>
+<p><strong>The v2 API cutover is that deliberate migration.</strong> v2 aligns both values to self-documenting keywords (<code>tenant: managed</code>, <code>allow-profile-downgrade: allowed</code>) on the renamed <code>actions-gateway.com/</code> domain (see <code>shared_types.go</code>).
+During the v1/v2 coexistence window every consumer <strong>dual-reads</strong> both spellings, so deployed clusters are not broken mid-cutover; the <a href="../../operations/migration-v1-to-v2/">M5 migration tool</a> relabels live namespaces additively, and the legacy <code>"true"</code> arms drop when <code>v1alpha1</code> is removed (design <a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>).</p>
 <h2 id="label--annotation-key-conventions">Label &amp; annotation key conventions<a class="headerlink" href="#label--annotation-key-conventions" title="Permanent link">&para;</a></h2>
-<p>Use the <code>actions-gateway.github.com/&lt;name&gt;</code> prefix for every label and
-annotation key the project defines, matching the API group. Define the key (and
-its sentinel value, if any) as an exported <code>const</code> in the relevant
-<code>api/v1alpha1</code> package with godoc, and reference that const from controllers,
-webhooks, and tests — never re-type the literal string, so a rename can't drift
-between the producer and the consumers.</p>
-<p><strong>v2 (<code>actions-gateway.com</code>) keys use the owned domain from birth</strong> — the v2
-kinds and their controllers prefix labels/annotations with <code>actions-gateway.com/</code>
-(the group the project owns), defined as exported consts in the neutral <code>api/v2alpha1</code>
-package. Controller-set v2 labels:</p>
+<p>Use the <code>actions-gateway.github.com/&lt;name&gt;</code> prefix for every label and annotation key the project defines, matching the API group.
+Define the key (and its sentinel value, if any) as an exported <code>const</code> in the relevant <code>api/v1alpha1</code> package with godoc, and reference that const from controllers, webhooks, and tests — never re-type the literal string, so a rename can't drift between the producer and the consumers.</p>
+<p><strong>v2 (<code>actions-gateway.com</code>) keys use the owned domain from birth</strong> — the v2 kinds and their controllers prefix labels/annotations with <code>actions-gateway.com/</code> (the group the project owns), defined as exported consts in the neutral <code>api/v2alpha1</code> package.
+Controller-set v2 labels:</p>
 <ul>
-<li><code>actions-gateway.com/gateway: &lt;name&gt;</code> — stamped by the v2 <code>ActionsGateway</code>
-  reconciler on every AGC control-plane child (Deployment/SA/RoleBinding/Service/
-  NetworkPolicy/Secret), so M3b's per-gateway naming has an identity to key on and
-  operators can <code>kubectl get -l actions-gateway.com/gateway=&lt;name&gt;</code> a gateway's
-  resources.</li>
-<li><code>actions-gateway.com/runner-set: &lt;name&gt;</code> (<code>provisioner.LabelRunnerSet</code>) — stamped
-  on every v2 worker pod, job Secret, and <strong>agent-pool Secret</strong>; the AGC <code>RunnerSet</code>
-  controller's Pod watch, reaper, and agent pool filter on it. Distinct from the v1
-  <code>actions-gateway/runner-group</code> key so the v1 and v2 controllers never cross-wire
-  during coexistence.</li>
-<li><code>actions-gateway.com/egress-proxy: &lt;name&gt;</code> — stamped on every <code>EgressProxy</code> child and
-  pool pod, and the <strong>sole</strong> key of that pool's <code>Deployment</code>/<code>Service</code>/PDB/<code>NetworkPolicy</code>
-  selectors and its hostname anti-affinity term. Distinct from v1's bare
-  <code>app: actions-gateway-proxy</code> for the same coexistence reason, and it is the <em>selector</em>
-  that matters here, not just the name — see <a href="#a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582">below</a>.</li>
+<li><code>actions-gateway.com/gateway: &lt;name&gt;</code> — stamped by the v2 <code>ActionsGateway</code> reconciler on every AGC control-plane child (Deployment/SA/RoleBinding/Service/ NetworkPolicy/Secret), so M3b's per-gateway naming has an identity to key on and operators can <code>kubectl get -l actions-gateway.com/gateway=&lt;name&gt;</code> a gateway's resources.</li>
+<li><code>actions-gateway.com/runner-set: &lt;name&gt;</code> (<code>provisioner.LabelRunnerSet</code>) — stamped on every v2 worker pod, job Secret, and <strong>agent-pool Secret</strong>; the AGC <code>RunnerSet</code> controller's Pod watch, reaper, and agent pool filter on it.
+  Distinct from the v1 <code>actions-gateway/runner-group</code> key so the v1 and v2 controllers never cross-wire during coexistence.</li>
+<li><code>actions-gateway.com/egress-proxy: &lt;name&gt;</code> — stamped on every <code>EgressProxy</code> child and pool pod, and the <strong>sole</strong> key of that pool's <code>Deployment</code>/<code>Service</code>/PDB/<code>NetworkPolicy</code> selectors and its hostname anti-affinity term.
+  Distinct from v1's bare <code>app: actions-gateway-proxy</code> for the same coexistence reason, and it is the <em>selector</em> that matters here, not just the name — see <a href="#a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582">below</a>.</li>
 </ul>
 <h3 id="derive-a-per-owner-name-from-the-owners-kind-not-just-its-name-q466">Derive a per-owner name from the owner's <em>kind</em>, not just its name (Q466)<a class="headerlink" href="#derive-a-per-owner-name-from-the-owners-kind-not-just-its-name-q466" title="Permanent link">&para;</a></h3>
-<p>A v1 <code>RunnerGroup</code> and a v2 <code>RunnerSet</code> of the same name share one namespace for the
-whole coexistence window of a migration — that is what makes rollback to v1 possible.
-So <strong>any</strong> name or selector an AGC derives from an owner's name must carry the kind too,
-or the two controllers silently manage one object. The agent pool is the worked example
-and the one that got this wrong: identical Secret names, identical selector labels, and
-identical GitHub runner names left the v1 tenant in a permanent
-<code>secrets "agentpool-&lt;name&gt;-&lt;index&gt;" already exists</code> loop the moment v2 came up.</p>
+<p>A v1 <code>RunnerGroup</code> and a v2 <code>RunnerSet</code> of the same name share one namespace for the whole coexistence window of a migration — that is what makes rollback to v1 possible.
+So <strong>any</strong> name or selector an AGC derives from an owner's name must carry the kind too, or the two controllers silently manage one object.
+The agent pool is the worked example and the one that got this wrong: identical Secret names, identical selector labels, and identical GitHub runner names left the v1 tenant in a permanent <code>secrets "agentpool-&lt;name&gt;-&lt;index&gt;" already exists</code> loop the moment v2 came up.</p>
 <table>
 <thead>
 <tr>
@@ -2951,310 +2901,146 @@ identical GitHub runner names left the v1 tenant in a permanent
 </tr>
 </tbody>
 </table>
-<p>Two rules follow. <strong>The v1 spelling never moves</strong> — v1 is the rollback target, so it has
-to keep finding the objects and registrations it already owns; v2 is the side that gets
-the discriminator. And <strong>splitting the Kubernetes name is not enough on its own</strong>: the
-GitHub runner name is unique per registration scope, so two pools sharing one take turns
-deregistering each other's live record through the 409-conflict path. Split every
-derived identity or none of them.</p>
-<p>Renaming a derived object in a shipped release also has to carry the existing ones
-across, not orphan them. <code>agentpool.AdoptLegacyRunnerSetSecrets</code> is the pattern: on the
-first reconcile after the rename, copy each old-named object to its new name (preserving
-the payload, so no external registration is re-issued) and delete the original, gated on
-a check that the old name is not in use by the <em>other</em> kind.</p>
+<p>Two rules follow. <strong>The v1 spelling never moves</strong> — v1 is the rollback target, so it has to keep finding the objects and registrations it already owns; v2 is the side that gets the discriminator.
+And <strong>splitting the Kubernetes name is not enough on its own</strong>: the GitHub runner name is unique per registration scope, so two pools sharing one take turns deregistering each other's live record through the 409-conflict path.
+Split every derived identity or none of them.</p>
+<p>Renaming a derived object in a shipped release also has to carry the existing ones across, not orphan them. <code>agentpool.AdoptLegacyRunnerSetSecrets</code> is the pattern: on the first reconcile after the rename, copy each old-named object to its new name (preserving the payload, so no external registration is re-issued) and delete the original, gated on a check that the old name is not in use by the <em>other</em> kind.</p>
 <h3 id="a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582">A selector a coexisting controller also matches is a cross-wire (Q582)<a class="headerlink" href="#a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582" title="Permanent link">&para;</a></h3>
-<p>Q466 above splits derived <em>names</em>. The same coexistence window breaks a <em>selector</em> that
-two controllers both match, and it breaks it in places that carry no name at all. The v2
-<code>EgressProxy</code> pool used to stamp v1's <code>app: actions-gateway-proxy</code> alongside its own
-identity label, purely so generic tooling could find proxy pods. Names were already
-split — the pools are <code>actions-gateway-proxy</code> and <code>&lt;proxy&gt;-proxy</code> — but v1 keys its PDB
-selector, its <code>Deployment</code> selector, and its hostname anti-affinity term on that one bare
-label, because v1 has a single pool per namespace and never had to distinguish it. So
-every one of those reached into the v2 pool: each pool's pods fell under both PDBs (a pod
-covered by two is one the eviction API refuses to evict), both <code>HorizontalPodAutoscaler</code>s
-wedged on <code>AmbiguousSelector</code>, and the pools repelled each other off every node.</p>
+<p>Q466 above splits derived <em>names</em>.
+The same coexistence window breaks a <em>selector</em> that two controllers both match, and it breaks it in places that carry no name at all.
+The v2 <code>EgressProxy</code> pool used to stamp v1's <code>app: actions-gateway-proxy</code> alongside its own identity label, purely so generic tooling could find proxy pods.
+Names were already split — the pools are <code>actions-gateway-proxy</code> and <code>&lt;proxy&gt;-proxy</code> — but v1 keys its PDB selector, its <code>Deployment</code> selector, and its hostname anti-affinity term on that one bare label, because v1 has a single pool per namespace and never had to distinguish it.
+So every one of those reached into the v2 pool: each pool's pods fell under both PDBs (a pod covered by two is one the eviction API refuses to evict), both <code>HorizontalPodAutoscaler</code>s wedged on <code>AmbiguousSelector</code>, and the pools repelled each other off every node.</p>
 <p>Three things to carry forward when adding a label to a v2 object:</p>
 <ul>
-<li><strong>A shared label is a shared selector until proven otherwise.</strong> Trace every consumer
-  before stamping one: PDBs, <code>Service</code>s, <code>NetworkPolicy</code> pod selectors <em>and peers</em>, pod
-  (anti-)affinity terms, and CNI-native policy selectors. An HPA is the trap — it has no
-  selector of its own, so it never appears in a grep for the label, yet it inherits its
-  scale target's and wedges on an overlap.</li>
-<li><strong><code>Deployment.spec.selector</code> is immutable</strong>, so narrowing one is a delete-and-recreate
-  of a live workload, not a patch. Prefer the fix that lands on the <em>newer</em> side: v2's
-  pools are alpha and a migration creates them after the upgrade, whereas every install
-  has a running v1 pool. <code>EgressProxyReconciler.applyDeployment</code> carries the recreate for
-  pools that predate the narrowing, mirroring <code>applyRoleBinding</code>'s immutable-<code>roleRef</code>
-  path.</li>
-<li><strong>Generic identity belongs in the recommended labels</strong>, which nothing selects on.
-  <code>app.kubernetes.io/name=actions-gateway-proxy</code> is on both pools' pods and is the
-  version-agnostic way to list every proxy pod; a functional selector must key on the
-  owning object's identity label instead.</li>
+<li><strong>A shared label is a shared selector until proven otherwise.</strong> Trace every consumer before stamping one: PDBs, <code>Service</code>s, <code>NetworkPolicy</code> pod selectors <em>and peers</em>, pod (anti-)affinity terms, and CNI-native policy selectors.
+  An HPA is the trap — it has no selector of its own, so it never appears in a grep for the label, yet it inherits its scale target's and wedges on an overlap.</li>
+<li><strong><code>Deployment.spec.selector</code> is immutable</strong>, so narrowing one is a delete-and-recreate of a live workload, not a patch.
+  Prefer the fix that lands on the <em>newer</em> side: v2's pools are alpha and a migration creates them after the upgrade, whereas every install has a running v1 pool. <code>EgressProxyReconciler.applyDeployment</code> carries the recreate for pools that predate the narrowing, mirroring <code>applyRoleBinding</code>'s immutable-<code>roleRef</code> path.</li>
+<li><strong>Generic identity belongs in the recommended labels</strong>, which nothing selects on. <code>app.kubernetes.io/name=actions-gateway-proxy</code> is on both pools' pods and is the version-agnostic way to list every proxy pod; a functional selector must key on the owning object's identity label instead.</li>
 </ul>
 <h3 id="derive-every-name-through-apiapinames-q467-q473">Derive every name through <code>api/apinames</code> (Q467, Q473)<a class="headerlink" href="#derive-every-name-through-apiapinames-q467-q473" title="Permanent link">&para;</a></h3>
-<p><strong>All name derivation goes through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apinames/names.go"><code>api/apinames</code></a>.</strong> It
-lives in the neutral <code>api</code> module because the GMC derives the v1 RunnerGroup name,
-<code>gag-migrate</code> replicates it, and the AGC consumes it as a label value — three packages
-across two modules that must agree byte for byte. They previously agreed by comment
-("Kept byte-for-byte identical…"), which is not a mechanism.</p>
-<p>Two shipped bugs came from getting this wrong, and both presented to the operator the
-same way: no worker pod at all, and GitHub reporting that the runner <em>"lost
-communication"</em>. Both were deterministic per tenant-name length, not intermittent.</p>
-<p><strong>Budget against the tightest consumer, not the one you are creating.</strong> An object name
-may be 253 characters, but a <strong>label value and a Service name stop at 63</strong>. The v1
-<code>&lt;gateway&gt;-&lt;label&gt;</code> RunnerGroup name was never bounded: past 63 characters the CR is
-still created — it is a legal object name — and then every worker pod carrying it as
-<code>actions-gateway/runner-group</code> is rejected. A 15-character gateway with a 40-character
-runner label was enough. v2 avoids this class with a 52-char CEL cap on CR names
-(<a href="../../design/appendix-h-v2-api-decomposition/#h6-naming-and-length-budgets">§H.6</a>);
-v1 has no such cap, so the bound is applied where the name is derived.</p>
-<p><strong>Split the budget before you join the segments.</strong> A name has rules beyond "≤63
-characters" — it must also start and end with an alphanumeric character. Building
-<code>&lt;prefix&gt;-&lt;owner&gt;-&lt;id&gt;</code> and then cutting the result at 63 satisfies the length rule and
-violates the other one whenever the cut lands on a hyphen, and the hyphens in a UUID sit
-at fixed indices. <code>apinames.Join</code> splits the budget first (<code>apinames.Shares</code> gives each
-part an equal share and redistributes what a shorter part leaves over), so no cut can
-reach a separator.</p>
-<p><strong>Never trade validity for collisions.</strong> Trimming a trailing hyphen is not a fix on its
-own: it shortens the entropy-bearing suffix, and two objects that collide on a name are
-a worse failure than one the API server rejects. <code>apinames.Truncate</code> replaces the
-discarded tail with a hash of the <em>whole</em> segment, so every segment stays injective at
-every budget.</p>
-<p><strong>A name that already fits is never changed.</strong> <code>Join</code> returns the plain concatenation
-whenever it is within budget. That is what makes the helper adoptable: bounding a
-derivation renames only the tenants that were already broken, never a healthy one.</p>
-<p><strong>Test at the boundary, not just under it.</strong> <code>assert len(name) &lt;= 63</code> passes happily on
-<code>…-</code>. Sweep the name lengths that put the cut on each separator, one either side, and
-the maximum-length case; assert against <code>k8s.io/apimachinery/pkg/util/validation</code>
-(<code>IsDNS1123Label</code>, <code>IsValidLabelValue</code>) rather than a length; and let a real API server
-judge in an envtest, since it is the authority that rejected these in the first place.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apinames/names_test.go"><code>api/apinames/names_test.go</code></a> is the worked example,
-with a fuzz target for the inputs a table misses.</p>
-<p>A rejected object must also be <strong>legible to an operator</strong>. A create the API server
-refuses is invisible from the outside — nothing to <code>kubectl describe</code>, nothing in the
-tenant's namespace at all — so surface the API server's own message as a <code>Warning</code> Event
-on the owner (<code>WorkerPodCreateFailed</code>) rather than leaving it in a controller log the
-tenant cannot read.</p>
+<p><strong>All name derivation goes through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apinames/names.go"><code>api/apinames</code></a>.</strong> It lives in the neutral <code>api</code> module because the GMC derives the v1 RunnerGroup name, <code>gag-migrate</code> replicates it, and the AGC consumes it as a label value — three packages across two modules that must agree byte for byte.
+They previously agreed by comment ("Kept byte-for-byte identical…"), which is not a mechanism.</p>
+<p>Two shipped bugs came from getting this wrong, and both presented to the operator the same way: no worker pod at all, and GitHub reporting that the runner <em>"lost communication"</em>.
+Both were deterministic per tenant-name length, not intermittent.</p>
+<p><strong>Budget against the tightest consumer, not the one you are creating.</strong> An object name may be 253 characters, but a <strong>label value and a Service name stop at 63</strong>.
+The v1 <code>&lt;gateway&gt;-&lt;label&gt;</code> RunnerGroup name was never bounded: past 63 characters the CR is still created — it is a legal object name — and then every worker pod carrying it as <code>actions-gateway/runner-group</code> is rejected.
+A 15-character gateway with a 40-character runner label was enough. v2 avoids this class with a 52-char CEL cap on CR names (<a href="../../design/appendix-h-v2-api-decomposition/#h6-naming-and-length-budgets">§H.6</a>); v1 has no such cap, so the bound is applied where the name is derived.</p>
+<p><strong>Split the budget before you join the segments.</strong> A name has rules beyond "≤63 characters" — it must also start and end with an alphanumeric character.
+Building <code>&lt;prefix&gt;-&lt;owner&gt;-&lt;id&gt;</code> and then cutting the result at 63 satisfies the length rule and violates the other one whenever the cut lands on a hyphen, and the hyphens in a UUID sit at fixed indices. <code>apinames.Join</code> splits the budget first (<code>apinames.Shares</code> gives each part an equal share and redistributes what a shorter part leaves over), so no cut can reach a separator.</p>
+<p><strong>Never trade validity for collisions.</strong> Trimming a trailing hyphen is not a fix on its own: it shortens the entropy-bearing suffix, and two objects that collide on a name are a worse failure than one the API server rejects. <code>apinames.Truncate</code> replaces the discarded tail with a hash of the <em>whole</em> segment, so every segment stays injective at every budget.</p>
+<p><strong>A name that already fits is never changed.</strong> <code>Join</code> returns the plain concatenation whenever it is within budget.
+That is what makes the helper adoptable: bounding a derivation renames only the tenants that were already broken, never a healthy one.</p>
+<p><strong>Test at the boundary, not just under it.</strong> <code>assert len(name) &lt;= 63</code> passes happily on <code>…-</code>.
+Sweep the name lengths that put the cut on each separator, one either side, and the maximum-length case; assert against <code>k8s.io/apimachinery/pkg/util/validation</code> (<code>IsDNS1123Label</code>, <code>IsValidLabelValue</code>) rather than a length; and let a real API server judge in an envtest, since it is the authority that rejected these in the first place.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apinames/names_test.go"><code>api/apinames/names_test.go</code></a> is the worked example, with a fuzz target for the inputs a table misses.</p>
+<p>A rejected object must also be <strong>legible to an operator</strong>.
+A create the API server refuses is invisible from the outside — nothing to <code>kubectl describe</code>, nothing in the tenant's namespace at all — so surface the API server's own message as a <code>Warning</code> Event on the owner (<code>WorkerPodCreateFailed</code>) rather than leaving it in a controller log the tenant cannot read.</p>
 <h3 id="own-every-object-you-derive">Own every object you derive<a class="headerlink" href="#own-every-object-you-derive" title="Permanent link">&para;</a></h3>
-<p>Every Secret, pod, or child object a controller derives from a CR carries a controller
-<code>OwnerReference</code> to it, built from a single exported helper per kind
-(<code>provisioner.RunnerGroupOwnerRef</code>, <code>runnerSetOwnerRef</code>) so the paths that stamp it
-cannot drift into two spellings. Two properties come from that:</p>
+<p>Every Secret, pod, or child object a controller derives from a CR carries a controller <code>OwnerReference</code> to it, built from a single exported helper per kind (<code>provisioner.RunnerGroupOwnerRef</code>, <code>runnerSetOwnerRef</code>) so the paths that stamp it cannot drift into two spellings.
+Two properties come from that:</p>
 <ul>
-<li><strong>Lifecycle is unambiguous.</strong> With no owner reference, nothing arbitrates between two
-  controllers that reach for the same object — which is exactly what turned the name
-  collision above into a permanent error loop rather than a caught mistake.</li>
-<li><strong>Cleanup survives a dead controller.</strong> The finalizer path is the primary cleanup; the
-  owner reference is the backstop when the AGC crashed or the namespace went away first.</li>
+<li><strong>Lifecycle is unambiguous.</strong> With no owner reference, nothing arbitrates between two controllers that reach for the same object — which is exactly what turned the name collision above into a permanent error loop rather than a caught mistake.</li>
+<li><strong>Cleanup survives a dead controller.</strong> The finalizer path is the primary cleanup; the owner reference is the backstop when the AGC crashed or the namespace went away first.</li>
 </ul>
-<p>Refresh the reference on <strong>every reconcile</strong>, not once when the cached pool or helper is
-built: an owner deleted and recreated under the same name has a new UID, and an object
-written with a UID that no longer exists is garbage-collected the instant it lands.
-Leave <code>BlockOwnerDeletion</code> unset — setting it would require <code>update</code> on the owner's
-finalizers under the <code>OwnerReferencesPermissionEnforcement</code> admission plugin.</p>
+<p>Refresh the reference on <strong>every reconcile</strong>, not once when the cached pool or helper is built: an owner deleted and recreated under the same name has a new UID, and an object written with a UID that no longer exists is garbage-collected the instant it lands.
+Leave <code>BlockOwnerDeletion</code> unset — setting it would require <code>update</code> on the owner's finalizers under the <code>OwnerReferencesPermissionEnforcement</code> admission plugin.</p>
 <p>One further v2 label is set by the <strong>migration tool</strong>, not by a controller:</p>
 <ul>
-<li><code>actions-gateway.com/migrated-from-namespace: &lt;ns&gt;</code> — stamped by <code>gag-migrate</code> on the
-  <code>ClusterRunnerTemplate</code> it emits for a privileged (DinD/sysbox) v1 worker shape. That
-  is the one migration output which is cluster-scoped, so deleting the tenant namespace
-  does not garbage-collect it; the label is how an operator finds and tears it down
-  (<a href="../../operations/migration-v1-to-v2/#privileged-worker-shapes-dind-become-cluster-scoped-templates">migration runbook</a>).
-  Informational provenance only — nothing selects on it for enforcement, and a
-  platform-authored <code>ClusterRunnerTemplate</code> never carries it.</li>
+<li><code>actions-gateway.com/migrated-from-namespace: &lt;ns&gt;</code> — stamped by <code>gag-migrate</code> on the <code>ClusterRunnerTemplate</code> it emits for a privileged (DinD/sysbox) v1 worker shape.
+  That is the one migration output which is cluster-scoped, so deleting the tenant namespace does not garbage-collect it; the label is how an operator finds and tears it down (<a href="../../operations/migration-v1-to-v2/#privileged-worker-shapes-dind-become-cluster-scoped-templates">migration runbook</a>).
+  Informational provenance only — nothing selects on it for enforcement, and a platform-authored <code>ClusterRunnerTemplate</code> never carries it.</li>
 </ul>
-<p>The shared <code>actions-gateway/component: workload</code> selector label is carried by both
-v1 and v2 worker/AGC pods (it backs the workload NetworkPolicy selector), so the
-egress-lockdown posture is identical across the two APIs.</p>
+<p>The shared <code>actions-gateway/component: workload</code> selector label is carried by both v1 and v2 worker/AGC pods (it backs the workload NetworkPolicy selector), so the egress-lockdown posture is identical across the two APIs.</p>
 <h3 id="tolerate-kubectlkubernetesiorestartedat-on-a-managed-pod-template-q552">Tolerate <code>kubectl.kubernetes.io/restartedAt</code> on a managed pod template (Q552)<a class="headerlink" href="#tolerate-kubectlkubernetesiorestartedat-on-a-managed-pod-template-q552" title="Permanent link">&para;</a></h3>
-<p>A GMC-managed Deployment's pod template is rebuilt from the CR on every reconcile, so
-anything an operator hand-edits onto it is reverted. That is the intended contract for
-config drift — the CR is the source of truth — but it also reverted the annotation
-<code>kubectl rollout restart</code> patches in, making the restart a silent no-op: kubectl reports
-the <em>old</em>, trivially-complete ReplicaSet as successfully rolled out. Every runbook that
-prescribed a restart was therefore prescribing nothing.</p>
-<p><code>assignManagedPodTemplate</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/deployment_restart_annotation.go"><code>cmd/gmc/internal/controller/deployment_restart_annotation.go</code></a>)
-carries the keys in <code>toleratedTemplateAnnotations</code> over from the live template instead
-of reverting them; every GMC Deployment apply path routes its template assignment
-through it.</p>
-<p>That list is deliberately one well-known key rather than a preserve-anything-unmanaged
-rule. Preserving unmanaged keys wholesale would mean the GMC could never <em>remove</em> an
-annotation it had stopped setting, and would quietly turn the pod template into a
-partially-unowned surface. Adding a key here is a decision to give up reconciliation of
-that key — take it one key at a time, and pin it with a test that the <em>unlisted</em> keys
-are still reverted.</p>
+<p>A GMC-managed Deployment's pod template is rebuilt from the CR on every reconcile, so anything an operator hand-edits onto it is reverted.
+That is the intended contract for config drift — the CR is the source of truth — but it also reverted the annotation <code>kubectl rollout restart</code> patches in, making the restart a silent no-op: kubectl reports the <em>old</em>, trivially-complete ReplicaSet as successfully rolled out.
+Every runbook that prescribed a restart was therefore prescribing nothing.</p>
+<p><code>assignManagedPodTemplate</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/deployment_restart_annotation.go"><code>cmd/gmc/internal/controller/deployment_restart_annotation.go</code></a>) carries the keys in <code>toleratedTemplateAnnotations</code> over from the live template instead of reverting them; every GMC Deployment apply path routes its template assignment through it.</p>
+<p>That list is deliberately one well-known key rather than a preserve-anything-unmanaged rule.
+Preserving unmanaged keys wholesale would mean the GMC could never <em>remove</em> an annotation it had stopped setting, and would quietly turn the pod template into a partially-unowned surface.
+Adding a key here is a decision to give up reconciliation of that key — take it one key at a time, and pin it with a test that the <em>unlisted</em> keys are still reverted.</p>
 <h3 id="recommended-appkubernetesio-labels-q205">Recommended <code>app.kubernetes.io/*</code> labels (Q205)<a class="headerlink" href="#recommended-appkubernetesio-labels-q205" title="Permanent link">&para;</a></h3>
-<p>Every object the GMC or AGC creates also carries the Kubernetes
-<a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/">recommended labels</a>
-— <code>app.kubernetes.io/{name,instance,component,part-of,managed-by}</code> (and <code>version</code>
-where a meaningful one exists) — stamped via the shared
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apilabels/labels.go"><code>api/apilabels</code></a> helper so the GMC and AGC never
-diverge on the keys or the <code>part-of</code> value. They are <strong>additive metadata</strong>: stamp
-them <em>alongside</em> the functional selector labels above, never in place of them, and
-never build a controller's pod/Service selector on them (an operator may relabel
-them). <code>apilabels.Merge</code> preserves any existing key, so it cannot clobber a
-selector label. The canonical per-component values and operator <code>kubectl -l</code>
-recipes live in <a href="../../operations/observability-metrics/#selecting-gag-objects-with-the-recommended-labels">observability.md</a>.</p>
-<p>Controller-set annotations on worker pods (both v1 and v2, stamped by the
-provisioner at pod creation time — from the AcquireJob payload on the classic
-tier, from the assignment message's <code>JobMessageBase</code> fields on the scale-set
-tier):</p>
+<p>Every object the GMC or AGC creates also carries the Kubernetes <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/">recommended labels</a> — <code>app.kubernetes.io/{name,instance,component,part-of,managed-by}</code> (and <code>version</code> where a meaningful one exists) — stamped via the shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apilabels/labels.go"><code>api/apilabels</code></a> helper so the GMC and AGC never diverge on the keys or the <code>part-of</code> value.
+They are <strong>additive metadata</strong>: stamp them <em>alongside</em> the functional selector labels above, never in place of them, and never build a controller's pod/Service selector on them (an operator may relabel them). <code>apilabels.Merge</code> preserves any existing key, so it cannot clobber a selector label.
+The canonical per-component values and operator <code>kubectl -l</code> recipes live in <a href="../../operations/observability-metrics/#selecting-gag-objects-with-the-recommended-labels">observability.md</a>.</p>
+<p>Controller-set annotations on worker pods (both v1 and v2, stamped by the provisioner at pod creation time — from the AcquireJob payload on the classic tier, from the assignment message's <code>JobMessageBase</code> fields on the scale-set tier):</p>
 <ul>
 <li><code>actions-gateway.com/run-id</code> — GitHub workflow run ID.</li>
 <li><code>actions-gateway.com/repository</code> — <code>owner/repo</code> the job belongs to.</li>
 <li><code>actions-gateway.com/job-name</code> — job name as defined in the workflow YAML.</li>
-<li><code>actions-gateway.com/workflow</code> — workflow file name. Classic only; the
-  scale-set protocol delivers no workflow name.</li>
+<li><code>actions-gateway.com/workflow</code> — workflow file name.
+  Classic only; the scale-set protocol delivers no workflow name.</li>
 </ul>
-<p><strong>On the classic tier, read the identity out of the payload's serialised <code>github</code>
-context — never out of <code>variables</code>.</strong> A real AcquireJob body carries
-<code>contextData.github.run_id</code> and <code>.repository</code> and no <code>system.github.run_id</code> at all;
-reading the variables instead is how these annotations came to be absent from every
-real worker pod, taking classic-tier eviction recovery with them (Q495). The
-ground truth is <code>testdata/job_payload.json</code>, a redacted capture of a live response,
-and <code>payload_groundtruth_test.go</code> asserts against it — extend that test rather than
-a hand-written payload when this parsing changes.</p>
-<p>These are best-effort: absent if GitHub omitted the corresponding field
-(<code>contextData.github.run_id</code>/<code>.repository</code>/<code>.workflow</code> on classic;
-<code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code> on scale-set). Never use them for
-security enforcement — they are informational annotations for operator
-visibility, <strong>except</strong> that on the scale-set tier <code>run-id</code> and <code>repository</code> are
-also load-bearing: they are the only record of which workflow run a worker was
-serving, so eviction recovery reads them back off the pod (Q417). Adding a fifth
-key is fine; changing or removing either of those two breaks recovery on that
-tier.</p>
-<p>One further controller-set annotation is stamped at pod build, on both tiers, only
-when an opt-in sizing profile actually derived the pod's ask:</p>
+<p><strong>On the classic tier, read the identity out of the payload's serialised <code>github</code> context — never out of <code>variables</code>.</strong> A real AcquireJob body carries <code>contextData.github.run_id</code> and <code>.repository</code> and no <code>system.github.run_id</code> at all; reading the variables instead is how these annotations came to be absent from every real worker pod, taking classic-tier eviction recovery with them (Q495).
+The ground truth is <code>testdata/job_payload.json</code>, a redacted capture of a live response, and <code>payload_groundtruth_test.go</code> asserts against it — extend that test rather than a hand-written payload when this parsing changes.</p>
+<p>These are best-effort: absent if GitHub omitted the corresponding field (<code>contextData.github.run_id</code>/<code>.repository</code>/<code>.workflow</code> on classic; <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code> on scale-set).
+Never use them for security enforcement — they are informational annotations for operator visibility, <strong>except</strong> that on the scale-set tier <code>run-id</code> and <code>repository</code> are also load-bearing: they are the only record of which workflow run a worker was serving, so eviction recovery reads them back off the pod (Q417).
+Adding a fifth key is fine; changing or removing either of those two breaks recovery on that tier.</p>
+<p>One further controller-set annotation is stamped at pod build, on both tiers, only when an opt-in sizing profile actually derived the pod's ask:</p>
 <ul>
-<li><code>actions-gateway.com/sizing-profile: &lt;Binpack|Throughput|NodeShare&gt;</code>
-  (<code>provisioner.AnnotationSizingProfile</code>) — the profile that produced this pod's
-  cpu/memory values. A pod built from the template's static values (<code>Static</code>, or a
-  history-based profile still <code>AwaitingSamples</code>) carries no such annotation, so
-  presence answers "was this sized by the profile or by the template?" without
-  reverse-engineering it from the numbers. It is load-bearing for the
-  <code>SizingProfileOverridden</code> condition (Q489), which compares what the profile built
-  against what the apiserver admitted and must not mistake a template-built pod for
-  a profile-built one. Informational otherwise; never set it by hand.</li>
+<li><code>actions-gateway.com/sizing-profile: &lt;Binpack|Throughput|NodeShare&gt;</code> (<code>provisioner.AnnotationSizingProfile</code>) — the profile that produced this pod's cpu/memory values.
+  A pod built from the template's static values (<code>Static</code>, or a history-based profile still <code>AwaitingSamples</code>) carries no such annotation, so presence answers "was this sized by the profile or by the template?" without reverse-engineering it from the numbers.
+  It is load-bearing for the <code>SizingProfileOverridden</code> condition (Q489), which compares what the profile built against what the apiserver admitted and must not mistake a template-built pod for a profile-built one.
+  Informational otherwise; never set it by hand.</li>
 </ul>
 <p>One controller-set annotation is stamped at pod creation on the ScaleSet tier only:</p>
 <ul>
-<li><code>actions-gateway.com/runner-name</code> (<code>provisioner.AnnotationRunnerName</code>) — the name
-  the listener pre-registered this pod's runner under at GitHub. <code>generatejitconfig</code>
-  creates the record before the pod exists, and nothing else remembers the name once
-  the listener goroutine that minted it has moved on, so the pod is the record: the
-  reaper reads it back to deregister the registration when it deletes the pod, and
-  the listener's start-up sweep treats a name stamped on a live pod as claimed and
-  therefore not collectable (Q550). Load-bearing in the same sense as <code>run-id</code> on
-  this tier — a pod without it is reaped with its GitHub registration left behind,
-  and because runner names derive from the job ID, that leftover is what the job's
-  own retries collide with. Never set it by hand.</li>
+<li><code>actions-gateway.com/runner-name</code> (<code>provisioner.AnnotationRunnerName</code>) — the name the listener pre-registered this pod's runner under at GitHub. <code>generatejitconfig</code> creates the record before the pod exists, and nothing else remembers the name once the listener goroutine that minted it has moved on, so the pod is the record: the reaper reads it back to deregister the registration when it deletes the pod, and the listener's start-up sweep treats a name stamped on a live pod as claimed and therefore not collectable (Q550).
+  Load-bearing in the same sense as <code>run-id</code> on this tier — a pod without it is reaped with its GitHub registration left behind, and because runner names derive from the job ID, that leftover is what the job's own retries collide with.
+  Never set it by hand.</li>
 </ul>
-<p>Two further controller-set annotations are stamped <em>after</em> pod creation, on the
-ScaleSet tier only:</p>
+<p>Two further controller-set annotations are stamped <em>after</em> pod creation, on the ScaleSet tier only:</p>
 <ul>
-<li><code>actions-gateway.com/job-completed-at</code> (<code>provisioner.AnnotationJobCompletedAt</code>)
-  — RFC 3339 UTC time at which the scale-set listener saw the terminal
-  <code>JobCompleted</code> for the job this pod was created for. It is the reap deadline
-  for a pod whose own job is over, in either non-terminal phase: five minutes for
-  one still <code>Running</code> (Q420), thirty seconds for one still <code>Pending</code> (Q575), which
-  can no longer start because the same completion reclaimed the JIT-config Secret
-  it mounts. Set once — a completion replayed to a re-created session must not
-  push the deadline back — and never set on the classic path, whose <code>provision()</code>
-  goroutine owns its pod through to a terminal phase.</li>
-<li><code>actions-gateway.com/eviction-handled-at</code>
-  (<code>provisioner.AnnotationEvictionHandledAt</code>) — RFC 3339 UTC time at which the
-  owning reconciler adjudicated this pod's eviction, whether it went on to
-  trigger a re-run, found no run identity, or found the budget exhausted (Q417).
-  It is a <strong>claim</strong>, not a log line: it is written under an optimistic lock
-  <em>before</em> the GitHub call, which is what makes automatic recovery at-most-once
-  per evicted pod across reconciles, restarts, and replicas. If you add another
-  post-creation side effect keyed off a worker pod, follow the same pattern —
-  claim first with <code>client.MergeFromWithOptimisticLock</code>, then act.</li>
+<li><code>actions-gateway.com/job-completed-at</code> (<code>provisioner.AnnotationJobCompletedAt</code>) — RFC 3339 UTC time at which the scale-set listener saw the terminal <code>JobCompleted</code> for the job this pod was created for.
+  It is the reap deadline for a pod whose own job is over, in either non-terminal phase: five minutes for one still <code>Running</code> (Q420), thirty seconds for one still <code>Pending</code> (Q575), which can no longer start because the same completion reclaimed the JIT-config Secret it mounts.
+  Set once — a completion replayed to a re-created session must not push the deadline back — and never set on the classic path, whose <code>provision()</code> goroutine owns its pod through to a terminal phase.</li>
+<li><code>actions-gateway.com/eviction-handled-at</code> (<code>provisioner.AnnotationEvictionHandledAt</code>) — RFC 3339 UTC time at which the owning reconciler adjudicated this pod's eviction, whether it went on to trigger a re-run, found no run identity, or found the budget exhausted (Q417).
+  It is a <strong>claim</strong>, not a log line: it is written under an optimistic lock <em>before</em> the GitHub call, which is what makes automatic recovery at-most-once per evicted pod across reconciles, restarts, and replicas.
+  If you add another post-creation side effect keyed off a worker pod, follow the same pattern — claim first with <code>client.MergeFromWithOptimisticLock</code>, then act.</li>
 </ul>
-<p>One further controller-set annotation is stamped <em>after</em> pod creation, on <strong>both</strong>
-tiers:</p>
+<p>One further controller-set annotation is stamped <em>after</em> pod creation, on <strong>both</strong> tiers:</p>
 <ul>
-<li><code>actions-gateway.com/deletion-reason</code> (<code>provisioner.AnnotationDeletionReason</code>) —
-  the reap reason (e.g. <code>completed_ttl</code>, <code>pending_deadline</code>), stamped immediately
-  before the reaper deletes the pod (Q502). It marks the deletion as the AGC's own,
-  which is what excludes reaper cleanup from graceful-deletion recovery — an
-  unstamped deletion of a worker that then publishes a terminal phase is read as a
-  drain and re-runs the interrupted job. <strong>Any new AGC code path that deletes a
-  worker pod must stamp this annotation before the delete</strong> (stamp-then-delete, in
-  that order), or its deletions become re-run triggers; the reaper's
-  <code>reapWorkerPodsByLabel</code> is the pattern. The one exception is a delete of a pod that
-  has <em>already</em> reached its terminal phase (the <code>completedPodTTL: 0</code> cleanup), which
-  the detection's ordering rule excludes on its own.</li>
+<li><code>actions-gateway.com/deletion-reason</code> (<code>provisioner.AnnotationDeletionReason</code>) — the reap reason (e.g. <code>completed_ttl</code>, <code>pending_deadline</code>), stamped immediately before the reaper deletes the pod (Q502).
+  It marks the deletion as the AGC's own, which is what excludes reaper cleanup from graceful-deletion recovery — an unstamped deletion of a worker that then publishes a terminal phase is read as a drain and re-runs the interrupted job. <strong>Any new AGC code path that deletes a worker pod must stamp this annotation before the delete</strong> (stamp-then-delete, in that order), or its deletions become re-run triggers; the reaper's <code>reapWorkerPodsByLabel</code> is the pattern.
+  The one exception is a delete of a pod that has <em>already</em> reached its terminal phase (the <code>completedPodTTL: 0</code> cleanup), which the detection's ordering rule excludes on its own.</li>
 </ul>
-<p><strong>A new delete also owes the specs.</strong> What a worker pod publishes at its terminal
-  phase is what the drain/cancel specs assert, so a new deleter can falsify one
-  without failing it, and the live-GitHub half skips without credentials, so its
-  green means nothing (Q599; see
-  <a href="../testing/#a-credential-gated-spec-that-skips-is-not-defending-anything">testing.md</a>).
-  <code>cmd/agc/internal/provisioner/deletion_inventory_test.go</code> is the tripwire: it fails
-  on any added, moved, or renamed client <code>Delete</code> in the <code>agc</code> module and prints the
-  spec roster to read before updating it.</p>
-<p>Alongside them, the scale-set tier stamps one controller-set <strong>label</strong> at pod
-creation:</p>
+<p><strong>A new delete also owes the specs.</strong> What a worker pod publishes at its terminal phase is what the drain/cancel specs assert, so a new deleter can falsify one without failing it, and the live-GitHub half skips without credentials, so its green means nothing (Q599; see <a href="../testing/#a-credential-gated-spec-that-skips-is-not-defending-anything">testing.md</a>). <code>cmd/agc/internal/provisioner/deletion_inventory_test.go</code> is the tripwire: it fails on any added, moved, or renamed client <code>Delete</code> in the <code>agc</code> module and prints the spec roster to read before updating it.</p>
+<p>Alongside them, the scale-set tier stamps one controller-set <strong>label</strong> at pod creation:</p>
 <ul>
 <li><code>actions-gateway.com/acquisition-protocol</code> (<code>= "ScaleSet"</code>) — the tier marker.
-  Presence is the tier test: a classic worker carries no such label. It exists
-  because the two tiers own a worker's lifecycle differently, so eviction
-  recovery must filter on it or one eviction would be recovered twice (once
-  inline by the classic <code>provision()</code> goroutine, once by the reconciler),
-  spending two slots of one run's retry budget.</li>
+  Presence is the tier test: a classic worker carries no such label.
+  It exists because the two tiers own a worker's lifecycle differently, so eviction recovery must filter on it or one eviction would be recovered twice (once inline by the classic <code>provision()</code> goroutine, once by the reconciler), spending two slots of one run's retry budget.</li>
 </ul>
-<p>The provisioner also gap-fills three <strong>node-disruption-safety</strong> annotations on
-every worker pod, so a node autoscaler or the descheduler does not evict a pod
-mid-job and strand the CI run (these are third-party well-known keys, not our
-<code>actions-gateway.com/</code> domain):</p>
+<p>The provisioner also gap-fills three <strong>node-disruption-safety</strong> annotations on every worker pod, so a node autoscaler or the descheduler does not evict a pod mid-job and strand the CI run (these are third-party well-known keys, not our <code>actions-gateway.com/</code> domain):</p>
 <ul>
 <li><code>karpenter.sh/do-not-disrupt: "true"</code> — Karpenter consolidation/drift opt-out.</li>
 <li><code>cluster-autoscaler.kubernetes.io/safe-to-evict: "false"</code> — Cluster Autoscaler scale-down opt-out.</li>
 <li><code>descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"</code> — descheduler opt-out (current well-known key; the older <code>…/evict</code> is opt-<em>in</em> only).</li>
 </ul>
-<p>Gap-fill only: a value for any of these keys set in the runner's
-<code>podTemplate.metadata.annotations</code> wins (mirroring the SecurityContext gap-fill).
-Only these three keys are honored from the template; arbitrary <code>podTemplate</code>
-annotations are not copied onto worker pods. The markers live on the pod, so they
-release automatically when the pod is torn down on job completion. Operator-facing
-detail in <a href="../../operations/observability-metrics/#node-disruption-safety-annotations">observability.md</a>.</p>
+<p>Gap-fill only: a value for any of these keys set in the runner's <code>podTemplate.metadata.annotations</code> wins (mirroring the SecurityContext gap-fill).
+Only these three keys are honored from the template; arbitrary <code>podTemplate</code> annotations are not copied onto worker pods.
+The markers live on the pod, so they release automatically when the pod is torn down on job completion.
+Operator-facing detail in <a href="../../operations/observability-metrics/#node-disruption-safety-annotations">observability.md</a>.</p>
 <h2 id="a-new-controller-write-verb-updates-the-role-pair-in-the-same-change">A new controller write verb updates the role pair in the same change<a class="headerlink" href="#a-new-controller-write-verb-updates-the-role-pair-in-the-same-change" title="Permanent link">&para;</a></h2>
-<p>When controller code gains a client write it did not make before — a <code>Patch</code> on a
-kind it only deleted, an <code>Update</code> on one it only read, any new (resource, verb)
-combination — the change must also land the grant, in both halves of the pair:
-the <code>+kubebuilder:rbac</code> markers (<code>cmd/agc/internal/controller/doc.go</code>) <strong>and</strong> the
-chart's hand-maintained rules fragment
-(<code>charts/actions-gateway/files/agc-*-rules.yaml</code>; see
-<a href="../code-generation/#agc-tenant-role">code-generation.md § agc-tenant-role</a> for why
-the tenant role is not generated).</p>
-<p>Nothing catches the miss for you. The drift gate (Q454) pairs markers with chart
-rules, but nothing pairs <em>code</em> with markers — and envtest does not enforce RBAC
-(every test client runs as admin), so unit and integration stay green and the write
-403s only on a real cluster. That is how the scale-set eviction-recovery claim and
-the <code>job-completed-at</code> stamp shipped patching pods without the verb and ran broken
-on every real install until Q502's e2e round surfaced it. Grep for the client call
-(<code>Client.Patch</code>/<code>Update</code>/<code>Delete</code> on the kind) when reviewing a controller change,
-and treat a new verb in code with no diff under <code>charts/</code> as the smell.</p>
-<p>One path now has an enforced-RBAC backstop: <code>E2E_AGC_ScaleSetRecovery</code> (Q519) runs
-scale-set disruption recovery — the claim patch and the rerun — under the chart's
-shipped role on kind, so a verb that path needs and the role lacks fails CI. It
-covers only the verbs that path exercises; everywhere else the grep above is still
-the gate.</p>
+<p>When controller code gains a client write it did not make before — a <code>Patch</code> on a kind it only deleted, an <code>Update</code> on one it only read, any new (resource, verb) combination — the change must also land the grant, in both halves of the pair: the <code>+kubebuilder:rbac</code> markers (<code>cmd/agc/internal/controller/doc.go</code>) <strong>and</strong> the chart's hand-maintained rules fragment (<code>charts/actions-gateway/files/agc-*-rules.yaml</code>; see <a href="../code-generation/#agc-tenant-role">code-generation.md § agc-tenant-role</a> for why the tenant role is not generated).</p>
+<p>Nothing catches the miss for you.
+The drift gate (Q454) pairs markers with chart rules, but nothing pairs <em>code</em> with markers — and envtest does not enforce RBAC (every test client runs as admin), so unit and integration stay green and the write 403s only on a real cluster.
+That is how the scale-set eviction-recovery claim and the <code>job-completed-at</code> stamp shipped patching pods without the verb and ran broken on every real install until Q502's e2e round surfaced it.
+Grep for the client call (<code>Client.Patch</code>/<code>Update</code>/<code>Delete</code> on the kind) when reviewing a controller change, and treat a new verb in code with no diff under <code>charts/</code> as the smell.</p>
+<p>One path now has an enforced-RBAC backstop: <code>E2E_AGC_ScaleSetRecovery</code> (Q519) runs scale-set disruption recovery — the claim patch and the rerun — under the chart's shipped role on kind, so a verb that path needs and the role lacks fails CI.
+It covers only the verbs that path exercises; everywhere else the grep above is still the gate.</p>
 <h2 id="validatingadmissionpolicy-paramkind-never-a-core-type-q444q492">ValidatingAdmissionPolicy <code>paramKind</code>: never a core type (Q444/Q492)<a class="headerlink" href="#validatingadmissionpolicy-paramkind-never-a-core-type-q444q492" title="Permanent link">&para;</a></h2>
-<p><strong>Rule: a <code>paramKind</code> must be a CRD. Never <code>ConfigMap</code>, <code>Secret</code>, or any other
-built-in.</strong> This is not a style preference — a core type is load-bearing broken.</p>
-<p>The apiserver keeps one parameter informer per <code>paramKind</code> GVK, shared by every
-policy naming it. When the set of <code>ValidatingAdmissionPolicyBinding</code>s naming that
-GVK becomes empty for even one policy-refresh tick (default 1s), it calls the
-informer's cancel func. For a <strong>core type</strong> that informer came from the shared
-<code>SharedInformerFactory</code>, which records <code>startedInformers[type] = true</code> and never
-clears it — so the informer stops and <code>Start()</code> will never run it again <em>for the
-life of that kube-apiserver process</em>. Its store freezes rather than emptying. For
-a <strong>CRD</strong> the apiserver allocates a fresh dynamic informer per context instead,
-so the same transition is harmless.</p>
-<p>Deleting a binding is an ordinary operation — <code>helm uninstall</code> does it. The two
-outcomes, both bad:</p>
+<p><strong>Rule: a <code>paramKind</code> must be a CRD.
+Never <code>ConfigMap</code>, <code>Secret</code>, or any other built-in.</strong> This is not a style preference — a core type is load-bearing broken.</p>
+<p>The apiserver keeps one parameter informer per <code>paramKind</code> GVK, shared by every policy naming it.
+When the set of <code>ValidatingAdmissionPolicyBinding</code>s naming that GVK becomes empty for even one policy-refresh tick (default 1s), it calls the informer's cancel func.
+For a <strong>core type</strong> that informer came from the shared <code>SharedInformerFactory</code>, which records <code>startedInformers[type] = true</code> and never clears it — so the informer stops and <code>Start()</code> will never run it again <em>for the life of that kube-apiserver process</em>.
+Its store freezes rather than emptying.
+For a <strong>CRD</strong> the apiserver allocates a fresh dynamic informer per context instead, so the same transition is harmless.</p>
+<p>Deleting a binding is an ordinary operation — <code>helm uninstall</code> does it.
+The two outcomes, both bad:</p>
 <table>
 <thead>
 <tr>
@@ -3273,157 +3059,87 @@ outcomes, both bad:</p>
 </tr>
 </tbody>
 </table>
-<p>The only recovery is restarting kube-apiserver, which managed control planes
-(GKE/EKS/AKS) do not offer.</p>
-<p>Measured, not inferred: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>
-runs the identical empty-binding-set transition against a ConfigMap <code>paramKind</code>
-and a CRD one on a single apiserver — the ConfigMap arm breaks, the CRD arm stays
-fresh. Upstream: <a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>
-(unfixed; do not wait for it). <code>scripts/e2e/chart-reinstall-check.sh</code> gates the
-product-level cycle in CI.</p>
-<p><strong>CRD schema/CEL validation runs before a policy sees the request.</strong> An update
-that trips an <code>x-kubernetes-validations</code> rule is rejected with the CEL message
-and never reaches any <code>ValidatingAdmissionPolicy</code> — so a test asserting a
-policy's denial must mutate a field no CRD CEL rule constrains, or the CEL
-error masks the policy verdict (observed in the Q518 integration test:
-<code>maxWorkers</code> is CEL-coupled to the last tier threshold, so mutating it never
-exercised the policy).</p>
+<p>The only recovery is restarting kube-apiserver, which managed control planes (GKE/EKS/AKS) do not offer.</p>
+<p>Measured, not inferred: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a> runs the identical empty-binding-set transition against a ConfigMap <code>paramKind</code> and a CRD one on a single apiserver — the ConfigMap arm breaks, the CRD arm stays fresh.
+Upstream: <a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a> (unfixed; do not wait for it). <code>scripts/e2e/chart-reinstall-check.sh</code> gates the product-level cycle in CI.</p>
+<p><strong>CRD schema/CEL validation runs before a policy sees the request.</strong> An update that trips an <code>x-kubernetes-validations</code> rule is rejected with the CEL message and never reaches any <code>ValidatingAdmissionPolicy</code> — so a test asserting a policy's denial must mutate a field no CRD CEL rule constrains, or the CEL error masks the policy verdict (observed in the Q518 integration test: <code>maxWorkers</code> is CEL-coupled to the last tier threshold, so mutating it never exercised the policy).</p>
 <p><strong>Corollaries for a new policy:</strong></p>
 <ul>
-<li>Give the policy a small, purpose-built cluster-scoped CRD for its params.
-  <code>PriorityClassAllowlist</code> (<code>api/v2beta1</code>) is the worked example.</li>
-<li>Keep <code>parameterNotFoundAction: Deny</code>. It is the fail-closed default and the
-  reason a broken <code>paramKind</code> is so loud; the fix is the CRD, not weakening this.</li>
-<li>Do <strong>not</strong> try to fix it by retaining the binding across uninstall
-  (<code>helm.sh/resource-policy: keep</code>). <code>scripts/manifest/manifest-validate.sh</code> forbids that
-  on a VAPB, because a retained binding keeps enforcing after the release is gone
-  and makes <code>admissionPolicy.enabled=false</code> a silent no-op.</li>
-<li>A chart that renders both a CRD and a CR of it must ship that CRD in the
-  chart-root <code>crds/</code> dir: Helm resolves REST mappings for the whole manifest
-  before applying any of it, so a CR whose CRD is a template in the same release
-  fails the install with <code>no matches for kind</code>.</li>
+<li>Give the policy a small, purpose-built cluster-scoped CRD for its params. <code>PriorityClassAllowlist</code> (<code>api/v2beta1</code>) is the worked example.</li>
+<li>Keep <code>parameterNotFoundAction: Deny</code>.
+  It is the fail-closed default and the reason a broken <code>paramKind</code> is so loud; the fix is the CRD, not weakening this.</li>
+<li>Do <strong>not</strong> try to fix it by retaining the binding across uninstall (<code>helm.sh/resource-policy: keep</code>). <code>scripts/manifest/manifest-validate.sh</code> forbids that on a VAPB, because a retained binding keeps enforcing after the release is gone and makes <code>admissionPolicy.enabled=false</code> a silent no-op.</li>
+<li>A chart that renders both a CRD and a CR of it must ship that CRD in the chart-root <code>crds/</code> dir: Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install with <code>no matches for kind</code>.</li>
 </ul>
 <h2 id="status-conditions--alertable-condition-metrics">Status conditions &amp; alertable condition metrics<a class="headerlink" href="#status-conditions--alertable-condition-metrics" title="Permanent link">&para;</a></h2>
-<p>The CRDs report observed state with standard Kubernetes conditions
-(<code>metav1.Condition</code>, keyed by <code>type</code>, surfaced via <code>kubectl describe</code>). Two
-conventions keep them consistent and alertable.</p>
+<p>The CRDs report observed state with standard Kubernetes conditions (<code>metav1.Condition</code>, keyed by <code>type</code>, surfaced via <code>kubectl describe</code>).
+Two conventions keep them consistent and alertable.</p>
 <h3 id="two-tier-pressure--exceeded-ladder-for-capacity-signals">Two-tier "pressure / exceeded" ladder for capacity signals<a class="headerlink" href="#two-tier-pressure--exceeded-ladder-for-capacity-signals" title="Permanent link">&para;</a></h3>
-<p>When a controller surfaces pressure against a finite resource (e.g. the
-namespace <code>ResourceQuota</code>), model it as a <strong>two-tier ladder</strong> rather than one
-boolean, so operators can route a <em>warning</em> and a <em>page</em> differently:</p>
+<p>When a controller surfaces pressure against a finite resource (e.g. the namespace <code>ResourceQuota</code>), model it as a <strong>two-tier ladder</strong> rather than one boolean, so operators can route a <em>warning</em> and a <em>page</em> differently:</p>
 <ul>
-<li><strong><code>&lt;Subject&gt;QuotaPressure</code></strong> — <em>warning</em>. Predictive: the subject cannot grow
-  to its configured ceiling within the <strong>remaining</strong> headroom (<code>hard − used</code>).
-  This is load-dependent and may flap; alert on it with an <code>for:</code> debounce and
-  do <strong>not</strong> page.</li>
-<li><strong><code>&lt;Subject&gt;QuotaExceeded</code></strong> — <em>error</em>. Observed/imminent: creates are being
-  rejected now, or no headroom remains for even one more unit. Page-worthy
-  (still use <code>for:</code> to debounce).</li>
+<li><strong><code>&lt;Subject&gt;QuotaPressure</code></strong> — <em>warning</em>.
+  Predictive: the subject cannot grow to its configured ceiling within the <strong>remaining</strong> headroom (<code>hard − used</code>).
+  This is load-dependent and may flap; alert on it with an <code>for:</code> debounce and do <strong>not</strong> page.</li>
+<li><strong><code>&lt;Subject&gt;QuotaExceeded</code></strong> — <em>error</em>.
+  Observed/imminent: creates are being rejected now, or no headroom remains for even one more unit.
+  Page-worthy (still use <code>for:</code> to debounce).</li>
 </ul>
 <p>Rules:</p>
 <ul>
-<li><strong>Polarity is abnormal-is-<code>True</code></strong> (matching <code>CredentialUnavailable</code>,
-  <code>RateLimited</code>) — <code>True</code> means there is a problem.</li>
-<li><strong>The tiers are mutually exclusive</strong>: when the error fires, force the warning
-  to <code>False</code> (reason <code>Superseded</code>). Each condition then maps to exactly one
-  alert severity with a plain <code>== True</code> rule and no Alertmanager inhibition.</li>
-<li><strong>Advisory unless stated</strong>: a capacity condition does not gate <code>Ready</code> unless
-  the subject is actually unavailable — surfacing a latent problem must not flip
-  a healthy workload to not-ready.</li>
-<li>Shipped examples: <code>ProxyQuotaPressure</code>/<code>ProxyQuotaExceeded</code> on the
-  <code>ActionsGateway</code> (GMC) and <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> on the
-  <code>RunnerGroup</code> (AGC). See <a href="../../plan/archive/quota-pressure-conditions/">Q82</a>.</li>
+<li><strong>Polarity is abnormal-is-<code>True</code></strong> (matching <code>CredentialUnavailable</code>, <code>RateLimited</code>) — <code>True</code> means there is a problem.</li>
+<li><strong>The tiers are mutually exclusive</strong>: when the error fires, force the warning to <code>False</code> (reason <code>Superseded</code>).
+  Each condition then maps to exactly one alert severity with a plain <code>== True</code> rule and no Alertmanager inhibition.</li>
+<li><strong>Advisory unless stated</strong>: a capacity condition does not gate <code>Ready</code> unless the subject is actually unavailable — surfacing a latent problem must not flip a healthy workload to not-ready.</li>
+<li>Shipped examples: <code>ProxyQuotaPressure</code>/<code>ProxyQuotaExceeded</code> on the <code>ActionsGateway</code> (GMC) and <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> on the <code>RunnerGroup</code> (AGC).
+  See <a href="../../plan/archive/quota-pressure-conditions/">Q82</a>.</li>
 </ul>
 <h3 id="mirror-alertable-conditions-as-a-controller-exported-gauge">Mirror alertable conditions as a controller-exported gauge<a class="headerlink" href="#mirror-alertable-conditions-as-a-controller-exported-gauge" title="Permanent link">&para;</a></h3>
-<p>Every condition an operator should alert on is <strong>also</strong> exported as a Prometheus
-gauge by the owning controller (<code>1</code> when the condition is <code>True</code>, <code>0</code>
-otherwise), labelled by namespace + object name. This lets clusters alert
-directly on the controller's <code>/metrics</code> endpoint <strong>without depending on
-kube-state-metrics</strong> to scrape CRD conditions.</p>
-<p>Implement it as a <strong>scrape-time collector</strong> that lists the CRs from the cached
-reader and reads <code>.status.conditions</code> (see <code>proxyQuotaCollector</code> in <code>cmd/gmc</code>
-and <code>workerQuotaCollector</code> in <code>cmd/agc</code>), not a reconcile-path gauge: a deleted
-object simply stops being listed, so its series disappears with no stale-series
-cleanup and no reconcile cost. Metric names mirror the condition
-(<code>actions_gateway_proxy_quota_pressure</code>, <code>actions_gateway_worker_quota_exceeded</code>,
-…).</p>
+<p>Every condition an operator should alert on is <strong>also</strong> exported as a Prometheus gauge by the owning controller (<code>1</code> when the condition is <code>True</code>, <code>0</code> otherwise), labelled by namespace + object name.
+This lets clusters alert directly on the controller's <code>/metrics</code> endpoint <strong>without depending on kube-state-metrics</strong> to scrape CRD conditions.</p>
+<p>Implement it as a <strong>scrape-time collector</strong> that lists the CRs from the cached reader and reads <code>.status.conditions</code> (see <code>proxyQuotaCollector</code> in <code>cmd/gmc</code> and <code>workerQuotaCollector</code> in <code>cmd/agc</code>), not a reconcile-path gauge: a deleted object simply stops being listed, so its series disappears with no stale-series cleanup and no reconcile cost.
+Metric names mirror the condition (<code>actions_gateway_proxy_quota_pressure</code>, <code>actions_gateway_worker_quota_exceeded</code>, …).</p>
 <h2 id="kubernetes-events-for-lifecycle-transitions">Kubernetes Events for lifecycle transitions<a class="headerlink" href="#kubernetes-events-for-lifecycle-transitions" title="Permanent link">&para;</a></h2>
-<p>Controllers emit Kubernetes Events (via a controller-runtime <code>EventRecorder</code>) on
-the owning CR for incident-worthy lifecycle transitions, so operators see them in
-<code>kubectl describe</code> and event watchers — not only in metrics/conditions. Conventions
-that keep them consistent and non-spammy:</p>
+<p>Controllers emit Kubernetes Events (via a controller-runtime <code>EventRecorder</code>) on the owning CR for incident-worthy lifecycle transitions, so operators see them in <code>kubectl describe</code> and event watchers — not only in metrics/conditions.
+Conventions that keep them consistent and non-spammy:</p>
 <ul>
-<li><strong><code>Reason</code> is PascalCase and stable</strong> — it is a machine-matchable key operators
-  filter on (<code>kubectl get events --field-selector reason=&lt;X&gt;</code>), so treat it like an
-  API surface: don't rename it casually. Where an Event corresponds to a Prometheus
-  counter, <strong>mirror the metric name</strong> in the <code>Reason</code> (e.g. the
-  <code>actions_gateway_eviction_retries_exhausted_total</code> metric ↔ the
-  <code>EvictionRetriesExhausted</code> Event) so the two correlate at a glance.</li>
-<li><strong><code>Warning</code> vs <code>Normal</code> by severity</strong> — <code>Warning</code> for a failure/abnormal terminal
-  outcome, <code>Normal</code> for a benign transition.</li>
-<li><strong>Emit on transitions / terminal outcomes, never every reconcile</strong> — an Event is
-  an incident signal, not a heartbeat. Where a status condition already captures the
-  steady state, the Event <em>complements</em> it (records the transition) rather than
-  re-emitting on every requeue.</li>
-<li><strong>Record on the most useful object</strong> — the owning CR an operator would
-  <code>kubectl describe</code> (the reaper, and the Q170 job-lifecycle Events, record on the
-  <code>RunnerGroup</code>/<code>RunnerSet</code>; the message names the affected pod/run/job).</li>
-<li><strong>Route deep-goroutine events back through the reconciler</strong> — a listener or
-  provisioner goroutine does not hold the live owner object the <code>EventRecorder</code>
-  needs, so it pushes the event onto a buffered channel (non-blocking; drop on full)
-  that the reconciler drains and records on the live object — mirroring the existing
-  condition-update channel. The drain consumes each event once, so it is not
-  re-emitted on later reconciles.</li>
-<li>Shipped examples: <code>WorkerPodStuckPending</code> (reaper), and the Q170 job-lifecycle set
-  (<code>JobAcquisitionFailed</code>, <code>RunnerVersionTooOld</code>, <code>SessionUnauthorized</code>,
-  <code>QuotaRetriesExhausted</code>, <code>EvictionRetriesExhausted</code>). The operator-facing catalogue
-  lives in <a href="../../operations/troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">troubleshooting.md</a>.</li>
+<li><strong><code>Reason</code> is PascalCase and stable</strong> — it is a machine-matchable key operators filter on (<code>kubectl get events --field-selector reason=&lt;X&gt;</code>), so treat it like an API surface: don't rename it casually.
+  Where an Event corresponds to a Prometheus counter, <strong>mirror the metric name</strong> in the <code>Reason</code> (e.g. the <code>actions_gateway_eviction_retries_exhausted_total</code> metric ↔ the <code>EvictionRetriesExhausted</code> Event) so the two correlate at a glance.</li>
+<li><strong><code>Warning</code> vs <code>Normal</code> by severity</strong> — <code>Warning</code> for a failure/abnormal terminal outcome, <code>Normal</code> for a benign transition.</li>
+<li><strong>Emit on transitions / terminal outcomes, never every reconcile</strong> — an Event is an incident signal, not a heartbeat.
+  Where a status condition already captures the steady state, the Event <em>complements</em> it (records the transition) rather than re-emitting on every requeue.</li>
+<li><strong>Record on the most useful object</strong> — the owning CR an operator would <code>kubectl describe</code> (the reaper, and the Q170 job-lifecycle Events, record on the <code>RunnerGroup</code>/<code>RunnerSet</code>; the message names the affected pod/run/job).</li>
+<li><strong>Route deep-goroutine events back through the reconciler</strong> — a listener or provisioner goroutine does not hold the live owner object the <code>EventRecorder</code> needs, so it pushes the event onto a buffered channel (non-blocking; drop on full) that the reconciler drains and records on the live object — mirroring the existing condition-update channel.
+  The drain consumes each event once, so it is not re-emitted on later reconciles.</li>
+<li>Shipped examples: <code>WorkerPodStuckPending</code> (reaper), and the Q170 job-lifecycle set (<code>JobAcquisitionFailed</code>, <code>RunnerVersionTooOld</code>, <code>SessionUnauthorized</code>, <code>QuotaRetriesExhausted</code>, <code>EvictionRetriesExhausted</code>).
+  The operator-facing catalogue lives in <a href="../../operations/troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">troubleshooting.md</a>.</li>
 </ul>
 <h2 id="graceful-shutdown-sigterm">Graceful shutdown (SIGTERM)<a class="headerlink" href="#graceful-shutdown-sigterm" title="Permanent link">&para;</a></h2>
-<p>Every binary we ship runs in a pod, so every one of them gets SIGTERM on each
-rollout, node drain, eviction, and scale-down. Getting this wrong is quiet: the
-process exits cleanly, the rollout looks green, and the damage shows up
-elsewhere — as leaked GitHub-side sessions, as CI jobs whose network was cut
-mid-request, as jobs GitHub waits out rather than being told about.</p>
+<p>Every binary we ship runs in a pod, so every one of them gets SIGTERM on each rollout, node drain, eviction, and scale-down.
+Getting this wrong is quiet: the process exits cleanly, the rollout looks green, and the damage shows up elsewhere — as leaked GitHub-side sessions, as CI jobs whose network was cut mid-request, as jobs GitHub waits out rather than being told about.</p>
 <p>Read this before writing or changing any shutdown path.</p>
 <h3 id="the-lifecycle-facts-the-rules-below-follow-from">The lifecycle facts the rules below follow from<a class="headerlink" href="#the-lifecycle-facts-the-rules-below-follow-from" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Endpoint removal is concurrent with SIGTERM, not ordered before it.</strong> Marking
-  the pod terminating, removing it from EndpointSlices, and the kubelet starting
-  its shutdown are independent control loops; none waits for the others. A pod
-  can therefore receive SIGTERM while kube-proxy, an ingress, or a mesh sidecar
-  is still routing new connections to it.</li>
-<li><strong><code>preStop</code> runs before SIGTERM</strong>, and the time it takes is <strong>deducted from</strong>
-  <code>terminationGracePeriodSeconds</code> — it is not extra budget.</li>
-<li><strong>SIGTERM goes to PID 1 of each container only.</strong> Child processes are not
-  signalled. At grace expiry SIGKILL goes to every process in the cgroup.</li>
-<li><strong>The grace period is a deadline, not an allowance.</strong> Anything still running
-  when it expires is killed outright, mid-write.</li>
-<li><strong>And it is a <em>request</em>, not a guarantee.</strong> The kubelet grants
-  <code>min(terminationGracePeriodSeconds, what the node shutdown path allows)</code>.
-  Voluntary drains honour it; involuntary ones truncate it hard — GKE gives
-  ordinary pods <strong>15s</strong> on a Spot node however large the pod's ask. Per-platform
-  defaults: <a href="../../operations/node-shutdown-budgets/">operations/node-shutdown-budgets.md</a>.</li>
+<li><strong>Endpoint removal is concurrent with SIGTERM, not ordered before it.</strong> Marking the pod terminating, removing it from EndpointSlices, and the kubelet starting its shutdown are independent control loops; none waits for the others.
+  A pod can therefore receive SIGTERM while kube-proxy, an ingress, or a mesh sidecar is still routing new connections to it.</li>
+<li><strong><code>preStop</code> runs before SIGTERM</strong>, and the time it takes is <strong>deducted from</strong> <code>terminationGracePeriodSeconds</code> — it is not extra budget.</li>
+<li><strong>SIGTERM goes to PID 1 of each container only.</strong> Child processes are not signalled.
+  At grace expiry SIGKILL goes to every process in the cgroup.</li>
+<li><strong>The grace period is a deadline, not an allowance.</strong> Anything still running when it expires is killed outright, mid-write.</li>
+<li><strong>And it is a <em>request</em>, not a guarantee.</strong> The kubelet grants <code>min(terminationGracePeriodSeconds, what the node shutdown path allows)</code>.
+  Voluntary drains honour it; involuntary ones truncate it hard — GKE gives ordinary pods <strong>15s</strong> on a Spot node however large the pod's ask.
+  Per-platform defaults: <a href="../../operations/node-shutdown-budgets/">operations/node-shutdown-budgets.md</a>.</li>
 </ul>
 <h3 id="rules">Rules<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h3>
-<p><strong>1. A process must not exit while work it owns is unfinished.</strong></p>
-<p>"Work it owns" is anything the outside world is still counting on: an open
-upstream session, an in-flight request, an unreported job result, a held lease.
-Enumerate it explicitly for each binary — the failure mode is always something
-nobody thought to enumerate.</p>
-<p>An acknowledgement the process has decided on but not yet sent counts, and it is
-easy to miss because in-process state says the work is finished. The AGC's
-scale-set listener concludes a job in memory and deletes its queue message
-separately; exiting in between left GitHub still holding a message the listener
-had already acted on, and the next process provisioned a worker for it (Q603).
-If a decision is only durable once a remote call lands, the exit path owes that
-call.</p>
-<p><strong>2. With controller-runtime, <code>mgr.Start</code> only waits for what the manager
-knows about.</strong> Goroutines you spawn yourself from <code>Reconcile</code> are invisible to
-it: <code>mgr.Start</code> returns, <code>main</code> returns, and the process exits out from under
-them. Register the drain as a <code>manager.Runnable</code> that blocks on the manager
-context and then waits for your goroutines, so it runs inside the manager's
-graceful shutdown:</p>
+<p><strong>1.
+A process must not exit while work it owns is unfinished.</strong></p>
+<p>"Work it owns" is anything the outside world is still counting on: an open upstream session, an in-flight request, an unreported job result, a held lease.
+Enumerate it explicitly for each binary — the failure mode is always something nobody thought to enumerate.</p>
+<p>An acknowledgement the process has decided on but not yet sent counts, and it is easy to miss because in-process state says the work is finished.
+The AGC's scale-set listener concludes a job in memory and deletes its queue message separately; exiting in between left GitHub still holding a message the listener had already acted on, and the next process provisioned a worker for it (Q603).
+If a decision is only durable once a remote call lands, the exit path owes that call.</p>
+<p><strong>2.
+With controller-runtime, <code>mgr.Start</code> only waits for what the manager knows about.</strong> Goroutines you spawn yourself from <code>Reconcile</code> are invisible to it: <code>mgr.Start</code> returns, <code>main</code> returns, and the process exits out from under them.
+Register the drain as a <code>manager.Runnable</code> that blocks on the manager context and then waits for your goroutines, so it runs inside the manager's graceful shutdown:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">listenerShutdown</span><span class="p">)</span><span class="w"> </span><span class="nx">Start</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="o">&lt;-</span><span class="nx">ctx</span><span class="p">.</span><span class="nx">Done</span><span class="p">()</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="o">&lt;-</span><span class="nx">s</span><span class="p">.</span><span class="nx">stop</span><span class="p">()</span><span class="w"> </span><span class="c1">// returns a done channel; blocks until every goroutine has exited</span>
@@ -3434,129 +3150,70 @@ graceful shutdown:</p>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1">// still owns the goroutines it spawned.</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">listenerShutdown</span><span class="p">)</span><span class="w"> </span><span class="nx">NeedLeaderElection</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
-<p>This is what Q222 got wrong — the AGC leaked a GitHub-side session per in-flight
-listener on every rollout.</p>
-<p><strong>3. Cleanup that runs <em>because</em> of cancellation must not run <em>on</em> the cancelled
-context.</strong> A teardown <code>DELETE</code>/<code>PATCH</code>/report issued on the context that was just
-cancelled fails instantly, and "best-effort, error discarded" then means "never
-happened". Use a context detached from the cancelled one, with its own bound:</p>
+<p>This is what Q222 got wrong — the AGC leaked a GitHub-side session per in-flight listener on every rollout.</p>
+<p><strong>3.
+Cleanup that runs <em>because</em> of cancellation must not run <em>on</em> the cancelled context.</strong> A teardown <code>DELETE</code>/<code>PATCH</code>/report issued on the context that was just cancelled fails instantly, and "best-effort, error discarded" then means "never happened".
+Use a context detached from the cancelled one, with its own bound:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">cancel</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">WithTimeout</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span><span class="w"> </span><span class="nx">cleanupBudget</span><span class="p">)</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">defer</span><span class="w"> </span><span class="nx">cancel</span><span class="p">()</span>
 </code></pre></div>
-<p>Bound it, retry inside the bound (a teardown call is usually the <em>only</em> one that
-work will ever get), and log loudly with the resource's identity when you give
-up — a silent leak is unactionable. Q222 shipped both halves of this.</p>
-<p><strong>4. <code>http.Server.Shutdown</code> does not wait for hijacked connections.</strong> From the
-stdlib: <em>"Shutdown does not attempt to close nor wait for hijacked connections
-such as WebSockets. The caller of Shutdown should separately notify such
-long-lived connections of shutdown and wait for them to close."</em> Any CONNECT
-tunnel, WebSocket, or upgraded stream needs its own tracking (a <code>WaitGroup</code> or a
-connection set, plus <code>Server.RegisterOnShutdown</code>) — <code>Shutdown</code> returning is not
-evidence they finished.</p>
-<p>The egress proxy is the worked example (Q384). <code>cmd/proxy</code> registers each tunnel
-with a tracker <strong>before</strong> hijacking the client connection — up to the hijack
-net/http still counts the connection as active and <code>Shutdown</code> waits for it, so
-registering first is what closes the window in which <code>Shutdown</code> could return
-between a hijack and its registration and see an empty tracker. Shutdown then
-waits on the tracker <em>after</em> <code>Shutdown</code> returns, by which point the listener is
-closed and the tracked set can only shrink.</p>
-<p><strong>5. If your PID 1 supervises a child, forward the signal.</strong> The child never gets
-SIGTERM on its own. A wrapper that <code>exec.Command</code>s a real workload must catch
-SIGTERM, forward it, and wait — otherwise the child runs on until the cgroup
-SIGKILL with no chance to report its outcome. Our worker wrapper does this in
-<code>terminationRelay</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a>): it
-forwards SIGTERM/SIGINT to <code>Runner.Worker</code> (or <code>run.sh</code>), waits for it inside a
-bounded grace (<code>WORKER_SHUTDOWN_GRACE</code>, default 25s), and kills it with a logged
-reason if it overruns. Propagate the child's exit code, including the
-128+signal encoding for a signalled child — <code>os.ProcessState.ExitCode</code> reports
--1 there, and <code>os.Exit(-1)</code> silently becomes 255.</p>
-<p><strong>Register the handler <em>before</em> starting the child</strong> — <code>signal.Notify</code> first,
-<code>cmd.Start</code> second, same register-before-the-window discipline as rule 4's
-hijack tracker. A signal landing in between hits Go's default disposition, where
-PID 1 has no good outcome: the kernel drops a default-disposition SIGTERM sent to
-a namespace's init (<code>SIGNAL_UNKILLABLE</code>), so the pod's one termination notice is
-lost and you are back to the unreported-job failure this rule exists to prevent;
-off PID 1 (tests, local runs) the same signal kills the supervisor outright and
-strands the child. The window is small but reachable — a job cancelled or a node
-drained seconds after the pod starts, or just a scheduler hiccup between the two
-statements (Q445). Buffer the channel so a signal caught before the child exists
-is held and forwarded once it does, rather than dropped.</p>
-<p><strong>6. Anything serving traffic through a Service needs a <code>preStop</code> sleep.</strong>
-Because of the concurrency in the first bullet above, SIGTERM is not a signal
-that traffic has stopped arriving. A short <code>preStop</code> sleep (a few seconds, no
-process cooperation required) lets endpoint removal propagate before the process
-starts refusing work. Size <code>terminationGracePeriodSeconds</code> as
-<code>preStop + drain budget + headroom</code>.</p>
-<p><strong>But prefer an in-process linger when the process already has a drain.</strong> A
-<code>preStop</code> sleep has two costs that are easy to miss:</p>
+<p>Bound it, retry inside the bound (a teardown call is usually the <em>only</em> one that work will ever get), and log loudly with the resource's identity when you give up — a silent leak is unactionable.
+Q222 shipped both halves of this.</p>
+<p><strong>4. <code>http.Server.Shutdown</code> does not wait for hijacked connections.</strong> From the stdlib: <em>"Shutdown does not attempt to close nor wait for hijacked connections such as WebSockets.
+The caller of Shutdown should separately notify such long-lived connections of shutdown and wait for them to close."</em> Any CONNECT tunnel, WebSocket, or upgraded stream needs its own tracking (a <code>WaitGroup</code> or a connection set, plus <code>Server.RegisterOnShutdown</code>) — <code>Shutdown</code> returning is not evidence they finished.</p>
+<p>The egress proxy is the worked example (Q384). <code>cmd/proxy</code> registers each tunnel with a tracker <strong>before</strong> hijacking the client connection — up to the hijack net/http still counts the connection as active and <code>Shutdown</code> waits for it, so registering first is what closes the window in which <code>Shutdown</code> could return between a hijack and its registration and see an empty tracker.
+Shutdown then waits on the tracker <em>after</em> <code>Shutdown</code> returns, by which point the listener is closed and the tracked set can only shrink.</p>
+<p><strong>5.
+If your PID 1 supervises a child, forward the signal.</strong> The child never gets SIGTERM on its own.
+A wrapper that <code>exec.Command</code>s a real workload must catch SIGTERM, forward it, and wait — otherwise the child runs on until the cgroup SIGKILL with no chance to report its outcome.
+Our worker wrapper does this in <code>terminationRelay</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a>): it forwards SIGTERM/SIGINT to <code>Runner.Worker</code> (or <code>run.sh</code>), waits for it inside a bounded grace (<code>WORKER_SHUTDOWN_GRACE</code>, default 25s), and kills it with a logged reason if it overruns.
+Propagate the child's exit code, including the 128+signal encoding for a signalled child — <code>os.ProcessState.ExitCode</code> reports -1 there, and <code>os.Exit(-1)</code> silently becomes 255.</p>
+<p><strong>Register the handler <em>before</em> starting the child</strong> — <code>signal.Notify</code> first, <code>cmd.Start</code> second, same register-before-the-window discipline as rule 4's hijack tracker.
+A signal landing in between hits Go's default disposition, where PID 1 has no good outcome: the kernel drops a default-disposition SIGTERM sent to a namespace's init (<code>SIGNAL_UNKILLABLE</code>), so the pod's one termination notice is lost and you are back to the unreported-job failure this rule exists to prevent; off PID 1 (tests, local runs) the same signal kills the supervisor outright and strands the child.
+The window is small but reachable — a job cancelled or a node drained seconds after the pod starts, or just a scheduler hiccup between the two statements (Q445).
+Buffer the channel so a signal caught before the child exists is held and forwarded once it does, rather than dropped.</p>
+<p><strong>6.
+Anything serving traffic through a Service needs a <code>preStop</code> sleep.</strong> Because of the concurrency in the first bullet above, SIGTERM is not a signal that traffic has stopped arriving.
+A short <code>preStop</code> sleep (a few seconds, no process cooperation required) lets endpoint removal propagate before the process starts refusing work.
+Size <code>terminationGracePeriodSeconds</code> as <code>preStop + drain budget + headroom</code>.</p>
+<p><strong>But prefer an in-process linger when the process already has a drain.</strong> A <code>preStop</code> sleep has two costs that are easy to miss:</p>
 <ul>
-<li><strong>It is serial with the drain</strong>, so the grace period has to cover both. Yet the
-  two waits are for <em>different</em> things and overlap freely — work in flight keeps
-  finishing while you wait for endpoint removal.</li>
-<li><strong>Its cost is unconditional, and the budget is not always what the manifest
-  says.</strong> The kubelet grants a terminating pod
-  <code>min(terminationGracePeriodSeconds, remaining node-shutdown window)</code>. On a
-  truncated window — spot/preemptible reclamation, graceful node shutdown — a
-  fixed sleep spends scarce budget idling and leaves the drain <em>less</em> time than
-  it would have had with no <code>preStop</code> at all. That is a regression precisely
-  where disruption is most frequent.</li>
+<li><strong>It is serial with the drain</strong>, so the grace period has to cover both.
+  Yet the two waits are for <em>different</em> things and overlap freely — work in flight keeps finishing while you wait for endpoint removal.</li>
+<li><strong>Its cost is unconditional, and the budget is not always what the manifest says.</strong> The kubelet grants a terminating pod <code>min(terminationGracePeriodSeconds, remaining node-shutdown window)</code>.
+  On a truncated window — spot/preemptible reclamation, graceful node shutdown — a fixed sleep spends scarce budget idling and leaves the drain <em>less</em> time than it would have had with no <code>preStop</code> at all.
+  That is a regression precisely where disruption is most frequent.</li>
 </ul>
-<p>If the process handles SIGTERM already, keep the listener <strong>open</strong> for a bounded
-linger at the top of the drain instead, and spend it inside the existing drain
-budget. Failing readiness first is a bonus a <code>preStop</code> sleep cannot match: the
-process does not know it is terminating until SIGTERM, so a sleep cannot start
-the endpoint-removal clock, only wait out someone else's.</p>
-<p>Better still, <strong>measure instead of sleeping</strong>. There is no Kubernetes signal for
-"endpoint removal has propagated" — no API, no readback across the N kube-proxies
-applying it — which is why the fixed sleep is the folk remedy. But a server can
-observe <em>new connection arrivals</em> directly, and arrivals stopping is the property
-the sleep is approximating. Wait until none has arrived for a short quiescence
-interval, measured from <code>max(shutdown start, last arrival)</code>: one rule that yields
-both a floor (an idle pod cannot exit instantly into the race) and an extending
-wait (each arrival is fresh evidence some dataplane has not converged). Cap it,
-because a quiet interval is evidence and not proof.</p>
-<p>The egress proxy is the worked example (Q386): <code>lingerForEndpointRemoval</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go">cmd/proxy/proxy.go</a>, ceiling <code>PROXY_SHUTDOWN_LINGER</code>
-(negative disables, for exactly the truncated-window case above), spent inside
-<code>PROXY_SHUTDOWN_DRAIN_TIMEOUT</code>. Worst case is <code>max(linger, drain)</code> rather than
-their sum, so <code>terminationGracePeriodSeconds</code> did not have to grow to accommodate
-it.</p>
-<p><strong>Use the native <code>sleep</code> handler if you do need <code>preStop</code>.</strong> Our images are
-distroless: there is no shell and no <code>sleep</code> binary, so <code>exec: ["sleep", …]</code>
-fails at runtime and the pod proceeds straight to SIGTERM — reintroducing the
-race, but silently. The native handler (KEP-3960) is beta and on by default from
-Kubernetes 1.30, the project's blocking install floor.</p>
-<p><strong>7. State the budget in the manifest comment, and keep the code inside it.</strong>
-<code>terminationGracePeriodSeconds</code> is a claim about how long shutdown takes; if the
-code's drain is unbounded, or the comment describes a drain the code doesn't
-perform, the two silently diverge. Prefer a bounded drain whose worst case you
-can name over <code>context.Background()</code> with no deadline.</p>
+<p>If the process handles SIGTERM already, keep the listener <strong>open</strong> for a bounded linger at the top of the drain instead, and spend it inside the existing drain budget.
+Failing readiness first is a bonus a <code>preStop</code> sleep cannot match: the process does not know it is terminating until SIGTERM, so a sleep cannot start the endpoint-removal clock, only wait out someone else's.</p>
+<p>Better still, <strong>measure instead of sleeping</strong>.
+There is no Kubernetes signal for "endpoint removal has propagated" — no API, no readback across the N kube-proxies applying it — which is why the fixed sleep is the folk remedy.
+But a server can observe <em>new connection arrivals</em> directly, and arrivals stopping is the property the sleep is approximating.
+Wait until none has arrived for a short quiescence interval, measured from <code>max(shutdown start, last arrival)</code>: one rule that yields both a floor (an idle pod cannot exit instantly into the race) and an extending wait (each arrival is fresh evidence some dataplane has not converged).
+Cap it, because a quiet interval is evidence and not proof.</p>
+<p>The egress proxy is the worked example (Q386): <code>lingerForEndpointRemoval</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go">cmd/proxy/proxy.go</a>, ceiling <code>PROXY_SHUTDOWN_LINGER</code> (negative disables, for exactly the truncated-window case above), spent inside <code>PROXY_SHUTDOWN_DRAIN_TIMEOUT</code>.
+Worst case is <code>max(linger, drain)</code> rather than their sum, so <code>terminationGracePeriodSeconds</code> did not have to grow to accommodate it.</p>
+<p><strong>Use the native <code>sleep</code> handler if you do need <code>preStop</code>.</strong> Our images are distroless: there is no shell and no <code>sleep</code> binary, so <code>exec: ["sleep", …]</code> fails at runtime and the pod proceeds straight to SIGTERM — reintroducing the race, but silently.
+The native handler (KEP-3960) is beta and on by default from Kubernetes 1.30, the project's blocking install floor.</p>
+<p><strong>7.
+State the budget in the manifest comment, and keep the code inside it.</strong> <code>terminationGracePeriodSeconds</code> is a claim about how long shutdown takes; if the code's drain is unbounded, or the comment describes a drain the code doesn't perform, the two silently diverge.
+Prefer a bounded drain whose worst case you can name over <code>context.Background()</code> with no deadline.</p>
 <h3 id="review-checklist">Review checklist<a class="headerlink" href="#review-checklist" title="Permanent link">&para;</a></h3>
 <p>For any binary that runs in a pod:</p>
 <ul>
-<li>[ ] What does this process own that the outside world is waiting on? Is each
-      item drained before exit?</li>
-<li>[ ] Does anything wait for the goroutines this process spawns, or does <code>main</code>
-      just return?</li>
-<li>[ ] Does teardown run on a context detached from the cancelled one, bounded,
-      and retried?</li>
-<li>[ ] Are hijacked/upgraded connections tracked separately from
-      <code>http.Server.Shutdown</code>?</li>
-<li>[ ] If there is a child process, is SIGTERM forwarded to it — with the handler
-      registered <em>before</em> the child is started?</li>
-<li>[ ] Does the pod serve traffic through a Service (⇒ needs a <code>preStop</code> sleep, or
-      better, an in-process linger inside the existing drain budget)?</li>
-<li>[ ] Is <code>terminationGracePeriodSeconds</code> ≥ the worst-case shutdown (<code>preStop</code> +
-      drain if serial; <code>max(linger, drain)</code> + tail if overlapped), and does its
-      comment match what the code actually does?</li>
-<li>[ ] Would this still drain usefully on a node that grants only a few seconds
-      (spot reclamation, graceful node shutdown), where the kubelet truncates the
-      grace period?</li>
-<li>[ ] Is there a test that cancels the context and asserts the cleanup happened
-      — not merely that the process exited?</li>
+<li>[ ] What does this process own that the outside world is waiting on?
+  Is each item drained before exit?</li>
+<li>[ ] Does anything wait for the goroutines this process spawns, or does <code>main</code> just return?</li>
+<li>[ ] Does teardown run on a context detached from the cancelled one, bounded, and retried?</li>
+<li>[ ] Are hijacked/upgraded connections tracked separately from <code>http.Server.Shutdown</code>?</li>
+<li>[ ] If there is a child process, is SIGTERM forwarded to it — with the handler registered <em>before</em> the child is started?</li>
+<li>[ ] Does the pod serve traffic through a Service (⇒ needs a <code>preStop</code> sleep, or better, an in-process linger inside the existing drain budget)?</li>
+<li>[ ] Is <code>terminationGracePeriodSeconds</code> ≥ the worst-case shutdown (<code>preStop</code> + drain if serial; <code>max(linger, drain)</code> + tail if overlapped), and does its comment match what the code actually does?</li>
+<li>[ ] Would this still drain usefully on a node that grants only a few seconds (spot reclamation, graceful node shutdown), where the kubelet truncates the grace period?</li>
+<li>[ ] Is there a test that cancels the context and asserts the cleanup happened — not merely that the process exited?</li>
 </ul>
-<p>That last one is the one that catches regressions. A shutdown test asserting
-only "it exited" passes against every bug on this page.</p>
+<p>That last one is the one that catches regressions.
+A shutdown test asserting only "it exited" passes against every bug on this page.</p>
 
 
 

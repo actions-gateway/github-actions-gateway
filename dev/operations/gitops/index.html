@@ -2828,20 +2828,14 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer running a GitOps-managed cluster</p>
 </blockquote>
-<p>This page shows how to install the Gateway Manager Controller (GMC) <strong>declaratively</strong>
-from a Git repository using either <a href="https://argo-cd.readthedocs.io">Argo CD</a> or
-<a href="https://fluxcd.io">Flux</a>, instead of running <code>helm install</code> by hand. It builds on
-the imperative <a href="../install/">install.md</a> reference — the prerequisites, the required
-image-digest pinning, and the healthy-install verification all apply unchanged here.</p>
+<p>This page shows how to install the Gateway Manager Controller (GMC) <strong>declaratively</strong> from a Git repository using either <a href="https://argo-cd.readthedocs.io">Argo CD</a> or <a href="https://fluxcd.io">Flux</a>, instead of running <code>helm install</code> by hand.
+It builds on the imperative <a href="../install/">install.md</a> reference — the prerequisites, the required image-digest pinning, and the healthy-install verification all apply unchanged here.</p>
 <p>Two things move into Git:</p>
 <ol>
-<li><strong>The chart install</strong> — the published, cosign-signed <code>actions-gateway</code> OCI Helm
-   chart, rendered by your GitOps controller with the four image digests pinned.</li>
+<li><strong>The chart install</strong> — the published, cosign-signed <code>actions-gateway</code> OCI Helm chart, rendered by your GitOps controller with the four image digests pinned.</li>
 <li>
-<p><strong>The GitHub App credential Secret</strong> — sourced the GitOps way so the raw private
-   key is <strong>never</strong> committed to Git. Use <a href="#sourcing-the-github-app-secret-external-secrets-operator">External Secrets Operator</a>
-   (pulls from your secret manager) or <a href="#sourcing-the-github-app-secret-sealed-secrets">Sealed Secrets</a>
-   (commits an encrypted blob only).</p>
+<p><strong>The GitHub App credential Secret</strong> — sourced the GitOps way so the raw private key is <strong>never</strong> committed to Git.
+   Use <a href="#sourcing-the-github-app-secret-external-secrets-operator">External Secrets Operator</a> (pulls from your secret manager) or <a href="#sourcing-the-github-app-secret-sealed-secrets">Sealed Secrets</a> (commits an encrypted blob only).</p>
 </li>
 <li>
 <p><a href="#the-crd-pruning-gotcha-read-first">The CRD pruning gotcha</a></p>
@@ -2853,34 +2847,21 @@ image-digest pinning, and the healthy-install verification all apply unchanged h
 </ol>
 <hr />
 <h2 id="the-crd-pruning-gotcha-read-first">The CRD pruning gotcha (read first)<a class="headerlink" href="#the-crd-pruning-gotcha-read-first" title="Permanent link">&para;</a></h2>
-<p>The chart ships the two CustomResourceDefinitions (CRDs) —
-<code>actionsgateways.actions-gateway.github.com</code> and
-<code>runnergroups.actions-gateway.github.com</code> — as templates carrying the
-<code>helm.sh/resource-policy: keep</code> annotation. That annotation tells Helm (and both
-GitOps controllers below) <strong>not</strong> to delete the CRDs when the release is removed,
-so uninstalling the GMC never cascade-deletes a tenant's <code>ActionsGateway</code> /
-<code>RunnerGroup</code> objects. (The same applies to the opt-in <code>actions-gateway-crds-v2</code>
-chart if you install it.)</p>
-<p>A GitOps controller that <em>prunes</em> resources no longer present in its source can
-defeat this if you are not careful. Two safe outcomes you must preserve:</p>
+<p>The chart ships the two CustomResourceDefinitions (CRDs) — <code>actionsgateways.actions-gateway.github.com</code> and <code>runnergroups.actions-gateway.github.com</code> — as templates carrying the <code>helm.sh/resource-policy: keep</code> annotation.
+That annotation tells Helm (and both GitOps controllers below) <strong>not</strong> to delete the CRDs when the release is removed, so uninstalling the GMC never cascade-deletes a tenant's <code>ActionsGateway</code> / <code>RunnerGroup</code> objects.
+(The same applies to the opt-in <code>actions-gateway-crds-v2</code> chart if you install it.)</p>
+<p>A GitOps controller that <em>prunes</em> resources no longer present in its source can defeat this if you are not careful.
+Two safe outcomes you must preserve:</p>
 <ul>
-<li><strong>Deleting the Application / HelmRelease must not delete the CRDs</strong> (and with
-  them, every tenant gateway).</li>
-<li><strong>The CRDs are large</strong>, so server-side apply is the right strategy — a
-  client-side apply can blow the 256 KiB last-applied annotation limit.</li>
+<li><strong>Deleting the Application / HelmRelease must not delete the CRDs</strong> (and with them, every tenant gateway).</li>
+<li><strong>The CRDs are large</strong>, so server-side apply is the right strategy — a client-side apply can blow the 256 KiB last-applied annotation limit.</li>
 </ul>
-<p>Both Argo CD and Flux <strong>honour <code>helm.sh/resource-policy: keep</code></strong> out of the box, so
-the chart's CRDs are protected without extra configuration. The examples below add
-the controller-native guardrails anyway (<code>Prune=false</code>, <code>ServerSideApply=true</code>,
-<code>upgrade.crds: CreateReplace</code>) so the protection is explicit and survives a future
-chart refactor.</p>
+<p>Both Argo CD and Flux <strong>honour <code>helm.sh/resource-policy: keep</code></strong> out of the box, so the chart's CRDs are protected without extra configuration.
+The examples below add the controller-native guardrails anyway (<code>Prune=false</code>, <code>ServerSideApply=true</code>, <code>upgrade.crds: CreateReplace</code>) so the protection is explicit and survives a future chart refactor.</p>
 <hr />
 <h2 id="argo-cd">Argo CD<a class="headerlink" href="#argo-cd" title="Permanent link">&para;</a></h2>
-<p>The chart is an OCI artifact, so the Argo CD <code>Application</code> points its Helm source
-at the GHCR registry path. Copy the four image digests from the
-<a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0">release notes</a>
-— the chart ships <strong>no</strong> baked-in digests (an unconfigured render is rejected,
-fail-closed).</p>
+<p>The chart is an OCI artifact, so the Argo CD <code>Application</code> points its Helm source at the GHCR registry path.
+Copy the four image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0">release notes</a> — the chart ships <strong>no</strong> baked-in digests (an unconfigured render is rejected, fail-closed).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">argoproj.io/v1alpha1</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Application</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -2920,29 +2901,18 @@ fail-closed).</p>
 </code></pre></div>
 <p>Notes:</p>
 <ul>
-<li><strong><code>repoURL</code> is the registry path, <code>chart</code> is the chart name</strong> — for an OCI Helm
-  source Argo CD splits them. On Argo CD older than v2.7 you must first register
-  the repository with <code>enableOCI: true</code>; v2.7+ resolves <code>oci://</code>-style sources
-  automatically.</li>
+<li><strong><code>repoURL</code> is the registry path, <code>chart</code> is the chart name</strong> — for an OCI Helm source Argo CD splits them.
+  On Argo CD older than v2.7 you must first register the repository with <code>enableOCI: true</code>; v2.7+ resolves <code>oci://</code>-style sources automatically.</li>
 <li><strong>Keep <code>automated.prune: true</code>.</strong> Pruning is what makes Git the source of truth.
-  The CRDs survive it because the chart already stamps them with
-  <code>helm.sh/resource-policy: keep</code>, which Argo CD maps to <code>Prune=false</code> — so no
-  Application-level override is needed. If you ever want to pin <code>Prune=false</code>
-  regardless of the chart, set <code>argocd.argoproj.io/sync-options: Prune=false</code> on
-  the CRD objects (e.g. via the chart's <code>commonAnnotations</code>), <strong>not</strong> on the whole
-  Application — Application-wide <code>Prune=false</code> would strand every orphaned resource,
-  not just the CRDs.</li>
-<li>Verify the chart and image cosign signatures before first sync — see
-  <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>.</li>
+  The CRDs survive it because the chart already stamps them with <code>helm.sh/resource-policy: keep</code>, which Argo CD maps to <code>Prune=false</code> — so no Application-level override is needed.
+  If you ever want to pin <code>Prune=false</code> regardless of the chart, set <code>argocd.argoproj.io/sync-options: Prune=false</code> on the CRD objects (e.g. via the chart's <code>commonAnnotations</code>), <strong>not</strong> on the whole Application — Application-wide <code>Prune=false</code> would strand every orphaned resource, not just the CRDs.</li>
+<li>Verify the chart and image cosign signatures before first sync — see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>.</li>
 </ul>
-<p>For the GitHub App credential Secret, do <strong>not</strong> put it in this Application. Source
-it with <a href="#sourcing-the-github-app-secret-external-secrets-operator">External Secrets Operator</a>
-or <a href="#sourcing-the-github-app-secret-sealed-secrets">Sealed Secrets</a> in the tenant
-namespace.</p>
+<p>For the GitHub App credential Secret, do <strong>not</strong> put it in this Application.
+Source it with <a href="#sourcing-the-github-app-secret-external-secrets-operator">External Secrets Operator</a> or <a href="#sourcing-the-github-app-secret-sealed-secrets">Sealed Secrets</a> in the tenant namespace.</p>
 <hr />
 <h2 id="flux">Flux<a class="headerlink" href="#flux" title="Permanent link">&para;</a></h2>
-<p>Flux installs the OCI chart with a <code>HelmRelease</code> backed by either an
-<code>OCIRepository</code> (recommended for OCI charts) or a <code>HelmRepository</code> of <code>type: oci</code>.
+<p>Flux installs the OCI chart with a <code>HelmRelease</code> backed by either an <code>OCIRepository</code> (recommended for OCI charts) or a <code>HelmRepository</code> of <code>type: oci</code>.
 Both forms are shown.</p>
 <h3 id="ocirepository--helmrelease-recommended">OCIRepository + HelmRelease (recommended)<a class="headerlink" href="#ocirepository--helmrelease-recommended" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">source.toolkit.fluxcd.io/v1</span>
@@ -3005,8 +2975,7 @@ Both forms are shown.</p>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">oci://ghcr.io/actions-gateway/charts</span>
 </code></pre></div>
-<p>…and reference it from the <code>HelmRelease</code> with a <code>spec.chart</code> block instead of
-<code>chartRef</code>:</p>
+<p>…and reference it from the <code>HelmRelease</code> with a <code>spec.chart</code> block instead of <code>chartRef</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="w">  </span><span class="nt">chart</span><span class="p">:</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">      </span><span class="nt">chart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway</span>
@@ -3017,29 +2986,19 @@ Both forms are shown.</p>
 </code></pre></div>
 <p>Notes:</p>
 <ul>
-<li><strong><code>upgrade.crds: CreateReplace</code></strong> is the safe setting: it applies CRD schema
-  changes on <code>helm upgrade</code> but <strong>never deletes</strong> a CRD (Helm has no delete-CRD
-  path). Do <strong>not</strong> use <code>Skip</code> if a release ever changes the CRD schema, or the
-  new fields will silently not apply. Deleting the <code>HelmRelease</code> leaves the CRDs
-  and tenant CRs in place — Helm does not garbage-collect CRDs, and the
-  <code>helm.sh/resource-policy: keep</code> annotation reinforces it.</li>
-<li>For air-gapped relocation of the chart and images, see
-  <a href="../air-gapped-install/">air-gapped-install.md</a>; the <code>OCIRepository</code> <code>url</code> and the
-  <code>*.image.digest</code> values point at your private registry instead of GHCR.</li>
+<li><strong><code>upgrade.crds: CreateReplace</code></strong> is the safe setting: it applies CRD schema changes on <code>helm upgrade</code> but <strong>never deletes</strong> a CRD (Helm has no delete-CRD path).
+  Do <strong>not</strong> use <code>Skip</code> if a release ever changes the CRD schema, or the new fields will silently not apply.
+  Deleting the <code>HelmRelease</code> leaves the CRDs and tenant CRs in place — Helm does not garbage-collect CRDs, and the <code>helm.sh/resource-policy: keep</code> annotation reinforces it.</li>
+<li>For air-gapped relocation of the chart and images, see <a href="../air-gapped-install/">air-gapped-install.md</a>; the <code>OCIRepository</code> <code>url</code> and the <code>*.image.digest</code> values point at your private registry instead of GHCR.</li>
 </ul>
 <p>For the GitHub App credential Secret, use one of the two patterns below.</p>
 <hr />
 <h2 id="sourcing-the-github-app-secret-external-secrets-operator">Sourcing the GitHub App Secret: External Secrets Operator<a class="headerlink" href="#sourcing-the-github-app-secret-external-secrets-operator" title="Permanent link">&para;</a></h2>
-<p><a href="https://external-secrets.io">External Secrets Operator (ESO)</a> projects a Secret
-from your external secret manager (HashiCorp Vault, AWS Secrets Manager, GCP Secret
-Manager, Azure Key Vault, …) into the cluster. The raw private key lives in the
-secret manager; only the <em>reference</em> is committed to Git.</p>
-<p>The GMC consumes a per-tenant <code>Secret</code> with three keys — <code>appId</code>, <code>installationId</code>,
-and <code>privateKey</code> — referenced by <code>spec.gitHubAppRef</code> on the <code>ActionsGateway</code> CR (see
-<a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>).
-The <code>ExternalSecret</code> below reconstructs exactly those keys. Replace the
-<code>ClusterSecretStore</code> name and <code>remoteRef</code> keys with your provider's; this example
-uses a Vault-backed store.</p>
+<p><a href="https://external-secrets.io">External Secrets Operator (ESO)</a> projects a Secret from your external secret manager (HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, …) into the cluster.
+The raw private key lives in the secret manager; only the <em>reference</em> is committed to Git.</p>
+<p>The GMC consumes a per-tenant <code>Secret</code> with three keys — <code>appId</code>, <code>installationId</code>, and <code>privateKey</code> — referenced by <code>spec.gitHubAppRef</code> on the <code>ActionsGateway</code> CR (see <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>).
+The <code>ExternalSecret</code> below reconstructs exactly those keys.
+Replace the <code>ClusterSecretStore</code> name and <code>remoteRef</code> keys with your provider's; this example uses a Vault-backed store.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-secrets.io/v1</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExternalSecret</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3069,18 +3028,13 @@ uses a Vault-backed store.</p>
 <a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">        </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">secret/data/team-a/github-app</span>
 <a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">        </span><span class="nt">property</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">privateKey</span><span class="w">   </span><span class="c1"># the full PEM, stored only in Vault</span>
 </code></pre></div>
-<p>ESO recreates the Secret if it is deleted and re-projects it when the upstream key
-rotates. After rotating the key in your secret manager, follow the same Secret-swap
-flow as <a href="../../getting-started/#rotating-github-app-credentials">Getting Started — Rotating GitHub App Credentials</a>
-(point the CR at the new Secret name) so the rollout is controlled rather than
-in-place.</p>
+<p>ESO recreates the Secret if it is deleted and re-projects it when the upstream key rotates.
+After rotating the key in your secret manager, follow the same Secret-swap flow as <a href="../../getting-started/#rotating-github-app-credentials">Getting Started — Rotating GitHub App Credentials</a> (point the CR at the new Secret name) so the rollout is controlled rather than in-place.</p>
 <hr />
 <h2 id="sourcing-the-github-app-secret-sealed-secrets">Sourcing the GitHub App Secret: Sealed Secrets<a class="headerlink" href="#sourcing-the-github-app-secret-sealed-secrets" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/bitnami-labs/sealed-secrets">Sealed Secrets</a> lets you commit an
-<strong>encrypted</strong> <code>SealedSecret</code> to Git that only the in-cluster controller can decrypt.
+<p><a href="https://github.com/bitnami-labs/sealed-secrets">Sealed Secrets</a> lets you commit an <strong>encrypted</strong> <code>SealedSecret</code> to Git that only the in-cluster controller can decrypt.
 The plaintext private key never enters the repository.</p>
-<p>Seal the Secret from a local PEM file — the <code>.pem</code> stays on your workstation and is
-<strong>never</strong> committed:</p>
+<p>Seal the Secret from a local PEM file — the <code>.pem</code> stays on your workstation and is <strong>never</strong> committed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># app.private-key.pem is the key you downloaded from the GitHub App settings.</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Build the plaintext Secret only as an in-memory pipe, then seal it.</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>my-github-app<span class="w"> </span><span class="se">\</span>
@@ -3092,8 +3046,7 @@ The plaintext private key never enters the repository.</p>
 <a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span>--dry-run<span class="o">=</span>client<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="p">|</span><span class="w"> </span>kubeseal<span class="w"> </span>--format<span class="w"> </span>yaml<span class="w"> </span>&gt;<span class="w"> </span>my-github-app.sealedsecret.yaml
 </code></pre></div>
-<p>The resulting <code>my-github-app.sealedsecret.yaml</code> is safe to commit and reconcile via
-Argo CD or Flux:</p>
+<p>The resulting <code>my-github-app.sealedsecret.yaml</code> is safe to commit and reconcile via Argo CD or Flux:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bitnami.com/v1alpha1</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SealedSecret</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3110,23 +3063,16 @@ Argo CD or Flux:</p>
 <a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
 <a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Opaque</span>
 </code></pre></div>
-<p>The controller decrypts it into a normal <code>Secret</code> named <code>my-github-app</code> with the
-<code>appId</code> / <code>installationId</code> / <code>privateKey</code> keys the GMC expects. By default a
-<code>SealedSecret</code> is sealed to its exact name <strong>and</strong> namespace, so it can only be
-unsealed in <code>team-a</code> — keep the namespace consistent with the <code>ActionsGateway</code> CR.
-After deleting the local <code>.pem</code>, the only copy of the private key outside GitHub is
-the one the controller holds in-cluster.</p>
+<p>The controller decrypts it into a normal <code>Secret</code> named <code>my-github-app</code> with the <code>appId</code> / <code>installationId</code> / <code>privateKey</code> keys the GMC expects.
+By default a <code>SealedSecret</code> is sealed to its exact name <strong>and</strong> namespace, so it can only be unsealed in <code>team-a</code> — keep the namespace consistent with the <code>ActionsGateway</code> CR.
+After deleting the local <code>.pem</code>, the only copy of the private key outside GitHub is the one the controller holds in-cluster.</p>
 <hr />
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../install/">install.md</a> — the imperative install reference these examples build
-  on (prerequisites, digest pinning, healthy-install verification).</li>
-<li><a href="../air-gapped-install/">air-gapped-install.md</a> — relocate the chart and images to
-  a private registry; the <code>OCIRepository</code> / <code>repoURL</code> and digests point there.</li>
-<li><a href="../../getting-started/">Getting Started</a> — create the GitHub App Secret and the
-  first <code>ActionsGateway</code> CR; the credential-rotation flow.</li>
-<li><a href="../backup-restore/">backup-restore.md</a> — why GitOps <em>is</em> the primary backup
-  posture for the gateway's desired state.</li>
+<li><a href="../install/">install.md</a> — the imperative install reference these examples build on (prerequisites, digest pinning, healthy-install verification).</li>
+<li><a href="../air-gapped-install/">air-gapped-install.md</a> — relocate the chart and images to a private registry; the <code>OCIRepository</code> / <code>repoURL</code> and digests point there.</li>
+<li><a href="../../getting-started/">Getting Started</a> — create the GitHub App Secret and the first <code>ActionsGateway</code> CR; the credential-rotation flow.</li>
+<li><a href="../backup-restore/">backup-restore.md</a> — why GitOps <em>is</em> the primary backup posture for the gateway's desired state.</li>
 </ul>
 <hr />
 <p>← <a href="../">Back to Operations</a></p>

@@ -2693,25 +2693,17 @@
 
 <h1 id="q414--representative-dind-tenant-fixture-and-the-migration-gap-it-found">Q414 — Representative DinD tenant fixture, and the migration gap it found<a class="headerlink" href="#q414--representative-dind-tenant-fixture-and-the-migration-gap-it-found" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status:</strong> ✅ Complete (2026-07-26). Every deliverable below shipped in one change.</p>
+<p><strong>Status:</strong> ✅ Complete (2026-07-26).
+Every deliverable below shipped in one change.</p>
 </blockquote>
-<p>Q414 asked for one reusable v1 tenant fixture carrying a
-Docker-in-Docker (DinD) worker shape, and for <code>gag-migrate</code>'s v1→v2 fan-out to be
-covered in e2e rather than only in unit tests. <a href="../q415-migrate-dogfood-validation/">Q415</a> — migrate a
-representative tenant on the dogfood cluster for real — was blocked on it, because
-the <a href="../../v2-api/#definition-of-done-v2-ga">v2 GA Definition of Done</a> wants exactly one
-real tenant migrated and our own dogfood e2e tenant is the only one that exists.</p>
+<p>Q414 asked for one reusable v1 tenant fixture carrying a Docker-in-Docker (DinD) worker shape, and for <code>gag-migrate</code>'s v1→v2 fan-out to be covered in e2e rather than only in unit tests.
+<a href="../q415-migrate-dogfood-validation/">Q415</a> — migrate a representative tenant on the dogfood cluster for real — was blocked on it, because the <a href="../../v2-api/#definition-of-done-v2-ga">v2 GA Definition of Done</a> wants exactly one real tenant migrated and our own dogfood e2e tenant is the only one that exists.</p>
 <p>Building the fixture surfaced a defect that makes both of those impossible today.</p>
 <h2 id="finding--gag-migrate-cannot-migrate-a-dind-tenant-measured-2026-07-26">Finding — <code>gag-migrate</code> cannot migrate a DinD tenant (measured 2026-07-26)<a class="headerlink" href="#finding--gag-migrate-cannot-migrate-a-dind-tenant-measured-2026-07-26" title="Permanent link">&para;</a></h2>
-<p><code>FanOut</code> always emits a <strong>namespaced</strong> <code>RunnerTemplate</code> for a v1 <code>RunnerGroup</code>'s
-<code>podTemplate</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/migrate.go">migrate.go</a>). The v2
-admission webhook rejects a privileged container on that kind by design — privileged
-worker shapes belong on the platform-owned, cluster-scoped <code>ClusterRunnerTemplate</code>
-(<a href="../../../design/appendix-h-v2-api-decomposition/">§H.6</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/runnertemplate_webhook.go">runnertemplate_webhook.go</a>).
-A DinD tenant's worker pod is privileged by construction (the <code>dockerd</code> sidecar), so
-the two rules collide.</p>
-<p>Measured directly by running <code>FanOut</code> over a v1 DinD tenant shape and feeding the
-emitted template to the real <code>RunnerTemplateCustomValidator</code>:</p>
+<p><code>FanOut</code> always emits a <strong>namespaced</strong> <code>RunnerTemplate</code> for a v1 <code>RunnerGroup</code>'s <code>podTemplate</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/migrate.go">migrate.go</a>).
+The v2 admission webhook rejects a privileged container on that kind by design — privileged worker shapes belong on the platform-owned, cluster-scoped <code>ClusterRunnerTemplate</code> (<a href="../../../design/appendix-h-v2-api-decomposition/">§H.6</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/runnertemplate_webhook.go">runnertemplate_webhook.go</a>).
+A DinD tenant's worker pod is privileged by construction (the <code>dockerd</code> sidecar), so the two rules collide.</p>
+<p>Measured directly by running <code>FanOut</code> over a v1 DinD tenant shape and feeding the emitted template to the real <code>RunnerTemplateCustomValidator</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>templates=1 sets=1 warnings=[]
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>RunnerTemplate &quot;rt-c44dc9368ef1&quot; ValidateCreate err =
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  podTemplate.spec.initContainers[&quot;dind&quot;]: privileged containers are not permitted in a
@@ -2720,95 +2712,57 @@ emitted template to the real <code>RunnerTemplateCustomValidator</code>:</p>
 </code></pre></div>
 <p>Three things make this worse than a plain rejection:</p>
 <ol>
-<li><strong>No dry-run warning.</strong> <code>FanOut</code> returns <code>warnings=[]</code>, so the reviewed dry-run
-   output looks clean. The operator only learns of the problem when <code>--apply</code> fails.</li>
-<li><strong><code>--apply</code> fails half-done.</strong> <code>applyResult</code> creates objects in the order
-   <code>EgressProxy → RunnerTemplates → ActionsGateway → RunnerSets</code>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/migrate/main.go">main.go</a>). The template is the <em>second</em> object, so
-   the run aborts with the <code>EgressProxy</code> already created and no gateway or sets —
-   a partially-migrated namespace.</li>
-<li><strong>It breaks the tool's own stated invariant.</strong> The runbook promises the fan-out
-   "preserves v1 behavior and weakens no security property"
-   (<a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a>). For a privileged
-   tenant it preserves nothing: v1 ran the workload fine (v1's webhook permits
-   privileged containers when the gateway opts into <code>securityProfile: privileged</code>
-   and the namespace holds the platform grant), and v2 refuses to accept it at all.</li>
+<li><strong>No dry-run warning.</strong> <code>FanOut</code> returns <code>warnings=[]</code>, so the reviewed dry-run output looks clean.
+   The operator only learns of the problem when <code>--apply</code> fails.</li>
+<li><strong><code>--apply</code> fails half-done.</strong> <code>applyResult</code> creates objects in the order <code>EgressProxy → RunnerTemplates → ActionsGateway → RunnerSets</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/migrate/main.go">main.go</a>).
+   The template is the <em>second</em> object, so the run aborts with the <code>EgressProxy</code> already created and no gateway or sets — a partially-migrated namespace.</li>
+<li><strong>It breaks the tool's own stated invariant.</strong> The runbook promises the fan-out "preserves v1 behavior and weakens no security property" (<a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a>).
+   For a privileged tenant it preserves nothing: v1 ran the workload fine (v1's webhook permits privileged containers when the gateway opts into <code>securityProfile: privileged</code> and the namespace holds the platform grant), and v2 refuses to accept it at all.</li>
 </ol>
-<p>The design never covered this case: <a href="../../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>
-says only "extracting each inline <code>podTemplate</code> into a <code>RunnerTemplate</code>".</p>
+<p>The design never covered this case: <a href="../../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a> says only "extracting each inline <code>podTemplate</code> into a <code>RunnerTemplate</code>".</p>
 <h2 id="two-more-defects-found-only-by-running-it">Two more defects, found only by running it<a class="headerlink" href="#two-more-defects-found-only-by-running-it" title="Permanent link">&para;</a></h2>
-<p>The template fix was necessary but not sufficient. Standing the e2e up against a live
-cluster found two further blockers on the same path — neither reachable by a unit test,
-because each depends on a real apiserver evaluating a real admission policy.</p>
+<p>The template fix was necessary but not sufficient.
+Standing the e2e up against a live cluster found two further blockers on the same path — neither reachable by a unit test, because each depends on a real apiserver evaluating a real admission policy.</p>
 <h3 id="finding-2--a-lone-privileged-tenant-was-silently-downgraded-to-baseline">Finding 2 — a lone privileged tenant was silently downgraded to <code>baseline</code><a class="headerlink" href="#finding-2--a-lone-privileged-tenant-was-silently-downgraded-to-baseline" title="Permanent link">&para;</a></h3>
-<p><code>MostRestrictiveProfile</code> seeded its accumulator with <code>baseline</code> unconditionally. But
-<code>privileged</code> <strong>ranks below</strong> <code>baseline</code> (it is the least restrictive level, rank 0), so
-a single privileged gateway could never beat the seed: <code>MostRestrictiveProfile("privileged")</code>
-returned <code>"baseline"</code>. The CLI's namespace-wide override in <code>migrateNamespace</code> then
-clobbered the correct <code>privileged</code> value that <code>buildNamespacePatch</code> had already computed.</p>
-<p>Direction-safe, outcome-wrong: the migrated tenant's namespace enforced <code>baseline</code>, so
-Pod Security Admission would refuse the very DinD worker pods the tenant migrated in
-order to keep running. Fixed by seeding from the first input profile instead — every
-genuine multi-gateway comparison is unchanged (strictest still wins), and a single
-gateway now migrates to exactly its own profile.</p>
+<p><code>MostRestrictiveProfile</code> seeded its accumulator with <code>baseline</code> unconditionally.
+But <code>privileged</code> <strong>ranks below</strong> <code>baseline</code> (it is the least restrictive level, rank 0), so a single privileged gateway could never beat the seed: <code>MostRestrictiveProfile("privileged")</code> returned <code>"baseline"</code>.
+The CLI's namespace-wide override in <code>migrateNamespace</code> then clobbered the correct <code>privileged</code> value that <code>buildNamespacePatch</code> had already computed.</p>
+<p>Direction-safe, outcome-wrong: the migrated tenant's namespace enforced <code>baseline</code>, so Pod Security Admission would refuse the very DinD worker pods the tenant migrated in order to keep running.
+Fixed by seeding from the first input profile instead — every genuine multi-gateway comparison is unchanged (strictest still wins), and a single gateway now migrates to exactly its own profile.</p>
 <h3 id="finding-3--the-downgrade-guard-rejects-every-privileged-relocation">Finding 3 — the downgrade guard rejects every privileged relocation<a class="headerlink" href="#finding-3--the-downgrade-guard-rejects-every-privileged-relocation" title="Permanent link">&para;</a></h3>
-<p>Fixing finding 2 exposed the next one. <code>namespace-security-profile-guard</code> compares the
-incoming <code>security-profile</code> label against the current one, and an <strong>absent</strong> label reads
-as <code>baseline</code>. A tenant coming from v1 has never carried the v2 label, so relocating
-<code>privileged</code> always presents as <code>baseline</code> → <code>privileged</code> — a downgrade — and is denied:</p>
+<p>Fixing finding 2 exposed the next one. <code>namespace-security-profile-guard</code> compares the incoming <code>security-profile</code> label against the current one, and an <strong>absent</strong> label reads as <code>baseline</code>.
+A tenant coming from v1 has never carried the v2 label, so relocating <code>privileged</code> always presents as <code>baseline</code> → <code>privileged</code> — a downgrade — and is denied:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>namespaces &quot;tenant-migrate-dind&quot; is forbidden: ValidatingAdmissionPolicy
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>&#39;gmc-namespace-security-profile-guard&#39; denied request: security profile downgrade from
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>baseline to privileged is not permitted without the
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>actions-gateway.com/allow-profile-downgrade=allowed annotation
 </code></pre></div>
-<p>The downgrade is only apparent — the namespace's PSA level is already <code>privileged</code> under
-v1 — but the policy cannot see that, and it must not: it is what stops a stray re-apply
-from silently relaxing a tenant's isolation.</p>
-<p>Resolved by <strong>warning, not self-granting</strong>. Writing the opt-in annotation would be the
-tool inventing a security decision on the operator's behalf, the same thing the
-privileged-eligibility grant is deliberately never invented for. The dry-run now prints
-the exact remediation, and the runbook documents the annotate → migrate → un-annotate
-sequence. Without the warning the operator discovers this only when <code>--apply</code> fails at
-its <em>last</em> step, with every v2 object already created.</p>
+<p>The downgrade is only apparent — the namespace's PSA level is already <code>privileged</code> under v1 — but the policy cannot see that, and it must not: it is what stops a stray re-apply from silently relaxing a tenant's isolation.</p>
+<p>Resolved by <strong>warning, not self-granting</strong>.
+Writing the opt-in annotation would be the tool inventing a security decision on the operator's behalf, the same thing the privileged-eligibility grant is deliberately never invented for.
+The dry-run now prints the exact remediation, and the runbook documents the annotate → migrate → un-annotate sequence.
+Without the warning the operator discovers this only when <code>--apply</code> fails at its <em>last</em> step, with every v2 object already created.</p>
 <h3 id="why-the-order-matters">Why the order matters<a class="headerlink" href="#why-the-order-matters" title="Permanent link">&para;</a></h3>
-<p>Each defect masked the next. Only the template fix let the apply reach the RunnerSet;
-only the profile fix let it reach the namespace patch; only then did the downgrade guard
-speak up. A test tier that stops at "the right Go structs were produced" could not have
-found any of the three.</p>
+<p>Each defect masked the next.
+Only the template fix let the apply reach the RunnerSet; only the profile fix let it reach the namespace patch; only then did the downgrade guard speak up.
+A test tier that stops at "the right Go structs were produced" could not have found any of the three.</p>
 <h2 id="fix--map-a-privileged-v1-shape-onto-clusterrunnertemplate">Fix — map a privileged v1 shape onto <code>ClusterRunnerTemplate</code><a class="headerlink" href="#fix--map-a-privileged-v1-shape-onto-clusterrunnertemplate" title="Permanent link">&para;</a></h2>
-<p><code>ClusterRunnerTemplate</code> exists <em>precisely</em> to hold golden privileged DinD/sysbox
-templates (§H.6), and <code>RunnerSet.spec.templateRef.kind</code> already selects it, so the
-mapping needs no new API surface:</p>
+<p><code>ClusterRunnerTemplate</code> exists <em>precisely</em> to hold golden privileged DinD/sysbox templates (§H.6), and <code>RunnerSet.spec.templateRef.kind</code> already selects it, so the mapping needs no new API surface:</p>
 <ul>
-<li>A v1 <code>RunnerGroup</code> whose <code>podTemplate</code> carries a privileged container (or init
-  container) fans out to a <strong><code>ClusterRunnerTemplate</code></strong> instead of a <code>RunnerTemplate</code>,
-  and its <code>RunnerSet</code> gets <code>templateRef.kind: ClusterRunnerTemplate</code>.</li>
-<li>Non-privileged groups are untouched — they keep emitting a namespaced
-  <code>RunnerTemplate</code> with no <code>kind</code> discriminator, so every existing golden file and
-  every non-privileged tenant migrates byte-for-byte as before.</li>
+<li>A v1 <code>RunnerGroup</code> whose <code>podTemplate</code> carries a privileged container (or init container) fans out to a <strong><code>ClusterRunnerTemplate</code></strong> instead of a <code>RunnerTemplate</code>, and its <code>RunnerSet</code> gets <code>templateRef.kind: ClusterRunnerTemplate</code>.</li>
+<li>Non-privileged groups are untouched — they keep emitting a namespaced <code>RunnerTemplate</code> with no <code>kind</code> discriminator, so every existing golden file and every non-privileged tenant migrates byte-for-byte as before.</li>
 </ul>
-<p><strong>No security property is weakened.</strong> Pod Security Admission, stamped from the
-namespace's <code>security-profile</code> label, remains the runtime backstop for both template
-kinds — the design's own argument for why privileged is permitted on the
-cluster-scoped kind. The tool already carries the platform's privileged grant forward
-(and warns, never self-grants, when it is missing), so a migrated privileged tenant is
-admitted at runtime under exactly the grant its platform admin already gave it.</p>
+<p><strong>No security property is weakened.</strong> Pod Security Admission, stamped from the namespace's <code>security-profile</code> label, remains the runtime backstop for both template kinds — the design's own argument for why privileged is permitted on the cluster-scoped kind.
+The tool already carries the platform's privileged grant forward (and warns, never self-grants, when it is missing), so a migrated privileged tenant is admitted at runtime under exactly the grant its platform admin already gave it.</p>
 <p>Two deliberate choices:</p>
 <ul>
-<li><strong>Names are namespace-qualified</strong> (<code>crt-&lt;ns&gt;-&lt;hash&gt;</code>, not the bare content address
-  the namespaced kind uses). Cluster-scoped names are cluster-unique, so a pure
-  content address would silently <em>share</em> one object between two tenants with the same
-  worker shape — and a later edit by one tenant's operator would change the other's
-  worker pods. Per-namespace names keep the v1 property that each tenant owns its own
-  template.</li>
-<li><strong>The emitted object is labelled with its origin namespace</strong>
-  (<code>actions-gateway.com/migrated-from-namespace</code>). A namespaced migration now creates
-  a cluster-scoped object, which namespace deletion does <em>not</em> garbage-collect, so an
-  operator needs a way to find and tear down what a migration left behind.</li>
+<li><strong>Names are namespace-qualified</strong> (<code>crt-&lt;ns&gt;-&lt;hash&gt;</code>, not the bare content address the namespaced kind uses).
+  Cluster-scoped names are cluster-unique, so a pure content address would silently <em>share</em> one object between two tenants with the same worker shape — and a later edit by one tenant's operator would change the other's worker pods.
+  Per-namespace names keep the v1 property that each tenant owns its own template.</li>
+<li><strong>The emitted object is labelled with its origin namespace</strong> (<code>actions-gateway.com/migrated-from-namespace</code>).
+  A namespaced migration now creates a cluster-scoped object, which namespace deletion does <em>not</em> garbage-collect, so an operator needs a way to find and tear down what a migration left behind.</li>
 </ul>
-<p>The tool also warns on every emitted cluster template — creating a cluster-scoped
-object from a namespace-scoped migration is a blast-radius change the operator must
-see in the dry-run before approving <code>--apply</code>.</p>
+<p>The tool also warns on every emitted cluster template — creating a cluster-scoped object from a namespace-scoped migration is a blast-radius change the operator must see in the dry-run before approving <code>--apply</code>.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2858,45 +2812,26 @@ see in the dry-run before approving <code>--apply</code>.</p>
 </table>
 <h2 id="test-coverage">Test coverage<a class="headerlink" href="#test-coverage" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/privileged_test.go"><code>privileged_test.go</code></a>) —
-  the kind choice, per-group splitting on a mixed tenant, within-namespace reuse
-  collapse, cross-namespace non-sharing, name truncation, and a golden manifest for the
-  DinD tenant. The decisive one is <code>TestFanOut_EmittedTemplatesAreAdmissible</code>: it runs
-  the <strong>real</strong> v2 admission validators over everything <code>FanOut</code> emits, so the assertion
-  is made against the admission rule itself rather than a restatement of it — that is
-  the invariant that actually broke.</li>
-<li><strong>e2e</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>migration_v1_to_v2_test.go</code></a>)
-  — dry-run writes nothing and warns; <code>--apply</code> produces an object set the live
-  apiserver admits, with the namespace patch applied and v1 still running beside it;
-  and the migrated tenant reconciles into a working per-gateway AGC + proxy pool. The
-  last one is what a unit test can never reach: admissible YAML is not the same as a
-  tenant that runs. Findings 2 and 3 above were both caught here and nowhere else.</li>
+<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/privileged_test.go"><code>privileged_test.go</code></a>) — the kind choice, per-group splitting on a mixed tenant, within-namespace reuse collapse, cross-namespace non-sharing, name truncation, and a golden manifest for the DinD tenant.
+  The decisive one is <code>TestFanOut_EmittedTemplatesAreAdmissible</code>: it runs the <strong>real</strong> v2 admission validators over everything <code>FanOut</code> emits, so the assertion is made against the admission rule itself rather than a restatement of it — that is the invariant that actually broke.</li>
+<li><strong>e2e</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>migration_v1_to_v2_test.go</code></a>) — dry-run writes nothing and warns; <code>--apply</code> produces an object set the live apiserver admits, with the namespace patch applied and v1 still running beside it; and the migrated tenant reconciles into a working per-gateway AGC + proxy pool.
+  The last one is what a unit test can never reach: admissible YAML is not the same as a tenant that runs.
+  Findings 2 and 3 above were both caught here and nowhere else.</li>
 </ul>
-<p><strong>Verified live</strong>, 3/3 specs green on a from-scratch kind cluster pinned to the CI
-Kubernetes version (<code>kindest/node:v1.35.5</code>), 2026-07-26.</p>
+<p><strong>Verified live</strong>, 3/3 specs green on a from-scratch kind cluster pinned to the CI Kubernetes version (<code>kindest/node:v1.35.5</code>), 2026-07-26.</p>
 <h2 id="local-loop-notes-not-product-defects">Local-loop notes (not product defects)<a class="headerlink" href="#local-loop-notes-not-product-defects" title="Permanent link">&para;</a></h2>
 <p>Two re-run artifacts cost time here and are worth knowing before iterating on this spec:</p>
 <ul>
-<li><strong>Re-running the suite over <code>E2E_SKIP_TEARDOWN=true</code> strands the tenant namespace.</strong>
-  The spec's <code>AfterAll</code> deletes the namespace, which takes the tenant AGC with it, and
-  the <code>agentpool-cleanup</code> finalizers on its RunnerGroup/RunnerSet then have nothing left
-  to clear them — the Q301 shape <code>drainTenantNamespaces</code> exists to prevent, bypassed by
-  the skip flag. Clear the finalizers by hand, or don't skip teardown.</li>
-<li><strong><code>helm uninstall</code> → reinstall leaves the PriorityClass allowlist VAP unable to
-  resolve its params</strong>, so every <code>runnergroups</code>/<code>runnersets</code> write is denied with
-  <code>no params found for policy binding</code> even though the param ConfigMap is present at
-  exactly the referenced name and namespace (verified directly on Kubernetes 1.36.1;
-  the same denial appeared on 1.35.5 after a reinstall). A from-scratch cluster is
-  unaffected, which is why CI never sees it. Filed separately — it is an operator-facing
-  chart-reinstall hazard, not something this change introduced.</li>
+<li><strong>Re-running the suite over <code>E2E_SKIP_TEARDOWN=true</code> strands the tenant namespace.</strong> The spec's <code>AfterAll</code> deletes the namespace, which takes the tenant AGC with it, and the <code>agentpool-cleanup</code> finalizers on its RunnerGroup/RunnerSet then have nothing left to clear them — the Q301 shape <code>drainTenantNamespaces</code> exists to prevent, bypassed by the skip flag.
+  Clear the finalizers by hand, or don't skip teardown.</li>
+<li><strong><code>helm uninstall</code> → reinstall leaves the PriorityClass allowlist VAP unable to resolve its params</strong>, so every <code>runnergroups</code>/<code>runnersets</code> write is denied with <code>no params found for policy binding</code> even though the param ConfigMap is present at exactly the referenced name and namespace (verified directly on Kubernetes 1.36.1; the same denial appeared on 1.35.5 after a reinstall).
+  A from-scratch cluster is unaffected, which is why CI never sees it.
+  Filed separately — it is an operator-facing chart-reinstall hazard, not something this change introduced.</li>
 </ul>
 <h2 id="why-a-fixture-not-another-one-off-builder">Why a fixture, not another one-off builder<a class="headerlink" href="#why-a-fixture-not-another-one-off-builder" title="Permanent link">&para;</a></h2>
-<p><code>cmd/gmc/test/utils/resources.go</code> grew four <code>ApplyActionsGatewayCR*</code> functions that
-differ only in which RunnerGroup knobs they set, each carrying a near-identical copy
-of the same 30-line YAML and the same three explanatory comment blocks. Adding a
-fifth for DinD would have been the obvious move and the wrong one. The fixture is one
-options struct with presets, so a new shape is a few fields rather than another copy
-of the whole document.</p>
+<p><code>cmd/gmc/test/utils/resources.go</code> grew four <code>ApplyActionsGatewayCR*</code> functions that differ only in which RunnerGroup knobs they set, each carrying a near-identical copy of the same 30-line YAML and the same three explanatory comment blocks.
+Adding a fifth for DinD would have been the obvious move and the wrong one.
+The fixture is one options struct with presets, so a new shape is a few fields rather than another copy of the whole document.</p>
 
 
 

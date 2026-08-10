@@ -2749,41 +2749,32 @@
 
 <h1 id="markdown-gates-on-a-real-parser">Markdown gates on a real parser<a class="headerlink" href="#markdown-gates-on-a-real-parser" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> filed 2026-08-02; all three phases shipped by 2026-08-04.
-Q612 ✅ → Q613 ✅ → Q614 ✅. Q654 shipped alongside them: an em-dash density
-gate on the same parse layer, filed after the phases were scoped. Only the
-Progress row still references this plan, so archiving it is the milestone's
-call rather than any one phase's.</p>
-<p>Phase 1 shipped: <code>devtools/docs/markdown</code> (the shared parse layer over goldmark)
-and <code>devtools/docs/doclinks</code> (the checker), with <code>check-doc-links.sh</code> kept as the
-entry point that selects the files. What the build measured, and what it changed
-about the plan below, is in <a href="#phase-1-result-q612">Phase 1 result</a>.</p>
+Q612 ✅ → Q613 ✅ → Q614 ✅.
+Q654 shipped alongside them: an em-dash density gate on the same parse layer, filed after the phases were scoped.
+Only the Progress row still references this plan, so archiving it is the milestone's call rather than any one phase's.</p>
+<p>Phase 1 shipped: <code>devtools/docs/markdown</code> (the shared parse layer over goldmark) and <code>devtools/docs/doclinks</code> (the checker), with <code>check-doc-links.sh</code> kept as the entry point that selects the files.
+What the build measured, and what it changed about the plan below, is in <a href="#phase-1-result-q612">Phase 1 result</a>.</p>
 <p>Phase 2 shipped: <code>devtools/docs/backloglint</code>, plus <code>Tables()</code> on the parse layer.
 <a href="#phase-2-result-q613">Phase 2 result</a>.</p>
-<p>Four gates read Markdown with hand-rolled <code>awk</code>: the link/anchor checker, the backlog
-linter, the roadmap coherence check, and the backlog metrics replay. Each re-implements
-some slice of Markdown with regular expressions, and regular expressions cannot count
-brackets. Every defect below is that one root cause.</p>
-<p>The failure mode is the expensive one: these gates report <strong>green by not seeing
-things</strong>. That is the same class as the path-filter gap (Q400/Q429) where a filter
-missing a module made its gate pass by skipping.</p>
+<p>Four gates read Markdown with hand-rolled <code>awk</code>: the link/anchor checker, the backlog linter, the roadmap coherence check, and the backlog metrics replay.
+Each re-implements some slice of Markdown with regular expressions, and regular expressions cannot count brackets.
+Every defect below is that one root cause.</p>
+<p>The failure mode is the expensive one: these gates report <strong>green by not seeing things</strong>.
+That is the same class as the path-filter gap (Q400/Q429) where a filter missing a module made its gate pass by skipping.</p>
 <h2 id="the-evidence">The evidence<a class="headerlink" href="#the-evidence" title="Permanent link">&para;</a></h2>
 <h3 id="check-doc-linkssh-is-blind-to-a-link-shape-the-readme-uses-today"><code>check-doc-links.sh</code> is blind to a link shape the README uses today<a class="headerlink" href="#check-doc-linkssh-is-blind-to-a-link-shape-the-readme-uses-today" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>scripts/docs/check-doc-links.sh</code></a> is 235 lines,
-~190 of them a single <code>awk</code> program implementing a Markdown parser <em>and</em> the
-github-slugger algorithm. Of the four gates in this plan it is the <strong>only one with no
-<code>-test.sh</code> companion</strong>: <code>lint-backlog</code>, <code>check-roadmap</code>, and <code>backlog-metrics</code> all
-have one. The most parser-dense gate is the untested one.</p>
-<p>Repointing the README's license badge at a nonexistent file left the gate green; the
-identical target as a plain link failed it:</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>scripts/docs/check-doc-links.sh</code></a> is 235 lines, ~190 of them a single <code>awk</code> program implementing a Markdown parser <em>and</em> the github-slugger algorithm.
+Of the four gates in this plan it is the <strong>only one with no <code>-test.sh</code> companion</strong>: <code>lint-backlog</code>, <code>check-roadmap</code>, and <code>backlog-metrics</code> all have one.
+The most parser-dense gate is the untested one.</p>
+<p>Repointing the README's license badge at a nonexistent file left the gate green; the identical target as a plain link failed it:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[![License: Apache 2.0](…badge.svg)](THIS-FILE-DOES-NOT-EXIST.md)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  → check-doc-links: ok (242 files, 5134 links checked)   exit=0
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[plain](THIS-FILE-DOES-NOT-EXIST.md)
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  → README.md:219: dead link …  FAILED                    exit=1
 </code></pre></div>
-<p>The collection regex <code>\[[^]]*\]\([^)]*\)</code> matches the inner <strong>image</strong> first, so the
-outer destination is never collected. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md"><code>README.md</code></a> line 7 points at
-<code>LICENSE</code> through exactly this shape, a relative path the gate cannot see.</p>
+<p>The collection regex <code>\[[^]]*\]\([^)]*\)</code> matches the inner <strong>image</strong> first, so the outer destination is never collected.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md"><code>README.md</code></a> line 7 points at <code>LICENSE</code> through exactly this shape, a relative path the gate cannot see.</p>
 <p>Measured against the verbatim collection block:</p>
 <table>
 <thead>
@@ -2816,37 +2807,27 @@ outer destination is never collected. <a href="https://github.com/actions-gatewa
 </tr>
 </tbody>
 </table>
-<p>Blast radius is the highest of the four: it runs in <code>make check</code>, in <code>STATUS_GATES</code>,
-and in its own <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links.yml</code></a> workflow.</p>
+<p>Blast radius is the highest of the four: it runs in <code>make check</code>, in <code>STATUS_GATES</code>, and in its own <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links.yml</code></a> workflow.</p>
 <h3 id="lint-backlogsh-splits-table-rows-positionally"><code>lint-backlog.sh</code> splits table rows positionally<a class="headerlink" href="#lint-backlogsh-splits-table-rows-positionally" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a> reads the Queue
-with <code>awk -F'|'</code> and fixed field indices. One escaped pipe in any cell shifts every
-field, measured:</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a> reads the Queue with <code>awk -F'|'</code> and fixed field indices.
+One escaped pipe in any cell shifts every field, measured:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>| … | Item with a \| pipe | `lbl` | 🔲 | S | short note |   → NF=9  $5=[ `lbl` ]  $7=[ S ]
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>| … | Item plain          | `lbl` | 🔲 | S | short note |   → NF=8  $5=[ 🔲 ]    $7=[ short note ]
 </code></pre></div>
-<p><code>St</code> then reads the label cell and <code>Notes</code> reads the size, so the row's rules evaluate
-the wrong cells and pass. This fails <em>silently wrong</em>, not loudly, which is why it is
-worth closing before it happens rather than after. Filed as latent: "zero occurrences
-in <code>STATUS.md</code> today", which the build disproved: Q625 carried one,
-and the gate was reading 13 characters of a 243-character cell (<a href="#phase-2-result-q613">Phase 2
-result</a>).</p>
-<p>Second defect, latent: <code>awk</code>'s <code>length()</code> counts <strong>bytes</strong> on this host (BWK awk
-20200816) and <strong>runes</strong> under <code>gawk</code> in a UTF-8 locale. <code>STATUS.md</code> carries 52 em
-dashes, 51 🔲, 26 ✅. Measuring every cell exactly as the script extracts it, the
-longest is <a href="../../STATUS/#Q555">Q555</a> at <strong>249 bytes / 249 characters</strong> — one byte of
-margin against the 250 cap, and Q640 (measured before it shipped, so no row to link)
-tied it on bytes at 249/245.
-Nothing diverges today, but rows are routinely authored to fill the budget, and one at
-251/249 would pass in one environment and fail in the other.</p>
+<p><code>St</code> then reads the label cell and <code>Notes</code> reads the size, so the row's rules evaluate the wrong cells and pass.
+This fails <em>silently wrong</em>, not loudly, which is why it is worth closing before it happens rather than after.
+Filed as latent: "zero occurrences in <code>STATUS.md</code> today", which the build disproved: Q625 carried one, and the gate was reading 13 characters of a 243-character cell (<a href="#phase-2-result-q613">Phase 2 result</a>).</p>
+<p>Second defect, latent: <code>awk</code>'s <code>length()</code> counts <strong>bytes</strong> on this host (BWK awk 20200816) and <strong>runes</strong> under <code>gawk</code> in a UTF-8 locale. <code>STATUS.md</code> carries 52 em dashes, 51 🔲, 26 ✅.
+Measuring every cell exactly as the script extracts it, the longest is <a href="../../STATUS/#Q555">Q555</a> at <strong>249 bytes / 249 characters</strong> — one byte of margin against the 250 cap, and Q640 (measured before it shipped, so no row to link) tied it on bytes at 249/245.
+Nothing diverges today, but rows are routinely authored to fill the budget, and one at 251/249 would pass in one environment and fail in the other.</p>
 <h3 id="runtime-is-not-the-argument">Runtime is not the argument<a class="headerlink" href="#runtime-is-not-the-argument" title="Permanent link">&para;</a></h3>
-<p><code>check-doc-links</code> 0.67 s, <code>lint-backlog</code> 0.49 s, <code>check-roadmap</code> 0.27 s. All
-sub-second. This plan buys <strong>correctness and testability</strong>, not speed. Nothing here
-should be justified on performance.</p>
+<p><code>check-doc-links</code> 0.67 s, <code>lint-backlog</code> 0.49 s, <code>check-roadmap</code> 0.27 s.
+All sub-second.
+This plan buys <strong>correctness and testability</strong>, not speed.
+Nothing here should be justified on performance.</p>
 <h2 id="the-decision-adopt-goldmark">The decision: adopt goldmark<a class="headerlink" href="#the-decision-adopt-goldmark" title="Permanent link">&para;</a></h2>
-<p>Measured, not assumed. A probe against
-<a href="https://github.com/yuin/goldmark"><code>github.com/yuin/goldmark</code></a> with the GFM extension
-resolved every defect above:</p>
+<p>Measured, not assumed.
+A probe against <a href="https://github.com/yuin/goldmark"><code>github.com/yuin/goldmark</code></a> with the GFM extension resolved every defect above:</p>
 <table>
 <thead>
 <tr>
@@ -2883,86 +2864,54 @@ resolved every defect above:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>The slugger question is settled too.</strong> goldmark's <code>WithAutoHeadingID</code> agreed with the
-current <code>awk</code> slugger on <strong>all 13</strong> probed headings drawn from this repo's real docs —
-including duplicate de-duplication (<code>duplicate-1</code>), emoji stripping, code spans,
-punctuation runs (<code>c--go-100--done</code>), and hyphen runs. Thirteen cases is not a proof of
-equivalence, so the differential validation below is a required step rather than a
-nicety — but the hand-written slugger is no longer load-bearing, which is what shrinks
-this work.</p>
+<p><strong>The slugger question is settled too.</strong> goldmark's <code>WithAutoHeadingID</code> agreed with the current <code>awk</code> slugger on <strong>all 13</strong> probed headings drawn from this repo's real docs — including duplicate de-duplication (<code>duplicate-1</code>), emoji stripping, code spans, punctuation runs (<code>c--go-100--done</code>), and hyphen runs.
+Thirteen cases is not a proof of equivalence, so the differential validation below is a required step rather than a nicety — but the hand-written slugger is no longer load-bearing, which is what shrinks this work.</p>
 <h3 id="cost-verified">Cost, verified<a class="headerlink" href="#cost-verified" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Zero external dependencies.</strong> <code>go.mod</code> at v1.7.8, v1.7.16, and v1.8.5 has no
-  <code>require</code> block at all, the smallest possible supply-chain delta for a parser.</li>
-<li><strong>265 KB</strong> module zip including tests; <code>go mod vendor</code> strips tests, so the
-  <code>devtools/vendor</code> delta (364 KB today) is smaller than that.</li>
-<li><strong>Wiring already exists.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>vendor-sync.sh</code></a>,
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-check.sh"><code>vendor-check.sh</code></a>, and the <code>devtools/vendor/**</code>
-  path filter in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a> all already
-  cover the module. No new gate plumbing.</li>
-<li><strong>Line numbers need an offset→line index.</strong> goldmark nodes carry byte offsets, not
-  line numbers, and the gates report <code>file:line:</code>. Roughly three lines of Go; called
-  out because it is friction the <code>awk</code> does not have.</li>
+<li><strong>Zero external dependencies.</strong> <code>go.mod</code> at v1.7.8, v1.7.16, and v1.8.5 has no <code>require</code> block at all, the smallest possible supply-chain delta for a parser.</li>
+<li><strong>265 KB</strong> module zip including tests; <code>go mod vendor</code> strips tests, so the <code>devtools/vendor</code> delta (364 KB today) is smaller than that.</li>
+<li><strong>Wiring already exists.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>vendor-sync.sh</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-check.sh"><code>vendor-check.sh</code></a>, and the <code>devtools/vendor/**</code> path filter in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a> all already cover the module.
+  No new gate plumbing.</li>
+<li><strong>Line numbers need an offset→line index.</strong> goldmark nodes carry byte offsets, not line numbers, and the gates report <code>file:line:</code>.
+  Roughly three lines of Go; called out because it is friction the <code>awk</code> does not have.</li>
 </ul>
 <h3 id="third-party-notices-owes-nothing--settled"><code>THIRD-PARTY-NOTICES</code> owes nothing — settled<a class="headerlink" href="#third-party-notices-owes-nothing--settled" title="Permanent link">&para;</a></h3>
-<p><code>THIRD-PARTY-NOTICES</code> is generated from the <strong>root</strong> <code>vendor/modules.txt</code> only
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh"><code>gen-third-party-notices.sh</code></a>), so
-<code>devtools/</code> dependencies are not covered, and should not be. Attribution is triggered
-by <em>distributing</em> a binary, and these gate binaries are never shipped or signed, which
-is the same reason <code>tools/vendor/</code> is already excluded. Vendoring goldmark is therefore
-not a notices change.</p>
-<p>Recorded durably in
-<a href="../../development/building/#what-it-covers--and-why-build-time-tooling-does-not">building.md</a>
-(with the source-tree and SBOM distinctions) and cross-referenced from
-<a href="../../development/go-workspaces/#wiring-a-new-first-party-module">go-workspaces.md</a>, so
-the rule outlives this plan's archival. No decision left for Q612.</p>
+<p><code>THIRD-PARTY-NOTICES</code> is generated from the <strong>root</strong> <code>vendor/modules.txt</code> only (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh"><code>gen-third-party-notices.sh</code></a>), so <code>devtools/</code> dependencies are not covered, and should not be.
+Attribution is triggered by <em>distributing</em> a binary, and these gate binaries are never shipped or signed, which is the same reason <code>tools/vendor/</code> is already excluded.
+Vendoring goldmark is therefore not a notices change.</p>
+<p>Recorded durably in <a href="../../development/building/#what-it-covers--and-why-build-time-tooling-does-not">building.md</a> (with the source-tree and SBOM distinctions) and cross-referenced from <a href="../../development/go-workspaces/#wiring-a-new-first-party-module">go-workspaces.md</a>, so the rule outlives this plan's archival.
+No decision left for Q612.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <p>In scope, one phase each:</p>
 <ol>
-<li><strong>Q612 — <code>check-doc-links.sh</code>.</strong> ✅ Lands <code>devtools/docs/markdown</code>
-   (the shared parse layer) plus goldmark, and closes the proven defects.
+<li><strong>Q612 — <code>check-doc-links.sh</code>.</strong> ✅ Lands <code>devtools/docs/markdown</code> (the shared parse layer) plus goldmark, and closes the proven defects.
    Result: <a href="#phase-1-result-q612">Phase 1 result</a>.</li>
-<li><strong>Q613 ✅ — <code>lint-backlog.sh</code>.</strong> Table rows via the GFM AST; the
-   character cap via <code>utf8.RuneCountInString</code>.</li>
-<li><strong>Q614 — <code>check-roadmap.sh</code> + <code>backlog-metrics.sh</code>.</strong> ✅ The remaining two
-   consumers, onto the same layer.
+<li><strong>Q613 ✅ — <code>lint-backlog.sh</code>.</strong> Table rows via the GFM AST; the character cap via <code>utf8.RuneCountInString</code>.</li>
+<li><strong>Q614 — <code>check-roadmap.sh</code> + <code>backlog-metrics.sh</code>.</strong> ✅ The remaining two consumers, onto the same layer.
    Result: <a href="#phase-3-result-q614">Phase 3 result</a>.</li>
 </ol>
-<p>Each keeps its <code>scripts/</code> entry point, per
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a>: the gate map stays in one place.</p>
+<p>Each keeps its <code>scripts/</code> entry point, per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a>: the gate map stays in one place.</p>
 <h3 id="out-of-scope-deliberately">Out of scope, deliberately<a class="headerlink" href="#out-of-scope-deliberately" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a> and
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-table-rows.awk"><code>merge-table-rows.awk</code></a> stay as they are, as does
-the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> sibling. A
-merge driver must reconstruct the file <strong>line for line</strong>, including the conflict-marker
-fallback; an AST discards exactly the byte-level fidelity it depends on. Rewriting it
-onto goldmark would be actively wrong, not merely unnecessary.</p>
-<p>Also out: <code>check-codegen-drift.sh</code>, the <code>chart-*-check.sh</code> family, <code>validate-egress-ip.sh</code>,
-<code>dogfood/setup.sh</code>, and the <code>e2e/</code> scripts. They are long, but they orchestrate external
-CLIs (<code>kubectl</code>, <code>helm</code>, <code>docker</code>, <code>controller-gen</code>). Shell is the right language;
-Go would be <code>exec.Command</code> soup. <strong>Length is not the signal; parsing is.</strong></p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-table-rows.awk"><code>merge-table-rows.awk</code></a> stay as they are, as does the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> sibling.
+A merge driver must reconstruct the file <strong>line for line</strong>, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.
+Rewriting it onto goldmark would be actively wrong, not merely unnecessary.</p>
+<p>Also out: <code>check-codegen-drift.sh</code>, the <code>chart-*-check.sh</code> family, <code>validate-egress-ip.sh</code>, <code>dogfood/setup.sh</code>, and the <code>e2e/</code> scripts.
+They are long, but they orchestrate external CLIs (<code>kubectl</code>, <code>helm</code>, <code>docker</code>, <code>controller-gen</code>).
+Shell is the right language; Go would be <code>exec.Command</code> soup. <strong>Length is not the signal; parsing is.</strong></p>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
-<p>A rewrite that merely passes on the current tree proves nothing: the <code>awk</code> gate also
-passes, and that is the bug. Per
-<a href="../../development/testing/#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">testing.md</a>,
-each phase reconciles rather than greps:</p>
+<p>A rewrite that merely passes on the current tree proves nothing: the <code>awk</code> gate also passes, and that is the bug.
+Per <a href="../../development/testing/#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">testing.md</a>, each phase reconciles rather than greps:</p>
 <ol>
-<li><strong>Differential run.</strong> Go gate and <code>awk</code> gate over the same tree; every difference
-   explained as a fixed defect, not waved through. The corpus is real: 242 files, 5134
-   links/anchors.</li>
-<li><strong>Red-first on each proven defect.</strong> The four rows in the first table become test
-   cases that fail against the old behaviour and pass against the new, including the
-   badge-wrapped link, which is the one with live instances.</li>
-<li><strong>Slug equivalence.</strong> Every heading in every tracked <code>.md</code> slugged both ways and
-   reconciled. This is what upgrades "13 probed cases agreed" into a real assertion.</li>
-<li><strong>Delete the mechanism.</strong> For each new gate, remove the check and require red on the
-   assertion that names it
-   (<a href="../../development/testing/#verify-a-causation-claim-by-deleting-the-mechanism">testing.md</a>).</li>
+<li><strong>Differential run.</strong> Go gate and <code>awk</code> gate over the same tree; every difference explained as a fixed defect, not waved through.
+   The corpus is real: 242 files, 5134 links/anchors.</li>
+<li><strong>Red-first on each proven defect.</strong> The four rows in the first table become test cases that fail against the old behaviour and pass against the new, including the badge-wrapped link, which is the one with live instances.</li>
+<li><strong>Slug equivalence.</strong> Every heading in every tracked <code>.md</code> slugged both ways and reconciled.
+   This is what upgrades "13 probed cases agreed" into a real assertion.</li>
+<li><strong>Delete the mechanism.</strong> For each new gate, remove the check and require red on the assertion that names it (<a href="../../development/testing/#verify-a-causation-claim-by-deleting-the-mechanism">testing.md</a>).</li>
 </ol>
 <h2 id="phase-1-result-q612">Phase 1 result (Q612)<a class="headerlink" href="#phase-1-result-q612" title="Permanent link">&para;</a></h2>
-<p>The differential run is the evidence, over the whole tree: 249 files, <strong>5521</strong>
-links collected by the <code>awk</code> and <strong>5558</strong> by the parser. Every difference
-resolved to a fix, and <strong>nothing</strong> the <code>awk</code> collected was lost:</p>
+<p>The differential run is the evidence, over the whole tree: 249 files, <strong>5521</strong> links collected by the <code>awk</code> and <strong>5558</strong> by the parser.
+Every difference resolved to a fix, and <strong>nothing</strong> the <code>awk</code> collected was lost:</p>
 <table>
 <thead>
 <tr>
@@ -3004,44 +2953,27 @@ resolved to a fix, and <strong>nothing</strong> the <code>awk</code> collected w
 </tr>
 </tbody>
 </table>
-<p><strong>Two dialect gaps the survey missed.</strong> MkDocs is not CommonMark, and both gaps
-would have been silent coverage losses:</p>
+<p><strong>Two dialect gaps the survey missed.</strong> MkDocs is not CommonMark, and both gaps would have been silent coverage losses:</p>
 <ul>
-<li><strong>Admonitions.</strong> A <code>!!! note</code> body is four-space-indented, so a stock parser
-  reads it as an indented code block: 15 links across three pages, all
-  checked before.</li>
-<li><strong><code>md_in_html</code>.</strong> A <code>&lt;p markdown="span"&gt;…&lt;/p&gt;</code> element is raw HTML to
-  CommonMark: 4 more links.</li>
+<li><strong>Admonitions.</strong> A <code>!!! note</code> body is four-space-indented, so a stock parser reads it as an indented code block: 15 links across three pages, all checked before.</li>
+<li><strong><code>md_in_html</code>.</strong> A <code>&lt;p markdown="span"&gt;…&lt;/p&gt;</code> element is raw HTML to CommonMark: 4 more links.</li>
 </ul>
-<p>Both are now parsed by <code>MkDocsDialect</code>, a goldmark extension in the parse layer,
-which is where they belong: the other three gates read the same docs.</p>
-<p><strong>The hand-written slugger stayed</strong>, ported to Go and unit-tested, rather than
-being replaced by goldmark's <code>WithAutoHeadingID</code>. The gate's contract is
-GitHub's anchors, and goldmark keeps Unicode letters GitHub drops. Cost of
-keeping it: ~30 lines. Slug reconciliation over the corpus is above: 3333
-headings, the only two differences being fixes.</p>
-<p><strong>Cost, corrected.</strong> <code>devtools/vendor</code> grew 364 KB → 956 KB, not the "smaller
-than 265 KB" the module-zip figure predicted: <code>go mod vendor</code> keeps the GFM
-extension and the renderer packages. Runtime 0.67 s → 0.96 s, both sub-second,
-which is still not the argument. The checker is built to <code>.build/</code> and exec'd
-rather than <code>go run</code>, because its exit status is the verdict and <code>go run</code> prints
-an <code>exit status 1</code> line of its own on top of the findings.</p>
-<p><strong>The blind spot was measured, not predicted</strong> (<a href="../../development/testing/#verify-a-causation-claim-by-deleting-the-mechanism">Q622's
-method</a>):
-repointing README line 7's badge link at a nonexistent target left the <code>awk</code>
-gate green (exit 0, no finding) and failed the new one at <code>README.md:7</code>. The
-control — the same dead target as a plain link — failed both, so the difference
-is the shape and not the target.</p>
+<p>Both are now parsed by <code>MkDocsDialect</code>, a goldmark extension in the parse layer, which is where they belong: the other three gates read the same docs.</p>
+<p><strong>The hand-written slugger stayed</strong>, ported to Go and unit-tested, rather than being replaced by goldmark's <code>WithAutoHeadingID</code>.
+The gate's contract is GitHub's anchors, and goldmark keeps Unicode letters GitHub drops.
+Cost of keeping it: ~30 lines.
+Slug reconciliation over the corpus is above: 3333 headings, the only two differences being fixes.</p>
+<p><strong>Cost, corrected.</strong> <code>devtools/vendor</code> grew 364 KB → 956 KB, not the "smaller than 265 KB" the module-zip figure predicted: <code>go mod vendor</code> keeps the GFM extension and the renderer packages.
+Runtime 0.67 s → 0.96 s, both sub-second, which is still not the argument.
+The checker is built to <code>.build/</code> and exec'd rather than <code>go run</code>, because its exit status is the verdict and <code>go run</code> prints an <code>exit status 1</code> line of its own on top of the findings.</p>
+<p><strong>The blind spot was measured, not predicted</strong> (<a href="../../development/testing/#verify-a-causation-claim-by-deleting-the-mechanism">Q622's method</a>): repointing README line 7's badge link at a nonexistent target left the <code>awk</code> gate green (exit 0, no finding) and failed the new one at <code>README.md:7</code>.
+The control — the same dead target as a plain link — failed both, so the difference is the shape and not the target.</p>
 <h2 id="phase-2-result-q613">Phase 2 result (Q613)<a class="headerlink" href="#phase-2-result-q613" title="Permanent link">&para;</a></h2>
-<p>The rules moved to <code>devtools/docs/backloglint</code>; <code>Tables()</code> on the parse layer is
-the only shared-package addition. The script kept the file selection and the
-environment interface (<code>NOTES_MAX_CHARS</code>, <code>BACKLOG_ALLOW_*</code>), mapping them onto
-flags: 518 lines to 92.</p>
-<p><strong>The reconciliation is the evidence.</strong> <code>lint-backlog-test.sh</code> grew from 53 to 67
-cases, covering all 12 rules, and <code>LINT_BACKLOG_BIN</code> points the whole suite at
-another implementation so both ran over the same corpus. The <code>awk</code> passed 62 and
-failed 5; the rewrite passed 67. Every one of the five disagreements is one of
-this plan's two filed defects, and each is paired with a control that agreed:</p>
+<p>The rules moved to <code>devtools/docs/backloglint</code>; <code>Tables()</code> on the parse layer is the only shared-package addition.
+The script kept the file selection and the environment interface (<code>NOTES_MAX_CHARS</code>, <code>BACKLOG_ALLOW_*</code>), mapping them onto flags: 518 lines to 92.</p>
+<p><strong>The reconciliation is the evidence.</strong> <code>lint-backlog-test.sh</code> grew from 53 to 67 cases, covering all 12 rules, and <code>LINT_BACKLOG_BIN</code> points the whole suite at another implementation so both ran over the same corpus.
+The <code>awk</code> passed 62 and failed 5; the rewrite passed 67.
+Every one of the five disagreements is one of this plan's two filed defects, and each is paired with a control that agreed:</p>
 <table>
 <thead>
 <tr>
@@ -3102,58 +3034,29 @@ this plan's two filed defects, and each is paired with a control that agreed:</p
 </tr>
 </tbody>
 </table>
-<p>Over a 48 KB copy of the real <code>STATUS.md</code> carrying one instance each of rules 1,
-2, 3, 5, 7 and 11, both produce the <strong>same six findings, worded identically</strong> —
-the new ones additionally carry <code>:LINE:</code>. Rules 8, 9 and 10 are asserted through
-throwaway repos in the suite, and rule 8's positive case (a <code>flake</code> row actually
-deleted) was <strong>untested before this change</strong>: only the branch-behind-<code>main</code>
-negative was.</p>
-<p>Rule 12 (a new row's ID holds a <code>refs/queue-ids</code> claim) landed on <code>main</code> while
-this was in flight and was ported the same way. Its six cases — written against
-the <code>awk</code>, not against this — pass unchanged, which is the check that matters:
-a rule dropped in a port disarms a gate that still reports green.</p>
-<p><strong>The escaped-pipe defect had a live instance.</strong> Q625's
-Notes carry <code>`make check \| tail`</code>, so the <code>awk</code> read a 13-character cell
-where the row holds 243. Pushing that cell to 264 characters left the <code>awk</code>
-green; the rewrite fails it at <code>docs/STATUS.md:77</code>. The control — the same
-overflow on Q631, which has no escaped pipe — failed both, so the difference is
-the shape and not the row.</p>
-<p><strong>Which <code>awk</code> counts what, measured.</strong> <code>length()</code> on <code>"é—🔲"</code> answers 9 under
-this host's BWK awk 20200816 and under mawk 1.3.4, and 3 under GNU awk 5.2.1 in
-a UTF-8 locale — bytes and runes respectively (<code>LC_ALL=C</code> puts gawk back on
-bytes). CI runs the byte one: <code>ubuntu-latest</code> inherits Ubuntu 24.04's
-<code>/usr/bin/awk</code> → mawk 1.3.4, and the runner image's apt manifest adds no awk of
-its own. So the gate counted bytes in both places it actually ran, and the
-divergence was one <code>brew install gawk</code> away from arriving on a laptop.</p>
-<p><strong>No row was reclassified.</strong> All 109 Queue and Deferred cells re-measured: the
-longest is <a href="../../STATUS/#Q555">Q555</a> at 249 bytes / 249 characters, confirming
-the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B
-/ 206 chars). Nothing is over cap on either scale, and runes ≤ bytes always, so
-moving to characters can only relax, never break, an existing row.</p>
-<p><strong>One workflow gap closed.</strong> <code>status-lint.yml</code> gated on <code>scripts/docs/lint-backlog.sh</code>
-alone, which no longer holds the rules; it now also triggers on <code>devtools/**</code>,
-pins the toolchain with <code>setup-go</code>, and takes 5 minutes instead of 2 for the
-build. Runtime 0.49 s → 0.69 s, still sub-second, still not the argument.</p>
+<p>Over a 48 KB copy of the real <code>STATUS.md</code> carrying one instance each of rules 1, 2, 3, 5, 7 and 11, both produce the <strong>same six findings, worded identically</strong> — the new ones additionally carry <code>:LINE:</code>.
+Rules 8, 9 and 10 are asserted through throwaway repos in the suite, and rule 8's positive case (a <code>flake</code> row actually deleted) was <strong>untested before this change</strong>: only the branch-behind-<code>main</code> negative was.</p>
+<p>Rule 12 (a new row's ID holds a <code>refs/queue-ids</code> claim) landed on <code>main</code> while this was in flight and was ported the same way.
+Its six cases — written against the <code>awk</code>, not against this — pass unchanged, which is the check that matters: a rule dropped in a port disarms a gate that still reports green.</p>
+<p><strong>The escaped-pipe defect had a live instance.</strong> Q625's Notes carry <code>`make check \| tail`</code>, so the <code>awk</code> read a 13-character cell where the row holds 243.
+Pushing that cell to 264 characters left the <code>awk</code> green; the rewrite fails it at <code>docs/STATUS.md:77</code>.
+The control — the same overflow on Q631, which has no escaped pipe — failed both, so the difference is the shape and not the row.</p>
+<p><strong>Which <code>awk</code> counts what, measured.</strong> <code>length()</code> on <code>"é—🔲"</code> answers 9 under this host's BWK awk 20200816 and under mawk 1.3.4, and 3 under GNU awk 5.2.1 in a UTF-8 locale — bytes and runes respectively (<code>LC_ALL=C</code> puts gawk back on bytes).
+CI runs the byte one: <code>ubuntu-latest</code> inherits Ubuntu 24.04's <code>/usr/bin/awk</code> → mawk 1.3.4, and the runner image's apt manifest adds no awk of its own.
+So the gate counted bytes in both places it actually ran, and the divergence was one <code>brew install gawk</code> away from arriving on a laptop.</p>
+<p><strong>No row was reclassified.</strong> All 109 Queue and Deferred cells re-measured: the longest is <a href="../../STATUS/#Q555">Q555</a> at 249 bytes / 249 characters, confirming the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B / 206 chars).
+Nothing is over cap on either scale, and runes ≤ bytes always, so moving to characters can only relax, never break, an existing row.</p>
+<p><strong>One workflow gap closed.</strong> <code>status-lint.yml</code> gated on <code>scripts/docs/lint-backlog.sh</code> alone, which no longer holds the rules; it now also triggers on <code>devtools/**</code>, pins the toolchain with <code>setup-go</code>, and takes 5 minutes instead of 2 for the build.
+Runtime 0.49 s → 0.69 s, still sub-second, still not the argument.</p>
 <h2 id="phase-3-result-q614">Phase 3 result (Q614)<a class="headerlink" href="#phase-3-result-q614" title="Permanent link">&para;</a></h2>
-<p>Both gates keep their <code>scripts/</code> entry point and gain a Go checker,
-<code>devtools/docs/roadmapcheck</code> and <code>devtools/docs/backlogmetrics</code>, over the same
-parse layer. No new module, no new <code>make</code> target, no new path filter: the
-<code>devtools/**</code> filters Q612 wired already cover them.</p>
-<p><strong>The parse layer grew three general things</strong>, not one-caller helpers:
-<code>Tables()</code> gains a <code>Text</code> reading of each cell beside Q613's source reading,
-<code>TopLevelListItems()</code> reports a bullet's text, its lead bold run, its HTML
-comments and whether it links, and <code>SectionRange()</code> gives the lines a heading's
-section spans. Plus <code>ParseRow()</code>, for the case Q612 did not have: <strong>a table row
-with no table around it.</strong> The metrics replay reads <code>git log -p</code> output, where
-every row is a lone <code>+</code>/<code>-</code> diff line. GFM only recognizes a table whose
-delimiter is at least as wide as its header, and pads a narrower header out, so
-acceptance is monotone in the width and the narrowest accepted width <em>is</em> the
-row's cell count. <code>ParseRow</code> binary-searches it, which leaves every escaping
-rule to goldmark instead of restating it.</p>
-<p><strong><code>check-roadmap</code> reconciled</strong> to the same verdict and the same counts (18
-bullets, 57 features), with byte-identical output. Every bullet's annotation IDs
-and link flag match. Word counts all fell, by 5 to 24 on the roadmap and by
-exactly 1 on <code>features.md</code>:</p>
+<p>Both gates keep their <code>scripts/</code> entry point and gain a Go checker, <code>devtools/docs/roadmapcheck</code> and <code>devtools/docs/backlogmetrics</code>, over the same parse layer.
+No new module, no new <code>make</code> target, no new path filter: the <code>devtools/**</code> filters Q612 wired already cover them.</p>
+<p><strong>The parse layer grew three general things</strong>, not one-caller helpers: <code>Tables()</code> gains a <code>Text</code> reading of each cell beside Q613's source reading, <code>TopLevelListItems()</code> reports a bullet's text, its lead bold run, its HTML comments and whether it links, and <code>SectionRange()</code> gives the lines a heading's section spans.
+Plus <code>ParseRow()</code>, for the case Q612 did not have: <strong>a table row with no table around it.</strong> The metrics replay reads <code>git log -p</code> output, where every row is a lone <code>+</code>/<code>-</code> diff line.
+GFM only recognizes a table whose delimiter is at least as wide as its header, and pads a narrower header out, so acceptance is monotone in the width and the narrowest accepted width <em>is</em> the row's cell count. <code>ParseRow</code> binary-searches it, which leaves every escaping rule to goldmark instead of restating it.</p>
+<p><strong><code>check-roadmap</code> reconciled</strong> to the same verdict and the same counts (18 bullets, 57 features), with byte-identical output.
+Every bullet's annotation IDs and link flag match.
+Word counts all fell, by 5 to 24 on the roadmap and by exactly 1 on <code>features.md</code>:</p>
 <table>
 <thead>
 <tr>
@@ -3176,10 +3079,10 @@ exactly 1 on <code>features.md</code>:</p>
 </tr>
 </tbody>
 </table>
-<p>Nothing crossed either cap under either counter, so nothing changed hands. The
-caps now mean what they say: 60 real words, not ~54 plus markup.</p>
-<p><strong><code>backlog-metrics</code> reconciled over the whole history</strong>, 2898 diff rows and 631
-items. Identical filed dates and sizes; one event differs and 156 titles do:</p>
+<p>Nothing crossed either cap under either counter, so nothing changed hands.
+The caps now mean what they say: 60 real words, not ~54 plus markup.</p>
+<p><strong><code>backlog-metrics</code> reconciled over the whole history</strong>, 2898 diff rows and 631 items.
+Identical filed dates and sizes; one event differs and 156 titles do:</p>
 <table>
 <thead>
 <tr>
@@ -3201,30 +3104,18 @@ items. Identical filed dates and sizes; one event differs and 156 titles do:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>One rule had to loosen, not tighten.</strong> The ID cell is <em>searched for</em>, not
-pinned to index 0: history holds rows a botched edit prefixed with a stray
-delimiter (<code>|---|---|---|---|| &lt;a id="Q166"&gt;…</code>). Pinning index 0 dropped that
-add, which booked a removal for a row that never left. The reconciliation caught
-it; review would not have.</p>
-<p><strong>Red-first on the new shapes</strong>, each failing against the <code>awk</code> and passing
-against the parser: a <code>&lt;!-- q:QN --&gt;</code> inside a code fence (old gate green on a
-bullet with no real annotation), prose after a bullet counted against it, an
-escaped pipe truncating a row's title, and a fenced example row counted as
-parked in Deferred. The line-break case is a positive <strong>control</strong>: it passes
-both, and pins that excluding the following paragraph did not also exclude the
-bullet's own continuation lines.</p>
-<p><strong>A boundary the port does not cross, now pinned:</strong> the replay reads diff lines,
-which carry no document around them, so a row inside a fence still registers as
-an arrival there even though the same fence is respected when the file itself is
-parsed for Deferred IDs. Asserted so a change to it is a deliberate one, since
-every metric moves with it.</p>
-<p><code>backlog-metrics.sh</code> started as the backlog skill's script. It has now diverged;
-<code>scripts/README.md</code> says so rather than implying a sync obligation.</p>
+<p><strong>One rule had to loosen, not tighten.</strong> The ID cell is <em>searched for</em>, not pinned to index 0: history holds rows a botched edit prefixed with a stray delimiter (<code>|---|---|---|---|| &lt;a id="Q166"&gt;…</code>).
+Pinning index 0 dropped that add, which booked a removal for a row that never left.
+The reconciliation caught it; review would not have.</p>
+<p><strong>Red-first on the new shapes</strong>, each failing against the <code>awk</code> and passing against the parser: a <code>&lt;!-- q:QN --&gt;</code> inside a code fence (old gate green on a bullet with no real annotation), prose after a bullet counted against it, an escaped pipe truncating a row's title, and a fenced example row counted as parked in Deferred.
+The line-break case is a positive <strong>control</strong>: it passes both, and pins that excluding the following paragraph did not also exclude the bullet's own continuation lines.</p>
+<p><strong>A boundary the port does not cross, now pinned:</strong> the replay reads diff lines, which carry no document around them, so a row inside a fence still registers as an arrival there even though the same fence is respected when the file itself is parsed for Deferred IDs.
+Asserted so a change to it is a deliberate one, since every metric moves with it.</p>
+<p><code>backlog-metrics.sh</code> started as the backlog skill's script.
+It has now diverged; <code>scripts/README.md</code> says so rather than implying a sync obligation.</p>
 <h2 id="sequencing">Sequencing<a class="headerlink" href="#sequencing" title="Permanent link">&para;</a></h2>
-<p>Q612 lands the shared package, so Q613 and Q614 are blocked on it — recorded as <code>🚫</code> in
-the Queue with the <code>Blocked by</code> prefix <code>make queue-unblock</code> reads. The ordering is also
-the value ordering: Q612 fixes defects with live instances, Q613 and Q614 close latent
-ones.</p>
+<p>Q612 lands the shared package, so Q613 and Q614 are blocked on it — recorded as <code>🚫</code> in the Queue with the <code>Blocked by</code> prefix <code>make queue-unblock</code> reads.
+The ordering is also the value ordering: Q612 fixes defects with live instances, Q613 and Q614 close latent ones.</p>
 
 
 

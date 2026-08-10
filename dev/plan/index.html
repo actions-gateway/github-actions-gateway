@@ -2664,16 +2664,14 @@
 
 
 <h1 id="plans">Plans<a class="headerlink" href="#plans" title="Permanent link">&para;</a></h1>
-<p>Topic-organized index of plan files. For current status and priorities, see <a href="../STATUS/">docs/STATUS.md</a>.</p>
-<p>Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top. Authoritative state always lives in the individual file.</p>
-<p>Legend: ✅ done, ⚠️ partial / mixed (open <strong>Queue</strong> item remains), 💤 deferred
-(parked with a trigger, tracked in <a href="../STATUS/#deferred">STATUS.md Deferred</a>),
-❌ open, ⓘ informational (forward-looking spec or design rationale, no progress
-to track). A plan with only deferred residuals is ✅, not ⚠️ — see
-<a href="../development/maintaining-backlog/#-means-an-open-queue-row-remains--deferred-residuals-dont-count">maintaining-backlog.md</a>.</p>
+<p>Topic-organized index of plan files.
+For current status and priorities, see <a href="../STATUS/">docs/STATUS.md</a>.</p>
+<p>Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top.
+Authoritative state always lives in the individual file.</p>
+<p>Legend: ✅ done, ⚠️ partial / mixed (open <strong>Queue</strong> item remains), 💤 deferred (parked with a trigger, tracked in <a href="../STATUS/#deferred">STATUS.md Deferred</a>), ❌ open, ⓘ informational (forward-looking spec or design rationale, no progress to track).
+A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../development/maintaining-backlog/#-means-an-open-queue-row-remains--deferred-residuals-dont-count">maintaining-backlog.md</a>.</p>
 <h2 id="implementation-roadmap">Implementation roadmap<a class="headerlink" href="#implementation-roadmap" title="Permanent link">&para;</a></h2>
-<p>The five-milestone delivery from
-<a href="../design/06-implementation-phases/">docs/design/06-implementation-phases.md</a>.</p>
+<p>The five-milestone delivery from <a href="../design/06-implementation-phases/">docs/design/06-implementation-phases.md</a>.</p>
 <table>
 <thead>
 <tr>
@@ -2813,11 +2811,8 @@ to track). A plan with only deferred residuals is ✅, not ⚠️ — see
 </tbody>
 </table>
 <h2 id="test-plans">Test plans<a class="headerlink" href="#test-plans" title="Permanent link">&para;</a></h2>
-<p>Per-milestone test gap plans. The durable design rationale for what the
-unit/integration/e2e layers cover lives in
-<a href="../design/07-test-plan/"><code>docs/design/07-test-plan.md</code></a>; developer
-run commands live in
-<a href="../development/testing/"><code>docs/development/testing.md</code></a>.</p>
+<p>Per-milestone test gap plans.
+The durable design rationale for what the unit/integration/e2e layers cover lives in <a href="../design/07-test-plan/"><code>docs/design/07-test-plan.md</code></a>; developer run commands live in <a href="../development/testing/"><code>docs/development/testing.md</code></a>.</p>
 <table>
 <thead>
 <tr>
@@ -2865,8 +2860,8 @@ run commands live in
 </tbody>
 </table>
 <h2 id="speed-improvements">Speed improvements<a class="headerlink" href="#speed-improvements" title="Permanent link">&para;</a></h2>
-<p>Performance plans for build and test pipelines. Each has inline ✓
-markers per item.</p>
+<p>Performance plans for build and test pipelines.
+Each has inline ✓ markers per item.</p>
 <table>
 <thead>
 <tr>
@@ -3043,7 +3038,9 @@ markers per item.</p>
 </tbody>
 </table>
 <h2 id="archive">Archive<a class="headerlink" href="#archive" title="Permanent link">&para;</a></h2>
-<p>Plans whose work has fully landed and which <code>docs/STATUS.md</code> no longer references. Moved here so <code>ls docs/plan/</code> shows active work only. The doc remains available — the rationale is often more valuable than the diff.</p>
+<p>Plans whose work has fully landed and which <code>docs/STATUS.md</code> no longer references.
+Moved here so <code>ls docs/plan/</code> shows active work only.
+The doc remains available — the rationale is often more valuable than the diff.</p>
 <table>
 <thead>
 <tr>
@@ -3518,31 +3515,23 @@ markers per item.</p>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p>When adding a new plan:</p>
 <ul>
-<li>Put it at the top of the file: a one-paragraph "what and why," then a
-  <strong>Status at a glance</strong> table if there are 3+ discrete work items with
-  mixed state. The table is the index a returning reader scans first.</li>
-<li>Cite code with file:line links. They go stale, but stale links are
-  easier to fix than missing ones.</li>
-<li>Mark deferred or accepted items explicitly (⚠️ Partial — <em>what was
-  accepted and why</em>). Silent omissions become land mines.</li>
-<li>Once everything in a plan ships, leave the plan in place with the
-  status table updated to ✅ Done. Don't delete it — the rationale
-  is more valuable than the diff.</li>
+<li>Put it at the top of the file: a one-paragraph "what and why," then a <strong>Status at a glance</strong> table if there are 3+ discrete work items with mixed state.
+  The table is the index a returning reader scans first.</li>
+<li>Cite code with file:line links.
+  They go stale, but stale links are easier to fix than missing ones.</li>
+<li>Mark deferred or accepted items explicitly (⚠️ Partial — <em>what was accepted and why</em>).
+  Silent omissions become land mines.</li>
+<li>Once everything in a plan ships, leave the plan in place with the status table updated to ✅ Done.
+  Don't delete it — the rationale is more valuable than the diff.</li>
 </ul>
 <p>When a plan fully closes:</p>
 <ul>
-<li>If <code>docs/STATUS.md</code> still references it (Progress table or any Queue
-  row), leave it under <code>docs/plan/</code>.</li>
-<li>Once STATUS.md no longer references it, <code>git mv</code> it to
-  <code>docs/plan/archive/</code> and move its row in this README to the Archive
-  section. Update any other in-repo links to the new path <strong>and the moved
-  doc's own relative links</strong> (dropping into <code>archive/</code> adds one <code>../</code> level).
-  The doc stays available; the working directory just gets less noisy. See the
-  full protocol in <a href="../development/maintaining-backlog/#archiving-completed-plan-docs"><code>docs/development/maintaining-backlog.md</code></a>.</li>
-<li><strong>Do this on close, not in a later audit</strong> — in the same change that drops the
-  plan's last STATUS reference. <code>make plan-index-check</code> (part of <code>make check</code>)
-  fails when an active, non-<code>ⓘ</code> plan here is no longer referenced by STATUS.md,
-  so a forgotten archival can't ship silently.</li>
+<li>If <code>docs/STATUS.md</code> still references it (Progress table or any Queue row), leave it under <code>docs/plan/</code>.</li>
+<li>Once STATUS.md no longer references it, <code>git mv</code> it to <code>docs/plan/archive/</code> and move its row in this README to the Archive section.
+  Update any other in-repo links to the new path <strong>and the moved doc's own relative links</strong> (dropping into <code>archive/</code> adds one <code>../</code> level).
+  The doc stays available; the working directory just gets less noisy.
+  See the full protocol in <a href="../development/maintaining-backlog/#archiving-completed-plan-docs"><code>docs/development/maintaining-backlog.md</code></a>.</li>
+<li><strong>Do this on close, not in a later audit</strong> — in the same change that drops the plan's last STATUS reference. <code>make plan-index-check</code> (part of <code>make check</code>) fails when an active, non-<code>ⓘ</code> plan here is no longer referenced by STATUS.md, so a forgotten archival can't ship silently.</li>
 </ul>
 <p>Add a row to this README when creating, completing, or archiving a plan.</p>
 

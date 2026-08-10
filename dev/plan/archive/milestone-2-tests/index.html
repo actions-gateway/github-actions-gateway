@@ -2739,7 +2739,9 @@
 <p>← <a href="../../milestone-2/">Milestone 2</a></p>
 <hr />
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>✅ Complete (2026-05-29).</strong> All 9 gaps below (3–11) and the Gap 11 NonRetriableError wrap were shipped across prior sessions. Verified by per-test go-test invocations against the listed names; all pass. The envtest integration suite referenced at the bottom of this doc was also shipped (tracked separately as "M2 envtest goroutine-leak suite ✅" in <code>docs/STATUS.md</code>).</p>
+<p><strong>✅ Complete (2026-05-29).</strong> All 9 gaps below (3–11) and the Gap 11 NonRetriableError wrap were shipped across prior sessions.
+Verified by per-test go-test invocations against the listed names; all pass.
+The envtest integration suite referenced at the bottom of this doc was also shipped (tracked separately as "M2 envtest goroutine-leak suite ✅" in <code>docs/STATUS.md</code>).</p>
 <p>Per-gap landing points:</p>
 <table>
 <thead>
@@ -2800,15 +2802,19 @@
 <p>The narrative below is retained for historical context.</p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p><strong>Goal:</strong> Fill the moderate-severity test gaps identified in the post-PR coverage review of the Milestone 2 implementation. These were deferred from the main M2 PR to keep the initial PR focused.</p>
-<p>All gaps below are unit tests unless noted. They run without network access; existing fake-clock, httptest-stub, and fake-k8s-client infrastructure from the M2 test suite is reused throughout.</p>
+<p><strong>Goal:</strong> Fill the moderate-severity test gaps identified in the post-PR coverage review of the Milestone 2 implementation.
+These were deferred from the main M2 PR to keep the initial PR focused.</p>
+<p>All gaps below are unit tests unless noted.
+They run without network access; existing fake-clock, httptest-stub, and fake-k8s-client infrastructure from the M2 test suite is reused throughout.</p>
 <p>Separate from this plan, the envtest integration test suite (§7.2 of the Milestone 2 plan) is also deferred and tracked via the open checklist item in <code>milestone-2.md</code>.</p>
 <hr />
 <h2 id="gaps">Gaps<a class="headerlink" href="#gaps" title="Permanent link">&para;</a></h2>
 <h3 id="gap-3--token-cancelled-before-first-fetch">Gap 3 — <code>Token()</code> cancelled before first fetch<a class="headerlink" href="#gap-3--token-cancelled-before-first-fetch" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/token</code><br />
+<p><strong>Package:</strong> <code>cmd/agc/internal/token</code><br>
 <strong>Code path:</strong> <code>Token()</code> → <code>case &lt;-ctx.Done(): return "", ctx.Err()</code></p>
-<p>The <code>Token()</code> function blocks on a <code>ready</code> channel until the first successful fetch. If the context is cancelled before that fetch completes, it should return <code>ctx.Err()</code>. No existing test exercises this path — <code>TestManager_NoLeakOnCancel</code> only cancels <em>after</em> a successful fetch.</p>
+<p>The <code>Token()</code> function blocks on a <code>ready</code> channel until the first successful fetch.
+If the context is cancelled before that fetch completes, it should return <code>ctx.Err()</code>.
+No existing test exercises this path — <code>TestManager_NoLeakOnCancel</code> only cancels <em>after</em> a successful fetch.</p>
 <p><strong>Test to add in <code>manager_test.go</code>:</strong></p>
 <table>
 <thead>
@@ -2830,9 +2836,10 @@
 - Assert <code>Token()</code> returns a non-nil error; assert no goroutine leak (goleak).</p>
 <hr />
 <h3 id="gap-4--ensureagents-deregister-error-swallowed">Gap 4 — <code>EnsureAgents</code> deregister error swallowed<a class="headerlink" href="#gap-4--ensureagents-deregister-error-swallowed" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/agentpool</code><br />
+<p><strong>Package:</strong> <code>cmd/agc/internal/agentpool</code><br>
 <strong>Code path:</strong> scale-down loop in <code>EnsureAgents</code> → <code>Deregister</code> returns error → <code>slog.Warn</code> + <code>continue</code></p>
-<p>The "best-effort deregister" behaviour is correct but unasserted. A future refactor could accidentally change the <code>continue</code> to a <code>return err</code>, breaking idempotency silently.</p>
+<p>The "best-effort deregister" behaviour is correct but unasserted.
+A future refactor could accidentally change the <code>continue</code> to a <code>return err</code>, breaking idempotency silently.</p>
 <p><strong>Test to add in <code>pool_test.go</code>:</strong></p>
 <table>
 <thead>
@@ -2853,7 +2860,7 @@
 - Use the fake k8s client to count remaining Secrets.</p>
 <hr />
 <h3 id="gap-5--poolreload-silently-skips-unparseable-secrets">Gap 5 — <code>pool.reload()</code> silently skips unparseable Secrets<a class="headerlink" href="#gap-5--poolreload-silently-skips-unparseable-secrets" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/agentpool</code><br />
+<p><strong>Package:</strong> <code>cmd/agc/internal/agentpool</code><br>
 <strong>Code path:</strong> <code>reload</code> → <code>secretToAgent</code> returns error → <code>continue</code> (Secret skipped)</p>
 <p>A single corrupted Secret silently shrinks the pool at runtime with no error returned to the caller.</p>
 <p><strong>Test to add in <code>pool_test.go</code>:</strong></p>
@@ -2876,9 +2883,10 @@
 - The corrupt Secret needs valid labels (so <code>listSecrets</code> finds it) but an invalid PEM value.</p>
 <hr />
 <h3 id="gap-6--refreshbrokertoken-failure-early-exits-run">Gap 6 — <code>refreshBrokerToken</code> failure early-exits <code>Run</code><a class="headerlink" href="#gap-6--refreshbrokertoken-failure-early-exits-run" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/listener</code><br />
+<p><strong>Package:</strong> <code>cmd/agc/internal/listener</code><br>
 <strong>Code path:</strong> <code>Run</code> → <code>refreshBrokerToken</code> → OAuth token fetch fails → <code>return err</code></p>
-<p><code>refreshBrokerToken</code> is the first thing <code>Run</code> does. A failing OAuth server causes an immediate return, but this path is invisible to the existing test suite (every test provides a working OAuth stub).</p>
+<p><code>refreshBrokerToken</code> is the first thing <code>Run</code> does.
+A failing OAuth server causes an immediate return, but this path is invisible to the existing test suite (every test provides a working OAuth stub).</p>
 <p><strong>Test to add in <code>goroutine_test.go</code>:</strong></p>
 <table>
 <thead>
@@ -2896,7 +2904,7 @@
 </table>
 <hr />
 <h3 id="gap-7--acquirejob-failure-increments-metrics-counter">Gap 7 — <code>AcquireJob</code> failure increments metrics counter<a class="headerlink" href="#gap-7--acquirejob-failure-increments-metrics-counter" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/listener</code><br />
+<p><strong>Package:</strong> <code>cmd/agc/internal/listener</code><br>
 <strong>Code path:</strong> <code>handleJob</code> → <code>AcquireJob</code> returns error → <code>Metrics.JobAcquisitionErrors.Inc()</code> → <code>return err</code></p>
 <p>Neither the error return nor the metrics increment is verified by any test.</p>
 <p><strong>Test to add in <code>goroutine_test.go</code>:</strong></p>
@@ -2919,7 +2927,7 @@
 - The goroutine should continue polling after the failed acquisition (session is not closed).</p>
 <hr />
 <h3 id="gap-8--generic-poll-error-backoff-path">Gap 8 — Generic poll-error backoff path<a class="headerlink" href="#gap-8--generic-poll-error-backoff-path" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/listener</code><br />
+<p><strong>Package:</strong> <code>cmd/agc/internal/listener</code><br>
 <strong>Code path:</strong> <code>GetMessage</code> returns a non-rate-limit, non-session-expired error → <code>pollErrors++</code> → <code>backoffDelay(consecutiveErrors &gt; 5, clock)</code> returns 30–60 s range</p>
 <p>Neither the <code>pollErrors</code> accumulation path nor the <code>&gt;5</code> tier of <code>backoffDelay</code> is exercised.</p>
 <p><strong>Tests to add in <code>goroutine_test.go</code>:</strong></p>
@@ -2942,13 +2950,15 @@
 </tbody>
 </table>
 <p><strong>Implementation notes:</strong>
-- The <code>backoffDelay</code> function is unexported; test via <code>goroutine_test.go</code> in the internal package, or export it as <code>BackoffDelay</code> for testability. Alternatively, test the goroutine behaviour with a fake clock.</p>
+- The <code>backoffDelay</code> function is unexported; test via <code>goroutine_test.go</code> in the internal package, or export it as <code>BackoffDelay</code> for testability.
+  Alternatively, test the goroutine behaviour with a fake clock.</p>
 <hr />
 <h3 id="gap-9--tokenmanagertoken-failure-during-reconcile-and-delete">Gap 9 — <code>TokenManager.Token()</code> failure during reconcile and delete<a class="headerlink" href="#gap-9--tokenmanagertoken-failure-during-reconcile-and-delete" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/controller</code><br />
-<strong>Code path (reconcile):</strong> <code>r.TokenManager.Token()</code> returns error → reconciler returns error<br />
+<p><strong>Package:</strong> <code>cmd/agc/internal/controller</code><br>
+<strong>Code path (reconcile):</strong> <code>r.TokenManager.Token()</code> returns error → reconciler returns error<br>
 <strong>Code path (delete):</strong> <code>r.TokenManager.Token()</code> returns error → <code>instToken = ""</code> + warning + continue (graceful degradation)</p>
-<p>Neither path is tested. The delete path is especially important: a broken token manager during RunnerGroup deletion would otherwise orphan GitHub-registered agents.</p>
+<p>Neither path is tested.
+The delete path is especially important: a broken token manager during RunnerGroup deletion would otherwise orphan GitHub-registered agents.</p>
 <p><strong>Tests to add in <code>runnergroup_controller_test.go</code>:</strong></p>
 <table>
 <thead>
@@ -2973,7 +2983,7 @@
 - The delete path uses <code>instToken = ""</code> → <code>pool.DeleteAll(ctx, "")</code> → <code>StubRegistrar.Deregister</code> with an empty token (should succeed in the stub).</p>
 <hr />
 <h3 id="gap-10--drainconditions-isolation-across-multiple-runnergroups">Gap 10 — <code>drainConditions</code> isolation across multiple RunnerGroups<a class="headerlink" href="#gap-10--drainconditions-isolation-across-multiple-runnergroups" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/controller</code><br />
+<p><strong>Package:</strong> <code>cmd/agc/internal/controller</code><br>
 <strong>Code path:</strong> <code>drainConditions</code> → skips updates for other RunnerGroups → re-enqueues them</p>
 <p>The re-enqueue logic is present but no test verifies it: a condition sent for RunnerGroup B is not applied to RunnerGroup A, and is later applied when RunnerGroup B is reconciled.</p>
 <p><strong>Test to add in <code>runnergroup_controller_test.go</code>:</strong></p>
@@ -2993,13 +3003,13 @@
 </table>
 <hr />
 <h3 id="gap-11--pool-exhausted-path-in-getorcreatemultiplexer">Gap 11 — Pool-exhausted path in <code>getOrCreateMultiplexer</code><a class="headerlink" href="#gap-11--pool-exhausted-path-in-getorcreatemultiplexer" title="Permanent link">&para;</a></h3>
-<p><strong>Package:</strong> <code>cmd/agc/internal/controller</code> / <code>cmd/agc/internal/listener</code><br />
-<strong>Code path:</strong> <code>pool.ClaimAgent()</code> returns nil → <code>listener.Config{Agent: nil}</code> → <code>Run</code> returns <code>"listener: no agent available"</code> → <code>NonRetriableError</code>? (currently just a plain error, which would cause an infinite restart loop)</p>
+<p><strong>Package:</strong> <code>cmd/agc/internal/controller</code> / <code>cmd/agc/internal/listener</code><br>
+<strong>Code path:</strong> <code>pool.ClaimAgent()</code> returns nil → <code>listener.Config{Agent: nil}</code> → <code>Run</code> returns <code>"listener: no agent available"</code> → <code>NonRetriableError</code>?
+(currently just a plain error, which would cause an infinite restart loop)</p>
 <p>There are two issues here:
 1. The pool-exhausted error from <code>Run</code> is not wrapped in <code>NonRetriableError</code>, so the permanent goroutine <em>would</em> restart in a tight loop.
 2. No test exercises this path.</p>
-<p><strong>Fix required before writing the test:</strong>
-In <code>goroutine.go</code>, the "no agent available" early return should be wrapped:
+<p><strong>Fix required before writing the test:</strong> In <code>goroutine.go</code>, the "no agent available" early return should be wrapped:
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">if</span><span class="w"> </span><span class="nx">cfg</span><span class="p">.</span><span class="nx">Agent</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">NonRetriableError</span><span class="p">{</span><span class="nx">Cause</span><span class="p">:</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Errorf</span><span class="p">(</span><span class="s">&quot;pool exhausted: no agent available&quot;</span><span class="p">)}</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">}</span>
@@ -3079,13 +3089,15 @@ In <code>goroutine.go</code>, the "no agent available" early return should be wr
 </table>
 <hr />
 <h2 id="envtest-integration-tests-from-milestone-2-checklist">Envtest integration tests (from Milestone 2 checklist)<a class="headerlink" href="#envtest-integration-tests-from-milestone-2-checklist" title="Permanent link">&para;</a></h2>
-<p>The unchecked item in <code>milestone-2.md</code> ("RunnerGroup create/scale/delete lifecycle produces no goroutine leaks in integration tests") calls for an <code>envtest</code> suite in <code>cmd/agc/internal/controller/</code>. This is a separate track from the unit-test gaps above and can be done in the same PR or a subsequent one.</p>
+<p>The unchecked item in <code>milestone-2.md</code> ("RunnerGroup create/scale/delete lifecycle produces no goroutine leaks in integration tests") calls for an <code>envtest</code> suite in <code>cmd/agc/internal/controller/</code>.
+This is a separate track from the unit-test gaps above and can be done in the same PR or a subsequent one.</p>
 <p>Minimum scenarios (see <code>milestone-2.md §7.2</code> for the full list):
 1. RunnerGroup create → agent Secrets exist, <code>status.activeSessions ≥ 1</code>, <code>Ready</code> condition true
 2. Scale up → new Secrets appear
 3. Scale down → excess Secrets deleted, no goroutine leak
 4. Delete → Multiplexer stopped, all Secrets deleted, finalizer removed</p>
-<p><strong>Setup:</strong> <code>envtest</code> binaries via <code>setup-envtest</code>. Add a <code>Makefile</code> target and skip the suite when <code>KUBEBUILDER_ASSETS</code> is not set.</p>
+<p><strong>Setup:</strong> <code>envtest</code> binaries via <code>setup-envtest</code>.
+Add a <code>Makefile</code> target and skip the suite when <code>KUBEBUILDER_ASSETS</code> is not set.</p>
 
 
 

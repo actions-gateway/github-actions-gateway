@@ -2681,14 +2681,9 @@
 
 
 <h1 id="q536--trust-a-private-ca-in-front-of-a-ghes-appliance">Q536 — Trust a private CA in front of a GHES appliance<a class="headerlink" href="#q536--trust-a-private-ca-in-front-of-a-ghes-appliance" title="Permanent link">&para;</a></h1>
-<p>Q506 shipped Option A, which made GHES a supported endpoint: the AGC's API base
-URL, the FQDN allowlist, and the CONNECT suffix list all derive from
-<code>spec.githubURL</code>. Its audit named one adjacent gap and declined to fix it —
-nothing in the product lets an operator extend the AGC's TLS trust, so a GHES
-appliance fronted by a private or internal certificate authority still fails the
-handshake. This plan closes that gap: an optional ConfigMap reference on the
-<code>ActionsGateway</code> whose PEM bundle is added to the trust pool of both the AGC and
-the worker pods it provisions.</p>
+<p>Q506 shipped Option A, which made GHES a supported endpoint: the AGC's API base URL, the FQDN allowlist, and the CONNECT suffix list all derive from <code>spec.githubURL</code>.
+Its audit named one adjacent gap and declined to fix it — nothing in the product lets an operator extend the AGC's TLS trust, so a GHES appliance fronted by a private or internal certificate authority still fails the handshake.
+This plan closes that gap: an optional ConfigMap reference on the <code>ActionsGateway</code> whose PEM bundle is added to the trust pool of both the AGC and the worker pods it provisions.</p>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2732,21 +2727,14 @@ the worker pods it provisions.</p>
 </tbody>
 </table>
 <h2 id="what-was-measured">What was measured<a class="headerlink" href="#what-was-measured" title="Permanent link">&para;</a></h2>
-<p>The Queue row asserts a mechanism. Both halves of it hold, and neither rests on
-a live appliance.</p>
-<p><strong>The trust pool rejects a private CA.</strong> The AGC's pool builder seeds from
-<code>x509.SystemCertPool</code> and appends the egress proxy's self-signed CA
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/trustpool.go"><code>trustpool.go</code></a>, named
-<code>BuildProxyTrustPool</code> before this change). The repo already asserts the
-consequence: <code>TestBuildTrustPool_RejectsUnrelatedCA</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/trustpool_test.go"><code>trustpool_test.go</code></a>)
-signs a leaf with a CA that is in neither the system store nor the proxy CA and
-requires <code>Verify</code> to fail. A GHES appliance behind a private CA is exactly that
-leaf. The test was written to prove the pool does not <em>over</em>-trust; read the
-other way it is the measurement this row needs.</p>
-<p>Routing through the egress proxy does not change it. The proxy tunnels with
-<code>CONNECT</code>, so the AGC↔GHES TLS session is end to end and the AGC validates the
-appliance's own certificate against the same pool.</p>
+<p>The Queue row asserts a mechanism.
+Both halves of it hold, and neither rests on a live appliance.</p>
+<p><strong>The trust pool rejects a private CA.</strong> The AGC's pool builder seeds from <code>x509.SystemCertPool</code> and appends the egress proxy's self-signed CA (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/trustpool.go"><code>trustpool.go</code></a>, named <code>BuildProxyTrustPool</code> before this change).
+The repo already asserts the consequence: <code>TestBuildTrustPool_RejectsUnrelatedCA</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/trustpool_test.go"><code>trustpool_test.go</code></a>) signs a leaf with a CA that is in neither the system store nor the proxy CA and requires <code>Verify</code> to fail.
+A GHES appliance behind a private CA is exactly that leaf.
+The test was written to prove the pool does not <em>over</em>-trust; read the other way it is the measurement this row needs.</p>
+<p>Routing through the egress proxy does not change it.
+The proxy tunnels with <code>CONNECT</code>, so the AGC↔GHES TLS session is end to end and the AGC validates the appliance's own certificate against the same pool.</p>
 <p><strong>No configuration surface exists to extend it.</strong> Swept, all negative:</p>
 <table>
 <thead>
@@ -2778,63 +2766,40 @@ appliance's own certificate against the same pool.</p>
 </tr>
 </tbody>
 </table>
-<p>So the gap is the missing mount, not anything the appliance does — the same
-shape as Q506 finding #1, whose defect was the missing injection.</p>
+<p>So the gap is the missing mount, not anything the appliance does — the same shape as Q506 finding #1, whose defect was the missing injection.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
-<p><strong>In:</strong> the AGC control plane and the worker pods it provisions. A GHES tenant
-whose AGC trusts the appliance but whose runners do not is still broken —
-<code>actions/checkout</code>, log upload, and artifact upload all talk to the appliance
-from the worker pod.</p>
+<p><strong>In:</strong> the AGC control plane and the worker pods it provisions.
+A GHES tenant whose AGC trusts the appliance but whose runners do not is still broken — <code>actions/checkout</code>, log upload, and artifact upload all talk to the appliance from the worker pod.</p>
 <p><strong>Out:</strong></p>
 <ul>
-<li><strong>The GMC.</strong> Its only GitHub call is the <code>api.github.com/meta</code> IP-range fetch,
-  which is public-GitHub-only by construction (Q506 #3) and is not addressed to
-  a tenant's appliance.</li>
-<li><strong>The egress proxy.</strong> It terminates no TLS to GitHub; a <code>CONNECT</code> tunnel is
-  opaque bytes. Its own serving certificate is a separate, GMC-issued CA that
-  this bundle neither replaces nor extends.</li>
-<li><strong><code>v1alpha1</code>.</strong> The API is frozen and removed at <code>v2.0.0</code>
-  (<a href="../../../operations/v1alpha1-deprecation/">deprecation notice</a>); every field
-  added since — <code>scheduling</code>, <code>agcAutoscaling</code>, <code>clusterCapacity</code> — is v2-only.
+<li><strong>The GMC.</strong> Its only GitHub call is the <code>api.github.com/meta</code> IP-range fetch, which is public-GitHub-only by construction (Q506 #3) and is not addressed to a tenant's appliance.</li>
+<li><strong>The egress proxy.</strong> It terminates no TLS to GitHub; a <code>CONNECT</code> tunnel is opaque bytes.
+  Its own serving certificate is a separate, GMC-issued CA that this bundle neither replaces nor extends.</li>
+<li><strong><code>v1alpha1</code>.</strong> The API is frozen and removed at <code>v2.0.0</code> (<a href="../../../operations/v1alpha1-deprecation/">deprecation notice</a>); every field added since — <code>scheduling</code>, <code>agcAutoscaling</code>, <code>clusterCapacity</code> — is v2-only.
   A GHES tenant behind a private CA must be on v2.</li>
-<li><strong>Egress reachability.</strong> Trusting the appliance's CA does not put its address
-  space in the NetworkPolicy. That is Q506 #3, already surfaced as
-  <code>GitHubEgressIncomplete</code>, and it stays the operator's obligation.</li>
+<li><strong>Egress reachability.</strong> Trusting the appliance's CA does not put its address space in the NetworkPolicy.
+  That is Q506 #3, already surfaced as <code>GitHubEgressIncomplete</code>, and it stays the operator's obligation.</li>
 </ul>
 <h2 id="design">Design<a class="headerlink" href="#design" title="Permanent link">&para;</a></h2>
 <h3 id="the-field">The field<a class="headerlink" href="#the-field" title="Permanent link">&para;</a></h3>
-<p><code>ActionsGatewaySpec.githubCABundleRef</code> — optional, name-only reference to a
-ConfigMap in the gateway's own namespace, carrying the bundle under <code>ca.crt</code>.</p>
+<p><code>ActionsGatewaySpec.githubCABundleRef</code> — optional, name-only reference to a ConfigMap in the gateway's own namespace, carrying the bundle under <code>ca.crt</code>.</p>
 <p>Applying the <a href="../../../development/api-review/">api-review</a> rules:</p>
 <ul>
-<li><strong>Whose fact is it?</strong> The tenant's. It is the same party that supplies
-  <code>spec.githubURL</code>, and it is the only party that knows which CA fronts that
-  host. The blast radius is contained: the bundle widens the trust of that
-  tenant's own AGC pod and its own worker pods and reaches nothing else, and a
-  tenant that wanted to point at a hostile endpoint could already do so with
-  <code>githubURL</code>.</li>
-<li><strong>ConfigMap, not Secret.</strong> A CA certificate is public material. A Secret would
-  put it behind the credential RBAC surface for no benefit and read as if the
-  contents were sensitive.</li>
-<li><strong>Additive, never replacing.</strong> The system roots stay trusted, so a gateway on
-  public GitHub with a bundle set (a mixed estate applying one manifest) behaves
-  identically. Replacing would be the insecure-by-default direction and is not
-  offered.</li>
-<li><strong>Fixed key <code>ca.crt</code>.</strong> Matches <code>metricsCACertKey</code> and the upstream
-  <code>kube-root-ca.crt</code> convention. A <code>key</code> override is reachable additively later
-  if demand appears.</li>
-<li><strong>Optional pointer, no default.</strong> Unset and "empty bundle" are different
-  states; unset must mean "system roots only", which is the safe direction.</li>
-<li><strong>A new ref type, not <code>LocalObjectRef</code>.</strong> <code>LocalObjectRef</code> carries the v2
-  52-character object-name budget (§H.6); a ConfigMap is a core object with the
-  253-character DNS-subdomain budget. <code>LocalConfigMapReference</code> mirrors the
-  existing <code>LocalSecretReference</code> shape.</li>
+<li><strong>Whose fact is it?</strong> The tenant's.
+  It is the same party that supplies <code>spec.githubURL</code>, and it is the only party that knows which CA fronts that host.
+  The blast radius is contained: the bundle widens the trust of that tenant's own AGC pod and its own worker pods and reaches nothing else, and a tenant that wanted to point at a hostile endpoint could already do so with <code>githubURL</code>.</li>
+<li><strong>ConfigMap, not Secret.</strong> A CA certificate is public material.
+  A Secret would put it behind the credential RBAC surface for no benefit and read as if the contents were sensitive.</li>
+<li><strong>Additive, never replacing.</strong> The system roots stay trusted, so a gateway on public GitHub with a bundle set (a mixed estate applying one manifest) behaves identically.
+  Replacing would be the insecure-by-default direction and is not offered.</li>
+<li><strong>Fixed key <code>ca.crt</code>.</strong> Matches <code>metricsCACertKey</code> and the upstream <code>kube-root-ca.crt</code> convention.
+  A <code>key</code> override is reachable additively later if demand appears.</li>
+<li><strong>Optional pointer, no default.</strong> Unset and "empty bundle" are different states; unset must mean "system roots only", which is the safe direction.</li>
+<li><strong>A new ref type, not <code>LocalObjectRef</code>.</strong> <code>LocalObjectRef</code> carries the v2 52-character object-name budget (§H.6); a ConfigMap is a core object with the 253-character DNS-subdomain budget. <code>LocalConfigMapReference</code> mirrors the existing <code>LocalSecretReference</code> shape.</li>
 </ul>
 <h3 id="resolution-is-a-runtime-condition-not-admission">Resolution is a runtime condition, not admission<a class="headerlink" href="#resolution-is-a-runtime-condition-not-admission" title="Permanent link">&para;</a></h3>
-<p>Per §H.7, a reference to a not-yet-applied object is well formed. The GMC
-resolves it in the reconcile and fails closed the same way <code>defaultProxyRef</code>
-does — <code>Degraded=True</code> plus <code>Ready=False</code>, via the existing <code>setNotReady</code> — with
-two new reasons:</p>
+<p>Per §H.7, a reference to a not-yet-applied object is well formed.
+The GMC resolves it in the reconcile and fails closed the same way <code>defaultProxyRef</code> does — <code>Degraded=True</code> plus <code>Ready=False</code>, via the existing <code>setNotReady</code> — with two new reasons:</p>
 <table>
 <thead>
 <tr>
@@ -2853,21 +2818,12 @@ two new reasons:</p>
 </tr>
 </tbody>
 </table>
-<p>No new condition type. <code>ProxyNotFound</code> already sets <code>Degraded</code> for the sibling
-case of an unresolvable reference, and a condition type carries no version and
-no conversion path — the cheaper surface is the right one.</p>
-<p>Parsing in the GMC rather than letting the AGC fail at startup is deliberate:
-a <code>Degraded</code> condition naming the ConfigMap is a better operator signal than a
-<code>CrashLoopBackOff</code>.</p>
-<p><strong>The read is uncached and the recovery is a poll, not a watch.</strong> The sibling
-credential Secret converges on a <code>WatchesMetadata</code>, and that was the first
-design here too. It does not work: <code>buildCacheOptions</code> pins the GMC's ConfigMap
-informer to a single object in the GMC's <em>own</em> namespace precisely so the GMC
-needs no cluster-wide ConfigMap read (Q188/Q242 G.1). Watching a tenant
-ConfigMap would undo that scoping. So the reconciler reads through
-<code>mgr.GetAPIReader()</code> and returns a one-minute <code>RequeueAfter</code> while the reference
-is unresolved — the same shape the VPA CRD reprobe already uses, and the reason
-the RBAC grant is <code>get</code> alone with no <code>list</code>/<code>watch</code>.</p>
+<p>No new condition type. <code>ProxyNotFound</code> already sets <code>Degraded</code> for the sibling case of an unresolvable reference, and a condition type carries no version and no conversion path — the cheaper surface is the right one.</p>
+<p>Parsing in the GMC rather than letting the AGC fail at startup is deliberate: a <code>Degraded</code> condition naming the ConfigMap is a better operator signal than a <code>CrashLoopBackOff</code>.</p>
+<p><strong>The read is uncached and the recovery is a poll, not a watch.</strong> The sibling credential Secret converges on a <code>WatchesMetadata</code>, and that was the first design here too.
+It does not work: <code>buildCacheOptions</code> pins the GMC's ConfigMap informer to a single object in the GMC's <em>own</em> namespace precisely so the GMC needs no cluster-wide ConfigMap read (Q188/Q242 G.1).
+Watching a tenant ConfigMap would undo that scoping.
+So the reconciler reads through <code>mgr.GetAPIReader()</code> and returns a one-minute <code>RequeueAfter</code> while the reference is unresolved — the same shape the VPA CRD reprobe already uses, and the reason the RBAC grant is <code>get</code> alone with no <code>list</code>/<code>watch</code>.</p>
 <h3 id="the-mount-and-the-two-consumers">The mount and the two consumers<a class="headerlink" href="#the-mount-and-the-two-consumers" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2891,48 +2847,26 @@ the RBAC grant is <code>get</code> alone with no <code>list</code>/<code>watch</
 </tr>
 </tbody>
 </table>
-<p>Both hops copy a mechanism that already exists for the proxy CA
-(<code>PROXY_TLS_SECRET_NAME</code> → provisioner → <code>PROXY_CA_CERT_PATH</code> → wrapper), so
-this adds a second input to each stage rather than a new pathway.</p>
-<p><code>BuildProxyTrustPool</code> becomes <code>BuildTrustPool(pems ...[]byte)</code>: same semantics
-(all-empty returns <code>(nil, nil)</code>; a non-empty PEM with no parseable certificate
-is an error), one more source. The name stops claiming the pool is
-proxy-specific, and the file moves with it (<code>proxytrust.go</code> → <code>trustpool.go</code>).
-The worker wrapper's <code>installProxyCATrust</code> generalises the same way, to
-<code>installCATrust(runnerHome, caPaths...)</code> writing <code>ca-bundle.crt</code>.</p>
-<p>The two sources differ in what an absent file means, and the difference is the
-opt-in. The proxy CA is optional at runtime, so absent (and empty) is a logged
-no-op and only a genuine read failure is fatal — Q520's rule, which landed on
-<code>main</code> mid-build and which the merged <code>configureTrustPool</code> keeps verbatim. The
-GitHub CA bundle is read only when <code>GITHUB_CA_CONFIGMAP_NAME</code> is set, which <em>is</em>
-the gateway's explicit opt-in, so absent, unreadable, and empty are all fatal:
-there is no "not configured" reading of any of them, and running untrusting is
-the failure the whole change exists to remove.</p>
+<p>Both hops copy a mechanism that already exists for the proxy CA (<code>PROXY_TLS_SECRET_NAME</code> → provisioner → <code>PROXY_CA_CERT_PATH</code> → wrapper), so this adds a second input to each stage rather than a new pathway.</p>
+<p><code>BuildProxyTrustPool</code> becomes <code>BuildTrustPool(pems ...[]byte)</code>: same semantics (all-empty returns <code>(nil, nil)</code>; a non-empty PEM with no parseable certificate is an error), one more source.
+The name stops claiming the pool is proxy-specific, and the file moves with it (<code>proxytrust.go</code> → <code>trustpool.go</code>).
+The worker wrapper's <code>installProxyCATrust</code> generalises the same way, to <code>installCATrust(runnerHome, caPaths...)</code> writing <code>ca-bundle.crt</code>.</p>
+<p>The two sources differ in what an absent file means, and the difference is the opt-in.
+The proxy CA is optional at runtime, so absent (and empty) is a logged no-op and only a genuine read failure is fatal — Q520's rule, which landed on <code>main</code> mid-build and which the merged <code>configureTrustPool</code> keeps verbatim.
+The GitHub CA bundle is read only when <code>GITHUB_CA_CONFIGMAP_NAME</code> is set, which <em>is</em> the gateway's explicit opt-in, so absent, unreadable, and empty are all fatal: there is no "not configured" reading of any of them, and running untrusting is the failure the whole change exists to remove.</p>
 <h2 id="acceptance">Acceptance<a class="headerlink" href="#acceptance" title="Permanent link">&para;</a></h2>
 <ul>
-<li>A gateway with <code>githubCABundleRef</code> set produces an AGC Deployment mounting
-  that ConfigMap and carrying <code>GITHUB_CA_CONFIGMAP_NAME</code>; a gateway without it
-  produces a byte-identical Deployment to today's.</li>
-<li>A gateway naming a ConfigMap that does not exist, or one without a parseable
-  <code>ca.crt</code>, is <code>Ready=False</code>/<code>Degraded=True</code> with the reason above and
-  provisions no AGC — and recovers without operator action once the ConfigMap
-  is applied.</li>
-<li>The AGC's shared transport validates a leaf signed by the supplied CA, still
-  validates a system-rooted leaf, and still rejects an unrelated CA's leaf.</li>
-<li>A worker pod for such a gateway mounts the bundle and its <code>SSL_CERT_FILE</code>
-  target contains both the system roots and the supplied CA.</li>
-<li>Each of the above fails when its mechanism is deleted — a test that passes on
-  a missing mount is the negative-assertion trap.</li>
-<li>Operator docs state what a GHES tenant behind a private CA must supply, and
-  the troubleshooting page maps the <code>x509: certificate signed by unknown
-  authority</code> symptom to this field.</li>
+<li>A gateway with <code>githubCABundleRef</code> set produces an AGC Deployment mounting that ConfigMap and carrying <code>GITHUB_CA_CONFIGMAP_NAME</code>; a gateway without it produces a byte-identical Deployment to today's.</li>
+<li>A gateway naming a ConfigMap that does not exist, or one without a parseable <code>ca.crt</code>, is <code>Ready=False</code>/<code>Degraded=True</code> with the reason above and provisions no AGC — and recovers without operator action once the ConfigMap is applied.</li>
+<li>The AGC's shared transport validates a leaf signed by the supplied CA, still validates a system-rooted leaf, and still rejects an unrelated CA's leaf.</li>
+<li>A worker pod for such a gateway mounts the bundle and its <code>SSL_CERT_FILE</code> target contains both the system roots and the supplied CA.</li>
+<li>Each of the above fails when its mechanism is deleted — a test that passes on a missing mount is the negative-assertion trap.</li>
+<li>Operator docs state what a GHES tenant behind a private CA must supply, and the troubleshooting page maps the <code>x509: certificate signed by unknown authority</code> symptom to this field.</li>
 </ul>
 <h2 id="what-this-plan-will-not-verify">What this plan will not verify<a class="headerlink" href="#what-this-plan-will-not-verify" title="Permanent link">&para;</a></h2>
-<p>No GHES appliance is involved. The end-to-end claim — that a real appliance
-behind a real internal CA completes the handshake once the bundle is
-supplied — stays unobserved, exactly as Q506's own fix did. What is verifiable
-here is that the bundle reaches both pools and that those pools then accept a
-leaf signed by it, which is the whole of the mechanism this plan adds.</p>
+<p>No GHES appliance is involved.
+The end-to-end claim — that a real appliance behind a real internal CA completes the handshake once the bundle is supplied — stays unobserved, exactly as Q506's own fix did.
+What is verifiable here is that the bundle reaches both pools and that those pools then accept a leaf signed by it, which is the whole of the mechanism this plan adds.</p>
 
 
 

@@ -2620,10 +2620,8 @@
 
 
 <h1 id="github-app-credentials-for-live-testing">GitHub App Credentials for Live Testing<a class="headerlink" href="#github-app-credentials-for-live-testing" title="Permanent link">&para;</a></h1>
-<p>Live-cluster tests (M2 kind check, M3/M4 end-to-end, Ed25519 probe, egress
-proxy validation) require a real GitHub App installed on the <code>actions-gateway</code>
-org. This document describes how the credentials are stored and how to
-provision the Kubernetes Secret the Actions Gateway Controller (AGC) reads.</p>
+<p>Live-cluster tests (M2 kind check, M3/M4 end-to-end, Ed25519 probe, egress proxy validation) require a real GitHub App installed on the <code>actions-gateway</code> org.
+This document describes how the credentials are stored and how to provision the Kubernetes Secret the Actions Gateway Controller (AGC) reads.</p>
 <h2 id="app-details">App details<a class="headerlink" href="#app-details" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2651,67 +2649,44 @@ provision the Kubernetes Secret the Actions Gateway Controller (AGC) reads.</p>
 </tr>
 </tbody>
 </table>
-<p>The private key is stored in the macOS Keychain — <strong>not</strong> on disk or in the
-repository.</p>
+<p>The private key is stored in the macOS Keychain — <strong>not</strong> on disk or in the repository.</p>
 <h2 id="storing-the-private-key-one-time-setup">Storing the private key (one-time setup)<a class="headerlink" href="#storing-the-private-key-one-time-setup" title="Permanent link">&para;</a></h2>
-<p>Download the <code>.pem</code> file from the GitHub App settings page and keep it on disk.
-<code>security add-generic-password</code> takes no file argument, so the key has to reach
-it some other way — and the two obvious routes are both wrong. Feed the command
-below its input on <strong>stdin</strong>, which is neither:</p>
+<p>Download the <code>.pem</code> file from the GitHub App settings page and keep it on disk. <code>security add-generic-password</code> takes no file argument, so the key has to reach it some other way — and the two obvious routes are both wrong.
+Feed the command below its input on <strong>stdin</strong>, which is neither:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># The file you just downloaded. Name it exactly — see the warning below.</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">KEY_FILE</span><span class="o">=</span>~/Downloads/actions-gateway-test.2026-01-01.private-key.pem
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">{</span><span class="w"> </span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;add-generic-password -U -a &quot;actions-gateway-test&quot; -s &quot;github-app-private-key&quot; -X &#39;</span><span class="p">;</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>xxd<span class="w"> </span>-p<span class="w"> </span>-c<span class="w"> </span><span class="m">1000000</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$KEY_FILE</span><span class="s2">&quot;</span><span class="p">;</span><span class="w"> </span><span class="o">}</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>security<span class="w"> </span>-i
 </code></pre></div>
-<p><code>xxd</code> reads the downloaded file in place; there is no temp copy to make or
-clean up, which is one fewer copy of the key on disk than any staging approach.</p>
-<p><code>security -i</code> reads <em>commands</em> from stdin, so the key never becomes a process
-argument: <code>xxd</code> is invoked with only a filename and writes the hex to its
-stdout, and <code>security</code> is invoked with only <code>-i</code>. <code>xxd</code> is what makes this
-possible at all — <code>-X</code> wants one hex string, and hex is single-line.</p>
-<p>Keep the two halves as a literal <code>printf</code> and a separate <code>xxd</code>. Collapsing them
-into <code>printf '… -X %s' "$(xxd …)"</code> happens to avoid a leak only because
-<code>printf</code> is a shell builtin and no process is spawned; with <code>/usr/bin/printf</code>
-the key is back in <code>ps</code>.</p>
+<p><code>xxd</code> reads the downloaded file in place; there is no temp copy to make or clean up, which is one fewer copy of the key on disk than any staging approach.</p>
+<p><code>security -i</code> reads <em>commands</em> from stdin, so the key never becomes a process argument: <code>xxd</code> is invoked with only a filename and writes the hex to its stdout, and <code>security</code> is invoked with only <code>-i</code>. <code>xxd</code> is what makes this possible at all — <code>-X</code> wants one hex string, and hex is single-line.</p>
+<p>Keep the two halves as a literal <code>printf</code> and a separate <code>xxd</code>.
+Collapsing them into <code>printf '… -X %s' "$(xxd …)"</code> happens to avoid a leak only because <code>printf</code> is a shell builtin and no process is spawned; with <code>/usr/bin/printf</code> the key is back in <code>ps</code>.</p>
 <blockquote>
-<p><strong>Give <code>xxd</code> one explicit path, never a glob.</strong> <code>xxd</code>'s second positional
-argument is an <em>output</em> file, so <code>xxd -p -c 1000000 ~/Downloads/*.private-key.pem</code>
-with two keys in <code>~/Downloads</code> writes the hex of the first <strong>over the second</strong>
-— exit 0, no warning, the other key destroyed. Quote <code>"$KEY_FILE"</code> so the
-shell cannot expand it either.</p>
-<p><strong>Do not use the <code>-w</code> prompt for this key.</strong> It is line-oriented — a
-multi-line PEM's second line is consumed as the "retype" and the command
-fails — and it silently truncates input at <strong>128 characters</strong>, which a
-2048-bit key exceeds many times over. It exits 0 and stores a fragment; the
-only symptom is authentication failing later. <code>-w "$(cat &lt;file&gt;)"</code> avoids the
-truncation but puts the key in <code>ps</code>.</p>
+<p><strong>Give <code>xxd</code> one explicit path, never a glob.</strong> <code>xxd</code>'s second positional argument is an <em>output</em> file, so <code>xxd -p -c 1000000 ~/Downloads/*.private-key.pem</code> with two keys in <code>~/Downloads</code> writes the hex of the first <strong>over the second</strong> — exit 0, no warning, the other key destroyed.
+Quote <code>"$KEY_FILE"</code> so the shell cannot expand it either.</p>
+<p><strong>Do not use the <code>-w</code> prompt for this key.</strong> It is line-oriented — a multi-line PEM's second line is consumed as the "retype" and the command fails — and it silently truncates input at <strong>128 characters</strong>, which a 2048-bit key exceeds many times over.
+It exits 0 and stores a fragment; the only symptom is authentication failing later. <code>-w "$(cat &lt;file&gt;)"</code> avoids the truncation but puts the key in <code>ps</code>.</p>
 </blockquote>
 <p>Verify the entry round-trips:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>security<span class="w"> </span>find-generic-password<span class="w"> </span>-a<span class="w"> </span><span class="s2">&quot;actions-gateway-test&quot;</span><span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;github-app-private-key&quot;</span><span class="w"> </span>-w<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>xxd<span class="w"> </span>-r<span class="w"> </span>-p<span class="w"> </span><span class="p">|</span><span class="w"> </span>openssl<span class="w"> </span>rsa<span class="w"> </span>-check<span class="w"> </span>-noout
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># should print: RSA key ok</span>
 </code></pre></div>
-<p>Check that the whole key parses, not just that the first line looks right: a
-truncated entry still starts with <code>-----BEGIN RSA PRIVATE KEY-----</code>, so
-<code>head -1</code> cannot tell a good key from a broken one.</p>
-<p>Only once that passes, delete the download — until then it is the only intact
-copy:</p>
+<p>Check that the whole key parses, not just that the first line looks right: a truncated entry still starts with <code>-----BEGIN RSA PRIVATE KEY-----</code>, so <code>head -1</code> cannot tell a good key from a broken one.</p>
+<p>Only once that passes, delete the download — until then it is the only intact copy:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>rm<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$KEY_FILE</span><span class="s2">&quot;</span>
 </code></pre></div>
 <blockquote>
-<p><strong>Note:</strong> <code>security find-generic-password -w</code> outputs the password as ASCII
-hex. Pipe through <code>xxd -r -p</code> to convert it back to the raw PEM bytes before
-use.</p>
+<p><strong>Note:</strong> <code>security find-generic-password -w</code> outputs the password as ASCII hex.
+Pipe through <code>xxd -r -p</code> to convert it back to the raw PEM bytes before use.</p>
 </blockquote>
 <h2 id="creating-the-kubernetes-secret">Creating the Kubernetes Secret<a class="headerlink" href="#creating-the-kubernetes-secret" title="Permanent link">&para;</a></h2>
-<p>The AGC reads credentials from files projected into
-<code>/etc/actions-gateway/github-app/</code> by the GMC. The Secret must contain three
-keys: <code>appId</code>, <code>installationId</code>, and <code>privateKey</code>.</p>
-<p>Materialise the private key into a short-lived temp file (mode <code>0600</code>) and
-load it into the Secret with <code>--from-file</code>. This avoids putting the PEM on
-the <code>kubectl</code> command line (where it would be visible in <code>ps</code> and shell
-history) and ensures the on-disk copy is cleaned up even on failure:</p>
+<p>The AGC reads credentials from files projected into <code>/etc/actions-gateway/github-app/</code> by the GMC.
+The Secret must contain three keys: <code>appId</code>, <code>installationId</code>, and <code>privateKey</code>.</p>
+<p>Materialise the private key into a short-lived temp file (mode <code>0600</code>) and load it into the Secret with <code>--from-file</code>.
+This avoids putting the PEM on the <code>kubectl</code> command line (where it would be visible in <code>ps</code> and shell history) and ensures the on-disk copy is cleaned up even on failure:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">umask</span><span class="w"> </span><span class="m">077</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nv">KEY_FILE</span><span class="o">=</span><span class="k">$(</span>mktemp<span class="w"> </span>-t<span class="w"> </span>github-app-private-key.XXXXXX<span class="k">)</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">trap</span><span class="w"> </span><span class="s1">&#39;rm -f &quot;$KEY_FILE&quot;&#39;</span><span class="w"> </span>EXIT<span class="w"> </span>INT<span class="w"> </span>TERM
@@ -2727,8 +2702,8 @@ history) and ensures the on-disk copy is cleaned up even on failure:</p>
 <a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span><span class="m">135739122</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$KEY_FILE</span><span class="s2">&quot;</span>
 </code></pre></div>
-<p><code>appId</code> and <code>installationId</code> are not secret, so <code>--from-literal</code> is fine for
-those. Only the PEM goes via the temp file.</p>
+<p><code>appId</code> and <code>installationId</code> are not secret, so <code>--from-literal</code> is fine for those.
+Only the PEM goes via the temp file.</p>
 <p>Reference the Secret in the <code>ActionsGateway</code> CR:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
@@ -2737,23 +2712,14 @@ those. Only the PEM goes via the temp file.</p>
 <h2 id="rotating-the-private-key">Rotating the private key<a class="headerlink" href="#rotating-the-private-key" title="Permanent link">&para;</a></h2>
 <ol>
 <li>Generate a new private key on the <a href="https://github.com/organizations/actions-gateway/settings/apps/actions-gateway-test">GitHub App settings page</a>.</li>
-<li>Import it with the <code>security -i</code> flow from
-   <a href="#storing-the-private-key-one-time-setup">Storing the private key</a> — <code>-U</code>
-   updates the existing entry in place, so there is no window with no key.</li>
-<li>Verify it round-trips with the <code>openssl rsa -check</code> command from that same
-   section. Do this <strong>before</strong> step 6: a silently truncated entry and a revoked
-   old key together leave no working credential.</li>
+<li>Import it with the <code>security -i</code> flow from <a href="#storing-the-private-key-one-time-setup">Storing the private key</a> — <code>-U</code> updates the existing entry in place, so there is no window with no key.</li>
+<li>Verify it round-trips with the <code>openssl rsa -check</code> command from that same section.
+   Do this <strong>before</strong> step 6: a silently truncated entry and a revoked old key together leave no working credential.</li>
 <li>Delete the downloaded <code>.pem</code> file from <code>~/Downloads</code>.</li>
-<li>Recreate the Kubernetes Secret using the <code>mktemp</code> + <code>--from-file</code> flow
-   from the previous section (the <code>trap</code> ensures the temp file is removed
-   even if <code>kubectl</code> fails), then restart the consumers so they re-read it —
-   for the dogfood tenant, <code>kubectl rollout restart deployment/actions-gateway-controller</code>.
-   Worker pods are single-job and interrupting one costs a job, so check
-   <code>kubectl get pods -l app.kubernetes.io/managed-by=actions-gateway-controller</code>
-   first and roll during a quiet window.</li>
-<li>Delete the old key from the GitHub App settings page. <strong>This is the step that
-   actually ends the exposure</strong> — everything before it only migrates you onto
-   the new key. Do it even if the rest is deferred.</li>
+<li>Recreate the Kubernetes Secret using the <code>mktemp</code> + <code>--from-file</code> flow from the previous section (the <code>trap</code> ensures the temp file is removed even if <code>kubectl</code> fails), then restart the consumers so they re-read it — for the dogfood tenant, <code>kubectl rollout restart deployment/actions-gateway-controller</code>.
+   Worker pods are single-job and interrupting one costs a job, so check <code>kubectl get pods -l app.kubernetes.io/managed-by=actions-gateway-controller</code> first and roll during a quiet window.</li>
+<li>Delete the old key from the GitHub App settings page. <strong>This is the step that actually ends the exposure</strong> — everything before it only migrates you onto the new key.
+   Do it even if the rest is deferred.</li>
 </ol>
 
 

@@ -2950,9 +2950,13 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer</p>
 </blockquote>
-<p>The <code>ActionsGateway</code> custom resource (CR) is the <strong>source of truth</strong> for a tenant gateway. The Gateway Manager Controller (GMC) provisions every per-gateway child resource — the Actions Gateway Controller (AGC) Deployment, ServiceAccounts, RoleBinding, Service, NetworkPolicies, and metrics TLS Secrets — from that single CR, and owner-references each child to it. Deleting the CR therefore <strong>cascades</strong>: the apiserver garbage-collects all owner-referenced children. This makes the gateway cheap to recreate, but it also means an accidental <code>kubectl delete actionsgateway</code> (or a deleted namespace) tears down the running control plane.</p>
+<p>The <code>ActionsGateway</code> custom resource (CR) is the <strong>source of truth</strong> for a tenant gateway.
+The Gateway Manager Controller (GMC) provisions every per-gateway child resource — the Actions Gateway Controller (AGC) Deployment, ServiceAccounts, RoleBinding, Service, NetworkPolicies, and metrics TLS Secrets — from that single CR, and owner-references each child to it.
+Deleting the CR therefore <strong>cascades</strong>: the apiserver garbage-collects all owner-referenced children.
+This makes the gateway cheap to recreate, but it also means an accidental <code>kubectl delete actionsgateway</code> (or a deleted namespace) tears down the running control plane.</p>
 <p>This document covers the backup posture that protects against that, and a runnable recovery procedure for restoring a deleted or corrupted gateway.</p>
-<p>For component upgrade/rollback (a different concern — the binary version, not the CR) see <a href="../upgrade/">upgrade.md</a>. For symptom-driven diagnosis see <a href="../troubleshooting/">troubleshooting.md</a>.</p>
+<p>For component upgrade/rollback (a different concern — the binary version, not the CR) see <a href="../upgrade/">upgrade.md</a>.
+For symptom-driven diagnosis see <a href="../troubleshooting/">troubleshooting.md</a>.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3049,7 +3053,9 @@
 </tbody>
 </table>
 <blockquote>
-<p><strong>In-flight jobs are not recoverable.</strong> Running jobs whose renew loop lapses during the outage are cancelled by GitHub and require a manual re-run. Queued (not-yet-acquired) jobs are redelivered to the next healthy session within ~2 minutes. This matches <a href="../runbook/#agc-total-failure">Runbook — AGC Total Failure</a>.</p>
+<p><strong>In-flight jobs are not recoverable.</strong> Running jobs whose renew loop lapses during the outage are cancelled by GitHub and require a manual re-run.
+Queued (not-yet-acquired) jobs are redelivered to the next healthy session within ~2 minutes.
+This matches <a href="../runbook/#agc-total-failure">Runbook — AGC Total Failure</a>.</p>
 </blockquote>
 <hr />
 <h2 id="backup-posture">Backup Posture<a class="headerlink" href="#backup-posture" title="Permanent link">&para;</a></h2>
@@ -3062,17 +3068,24 @@
 <li>The tenant <code>Namespace</code> manifest (including its security-profile label).</li>
 <li>The namespace <code>ResourceQuota</code>.</li>
 </ul>
-<p><strong>Never commit the GitHub App credential <code>Secret</code> in plaintext.</strong> Manage it with a secrets-aware tool — <a href="https://github.com/bitnami-labs/sealed-secrets">Sealed Secrets</a>, <a href="https://external-secrets.io/">External Secrets Operator</a>, or SOPS-encrypted manifests — so the encrypted form is safe in Git and the plaintext only ever exists in the cluster. The private key itself is never recoverable from the cluster (it is held only inside the Secret); keep the source <code>.pem</code> in a password manager or secrets vault so a new Secret can be minted if the namespace is lost. See <a href="../security-operations/">Security Operations</a> for credential-handling guidance.</p>
+<p><strong>Never commit the GitHub App credential <code>Secret</code> in plaintext.</strong> Manage it with a secrets-aware tool — <a href="https://github.com/bitnami-labs/sealed-secrets">Sealed Secrets</a>, <a href="https://external-secrets.io/">External Secrets Operator</a>, or SOPS-encrypted manifests — so the encrypted form is safe in Git and the plaintext only ever exists in the cluster.
+The private key itself is never recoverable from the cluster (it is held only inside the Secret); keep the source <code>.pem</code> in a password manager or secrets vault so a new Secret can be minted if the namespace is lost.
+See <a href="../security-operations/">Security Operations</a> for credential-handling guidance.</p>
 <h3 id="secondary-etcd-and-per-resource-backups">Secondary: etcd and per-resource backups<a class="headerlink" href="#secondary-etcd-and-per-resource-backups" title="Permanent link">&para;</a></h3>
-<p>GitOps protects the <em>desired</em> state. To also capture live status and resources not in Git, add one of:</p>
+<p>GitOps protects the <em>desired</em> state.
+To also capture live status and resources not in Git, add one of:</p>
 <ul>
-<li><strong>etcd snapshots</strong> — a cluster-level backup (<code>etcdctl snapshot save</code>, or your managed-cluster provider's equivalent) captures every object, including the credential Secret and live CR status. This is the broadest safety net and the basis for <a href="#scenario-c-full-cluster--etcd-restore">Scenario C</a>. Treat the snapshot as sensitive: it contains every Secret in the cluster.</li>
-<li><strong>Namespace-scoped backups</strong> — a tool such as <a href="https://velero.io/">Velero</a> can back up and restore a tenant namespace (CRs, Secrets, quota) as a unit, which is convenient for <a href="#scenario-b-whole-tenant-namespace-lost">Scenario B</a>. For concrete Velero backup/restore commands grounded in the ownership model above — including the label selector that skips the GMC-owned children so the controllers rebuild them — see <a href="../velero-backup-restore/">Velero Backup and Restore</a>.</li>
+<li><strong>etcd snapshots</strong> — a cluster-level backup (<code>etcdctl snapshot save</code>, or your managed-cluster provider's equivalent) captures every object, including the credential Secret and live CR status.
+  This is the broadest safety net and the basis for <a href="#scenario-c-full-cluster--etcd-restore">Scenario C</a>.
+  Treat the snapshot as sensitive: it contains every Secret in the cluster.</li>
+<li><strong>Namespace-scoped backups</strong> — a tool such as <a href="https://velero.io/">Velero</a> can back up and restore a tenant namespace (CRs, Secrets, quota) as a unit, which is convenient for <a href="#scenario-b-whole-tenant-namespace-lost">Scenario B</a>.
+  For concrete Velero backup/restore commands grounded in the ownership model above — including the label selector that skips the GMC-owned children so the controllers rebuild them — see <a href="../velero-backup-restore/">Velero Backup and Restore</a>.</li>
 <li><strong>Ad-hoc CR export</strong> — for a point-in-time copy of a single gateway:</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span>&gt;<span class="w"> </span>backup-&lt;name&gt;.yaml
 </code></pre></div>
-<p>Strip the runtime fields before re-applying (<code>status</code>, <code>metadata.uid</code>, <code>metadata.resourceVersion</code>, <code>metadata.creationTimestamp</code>, and the <code>metadata.finalizers</code> entry) — re-applying them can wedge the apply or resurrect a stale finalizer. The spec is the only part you need.</p>
+<p>Strip the runtime fields before re-applying (<code>status</code>, <code>metadata.uid</code>, <code>metadata.resourceVersion</code>, <code>metadata.creationTimestamp</code>, and the <code>metadata.finalizers</code> entry) — re-applying them can wedge the apply or resurrect a stale finalizer.
+  The spec is the only part you need.</p>
 <h3 id="what-to-back-up">What to Back Up<a class="headerlink" href="#what-to-back-up" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3138,9 +3151,11 @@
 <h3 id="scenario-b-whole-tenant-namespace-lost">Scenario B: Whole Tenant Namespace Lost<a class="headerlink" href="#scenario-b-whole-tenant-namespace-lost" title="Permanent link">&para;</a></h3>
 <p>The namespace and everything in it — CR, credential Secret, quota — are gone.</p>
 <ol>
-<li><strong>Recreate and mark the namespace</strong> (including its security-profile label) from version control. See <a href="../../getting-started/#2-create-and-mark-the-tenant-namespace-and-set-its-quota">Getting Started §2</a>.</li>
+<li><strong>Recreate and mark the namespace</strong> (including its security-profile label) from version control.
+   See <a href="../../getting-started/#2-create-and-mark-the-tenant-namespace-and-set-its-quota">Getting Started §2</a>.</li>
 <li><strong>Re-apply the <code>ResourceQuota</code></strong> from version control.</li>
-<li><strong>Recreate the GitHub App credential Secret</strong> from your encrypted backup (or mint a fresh one from the source <code>.pem</code> in your vault). See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</li>
+<li><strong>Recreate the GitHub App credential Secret</strong> from your encrypted backup (or mint a fresh one from the source <code>.pem</code> in your vault).
+   See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</li>
 <li><strong>Re-apply the <code>EgressProxy</code> CR</strong>, if the gateway references one.</li>
 <li><strong>Re-apply the <code>ActionsGateway</code> CR.</strong></li>
 <li><strong><a href="#verification">Verify</a>.</strong> <code>RunnerSet</code>s that targeted this gateway flip from <code>Ready=False</code>/<code>GatewayNotFound</code> back to ready automatically once the gateway is up.</li>
@@ -3149,14 +3164,18 @@
 <p>Order matters only for the credential Secret and the <code>EgressProxy</code>: the gateway fails closed (<code>CredentialUnavailable</code> / <code>ProxyNotFound</code>) until both exist, then reconciles on its own once they appear — no gateway re-apply is needed after they land.</p>
 </blockquote>
 <h3 id="scenario-c-full-cluster--etcd-restore">Scenario C: Full Cluster / etcd Restore<a class="headerlink" href="#scenario-c-full-cluster--etcd-restore" title="Permanent link">&para;</a></h3>
-<p>For a control-plane loss, restore etcd from a snapshot per your Kubernetes distribution's documented procedure. After restore:</p>
+<p>For a control-plane loss, restore etcd from a snapshot per your Kubernetes distribution's documented procedure.
+After restore:</p>
 <ol>
 <li>Confirm the GMC is running: <code>kubectl rollout status deploy/gmc-controller-manager -n gmc-system</code>.</li>
-<li>The GMC reconciles every restored <code>ActionsGateway</code> CR idempotently — it compares desired vs. actual state and only applies what is missing. No resources are duplicated. This is the same idempotent recovery described in <a href="../runbook/#gmc-total-failure">Runbook — GMC Total Failure</a>.</li>
+<li>The GMC reconciles every restored <code>ActionsGateway</code> CR idempotently — it compares desired vs. actual state and only applies what is missing.
+   No resources are duplicated.
+   This is the same idempotent recovery described in <a href="../runbook/#gmc-total-failure">Runbook — GMC Total Failure</a>.</li>
 <li><strong><a href="#verification">Verify</a></strong> each tenant namespace.</li>
 </ol>
 <h3 id="cr-stuck-terminating">CR Stuck Terminating<a class="headerlink" href="#cr-stuck-terminating" title="Permanent link">&para;</a></h3>
-<p>If a deleted CR hangs in <code>Terminating</code>, the GMC's cleanup finalizer (<code>actions-gateway.github.com/gmc-cleanup</code>) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down). The finalizer exists precisely to avoid orphaning the cluster-scoped <code>ClusterRoleBinding</code>.</p>
+<p>If a deleted CR hangs in <code>Terminating</code>, the GMC's cleanup finalizer (<code>actions-gateway.github.com/gmc-cleanup</code>) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down).
+The finalizer exists precisely to avoid orphaning the cluster-scoped <code>ClusterRoleBinding</code>.</p>
 <ol>
 <li>Check the GMC is running and reconciling — restart it if needed (<code>kubectl rollout restart deploy/gmc-controller-manager -n gmc-system</code>); it will complete teardown and clear the finalizer.</li>
 <li>Only <strong>force-remove the finalizer as a last resort</strong> when the GMC is permanently gone, and understand the trade-off: it leaves the cluster-scoped <code>ClusterRoleBinding</code> (<code>agc-clusterrunnertemplate-reader.&lt;namespace&gt;.&lt;name&gt;</code>) orphaned, which you must then delete by hand.
@@ -3180,8 +3199,10 @@
    <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;Ready&quot;)].status}{&quot;\n&quot;}&#39;</span>
 </code></pre></div>
-   Expect <code>True</code>. If <code>CredentialUnavailable</code> or <code>ProxyNotFound</code>, the credential Secret or <code>EgressProxy</code> is still missing — recheck the relevant scenario step.</li>
-<li>Sessions are polling — <code>actions_gateway_active_sessions</code> should reach ≥ 1 per RunnerGroup within seconds. See <a href="../observability/">Observability</a>.</li>
+   Expect <code>True</code>.
+   If <code>CredentialUnavailable</code> or <code>ProxyNotFound</code>, the credential Secret or <code>EgressProxy</code> is still missing — recheck the relevant scenario step.</li>
+<li>Sessions are polling — <code>actions_gateway_active_sessions</code> should reach ≥ 1 per RunnerGroup within seconds.
+   See <a href="../observability/">Observability</a>.</li>
 <li>Trigger a test workflow and confirm a worker pod is provisioned and the job completes.</li>
 </ol>
 <hr />

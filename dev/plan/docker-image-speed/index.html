@@ -3036,17 +3036,10 @@
 
 
 <h1 id="docker-image-speed-improvements">Docker Image Speed Improvements<a class="headerlink" href="#docker-image-speed-improvements" title="Permanent link">&para;</a></h1>
-<p>This document analyses where time is spent building and loading the five
-Docker images in this repo (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>fakegithub</code>) and
-describes concrete improvements in order of estimated impact. §1–§9 target
-the <strong>build</strong> phase; §12–§13 target the <strong>load-into-kind</strong> phase used by the
-e2e suite. Each section covers motivation, implementation steps, files
-affected, and estimated savings.</p>
-<p>Items that were obsoleted by other decisions (§3 and §6 by workspace
-vendoring; §10 and §11 by the in-cluster registry in §13) have been removed
-from this document — see commit history for the original plans.</p>
-<p>Items deliberately not pursued are noted with the rationale so the decision
-is not revisited inadvertently.</p>
+<p>This document analyses where time is spent building and loading the five Docker images in this repo (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>fakegithub</code>) and describes concrete improvements in order of estimated impact. §1–§9 target the <strong>build</strong> phase; §12–§13 target the <strong>load-into-kind</strong> phase used by the e2e suite.
+Each section covers motivation, implementation steps, files affected, and estimated savings.</p>
+<p>Items that were obsoleted by other decisions (§3 and §6 by workspace vendoring; §10 and §11 by the in-cluster registry in §13) have been removed from this document — see commit history for the original plans.</p>
+<p>Items deliberately not pursued are noted with the rationale so the decision is not revisited inadvertently.</p>
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="#status">Status</a></li>
@@ -3120,12 +3113,9 @@ is not revisited inadvertently.</p>
 </tr>
 </tbody>
 </table>
-<p>Plus, as an extra-plan change: <strong>Go workspace vendoring</strong> (<code>go work vendor</code>
-produces a single <code>vendor/</code> at the repo root, committed to git). Every
-Dockerfile now does <code>COPY . .</code> + <code>go build</code> with <code>-mod=vendor</code> auto-selected,
-no module-cache plumbing required. Vendor/ adds ~76 MB to the repo;
-<code>.gitattributes</code> marks it <code>linguist-vendored</code> so it doesn't dominate GitHub UI
-summaries.</p>
+<p>Plus, as an extra-plan change: <strong>Go workspace vendoring</strong> (<code>go work vendor</code> produces a single <code>vendor/</code> at the repo root, committed to git).
+Every Dockerfile now does <code>COPY . .</code> + <code>go build</code> with <code>-mod=vendor</code> auto-selected, no module-cache plumbing required.
+Vendor/ adds ~76 MB to the repo; <code>.gitattributes</code> marks it <code>linguist-vendored</code> so it doesn't dominate GitHub UI summaries.</p>
 <hr />
 <h2 id="background--where-time-goes-today">Background — where time goes today<a class="headerlink" href="#background--where-time-goes-today" title="Permanent link">&para;</a></h2>
 <p>A cold-cache run of <code>make e2e-images</code> builds four images sequentially:</p>
@@ -3163,30 +3153,19 @@ summaries.</p>
 </tr>
 </tbody>
 </table>
-<p>CI already enables <code>cache-from: type=gha</code> per image in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">.github/workflows/e2e-test.yml</a>, so warm runs
-do reuse layer blobs. The catch: BuildKit invalidates the <code>go build</code> layer the
-moment any file inside <code>COPY . .</code> changes — which is every PR. With no
-<code>--mount=type=cache</code> for <code>/go/pkg/mod</code> or <code>/root/.cache/go-build</code>, every
-non-cached <code>go build</code> recompiles the world.</p>
-<p>Local builds (<code>make e2e-images</code>) have no layer cache at all and rebuild from
-scratch every time.</p>
-<p>The improvements below target both paths: shrinking the build context so fewer
-edits invalidate layers, and adding BuildKit cache mounts so compilation
-artefacts survive cache misses.</p>
+<p>CI already enables <code>cache-from: type=gha</code> per image in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">.github/workflows/e2e-test.yml</a>, so warm runs do reuse layer blobs.
+The catch: BuildKit invalidates the <code>go build</code> layer the moment any file inside <code>COPY . .</code> changes — which is every PR.
+With no <code>--mount=type=cache</code> for <code>/go/pkg/mod</code> or <code>/root/.cache/go-build</code>, every non-cached <code>go build</code> recompiles the world.</p>
+<p>Local builds (<code>make e2e-images</code>) have no layer cache at all and rebuild from scratch every time.</p>
+<p>The improvements below target both paths: shrinking the build context so fewer edits invalidate layers, and adding BuildKit cache mounts so compilation artefacts survive cache misses.</p>
 <hr />
 <h2 id="1-root-dockerignore">1. Root <code>.dockerignore</code><a class="headerlink" href="#1-root-dockerignore" title="Permanent link">&para;</a></h2>
-<p><strong>Estimated savings: 5–15 s per build × 4 builds; eliminates many spurious
-cache invalidations</strong></p>
+<p><strong>Estimated savings: 5–15 s per build × 4 builds; eliminates many spurious cache invalidations</strong></p>
 <h3 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h3>
-<p>Docker reads <code>.dockerignore</code> from the <strong>context root</strong>, not from the directory
-next to the Dockerfile. The only <code>.dockerignore</code> in the repo is at
-<code>cmd/gmc/.dockerignore</code>, but every Dockerfile except
-proxy builds with <code>context: .</code>. That means none of those builds get a
-dockerignore applied. (BuildKit also supports <code>&lt;dockerfile&gt;.dockerignore</code> next
-to the Dockerfile, but the file would have to be named e.g.
-<code>cmd/gmc/Dockerfile.dockerignore</code> — the current <code>.dockerignore</code> filename is not
-matched.)</p>
+<p>Docker reads <code>.dockerignore</code> from the <strong>context root</strong>, not from the directory next to the Dockerfile.
+The only <code>.dockerignore</code> in the repo is at <code>cmd/gmc/.dockerignore</code>, but every Dockerfile except proxy builds with <code>context: .</code>.
+That means none of those builds get a dockerignore applied.
+(BuildKit also supports <code>&lt;dockerfile&gt;.dockerignore</code> next to the Dockerfile, but the file would have to be named e.g. <code>cmd/gmc/Dockerfile.dockerignore</code> — the current <code>.dockerignore</code> filename is not matched.)</p>
 <p>Result: the full repo ships into every build, including:</p>
 <ul>
 <li><code>tools/</code> — 29 MB (vendored <code>controller-gen</code>, <code>kubebuilder</code>, <code>setup-envtest</code>)</li>
@@ -3196,13 +3175,10 @@ matched.)</p>
 <li>All <code>*_test.go</code> files — irrelevant to builds; ~hundreds of KB</li>
 <li><code>.claude/</code>, <code>.build/</code>, IDE files — never needed</li>
 </ul>
-<p>Beyond the wire transfer cost, every change to any of those files invalidates
-the <code>COPY . .</code> layer and forces a full <code>go build</code> rebuild.</p>
+<p>Beyond the wire transfer cost, every change to any of those files invalidates the <code>COPY . .</code> layer and forces a full <code>go build</code> rebuild.</p>
 <h3 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h3>
-<p>Add a single root <code>.dockerignore</code> that excludes everything by default and
-re-includes only Go source, module files, and the workspace files needed for
-multi-module builds. Model after the existing
-<code>cmd/gmc/.dockerignore</code>.</p>
+<p>Add a single root <code>.dockerignore</code> that excludes everything by default and re-includes only Go source, module files, and the workspace files needed for multi-module builds.
+Model after the existing <code>cmd/gmc/.dockerignore</code>.</p>
 <h3 id="implementation-steps">Implementation steps<a class="headerlink" href="#implementation-steps" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong>Create <code>/.dockerignore</code></strong>:</li>
@@ -3228,14 +3204,12 @@ multi-module builds. Model after the existing
 </code></pre></div>
 <ol>
 <li>
-<p><strong>Delete <code>cmd/gmc/.dockerignore</code></strong> — superseded by
-   the root file, and ignored anyway when context is <code>.</code>.</p>
+<p><strong>Delete <code>cmd/gmc/.dockerignore</code></strong> — superseded by the root file, and ignored anyway when context is <code>.</code>.</p>
 </li>
 <li>
-<p><strong>Add <code>cmd/proxy/.dockerignore</code></strong> mirroring the root file. The proxy build
-   uses <code>context: cmd/proxy</code>, so the root <code>.dockerignore</code> does not apply to it.
-   In particular, exclude <code>proxy_test.go</code> so test edits do not invalidate the
-   build layer:</p>
+<p><strong>Add <code>cmd/proxy/.dockerignore</code></strong> mirroring the root file.
+   The proxy build uses <code>context: cmd/proxy</code>, so the root <code>.dockerignore</code> does not apply to it.
+   In particular, exclude <code>proxy_test.go</code> so test edits do not invalidate the build layer:</p>
 </li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>**
@@ -3254,59 +3228,38 @@ multi-module builds. Model after the existing
 <h2 id="2-compile-cache-mount-on-rootcachego-build-">2. Compile-cache mount on <code>/root/.cache/go-build</code> ✓<a class="headerlink" href="#2-compile-cache-mount-on-rootcachego-build-" title="Permanent link">&para;</a></h2>
 <p><strong>Estimated savings: 30–60 s on rebuilds that invalidate the build layer</strong></p>
 <h3 id="problem_1">Problem<a class="headerlink" href="#problem_1" title="Permanent link">&para;</a></h3>
-<p>The <code>go build</code> step lives in its own layer; that layer's cache key depends on
-every file in <code>COPY . .</code>. Any source edit invalidates the layer and forces
-Go to recompile every package from scratch — including unchanged dependencies
-— because the build cache lived inside the discarded layer.</p>
+<p>The <code>go build</code> step lives in its own layer; that layer's cache key depends on every file in <code>COPY . .</code>.
+Any source edit invalidates the layer and forces Go to recompile every package from scratch — including unchanged dependencies — because the build cache lived inside the discarded layer.</p>
 <h3 id="approach_1">Approach<a class="headerlink" href="#approach_1" title="Permanent link">&para;</a></h3>
-<p>Wrap the <code>go build</code> step with a BuildKit cache mount targeting
-<code>/root/.cache/go-build</code>. The mount is BuildKit-managed scratch space that is
-NOT part of the layer output, so it survives across layer-cache misses.
-Go's content-addressed build cache then reuses compiled <code>.a</code> files for any
-package whose inputs haven't changed.</p>
-<p>The module-cache half (<code>/go/pkg/mod</code>) from the original plan was dropped
-because workspace vendoring (committed separately) eliminated the module
-cache entirely — <code>go build</code> reads from <code>vendor/</code> without touching the
-module cache at all.</p>
+<p>Wrap the <code>go build</code> step with a BuildKit cache mount targeting <code>/root/.cache/go-build</code>.
+The mount is BuildKit-managed scratch space that is NOT part of the layer output, so it survives across layer-cache misses.
+Go's content-addressed build cache then reuses compiled <code>.a</code> files for any package whose inputs haven't changed.</p>
+<p>The module-cache half (<code>/go/pkg/mod</code>) from the original plan was dropped because workspace vendoring (committed separately) eliminated the module cache entirely — <code>go build</code> reads from <code>vendor/</code> without touching the module cache at all.</p>
 <h3 id="implementation-steps-shipped">Implementation steps (shipped)<a class="headerlink" href="#implementation-steps-shipped" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Pinned <code># syntax=docker/dockerfile:1.7</code> at the top of each Dockerfile.</li>
-<li>Added <code>--mount=type=cache,target=/root/.cache/go-build</code> to the <code>go build</code>
-   step in <code>cmd/gmc/Dockerfile</code>, <code>cmd/agc/Dockerfile</code>, <code>cmd/proxy/Dockerfile</code>,
-   and <code>test/fakegithub/Dockerfile</code>. (Those six per-image Dockerfiles were later
-   consolidated into the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">Dockerfile</a>, and this cache
-   mount replaced by a cacheable <code>deps</code> layer — see
-   <a href="../e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a> §1–3.)</li>
+<li>Added <code>--mount=type=cache,target=/root/.cache/go-build</code> to the <code>go build</code> step in <code>cmd/gmc/Dockerfile</code>, <code>cmd/agc/Dockerfile</code>, <code>cmd/proxy/Dockerfile</code>, and <code>test/fakegithub/Dockerfile</code>.
+   (Those six per-image Dockerfiles were later consolidated into the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">Dockerfile</a>, and this cache mount replaced by a cacheable <code>deps</code> layer — see <a href="../e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a> §1–3.)</li>
 </ol>
 <h3 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h3>
 <ul>
 <li>The cache mount uses BuildKit-managed storage, separate from <code>cache-to=gha</code>.
-  In CI it persists <em>within</em> a workflow run (so parallel bake targets share
-  the cache), but does not survive across runs unless BuildKit state itself
-  is cached.</li>
-<li>Inside the bake parallel run, the four targets share the mount with
-  <code>sharing=shared</code> (the default), so the first build to compile each package
-  populates a <code>.a</code> that the other three reuse.</li>
+  In CI it persists <em>within</em> a workflow run (so parallel bake targets share the cache), but does not survive across runs unless BuildKit state itself is cached.</li>
+<li>Inside the bake parallel run, the four targets share the mount with <code>sharing=shared</code> (the default), so the first build to compile each package populates a <code>.a</code> that the other three reuse.</li>
 </ul>
 <h3 id="files_1">Files<a class="headerlink" href="#files_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li>All four buildable Dockerfiles (<code>cmd/worker/Dockerfile</code> already uses
-  alpine and isn't part of the e2e bake set, so it's untouched).</li>
+<li>All four buildable Dockerfiles (<code>cmd/worker/Dockerfile</code> already uses alpine and isn't part of the e2e bake set, so it's untouched).</li>
 </ul>
 <hr />
 <h2 id="4-drop-the-go-work-sync-no-op-">4. Drop the <code>go work sync</code> no-op ✓<a class="headerlink" href="#4-drop-the-go-work-sync-no-op-" title="Permanent link">&para;</a></h2>
 <p><strong>Estimated savings: ~1 s × 3 builds; layer-cache hygiene</strong></p>
 <h3 id="problem_2">Problem<a class="headerlink" href="#problem_2" title="Permanent link">&para;</a></h3>
-<p><code>cmd/gmc/Dockerfile:11</code>, <code>cmd/agc/Dockerfile:10</code>, and
-<code>test/fakegithub/Dockerfile:11</code> (since consolidated into the root
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">Dockerfile</a>) all ran
-<code>RUN go work sync 2&gt;/dev/null || true</code> immediately before <code>COPY . .</code>. The next
-layer overwrites the working directory, so any side-effect of <code>go work sync</code>
-was thrown away. It was a no-op step that produced its own layer and added
-~1 s.</p>
+<p><code>cmd/gmc/Dockerfile:11</code>, <code>cmd/agc/Dockerfile:10</code>, and <code>test/fakegithub/Dockerfile:11</code> (since consolidated into the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">Dockerfile</a>) all ran <code>RUN go work sync 2&gt;/dev/null || true</code> immediately before <code>COPY . .</code>.
+The next layer overwrites the working directory, so any side-effect of <code>go work sync</code> was thrown away.
+It was a no-op step that produced its own layer and added ~1 s.</p>
 <h3 id="approach_2">Approach<a class="headerlink" href="#approach_2" title="Permanent link">&para;</a></h3>
-<p>Removed the line. <code>go build</code> resolves the workspace correctly without an
-explicit sync.</p>
+<p>Removed the line. <code>go build</code> resolves the workspace correctly without an explicit sync.</p>
 <h3 id="files_2">Files<a class="headerlink" href="#files_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>cmd/gmc/Dockerfile</code></li>
@@ -3315,47 +3268,33 @@ explicit sync.</p>
 </ul>
 <hr />
 <h2 id="5-build-ci-images-in-parallel-">5. Build CI images in parallel ✓<a class="headerlink" href="#5-build-ci-images-in-parallel-" title="Permanent link">&para;</a></h2>
-<p><strong>Estimated savings: ~2–4 min of wall time on cold-cache CI runs (observed:
-~2 min 15 s on the standard e2e job, ~2 min 40 s on multi-node)</strong></p>
+<p><strong>Estimated savings: ~2–4 min of wall time on cold-cache CI runs (observed: ~2 min 15 s on the standard e2e job, ~2 min 40 s on multi-node)</strong></p>
 <h3 id="problem_3">Problem<a class="headerlink" href="#problem_3" title="Permanent link">&para;</a></h3>
-<p>The four CI images used to build sequentially inside one job via four
-<code>docker/build-push-action@v6</code> steps. They have independent GHA cache scopes
-(<code>scope=gmc</code>, <code>scope=agc</code>, etc.) and no inter-image dependencies, so they
-could build concurrently and cut the build phase to roughly the slowest
-single image.</p>
+<p>The four CI images used to build sequentially inside one job via four <code>docker/build-push-action@v6</code> steps.
+They have independent GHA cache scopes (<code>scope=gmc</code>, <code>scope=agc</code>, etc.) and no inter-image dependencies, so they could build concurrently and cut the build phase to roughly the slowest single image.</p>
 <h3 id="approach-shipped">Approach (shipped)<a class="headerlink" href="#approach-shipped" title="Permanent link">&para;</a></h3>
-<p><code>docker buildx bake</code> with one HCL file describing all four targets. Bake
-runs them in parallel using a single BuildKit instance, so the compile-cache
-mount from §2 is shared across siblings.</p>
-<p>The implementation added a <code>GHA_CACHE</code> variable that toggles the
-<code>type=gha</code> cache-from/cache-to flags so local invocations don't fail with
-"ActionsRuntimeToken required" — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl">docker-bake.hcl</a>.</p>
+<p><code>docker buildx bake</code> with one HCL file describing all four targets.
+Bake runs them in parallel using a single BuildKit instance, so the compile-cache mount from §2 is shared across siblings.</p>
+<p>The implementation added a <code>GHA_CACHE</code> variable that toggles the <code>type=gha</code> cache-from/cache-to flags so local invocations don't fail with "ActionsRuntimeToken required" — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl">docker-bake.hcl</a>.</p>
 <h3 id="files_3">Files<a class="headerlink" href="#files_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl">docker-bake.hcl</a> (new)</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> — <code>e2e-images</code> and <code>docker-build-*</code> targets call bake</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">.github/workflows/e2e-test.yml</a> and
-  <code>.github/workflows/e2e-multi-node.yml</code>
-  — four build-push-action steps collapsed into one bake step</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">.github/workflows/e2e-test.yml</a> and <code>.github/workflows/e2e-multi-node.yml</code> — four build-push-action steps collapsed into one bake step</li>
 </ul>
 <hr />
 <h2 id="7-switch-builder-base-to-golang126-alpine--not-doing">7. Switch builder base to <code>golang:1.26-alpine</code> — <strong>Not doing</strong><a class="headerlink" href="#7-switch-builder-base-to-golang126-alpine--not-doing" title="Permanent link">&para;</a></h2>
-<p><strong>Decision</strong>: Alpine's musl libc introduces build-tool incompatibilities and
-a latent error surface that outweighs the 15–30 s cold-pull savings. All
-builder stages use the standard Debian-based <code>golang</code> image. The <code>cmd/worker</code>
-builder was previously on <code>golang:1.24-alpine</code> and has been updated to the
-standard <code>golang:1.24</code> as part of §8.</p>
+<p><strong>Decision</strong>: Alpine's musl libc introduces build-tool incompatibilities and a latent error surface that outweighs the 15–30 s cold-pull savings.
+All builder stages use the standard Debian-based <code>golang</code> image.
+The <code>cmd/worker</code> builder was previously on <code>golang:1.24-alpine</code> and has been updated to the standard <code>golang:1.24</code> as part of §8.</p>
 <hr />
 <h2 id="8-pin-base-images-by-digest-">8. Pin base images by digest ✓<a class="headerlink" href="#8-pin-base-images-by-digest-" title="Permanent link">&para;</a></h2>
 <p><strong>Estimated savings: reproducibility / cache stability, not raw speed</strong></p>
 <h3 id="problem_4">Problem<a class="headerlink" href="#problem_4" title="Permanent link">&para;</a></h3>
-<p><code>golang:1.26</code>, <code>gcr.io/distroless/static:nonroot</code>, and
-<code>ghcr.io/actions/actions-runner:2.327.1</code> (worker base) are referenced by mutable tags.
-A registry-side tag move silently busts the layer cache for every downstream
-build.</p>
+<p><code>golang:1.26</code>, <code>gcr.io/distroless/static:nonroot</code>, and <code>ghcr.io/actions/actions-runner:2.327.1</code> (worker base) are referenced by mutable tags.
+A registry-side tag move silently busts the layer cache for every downstream build.</p>
 <h3 id="approach-shipped_1">Approach (shipped)<a class="headerlink" href="#approach-shipped_1" title="Permanent link">&para;</a></h3>
-<p>Each base image is now pinned to its multi-arch manifest list digest
-(<code>@sha256:...</code>) with a comment showing the inspect command to refresh it.
+<p>Each base image is now pinned to its multi-arch manifest list digest (<code>@sha256:...</code>) with a comment showing the inspect command to refresh it.
 Dependabot keeps these up to date automatically.</p>
 <table>
 <thead>
@@ -3385,111 +3324,69 @@ Dependabot keeps these up to date automatically.</p>
 </table>
 <h3 id="files_4">Files<a class="headerlink" href="#files_4" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>cmd/gmc/Dockerfile</code>, <code>cmd/agc/Dockerfile</code>, <code>cmd/proxy/Dockerfile</code>,
-  <code>test/fakegithub/Dockerfile</code>, <code>cmd/worker/Dockerfile</code></li>
+<li><code>cmd/gmc/Dockerfile</code>, <code>cmd/agc/Dockerfile</code>, <code>cmd/proxy/Dockerfile</code>, <code>test/fakegithub/Dockerfile</code>, <code>cmd/worker/Dockerfile</code></li>
 </ul>
 <hr />
 <h2 id="9-skip-image-rebuilds-when-nothing-relevant-changed-">9. Skip image rebuilds when nothing relevant changed ✓<a class="headerlink" href="#9-skip-image-rebuilds-when-nothing-relevant-changed-" title="Permanent link">&para;</a></h2>
-<p><strong>Estimated savings: full e2e suite time on PRs that touch only unit tests,
-CI configs for other suites, scripts, etc.</strong></p>
+<p><strong>Estimated savings: full e2e suite time on PRs that touch only unit tests, CI configs for other suites, scripts, etc.</strong></p>
 <h3 id="problem_5">Problem<a class="headerlink" href="#problem_5" title="Permanent link">&para;</a></h3>
-<p>CI ran the full e2e suite (up to 45 min) on every PR push, even when the only
-changes were unit tests, CI workflow files for other suites, or other files
-that do not affect any of the four built images.</p>
+<p>CI ran the full e2e suite (up to 45 min) on every PR push, even when the only changes were unit tests, CI workflow files for other suites, or other files that do not affect any of the four built images.</p>
 <h3 id="approach-shipped_2">Approach (shipped)<a class="headerlink" href="#approach-shipped_2" title="Permanent link">&para;</a></h3>
-<p>A <code>changes</code> job runs <code>dorny/paths-filter</code> before <code>e2e</code> and emits a boolean
-output <code>e2e</code> indicating whether any e2e-relevant file changed. The <code>e2e</code> job
-has <code>needs: [changes]</code> and an <code>if:</code> condition:</p>
+<p>A <code>changes</code> job runs <code>dorny/paths-filter</code> before <code>e2e</code> and emits a boolean output <code>e2e</code> indicating whether any e2e-relevant file changed.
+The <code>e2e</code> job has <code>needs: [changes]</code> and an <code>if:</code> condition:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>if: needs.changes.outputs.e2e == &#39;true&#39; || github.event_name == &#39;push&#39;
 </code></pre></div>
-<p>Pushes to <code>main</code> always run. PRs that touch only CI configs for other suites,
-<code>.claude/</code>, etc. skip both bake and the full test run entirely.</p>
-<p><strong>Why not per-bake-target skipping?</strong> The local registry (<code>127.0.0.1:5000</code>) is
-ephemeral — created fresh each run. All four images must be present for e2e to
-run, so skipping a specific bake target would leave the registry incomplete.
-The GHA layer cache (<code>type=gha,mode=max</code>) already makes cache-hit builds fast
-(~15 s across all four in parallel), so the marginal gain from per-target
-skipping is small compared to skipping the entire 10–45 min test suite.</p>
-<p><strong>Required-status-checks note</strong>: if <code>e2e</code> is a required branch-protection
-check, enable "Allow required status checks to pass when skipped" in the
-repo's branch protection settings so that skipped runs count as passing.</p>
+<p>Pushes to <code>main</code> always run.
+PRs that touch only CI configs for other suites, <code>.claude/</code>, etc. skip both bake and the full test run entirely.</p>
+<p><strong>Why not per-bake-target skipping?</strong> The local registry (<code>127.0.0.1:5000</code>) is ephemeral — created fresh each run.
+All four images must be present for e2e to run, so skipping a specific bake target would leave the registry incomplete.
+The GHA layer cache (<code>type=gha,mode=max</code>) already makes cache-hit builds fast (~15 s across all four in parallel), so the marginal gain from per-target skipping is small compared to skipping the entire 10–45 min test suite.</p>
+<p><strong>Required-status-checks note</strong>: if <code>e2e</code> is a required branch-protection check, enable "Allow required status checks to pass when skipped" in the repo's branch protection settings so that skipped runs count as passing.</p>
 <h3 id="files_5">Files<a class="headerlink" href="#files_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">.github/workflows/e2e-test.yml</a> — <code>changes</code> job + <code>if:</code> on <code>e2e</code> job</li>
 </ul>
 <hr />
 <h2 id="background--why-kind-load-docker-image-was-slow">Background — why <code>kind load docker-image</code> was slow<a class="headerlink" href="#background--why-kind-load-docker-image-was-slow" title="Permanent link">&para;</a></h2>
-<p>(Historical context for §12 and §13. The kind-load path itself has been
-replaced by the in-cluster registry in §13; this section explains why.)</p>
+<p>(Historical context for §12 and §13.
+The kind-load path itself has been replaced by the in-cluster registry in §13; this section explains why.)</p>
 <p><code>kind load docker-image IMG --name X</code> did:</p>
 <ol>
-<li><strong><code>docker save IMG</code></strong> — re-serialise the entire image from the local
-   daemon's storage into a tarball. No layer-level dedup across images; the
-   distroless base was exported separately for every image.</li>
-<li><strong>For each node in the cluster, sequentially</strong>: pipe that tarball into
-   <code>docker exec &lt;node-container&gt; ctr --namespace=k8s.io images import -</code>.
-   Containerd inside the node container re-computed digests and wrote the
-   layers into its own content store.</li>
+<li><strong><code>docker save IMG</code></strong> — re-serialise the entire image from the local daemon's storage into a tarball.
+   No layer-level dedup across images; the distroless base was exported separately for every image.</li>
+<li><strong>For each node in the cluster, sequentially</strong>: pipe that tarball into <code>docker exec &lt;node-container&gt; ctr --namespace=k8s.io images import -</code>.
+   Containerd inside the node container re-computed digests and wrote the layers into its own content store.</li>
 </ol>
-<p>Multiplying by the CI cluster topology (2 nodes: 1 control-plane + 1 worker)
-and image sizes (~77+61+17+11 = ~166 MB total): <strong>4 × <code>docker save</code></strong> plus
-<strong>8 × <code>ctr import</code></strong>, all serial in one make target.</p>
+<p>Multiplying by the CI cluster topology (2 nodes: 1 control-plane + 1 worker) and image sizes (~77+61+17+11 = ~166 MB total): <strong>4 × <code>docker save</code></strong> plus <strong>8 × <code>ctr import</code></strong>, all serial in one make target.</p>
 <p>Three structural CI penalties on top of that:</p>
 <ol>
-<li><strong>Slow ephemeral disk.</strong> Every byte traversed the runner's disk multiple
-   times: daemon storage → save tarball → pipe → node container filesystem →
-   containerd content store.</li>
-<li><strong>Single-threaded pipeline.</strong> <code>docker save | docker exec … ctr import</code> is
-   one pipe; gzip in the save tarball is single-threaded; <code>ctr import</code> runs
-   digest verification on one CPU per call.</li>
-<li><strong>Control-plane was loaded for nothing.</strong> The control-plane node is tainted
-   <code>NoSchedule</code>, but <code>kind load docker-image</code> still pushed every image into
-   it, doubling the work in the 2-node config.</li>
+<li><strong>Slow ephemeral disk.</strong> Every byte traversed the runner's disk multiple times: daemon storage → save tarball → pipe → node container filesystem → containerd content store.</li>
+<li><strong>Single-threaded pipeline.</strong> <code>docker save | docker exec … ctr import</code> is one pipe; gzip in the save tarball is single-threaded; <code>ctr import</code> runs digest verification on one CPU per call.</li>
+<li><strong>Control-plane was loaded for nothing.</strong> The control-plane node is tainted <code>NoSchedule</code>, but <code>kind load docker-image</code> still pushed every image into it, doubling the work in the 2-node config.</li>
 </ol>
 <p>§13 (in-cluster registry) replaced all of this.</p>
 <hr />
 <h2 id="12-single-node-ci-cluster--not-doing">12. Single-node CI cluster — <strong>Not doing</strong><a class="headerlink" href="#12-single-node-ci-cluster--not-doing" title="Permanent link">&para;</a></h2>
-<p><strong>Decision</strong>: The project has consolidated on a multi-node e2e suite (1
-control-plane + 1 worker) to validate multi-tenancy under realistic scheduling
-conditions — including the <code>E2E_GMC_ProxyPodScheduledOnWorker</code> assertion.
-Shrinking to a single-node cluster would require either splitting the suite or
-removing that coverage. Splitting into single-node and multi-node suites adds
-CI maintenance overhead that is not justified by the 30–60 s <code>kind create</code>
-saving.</p>
+<p><strong>Decision</strong>: The project has consolidated on a multi-node e2e suite (1 control-plane + 1 worker) to validate multi-tenancy under realistic scheduling conditions — including the <code>E2E_GMC_ProxyPodScheduledOnWorker</code> assertion.
+Shrinking to a single-node cluster would require either splitting the suite or removing that coverage.
+Splitting into single-node and multi-node suites adds CI maintenance overhead that is not justified by the 30–60 s <code>kind create</code> saving.</p>
 <hr />
 <h2 id="13-replace-kind-load-docker-image-with-an-in-cluster-registry-">13. Replace <code>kind load docker-image</code> with an in-cluster registry ✓<a class="headerlink" href="#13-replace-kind-load-docker-image-with-an-in-cluster-registry-" title="Permanent link">&para;</a></h2>
-<p><strong>Estimated savings: ~60–120 s on the CI image-load step; replaces the
-entire <code>make e2e-load-images</code> step</strong></p>
+<p><strong>Estimated savings: ~60–120 s on the CI image-load step; replaces the entire <code>make e2e-load-images</code> step</strong></p>
 <h3 id="problem_6">Problem<a class="headerlink" href="#problem_6" title="Permanent link">&para;</a></h3>
-<p><code>kind load docker-image</code> was a serial bytes-over-pipe operation (see Background
-above): no layer dedup across images, no reuse of unchanged layers across runs,
-full image serialisation on every push. Every CI run re-paid the full ~166 MB
-transfer cost.</p>
+<p><code>kind load docker-image</code> was a serial bytes-over-pipe operation (see Background above): no layer dedup across images, no reuse of unchanged layers across runs, full image serialisation on every push.
+Every CI run re-paid the full ~166 MB transfer cost.</p>
 <h3 id="approach-shipped_3">Approach (shipped)<a class="headerlink" href="#approach-shipped_3" title="Permanent link">&para;</a></h3>
-<p>Adopted the "kind-with-registry" pattern documented at
-<a href="https://kind.sigs.k8s.io/docs/user/local-registry/">https://kind.sigs.k8s.io/docs/user/local-registry/</a>: a <code>registry:2</code> container
-runs alongside the kind cluster on the kind docker network; each node's
-containerd is configured to mirror <code>127.0.0.1:5000</code> → <code>kind-registry:5000</code>;
-buildx pushes directly to the registry; pods pull on demand. (The host ref is
-the literal IPv4 loopback, not <code>localhost</code>: the registry is published IPv4-only,
-so a pusher that resolves <code>localhost</code> to IPv6 <code>[::1]</code> first fails intermittently.)</p>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh">scripts/e2e/kind-with-registry.sh</a> handles the
-whole setup idempotently. <code>make e2e-cluster</code> invokes it; the legacy <code>kind
-load</code> flow was removed entirely (replaced rather than gated). Image tags now
-include <code>127.0.0.1:5000/&lt;name&gt;:e2e-&lt;sha&gt;</code> so kubelet's <code>IfNotPresent</code> cache
-can't serve a stale image across cluster reuse.</p>
+<p>Adopted the "kind-with-registry" pattern documented at <a href="https://kind.sigs.k8s.io/docs/user/local-registry/">https://kind.sigs.k8s.io/docs/user/local-registry/</a>: a <code>registry:2</code> container runs alongside the kind cluster on the kind docker network; each node's containerd is configured to mirror <code>127.0.0.1:5000</code> → <code>kind-registry:5000</code>; buildx pushes directly to the registry; pods pull on demand.
+(The host ref is the literal IPv4 loopback, not <code>localhost</code>: the registry is published IPv4-only, so a pusher that resolves <code>localhost</code> to IPv6 <code>[::1]</code> first fails intermittently.)</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh">scripts/e2e/kind-with-registry.sh</a> handles the whole setup idempotently. <code>make e2e-cluster</code> invokes it; the legacy <code>kind load</code> flow was removed entirely (replaced rather than gated).
+Image tags now include <code>127.0.0.1:5000/&lt;name&gt;:e2e-&lt;sha&gt;</code> so kubelet's <code>IfNotPresent</code> cache can't serve a stale image across cluster reuse.</p>
 <h3 id="files_6">Files<a class="headerlink" href="#files_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh">scripts/e2e/kind-with-registry.sh</a> (new)</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> — <code>e2e-cluster</code> invokes the script;
-  <code>e2e-load-images</code> removed; image tags include the registry prefix</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">.github/workflows/e2e-test.yml</a> and
-  <code>.github/workflows/e2e-multi-node.yml</code>
-  — drop the <code>kind load</code> step; setup-buildx-action uses <code>network=host</code> so
-  buildx can push to the host registry</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go">cmd/gmc/test/e2e/e2e_suite_test.go</a> —
-  dropped the redundant <code>LoadImageToKindClusterWithName</code> loop; flipped the
-  fakegithub manifest's <code>imagePullPolicy: Never</code> → <code>IfNotPresent</code></li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> — <code>e2e-cluster</code> invokes the script; <code>e2e-load-images</code> removed; image tags include the registry prefix</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">.github/workflows/e2e-test.yml</a> and <code>.github/workflows/e2e-multi-node.yml</code> — drop the <code>kind load</code> step; setup-buildx-action uses <code>network=host</code> so buildx can push to the host registry</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go">cmd/gmc/test/e2e/e2e_suite_test.go</a> — dropped the redundant <code>LoadImageToKindClusterWithName</code> loop; flipped the fakegithub manifest's <code>imagePullPolicy: Never</code> → <code>IfNotPresent</code></li>
 </ul>
 <hr />
 <h2 id="final-status">Final status<a class="headerlink" href="#final-status" title="Permanent link">&para;</a></h2>

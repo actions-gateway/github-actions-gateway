@@ -2631,16 +2631,12 @@
 
 
 <h1 id="q165--v2-api-m5-migration-tool--v1v2-cutover-implementation-plan">Q165 — v2 API M5: migration tool + v1/v2 cutover (implementation plan)<a class="headerlink" href="#q165--v2-api-m5-migration-tool--v1v2-cutover-implementation-plan" title="Permanent link">&para;</a></h1>
-<p>Closes the v2 API plan (<a href="../../v2-api/">v2-api.md</a> § M5). Design source of truth:
-<a href="../../../design/appendix-h-v2-api-decomposition/">appendix-h</a> §H.11 (fan-out), §H.12
-(dual-read window), §H.17 (migration invariants).</p>
-<p><strong>Goal.</strong> Ship a one-shot tool that fans a <code>v1alpha1</code> tenant out to the <code>v2alpha1</code>
-object set, complete the v1/v2 dual-read window, and document the cutover —
-without weakening any security property or stranding any resource.</p>
+<p>Closes the v2 API plan (<a href="../../v2-api/">v2-api.md</a> § M5).
+Design source of truth: <a href="../../../design/appendix-h-v2-api-decomposition/">appendix-h</a> §H.11 (fan-out), §H.12 (dual-read window), §H.17 (migration invariants).</p>
+<p><strong>Goal.</strong> Ship a one-shot tool that fans a <code>v1alpha1</code> tenant out to the <code>v2alpha1</code> object set, complete the v1/v2 dual-read window, and document the cutover — without weakening any security property or stranding any resource.</p>
 <h2 id="part-1--fan-out-migration-tool">Part 1 — fan-out migration tool<a class="headerlink" href="#part-1--fan-out-migration-tool" title="Permanent link">&para;</a></h2>
-<p>Core library <code>cmd/gmc/internal/migrate/</code> (pure, golden-tested) + thin CLI
-<code>cmd/gmc/migrate/</code> (<code>gag-migrate</code>). The GMC module already imports all three type
-sets (gmc v1, agc v1, neutral v2), so it is the natural host.</p>
+<p>Core library <code>cmd/gmc/internal/migrate/</code> (pure, golden-tested) + thin CLI <code>cmd/gmc/migrate/</code> (<code>gag-migrate</code>).
+The GMC module already imports all three type sets (gmc v1, agc v1, neutral v2), so it is the natural host.</p>
 <p><strong>Input → output mapping</strong> (<code>FanOut(Input) → Result</code>):</p>
 <table>
 <thead>
@@ -2674,70 +2670,47 @@ sets (gmc v1, agc v1, neutral v2), so it is the natural host.</p>
 </table>
 <p><strong>Decisions (recorded; H.17 invariants):</strong></p>
 <ul>
-<li><strong>Reuse / object-size invariant.</strong> Template identity key = canonical JSON of the
-  <em>built v2 <code>RunnerTemplateSpec</code></em> (<code>podTemplate</code> <strong>and</strong> <code>workerImage</code>). <code>workerImage</code>
-  participates in equality: it selects the runner container image, a material part
-  of the pod shape, so two groups differing only in <code>workerImage</code> must NOT collapse.
-  K groups with an identical key collapse to one <code>RunnerTemplate</code>; the name is a pure
-  function of that key (<code>rt-&lt;12 hex of sha256&gt;</code>), so identical content yields one
-  object by construction.</li>
-<li><strong>No silent direct egress (invariant 1).</strong> The v1 proxy is required, so the tool
-  always emits an <code>EgressProxy</code> and always sets <code>defaultProxyRef</code> on the gateway. The
-  AGC resolves an unset <code>RunnerSet.proxyRef</code> to <code>defaultProxyRef</code> and fails closed
-  (<code>ProxyNotFound</code>) if neither resolves — so leaving <code>proxyRef</code> unset is proxied, never
-  <code>Direct</code>.</li>
-<li><strong><code>maxListeners</code> 1→10 (invariant 1).</strong> v1 unset = 1; v2 unset = 10. The tool pins
-  each <code>RunnerSet.maxListeners</code> to the v1 <em>effective</em> value (1 when v1 omitted it) so
-  the concurrency ceiling is preserved rather than silently raised.</li>
-<li><strong>Standalone vs inline groups (latent ambiguity).</strong> Standalone <code>RunnerGroup</code> CRs are
-  authoritative — they are the runtime set the AGC serves and what the GMC materializes
-  inline <code>spec.runnerGroups[]</code> into. Inline entries with no materialized standalone CR
-  are synthesized to their v1 derived name; on a name collision the standalone CR wins.</li>
-<li><strong>Naming under the §H.6 52-char cap.</strong> Generated names: <code>EgressProxy</code> = <code>&lt;gw&gt;-egress</code>,
-  <code>RunnerSet</code> = the v1 group name, <code>RunnerTemplate</code> = <code>rt-&lt;hash&gt;</code>, gateway = v1 name. Any
-  name over 52 chars is truncated with a short hash suffix and a warning emitted.</li>
-<li><strong>securityProfile relocation (Q175).</strong> Most-restrictive-wins across a namespace's v1
-  gateways (v1 singleton ⇒ usually one). The label is always set (incl. baseline) so the
-  posture is explicit, never silently dropped/downgraded. Privileged carries the
-  namespace <code>privileged-profile=allowed</code> grant forward (domain-migrated, never invented).</li>
+<li><strong>Reuse / object-size invariant.</strong> Template identity key = canonical JSON of the <em>built v2 <code>RunnerTemplateSpec</code></em> (<code>podTemplate</code> <strong>and</strong> <code>workerImage</code>). <code>workerImage</code> participates in equality: it selects the runner container image, a material part of the pod shape, so two groups differing only in <code>workerImage</code> must NOT collapse.
+  K groups with an identical key collapse to one <code>RunnerTemplate</code>; the name is a pure function of that key (<code>rt-&lt;12 hex of sha256&gt;</code>), so identical content yields one object by construction.</li>
+<li><strong>No silent direct egress (invariant 1).</strong> The v1 proxy is required, so the tool always emits an <code>EgressProxy</code> and always sets <code>defaultProxyRef</code> on the gateway.
+  The AGC resolves an unset <code>RunnerSet.proxyRef</code> to <code>defaultProxyRef</code> and fails closed (<code>ProxyNotFound</code>) if neither resolves — so leaving <code>proxyRef</code> unset is proxied, never <code>Direct</code>.</li>
+<li><strong><code>maxListeners</code> 1→10 (invariant 1).</strong> v1 unset = 1; v2 unset = 10.
+  The tool pins each <code>RunnerSet.maxListeners</code> to the v1 <em>effective</em> value (1 when v1 omitted it) so the concurrency ceiling is preserved rather than silently raised.</li>
+<li><strong>Standalone vs inline groups (latent ambiguity).</strong> Standalone <code>RunnerGroup</code> CRs are authoritative — they are the runtime set the AGC serves and what the GMC materializes inline <code>spec.runnerGroups[]</code> into.
+  Inline entries with no materialized standalone CR are synthesized to their v1 derived name; on a name collision the standalone CR wins.</li>
+<li><strong>Naming under the §H.6 52-char cap.</strong> Generated names: <code>EgressProxy</code> = <code>&lt;gw&gt;-egress</code>, <code>RunnerSet</code> = the v1 group name, <code>RunnerTemplate</code> = <code>rt-&lt;hash&gt;</code>, gateway = v1 name.
+  Any name over 52 chars is truncated with a short hash suffix and a warning emitted.</li>
+<li><strong>securityProfile relocation (Q175).</strong> Most-restrictive-wins across a namespace's v1 gateways (v1 singleton ⇒ usually one).
+  The label is always set (incl. baseline) so the posture is explicit, never silently dropped/downgraded.
+  Privileged carries the namespace <code>privileged-profile=allowed</code> grant forward (domain-migrated, never invented).</li>
 </ul>
-<p><strong>Dry-run by default</strong> (emit manifests to stdout/dir); <code>--apply</code> applies the v2 set and
-patches the namespace. The tool never reads/prints Secret contents — it rewrites the
-<code>githubAppRef</code> <em>name</em> only. It never deletes v1 objects (coexistence / rollback).</p>
+<p><strong>Dry-run by default</strong> (emit manifests to stdout/dir); <code>--apply</code> applies the v2 set and patches the namespace.
+The tool never reads/prints Secret contents — it rewrites the <code>githubAppRef</code> <em>name</em> only.
+It never deletes v1 objects (coexistence / rollback).</p>
 <h2 id="part-2--dual-read-window-group-domain--q147-values">Part 2 — dual-read window (group domain + Q147 values)<a class="headerlink" href="#part-2--dual-read-window-group-domain--q147-values" title="Permanent link">&para;</a></h2>
-<p>The three VAPs already dual-read (M3b). Remaining gap: the <strong>v1 GMC ActionsGateway
-webhook</strong> still reads only v1-domain keys. Complete the window there:</p>
+<p>The three VAPs already dual-read (M3b).
+Remaining gap: the <strong>v1 GMC ActionsGateway webhook</strong> still reads only v1-domain keys.
+Complete the window there:</p>
 <ul>
-<li><code>validatePrivilegedEligibility</code> — accept the namespace <code>privileged-profile=allowed</code>
-  label on <strong>either</strong> domain (so a migration that relabels the namespace to the v2
-  domain doesn't strand a still-running v1 privileged gateway).</li>
-<li><code>validateSecurityProfileTransition</code> — accept the downgrade opt-in annotation on
-  <strong>either</strong> domain <em>and</em> either value (<code>"true"</code> legacy / <code>"allowed"</code> new).</li>
+<li><code>validatePrivilegedEligibility</code> — accept the namespace <code>privileged-profile=allowed</code> label on <strong>either</strong> domain (so a migration that relabels the namespace to the v2 domain doesn't strand a still-running v1 privileged gateway).</li>
+<li><code>validateSecurityProfileTransition</code> — accept the downgrade opt-in annotation on <strong>either</strong> domain <em>and</em> either value (<code>"true"</code> legacy / <code>"allowed"</code> new).</li>
 </ul>
-<p>Secure-by-default: widens accepted <em>spelling</em> only; every invariant (explicit opt-in
-required, fail-closed on absence) is unchanged. The tool relabels keys/values/finalizer
-references additively (adds v2 keys, keeps v1 keys so v1 keeps working), so nothing is
-stranded mid-coexistence.</p>
+<p>Secure-by-default: widens accepted <em>spelling</em> only; every invariant (explicit opt-in required, fail-closed on absence) is unchanged.
+The tool relabels keys/values/finalizer references additively (adds v2 keys, keeps v1 keys so v1 keeps working), so nothing is stranded mid-coexistence.</p>
 <h2 id="part-3--docs">Part 3 — docs<a class="headerlink" href="#part-3--docs" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>docs/operations/migration-v1-to-v2.md</code> — operator runbook: dry-run → review → apply,
-  coexistence/rollback, post-migration v1 teardown.</li>
+<li><code>docs/operations/migration-v1-to-v2.md</code> — operator runbook: dry-run → review → apply, coexistence/rollback, post-migration v1 teardown.</li>
 <li><code>v1alpha1</code> deprecation notice (operations + design).</li>
-<li>Design-doc updates (appendix-h §H.11/§H.12 mark the tool shipped); doc-update matrix;
-  website positioning if user-visible.</li>
+<li>Design-doc updates (appendix-h §H.11/§H.12 mark the tool shipped); doc-update matrix; website positioning if user-visible.</li>
 </ul>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Golden-manifest unit tests on <code>FanOut</code>: fan-out, reuse collapse, reference rewrite,
-  securityProfile relocation, naming-cap, a representative multi-group tenant.</li>
-<li>envtest (gmc integration tier): emitted manifests pass v2 CEL + reach the apiserver
-  (<code>--apply</code> path); dual-read proves both domains/values accepted by the VAP + v1 webhook;
-  v1/v2 coexistence.</li>
+<li>Golden-manifest unit tests on <code>FanOut</code>: fan-out, reuse collapse, reference rewrite, securityProfile relocation, naming-cap, a representative multi-group tenant.</li>
+<li>envtest (gmc integration tier): emitted manifests pass v2 CEL + reach the apiserver (<code>--apply</code> path); dual-read proves both domains/values accepted by the VAP + v1 webhook; v1/v2 coexistence.</li>
 </ul>
 <h2 id="exit">Exit<a class="headerlink" href="#exit" title="Permanent link">&para;</a></h2>
-<p>Tool migrates a representative tenant in dry-run <strong>and</strong> <code>--apply</code>; reuse holds;
-securityProfile lands on the namespace; dual-read verified; <code>make check</code> green. Flip the
-v2 API Progress row to ✅ and remove the Q165 Queue row (isolated <code>docs/STATUS.md</code> commit).</p>
+<p>Tool migrates a representative tenant in dry-run <strong>and</strong> <code>--apply</code>; reuse holds; securityProfile lands on the namespace; dual-read verified; <code>make check</code> green.
+Flip the v2 API Progress row to ✅ and remove the Q165 Queue row (isolated <code>docs/STATUS.md</code> commit).</p>
 
 
 

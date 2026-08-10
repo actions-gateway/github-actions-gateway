@@ -2709,85 +2709,55 @@
 
 
 <h1 id="pre-acquisition-admission-control-capacity-gated-acquirejob">Pre-Acquisition Admission Control (Capacity-Gated <code>acquirejob</code>)<a class="headerlink" href="#pre-acquisition-admission-control-capacity-gated-acquirejob" title="Permanent link">&para;</a></h1>
-<p>Status: ✅ Implemented (in-memory reservation-counter gate). Tracked as <a href="../../../STATUS/">Q59</a>.</p>
+<p>Status: ✅ Implemented (in-memory reservation-counter gate).
+Tracked as <a href="../../../STATUS/">Q59</a>.</p>
 <blockquote>
-<p><strong>What shipped.</strong> The in-memory reservation-counter variant (the leading
-candidate below) is live: an <code>AdmitFunc</code> hook on <code>listener.Config</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>) is consulted
-before <code>AcquireJob</code>; the per-RunnerGroup gate lives in the provisioner
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>admission.go</code></a>) and reads
-the ceiling from the freshly cached RunnerGroup each call (honours spec edits,
-Q117). Rejections increment <code>actions_gateway_jobs_admission_rejected_total</code>.
-The post-acquire <code>ceilingCheck</code> and quota retry are unchanged — they remain
-the backstop. <strong>Verified end-to-end (Q154):</strong> the
-ceiling-held-→-cancelled-vs-redelivered assumption below has now been
-confirmed on a real cluster — see "End-to-end verification (Q154)".</p>
+<p><strong>What shipped.</strong> The in-memory reservation-counter variant (the leading candidate below) is live: an <code>AdmitFunc</code> hook on <code>listener.Config</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>) is consulted before <code>AcquireJob</code>; the per-RunnerGroup gate lives in the provisioner (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>admission.go</code></a>) and reads the ceiling from the freshly cached RunnerGroup each call (honours spec edits, Q117).
+Rejections increment <code>actions_gateway_jobs_admission_rejected_total</code>.
+The post-acquire <code>ceilingCheck</code> and quota retry are unchanged — they remain the backstop. <strong>Verified end-to-end (Q154):</strong> the ceiling-held-→-cancelled-vs-redelivered assumption below has now been confirmed on a real cluster — see "End-to-end verification (Q154)".</p>
 </blockquote>
 <h2 id="the-problem-in-one-sentence">The problem in one sentence<a class="headerlink" href="#the-problem-in-one-sentence" title="Permanent link">&para;</a></h2>
-<p>The AGC claims a job from GitHub (<code>acquirejob</code>) <strong>before</strong> it knows whether
-it has capacity to place a worker pod for it, so under capacity pressure it
-acquires jobs it cannot run — wasting the claim and, in the worst case,
-getting the run cancelled rather than redelivered.</p>
+<p>The AGC claims a job from GitHub (<code>acquirejob</code>) <strong>before</strong> it knows whether it has capacity to place a worker pod for it, so under capacity pressure it acquires jobs it cannot run — wasting the claim and, in the worst case, getting the run cancelled rather than redelivered.</p>
 <h2 id="current-behavior-verified-against-code">Current behavior (verified against code)<a class="headerlink" href="#current-behavior-verified-against-code" title="Permanent link">&para;</a></h2>
-<p>The acquire-then-place ordering lives in the listener's <code>handleJob</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>cmd/agc/internal/listener/goroutine.go</code></a>):</p>
+<p>The acquire-then-place ordering lives in the listener's <code>handleJob</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>cmd/agc/internal/listener/goroutine.go</code></a>):</p>
 <ol>
 <li>Long-poll <code>GET /message</code> returns a job.</li>
-<li><strong><code>AcquireJob</code></strong> is called (<code>goroutine.go:341</code>) — this claims the job from
-   GitHub. From here GitHub considers the job <em>owned by this session</em>.</li>
+<li><strong><code>AcquireJob</code></strong> is called (<code>goroutine.go:341</code>) — this claims the job from GitHub.
+   From here GitHub considers the job <em>owned by this session</em>.</li>
 <li>A replacement listener is spawned (<code>SpawnReplacement</code>, line 359).</li>
 <li><strong><code>StartRenewLoop</code></strong> begins (<code>goroutine.go:370</code>) with <code>defer stop()</code>.</li>
 <li><strong><code>JobHandler</code></strong> runs (line 378) → the provisioner's <code>Provision</code>.</li>
 </ol>
-<p>Only in step 5 does capacity get evaluated. In
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>cmd/agc/internal/provisioner/provisioner.go</code></a>:</p>
+<p>Only in step 5 does capacity get evaluated.
+In <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>cmd/agc/internal/provisioner/provisioner.go</code></a>:</p>
 <ul>
-<li><strong>Ceiling check</strong> (<code>provisioner.go:232</code>, <code>ceilingCheck</code>): counts active pods
-  against <code>maxWorkers</code> / <code>priorityTiers</code>. If the ceiling is reached the
-  provisioner deletes the staged Secret and returns
-  <code>concurrency ceiling reached</code>.</li>
-<li><strong>Quota retry</strong> (<code>createPodWithQuotaRetry</code>): on a <code>403 Forbidden / exceeded
-  quota</code> from the API server, retries the pod create in place up to
-  <code>maxQuotaRetries</code> (default 5) with <code>quotaRetryDelay</code> (default 30s) — <strong>while
-  holding the GitHub job lock</strong>.</li>
+<li><strong>Ceiling check</strong> (<code>provisioner.go:232</code>, <code>ceilingCheck</code>): counts active pods against <code>maxWorkers</code> / <code>priorityTiers</code>.
+  If the ceiling is reached the provisioner deletes the staged Secret and returns <code>concurrency ceiling reached</code>.</li>
+<li><strong>Quota retry</strong> (<code>createPodWithQuotaRetry</code>): on a <code>403 Forbidden / exceeded quota</code> from the API server, retries the pod create in place up to <code>maxQuotaRetries</code> (default 5) with <code>quotaRetryDelay</code> (default 30s) — <strong>while holding the GitHub job lock</strong>.</li>
 </ul>
 <h3 id="two-distinct-failure-shapes-fall-out-of-this-ordering">Two distinct failure shapes fall out of this ordering<a class="headerlink" href="#two-distinct-failure-shapes-fall-out-of-this-ordering" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>Ceiling-held job is dropped after acquisition.</strong> When <code>ceilingCheck</code>
-   returns <code>held</code>, <code>JobHandler</code> returns an error, <code>handleJob</code> returns, and the
-   <code>defer stop()</code> halts renewal. The job was <em>already acquired</em> but no worker
-   ever runs and the lock is no longer renewed. Per the lock-expiry contract in
-   <a href="../../../design/04-operational-flows/"><code>docs/design/04-operational-flows.md</code></a>
-   and <a href="../../../design/02-architecture/"><code>02-architecture.md</code> §2.2</a>, a job whose
-   renewal window lapses is <strong>cancelled</strong> by GitHub — <em>not</em> redelivered. So a
-   capacity rejection that arrives one step too late converts "GitHub would
-   have handed this to another session in ~2 min" into "the run is cancelled
-   and needs a manual re-run."</li>
+<li><strong>Ceiling-held job is dropped after acquisition.</strong> When <code>ceilingCheck</code> returns <code>held</code>, <code>JobHandler</code> returns an error, <code>handleJob</code> returns, and the <code>defer stop()</code> halts renewal.
+   The job was <em>already acquired</em> but no worker ever runs and the lock is no longer renewed.
+   Per the lock-expiry contract in <a href="../../../design/04-operational-flows/"><code>docs/design/04-operational-flows.md</code></a> and <a href="../../../design/02-architecture/"><code>02-architecture.md</code> §2.2</a>, a job whose renewal window lapses is <strong>cancelled</strong> by GitHub — <em>not</em> redelivered.
+   So a capacity rejection that arrives one step too late converts "GitHub would have handed this to another session in ~2 min" into "the run is cancelled and needs a manual re-run."</li>
 </ol>
 <blockquote>
-<p>✅ Verified end-to-end (Q154). The acquired-then-held outcome — <em>not
-redelivered</em> — is now confirmed on a real cluster, not just source-read.
+<p>✅ Verified end-to-end (Q154).
+The acquired-then-held outcome — <em>not redelivered</em> — is now confirmed on a real cluster, not just source-read.
 See "End-to-end verification (Q154)" below.</p>
 </blockquote>
 <ol>
-<li><strong>Quota-rejected job blocks a goroutine holding the lock.</strong> The acquire
-   committed the claim, so the provisioner cannot cheaply hand the job back —
-   it retries in place for up to <code>5 × 30s = 150s</code>, occupying a goroutine and a
-   live 10-minute lock the whole time, betting that quota frees up. Reasonable
-   as a last resort, but it only exists <em>because</em> we already acquired.</li>
+<li><strong>Quota-rejected job blocks a goroutine holding the lock.</strong> The acquire committed the claim, so the provisioner cannot cheaply hand the job back — it retries in place for up to <code>5 × 30s = 150s</code>, occupying a goroutine and a live 10-minute lock the whole time, betting that quota frees up.
+   Reasonable as a last resort, but it only exists <em>because</em> we already acquired.</li>
 </ol>
-<p>Both shapes share one root: <strong>the capacity decision happens after the
-irreversible step.</strong></p>
+<p>Both shapes share one root: <strong>the capacity decision happens after the irreversible step.</strong></p>
 <h2 id="proposed-direction-gate-capacity-before-acquirejob">Proposed direction: gate capacity <em>before</em> <code>acquirejob</code><a class="headerlink" href="#proposed-direction-gate-capacity-before-acquirejob" title="Permanent link">&para;</a></h2>
-<p>Add an <strong>admission check between <code>GET /message</code> returning a job and the
-<code>AcquireJob</code> call</strong> in <code>handleJob</code>. If the gate says "no capacity," the
-listener does <strong>not</strong> acquire — it leaves the job in GitHub's queue, where the
-existing redelivery contract hands it to another session (this one, on a later
-poll, or a burst-spawned sibling) within the delivery window. This is a
-<strong>concurrency gate, not a queue</strong> — see "Rejected alternative" below.</p>
-<p>This is deliberately the smallest change that moves the decision to the right
-side of the acquire. It does <strong>not</strong> remove the post-acquire <code>ceilingCheck</code> or
-quota retry; those stay as the backstop for races the pre-check can't close.</p>
+<p>Add an <strong>admission check between <code>GET /message</code> returning a job and the <code>AcquireJob</code> call</strong> in <code>handleJob</code>.
+If the gate says "no capacity," the listener does <strong>not</strong> acquire — it leaves the job in GitHub's queue, where the existing redelivery contract hands it to another session (this one, on a later poll, or a burst-spawned sibling) within the delivery window.
+This is a <strong>concurrency gate, not a queue</strong> — see "Rejected alternative" below.</p>
+<p>This is deliberately the smallest change that moves the decision to the right side of the acquire.
+It does <strong>not</strong> remove the post-acquire <code>ceilingCheck</code> or quota retry; those stay as the backstop for races the pre-check can't close.</p>
 <h3 id="sketch-of-the-gate">Sketch of the gate<a class="headerlink" href="#sketch-of-the-gate" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>GET /message returns job
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>        │
@@ -2802,200 +2772,105 @@ quota retry; those stay as the backstop for races the pre-check can't close.</p>
 </code></pre></div>
 <p>Key design questions to resolve in implementation:</p>
 <ol>
-<li><strong>What does <code>admit</code> count, and from where?</strong> The authoritative count today
-   is <code>activePodCount</code> (a live <code>List</code> against the API server in the
-   provisioner). Calling that synchronously on the hot path before <em>every</em>
-   acquire adds an API round-trip per job and is racy under burst. Options:</li>
-<li><strong>In-memory reservation counter</strong> owned by the provisioner/multiplexer,
-     incremented at admit and decremented on pod terminal state. Fast, but is
-     soft state lost on AGC restart (acceptable — fail-safe, like the eviction
-     counter; budget resets generously, never starves).
-     <strong>Leading candidate.</strong></li>
-<li><strong>Informer-backed pod cache</strong> (ties into <a href="../../../STATUS/">Q64</a>, which already
-     wants the provisioner to <em>watch</em> pods instead of polling). The admit check
-     reads the cache instead of the API server. Best long-term; pairs naturally
-     with <a href="../../../STATUS/">Q63</a>'s RunnerGroup <code>Owns(&amp;Pod)</code>.</li>
+<li><strong>What does <code>admit</code> count, and from where?</strong> The authoritative count today is <code>activePodCount</code> (a live <code>List</code> against the API server in the provisioner).
+   Calling that synchronously on the hot path before <em>every</em> acquire adds an API round-trip per job and is racy under burst.
+   Options:</li>
+<li><strong>In-memory reservation counter</strong> owned by the provisioner/multiplexer, incremented at admit and decremented on pod terminal state.
+     Fast, but is soft state lost on AGC restart (acceptable — fail-safe, like the eviction counter; budget resets generously, never starves). <strong>Leading candidate.</strong></li>
+<li><strong>Informer-backed pod cache</strong> (ties into <a href="../../../STATUS/">Q64</a>, which already wants the provisioner to <em>watch</em> pods instead of polling).
+     The admit check reads the cache instead of the API server.
+     Best long-term; pairs naturally with <a href="../../../STATUS/">Q63</a>'s RunnerGroup <code>Owns(&amp;Pod)</code>.</li>
 <li>
-<p>Keep the live <code>List</code> but move it pre-acquire. Simplest, slowest, racy.</p>
+<p>Keep the live <code>List</code> but move it pre-acquire.
+     Simplest, slowest, racy.</p>
 </li>
 <li>
-<p><strong>Reservation vs. observed count.</strong> A pure observed-pod count
-   double-admits under burst: N listeners can all see "room for one more"
-   before any pod is created. The counter must reserve at admit time
-   (<code>reserved + running &lt; ceiling</code>) and release on terminal state or acquire
-   failure. This reservation is the actual new primitive.</p>
+<p><strong>Reservation vs. observed count.</strong> A pure observed-pod count double-admits under burst: N listeners can all see "room for one more" before any pod is created.
+   The counter must reserve at admit time (<code>reserved + running &lt; ceiling</code>) and release on terminal state or acquire failure.
+   This reservation is the actual new primitive.</p>
 </li>
 <li>
-<p><strong>Priority tiers.</strong> <code>ceilingCheck</code> returns a <code>PriorityClass</code> based on
-   cumulative count; the admit gate must reproduce the <em>last-tier ceiling</em>
-   decision (admit iff below the final tier's ceiling) without needing to
-   assign the class yet — class assignment can stay in the provisioner.</p>
+<p><strong>Priority tiers.</strong> <code>ceilingCheck</code> returns a <code>PriorityClass</code> based on cumulative count; the admit gate must reproduce the <em>last-tier ceiling</em> decision (admit iff below the final tier's ceiling) without needing to assign the class yet — class assignment can stay in the provisioner.</p>
 </li>
 <li>
-<p><strong>Quota is not locally observable.</strong> ResourceQuota exhaustion is only known
-   when the API server rejects the create. The pre-acquire gate cannot predict
-   it, so the post-acquire <code>createPodWithQuotaRetry</code> path must remain. The gate
-   reduces how often we reach it, not whether it exists. Consider lowering the
-   default <code>maxQuotaRetries</code>/<code>quotaRetryDelay</code> once admission control absorbs
-   most of the pressure — but that's a follow-up, not part of this change.</p>
+<p><strong>Quota is not locally observable.</strong> ResourceQuota exhaustion is only known when the API server rejects the create.
+   The pre-acquire gate cannot predict it, so the post-acquire <code>createPodWithQuotaRetry</code> path must remain.
+   The gate reduces how often we reach it, not whether it exists.
+   Consider lowering the default <code>maxQuotaRetries</code>/<code>quotaRetryDelay</code> once admission control absorbs most of the pressure — but that's a follow-up, not part of this change.</p>
 </li>
 <li>
-<p><strong>Where the gate lives.</strong> <code>handleJob</code> already depends on <code>cfg</code> callbacks
-   (<code>SpawnReplacement</code>, <code>JobHandler</code>). Add an <code>AdmitFunc</code>-style hook
-   (<code>func(ctx) (release func(), ok bool)</code>) so the listener stays decoupled from
-   the provisioner and the reservation lifecycle is explicit per the CLAUDE.md
-   async/ownership conventions. <code>release</code> is called on acquire failure or pod
-   terminal state.</p>
+<p><strong>Where the gate lives.</strong> <code>handleJob</code> already depends on <code>cfg</code> callbacks (<code>SpawnReplacement</code>, <code>JobHandler</code>).
+   Add an <code>AdmitFunc</code>-style hook (<code>func(ctx) (release func(), ok bool)</code>) so the listener stays decoupled from the provisioner and the reservation lifecycle is explicit per the CLAUDE.md async/ownership conventions. <code>release</code> is called on acquire failure or pod terminal state.</p>
 </li>
 </ol>
 <h3 id="what-this-buys">What this buys<a class="headerlink" href="#what-this-buys" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Capacity rejections leave the job <strong>redeliverable</strong> instead of acquired-then-
-  cancelled (closes failure shape 1).</li>
+<li>Capacity rejections leave the job <strong>redeliverable</strong> instead of acquired-then- cancelled (closes failure shape 1).</li>
 <li>Far fewer jobs reach the in-place quota-retry stall (mitigates shape 2).</li>
-<li>Steady-state behavior is unchanged — the gate is a no-op until pods approach
-  the ceiling.</li>
+<li>Steady-state behavior is unchanged — the gate is a no-op until pods approach the ceiling.</li>
 </ul>
 <h2 id="rejected-alternative-a-durable-internal-job-queue">Rejected alternative: a durable internal job queue<a class="headerlink" href="#rejected-alternative-a-durable-internal-job-queue" title="Permanent link">&para;</a></h2>
-<p>Adding the AGC's <em>own</em> persistent queue of pending/retrying jobs was
-considered and rejected:</p>
+<p>Adding the AGC's <em>own</em> persistent queue of pending/retrying jobs was considered and rejected:</p>
 <ul>
-<li><strong>GitHub already is the durable queue.</strong> Jobs queue in GitHub's broker;
-  unacquired jobs are redelivered within the ~2-minute window. An internal
-  queue duplicates that contract and creates a two-sources-of-truth
-  reconciliation problem.</li>
-<li><strong>It breaks the stateless-AGC pillar.</strong> The AGC is <code>replicas: 1</code> with an
-  in-memory session registry precisely so it holds no durable state; HA is
-  job-level via GitHub redelivery (<a href="../../../design/02-architecture/"><code>02-architecture.md</code> §2.2</a>).
+<li><strong>GitHub already is the durable queue.</strong> Jobs queue in GitHub's broker; unacquired jobs are redelivered within the ~2-minute window.
+  An internal queue duplicates that contract and creates a two-sources-of-truth reconciliation problem.</li>
+<li><strong>It breaks the stateless-AGC pillar.</strong> The AGC is <code>replicas: 1</code> with an in-memory session registry precisely so it holds no durable state; HA is job-level via GitHub redelivery (<a href="../../../design/02-architecture/"><code>02-architecture.md</code> §2.2</a>).
   A persistent queue forces a datastore + leader election or a shared store.</li>
-<li><strong>Durability buys little here.</strong> The one piece of state we lose on restart —
-  retry counters — is fail-safe to lose (budgets reset generously).</li>
-<li><strong>Fairness/ordering needs don't exist by design.</strong> Tenants are isolated into
-  separate AGC instances; within a tenant GitHub owns ordering.</li>
+<li><strong>Durability buys little here.</strong> The one piece of state we lose on restart — retry counters — is fail-safe to lose (budgets reset generously).</li>
+<li><strong>Fairness/ordering needs don't exist by design.</strong> Tenants are isolated into separate AGC instances; within a tenant GitHub owns ordering.</li>
 </ul>
-<p>The valuable idea hiding inside "should we add a queue?" was <em>backpressure</em>,
-and the cheap way to get backpressure is the admission gate above — not a
-stateful queue subsystem. If a future requirement genuinely needs durable
-cross-restart job state (it does not today), revisit this section before
-building it.</p>
+<p>The valuable idea hiding inside "should we add a queue?" was <em>backpressure</em>, and the cheap way to get backpressure is the admission gate above — not a stateful queue subsystem.
+If a future requirement genuinely needs durable cross-restart job state (it does not today), revisit this section before building it.</p>
 <h2 id="relationship-to-kueue-why-an-off-the-shelf-k8s-queue-isnt-the-admission-layer">Relationship to Kueue (why an off-the-shelf k8s queue isn't the admission layer)<a class="headerlink" href="#relationship-to-kueue-why-an-off-the-shelf-k8s-queue-isnt-the-admission-layer" title="Permanent link">&para;</a></h2>
-<p><a href="https://kueue.sigs.k8s.io/">Kueue</a> is the popular Kubernetes-native job
-queueing / quota manager (ClusterQueue, LocalQueue, ResourceFlavor, Cohort
-borrowing, <code>WorkloadPriorityClass</code> preemption). It is a natural thing to reach
-for when someone asks "why not just put a priority queue in front of the
-runners?" — and it is sometimes layered under ARC for GPU/quota management
-(e.g. the pattern vendors like Exostellar use; <em>specifics to verify in the
-<a href="../../../STATUS/">Q60</a> competitive analysis</em>). So the design must say explicitly
-why GAG does not delegate admission to it.</p>
-<p><strong>Kueue gates the wrong layer for this problem.</strong> Per its own docs, Kueue
-"decides when a job should wait, when a job should be admitted to start (as in
-pods can be created), and when a job should be preempted" — it operates <em>only</em>
-on Kubernetes resources and controls <strong>pod creation</strong>. GAG's admission
-decision, by contrast, has to happen one layer up: at <code>acquirejob</code> against the
-<strong>GitHub broker</strong>, before any Kubernetes object exists. Kueue has no visibility
-into the broker and cannot queue a job that is not yet a Kubernetes workload.</p>
-<p><strong>Even as a complement, the layering fights the broker contract.</strong> Suppose a
-cluster already runs Kueue and GAG's worker pods participate in a ClusterQueue.
-The moment Kueue <em>defers</em> a worker pod (its whole job), GAG is back in the
-failure shape this plan exists to fix: the job was already claimed from GitHub
-at <code>acquirejob</code>, the 10-minute lock is ticking, and the pod that would do the
-work is sitting in a Kueue queue. GitHub's "claim within ~2 min, then you own
-it and must run it" semantics are fundamentally incompatible with queueing the
-work <em>after</em> the claim. Admission has to be decided <strong>before</strong> the claim —
-upstream of anything Kueue can act on.</p>
-<p><strong>Operational mismatch too.</strong> Kueue requires cluster-admin install (CRDs,
-webhooks, cluster-wide controller). GAG's stated requirement is self-service
-tenant onboarding without cluster-admin involvement per team
-(<a href="../../../design/appendix-d-alternatives-considered/">Appendix D intro</a>). Making
-Kueue a hard dependency regresses that.</p>
-<p><strong>Where Kueue <em>is</em> complementary:</strong> in clusters that already run it, GAG's
-worker pods can still be Kueue-managed for cluster-level quota/preemption at the
-pod layer — GAG's per-<code>RunnerGroup</code> admission gate (this plan) and Kueue's
-cluster-wide quota are not mutually exclusive. GAG's gate decides <em>whether to
-claim</em>; Kueue, if present, can still arbitrate the resulting pod against
-cluster quota. The point is that Kueue <strong>augments</strong> the pod layer; it cannot
-<strong>replace</strong> the pre-acquire gate. This is the comparison to land in the docs.</p>
+<p><a href="https://kueue.sigs.k8s.io/">Kueue</a> is the popular Kubernetes-native job queueing / quota manager (ClusterQueue, LocalQueue, ResourceFlavor, Cohort borrowing, <code>WorkloadPriorityClass</code> preemption).
+It is a natural thing to reach for when someone asks "why not just put a priority queue in front of the runners?" — and it is sometimes layered under ARC for GPU/quota management (e.g. the pattern vendors like Exostellar use; <em>specifics to verify in the <a href="../../../STATUS/">Q60</a> competitive analysis</em>).
+So the design must say explicitly why GAG does not delegate admission to it.</p>
+<p><strong>Kueue gates the wrong layer for this problem.</strong> Per its own docs, Kueue "decides when a job should wait, when a job should be admitted to start (as in pods can be created), and when a job should be preempted" — it operates <em>only</em> on Kubernetes resources and controls <strong>pod creation</strong>.
+GAG's admission decision, by contrast, has to happen one layer up: at <code>acquirejob</code> against the <strong>GitHub broker</strong>, before any Kubernetes object exists.
+Kueue has no visibility into the broker and cannot queue a job that is not yet a Kubernetes workload.</p>
+<p><strong>Even as a complement, the layering fights the broker contract.</strong> Suppose a cluster already runs Kueue and GAG's worker pods participate in a ClusterQueue.
+The moment Kueue <em>defers</em> a worker pod (its whole job), GAG is back in the failure shape this plan exists to fix: the job was already claimed from GitHub at <code>acquirejob</code>, the 10-minute lock is ticking, and the pod that would do the work is sitting in a Kueue queue.
+GitHub's "claim within ~2 min, then you own it and must run it" semantics are fundamentally incompatible with queueing the work <em>after</em> the claim.
+Admission has to be decided <strong>before</strong> the claim — upstream of anything Kueue can act on.</p>
+<p><strong>Operational mismatch too.</strong> Kueue requires cluster-admin install (CRDs, webhooks, cluster-wide controller).
+GAG's stated requirement is self-service tenant onboarding without cluster-admin involvement per team (<a href="../../../design/appendix-d-alternatives-considered/">Appendix D intro</a>).
+Making Kueue a hard dependency regresses that.</p>
+<p><strong>Where Kueue <em>is</em> complementary:</strong> in clusters that already run it, GAG's worker pods can still be Kueue-managed for cluster-level quota/preemption at the pod layer — GAG's per-<code>RunnerGroup</code> admission gate (this plan) and Kueue's cluster-wide quota are not mutually exclusive.
+GAG's gate decides <em>whether to claim</em>; Kueue, if present, can still arbitrate the resulting pod against cluster quota.
+The point is that Kueue <strong>augments</strong> the pod layer; it cannot <strong>replace</strong> the pre-acquire gate.
+This is the comparison to land in the docs.</p>
 <h2 id="scope--testing">Scope / testing<a class="headerlink" href="#scope--testing" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Code:</strong> <code>handleJob</code> admit hook (<code>goroutine.go</code>), reservation counter +
-  <code>release</code> lifecycle (provisioner or multiplexer), wiring in the multiplexer.</li>
-<li><strong>Metrics:</strong> add <code>actions_gateway_jobs_admission_rejected_total{namespace,
-  runner_group}</code> (gate said full, acquire skipped) and keep the existing
-  ceiling/quota counters as the post-acquire backstop signal. A persistent gap
-  between admission-rejected and the old ceiling-held counter tells operators
-  the gate is working.</li>
-<li><strong>Docs to update when implemented:</strong> <a href="../../../design/02-architecture/"><code>02-architecture.md</code></a>
-  (Session Multiplexer / Pod Provisioner prose + metrics table),
-  <a href="../../../design/04-operational-flows/"><code>04-operational-flows.md</code></a> (job-acquisition
-  flow), <a href="../../../design/03-api-contracts/"><code>03-api-contracts.md</code></a> if any
-  RunnerGroup field is added, and a troubleshooting note for "jobs not being
-  acquired despite queued work" (gate saturated).</li>
-<li><strong>Document the <em>why</em>, not just the <em>what</em> (required, not optional).</strong> When
-  this ships, the rationale must land in <strong>human-facing docs</strong>, not only this
-  plan doc. Specifically:</li>
-<li>Add a section to <a href="../../../design/appendix-d-alternatives-considered/"><code>appendix-d-alternatives-considered.md</code></a>
-    (it already runs D.1–D.4; this is a natural <strong>D.5 — Kueue / k8s job-queue
-    managers</strong>) capturing two things: (1) why admission is gated <em>before</em>
-    <code>acquirejob</code> rather than via a durable internal queue, and (2) the
-    <strong>Kueue comparison</strong> from the "Relationship to Kueue" section above —
-    Kueue gates pod creation <em>below</em> the broker layer, cannot see the
-    <code>acquirejob</code> decision, and so augments rather than replaces GAG's gate.</li>
-<li>Add a short line to the README's ARC/KEDA comparison block noting that GAG
-    handles admission at the broker-claim layer (where a k8s queue manager like
-    Kueue structurally cannot operate), linking to the appendix for depth.</li>
-<li>Keep this plan doc's "Rejected alternative" and "Relationship to Kueue"
-    sections as the source the appendix is distilled from.</li>
-<li><strong>Test tier:</strong> unit-test the reservation arithmetic (double-admit under
-  burst, release on failure, restart resets). The acquired-then-cancelled
-  outcome and the redelivery-after-skip behavior are <strong>cluster-only kind e2e</strong>
-  territory — they cross the real broker contract and cannot be proven by
-  envtest. This is the same class of bug PR #59's planned
-  <code>E2E_GMC_TenantProvisioning_*</code> test exists to catch.</li>
+<li><strong>Code:</strong> <code>handleJob</code> admit hook (<code>goroutine.go</code>), reservation counter + <code>release</code> lifecycle (provisioner or multiplexer), wiring in the multiplexer.</li>
+<li><strong>Metrics:</strong> add <code>actions_gateway_jobs_admission_rejected_total{namespace, runner_group}</code> (gate said full, acquire skipped) and keep the existing ceiling/quota counters as the post-acquire backstop signal.
+  A persistent gap between admission-rejected and the old ceiling-held counter tells operators the gate is working.</li>
+<li><strong>Docs to update when implemented:</strong> <a href="../../../design/02-architecture/"><code>02-architecture.md</code></a> (Session Multiplexer / Pod Provisioner prose + metrics table), <a href="../../../design/04-operational-flows/"><code>04-operational-flows.md</code></a> (job-acquisition flow), <a href="../../../design/03-api-contracts/"><code>03-api-contracts.md</code></a> if any RunnerGroup field is added, and a troubleshooting note for "jobs not being acquired despite queued work" (gate saturated).</li>
+<li><strong>Document the <em>why</em>, not just the <em>what</em> (required, not optional).</strong> When this ships, the rationale must land in <strong>human-facing docs</strong>, not only this plan doc.
+  Specifically:</li>
+<li>Add a section to <a href="../../../design/appendix-d-alternatives-considered/"><code>appendix-d-alternatives-considered.md</code></a> (it already runs D.1–D.4; this is a natural <strong>D.5 — Kueue / k8s job-queue managers</strong>) capturing two things: (1) why admission is gated <em>before</em> <code>acquirejob</code> rather than via a durable internal queue, and (2) the <strong>Kueue comparison</strong> from the "Relationship to Kueue" section above — Kueue gates pod creation <em>below</em> the broker layer, cannot see the <code>acquirejob</code> decision, and so augments rather than replaces GAG's gate.</li>
+<li>Add a short line to the README's ARC/KEDA comparison block noting that GAG handles admission at the broker-claim layer (where a k8s queue manager like Kueue structurally cannot operate), linking to the appendix for depth.</li>
+<li>Keep this plan doc's "Rejected alternative" and "Relationship to Kueue" sections as the source the appendix is distilled from.</li>
+<li><strong>Test tier:</strong> unit-test the reservation arithmetic (double-admit under burst, release on failure, restart resets).
+  The acquired-then-cancelled outcome and the redelivery-after-skip behavior are <strong>cluster-only kind e2e</strong> territory — they cross the real broker contract and cannot be proven by envtest.
+  This is the same class of bug PR #59's planned <code>E2E_GMC_TenantProvisioning_*</code> test exists to catch.</li>
 </ul>
 <h2 id="end-to-end-verification-q154">End-to-end verification (Q154)<a class="headerlink" href="#end-to-end-verification-q154" title="Permanent link">&para;</a></h2>
-<p>The load-bearing assumption — <em>a ceiling-held, already-acquired job is cancelled
-(owned by the runner; the unrenewed lock lapses), not redelivered</em> — was, until
-Q154, only unit-tested and source-read. Per CLAUDE.md's PR #59 lesson (✅
-source-read findings are unverified until run), it is now confirmed by a cluster-only
-kind e2e: <code>E2E_AGC_AcquireAdmissionControl</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/acquire_admission_test.go"><code>cmd/gmc/test/e2e/acquire_admission_test.go</code></a>.</p>
-<p>The spec proves both halves of the contract the gate rests on, observing
-GitHub's behaviour through fakegithub (extended with an opt-in, owner-scoped
-<strong>lease / acquire-vs-redeliver</strong> model so the two paths have distinct,
-observable outcomes — <code>test/fakegithub/main.go</code>, <code>/control/redelivery</code> +
-<code>/control/jobstats</code>):</p>
+<p>The load-bearing assumption — <em>a ceiling-held, already-acquired job is cancelled (owned by the runner; the unrenewed lock lapses), not redelivered</em> — was, until Q154, only unit-tested and source-read.
+Per CLAUDE.md's PR #59 lesson (✅ source-read findings are unverified until run), it is now confirmed by a cluster-only kind e2e: <code>E2E_AGC_AcquireAdmissionControl</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/acquire_admission_test.go"><code>cmd/gmc/test/e2e/acquire_admission_test.go</code></a>.</p>
+<p>The spec proves both halves of the contract the gate rests on, observing GitHub's behaviour through fakegithub (extended with an opt-in, owner-scoped <strong>lease / acquire-vs-redeliver</strong> model so the two paths have distinct, observable outcomes — <code>test/fakegithub/main.go</code>, <code>/control/redelivery</code> + <code>/control/jobstats</code>):</p>
 <ul>
-<li><strong>Acquired-then-held ⇒ not redelivered.</strong> A Pending decoy pod manufactures the
-  gate/ceiling divergence the post-acquire backstop exists for (a pod the
-  in-memory counter doesn't know about — e.g. after an AGC restart, or a sibling
-  AGC): the gate <em>admits</em>, <code>AcquireJob</code> claims the job, and only then does
-  <code>ceilingCheck</code> hold it. fakegithub records the job acquired and <strong>never
-  redelivers it</strong> (<code>deliveries</code> stays 1) — confirming an acquired job is the
-  runner's to lose, exactly as the design assumes.</li>
-<li><strong>Skipped ⇒ redelivered after capacity frees.</strong> With the single worker slot
-  busy (a Pending pod holding the reservation), a second job is <em>skipped</em> by the
-  gate — never acquired — yet GitHub keeps <strong>redelivering</strong> it (<code>deliveries</code>
-  climbs while <code>acquired</code> stays false). Deleting the busy pod frees the slot and
-  the redelivered job is finally acquired — confirming a skipped job is not lost.</li>
+<li><strong>Acquired-then-held ⇒ not redelivered.</strong> A Pending decoy pod manufactures the gate/ceiling divergence the post-acquire backstop exists for (a pod the in-memory counter doesn't know about — e.g. after an AGC restart, or a sibling AGC): the gate <em>admits</em>, <code>AcquireJob</code> claims the job, and only then does <code>ceilingCheck</code> hold it. fakegithub records the job acquired and <strong>never redelivers it</strong> (<code>deliveries</code> stays 1) — confirming an acquired job is the runner's to lose, exactly as the design assumes.</li>
+<li><strong>Skipped ⇒ redelivered after capacity frees.</strong> With the single worker slot busy (a Pending pod holding the reservation), a second job is <em>skipped</em> by the gate — never acquired — yet GitHub keeps <strong>redelivering</strong> it (<code>deliveries</code> climbs while <code>acquired</code> stays false).
+  Deleting the busy pod frees the slot and the redelivered job is finally acquired — confirming a skipped job is not lost.</li>
 </ul>
-<p><strong>Result: the assumption holds.</strong> The gate's design — decide capacity <em>before</em>
-<code>AcquireJob</code> — is correct: skipping is safe (redelivery) and a too-late
-post-acquire rejection is not (cancellation, no redelivery).</p>
+<p><strong>Result: the assumption holds.</strong> The gate's design — decide capacity <em>before</em> <code>AcquireJob</code> — is correct: skipping is safe (redelivery) and a too-late post-acquire rejection is not (cancellation, no redelivery).</p>
 <h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
 <ul>
-<li>~~Confirm (live) whether a ceiling-held, already-acquired job is cancelled vs.
-  redelivered.~~ <strong>Resolved (Q154): cancelled, not redelivered.</strong> See
-  "End-to-end verification (Q154)" above.</li>
-<li>~~Decide reservation-counter vs. informer-cache for the gate's count source.~~
-  <strong>Resolved: reservation counter</strong> (the leading candidate), shipped as a pure
-  in-memory per-RunnerGroup counter independent of the provisioner's
-  List-backed <code>ceilingCheck</code>. If <a href="../../../STATUS/">Q64</a> later moves the provisioner
-  to an informer-backed pod cache, the gate's <em>backstop</em> (<code>ceilingCheck</code>) can
-  read that cache; the gate's own reservation count stays in-memory by design
-  (it must reserve pre-pod, which no observed-pod source can do).</li>
-<li>Should the gate be per-<code>RunnerGroup</code> only, or also enforce an AGC-wide
-  aggregate ceiling? Per-RG matches today's <code>ceilingCheck</code>; an aggregate cap
-  would be new policy and should be raised separately.</li>
+<li>~~Confirm (live) whether a ceiling-held, already-acquired job is cancelled vs. redelivered.~~ <strong>Resolved (Q154): cancelled, not redelivered.</strong> See "End-to-end verification (Q154)" above.</li>
+<li>~~Decide reservation-counter vs. informer-cache for the gate's count source.~~ <strong>Resolved: reservation counter</strong> (the leading candidate), shipped as a pure in-memory per-RunnerGroup counter independent of the provisioner's List-backed <code>ceilingCheck</code>.
+  If <a href="../../../STATUS/">Q64</a> later moves the provisioner to an informer-backed pod cache, the gate's <em>backstop</em> (<code>ceilingCheck</code>) can read that cache; the gate's own reservation count stays in-memory by design (it must reserve pre-pod, which no observed-pod source can do).</li>
+<li>Should the gate be per-<code>RunnerGroup</code> only, or also enforce an AGC-wide aggregate ceiling?
+  Per-RG matches today's <code>ceilingCheck</code>; an aggregate cap would be new policy and should be raised separately.</li>
 </ul>
 
 

@@ -2898,147 +2898,73 @@
 
 <h1 id="worker-right-sizing-profiles-recommendations-first">Worker Right-Sizing Profiles (Recommendations First)<a class="headerlink" href="#worker-right-sizing-profiles-recommendations-first" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and live-validated
-across three dogfood sessions (two on 2026-07-25, one on 2026-07-28).
-Residuals:
-<a href="../../STATUS/#Q416">Q416</a> and, for the one profile still short of a live run,
-<a href="../../STATUS/#Q448">Q448</a>.</strong> Usage observability, the status recommendation and
-its derivation, restart persistence, and the below-confidence fallback were
-confirmed in the first dogfood session. The two behaviours gated on 20 sampled
-jobs, the <code>SizingDrift</code> verdict and <code>Binpack</code> actuating, were confirmed in a
-second session after Q399 migrated the tenant off the Classic protocol (which
-had orphaned 81% of the jobs it acquired, capping samples at 10);
-<a href="#throughput-actuating-live-2026-07-28"><code>Throughput</code> actuated live</a> on the same
-tenant three days later. See
-<a href="#live-validation-2026-07-25">Live validation</a> and
-<a href="#both-20-sample-paths-confirmed-2026-07-25-second-session">Both ≥20-sample paths confirmed</a>.
-<strong><code>NodeShare</code> is the one actuating profile with no live run yet</strong> — it carries
-envtest confidence only, tracked as Q448.
-Both bugs this validation surfaced are Classic-tier defects rather than sizing
-gaps: <a href="#editing-a-classic-runnerset-needed-an-explicit-version-fixed">Q398</a> is
-fixed, and Q416 waits on a Classic operator report.
+<p><strong>Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and live-validated across three dogfood sessions (two on 2026-07-25, one on 2026-07-28).
+Residuals: <a href="../../STATUS/#Q416">Q416</a> and, for the one profile still short of a live run, <a href="../../STATUS/#Q448">Q448</a>.</strong> Usage observability, the status recommendation and its derivation, restart persistence, and the below-confidence fallback were confirmed in the first dogfood session.
+The two behaviours gated on 20 sampled jobs, the <code>SizingDrift</code> verdict and <code>Binpack</code> actuating, were confirmed in a second session after Q399 migrated the tenant off the Classic protocol (which had orphaned 81% of the jobs it acquired, capping samples at 10); <a href="#throughput-actuating-live-2026-07-28"><code>Throughput</code> actuated live</a> on the same tenant three days later.
+See <a href="#live-validation-2026-07-25">Live validation</a> and <a href="#both-20-sample-paths-confirmed-2026-07-25-second-session">Both ≥20-sample paths confirmed</a>. <strong><code>NodeShare</code> is the one actuating profile with no live run yet</strong> — it carries envtest confidence only, tracked as Q448.
+Both bugs this validation surfaced are Classic-tier defects rather than sizing gaps: <a href="#editing-a-classic-runnerset-needed-an-explicit-version-fixed">Q398</a> is fixed, and Q416 waits on a Classic operator report.
 This doc is the design sketch, the phase record, and the validation record.</p>
 </blockquote>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Automatically right-size worker pod CPU/memory <code>requests</code>/<code>limits</code> per runner
-shape from usage observed across the jobs that actually ran on that shape —
-recommendations first, opt-in actuation later.</p>
+<p>Automatically right-size worker pod CPU/memory <code>requests</code>/<code>limits</code> per runner shape from usage observed across the jobs that actually ran on that shape — recommendations first, opt-in actuation later.</p>
 <h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
-<p><strong>This is a differentiator versus Actions Runner Controller (ARC).</strong> ARC has no
-sizing feedback loop: operators guess runner resource specs, and the guess is
-rarely revisited. Our own dogfood proved both the value and the toil of doing it
-manually — <a href="../dogfood-runner-rightsizing/">dogfood-runner-rightsizing.md</a>
-started from "every worker pod's original <code>requests</code>/<code>limits</code> were an unmeasured
-guess" and spent multiple sessions measuring peaks and deriving values by hand.
+<p><strong>This is a differentiator versus Actions Runner Controller (ARC).</strong> ARC has no sizing feedback loop: operators guess runner resource specs, and the guess is rarely revisited.
+Our own dogfood proved both the value and the toil of doing it manually — <a href="../dogfood-runner-rightsizing/">dogfood-runner-rightsizing.md</a> started from "every worker pod's original <code>requests</code>/<code>limits</code> were an unmeasured guess" and spent multiple sessions measuring peaks and deriving values by hand.
 This plan automates that loop for every tenant.</p>
 <p>The payoff concentrates where nodes are expensive:</p>
 <ul>
-<li><strong>GPU bin-packing.</strong> Jobs select a runner shape by label (e.g. GPU count);
-  within a shape, CPU/memory demand varies. Right-sized CPU/memory requests keep
-  the GPU count — not an inflated CPU ask — the binding constraint, maximizing
-  runners per GPU node.</li>
-<li><strong>Throughput tuning.</strong> The opposite trade is also legitimate: oversize the
-  shape so jobs burst and finish faster (GPU idle time while CPU-bound steps run
-  is waste). A profile makes the trade explicit instead of accidental.</li>
+<li><strong>GPU bin-packing.</strong> Jobs select a runner shape by label (e.g.
+  GPU count); within a shape, CPU/memory demand varies.
+  Right-sized CPU/memory requests keep the GPU count — not an inflated CPU ask — the binding constraint, maximizing runners per GPU node.</li>
+<li><strong>Throughput tuning.</strong> The opposite trade is also legitimate: oversize the shape so jobs burst and finish faster (GPU idle time while CPU-bound steps run is waste).
+  A profile makes the trade explicit instead of accidental.</li>
 </ul>
 <h2 id="constraints-why-this-is-gag-native-not-a-vpa-bolt-on">Constraints (why this is GAG-native, not a VPA bolt-on)<a class="headerlink" href="#constraints-why-this-is-gag-native-not-a-vpa-bolt-on" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p>The durable, post-ship version of this argument — including the alternatives
-considered (stock VPA, custom recommender, GitOps loop, standalone
-webhook-actuated tool) and the extraction path — lives in
-<a href="../../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">appendix D §D.7</a>
-and <a href="../../design/appendix-g-future-enhancements/#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool">appendix G §G.15</a>.</p>
+<p>The durable, post-ship version of this argument — including the alternatives considered (stock VPA, custom recommender, GitOps loop, standalone webhook-actuated tool) and the extraction path — lives in <a href="../../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">appendix D §D.7</a> and <a href="../../design/appendix-g-future-enhancements/#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool">appendix G §G.15</a>.</p>
 </blockquote>
 <ul>
-<li><strong>Stock VPA cannot target worker pods.</strong> VPA's <code>targetRef</code> requires a
-  controller with a <code>/scale</code> subresource to group pods; worker pods are owned by
-  the <code>RunnerSet</code> CRD (<code>cmd/agc/internal/controller/runnerset_target.go</code>), which
-  has no scale semantics — <code>replicas</code> is meaningless in a scale-to-zero design.</li>
-<li><strong>Actuation must happen at pod-build time.</strong> Worker pods live minutes;
-  evict-and-resize (VPA's actuation) is useless. The AGC provisioner already
-  constructs every worker pod from the template
-  (<code>cmd/agc/internal/provisioner/pod.go</code>), so applying a profile needs no
-  webhook — it is a pod-build step.</li>
-<li><strong>GPU counts are never touched.</strong> Extended resources are integer,
-  job-selected via runner labels, and part of the shape's identity. Profiles
-  shape CPU/memory <em>around</em> the fixed GPU allocation only.</li>
-<li><strong>Tenant-authored templates stay authoritative by default.</strong> <code>podTemplate</code> on
-  <code>RunnerTemplate</code> is the tenant's; any auto-apply is opt-in per <code>RunnerSet</code>
-  and clamped (see Phase 3 safety rails).</li>
+<li><strong>Stock VPA cannot target worker pods.</strong> VPA's <code>targetRef</code> requires a controller with a <code>/scale</code> subresource to group pods; worker pods are owned by the <code>RunnerSet</code> CRD (<code>cmd/agc/internal/controller/runnerset_target.go</code>), which has no scale semantics — <code>replicas</code> is meaningless in a scale-to-zero design.</li>
+<li><strong>Actuation must happen at pod-build time.</strong> Worker pods live minutes; evict-and-resize (VPA's actuation) is useless.
+  The AGC provisioner already constructs every worker pod from the template (<code>cmd/agc/internal/provisioner/pod.go</code>), so applying a profile needs no webhook — it is a pod-build step.</li>
+<li><strong>GPU counts are never touched.</strong> Extended resources are integer, job-selected via runner labels, and part of the shape's identity.
+  Profiles shape CPU/memory <em>around</em> the fixed GPU allocation only.</li>
+<li><strong>Tenant-authored templates stay authoritative by default.</strong> <code>podTemplate</code> on <code>RunnerTemplate</code> is the tenant's; any auto-apply is opt-in per <code>RunnerSet</code> and clamped (see Phase 3 safety rails).</li>
 </ul>
 <h2 id="phases">Phases<a class="headerlink" href="#phases" title="Permanent link">&para;</a></h2>
 <h3 id="phase-1--per-runnerset-usage-observability-m---shipped-2026-07-21">Phase 1 — per-RunnerSet usage observability (M) — ✅ shipped 2026-07-21<a class="headerlink" href="#phase-1--per-runnerset-usage-observability-m---shipped-2026-07-21" title="Permanent link">&para;</a></h3>
-<p>The AGC samples CPU/memory usage for the worker pods it owns and aggregates per
-<code>RunnerSet</code> × container. Implementation: <code>cmd/agc/internal/usage/</code> (a
-<code>manager.Runnable</code> ticker poller wired in <code>main.go</code>); operator docs:
-<a href="../../operations/worker-rightsizing/">worker-rightsizing.md</a> +
-<a href="../../operations/observability-metrics/#worker-usage--right-sizing-metrics-q359">metrics reference</a>.</p>
+<p>The AGC samples CPU/memory usage for the worker pods it owns and aggregates per <code>RunnerSet</code> × container.
+Implementation: <code>cmd/agc/internal/usage/</code> (a <code>manager.Runnable</code> ticker poller wired in <code>main.go</code>); operator docs: <a href="../../operations/worker-rightsizing/">worker-rightsizing.md</a> + <a href="../../operations/observability-metrics/#worker-usage--right-sizing-metrics-q359">metrics reference</a>.</p>
 <p>Decisions taken at pickup (open questions 1–2):</p>
 <ul>
-<li><strong>Metrics source: <code>metrics.k8s.io</code></strong> (metrics-server), as the default
-  candidate argued — typed clientset, one PodMetrics list per tick (default
-  15s, <code>WORKER_USAGE_SAMPLE_INTERVAL</code>, <code>0</code>/<code>off</code> disables), RBAC =
-  <code>pods.metrics.k8s.io</code> get/list added to the marker role <strong>and</strong> the
-  hand-maintained <code>agc-tenant-role</code> fragment. Degrades gracefully when absent
-  (throttled log + <code>…_poll_errors_total</code>); jobs shorter than one interval are
-  counted in <code>…_jobs_unsampled_total</code> so coverage is judgeable.</li>
-<li><strong>Aggregation/export: Prometheus histograms of per-job peaks</strong> rather than
-  in-process p50/p95 summaries — <code>histogram_quantile</code> gives any-window
-  quantiles, survives AGC restarts (rate/window queries), and aggregates across
-  replicas; in-process state reduces to per-pod running peaks plus a max-peak
-  gauge per RunnerSet × container (since-start; <code>max_over_time</code> bridges
-  restarts). The in-memory aggregate window question (Q2) is thereby deferred
-  to Phase 2, where status persistence genuinely needs one.</li>
-<li><strong>Ownership scoping:</strong> candidate pods (label <code>actions-gateway.com/runner-set</code>)
-  are matched against the RunnerSets in the manager cache, which is already
-  namespace- and gateway-scoped — co-located multi-gateway AGCs never
-  double-count.</li>
+<li><strong>Metrics source: <code>metrics.k8s.io</code></strong> (metrics-server), as the default candidate argued — typed clientset, one PodMetrics list per tick (default 15s, <code>WORKER_USAGE_SAMPLE_INTERVAL</code>, <code>0</code>/<code>off</code> disables), RBAC = <code>pods.metrics.k8s.io</code> get/list added to the marker role <strong>and</strong> the hand-maintained <code>agc-tenant-role</code> fragment.
+  Degrades gracefully when absent (throttled log + <code>…_poll_errors_total</code>); jobs shorter than one interval are counted in <code>…_jobs_unsampled_total</code> so coverage is judgeable.</li>
+<li><strong>Aggregation/export: Prometheus histograms of per-job peaks</strong> rather than in-process p50/p95 summaries — <code>histogram_quantile</code> gives any-window quantiles, survives AGC restarts (rate/window queries), and aggregates across replicas; in-process state reduces to per-pod running peaks plus a max-peak gauge per RunnerSet × container (since-start; <code>max_over_time</code> bridges restarts).
+  The in-memory aggregate window question (Q2) is thereby deferred to Phase 2, where status persistence genuinely needs one.</li>
+<li><strong>Ownership scoping:</strong> candidate pods (label <code>actions-gateway.com/runner-set</code>) are matched against the RunnerSets in the manager cache, which is already namespace- and gateway-scoped — co-located multi-gateway AGCs never double-count.</li>
 </ul>
-<p><strong>Acceptance:</strong> metrics visible for a live RunnerSet after a handful of jobs;
-recipe reproduces the dogfood derivation without ad-hoc <code>kubectl top</code> scraping.
-Unit-tested (peak-max across ticks, single finalize, unsampled short jobs,
-disappeared pods, unowned pods, poll errors); live-cluster validation rides the
-next dogfood benchmark session.</p>
+<p><strong>Acceptance:</strong> metrics visible for a live RunnerSet after a handful of jobs; recipe reproduces the dogfood derivation without ad-hoc <code>kubectl top</code> scraping.
+Unit-tested (peak-max across ticks, single finalize, unsampled short jobs, disappeared pods, unowned pods, poll errors); live-cluster validation rides the next dogfood benchmark session.</p>
 <h3 id="phase-2--recommendations-in-runnersetstatus-m---shipped-2026-07-21">Phase 2 — recommendations in <code>RunnerSet.status</code> (M) — ✅ shipped 2026-07-21<a class="headerlink" href="#phase-2--recommendations-in-runnersetstatus-m---shipped-2026-07-21" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>status.sizingRecommendation</code>: per-container recommended <code>requests</code>/<code>limits</code>
-  (derived from Phase 1 aggregates), plus sample count and window so operators
-  can judge confidence.</li>
-<li>A condition (e.g. <code>SizingDrift</code>) when the template's ask deviates from the
-  recommendation beyond a threshold in either direction (waste or OOM risk).</li>
-<li><strong>Persistence:</strong> aggregates flush into status periodically and merge back on
-  AGC restart — status is the store; no new backing store.</li>
+<li><code>status.sizingRecommendation</code>: per-container recommended <code>requests</code>/<code>limits</code> (derived from Phase 1 aggregates), plus sample count and window so operators can judge confidence.</li>
+<li>A condition (e.g. <code>SizingDrift</code>) when the template's ask deviates from the recommendation beyond a threshold in either direction (waste or OOM risk).</li>
+<li><strong>Persistence:</strong> aggregates flush into status periodically and merge back on AGC restart — status is the store; no new backing store.</li>
 <li>Recommendations are advisory only in this phase; nothing changes pod specs.</li>
 </ul>
-<p><strong>Acceptance:</strong> a deliberately oversized RunnerSet shows a lower recommendation
-and the drift condition within N jobs; restart does not zero the history.</p>
+<p><strong>Acceptance:</strong> a deliberately oversized RunnerSet shows a lower recommendation and the drift condition within N jobs; restart does not zero the history.</p>
 <p>Decisions taken at pickup (implementation: <code>cmd/agc/internal/usage/aggregate.go</code>
-+ <code>cmd/agc/internal/controller/runnerset_sizing.go</code>; design summary in
-<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix H §H.7</a>):</p>
++ <code>cmd/agc/internal/controller/runnerset_sizing.go</code>; design summary in <a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix H §H.7</a>):</p>
 <ul>
-<li><strong>Aggregation window (open question 2): unbounded-since-window-start, no
-  decay.</strong> The sampler keeps fixed-bucket per-job-peak histograms (the Phase 1
-  Prometheus bucket edges, shared so the two views can't disagree) per
-  RunnerSet × container. No rolling window: sizing wants the whole observed
-  envelope, the operator judges staleness via <code>windowStartTime</code>/<code>sampleCount</code>, and
-  a decay policy can arrive with Phase 3's confidence machinery if live use
-  shows drift-over-time matters. Memory stays bounded by container-name
-  cardinality regardless.</li>
-<li><strong>Persistence is approximate by design.</strong> Status stores per container:
-  observed p95 + max + count (+ window start), not the full histogram. On
-  restart the sampler re-seeds 95% of the count at the p95 and the rest at the
-  max — exactly preserving the two statistics the recommendation derives from
-  (requests ≈ p95, memory limit ≈ max × 1.4) while keeping the API surface
-  operator-meaningful instead of bucket arrays.</li>
-<li><strong>Derivation:</strong> requests = p95 rounded up to 50m / 64Mi steps; memory limit =
-  max × 1.4 (top of the dogfood-validated 1.3–1.4 band); never a CPU limit.
-  Recommendation appears at ≥5 samples; <code>SizingDrift</code> judged at ≥20. Drift =
-  ask ≥2× recommendation (waste) or memory limit &lt; observed peak (OOM risk),
-  compared against the template's declared resources or the provisioner's
-  500m/1Gi gap-fill defaults when it declares none.</li>
-<li><strong>Warm-up safety:</strong> the reconciler never overwrites
-  <code>status.sizingRecommendation</code> with an empty snapshot, so a freshly restarted
-  (or disabled) sampler cannot wipe the persisted store it would re-seed from.</li>
+<li><strong>Aggregation window (open question 2): unbounded-since-window-start, no decay.</strong> The sampler keeps fixed-bucket per-job-peak histograms (the Phase 1 Prometheus bucket edges, shared so the two views can't disagree) per RunnerSet × container.
+  No rolling window: sizing wants the whole observed envelope, the operator judges staleness via <code>windowStartTime</code>/<code>sampleCount</code>, and a decay policy can arrive with Phase 3's confidence machinery if live use shows drift-over-time matters.
+  Memory stays bounded by container-name cardinality regardless.</li>
+<li><strong>Persistence is approximate by design.</strong> Status stores per container: observed p95 + max + count (+ window start), not the full histogram.
+  On restart the sampler re-seeds 95% of the count at the p95 and the rest at the max — exactly preserving the two statistics the recommendation derives from (requests ≈ p95, memory limit ≈ max × 1.4) while keeping the API surface operator-meaningful instead of bucket arrays.</li>
+<li><strong>Derivation:</strong> requests = p95 rounded up to 50m / 64Mi steps; memory limit = max × 1.4 (top of the dogfood-validated 1.3–1.4 band); never a CPU limit.
+  Recommendation appears at ≥5 samples; <code>SizingDrift</code> judged at ≥20.
+  Drift = ask ≥2× recommendation (waste) or memory limit &lt; observed peak (OOM risk), compared against the template's declared resources or the provisioner's 500m/1Gi gap-fill defaults when it declares none.</li>
+<li><strong>Warm-up safety:</strong> the reconciler never overwrites <code>status.sizingRecommendation</code> with an empty snapshot, so a freshly restarted (or disabled) sampler cannot wipe the persisted store it would re-seed from.</li>
 </ul>
 <h3 id="phase-3--opt-in-sizing-profiles-m---shipped-2026-07-22">Phase 3 — opt-in sizing profiles (M) — ✅ shipped 2026-07-22<a class="headerlink" href="#phase-3--opt-in-sizing-profiles-m---shipped-2026-07-22" title="Permanent link">&para;</a></h3>
 <p><code>RunnerSet.spec.sizing.profile</code>, applied by the provisioner at pod-build time:</p>
@@ -3068,18 +2994,10 @@ and the drift condition within N jobs; restart does not zero the history.</p>
 </tr>
 </tbody>
 </table>
-<p>Safety rails: never modify extended resources (GPUs); clamp within configured
-floor/ceiling; fall back to <code>Static</code> while sample count is below a confidence
-minimum; admission-reject profile configs that would exceed the namespace
-<code>ResourceQuota</code>/<code>LimitRange</code> shape rather than failing at provision time.</p>
-<p><strong>Acceptance:</strong> a <code>Binpack</code> RunnerSet provisions pods with derived resources; a
-fresh RunnerSet (no history) provisions <code>Static</code> until confident; GPU counts
-byte-identical to the template in all profiles. (All three asserted by the
-envtest test <code>TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources</code>.)</p>
-<p><strong>Every profile now has an envtest that provisions a real pod</strong> — the other two
-were unit-tested only until 2026-07-26, which left the actuation path (the
-transform reached through <code>Resolve</code> at pod build, not the resource arithmetic in
-isolation) unexercised for both:</p>
+<p>Safety rails: never modify extended resources (GPUs); clamp within configured floor/ceiling; fall back to <code>Static</code> while sample count is below a confidence minimum; admission-reject profile configs that would exceed the namespace <code>ResourceQuota</code>/<code>LimitRange</code> shape rather than failing at provision time.</p>
+<p><strong>Acceptance:</strong> a <code>Binpack</code> RunnerSet provisions pods with derived resources; a fresh RunnerSet (no history) provisions <code>Static</code> until confident; GPU counts byte-identical to the template in all profiles.
+(All three asserted by the envtest test <code>TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources</code>.)</p>
+<p><strong>Every profile now has an envtest that provisions a real pod</strong> — the other two were unit-tested only until 2026-07-26, which left the actuation path (the transform reached through <code>Resolve</code> at pod build, not the resource arithmetic in isolation) unexercised for both:</p>
 <table>
 <thead>
 <tr>
@@ -3098,23 +3016,13 @@ isolation) unexercised for both:</p>
 </tr>
 </tbody>
 </table>
-<p>Each assertion was confirmed to fail against a mutated implementation before
-being trusted (headroom constant, the CPU-limit <code>delete</code>, the runner-container
-guard, and the clamp call each removed in turn).</p>
-<p><strong>Resolved for <code>Throughput</code> on 2026-07-28</strong> (<a href="#throughput-actuating-live-2026-07-28">Throughput actuating
-live</a>, Q449). <code>Binpack</code> was already live
-(<a href="#live-validation-2026-07-25">Live validation</a>), so <code>NodeShare</code> is now the only
-profile carrying envtest confidence rather than dogfood confidence — and the more
-consequential one to leave there, since it needs no warm-up and so is the profile
-an operator can enable on day one. The live path is below.</p>
+<p>Each assertion was confirmed to fail against a mutated implementation before being trusted (headroom constant, the CPU-limit <code>delete</code>, the runner-container guard, and the clamp call each removed in turn).</p>
+<p><strong>Resolved for <code>Throughput</code> on 2026-07-28</strong> (<a href="#throughput-actuating-live-2026-07-28">Throughput actuating live</a>, Q449). <code>Binpack</code> was already live (<a href="#live-validation-2026-07-25">Live validation</a>), so <code>NodeShare</code> is now the only profile carrying envtest confidence rather than dogfood confidence — and the more consequential one to leave there, since it needs no warm-up and so is the profile an operator can enable on day one.
+The live path is below.</p>
 <h3 id="the-live-path-and-why-the-rc-gate-could-not-have-found-this">The live path, and why the RC gate could not have found this<a class="headerlink" href="#the-live-path-and-why-the-rc-gate-could-not-have-found-this" title="Permanent link">&para;</a></h3>
-<p>Auditing what <code>validate-release.sh</code> would actually exercise turned up something
-worse than the missing envtests: <strong>neither dogfood tenant declared
-<code>spec.sizing</code> at all</strong>, so the gate provisioned every worker at the <code>Static</code>
-default and would have passed an RC having validated none of the four profiles.
-The failure mode is quiet by construction — <code>Static</code> yields a valid, healthy
-pod, the matrix goes green, and nothing in the gate looks wrong. It is the
-Q400/Q404 shape again: a gate that cannot observe the thing it gates.</p>
+<p>Auditing what <code>validate-release.sh</code> would actually exercise turned up something worse than the missing envtests: <strong>neither dogfood tenant declared <code>spec.sizing</code> at all</strong>, so the gate provisioned every worker at the <code>Static</code> default and would have passed an RC having validated none of the four profiles.
+The failure mode is quiet by construction — <code>Static</code> yields a valid, healthy pod, the matrix goes green, and nothing in the gate looks wrong.
+It is the Q400/Q404 shape again: a gate that cannot observe the thing it gates.</p>
 <p>Three changes close it, and they are asymmetric because the profiles are:</p>
 <table>
 <thead>
@@ -3142,92 +3050,44 @@ Q400/Q404 shape again: a gate that cannot observe the thing it gates.</p>
 </tr>
 </tbody>
 </table>
-<p><code>Throughput</code> also happens to be what the <code>ci</code> template already encodes by hand —
-requests-only CPU, memory limit above the request for OOM headroom (Q248) — so
-the profile and the measured shape agree, and <code>minRequests</code>/<code>maxRequests</code> bound
-a bad derivation away from starving or over-asking on a real CI tenant.</p>
-<p><strong>The e2e envelope is a deliberate lower bound.</strong> <code>allocatable.cpu: 1500m /
-workersPerNode: 1</code> sits below both variants' static runner request (kata 2, dind
-3), so actuation can only ever <em>reduce</em> a worker's ask — a wrong guess cannot
-make the release's own e2e gate unschedulable. It is CPU-only for the same
-reason. The true e2e-node allocatable has not been measured (the pool is
-<code>n2-standard-8</code> since Q627, the same 8 vCPU / 32 GB shape), and NodeShare
-divides into the runner container only, leaving the dind sidecar and Kata's
-250m RuntimeClass overhead as the operator's accounting; the honest envelope
-therefore needs one <code>kubectl get node</code> reading first (<a href="../../STATUS/#Q448">Q448</a>).
-The trivial <code>÷1</code> divisor is fine here on purpose: the envtests above already
-cover the arithmetic (8÷4, 32Gi÷4), so the dogfood leg buys the thing envtest
-cannot — actuation through the real provisioner, on a real GKE node, for a
-real job.</p>
-<p>Decisions taken at pickup (implementation:
-<code>cmd/agc/internal/controller/runnerset_sizing_profile.go</code>, applied in
-<code>runnerSetTarget.Resolve</code>; design summary in
-<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix H §H.7</a>):</p>
+<p><code>Throughput</code> also happens to be what the <code>ci</code> template already encodes by hand — requests-only CPU, memory limit above the request for OOM headroom (Q248) — so the profile and the measured shape agree, and <code>minRequests</code>/<code>maxRequests</code> bound a bad derivation away from starving or over-asking on a real CI tenant.</p>
+<p><strong>The e2e envelope is a deliberate lower bound.</strong> <code>allocatable.cpu: 1500m / workersPerNode: 1</code> sits below both variants' static runner request (kata 2, dind 3), so actuation can only ever <em>reduce</em> a worker's ask — a wrong guess cannot make the release's own e2e gate unschedulable.
+It is CPU-only for the same reason.
+The true e2e-node allocatable has not been measured (the pool is <code>n2-standard-8</code> since Q627, the same 8 vCPU / 32 GB shape), and NodeShare divides into the runner container only, leaving the dind sidecar and Kata's 250m RuntimeClass overhead as the operator's accounting; the honest envelope therefore needs one <code>kubectl get node</code> reading first (<a href="../../STATUS/#Q448">Q448</a>).
+The trivial <code>÷1</code> divisor is fine here on purpose: the envtests above already cover the arithmetic (8÷4, 32Gi÷4), so the dogfood leg buys the thing envtest cannot — actuation through the real provisioner, on a real GKE node, for a real job.</p>
+<p>Decisions taken at pickup (implementation: <code>cmd/agc/internal/controller/runnerset_sizing_profile.go</code>, applied in <code>runnerSetTarget.Resolve</code>; design summary in <a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix H §H.7</a>):</p>
 <ul>
-<li><strong>Actuation input is <code>status.sizingRecommendation</code></strong>, not the sampler's
-  in-memory state: <code>Resolve</code> re-reads the RunnerSet per job anyway, the status
-  IS the persisted store, and it makes actuation and the reported
-  recommendation impossible to disagree — no new plumbing between sampler and
-  provisioner.</li>
-<li><strong>Whole-pod confidence fallback.</strong> <code>Binpack</code>/<code>Throughput</code> apply only when
-  every template container has a ≥<code>MinSamplesForDrift</code> recommendation;
-  otherwise the whole pod provisions <code>Static</code> (partial actuation would make
-  QoS unpredictable — Guaranteed requires every container to carry
-  requests==limits). Reported as <code>status.sizingProfileState</code>
-  (<code>Active</code>/<code>AwaitingSamples</code>); while <code>Active</code>, <code>SizingDrift</code> reports
-  <code>False/SizingProfileActive</code> instead of judging the now-bypassed template ask.</li>
-<li><strong><code>NodeShare</code> declares the envelope</strong> (<code>nodeShare.allocatable</code> +
-  <code>workersPerNode</code>) rather than the AGC reading Node objects — the AGC is
-  deliberately namespace-scoped (no cluster RBAC), and the operator knows
-  which node shape the set's scheduling constraints target. Applied to the
-  runner container only; sidecars are the operator's accounting.</li>
-<li><strong>Quota/LimitRange conflicts stay a runtime signal</strong> — the planned
-  admission-reject rail is deliberately NOT implemented: cross-object
-  admission validation is what §H.7's "runtime conditions, not admission"
-  philosophy avoids (apply-order coupling, GitOps hostility), and the existing
-  <code>WorkerQuota*</code> conditions + quota retries already surface the conflict. The
-  <code>maxRequests</code> clamp is the preventive knob. <strong>Amended (Q489):</strong> those cover
-  the conflicts admission <em>rejects</em>. The one that rejects nothing — an injected
-  CPU limit cancelling <code>Throughput</code>, whose mechanism is that limit's absence —
-  got its own condition, <code>SizingProfileOverridden</code>, computed by comparing the
-  pods the profile built against what the apiserver admitted rather than by
-  reading any policy object.</li>
-<li>Open question 3 (ship <code>NodeShare</code> first) became moot — it shipped with the
-  phase. Question 4 confirmed: profile parameters live on the <code>RunnerSet</code>
-  (differently-tuned sets can share one template).</li>
+<li><strong>Actuation input is <code>status.sizingRecommendation</code></strong>, not the sampler's in-memory state: <code>Resolve</code> re-reads the RunnerSet per job anyway, the status IS the persisted store, and it makes actuation and the reported recommendation impossible to disagree — no new plumbing between sampler and provisioner.</li>
+<li><strong>Whole-pod confidence fallback.</strong> <code>Binpack</code>/<code>Throughput</code> apply only when every template container has a ≥<code>MinSamplesForDrift</code> recommendation; otherwise the whole pod provisions <code>Static</code> (partial actuation would make QoS unpredictable — Guaranteed requires every container to carry requests==limits).
+  Reported as <code>status.sizingProfileState</code> (<code>Active</code>/<code>AwaitingSamples</code>); while <code>Active</code>, <code>SizingDrift</code> reports <code>False/SizingProfileActive</code> instead of judging the now-bypassed template ask.</li>
+<li><strong><code>NodeShare</code> declares the envelope</strong> (<code>nodeShare.allocatable</code> + <code>workersPerNode</code>) rather than the AGC reading Node objects — the AGC is deliberately namespace-scoped (no cluster RBAC), and the operator knows which node shape the set's scheduling constraints target.
+  Applied to the runner container only; sidecars are the operator's accounting.</li>
+<li><strong>Quota/LimitRange conflicts stay a runtime signal</strong> — the planned admission-reject rail is deliberately NOT implemented: cross-object admission validation is what §H.7's "runtime conditions, not admission" philosophy avoids (apply-order coupling, GitOps hostility), and the existing <code>WorkerQuota*</code> conditions + quota retries already surface the conflict.
+  The <code>maxRequests</code> clamp is the preventive knob. <strong>Amended (Q489):</strong> those cover the conflicts admission <em>rejects</em>.
+  The one that rejects nothing — an injected CPU limit cancelling <code>Throughput</code>, whose mechanism is that limit's absence — got its own condition, <code>SizingProfileOverridden</code>, computed by comparing the pods the profile built against what the apiserver admitted rather than by reading any policy object.</li>
+<li>Open question 3 (ship <code>NodeShare</code> first) became moot — it shipped with the phase.
+  Question 4 confirmed: profile parameters live on the <code>RunnerSet</code> (differently-tuned sets can share one template).</li>
 </ul>
 <h2 id="live-validation-2026-07-25">Live validation (2026-07-25)<a class="headerlink" href="#live-validation-2026-07-25" title="Permanent link">&para;</a></h2>
-<p>Run against the dogfood cluster rebuilt from zero the same session (see the
-<a href="../gke-dogfood/">GKE dogfood runbook</a>), on a control-plane image built from
-<code>e0acd60</code>.
-Every published image predated these phases, so the validation image had to be
-built by hand.</p>
+<p>Run against the dogfood cluster rebuilt from zero the same session (see the <a href="../gke-dogfood/">GKE dogfood runbook</a>), on a control-plane image built from <code>e0acd60</code>.
+Every published image predated these phases, so the validation image had to be built by hand.</p>
 <blockquote>
-<p><strong>That hand-build does not need repeating.</strong> The <code>e0acd60</code> image is still in
-GHCR (<code>ghcr.io/actions-gateway/agc:e0acd60d49fb7fb956b0f5380acdb6d69cac65ec</code>)
-and the dogfood cluster's GMC is already pinned to it, so a follow-up session
-reuses it as-is. Still true that no <em>cut release</em> carries this code: <code>v1.2.0</code>
-and <code>v1.2.0-rc.1</code> both predate Phase 2 (2026-07-21), as does <code>setup.sh</code>'s
-default <code>GAG_IMAGE_TAG</code>. Check with
-<code>git merge-base --is-ancestor &lt;sizing-commit&gt; &lt;ref&gt;</code> before assuming a tag has it.</p>
+<p><strong>That hand-build does not need repeating.</strong> The <code>e0acd60</code> image is still in GHCR (<code>ghcr.io/actions-gateway/agc:e0acd60d49fb7fb956b0f5380acdb6d69cac65ec</code>) and the dogfood cluster's GMC is already pinned to it, so a follow-up session reuses it as-is.
+Still true that no <em>cut release</em> carries this code: <code>v1.2.0</code> and <code>v1.2.0-rc.1</code> both predate Phase 2 (2026-07-21), as does <code>setup.sh</code>'s default <code>GAG_IMAGE_TAG</code>.
+Check with <code>git merge-base --is-ancestor &lt;sizing-commit&gt; &lt;ref&gt;</code> before assuming a tag has it.</p>
 </blockquote>
-<p>Tenant: <code>gag-dogfood</code>, <code>RunnerSet</code> <code>ci</code>, runner container asking <code>cpu: 2</code> /
-<code>memory: 2Gi</code> with a <code>3Gi</code> memory limit. Load was the repo's own CI, dispatched
-onto GAG with <code>unit-test.yml -f target_gag=true</code>.</p>
+<p>Tenant: <code>gag-dogfood</code>, <code>RunnerSet</code> <code>ci</code>, runner container asking <code>cpu: 2</code> / <code>memory: 2Gi</code> with a <code>3Gi</code> memory limit.
+Load was the repo's own CI, dispatched onto GAG with <code>unit-test.yml -f target_gag=true</code>.</p>
 <h3 id="prerequisites-behaved-as-documented">Prerequisites behaved as documented<a class="headerlink" href="#prerequisites-behaved-as-documented" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>metrics.k8s.io</code> is served by GKE's own metrics-server addon; no install step.
-  (It is <em>not</em> Available for roughly the first two minutes of a new cluster's
-  life, so a from-zero bootstrap's preflight reports it missing and then it
-  self-resolves; that artifact is tracked on the dogfood runbook, not here.)</li>
-<li>The AGC's ServiceAccount could <code>list pods.metrics.k8s.io</code> in the tenant
-  namespace with no manual RBAC, confirming the shipped grant.</li>
-<li>The sampler announced itself at startup: <code>worker usage sampler started</code>,
-  <code>interval 15</code>.</li>
+  (It is <em>not</em> Available for roughly the first two minutes of a new cluster's life, so a from-zero bootstrap's preflight reports it missing and then it self-resolves; that artifact is tracked on the dogfood runbook, not here.)</li>
+<li>The AGC's ServiceAccount could <code>list pods.metrics.k8s.io</code> in the tenant namespace with no manual RBAC, confirming the shipped grant.</li>
+<li>The sampler announced itself at startup: <code>worker usage sampler started</code>, <code>interval 15</code>.</li>
 </ul>
 <h3 id="phase-1--usage-observability-confirmed">Phase 1 — usage observability: confirmed<a class="headerlink" href="#phase-1--usage-observability-confirmed" title="Permanent link">&para;</a></h3>
-<p>Scraped from the AGC's <code>/metrics</code> over mTLS. All seven metric families are
-exported with live data, labelled by namespace, runner set, and container:</p>
+<p>Scraped from the AGC's <code>/metrics</code> over mTLS.
+All seven metric families are exported with live data, labelled by namespace, runner set, and container:</p>
 <table>
 <thead>
 <tr>
@@ -3264,22 +3124,12 @@ exported with live data, labelled by namespace, runner set, and container:</p>
 </table>
 <p>Two independent things worth recording:</p>
 <ul>
-<li><strong>The measured peak matches the earlier hand-derivation.</strong> The
-  <a href="../dogfood-runner-rightsizing/">dogfood right-sizing exercise</a> put heavy CI
-  jobs at roughly 3.8 vCPU / 2.1 GiB by scraping <code>kubectl top</code> by hand; the
-  sampler independently measured 3.74 cores / 2.22 GiB on the same workload.
-  That is the feature reproducing, automatically, the number it was built to
-  stop people deriving manually.</li>
-<li><strong><code>jobs_unsampled_total</code> earns its place.</strong> Some CI jobs finish inside one
-  15s sample interval, and the counter makes that visible instead of silently
-  biasing the histogram toward long jobs.</li>
+<li><strong>The measured peak matches the earlier hand-derivation.</strong> The <a href="../dogfood-runner-rightsizing/">dogfood right-sizing exercise</a> put heavy CI jobs at roughly 3.8 vCPU / 2.1 GiB by scraping <code>kubectl top</code> by hand; the sampler independently measured 3.74 cores / 2.22 GiB on the same workload.
+  That is the feature reproducing, automatically, the number it was built to stop people deriving manually.</li>
+<li><strong><code>jobs_unsampled_total</code> earns its place.</strong> Some CI jobs finish inside one 15s sample interval, and the counter makes that visible instead of silently biasing the histogram toward long jobs.</li>
 </ul>
 <h3 id="phase-2--recommendation-in-status-confirmed">Phase 2 — recommendation in status: confirmed<a class="headerlink" href="#phase-2--recommendation-in-status-confirmed" title="Permanent link">&para;</a></h3>
-<p><code>status.sizingRecommendation</code> appeared on the <code>runner</code> container at exactly
-<code>sampleCount: 5</code> (<code>MinSamplesForRecommendation</code>), carrying <code>windowStartTime</code> and
-both raw statistics beside the derived values (the capture below spells that
-field <code>windowStart</code>, its name at observation time; <a href="../../STATUS/">Q485</a> renamed
-it before the 1.3 tag, values unchanged):</p>
+<p><code>status.sizingRecommendation</code> appeared on the <code>runner</code> container at exactly <code>sampleCount: 5</code> (<code>MinSamplesForRecommendation</code>), carrying <code>windowStartTime</code> and both raw statistics beside the derived values (the capture below spells that field <code>windowStart</code>, its name at observation time; <a href="../../STATUS/">Q485</a> renamed it before the 1.3 tag, values unchanged):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;container&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;runner&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;observedPeak&quot;</span><span class="p">:</span><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;cpu&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;3745m&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;memory&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2273Mi&quot;</span><span class="w"> </span><span class="p">},</span>
@@ -3292,42 +3142,24 @@ it before the 1.3 tag, values unchanged):</p>
 </code></pre></div>
 <p>Every derivation rule the docs state is reproduced by these numbers:</p>
 <ul>
-<li><code>requests</code> = p95 rounded <strong>up</strong> to the step: 3745m → 3750m (50m step),
-  2273Mi → 2304Mi (64Mi step, 36 × 64).</li>
+<li><code>requests</code> = p95 rounded <strong>up</strong> to the step: 3745m → 3750m (50m step), 2273Mi → 2304Mi (64Mi step, 36 × 64).</li>
 <li>memory <code>limit</code> = max × 1.4 rounded up: 2273 × 1.4 = 3182.2 → 3200Mi (50 × 64).</li>
 <li><strong>No CPU limit is recommended</strong>, as designed.</li>
-<li><code>observedP95</code> equals <code>observedPeak</code> here because five samples is too few to
-  separate them — which is exactly why <code>sampleCount</code> is published alongside.</li>
+<li><code>observedP95</code> equals <code>observedPeak</code> here because five samples is too few to separate them — which is exactly why <code>sampleCount</code> is published alongside.</li>
 </ul>
-<p><code>SizingDrift</code> was <code>False</code> with reason <code>InsufficientSamples</code> and a message
-naming the threshold, the documented behaviour below 20 samples.</p>
-<p><strong>The dogfood template is under-asking, not over-asking.</strong> The measured
-recommendation (3750m CPU / 2304Mi) sits <em>above</em> the template's <code>cpu: 2</code> /
-<code>memory: 2Gi</code>. Drift only flags waste (ask ≥ 2× recommendation) or OOM risk
-(memory limit below the observed peak), so an under-provisioned CPU <em>request</em>
-is deliberately not flagged: CPU is compressible, and the job bursts into idle
-node capacity rather than failing. Worth stating plainly because it is easy to
-read a <code>SizingWithinRange</code> verdict as "the template is right-sized" when it
-means "the template is not wasteful and will not OOM".</p>
+<p><code>SizingDrift</code> was <code>False</code> with reason <code>InsufficientSamples</code> and a message naming the threshold, the documented behaviour below 20 samples.</p>
+<p><strong>The dogfood template is under-asking, not over-asking.</strong> The measured recommendation (3750m CPU / 2304Mi) sits <em>above</em> the template's <code>cpu: 2</code> / <code>memory: 2Gi</code>.
+Drift only flags waste (ask ≥ 2× recommendation) or OOM risk (memory limit below the observed peak), so an under-provisioned CPU <em>request</em> is deliberately not flagged: CPU is compressible, and the job bursts into idle node capacity rather than failing.
+Worth stating plainly because it is easy to read a <code>SizingWithinRange</code> verdict as "the template is right-sized" when it means "the template is not wasteful and will not OOM".</p>
 <h3 id="phase-2--restart-persistence-confirmed">Phase 2 — restart persistence: confirmed<a class="headerlink" href="#phase-2--restart-persistence-confirmed" title="Permanent link">&para;</a></h3>
-<p>Deleting the AGC pod mid-run (<code>dogfood-agc-…-227d6</code> → <code>…-fstfb</code>) left
-<code>status.sizingRecommendation</code> <strong>byte-identical</strong> across the restart —
-<code>sampleCount: 10</code>, the same <code>observedPeak</code>/<code>observedP95</code>, the same derived
-<code>requests</code>/<code>limits</code>, and the same <code>windowStartTime</code>. That is the warm-up safety
-rail doing its job: a freshly-started sampler holds an empty aggregate, and the
-reconciler declines to overwrite the persisted store with it.</p>
-<p><strong>The re-seed is real, not just a preserved field.</strong> The next job to finalize
-after the restart took <code>sampleCount</code> from 10 to <strong>11</strong>, rather than back to 1 —
-so <code>seedFromStatus</code> (<code>cmd/agc/internal/usage/sampler.go</code>) genuinely rebuilt the
-in-memory aggregate from the persisted statistics, and the reconciler was not
-merely declining to touch a stale field.</p>
+<p>Deleting the AGC pod mid-run (<code>dogfood-agc-…-227d6</code> → <code>…-fstfb</code>) left <code>status.sizingRecommendation</code> <strong>byte-identical</strong> across the restart — <code>sampleCount: 10</code>, the same <code>observedPeak</code>/<code>observedP95</code>, the same derived <code>requests</code>/<code>limits</code>, and the same <code>windowStartTime</code>.
+That is the warm-up safety rail doing its job: a freshly-started sampler holds an empty aggregate, and the reconciler declines to overwrite the persisted store with it.</p>
+<p><strong>The re-seed is real, not just a preserved field.</strong> The next job to finalize after the restart took <code>sampleCount</code> from 10 to <strong>11</strong>, rather than back to 1 — so <code>seedFromStatus</code> (<code>cmd/agc/internal/usage/sampler.go</code>) genuinely rebuilt the in-memory aggregate from the persisted statistics, and the reconciler was not merely declining to touch a stale field.</p>
 <p><strong>The Prometheus metrics do reset</strong>, and should not be mistaken for data loss.
-The gauges and histograms are in-process and start empty on a new pod, which is
-why the metric is documented as "since the AGC last restarted" and the operator
-recipe reaches for <code>max_over_time</code> to bridge restarts. The <em>recommendation</em> is
-what survives, because status — not the metric — is the store.</p>
-<p>The practical consequence is that <strong>the two views disagree immediately after a
-restart, and both are right</strong>. Measured one job after the restart above:</p>
+The gauges and histograms are in-process and start empty on a new pod, which is why the metric is documented as "since the AGC last restarted" and the operator recipe reaches for <code>max_over_time</code> to bridge restarts.
+The <em>recommendation</em> is what survives, because status — not the metric — is the store.</p>
+<p>The practical consequence is that <strong>the two views disagree immediately after a restart, and both are right</strong>.
+Measured one job after the restart above:</p>
 <table>
 <thead>
 <tr>
@@ -3346,20 +3178,15 @@ restart, and both are right</strong>. Measured one job after the restart above:<
 </tr>
 </tbody>
 </table>
-<p>Anyone cross-checking the sampler by comparing those two numbers will conclude
-it lost history. It did not — the counter is scoped to the current process
-while the recommendation carries the whole window.</p>
+<p>Anyone cross-checking the sampler by comparing those two numbers will conclude it lost history.
+It did not — the counter is scoped to the current process while the recommendation carries the whole window.</p>
 <h3 id="phase-3--below-confidence-fallback-confirmed">Phase 3 — below-confidence fallback: confirmed<a class="headerlink" href="#phase-3--below-confidence-fallback-confirmed" title="Permanent link">&para;</a></h3>
-<p>With <code>spec.sizing.profile: Binpack</code> set while no container had reached
-<code>MinSamplesForDrift</code> samples:</p>
+<p>With <code>spec.sizing.profile: Binpack</code> set while no container had reached <code>MinSamplesForDrift</code> samples:</p>
 <ul>
 <li><code>status.sizingProfileState</code> reported <code>AwaitingSamples</code>.</li>
-<li>Worker pods provisioned the template's static ask verbatim
-  (<code>requests cpu 2 / memory 2Gi</code>, <code>limits memory 3Gi</code>) at <strong>Burstable</strong> QoS —
-  i.e. <code>Static</code>, not a partially-derived shape. Guaranteed QoS would have
-  indicated the profile actuating early.</li>
-<li>No <code>SizingDrift</code> condition was set, matching the deliberate "no data, no
-  noise" branch rather than a <code>False/InsufficientSamples</code> on every set.</li>
+<li>Worker pods provisioned the template's static ask verbatim (<code>requests cpu 2 / memory 2Gi</code>, <code>limits memory 3Gi</code>) at <strong>Burstable</strong> QoS — i.e. <code>Static</code>, not a partially-derived shape.
+  Guaranteed QoS would have indicated the profile actuating early.</li>
+<li>No <code>SizingDrift</code> condition was set, matching the deliberate "no data, no noise" branch rather than a <code>False/InsufficientSamples</code> on every set.</li>
 </ul>
 <h3 id="editing-a-classic-runnerset-needed-an-explicit-version-fixed">Editing a Classic RunnerSet needed an explicit version (fixed)<a class="headerlink" href="#editing-a-classic-runnerset-needed-an-explicit-version-fixed" title="Permanent link">&para;</a></h3>
 <p>Enabling the profile the obvious way failed:</p>
@@ -3369,41 +3196,29 @@ while the recommendation carries the whole window.</p>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale set&#39;s</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="go">name is its single runs-on match target (Q264)</span>
 </code></pre></div>
-<p>The object is a <code>Classic</code> set with three <code>runnerLabels</code> — a shape v2alpha1
-allows and v2beta1 does not. Unqualified <code>kubectl</code> addresses the storage
-version (v2beta1), so the write was rejected even though the field being set had
-nothing to do with labels or protocol. Qualifying the resource worked:</p>
+<p>The object is a <code>Classic</code> set with three <code>runnerLabels</code> — a shape v2alpha1 allows and v2beta1 does not.
+Unqualified <code>kubectl</code> addresses the storage version (v2beta1), so the write was rejected even though the field being set had nothing to do with labels or protocol.
+Qualifying the resource worked:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>runnersets.v2alpha1.actions-gateway.com<span class="w"> </span>ci<span class="w"> </span>-n<span class="w"> </span>gag-dogfood<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;sizing&quot;:{&quot;profile&quot;:&quot;Binpack&quot;}}}&#39;</span>
 </code></pre></div>
-<p>This was not specific to sizing — it blocked <em>any</em> unqualified edit of a Classic
-multi-label RunnerSet, including <code>kubectl edit</code> and re-<code>apply</code>. Filed as Q398 and
-<strong>since fixed</strong>: the single-label rule moved from <code>v2beta1</code>'s <code>spec</code> onto its
-<code>runnerLabels</code> field, so CRD validation ratcheting suppresses it while the labels
-are unchanged. The first <code>kubectl patch</code> above now succeeds; qualifying to
-<code>v2alpha1</code> is still required to edit such a set's <strong>labels</strong>. Rationale and the
-general rule for hub-only constraints: <a href="../v2beta1/#6-q74--the-graduation-cut">v2beta1.md</a>.</p>
+<p>This was not specific to sizing — it blocked <em>any</em> unqualified edit of a Classic multi-label RunnerSet, including <code>kubectl edit</code> and re-<code>apply</code>.
+Filed as Q398 and <strong>since fixed</strong>: the single-label rule moved from <code>v2beta1</code>'s <code>spec</code> onto its <code>runnerLabels</code> field, so CRD validation ratcheting suppresses it while the labels are unchanged.
+The first <code>kubectl patch</code> above now succeeds; qualifying to <code>v2alpha1</code> is still required to edit such a set's <strong>labels</strong>.
+Rationale and the general rule for hub-only constraints: <a href="../v2beta1/#6-q74--the-graduation-cut">v2beta1.md</a>.</p>
 <h3 id="the-20-sample-paths-reached-2026-07-25-second-session">The ≥20-sample paths (reached 2026-07-25, second session)<a class="headerlink" href="#the-20-sample-paths-reached-2026-07-25-second-session" title="Permanent link">&para;</a></h3>
-<p>Two behaviours need <code>MinSamplesForDrift</code> (20) sampled jobs on a template
-container. The first session topped out at <strong>10</strong>; the follow-up session, run on
-the ScaleSet-migrated tenant, reached <strong>36</strong> and validated both. Results are in
-<a href="#both-20-sample-paths-confirmed-2026-07-25-second-session">Both ≥20-sample paths confirmed</a>
-below; the account of why the first session could not reach them follows.</p>
+<p>Two behaviours need <code>MinSamplesForDrift</code> (20) sampled jobs on a template container.
+The first session topped out at <strong>10</strong>; the follow-up session, run on the ScaleSet-migrated tenant, reached <strong>36</strong> and validated both.
+Results are in <a href="#both-20-sample-paths-confirmed-2026-07-25-second-session">Both ≥20-sample paths confirmed</a> below; the account of why the first session could not reach them follows.</p>
 <ul>
-<li>the actual <code>SizingDrift</code> verdict (<code>SizingWithinRange</code> vs <code>SizingDriftDetected</code>),
-  as opposed to the <code>InsufficientSamples</code> state that was confirmed;</li>
-<li><code>Binpack</code> actuating — <code>sizingProfileState: Active</code> with derived
-  <code>requests</code>==<code>limits</code> at Guaranteed QoS.</li>
+<li>the actual <code>SizingDrift</code> verdict (<code>SizingWithinRange</code> vs <code>SizingDriftDetected</code>), as opposed to the <code>InsufficientSamples</code> state that was confirmed;</li>
+<li><code>Binpack</code> actuating — <code>sizingProfileState: Active</code> with derived <code>requests</code>==<code>limits</code> at Guaranteed QoS.</li>
 </ul>
-<p>The cap was <strong>not</strong> the sizing code. Since only finalized jobs become samples,
-sample accrual was bounded by the tenant's job-completion rate, which was
-catastrophically low. Diagnosed and fixed under Q399: the tenant moved off the
-Classic protocol to a single-label ScaleSet (<a href="../gke-dogfood/#b7-create-the-v2-tenant-objects">gke-dogfood B7</a>).
-The measurement is recorded here because it bounds what any future validation run
-on this cluster can expect.</p>
-<p><strong>Measured across the whole 2026-07-25 session</strong> (GitHub jobs API for all 18
-dispatched runs, cross-checked against GKE Cloud Logging for the AGC and every
-worker container):</p>
+<p>The cap was <strong>not</strong> the sizing code.
+Since only finalized jobs become samples, sample accrual was bounded by the tenant's job-completion rate, which was catastrophically low.
+Diagnosed and fixed under Q399: the tenant moved off the Classic protocol to a single-label ScaleSet (<a href="../gke-dogfood/#b7-create-the-v2-tenant-objects">gke-dogfood B7</a>).
+The measurement is recorded here because it bounds what any future validation run on this cluster can expect.</p>
+<p><strong>Measured across the whole 2026-07-25 session</strong> (GitHub jobs API for all 18 dispatched runs, cross-checked against GKE Cloud Logging for the AGC and every worker container):</p>
 <table>
 <thead>
 <tr>
@@ -3435,53 +3250,31 @@ worker container):</p>
 </tbody>
 </table>
 <p>The two counts of 16 are independent and agree exactly.</p>
-<p><strong>The failure shape is acquire-without-provision, and it is Classic-only.</strong>
-<code>AcquireJob</code> is what flips a job to <code>in_progress</code> at GitHub and stamps the runner
-name; it succeeded 85 times. Only 16 of those acquisitions ever got a worker pod.
-The other 69 sat with zero steps until GitHub's own timers ended them, visible
-as exact <code>+10:00</code> (lock lapse) and <code>+15:00</code> (unstarted-job) deltas, e.g. run
-<code>30146417937</code>'s <code>coverage</code> started 06:07:42 and "failed" at 06:17:42 having run
-nothing. The tenant's <code>RunnerSet</code> was <code>acquisitionProtocol: Classic</code> with three
-<code>runnerLabels</code>; the ScaleSet listener is single-acquirer and lives in a separate
-package (<code>cmd/agc/internal/scalesetlistener/</code>) that shares none of the classic
-acquire path, which is why Q264 P4 measured 7/7 there against Classic's 2/7.</p>
-<p><strong>The Q254 teardown was a red herring.</strong> It appears in the original Q399 report
-because it is the loudest line in the AGC log, but it fired exactly twice in
-4.75 hours. It cannot account for 69 orphaned jobs.</p>
-<p>Two further Classic-only listener defects surfaced while measuring, both left in
-place because Classic is terminal (<code>docs/plan/v1-classic-sunset-review.md</code>):</p>
+<p><strong>The failure shape is acquire-without-provision, and it is Classic-only.</strong> <code>AcquireJob</code> is what flips a job to <code>in_progress</code> at GitHub and stamps the runner name; it succeeded 85 times.
+Only 16 of those acquisitions ever got a worker pod.
+The other 69 sat with zero steps until GitHub's own timers ended them, visible as exact <code>+10:00</code> (lock lapse) and <code>+15:00</code> (unstarted-job) deltas, e.g. run <code>30146417937</code>'s <code>coverage</code> started 06:07:42 and "failed" at 06:17:42 having run nothing.
+The tenant's <code>RunnerSet</code> was <code>acquisitionProtocol: Classic</code> with three <code>runnerLabels</code>; the ScaleSet listener is single-acquirer and lives in a separate package (<code>cmd/agc/internal/scalesetlistener/</code>) that shares none of the classic acquire path, which is why Q264 P4 measured 7/7 there against Classic's 2/7.</p>
+<p><strong>The Q254 teardown was a red herring.</strong> It appears in the original Q399 report because it is the loudest line in the AGC log, but it fired exactly twice in 4.75 hours.
+It cannot account for 69 orphaned jobs.</p>
+<p>Two further Classic-only listener defects surfaced while measuring, both left in place because Classic is terminal (<code>docs/plan/v1-classic-sunset-review.md</code>):</p>
 <ul>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go"><code>session.go</code></a> <code>healSession</code> deletes
-  the old broker session <em>before</em> refreshing the token, so on the <code>unauthorized</code>
-  heal path the DELETE presents the already-expired token, returns 401, and leaks
-  the session server-side; the follow-up <code>CreateSession</code> then collides with it
-  (409) and the listener exits. Observed at 04:12 and 05:02.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go</code></a> restarts only
-  the permanent baseline goroutine, so both of those listener slots stayed dead
-  for the rest of the session.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go"><code>session.go</code></a> <code>healSession</code> deletes the old broker session <em>before</em> refreshing the token, so on the <code>unauthorized</code> heal path the DELETE presents the already-expired token, returns 401, and leaks the session server-side; the follow-up <code>CreateSession</code> then collides with it (409) and the listener exits.
+  Observed at 04:12 and 05:02.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go</code></a> restarts only the permanent baseline goroutine, so both of those listener slots stayed dead for the rest of the session.</li>
 </ul>
-<p>When picking this up again, note that the drift verdict is judged against the
-<strong>template's</strong> ask, not against new samples — so once a set is past 20 samples,
-both branches can be exercised in seconds by editing <code>RunnerTemplate</code>
-resources, with no further soak:</p>
+<p>When picking this up again, note that the drift verdict is judged against the <strong>template's</strong> ask, not against new samples — so once a set is past 20 samples, both branches can be exercised in seconds by editing <code>RunnerTemplate</code> resources, with no further soak:</p>
 <ul>
-<li><code>SizingDriftDetected</code> (waste) needs an ask ≥2× the recommendation. On the
-  dogfood shape only <strong>memory</strong> can do this: 2× the ~2.3Gi recommendation still
-  fits an <code>e2-standard-4</code>, whereas 2× the ~3.75-core CPU recommendation exceeds
-  node allocatable and would leave worker pods <code>Pending</code> instead.</li>
-<li><code>SizingDriftDetected</code> (OOM risk) needs a memory <em>limit</em> below the observed
-  peak, which will genuinely OOM-kill jobs — do it on a throwaway set.</li>
+<li><code>SizingDriftDetected</code> (waste) needs an ask ≥2× the recommendation.
+  On the dogfood shape only <strong>memory</strong> can do this: 2× the ~2.3Gi recommendation still fits an <code>e2-standard-4</code>, whereas 2× the ~3.75-core CPU recommendation exceeds node allocatable and would leave worker pods <code>Pending</code> instead.</li>
+<li><code>SizingDriftDetected</code> (OOM risk) needs a memory <em>limit</em> below the observed peak, which will genuinely OOM-kill jobs — do it on a throwaway set.</li>
 </ul>
 <blockquote>
-<p>Both predictions above held, with one correction: the OOM-risk branch does
-<strong>not</strong> need a throwaway set. The verdict is a pure reconciler computation over
-<code>status.sizingRecommendation</code> and the template, so with an empty job queue the
-condition can be produced and reverted without a single pod being built from
-the bad limit. See below.</p>
+<p>Both predictions above held, with one correction: the OOM-risk branch does <strong>not</strong> need a throwaway set.
+The verdict is a pure reconciler computation over <code>status.sizingRecommendation</code> and the template, so with an empty job queue the condition can be produced and reverted without a single pod being built from the bad limit.
+See below.</p>
 </blockquote>
 <h2 id="both-20-sample-paths-confirmed-2026-07-25-second-session">Both ≥20-sample paths confirmed (2026-07-25, second session)<a class="headerlink" href="#both-20-sample-paths-confirmed-2026-07-25-second-session" title="Permanent link">&para;</a></h2>
-<p>Run on the same tenant after <a href="../gke-dogfood/#b7-create-the-v2-tenant-objects">Q399</a>
-migrated it to a single-label ScaleSet, on the same <code>e0acd60</code> control-plane image.
+<p>Run on the same tenant after <a href="../gke-dogfood/#b7-create-the-v2-tenant-objects">Q399</a> migrated it to a single-label ScaleSet, on the same <code>e0acd60</code> control-plane image.
 The soak reached <code>sampleCount: 36</code>; the recommendation stabilised at:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;container&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;runner&quot;</span><span class="p">,</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;observedPeak&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;cpu&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;3740m&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;memory&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2399Mi&quot;</span><span class="w"> </span><span class="p">},</span>
@@ -3489,11 +3282,8 @@ The soak reached <code>sampleCount: 36</code>; the recommendation stabilised at:
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">&quot;limits&quot;</span><span class="p">:</span><span class="w">       </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;memory&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;3392Mi&quot;</span><span class="w"> </span><span class="p">},</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">&quot;sampleCount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">36</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
-<p><strong>The measurement reproduced independently.</strong> The first session measured a 3745m
-CPU peak on a Classic tenant; this one measured <strong>3740m</strong> on a ScaleSet tenant,
-from a fresh window with a rebuilt aggregate. Two independent runs, five
-milli-cores apart, agreeing with the ~3.8 vCPU hand-derivation the feature was
-built to replace.</p>
+<p><strong>The measurement reproduced independently.</strong> The first session measured a 3745m CPU peak on a Classic tenant; this one measured <strong>3740m</strong> on a ScaleSet tenant, from a fresh window with a rebuilt aggregate.
+Two independent runs, five milli-cores apart, agreeing with the ~3.8 vCPU hand-derivation the feature was built to replace.</p>
 <h3 id="the-sizingdrift-verdict-all-three-states">The <code>SizingDrift</code> verdict: all three states<a class="headerlink" href="#the-sizingdrift-verdict-all-three-states" title="Permanent link">&para;</a></h3>
 <p>Judged against the template's ask, so each state is one <code>RunnerTemplate</code> edit:</p>
 <table>
@@ -3522,76 +3312,39 @@ built to replace.</p>
 </tr>
 </tbody>
 </table>
-<p>Both <code>SizingDriftDetected</code> messages name the measured numbers rather than
-emitting a generic warning, so an operator can act on the condition alone.</p>
+<p>Both <code>SizingDriftDetected</code> messages name the measured numbers rather than emitting a generic warning, so an operator can act on the condition alone.</p>
 <h3 id="binpack-actuating"><code>Binpack</code> actuating<a class="headerlink" href="#binpack-actuating" title="Permanent link">&para;</a></h3>
-<p>With <code>spec.sizing: {profile: Binpack, maxRequests: {cpu: "3"}}</code> and every template
-container past 20 samples:</p>
+<p>With <code>spec.sizing: {profile: Binpack, maxRequests: {cpu: "3"}}</code> and every template container past 20 samples:</p>
 <ul>
-<li><code>status.sizingProfileState</code> → <strong><code>Active</code></strong> (previously only <code>AwaitingSamples</code>
-  had been observed).</li>
-<li><code>SizingDrift</code> → <code>False</code> / <strong><code>SizingProfileActive</code></strong>, the documented supersession:
-  pods run derived values, so comparing the static ask would mislead.</li>
-<li>The next worker pod provisioned at <strong>Guaranteed QoS</strong> with
-  <code>requests == limits == {cpu: 3, memory: 3392Mi}</code>, while pods created before the
-  flip stayed <code>Burstable</code> on the template's static values, so the transform
-  applies at pod build, not retroactively.</li>
+<li><code>status.sizingProfileState</code> → <strong><code>Active</code></strong> (previously only <code>AwaitingSamples</code> had been observed).</li>
+<li><code>SizingDrift</code> → <code>False</code> / <strong><code>SizingProfileActive</code></strong>, the documented supersession: pods run derived values, so comparing the static ask would mislead.</li>
+<li>The next worker pod provisioned at <strong>Guaranteed QoS</strong> with <code>requests == limits == {cpu: 3, memory: 3392Mi}</code>, while pods created before the flip stayed <code>Burstable</code> on the template's static values, so the transform applies at pod build, not retroactively.</li>
 </ul>
-<p><strong>The <code>maxRequests</code> clamp is not optional on this shape.</strong> The raw CPU
-recommendation (3750m) exceeds an <code>e2-standard-4</code>'s ~3.4 vCPU allocatable, so
-unclamped <code>Binpack</code> would derive an unschedulable pod and leave every worker
-<code>Pending</code>. Clamping to <code>cpu: "3"</code> kept pods schedulable and exercised the safety
-rail in the same step. Any tenant whose measured peak approaches node allocatable
-needs the same clamp. Worth stating in the operator doc, because the failure is
-silent until pods stop scheduling.</p>
+<p><strong>The <code>maxRequests</code> clamp is not optional on this shape.</strong> The raw CPU recommendation (3750m) exceeds an <code>e2-standard-4</code>'s ~3.4 vCPU allocatable, so unclamped <code>Binpack</code> would derive an unschedulable pod and leave every worker <code>Pending</code>.
+Clamping to <code>cpu: "3"</code> kept pods schedulable and exercised the safety rail in the same step.
+Any tenant whose measured peak approaches node allocatable needs the same clamp.
+Worth stating in the operator doc, because the failure is silent until pods stop scheduling.</p>
 <h3 id="ordering-constraint">Ordering constraint<a class="headerlink" href="#ordering-constraint" title="Permanent link">&para;</a></h3>
-<p><code>SizingProfileState: Active</code> short-circuits the drift judgment
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_sizing.go"><code>runnerset_sizing.go</code></a>),
-so the drift branches must be exercised <strong>before</strong> enabling a profile, or the
-condition reports <code>SizingProfileActive</code> instead of a verdict.</p>
+<p><code>SizingProfileState: Active</code> short-circuits the drift judgment (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_sizing.go"><code>runnerset_sizing.go</code></a>), so the drift branches must be exercised <strong>before</strong> enabling a profile, or the condition reports <code>SizingProfileActive</code> instead of a verdict.</p>
 <h3 id="session-artifacts-worth-not-repeating">Session artifacts worth not repeating<a class="headerlink" href="#session-artifacts-worth-not-repeating" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Size the system pool from <code>required_system_nodes</code>, not by hand.</strong> A manual
-  resize to 1 node left the AGC unschedulable (one <code>e2-standard-2</code> cannot hold
-  GMC + Athens + AGC), and the tenant ran with no controller for 16 minutes.
-  <code>scripts/dogfood/start.sh</code> derives the count and warns on a low pin.</li>
-<li><strong><code>maxWorkers</code> is bounded by the namespace <code>ResourceQuota</code>, not just nodes.</strong>
-  Raising it 8 → 16 against a <code>pods: 12</code> quota put the AGC into a
-  provision/quota-deny/retry/abandon loop and stalled sample accrual entirely.
-  The quota conditions reported it precisely (<code>WorkerQuotaExceeded=True</code>,
-  <code>QuotaExhausted</code>, with <code>WorkerQuotaPressure</code> correctly <code>Superseded</code>), which is
-  the capacity observability doing its job on a real fault.</li>
-<li><strong>A Running scale-set worker has no reap deadline, so an idle one is
-  immortal.</strong> After that churn, 8 worker pods remained alive with <strong>zero</strong> jobs
-  outstanding, occupying 10 of 12 quota slots and all 6 worker nodes until
-  deleted by hand. The reaper
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go"><code>runner_shared.go</code></a>)
-  switches on pod phase: terminal phases get <code>completedTTL</code>, <code>Pending</code> gets
-  <code>pendingDeadline</code>, and <code>PodRunning</code> is counted as active and <code>continue</code>d with
-  <strong>no deadline of any kind</strong>. So the Pending orphans in that same window <em>were</em>
-  reaped (<code>reason=pending_deadline</code> in the AGC log); the ones that survived were
-  the workers that had reached Running, registered, and then sat at
-  <code>Listening for Jobs</code> forever because their assignment was gone. On classic this
-  cannot happen: <code>provision()</code> blocks on the pod's terminal state, so a Running
-  worker is always owned by a goroutine. It is specific to the scale-set tier's
-  fire-and-forget provisioning. Filed as Q420 and <strong>fixed 2026-07-26</strong>,
-  independently of Q417 (which shipped later the same day): the fix needed a durable deadline
-  rather than a pod watch, so it did not have to wait for one. The scale-set
-  listener's completion path stamps <code>actions-gateway.com/job-completed-at</code> on the
-  job's worker pod, and the reaper deletes a pod still Running five minutes later
-  (<code>reason=orphaned_running</code>, <code>WorkerPodOrphanedRunning</code> Warning Event). Putting
-  the deadline on the pod rather than in AGC memory is what makes it survive an
-  AGC restart, and set-once semantics keep a completion replayed to a re-created
-  session from pushing it back. Flow:
-  <a href="../../design/04-operational-flows/#orphaned-running-worker-pod-scaleset-tier">04-operational-flows.md</a>.</li>
+<li><strong>Size the system pool from <code>required_system_nodes</code>, not by hand.</strong> A manual resize to 1 node left the AGC unschedulable (one <code>e2-standard-2</code> cannot hold GMC + Athens + AGC), and the tenant ran with no controller for 16 minutes. <code>scripts/dogfood/start.sh</code> derives the count and warns on a low pin.</li>
+<li><strong><code>maxWorkers</code> is bounded by the namespace <code>ResourceQuota</code>, not just nodes.</strong> Raising it 8 → 16 against a <code>pods: 12</code> quota put the AGC into a provision/quota-deny/retry/abandon loop and stalled sample accrual entirely.
+  The quota conditions reported it precisely (<code>WorkerQuotaExceeded=True</code>, <code>QuotaExhausted</code>, with <code>WorkerQuotaPressure</code> correctly <code>Superseded</code>), which is the capacity observability doing its job on a real fault.</li>
+<li><strong>A Running scale-set worker has no reap deadline, so an idle one is immortal.</strong> After that churn, 8 worker pods remained alive with <strong>zero</strong> jobs outstanding, occupying 10 of 12 quota slots and all 6 worker nodes until deleted by hand.
+  The reaper (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go"><code>runner_shared.go</code></a>) switches on pod phase: terminal phases get <code>completedTTL</code>, <code>Pending</code> gets <code>pendingDeadline</code>, and <code>PodRunning</code> is counted as active and <code>continue</code>d with <strong>no deadline of any kind</strong>.
+  So the Pending orphans in that same window <em>were</em> reaped (<code>reason=pending_deadline</code> in the AGC log); the ones that survived were the workers that had reached Running, registered, and then sat at <code>Listening for Jobs</code> forever because their assignment was gone.
+  On classic this cannot happen: <code>provision()</code> blocks on the pod's terminal state, so a Running worker is always owned by a goroutine.
+  It is specific to the scale-set tier's fire-and-forget provisioning.
+  Filed as Q420 and <strong>fixed 2026-07-26</strong>, independently of Q417 (which shipped later the same day): the fix needed a durable deadline rather than a pod watch, so it did not have to wait for one.
+  The scale-set listener's completion path stamps <code>actions-gateway.com/job-completed-at</code> on the job's worker pod, and the reaper deletes a pod still Running five minutes later (<code>reason=orphaned_running</code>, <code>WorkerPodOrphanedRunning</code> Warning Event).
+  Putting the deadline on the pod rather than in AGC memory is what makes it survive an AGC restart, and set-once semantics keep a completion replayed to a re-created session from pushing it back.
+  Flow: <a href="../../design/04-operational-flows/#orphaned-running-worker-pod-scaleset-tier">04-operational-flows.md</a>.</li>
 </ul>
 <h2 id="throughput-actuating-live-2026-07-28"><code>Throughput</code> actuating live (2026-07-28)<a class="headerlink" href="#throughput-actuating-live-2026-07-28" title="Permanent link">&para;</a></h2>
-<p>Q449: the committed <code>spec.sizing</code> block reached the live <code>ci</code> tenant, and
-<code>Throughput</code> provisioned real worker pods. Same cluster and control-plane image
-(<code>e0acd60</code>) as the 07-25 run.</p>
-<p><strong>Derivation, end to end.</strong> From a 36-sample history (<code>observedPeak</code> <code>cpu 3751m</code> /
-<code>memory 2399Mi</code>, <code>requests</code> <code>cpu 3800m</code> / <code>memory 2432Mi</code>), every post-patch worker
-pod provisioned:</p>
+<p>Q449: the committed <code>spec.sizing</code> block reached the live <code>ci</code> tenant, and <code>Throughput</code> provisioned real worker pods.
+Same cluster and control-plane image (<code>e0acd60</code>) as the 07-25 run.</p>
+<p><strong>Derivation, end to end.</strong> From a 36-sample history (<code>observedPeak</code> <code>cpu 3751m</code> / <code>memory 2399Mi</code>, <code>requests</code> <code>cpu 3800m</code> / <code>memory 2432Mi</code>), every post-patch worker pod provisioned:</p>
 <table>
 <thead>
 <tr>
@@ -3628,77 +3381,39 @@ pod provisioned:</p>
 </tr>
 </tbody>
 </table>
-<p><code>status.sizingProfileState</code> → <code>Active</code> and <code>SizingDrift</code> → <code>False</code> /
-<code>SizingProfileActive</code> the moment the spec landed; the template's single <code>runner</code>
-container was already past 20 samples, so the whole-pod confidence gate passed
-with no warm-up. Seven pods actuated, all scheduled (none <code>Pending</code>), and a real
-CI job ran to completion on one (<code>Completed</code>, exit 0) — so <code>cpu: 3</code> schedules on
-an <code>e2-standard-4</code> and the memory envelope holds under the repo's own load.</p>
-<p><strong>The <code>maxRequests</code> clamp is load-bearing for <code>Throughput</code> too</strong>, not just
-<code>Binpack</code>: the raw 3800m derivation exceeds an <code>e2-standard-4</code>'s ~3.4 vCPU
-allocatable. Throughput dropping the <em>CPU limit</em> does not help — schedulability is
-decided by the <em>request</em>. The operator doc's clamp warning was scoped to <code>Binpack</code>
-and has been broadened to both history-based profiles.</p>
-<p><strong>Pods created before the patch stayed <code>Static</code></strong> (<code>cpu 2</code> / <code>memory 2Gi</code>, limit
-<code>3Gi</code>) — actuation is a pod-build transform, not retroactive, matching the 07-25
-<code>Binpack</code> observation.</p>
+<p><code>status.sizingProfileState</code> → <code>Active</code> and <code>SizingDrift</code> → <code>False</code> / <code>SizingProfileActive</code> the moment the spec landed; the template's single <code>runner</code> container was already past 20 samples, so the whole-pod confidence gate passed with no warm-up.
+Seven pods actuated, all scheduled (none <code>Pending</code>), and a real CI job ran to completion on one (<code>Completed</code>, exit 0) — so <code>cpu: 3</code> schedules on an <code>e2-standard-4</code> and the memory envelope holds under the repo's own load.</p>
+<p><strong>The <code>maxRequests</code> clamp is load-bearing for <code>Throughput</code> too</strong>, not just <code>Binpack</code>: the raw 3800m derivation exceeds an <code>e2-standard-4</code>'s ~3.4 vCPU allocatable.
+Throughput dropping the <em>CPU limit</em> does not help — schedulability is decided by the <em>request</em>.
+The operator doc's clamp warning was scoped to <code>Binpack</code> and has been broadened to both history-based profiles.</p>
+<p><strong>Pods created before the patch stayed <code>Static</code></strong> (<code>cpu 2</code> / <code>memory 2Gi</code>, limit <code>3Gi</code>) — actuation is a pod-build transform, not retroactive, matching the 07-25 <code>Binpack</code> observation.</p>
 <h3 id="why-this-could-not-be-deployed-until-now">Why this could not be deployed until now<a class="headerlink" href="#why-this-could-not-be-deployed-until-now" title="Permanent link">&para;</a></h3>
-<p>The cluster was at <strong>0 nodes across every pool</strong> (normal at-rest state after
-<code>stop.sh</code>), so the GMC pod had been <code>Pending</code> ~10h and <code>webhook-service</code> had no
-endpoints. The <code>RunnerSet</code> CRD stores <code>v2beta1</code> with <code>Webhook</code> conversion, and
-<code>vrunnerset-v2alpha1.kb.io</code> is <code>failurePolicy: Fail</code> with <code>matchPolicy:
-Equivalent</code> — so a write to <em>either</em> served version is routed through the down
-webhook. <strong>No CR write of any kind can land while the dogfood cluster is
-stopped.</strong> Bring the cluster up first; there is no offline path.</p>
+<p>The cluster was at <strong>0 nodes across every pool</strong> (normal at-rest state after <code>stop.sh</code>), so the GMC pod had been <code>Pending</code> ~10h and <code>webhook-service</code> had no endpoints.
+The <code>RunnerSet</code> CRD stores <code>v2beta1</code> with <code>Webhook</code> conversion, and <code>vrunnerset-v2alpha1.kb.io</code> is <code>failurePolicy: Fail</code> with <code>matchPolicy: Equivalent</code> — so a write to <em>either</em> served version is routed through the down webhook. <strong>No CR write of any kind can land while the dogfood cluster is stopped.</strong> Bring the cluster up first; there is no offline path.</p>
 <h3 id="the-multi-day-soak-was-not-needed">The multi-day soak was not needed<a class="headerlink" href="#the-multi-day-soak-was-not-needed" title="Permanent link">&para;</a></h3>
-<p>Q449 was filed expecting a days-long accrual before the RC. It was not required:
-the aggregate is <strong>cumulative with no TTL or eviction</strong>, and <code>seedFromStatus</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/usage/aggregate.go"><code>aggregate.go</code></a>) rebuilds it from
-persisted <code>status.sizingRecommendation</code>. All 36 samples from 07-25 were still
-counted after the stop, so the deploy was a single short window — start, patch,
-verify, stop — rather than a soak. <strong>Any future sizing deploy on this tenant
-inherits the same property</strong>: history is durable across stop/start, so it never
-has to be re-earned.</p>
-<p>What survives is the <em>summary</em>, not the raw distribution, and that is by
-design: <code>seed</code> reconstructs the histogram from the persisted <code>(sampleCount,
-observedP95, observedPeak)</code> triple by putting 95% of the mass at the p95 and the
-rest at the max. Sample count and peak come back exact and the p95 to bucket
-resolution — precisely the three statistics the recommendation reads — while the
-shape below the p95 is deliberately not persisted. So "durable" means the
-<em>derivation</em> is reproducible across a stop, not that the tenant's job history is
-archived; a stop still costs the sub-p95 detail, which nothing downstream uses.</p>
+<p>Q449 was filed expecting a days-long accrual before the RC.
+It was not required: the aggregate is <strong>cumulative with no TTL or eviction</strong>, and <code>seedFromStatus</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/usage/aggregate.go"><code>aggregate.go</code></a>) rebuilds it from persisted <code>status.sizingRecommendation</code>.
+All 36 samples from 07-25 were still counted after the stop, so the deploy was a single short window — start, patch, verify, stop — rather than a soak. <strong>Any future sizing deploy on this tenant inherits the same property</strong>: history is durable across stop/start, so it never has to be re-earned.</p>
+<p>What survives is the <em>summary</em>, not the raw distribution, and that is by design: <code>seed</code> reconstructs the histogram from the persisted <code>(sampleCount, observedP95, observedPeak)</code> triple by putting 95% of the mass at the p95 and the rest at the max.
+Sample count and peak come back exact and the p95 to bucket resolution — precisely the three statistics the recommendation reads — while the shape below the p95 is deliberately not persisted.
+So "durable" means the <em>derivation</em> is reproducible across a stop, not that the tenant's job history is archived; a stop still costs the sub-p95 detail, which nothing downstream uses.</p>
 <h3 id="startsh-does-not-re-apply-the-crs"><code>start.sh</code> does not re-apply the CRs<a class="headerlink" href="#startsh-does-not-re-apply-the-crs" title="Permanent link">&para;</a></h3>
-<p>The reason the committed config sat undeployed: <code>start.sh</code> resizes the pool,
-waits for readiness, and dispatches workflows — it never calls <code>apply_cr</code>, which
-lives only in <code>setup.sh</code>'s <code>main</code>. A CR-only change therefore reaches the cluster
-via a <code>setup.sh</code> re-run or a targeted patch, never via a start. Worth knowing
-before assuming a committed CR edit is live.</p>
+<p>The reason the committed config sat undeployed: <code>start.sh</code> resizes the pool, waits for readiness, and dispatches workflows — it never calls <code>apply_cr</code>, which lives only in <code>setup.sh</code>'s <code>main</code>.
+A CR-only change therefore reaches the cluster via a <code>setup.sh</code> re-run or a targeted patch, never via a start.
+Worth knowing before assuming a committed CR edit is live.</p>
 <h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>AGC / GMC / proxy-pool autoscaling</strong> — separate concerns, both shipped:
-  the managed VPA opt-in for the control planes (Q360:
-  <a href="../../design/appendix-e-capacity-planning/#e11-managed-vertical-right-sizing-of-the-control-planes"><code>ActionsGateway.spec.agcAutoscaling</code></a>
-  and the chart's <code>vpa.enabled</code>) and the bring-your-own proxy autoscaler (Q173:
-  <a href="../v2-api/#bring-your-own-proxy-autoscaler-q173--shipped"><code>EgressProxy.spec.managedAutoscaling</code></a>).</li>
+<li><strong>AGC / GMC / proxy-pool autoscaling</strong> — separate concerns, both shipped: the managed VPA opt-in for the control planes (Q360: <a href="../../design/appendix-e-capacity-planning/#e11-managed-vertical-right-sizing-of-the-control-planes"><code>ActionsGateway.spec.agcAutoscaling</code></a> and the chart's <code>vpa.enabled</code>) and the bring-your-own proxy autoscaler (Q173: <a href="../v2-api/#bring-your-own-proxy-autoscaler-q173--shipped"><code>EgressProxy.spec.managedAutoscaling</code></a>).</li>
 <li><strong>GPU-count autoscaling</strong> — shapes are selected by jobs, never resized.</li>
-<li><strong>Making CI faster than GitHub-hosted</strong> — same scope note as the
-  <a href="../dogfood-runner-rightsizing/#scope-note--this-is-costcorrectness-not-speed">dogfood plan</a>:
-  this is cost/correctness, not speed.</li>
-<li><strong>In-place resize of running job pods</strong> (K8s ≥1.33 in-place pod resize) —
-  plausible future extension once profiles exist; out of scope here.</li>
+<li><strong>Making CI faster than GitHub-hosted</strong> — same scope note as the <a href="../dogfood-runner-rightsizing/#scope-note--this-is-costcorrectness-not-speed">dogfood plan</a>: this is cost/correctness, not speed.</li>
+<li><strong>In-place resize of running job pods</strong> (K8s ≥1.33 in-place pod resize) — plausible future extension once profiles exist; out of scope here.</li>
 </ul>
 <h2 id="open-questions-settle-at-phase-pickup">Open questions (settle at phase pickup)<a class="headerlink" href="#open-questions-settle-at-phase-pickup" title="Permanent link">&para;</a></h2>
 <ol>
-<li>~~Metrics source~~ — settled in Phase 1: <code>metrics.k8s.io</code> (see the Phase 1
-   decisions above).</li>
-<li>~~Aggregation window and decay~~ — settled in Phase 2:
-   unbounded-since-window-start with no decay (see the Phase 2 decisions);
-   revisit only if live use shows drift-over-time matters (Phase 3 clamps and
-   confidence minimums are the safety net).</li>
-<li>Whether <code>NodeShare</code> ships first as its own slice (it needs none of the
-   observability machinery).</li>
-<li>Where profile parameters live when the same <code>RunnerTemplate</code> backs
-   differently-tuned <code>RunnerSet</code>s (current answer: on the <code>RunnerSet</code>).</li>
+<li>~~Metrics source~~ — settled in Phase 1: <code>metrics.k8s.io</code> (see the Phase 1 decisions above).</li>
+<li>~~Aggregation window and decay~~ — settled in Phase 2: unbounded-since-window-start with no decay (see the Phase 2 decisions); revisit only if live use shows drift-over-time matters (Phase 3 clamps and confidence minimums are the safety net).</li>
+<li>Whether <code>NodeShare</code> ships first as its own slice (it needs none of the observability machinery).</li>
+<li>Where profile parameters live when the same <code>RunnerTemplate</code> backs differently-tuned <code>RunnerSet</code>s (current answer: on the <code>RunnerSet</code>).</li>
 </ol>
 
 

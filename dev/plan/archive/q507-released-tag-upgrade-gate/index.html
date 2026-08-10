@@ -2631,19 +2631,11 @@
 
 
 <h1 id="q507--no-gate-upgrades-from-the-last-released-chart-tag">Q507 — No gate upgrades from the last released chart tag<a class="headerlink" href="#q507--no-gate-upgrades-from-the-last-released-chart-tag" title="Permanent link">&para;</a></h1>
-<p><strong>Status: SHIPPED.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh"><code>scripts/e2e/chart-released-upgrade-check.sh</code></a>
-(<code>make chart-released-upgrade-check</code>) runs last among the chart checks in
-<code>e2e-reusable.yml</code> (kindnet leg only). The design question below resolved to
-option (2) — <code>helm pull</code> of the published OCI artifact — with the tag discovered
-dynamically as the highest stable <code>vX.Y.Z</code> tag on origin (<code>git ls-remote</code>,
-prereleases excluded; the version <code>publish.yml</code> keys the chart on). No stable
-tag → clean skip; a stable tag with no published chart → loud failure, since
-operators cannot install that release either. The values migration path
-(acceptance bullet 4) is covered: an upgrade carrying the removed
-<code>priorityClassAllowlist.configMapName</code> must fail at render with the migration
-message, anchored on the guard still existing in HEAD's templates so retiring
-the guard retires the probe. Gate contract for chart authors and the discovery
-rules: <a href="../../../development/testing/#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>.</p>
+<p><strong>Status: SHIPPED.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh"><code>scripts/e2e/chart-released-upgrade-check.sh</code></a> (<code>make chart-released-upgrade-check</code>) runs last among the chart checks in <code>e2e-reusable.yml</code> (kindnet leg only).
+The design question below resolved to option (2) — <code>helm pull</code> of the published OCI artifact — with the tag discovered dynamically as the highest stable <code>vX.Y.Z</code> tag on origin (<code>git ls-remote</code>, prereleases excluded; the version <code>publish.yml</code> keys the chart on).
+No stable tag → clean skip; a stable tag with no published chart → loud failure, since operators cannot install that release either.
+The values migration path (acceptance bullet 4) is covered: an upgrade carrying the removed <code>priorityClassAllowlist.configMapName</code> must fail at render with the migration message, anchored on the guard still existing in HEAD's templates so retiring the guard retires the probe.
+Gate contract for chart authors and the discovery rules: <a href="../../../development/testing/#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>.</p>
 <h2 id="the-gap">The gap<a class="headerlink" href="#the-gap" title="Permanent link">&para;</a></h2>
 <p>Three paths exercise the chart, and none of them upgrades a <strong>released</strong> release:</p>
 <table>
@@ -2672,68 +2664,47 @@ rules: <a href="../../../development/testing/#the-released-chart-upgrade-gate-q5
 </tr>
 </tbody>
 </table>
-<p>So every gate answers "does HEAD upgrade to HEAD?" — never "does the chart an
-operator is actually running upgrade to HEAD?". Those are different questions
-whenever a change interacts with what Helm does <em>between</em> two chart versions.</p>
+<p>So every gate answers "does HEAD upgrade to HEAD?" — never "does the chart an operator is actually running upgrade to HEAD?".
+Those are different questions whenever a change interacts with what Helm does <em>between</em> two chart versions.</p>
 <h2 id="what-it-let-through">What it let through<a class="headerlink" href="#what-it-let-through" title="Permanent link">&para;</a></h2>
-<p>Q492 moved the PriorityClass guard's <code>paramKind</code> to a CRD and shipped that CRD in
-the chart-root <code>crds/</code> dir — the only placement Helm installs early enough for a
-CR in the same release. Helm installs <code>crds/</code> on <code>helm install</code> <strong>only, never on
-upgrade</strong>, so <strong>every</strong> existing release failed to upgrade:</p>
+<p>Q492 moved the PriorityClass guard's <code>paramKind</code> to a CRD and shipped that CRD in the chart-root <code>crds/</code> dir — the only placement Helm installs early enough for a CR in the same release.
+Helm installs <code>crds/</code> on <code>helm install</code> <strong>only, never on upgrade</strong>, so <strong>every</strong> existing release failed to upgrade:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Error: UPGRADE FAILED: resource mapping not found for name: &quot;gmc-priorityclass-allowlist&quot;
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>no matches for kind &quot;PriorityClassAllowlist&quot; in version &quot;actions-gateway.com/v2beta1&quot;
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ensure CRDs are installed first
 </code></pre></div>
-<p><code>make check</code> was green, every path-gated heavy gate ran and passed, and the PR was
-marked review-ready with a description asserting that installs which never set
-<code>priorityClassAllowlist.configMapName</code> needed no action. It was caught by a
-question in review, not by a gate. Nothing in CI could have caught it, because
-nothing in CI upgrades from a released chart.</p>
-<p>The fix (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/958">#958</a>)
-was verified by hand: <code>git archive v1.2.0</code> into a scratch dir, install on kind,
-upgrade to HEAD. That manual procedure is what this item automates.</p>
+<p><code>make check</code> was green, every path-gated heavy gate ran and passed, and the PR was marked review-ready with a description asserting that installs which never set <code>priorityClassAllowlist.configMapName</code> needed no action.
+It was caught by a question in review, not by a gate.
+Nothing in CI could have caught it, because nothing in CI upgrades from a released chart.</p>
+<p>The fix (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/958">#958</a>) was verified by hand: <code>git archive v1.2.0</code> into a scratch dir, install on kind, upgrade to HEAD.
+That manual procedure is what this item automates.</p>
 <h2 id="the-design-question">The design question<a class="headerlink" href="#the-design-question" title="Permanent link">&para;</a></h2>
 <p>Everything else is mechanical; this is the part to settle first.</p>
-<p><strong>How does CI resolve "the last released chart"?</strong> Three candidates, with the
-trade-off that matters:</p>
+<p><strong>How does CI resolve "the last released chart"?</strong> Three candidates, with the trade-off that matters:</p>
 <ol>
-<li><strong><code>git archive &lt;latest tag&gt;</code></strong> — no network, works on a fork and offline, and
-   the chart is exactly what the tag contains. But it is the chart <em>source</em>, not
-   the published artifact, so it cannot catch a packaging difference.</li>
-<li><strong><code>helm pull oci://ghcr.io/...</code> at the latest published version</strong> — tests the
-   real artifact, which is what operators run. Needs registry access from CI and
-   a rule for what to do when the newest tag has not published yet.</li>
-<li><strong>A pinned floor in-repo</strong> (e.g. a <code>MIN_UPGRADE_FROM</code> file) — deterministic and
-   reviewable, but rots silently unless something reminds you to bump it.</li>
+<li><strong><code>git archive &lt;latest tag&gt;</code></strong> — no network, works on a fork and offline, and the chart is exactly what the tag contains.
+   But it is the chart <em>source</em>, not the published artifact, so it cannot catch a packaging difference.</li>
+<li><strong><code>helm pull oci://ghcr.io/...</code> at the latest published version</strong> — tests the real artifact, which is what operators run.
+   Needs registry access from CI and a rule for what to do when the newest tag has not published yet.</li>
+<li><strong>A pinned floor in-repo</strong> (e.g. a <code>MIN_UPGRADE_FROM</code> file) — deterministic and reviewable, but rots silently unless something reminds you to bump it.</li>
 </ol>
 <p>(1) is the cheapest starting point and would have caught Q492's defect outright.
-(2) is the honest end state. They are not exclusive — (1) as the gate, (2) as a
-periodic job — and the choice can be deferred to implementation.</p>
-<p>Second-order: the gate must skip cleanly when no tag exists yet (a fresh fork),
-and must not pin the repo to a tag so old it predates a deliberate breaking
-change. Both argue for resolving the tag dynamically rather than hardcoding.</p>
+(2) is the honest end state.
+They are not exclusive — (1) as the gate, (2) as a periodic job — and the choice can be deferred to implementation.</p>
+<p>Second-order: the gate must skip cleanly when no tag exists yet (a fresh fork), and must not pin the repo to a tag so old it predates a deliberate breaking change.
+Both argue for resolving the tag dynamically rather than hardcoding.</p>
 <h2 id="acceptance">Acceptance<a class="headerlink" href="#acceptance" title="Permanent link">&para;</a></h2>
 <ul>
-<li>A gate installs the last released chart on a kind cluster, upgrades it to HEAD,
-  and fails if the upgrade fails or admission is broken afterwards.</li>
-<li>It fails on a reintroduction of the Q492 shape — a chart-root <code>crds/</code> CRD whose
-  CR the same release renders, with no documented apply step.</li>
-<li>It runs on one lane only (the property is Helm-version-dependent, not
-  CNI-dependent), matching how <code>chart_upgrade_check</code> and <code>chart_reinstall_check</code>
-  are gated in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a>.</li>
-<li>The values migration path is covered too, or explicitly noted as out of scope:
-  a released release whose values set a key HEAD removed must fail <em>at render</em>
-  with the migration message, not midway through applying.</li>
+<li>A gate installs the last released chart on a kind cluster, upgrades it to HEAD, and fails if the upgrade fails or admission is broken afterwards.</li>
+<li>It fails on a reintroduction of the Q492 shape — a chart-root <code>crds/</code> CRD whose CR the same release renders, with no documented apply step.</li>
+<li>It runs on one lane only (the property is Helm-version-dependent, not CNI-dependent), matching how <code>chart_upgrade_check</code> and <code>chart_reinstall_check</code> are gated in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>e2e-reusable.yml</code></a>.</li>
+<li>The values migration path is covered too, or explicitly noted as out of scope: a released release whose values set a key HEAD removed must fail <em>at render</em> with the migration message, not midway through applying.</li>
 </ul>
 <h2 id="why-this-is-worth-a-gate-rather-than-a-checklist-item">Why this is worth a gate rather than a checklist item<a class="headerlink" href="#why-this-is-worth-a-gate-rather-than-a-checklist-item" title="Permanent link">&para;</a></h2>
-<p>The failure is invisible to every local signal. <code>helm template</code>, <code>helm lint</code>,
-<code>kubeconform</code>, <code>make check</code> and the full e2e suite all pass on a chart that no
-existing release can upgrade to, because none of them has an older release to
-upgrade <em>from</em>. A reviewer would have to know Helm's <code>crds/</code> rule and think to ask.
+<p>The failure is invisible to every local signal. <code>helm template</code>, <code>helm lint</code>, <code>kubeconform</code>, <code>make check</code> and the full e2e suite all pass on a chart that no existing release can upgrade to, because none of them has an older release to upgrade <em>from</em>.
+A reviewer would have to know Helm's <code>crds/</code> rule and think to ask.
 That is exactly the shape that belongs in CI rather than in a human's memory.</p>
-<p>Prior art for the harness: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-upgrade-check.sh"><code>chart-upgrade-check.sh</code></a>
-already captures a live release's values, mutates the chart, upgrades, and
-restores — most of the scaffolding this needs exists there.</p>
+<p>Prior art for the harness: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-upgrade-check.sh"><code>chart-upgrade-check.sh</code></a> already captures a live release's values, mutates the chart, upgrades, and restores — most of the scaffolding this needs exists there.</p>
 
 
 

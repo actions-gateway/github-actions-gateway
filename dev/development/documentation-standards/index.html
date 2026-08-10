@@ -2716,6 +2716,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#line-breaks-in-prose-one-sentence-per-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Line breaks in prose: one sentence per line
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Line breaks in prose: one sentence per line">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-stays-hard-wrapped-and-why-it-stays-that-way" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays hard-wrapped, and why it stays that way
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#coverage-is-not-the-check-that-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage is not the check that matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#measuring-the-residue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measuring the residue
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#maintenance" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2769,178 +2819,124 @@
 
 
 <h1 id="documentation-standards">Documentation standards<a class="headerlink" href="#documentation-standards" title="Permanent link">&para;</a></h1>
-<p>The canonical home for <strong>how we write and maintain docs</strong> — the goals, the style,
-the conventions, and the upkeep. It complements two neighbours rather than
-repeating them:</p>
+<p>The canonical home for <strong>how we write and maintain docs</strong> — the goals, the style, the conventions, and the upkeep.
+It complements two neighbours rather than repeating them:</p>
 <ul>
 <li><a href="../doc-update-matrix/">doc-update-matrix.md</a> — <em>which</em> docs to update for each kind of change.</li>
 <li><a href="../maintaining-backlog/">maintaining-backlog.md</a> — rules specific to <a href="../../STATUS/">STATUS.md</a>.</li>
 </ul>
-<p>The bar is <strong>correct and findable first, usable as well</strong> — not polish in place of
-substance. A beautifully scannable doc that is wrong, missing, or the wrong type for
-the reader's task still fails. The goal hierarchy below makes that ordering explicit;
-the rest of the page is how we hit each level.</p>
+<p>The bar is <strong>correct and findable first, usable as well</strong> — not polish in place of substance.
+A beautifully scannable doc that is wrong, missing, or the wrong type for the reader's task still fails.
+The goal hierarchy below makes that ordering explicit; the rest of the page is how we hit each level.</p>
 <h2 id="the-docset-in-one-paragraph">The docset in one paragraph<a class="headerlink" href="#the-docset-in-one-paragraph" title="Permanent link">&para;</a></h2>
-<p><code>docs/</code> is plain GitHub-native Markdown — no MkDocs front matter, no transclusion, no
-versioned-docs tree (a <a href="../../plan/docs-six-layer-audit/">deliberate choice</a>: renders on
-GitHub, git is the single source of truth). The taxonomy is the per-directory
-<code>README.md</code> index. There are two audiences: <code>docs/design/</code> (how the system works, for
-contributors) and <code>docs/operations/</code> (what an operator does and sees). A change that
-alters operator-visible behaviour must update the operations docs too — design-only is
-the classic miss.</p>
-<p>The docs also serve <strong>two kinds of reader</strong>: humans, and the AI agents that build on
-this repo. They want compatible things — agents reward deterministic, greppable,
-single-canonical-home content; humans reward narrative and onboarding — but optimise
-for one blindly and you degrade the other. Most rules here serve both; where they
-diverge, the doc says so.</p>
+<p><code>docs/</code> is plain GitHub-native Markdown — no MkDocs front matter, no transclusion, no versioned-docs tree (a <a href="../../plan/docs-six-layer-audit/">deliberate choice</a>: renders on GitHub, git is the single source of truth).
+The taxonomy is the per-directory <code>README.md</code> index.
+There are two audiences: <code>docs/design/</code> (how the system works, for contributors) and <code>docs/operations/</code> (what an operator does and sees).
+A change that alters operator-visible behaviour must update the operations docs too — design-only is the classic miss.</p>
+<p>The docs also serve <strong>two kinds of reader</strong>: humans, and the AI agents that build on this repo.
+They want compatible things — agents reward deterministic, greppable, single-canonical-home content; humans reward narrative and onboarding — but optimise for one blindly and you degrade the other.
+Most rules here serve both; where they diverge, the doc says so.</p>
 <h2 id="goals-what-good-looks-like">Goals: what good looks like<a class="headerlink" href="#goals-what-good-looks-like" title="Permanent link">&para;</a></h2>
-<p>A doc-quality goal is wasted if the one above it fails — you can't scan your way out of
-a wrong or missing answer. In rough order of leverage:</p>
+<p>A doc-quality goal is wasted if the one above it fails — you can't scan your way out of a wrong or missing answer.
+In rough order of leverage:</p>
 <ol>
-<li><strong>Correct &amp; current.</strong> The doc matches the code, today. A stale doc is <em>worse</em> than
-   none: it misleads and erodes trust in the whole set. Highest leverage, hardest to
-   sustain — see <a href="#maintenance">Maintenance</a>.</li>
-<li><strong>Findable.</strong> The reader lands on the right page fast: entry points, <code>README.md</code>
-   indexes, cross-links, the <a href="../../design/08-glossary/">glossary</a>. A perfect doc nobody
-   finds is zero docs.</li>
-<li><strong>Complete enough.</strong> The questions readers actually have are answered; no silent
-   gaps. Coverage, not exhaustiveness.</li>
-<li><strong>Fit-for-purpose.</strong> Right <em>type</em> (tutorial / how-to / reference / explanation) and
-   right <em>altitude</em> (operator vs contributor). A reference dump when someone needs a
-   five-step how-to fails regardless of formatting.</li>
-<li><strong>Usable.</strong> Scannable, copy-paste-safe, free of filler — see <a href="#write-for-scanning">Write for
-   scanning</a> and <a href="#commands-and-code-blocks">Commands and code blocks</a>.
+<li><strong>Correct &amp; current.</strong> The doc matches the code, today.
+   A stale doc is <em>worse</em> than none: it misleads and erodes trust in the whole set.
+   Highest leverage, hardest to sustain — see <a href="#maintenance">Maintenance</a>.</li>
+<li><strong>Findable.</strong> The reader lands on the right page fast: entry points, <code>README.md</code> indexes, cross-links, the <a href="../../design/08-glossary/">glossary</a>.
+   A perfect doc nobody finds is zero docs.</li>
+<li><strong>Complete enough.</strong> The questions readers actually have are answered; no silent gaps.
+   Coverage, not exhaustiveness.</li>
+<li><strong>Fit-for-purpose.</strong> Right <em>type</em> (tutorial / how-to / reference / explanation) and right <em>altitude</em> (operator vs contributor).
+   A reference dump when someone needs a five-step how-to fails regardless of formatting.</li>
+<li><strong>Usable.</strong> Scannable, copy-paste-safe, free of filler — see <a href="#write-for-scanning">Write for scanning</a> and <a href="#commands-and-code-blocks">Commands and code blocks</a>.
    Necessary, cheap to get wrong, but not a substitute for 1–4.</li>
-<li><strong>Trustworthy in tone.</strong> Specific and evidence-backed, not promotional, and honest
-   about limitations, failure modes, and "not yet implemented" — see <a href="#write-with-substance-dont-read-as-ai-slop">Write with
-   substance</a>. Trust is what makes a reader
-   rely on 1–5 instead of discounting the project on sight.</li>
+<li><strong>Trustworthy in tone.</strong> Specific and evidence-backed, not promotional, and honest about limitations, failure modes, and "not yet implemented" — see <a href="#write-with-substance-dont-read-as-ai-slop">Write with substance</a>.
+   Trust is what makes a reader rely on 1–5 instead of discounting the project on sight.</li>
 </ol>
 <h2 id="write-for-scanning">Write for scanning<a class="headerlink" href="#write-for-scanning" title="Permanent link">&para;</a></h2>
-<p>A reader skims headings, then the first line of each block. Optimise for that.</p>
+<p>A reader skims headings, then the first line of each block.
+Optimise for that.</p>
 <ul>
-<li><strong>Answer first (inverted pyramid).</strong> Put the conclusion in the heading, the first
-  sentence of the paragraph, and the first item of the list. Don't make the reader
-  reach the end to get unstuck.</li>
-<li><strong>Self-describing headings.</strong> A heading states the task or answer ("Verify the heavy
-  gates ran"), not a bare topic ("Gates"). Someone reading only the headings should
-  understand the page.</li>
-<li><strong>One idea per paragraph.</strong> Keep paragraphs to ~4–5 lines. Split when a second idea
-  starts.</li>
-<li><strong>Lists for any enumeration.</strong> Steps, options, conditions, and requirements become
-  ordered/unordered lists — never a comma-strung sentence. This <em>cuts</em> words.</li>
-<li><strong>Tables for comparisons and mappings.</strong> Anything shaped "for X do Y" or "A vs B" is
-  a table, not parallel paragraphs.</li>
-<li><strong>Front-load list items.</strong> Start each bullet with the distinguishing word, bolded
-  (<code>**Worktree paths** — …</code>), not boilerplate ("When you are in a worktree, …").</li>
-<li><strong>Bold sparingly.</strong> Bold the one keyword a scanner hunts for. If everything is bold,
-  nothing is.</li>
+<li><strong>Answer first (inverted pyramid).</strong> Put the conclusion in the heading, the first sentence of the paragraph, and the first item of the list.
+  Don't make the reader reach the end to get unstuck.</li>
+<li><strong>Self-describing headings.</strong> A heading states the task or answer ("Verify the heavy gates ran"), not a bare topic ("Gates").
+  Someone reading only the headings should understand the page.</li>
+<li><strong>One idea per paragraph.</strong> Keep paragraphs to ~4–5 lines.
+  Split when a second idea starts.</li>
+<li><strong>Lists for any enumeration.</strong> Steps, options, conditions, and requirements become ordered/unordered lists — never a comma-strung sentence.
+  This <em>cuts</em> words.</li>
+<li><strong>Tables for comparisons and mappings.</strong> Anything shaped "for X do Y" or "A vs B" is a table, not parallel paragraphs.</li>
+<li><strong>Front-load list items.</strong> Start each bullet with the distinguishing word, bolded (<code>**Worktree paths** — …</code>), not boilerplate ("When you are in a worktree, …").</li>
+<li><strong>Bold sparingly.</strong> Bold the one keyword a scanner hunts for.
+  If everything is bold, nothing is.</li>
 </ul>
 <h2 id="cut-before-you-polish">Cut before you polish<a class="headerlink" href="#cut-before-you-polish" title="Permanent link">&para;</a></h2>
-<p>Length is the most common defect in this tree and the hardest to see from inside
-a draft. Run these four passes before touching wording. Every example below is
-from one review of the marketing pages, where 24 rounds of feedback collapsed
-into these four causes.</p>
-<p><strong>Ask whether the block belongs on this page at all.</strong> Three questions: does
-<em>this</em> page's reader need it, does it belong on another page, and what audience
-wants it and where would they look for it. <code>why-gag.md</code> carried a 424-word
-section on the v2 API decomposition, 22% of the page's height, whose four
-comparison points were already rows in the table directly above it, and whose
-subject was a GAG v1-to-v2 contrast rather than the ARC comparison the page
-exists for. Deleting it lost nothing: <code>features.md</code> and
-<a href="../../design/appendix-h-v2-api-decomposition/">appendix H</a> already served the
-reader who wanted it.</p>
-<p><strong>Never restate in prose what a diagram or table already carries.</strong> Prose beside
-a visual is the visual admitting it did not work. That same page opened a
-section with two paragraphs, 139 words, naming three capabilities, their
-combined effect and four outcomes, directly above a flow diagram whose nodes
-said exactly that. A one-line lead-in replaced both.</p>
-<p><strong>State the invariant, not an instance.</strong> "Listener footprint for 10 runner
-sets" invites the question the number cannot answer, because nothing justifies
-ten. The claim is a ratio: one always-on pod per set against one shared pod
-whatever the count. Saying it that way is shorter <em>and</em> stronger. A number earns
-its place when it is a measurement (15 to 26 s) or a declared scenario parameter
-(the <a href="../../design/appendix-f-cost-model/">cost model</a>'s ten-set fleet); it is
-noise when it is an illustration.</p>
-<p><strong>Scarcity is what makes an emphasis device work, and that is not only true of
-bold.</strong> Six consecutive admonitions ran 94 lines on one page, and because all
-six were styled identically the most important of them, the honest
-where-ARC-is-ahead list, looked exactly like the four routing notes above it.
-Budget roughly one callout per screen; promote anything that needs more to a
-heading of its own.</p>
+<p>Length is the most common defect in this tree and the hardest to see from inside a draft.
+Run these four passes before touching wording.
+Every example below is from one review of the marketing pages, where 24 rounds of feedback collapsed into these four causes.</p>
+<p><strong>Ask whether the block belongs on this page at all.</strong> Three questions: does <em>this</em> page's reader need it, does it belong on another page, and what audience wants it and where would they look for it. <code>why-gag.md</code> carried a 424-word section on the v2 API decomposition, 22% of the page's height, whose four comparison points were already rows in the table directly above it, and whose subject was a GAG v1-to-v2 contrast rather than the ARC comparison the page exists for.
+Deleting it lost nothing: <code>features.md</code> and <a href="../../design/appendix-h-v2-api-decomposition/">appendix H</a> already served the reader who wanted it.</p>
+<p><strong>Never restate in prose what a diagram or table already carries.</strong> Prose beside a visual is the visual admitting it did not work.
+That same page opened a section with two paragraphs, 139 words, naming three capabilities, their combined effect and four outcomes, directly above a flow diagram whose nodes said exactly that.
+A one-line lead-in replaced both.</p>
+<p><strong>State the invariant, not an instance.</strong> "Listener footprint for 10 runner sets" invites the question the number cannot answer, because nothing justifies ten.
+The claim is a ratio: one always-on pod per set against one shared pod whatever the count.
+Saying it that way is shorter <em>and</em> stronger.
+A number earns its place when it is a measurement (15 to 26 s) or a declared scenario parameter (the <a href="../../design/appendix-f-cost-model/">cost model</a>'s ten-set fleet); it is noise when it is an illustration.</p>
+<p><strong>Scarcity is what makes an emphasis device work, and that is not only true of bold.</strong> Six consecutive admonitions ran 94 lines on one page, and because all six were styled identically the most important of them, the honest where-ARC-is-ahead list, looked exactly like the four routing notes above it.
+Budget roughly one callout per screen; promote anything that needs more to a heading of its own.</p>
 <h2 id="commands-and-code-blocks">Commands and code blocks<a class="headerlink" href="#commands-and-code-blocks" title="Permanent link">&para;</a></h2>
-<p>A reader copies a block and runs it. Make that safe.</p>
+<p>A reader copies a block and runs it.
+Make that safe.</p>
 <ul>
-<li><strong>Copyable blocks run as-is.</strong> No <code>$</code>/<code>#</code> prompt prefixes on copyable lines, no
-  command-output interleaved in the same block, no leading line numbers.</li>
-<li><strong>One runnable command per intent.</strong> Give the whole working line once; don't make the
-  reader assemble it from three scattered snippets.</li>
-<li><strong>Obvious, consistent placeholders.</strong> Use one convention for substitutables
-  (<code>&lt;UPPER_SNAKE&gt;</code> or <code>${VAR}</code>) so the reader knows exactly what to replace. Never let a
-  real value masquerade as a placeholder, or vice versa.</li>
-<li><strong>No ellipses in copyable code.</strong> If a sample is incomplete, mark the omission with a
-  language-valid comment (<code># … rest of config</code>) and don't present it as copy-to-run — an
-  incomplete block that looks runnable is a trap.</li>
-<li><strong>Introduce, then show.</strong> A one-line lead-in ending in a colon, then the block. Put
-  explanation <em>before</em> the block, not as a wall of text after it.</li>
-<li><strong>A command that fetches a versioned artifact pins the version.</strong> A URL on a moving
-  ref — <code>raw.githubusercontent.com/&lt;org&gt;/&lt;repo&gt;/main/...</code>, a <code>:latest</code> image, an
-  unpinned chart — silently hands the reader the <em>wrong</em> artifact whenever they are not
-  on tip, which is most readers most of the time. Prefer a tool that derives the version
-  from what they are installing (<code>helm show crds &lt;chart&gt; --version &lt;v&gt;</code>, <code>helm pull</code>,
-  <code>gh release download &lt;tag&gt;</code>) over a hand-written URL; when only a URL will do, pin it
-  to a tag. Worst case is silent: applying a CRD from <code>main</code> against an older release
-  can prune a field the apiserver then drops without an error.</li>
+<li><strong>Copyable blocks run as-is.</strong> No <code>$</code>/<code>#</code> prompt prefixes on copyable lines, no command-output interleaved in the same block, no leading line numbers.</li>
+<li><strong>One runnable command per intent.</strong> Give the whole working line once; don't make the reader assemble it from three scattered snippets.</li>
+<li><strong>Obvious, consistent placeholders.</strong> Use one convention for substitutables (<code>&lt;UPPER_SNAKE&gt;</code> or <code>${VAR}</code>) so the reader knows exactly what to replace.
+  Never let a real value masquerade as a placeholder, or vice versa.</li>
+<li><strong>No ellipses in copyable code.</strong> If a sample is incomplete, mark the omission with a language-valid comment (<code># … rest of config</code>) and don't present it as copy-to-run — an incomplete block that looks runnable is a trap.</li>
+<li><strong>Introduce, then show.</strong> A one-line lead-in ending in a colon, then the block.
+  Put explanation <em>before</em> the block, not as a wall of text after it.</li>
+<li><strong>A command that fetches a versioned artifact pins the version.</strong> A URL on a moving ref — <code>raw.githubusercontent.com/&lt;org&gt;/&lt;repo&gt;/main/...</code>, a <code>:latest</code> image, an unpinned chart — silently hands the reader the <em>wrong</em> artifact whenever they are not on tip, which is most readers most of the time.
+  Prefer a tool that derives the version from what they are installing (<code>helm show crds &lt;chart&gt; --version &lt;v&gt;</code>, <code>helm pull</code>, <code>gh release download &lt;tag&gt;</code>) over a hand-written URL; when only a URL will do, pin it to a tag.
+  Worst case is silent: applying a CRD from <code>main</code> against an older release can prune a field the apiserver then drops without an error.</li>
 <li>Shell snippets follow the repo <a href="../bash-style/">bash conventions</a>.</li>
 </ul>
 <h2 id="write-with-substance-dont-read-as-ai-slop">Write with substance (don't read as AI slop)<a class="headerlink" href="#write-with-substance-dont-read-as-ai-slop" title="Permanent link">&para;</a></h2>
 <p>Readers discount a project on sight when its docs pattern-match to generated filler.
-They bounce before they ever try the code. The tells that cost the most are
-substance-level: padding, puffery, and claims without evidence. Punctuation density is
-a real tell too, and the em-dash is the one this docset overuses. Earn trust by being
-specific and honest.</p>
+They bounce before they ever try the code.
+The tells that cost the most are substance-level: padding, puffery, and claims without evidence.
+Punctuation density is a real tell too, and the em-dash is the one this docset overuses.
+Earn trust by being specific and honest.</p>
 <ul>
-<li><strong>Specifics over adjectives.</strong> Replace "robust, scalable, high-performance" with the
-  number, the command, or the named limit. "Multiplexes thousands of sessions as
-  goroutines" beats "powerful and efficient." A real command, metric, or link to the
-  code/test is the strongest anti-slop signal there is.</li>
-<li><strong>Plain verbs.</strong> Prefer "is / has / does" over marketing verbs ("serves as", "boasts",
-  "leverages", "empowers", "offers a seamless experience"). Cut the puffery vocabulary —
-  <em>delve, showcase, foster, robust, seamless, comprehensive, cutting-edge, powerful</em>.</li>
-<li><strong>No padding, no treadmill.</strong> Every paragraph adds new information. Delete
-  section-summary restatement, "challenges and future prospects" speculation, and the
-  optimistic wrap-up that says nothing. If a 500-word section carries 100 words of fact,
-  cut it to 100.</li>
-<li><strong>Drop the rhetorical tics.</strong> No "not just X, but Y"; no forced rule-of-three lists; no
-  "it's important to note"; no manufactured significance ("marks a pivotal shift").</li>
-<li><strong>Honest, not promotional.</strong> State limitations, known gaps, and "not yet implemented"
-  plainly (goal 6). A doc that admits what doesn't work yet reads as written by someone
-  who actually ran it.</li>
-<li><strong>Ration the em-dash.</strong> One or two per page is punctuation. Several per paragraph is
-  a signature, and it is the surface tell readers spot fastest. Reach for a comma, a
-  period, a colon, or parentheses first, and keep the dash only where the aside really
-  does interrupt the sentence and no other mark carries it. Two dashes in one sentence
-  almost always means the sentence wants to be two sentences. Above roughly 3 per 1,000
-  words, rewrite. <code>make em-dash-check</code> enforces it: see
-  <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</li>
-<li><strong>Formatting in moderation.</strong> Bold the keyword, not the sentence; sentence-case
-  headings, not Title Case; no emoji as bullets or status markers. Mechanical,
-  every-line formatting is itself a tell. (The one sanctioned Title-Case heading is the
-  <code>## Table of Contents</code> index — a fixed, doc-wide convention, not prose.)</li>
+<li><strong>Specifics over adjectives.</strong> Replace "robust, scalable, high-performance" with the number, the command, or the named limit.
+  "Multiplexes thousands of sessions as goroutines" beats "powerful and efficient."
+  A real command, metric, or link to the code/test is the strongest anti-slop signal there is.</li>
+<li><strong>Plain verbs.</strong> Prefer "is / has / does" over marketing verbs ("serves as", "boasts", "leverages", "empowers", "offers a seamless experience").
+  Cut the puffery vocabulary — <em>delve, showcase, foster, robust, seamless, comprehensive, cutting-edge, powerful</em>.</li>
+<li><strong>No padding, no treadmill.</strong> Every paragraph adds new information.
+  Delete section-summary restatement, "challenges and future prospects" speculation, and the optimistic wrap-up that says nothing.
+  If a 500-word section carries 100 words of fact, cut it to 100.</li>
+<li><strong>Drop the rhetorical tics.</strong> No "not just X, but Y"; no forced rule-of-three lists; no "it's important to note"; no manufactured significance ("marks a pivotal shift").</li>
+<li><strong>Honest, not promotional.</strong> State limitations, known gaps, and "not yet implemented" plainly (goal 6).
+  A doc that admits what doesn't work yet reads as written by someone who actually ran it.</li>
+<li><strong>Ration the em-dash.</strong> One or two per page is punctuation.
+  Several per paragraph is a signature, and it is the surface tell readers spot fastest.
+  Reach for a comma, a period, a colon, or parentheses first, and keep the dash only where the aside really does interrupt the sentence and no other mark carries it.
+  Two dashes in one sentence almost always means the sentence wants to be two sentences.
+  Above roughly 3 per 1,000 words, rewrite. <code>make em-dash-check</code> enforces it: see <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</li>
+<li><strong>Formatting in moderation.</strong> Bold the keyword, not the sentence; sentence-case headings, not Title Case; no emoji as bullets or status markers.
+  Mechanical, every-line formatting is itself a tell.
+  (The one sanctioned Title-Case heading is the <code>## Table of Contents</code> index — a fixed, doc-wide convention, not prose.)</li>
 </ul>
-<p>Fix both halves. Cutting punctuation density while leaving the padding and puffery
-untouched produces well-punctuated filler, and no amount of substance survives prose
-that reads as machine-generated on sight. Neither half is optional, and neither
-substitutes for the other.</p>
+<p>Fix both halves.
+Cutting punctuation density while leaving the padding and puffery untouched produces well-punctuated filler, and no amount of substance survives prose that reads as machine-generated on sight.
+Neither half is optional, and neither substitutes for the other.</p>
 <h2 id="enforcing-the-em-dash-rule">Enforcing the em-dash rule<a class="headerlink" href="#enforcing-the-em-dash-rule" title="Permanent link">&para;</a></h2>
-<p><code>make em-dash-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-em-dash.sh"><code>scripts/docs/check-em-dash.sh</code></a>)
-counts the dashes and fails the build. It runs inside <code>make check</code> and as its own job in
-the <code>doc-links</code> CI workflow.</p>
-<p><strong>What it does not count.</strong> A raw <code>grep -o '—' | wc -l</code> was the rule's only instrument
-before, and it counts four shapes where the dash is legitimate, which is most of why the
-rule was unmeasurable. The counter reads the parsed document instead
-(<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/emdash"><code>devtools/docs/emdash</code></a>, over the goldmark layer Q612
-built), and skips:</p>
+<p><code>make em-dash-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-em-dash.sh"><code>scripts/docs/check-em-dash.sh</code></a>) counts the dashes and fails the build.
+It runs inside <code>make check</code> and as its own job in the <code>doc-links</code> CI workflow.</p>
+<p><strong>What it does not count.</strong> A raw <code>grep -o '—' | wc -l</code> was the rule's only instrument before, and it counts four shapes where the dash is legitimate, which is most of why the rule was unmeasurable.
+The counter reads the parsed document instead (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/emdash"><code>devtools/docs/emdash</code></a>, over the goldmark layer Q612 built), and skips:</p>
 <table>
 <thead>
 <tr>
@@ -2972,26 +2968,19 @@ built), and skips:</p>
 </tr>
 </tbody>
 </table>
-<p>Words are skipped with them, so a long code block buys a page no headroom. Table cells,
-blockquotes and list items are prose and are counted.</p>
-<p><strong>The baseline.</strong> With those exclusions the tree measured 9,993 em-dashes in 584,490
-prose words on 2026-08-04, 17.1 per 1,000, with 231 of 249 files above the rule. A gate set at 3
-would land red on everything and be switched off, so
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/em-dash-baseline.txt"><code>scripts/docs/em-dash-baseline.txt</code></a> freezes
-each of those files at its current count as a ceiling. A listed file may not gain
-em-dashes; a file with no entry, including every new doc, is held to the rule itself.</p>
-<p><a href="../../STATUS/#Q650">Q650</a> is the cleanup. As it lands, <code>make em-dash-baseline</code> re-records
-the ceilings and the diff is the measure of what it cleared; an entry disappears once its
-file reaches the rule, and an empty baseline means the ratchet is done.
-<code>make em-dash-report</code> prints every file's density, worst first, which is the worklist.</p>
+<p>Words are skipped with them, so a long code block buys a page no headroom.
+Table cells, blockquotes and list items are prose and are counted.</p>
+<p><strong>The baseline.</strong> With those exclusions the tree measured 9,993 em-dashes in 584,490 prose words on 2026-08-04, 17.1 per 1,000, with 231 of 249 files above the rule.
+A gate set at 3 would land red on everything and be switched off, so <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/em-dash-baseline.txt"><code>scripts/docs/em-dash-baseline.txt</code></a> freezes each of those files at its current count as a ceiling.
+A listed file may not gain em-dashes; a file with no entry, including every new doc, is held to the rule itself.</p>
+<p><a href="../../STATUS/#Q650">Q650</a> is the cleanup.
+As it lands, <code>make em-dash-baseline</code> re-records the ceilings and the diff is the measure of what it cleared; an entry disappears once its file reaches the rule, and an empty baseline means the ratchet is done. <code>make em-dash-report</code> prints every file's density, worst first, which is the worklist.</p>
 <h2 id="an-upstream-behavior-claim-cites-a-measurement">An upstream-behavior claim cites a measurement<a class="headerlink" href="#an-upstream-behavior-claim-cites-a-measurement" title="Permanent link">&para;</a></h2>
-<p>A sentence about how something outside this repo behaves is a claim nobody here can
-check, and it goes stale with no commit, no red gate, and no other signal. Write the
-version it was measured against and when, or name the gate that keeps re-measuring it.
-The Queue-row form of the same rule is <a href="../maintaining-backlog/#a-rows-asserted-defect-is-a-claim-not-a-finding">maintaining-backlog.md § A row's asserted defect
-is a claim</a>;
-this section is its other two homes, prose docs and code comments.</p>
-<p>Four such claims shipped here from source inspection. All four were wrong:</p>
+<p>A sentence about how something outside this repo behaves is a claim nobody here can check, and it goes stale with no commit, no red gate, and no other signal.
+Write the version it was measured against and when, or name the gate that keeps re-measuring it.
+The Queue-row form of the same rule is <a href="../maintaining-backlog/#a-rows-asserted-defect-is-a-claim-not-a-finding">maintaining-backlog.md § A row's asserted defect is a claim</a>; this section is its other two homes, prose docs and code comments.</p>
+<p>Four such claims shipped here from source inspection.
+All four were wrong:</p>
 <table>
 <thead>
 <tr>
@@ -3018,84 +3007,54 @@ this section is its other two homes, prose docs and code comments.</p>
 </tr>
 </tbody>
 </table>
-<p>Q594 is the fifth, and the one caught in time: it asserted that <code>plan-hygiene.yml</code>'s
-<code>**.go</code> filter matched no Go file. Running the pinned action measured the opposite, so
-no fix was needed, and what landed instead is a compliant version of the finding
-(<a href="../testing/#where-a-globstar-works-in-a-filter-glob">testing.md § Where a globstar works in a filter
-glob</a>).</p>
+<p>Q594 is the fifth, and the one caught in time: it asserted that <code>plan-hygiene.yml</code>'s <code>**.go</code> filter matched no Go file.
+Running the pinned action measured the opposite, so no fix was needed, and what landed instead is a compliant version of the finding (<a href="../testing/#where-a-globstar-works-in-a-filter-glob">testing.md § Where a globstar works in a filter glob</a>).</p>
 <h3 id="what-counts-as-upstream">What counts as upstream<a class="headerlink" href="#what-counts-as-upstream" title="Permanent link">&para;</a></h3>
-<p>Anything whose behavior can change with no commit in this repo: a third-party library,
-a Kubernetes API behavior, a GitHub API or Actions Service response, a CI action's
-matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary,
-<strong>or a Claude Code hook, plugin, or harness decision</strong> (what workspace-guard denies,
-which paths are exempt, what a slash command does). The test is whether the sentence
-could go false while <code>make check</code> stays green and nobody here touched anything.</p>
-<p><strong><code>CLAUDE.md</code> is in scope, and is the worst place for a stale one.</strong> Its process rules
-read as house convention rather than as claims, so they attract no citation and get no
-review, while every session loads them and acts on them. A rule that says a tool denies
-something is an upstream-behavior claim wearing a procedural hat: cite the version you
-measured against, or say which command you ran. The scratchpad row above cost eleven
-days precisely because "never the session scratchpad" looked like a preference.</p>
+<p>Anything whose behavior can change with no commit in this repo: a third-party library, a Kubernetes API behavior, a GitHub API or Actions Service response, a CI action's matching semantics, a Helm chart's rendered defaults, an autoscaler's event vocabulary, <strong>or a Claude Code hook, plugin, or harness decision</strong> (what workspace-guard denies, which paths are exempt, what a slash command does).
+The test is whether the sentence could go false while <code>make check</code> stays green and nobody here touched anything.</p>
+<p><strong><code>CLAUDE.md</code> is in scope, and is the worst place for a stale one.</strong> Its process rules read as house convention rather than as claims, so they attract no citation and get no review, while every session loads them and acts on them.
+A rule that says a tool denies something is an upstream-behavior claim wearing a procedural hat: cite the version you measured against, or say which command you ran.
+The scratchpad row above cost eleven days precisely because "never the session scratchpad" looked like a preference.</p>
 <p>Two edges keep the rule from swallowing every sentence in the docset:</p>
 <ul>
-<li><strong>Our own behavior is not upstream.</strong> A wrong claim about this repo's code goes red
-  in a test. That is the gate; a citation adds nothing to it. The exemption is exactly
-  as strong as that red gate, which is why a restated default falls outside it (next
-  section).</li>
-<li><strong>Specified is not observed.</strong> Where upstream publishes normative text (an RFC
-  grammar, a documented status code, a CRD field's own godoc), link that text and stop:
-  the spec is its own citation. The rule bites on behavior learned by reading upstream
-  source or by inference, which is most of what this system depends on, and is where
-  all four claims above came from.</li>
+<li><strong>Our own behavior is not upstream.</strong> A wrong claim about this repo's code goes red in a test.
+  That is the gate; a citation adds nothing to it.
+  The exemption is exactly as strong as that red gate, which is why a restated default falls outside it (next section).</li>
+<li><strong>Specified is not observed.</strong> Where upstream publishes normative text (an RFC grammar, a documented status code, a CRD field's own godoc), link that text and stop: the spec is its own citation.
+  The rule bites on behavior learned by reading upstream source or by inference, which is most of what this system depends on, and is where all four claims above came from.</li>
 </ul>
 <h3 id="a-restated-default-is-a-claim-with-no-gate">A restated default is a claim with no gate<a class="headerlink" href="#a-restated-default-is-a-claim-with-no-gate" title="Permanent link">&para;</a></h3>
-<p>A flag or field default restated away from its wiring is the in-repo case the
-"our own behavior" exemption does not cover: no test reads comments, so a wrong
-one stays green forever. The measured case is Q676 (2026-08-04): <code>broker/types.go</code>,
-<code>listener/job.go</code>, and the Q645 plan doc all said the AGC's completejob release
-"stays gated off by default" while <code>cmd/agc/config.go</code> shipped
-<code>AGC_FANOUT_COMPLETION</code> on unless explicitly <code>"false"</code>. A production false-green
-defect read as contained for as long as the comments were trusted; the divergence
-surfaced only because remedy work happened to read the wiring.</p>
-<p>State a default's value only at the site that wires it. Everywhere else, say the
-switch exists and cite that site (or the operator doc that documents it), rather
-than copying the value into a sentence that can drift. When restating is genuinely
-clearer, treat the sentence like an upstream claim: name the wiring site in the
-same clause, so the reader can check it and the next editor knows what it depends
-on.</p>
+<p>A flag or field default restated away from its wiring is the in-repo case the "our own behavior" exemption does not cover: no test reads comments, so a wrong one stays green forever.
+The measured case is Q676 (2026-08-04): <code>broker/types.go</code>, <code>listener/job.go</code>, and the Q645 plan doc all said the AGC's completejob release "stays gated off by default" while <code>cmd/agc/config.go</code> shipped <code>AGC_FANOUT_COMPLETION</code> on unless explicitly <code>"false"</code>.
+A production false-green defect read as contained for as long as the comments were trusted; the divergence surfaced only because remedy work happened to read the wiring.</p>
+<p>State a default's value only at the site that wires it.
+Everywhere else, say the switch exists and cite that site (or the operator doc that documents it), rather than copying the value into a sentence that can drift.
+When restating is genuinely clearer, treat the sentence like an upstream claim: name the wiring site in the same clause, so the reader can check it and the next editor knows what it depends on.</p>
 <h3 id="in-prose">In prose<a class="headerlink" href="#in-prose" title="Permanent link">&para;</a></h3>
-<p>State the claim, then the version and the date, or the run they came from. Both of
-these are in the docset today:</p>
+<p>State the claim, then the version and the date, or the run they came from.
+Both of these are in the docset today:</p>
 <blockquote>
-<p>Today both autoscalers set <code>lastTimestamp</code> and leave <code>eventTime</code> empty (measured:
-cluster autoscaler v1.36.1, Karpenter v1.14.0).</p>
+<p>Today both autoscalers set <code>lastTimestamp</code> and leave <code>eventTime</code> empty (measured: cluster autoscaler v1.36.1, Karpenter v1.14.0).</p>
 </blockquote>
 <p>From <a href="../../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">troubleshooting.md</a>.
 The second names the input as well as the version, because the answer depended on it:</p>
 <blockquote>
-<p>Measured against the pinned <code>dorny/paths-filter@7b450ff</code> (v4.0.2) on a branch whose
-diff was two nested Go files.</p>
+<p>Measured against the pinned <code>dorny/paths-filter@7b450ff</code> (v4.0.2) on a branch whose diff was two nested Go files.</p>
 </blockquote>
 <h3 id="in-code-comments">In code comments<a class="headerlink" href="#in-code-comments" title="Permanent link">&para;</a></h3>
-<p>Comments here are terse and mechanism-focused, so the citation is a parenthetical
-rather than a paragraph: the version and what was observed, inside the clause that
-makes the claim.</p>
+<p>Comments here are terse and mechanism-focused, so the citation is a parenthetical rather than a paragraph: the version and what was observed, inside the clause that makes the claim.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// Neither project records through that generation today — measured live for both</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1">// (CA v1.36.1, Karpenter v1.14.0: LastTimestamp set, EventTime null) — but nothing</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// pins them to the legacy one, and the window is what keeps a future migration from</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">// reintroducing the accident.</span>
 </code></pre></div>
 <p>From <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/autoscaler_verdict.go"><code>autoscaler_verdict.go</code></a>.
-When the measurement needs more than a clause, it goes in <code>docs/</code> and the comment links
-there. Growing a provenance paragraph in the source is not the compliant form.</p>
-<p><strong>A live gate beats a date.</strong> Where a gate re-measures the claim on every run, name the
-gate instead: it is fresher than any date, and it turns red when upstream moves.
-<code>make test-autoscaler</code> and <code>make test-karpenter</code> drive real autoscalers and assert the
-matcher's verdict on the events that come back, which is why the reason constants they
-pin carry no per-claim date.</p>
+When the measurement needs more than a clause, it goes in <code>docs/</code> and the comment links there.
+Growing a provenance paragraph in the source is not the compliant form.</p>
+<p><strong>A live gate beats a date.</strong> Where a gate re-measures the claim on every run, name the gate instead: it is fresher than any date, and it turns red when upstream moves. <code>make test-autoscaler</code> and <code>make test-karpenter</code> drive real autoscalers and assert the matcher's verdict on the events that come back, which is why the reason constants they pin carry no per-claim date.</p>
 <h3 id="when-you-cannot-measure-it">When you cannot measure it<a class="headerlink" href="#when-you-cannot-measure-it" title="Permanent link">&para;</a></h3>
-<p>Say so in the same clause: "unverified, source inspection only". One clause tells the
-next session where to start, instead of handing it something it will trust for months.
+<p>Say so in the same clause: "unverified, source inspection only".
+One clause tells the next session where to start, instead of handing it something it will trust for months.
 Every claim in the table above shipped as a flat assertion instead.</p>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <table>
@@ -3150,35 +3109,81 @@ Every claim in the table above shipped as a flat assertion instead.</p>
 <td><strong>Versioning</strong></td>
 <td>Docs describe <code>main</code>: mark unshipped behavior <code>(planned)</code>, never as if it ships. API versions (<code>v1alpha1</code>→v2…) are documented together on <code>main</code> with reference + migration guides — one running gateway serves them at once. Separately, the published <em>site</em> is a versioned <em>tree</em> (a built copy per release): it defaults to the latest stable release, with <code>main</code> behind an opt-in <code>dev</code> version — see <a href="../website/#versioned-deploy-mike">website.md § Versioned deploy</a>.</td>
 </tr>
+<tr>
+<td><strong>Line breaks</strong></td>
+<td>One sentence per source line. Never hand-wrap a paragraph to a column: run <code>make md-reflow</code> and let the formatter place the breaks. What it declines to convert is covered below.</td>
+</tr>
 </tbody>
 </table>
+<h2 id="line-breaks-in-prose-one-sentence-per-line">Line breaks in prose: one sentence per line<a class="headerlink" href="#line-breaks-in-prose-one-sentence-per-line" title="Permanent link">&para;</a></h2>
+<p>Prose uses <a href="https://sembr.org/">semantic line breaks</a>, one sentence per source line.
+A one-sentence edit is then a one-line diff, so prose review stops being a re-wrap hunt and concurrent branches stop colliding on paragraphs neither of them meaningfully changed.
+That payoff is large here: 263 non-vendored Markdown files carry roughly 82,000 lines, and almost every session edits some of them.</p>
+<p>Do not place the breaks by hand.
+<a href="https://github.com/jbeda/mdreflow">mdreflow</a> is vendored in <code>tools/</code> at a pinned version and does it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>md-reflow
+</code></pre></div>
+<p><code>make md-reflow-check</code> reports what is unformatted without writing, and <code>make md-reflow-diff</code> prints the change.
+The check is in <code>make check</code> and costs about a second for the whole tree. <code>.mdreflow.yaml</code> at the repo root holds the configuration: <code>sentence</code> mode at <code>max-width: 0</code>, excluding the two generated docs, <code>docs/STATUS.md</code>, and the <code>AGENTS.md</code> symlink. mdreflow always excludes <code>vendor/</code>, so the 471 tracked vendored Markdown files are never walked.</p>
+<h3 id="what-stays-hard-wrapped-and-why-it-stays-that-way">What stays hard-wrapped, and why it stays that way<a class="headerlink" href="#what-stays-hard-wrapped-and-why-it-stays-that-way" title="Permanent link">&para;</a></h3>
+<p>Measured 2026-08-10: 99.81% of in-scope prose lines end at a sentence boundary, leaving 25.
+"In-scope" excludes the generated docs and <code>docs/STATUS.md</code>, which <code>.mdreflow.yaml</code> skips.</p>
+<p>What remains is one guard, and it is a correctness property rather than a defect.
+Moving a break inside a link construct is where render changes come from, so mdreflow passes over any paragraph where a link's text or destination is left open at a line end:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Control plane (GMC rolls to
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rc.6, [self-hosted] ready). Second sentence.       → reflows
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>[t](/a
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>b) here. Second one.                               → skipped
+</code></pre></div>
+<p>Do not hand-wrap around it.
+A paragraph the formatter leaves alone is correctly formatted, and hand-joining to force one through is how a link ends up straddling a break in the first place.</p>
+<h3 id="coverage-is-not-the-check-that-matters">Coverage is not the check that matters<a class="headerlink" href="#coverage-is-not-the-check-that-matters" title="Permanent link">&para;</a></h3>
+<p>The coverage figure counts line breaks.
+It cannot see whether a page still renders what it should, and that difference is not academic: a MkDocs callout flattened into a paragraph still scores as sentence-per-line, because it is.</p>
+<p>Adopting this convention destroyed 7 of 17 callouts on this tree and every gate stayed green, because the output was still valid Markdown that built.
+What caught it was rendering the site before and after and diffing every page. <strong>A change that moves line breaks across the docs is verified by a <code>mkdocs build</code> diff, not by <code>make check</code> and not by a coverage number.</strong></p>
+<p>Two pages differ structurally under that diff today, and both are the reflow fixing latent bugs rather than causing them: a sentence wrapped so <code>10.</code> began a line had been rendering as a stray list item, and a heading missing from a page's nav now appears.
+Wrapping mid-sentence is what puts a number, a <code>---</code>, or another block-starting token at line start where Markdown reinterprets it.
+One sentence per line cannot.</p>
+<h3 id="measuring-the-residue">Measuring the residue<a class="headerlink" href="#measuring-the-residue" title="Permanent link">&para;</a></h3>
+<p>Counting lines that "do not end in sentence punctuation" over-reports badly, and every intermediate figure in this section's history came from that mistake.
+It counts YAML front matter, <code>&lt;details&gt;</code> blocks, <code>[label]: target</code> definitions and immovable marker lines as prose the formatter failed to split, and it misses a sentence ending <code>.)</code> or <code>."</code>.
+Corrected against one tree, that metric read 97.1% where the honest number was 99.34%.
+Measure by excluding the constructs mdreflow never reflows, and treat a closing delimiter after terminal punctuation as a sentence end.</p>
+<p>Six mdreflow bugs surfaced while adopting this, all fixed upstream: <a href="https://github.com/jbeda/mdreflow/issues/14">#14</a>, <a href="https://github.com/jbeda/mdreflow/issues/15">#15</a>, <a href="https://github.com/jbeda/mdreflow/issues/16">#16</a>, <a href="https://github.com/jbeda/mdreflow/issues/33">#33</a>, and pull requests <a href="https://github.com/jbeda/mdreflow/pull/29">#29</a> and <a href="https://github.com/jbeda/mdreflow/pull/31">#31</a>.
+Between them they took this tree from roughly two thirds converted to 99.81%, and stopped callouts being destroyed.
+The last was fixed structurally rather than by another narrowing: deriving no-break spans from a goldmark parse means linkify is modeled by the parser instead of mirrored by hand, which is what let a code span ending in a URL stop skipping its paragraph.</p>
+<p>The 25 lines that still do not reflow fall into three classes, and all three are settled, so a later session need not re-diagnose them.
+Thirteen sit three or more containers deep, which mdreflow declines by design (<a href="https://github.com/jbeda/mdreflow/issues/1">#1</a>).
+That one is written off rather than merely unfixed: raising the depth cap locally corrupted structure, moving content out of its list item into a sibling blockquote, so a human deciding where the breaks go is the right default at that depth.
+Two are a paragraph in <a href="../website/">website.md</a> that documents <code>[label]: target</code> syntax, where skipping is the correct answer and no exclusion is warranted, since excluding the file would stop reflowing its other 658 lines.
+The remaining ten are a <code>[label]:</code> shape inside an inline code span arming the link-reference-definition zone, filed upstream as <a href="https://github.com/jbeda/mdreflow/issues/37">#37</a>.
+Six of those ten are in a neighboring bullet holding no bracket at all.
+Do not patch around it here: the one-line fix breaks fuzz idempotency, which is why <a href="https://github.com/jbeda/mdreflow/pull/36">#36</a> was withdrawn.</p>
+<p>Two lessons worth keeping.
+A narrowing this repo proposed was wrong in a way a 2.8M-execution fuzz run did not catch: it armed only at paren depth zero, so a link destination opened inside an outer prose paren escaped it and was corrupted.
+A large execution count over a corpus that never contained the shape is weaker evidence than one deliberately constructed case.
+And a differential test needs a known-answer case of its own: an oracle built on a bare goldmark reported a render change on every hard break, because it omits raw HTML where mdreflow's own instance sets <code>html.WithUnsafe()</code>.</p>
 <h2 id="maintenance">Maintenance<a class="headerlink" href="#maintenance" title="Permanent link">&para;</a></h2>
-<p>Goal 1 — <em>correct &amp; current</em> — is the hardest to sustain because docs rot silently as
-the code moves. Keep them current:</p>
+<p>Goal 1 — <em>correct &amp; current</em> — is the hardest to sustain because docs rot silently as the code moves.
+Keep them current:</p>
 <ul>
-<li><strong>Update docs in the same change.</strong> After a behaviour change, update every doc it
-  touches before opening the PR — the change-type → docs map is the
-  <a href="../doc-update-matrix/">doc-update-matrix</a>. Design-doc updates alone are not enough when
-  a change alters what an operator does, configures, or observes.</li>
-<li><strong>Keep each <code>README.md</code> index complete.</strong> A new doc gets a row in its directory's
-  <code>README.md</code> index in the same change (a goal-2 <em>findability</em> failure otherwise).</li>
-<li><strong>Archive finished plans.</strong> When a plan's last STATUS reference is removed, update its
-  <a href="../../plan/"><code>docs/plan/README.md</code></a> row and archive the plan in the same change
-  — <code>make plan-index-check</code> enforces this. See
-  <a href="../maintaining-backlog/#archiving-completed-plan-docs">maintaining-backlog.md</a>.</li>
-<li><strong>STATUS.md gets its own commit.</strong> It is high-contention; isolating its changes keeps
-  rebases trivial. Queue Notes have a hard 250-char cap (lint-enforced). Details:
-  <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</li>
-<li><strong>Links and anchors are checked, twice.</strong> <code>make doc-links</code> (in <code>make check</code>) fails on
-  broken cross-file links and heading anchors as <strong>github.com</strong> resolves them;
-  <code>make docs-build</code> re-checks them as the <strong>published site</strong> does. The two sluggers
-  disagree, so a link needs both verdicts — write headings and links that survive each
-  per <a href="../website/#the-two-link-gates">website.md § The two link gates</a>. External URLs are
-  out of scope for both — eyeball those.</li>
+<li><strong>Update docs in the same change.</strong> After a behaviour change, update every doc it touches before opening the PR — the change-type → docs map is the <a href="../doc-update-matrix/">doc-update-matrix</a>.
+  Design-doc updates alone are not enough when a change alters what an operator does, configures, or observes.</li>
+<li><strong>Keep each <code>README.md</code> index complete.</strong> A new doc gets a row in its directory's <code>README.md</code> index in the same change (a goal-2 <em>findability</em> failure otherwise).</li>
+<li><strong>Archive finished plans.</strong> When a plan's last STATUS reference is removed, update its <a href="../../plan/"><code>docs/plan/README.md</code></a> row and archive the plan in the same change — <code>make plan-index-check</code> enforces this.
+  See <a href="../maintaining-backlog/#archiving-completed-plan-docs">maintaining-backlog.md</a>.</li>
+<li><strong>STATUS.md gets its own commit.</strong> It is high-contention; isolating its changes keeps rebases trivial.
+  Queue Notes have a hard 250-char cap (lint-enforced).
+  Details: <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</li>
+<li><strong>Links and anchors are checked, twice.</strong> <code>make doc-links</code> (in <code>make check</code>) fails on broken cross-file links and heading anchors as <strong>github.com</strong> resolves them; <code>make docs-build</code> re-checks them as the <strong>published site</strong> does.
+  The two sluggers disagree, so a link needs both verdicts — write headings and links that survive each per <a href="../website/#the-two-link-gates">website.md § The two link gates</a>.
+  External URLs are out of scope for both — eyeball those.</li>
 </ul>
 <h2 id="measuring-doc-quality">Measuring doc quality<a class="headerlink" href="#measuring-doc-quality" title="Permanent link">&para;</a></h2>
-<p>"Best docs" implies a way to <em>know</em> — quality you can observe, not just assert. What
-exists today, and what's proposed:</p>
+<p>"Best docs" implies a way to <em>know</em> — quality you can observe, not just assert.
+What exists today, and what's proposed:</p>
 <table>
 <thead>
 <tr>
@@ -3230,27 +3235,16 @@ exists today, and what's proposed:</p>
 </tr>
 </tbody>
 </table>
-<p>Treat the proposed rows as the roadmap for making quality observable; the highest-value
-next step is the periodic drift audit, since it catches what the per-change rule misses.</p>
+<p>Treat the proposed rows as the roadmap for making quality observable; the highest-value next step is the periodic drift audit, since it catches what the per-change rule misses.</p>
 <h2 id="authoring-checklist">Authoring checklist<a class="headerlink" href="#authoring-checklist" title="Permanent link">&para;</a></h2>
 <p>Before opening a docs PR, check against the goals — not just formatting:</p>
 <ul>
-<li>[ ] <strong>Correct &amp; current (1):</strong> matches the code today; every doc the change touches is
-      updated per the <a href="../doc-update-matrix/">doc-update-matrix</a>.</li>
-<li>[ ] <strong>Findable (2):</strong> linked from its directory <code>README.md</code> index; cross-links and
-      anchors verified against the rendered page; no orphan.</li>
-<li>[ ] <strong>Complete (3):</strong> answers the question a reader arrives with; no silent gap or
-      undocumented failure mode.</li>
-<li>[ ] <strong>Fit-for-purpose (4):</strong> right type and altitude for its audience
-      (operator vs contributor).</li>
-<li>[ ] <strong>Usable (5):</strong> answer-first; enumerations are lists and comparisons are tables;
-      code/command blocks are copy-paste-runnable with consistent placeholders; no walls
-      of text or filler.</li>
-<li>[ ] <strong>Trustworthy (6):</strong> specific and evidence-backed, not promotional (doesn't read
-      as AI slop); honest about limitations and "not yet implemented"; acronyms expanded
-      on first use; terms match the glossary; no links to <code>CLAUDE.md</code>; every
-      <a href="#an-upstream-behavior-claim-cites-a-measurement">upstream-behavior claim cites a
-      measurement</a> or the gate pinning it.</li>
+<li>[ ] <strong>Correct &amp; current (1):</strong> matches the code today; every doc the change touches is updated per the <a href="../doc-update-matrix/">doc-update-matrix</a>.</li>
+<li>[ ] <strong>Findable (2):</strong> linked from its directory <code>README.md</code> index; cross-links and anchors verified against the rendered page; no orphan.</li>
+<li>[ ] <strong>Complete (3):</strong> answers the question a reader arrives with; no silent gap or undocumented failure mode.</li>
+<li>[ ] <strong>Fit-for-purpose (4):</strong> right type and altitude for its audience (operator vs contributor).</li>
+<li>[ ] <strong>Usable (5):</strong> answer-first; enumerations are lists and comparisons are tables; code/command blocks are copy-paste-runnable with consistent placeholders; no walls of text or filler.</li>
+<li>[ ] <strong>Trustworthy (6):</strong> specific and evidence-backed, not promotional (doesn't read as AI slop); honest about limitations and "not yet implemented"; acronyms expanded on first use; terms match the glossary; no links to <code>CLAUDE.md</code>; every <a href="#an-upstream-behavior-claim-cites-a-measurement">upstream-behavior claim cites a measurement</a> or the gate pinning it.</li>
 </ul>
 
 

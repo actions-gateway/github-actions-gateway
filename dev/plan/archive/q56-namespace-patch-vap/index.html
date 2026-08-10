@@ -2709,83 +2709,58 @@
 
 
 <h1 id="q56--gate-gmc-cluster-wide-namespaces-patch-k8s-audit-b-b2">Q56 — Gate GMC cluster-wide <code>namespaces: patch</code> (k8s audit §B B2)<a class="headerlink" href="#q56--gate-gmc-cluster-wide-namespaces-patch-k8s-audit-b-b2" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ Done — shipped via the <code>namespace-psa-guard</code> VAP + marker-label contract; covered by <code>TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope</code>.
-<strong>Queue:</strong> <a href="../../../STATUS/">Q56</a> · <strong>Finding:</strong> <a href="../k8s-best-practices/#b-rbac--cluster-wide-privilege-">k8s-best-practices.md §B B2</a></p>
+<p><strong>Status:</strong> ✅ Done — shipped via the <code>namespace-psa-guard</code> VAP + marker-label contract; covered by <code>TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope</code>. <strong>Queue:</strong> <a href="../../../STATUS/">Q56</a> · <strong>Finding:</strong> <a href="../k8s-best-practices/#b-rbac--cluster-wide-privilege-">k8s-best-practices.md §B B2</a></p>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>A compromised GMC pod must not be able to relabel a non-tenant namespace (notably
-<code>kube-system</code>) Pod Security Admission (PSA) profile. Today the GMC holds cluster-wide
-<code>namespaces: patch/update</code> so it can stamp PSA labels on tenant namespaces — but that
-same grant lets a compromised pod relabel <code>kube-system</code> to <code>privileged</code>.</p>
+<p>A compromised GMC pod must not be able to relabel a non-tenant namespace (notably <code>kube-system</code>) Pod Security Admission (PSA) profile.
+Today the GMC holds cluster-wide <code>namespaces: patch/update</code> so it can stamp PSA labels on tenant namespaces — but that same grant lets a compromised pod relabel <code>kube-system</code> to <code>privileged</code>.</p>
 <h2 id="approach-chosen">Approach (chosen)<a class="headerlink" href="#approach-chosen" title="Permanent link">&para;</a></h2>
-<p>A <code>ValidatingAdmissionPolicy</code> (VAP) scoped to the GMC ServiceAccount, gating namespace
-<code>UPDATE</code>s. VAP is in-API-server (no webhook server, cert, or availability risk) and is
-GA on the project's envtest k8s version (1.35).</p>
-<p>RBAC stays cluster-wide: RBAC cannot express "namespaces carrying label X", so the VAP
-— not the Role — is the gate. This is exactly the fix the finding describes.</p>
+<p>A <code>ValidatingAdmissionPolicy</code> (VAP) scoped to the GMC ServiceAccount, gating namespace <code>UPDATE</code>s.
+VAP is in-API-server (no webhook server, cert, or availability risk) and is GA on the project's envtest k8s version (1.35).</p>
+<p>RBAC stays cluster-wide: RBAC cannot express "namespaces carrying label X", so the VAP — not the Role — is the gate.
+This is exactly the fix the finding describes.</p>
 <h3 id="two-constraints">Two constraints<a class="headerlink" href="#two-constraints" title="Permanent link">&para;</a></h3>
 <ol>
 <li>
-<p><strong>Marker-label scope (primary).</strong> Deny a namespace <code>UPDATE</code> by the GMC SA unless the
-   <em>existing</em> object (<code>oldObject</code>) carries <code>actions-gateway.github.com/tenant: "true"</code>.
-   The marker is read from <code>oldObject</code>, which a compromised GMC cannot forge in the
-   request, and is applied by a <em>trusted</em> actor (the admin, at namespace creation) — the
-   GMC must never be able to set it, or a compromised GMC could mark <code>kube-system</code> then
-   patch it. <code>kube-system</code> and every other non-tenant namespace lack the marker → the
-   GMC SA cannot touch them. This alone fully closes B2.</p>
+<p><strong>Marker-label scope (primary).</strong> Deny a namespace <code>UPDATE</code> by the GMC SA unless the <em>existing</em> object (<code>oldObject</code>) carries <code>actions-gateway.github.com/tenant: "true"</code>.
+   The marker is read from <code>oldObject</code>, which a compromised GMC cannot forge in the request, and is applied by a <em>trusted</em> actor (the admin, at namespace creation) — the GMC must never be able to set it, or a compromised GMC could mark <code>kube-system</code> then patch it. <code>kube-system</code> and every other non-tenant namespace lack the marker → the GMC SA cannot touch them.
+   This alone fully closes B2.</p>
 </li>
 <li>
-<p><strong>PSA-only field guard (value guard, defense-in-depth).</strong> Deny if the GMC's update
-   changes any namespace label <em>other than</em> the six <code>pod-security.kubernetes.io/*</code> keys,
-   or changes any annotation. The GMC's legitimate SSA apply (field manager
-   <code>actionsgateway-controller-psa</code>) only ever declares those six labels, so this is
-   non-breaking, but it stops a compromised GMC from doing label/annotation mischief on
-   the tenant namespaces it <em>can</em> reach (e.g. stripping a NetworkPolicy selector label).</p>
+<p><strong>PSA-only field guard (value guard, defense-in-depth).</strong> Deny if the GMC's update changes any namespace label <em>other than</em> the six <code>pod-security.kubernetes.io/*</code> keys, or changes any annotation.
+   The GMC's legitimate SSA apply (field manager <code>actionsgateway-controller-psa</code>) only ever declares those six labels, so this is non-breaking, but it stops a compromised GMC from doing label/annotation mischief on the tenant namespaces it <em>can</em> reach (e.g. stripping a NetworkPolicy selector label).</p>
 </li>
 </ol>
 <h3 id="why-no-blanket-gmc-may-never-write-privileged">Why no blanket "GMC may never write <code>privileged</code>"<a class="headerlink" href="#why-no-blanket-gmc-may-never-write-privileged" title="Permanent link">&para;</a></h3>
-<p><code>securityProfile: privileged</code> is a supported onboarding path (DinD / kernel-module
-tenants — see <a href="../../../design/05-security/">05-security.md §5.3</a>, <code>securityProfile</code> enum
-<code>baseline;restricted;privileged</code>). The GMC legitimately stamps PSA <code>privileged</code> on such
-a tenant's namespace, so a value ban on <code>privileged</code> would break supported tenants. The
-marker scope already bounds the blast radius to GMC-managed tenant namespaces.</p>
+<p><code>securityProfile: privileged</code> is a supported onboarding path (DinD / kernel-module tenants — see <a href="../../../design/05-security/">05-security.md §5.3</a>, <code>securityProfile</code> enum <code>baseline;restricted;privileged</code>).
+The GMC legitimately stamps PSA <code>privileged</code> on such a tenant's namespace, so a value ban on <code>privileged</code> would break supported tenants.
+The marker scope already bounds the blast radius to GMC-managed tenant namespaces.</p>
 <h3 id="residual-documented-out-of-scope-for-q56">Residual (documented, out of scope for Q56)<a class="headerlink" href="#residual-documented-out-of-scope-for-q56" title="Permanent link">&para;</a></h3>
-<p>A compromised GMC can still flip the PSA profile <em>within a tenant namespace it already
-manages</em> (e.g. <code>baseline</code> → <code>privileged</code> on that one tenant). That blast radius is
-inherent — the GMC's whole job is managing that tenant's PSA. The complementary control
-is CEL immutability / downgrade-audit on <code>securityProfile</code> itself, tracked as
-<a href="../../../STATUS/">Q33</a> (k8s audit §D D5). Q56 is strictly about non-tenant namespaces.</p>
+<p>A compromised GMC can still flip the PSA profile <em>within a tenant namespace it already manages</em> (e.g. <code>baseline</code> → <code>privileged</code> on that one tenant).
+That blast radius is inherent — the GMC's whole job is managing that tenant's PSA.
+The complementary control is CEL immutability / downgrade-audit on <code>securityProfile</code> itself, tracked as <a href="../../../STATUS/">Q33</a> (k8s audit §D D5).
+Q56 is strictly about non-tenant namespaces.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <h3 id="manifests">Manifests<a class="headerlink" href="#manifests" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>cmd/gmc/config/admission-policy/policy.yaml</code> — <code>ValidatingAdmissionPolicy</code> +
-  <code>ValidatingAdmissionPolicyBinding</code>.</li>
+<li><code>cmd/gmc/config/admission-policy/policy.yaml</code> — <code>ValidatingAdmissionPolicy</code> + <code>ValidatingAdmissionPolicyBinding</code>.</li>
 <li><code>cmd/gmc/config/admission-policy/kustomization.yaml</code>.</li>
-<li>Wire <code>- ../admission-policy</code> into <code>cmd/gmc/config/default/kustomization.yaml</code>
-  (uncommented = secure by default).</li>
+<li>Wire <code>- ../admission-policy</code> into <code>cmd/gmc/config/default/kustomization.yaml</code> (uncommented = secure by default).</li>
 </ul>
 <h3 id="vap-shape">VAP shape<a class="headerlink" href="#vap-shape" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>matchConstraints</code>: <code>""/v1 namespaces</code>, <code>operations: [UPDATE]</code> (GMC has no <code>create</code> on
-  namespaces — verbs are get/list/patch/update/watch — so CREATE need not be matched).</li>
-<li><code>matchConditions</code>: <code>request.userInfo.username == 'system:serviceaccount:gmc-system:gmc-controller-manager'</code>
-  (the default install identity; documented as the one string to change if the install
-  namespace/name is customized).</li>
+<li><code>matchConstraints</code>: <code>""/v1 namespaces</code>, <code>operations: [UPDATE]</code> (GMC has no <code>create</code> on namespaces — verbs are get/list/patch/update/watch — so CREATE need not be matched).</li>
+<li><code>matchConditions</code>: <code>request.userInfo.username == 'system:serviceaccount:gmc-system:gmc-controller-manager'</code> (the default install identity; documented as the one string to change if the install namespace/name is customized).</li>
 <li><code>variables</code> + <code>validations</code> implementing constraints 1 and 2.</li>
-<li>Binding <code>validationActions: [Deny]</code> (secure default). Migration path for existing
-  clusters documented (label namespaces first, or temporarily flip to <code>Audit</code>).</li>
+<li>Binding <code>validationActions: [Deny]</code> (secure default).
+  Migration path for existing clusters documented (label namespaces first, or temporarily flip to <code>Audit</code>).</li>
 </ul>
 <h3 id="code">Code<a class="headerlink" href="#code" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>applyNamespacePSA</code>: when the SSA apply is rejected with <code>IsForbidden</code> (VAP denial,
-  typically a new tenant whose namespace was not labeled), emit a <code>Warning</code> event
-  (<code>NamespaceMarkerMissing</code>) guiding the operator to apply the marker label, instead of
-  surfacing only an opaque reconcile error.</li>
+<li><code>applyNamespacePSA</code>: when the SSA apply is rejected with <code>IsForbidden</code> (VAP denial, typically a new tenant whose namespace was not labeled), emit a <code>Warning</code> event (<code>NamespaceMarkerMissing</code>) guiding the operator to apply the marker label, instead of surfacing only an opaque reconcile error.</li>
 </ul>
 <h3 id="tests-envtest-cmdgmcinternalcontroller">Tests (envtest, <code>cmd/gmc/internal/controller</code>)<a class="headerlink" href="#tests-envtest-cmdgmcinternalcontroller" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Install the VAP + binding objects; using an <strong>impersonating</strong> client
-  (<code>rest.Config.Impersonate</code> = the GMC SA), assert via <code>Eventually</code> (VAP enforcement is
-  not instantaneous after creation):</li>
+<li>Install the VAP + binding objects; using an <strong>impersonating</strong> client (<code>rest.Config.Impersonate</code> = the GMC SA), assert via <code>Eventually</code> (VAP enforcement is not instantaneous after creation):</li>
 <li>UPDATE of an <strong>unmarked</strong> namespace → Forbidden.</li>
 <li>UPDATE of a <strong>marked</strong> namespace setting PSA labels → allowed.</li>
 <li>UPDATE of a marked namespace changing a <strong>non-PSA</strong> label → Forbidden.</li>
@@ -2794,13 +2769,10 @@ is CEL immutability / downgrade-audit on <code>securityProfile</code> itself, tr
 <h3 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>docs/design/05-security.md</code> — new control + the marker-label contract.</li>
-<li><code>docs/operations/tenant-onboarding.md</code> — add the marker label to the namespace
-  pre-condition and the create-namespace step.</li>
+<li><code>docs/operations/tenant-onboarding.md</code> — add the marker label to the namespace pre-condition and the create-namespace step.</li>
 <li><code>docs/getting-started.md</code> — add the label to the namespace it creates.</li>
-<li><code>docs/operations/upgrade.md</code> — migration: label existing tenant namespaces before
-  upgrading (or run the binding in <code>Audit</code> during transition).</li>
-<li><code>docs/operations/troubleshooting.md</code> — runbook: "PSA reconcile denied / namespace
-  marker missing".</li>
+<li><code>docs/operations/upgrade.md</code> — migration: label existing tenant namespaces before upgrading (or run the binding in <code>Audit</code> during transition).</li>
+<li><code>docs/operations/troubleshooting.md</code> — runbook: "PSA reconcile denied / namespace marker missing".</li>
 <li><code>docs/design/02-architecture.md</code> — one line in the RBAC/security prose.</li>
 <li><code>docs/plan/archive/k8s-best-practices.md</code> — mark B2 ✅ with the implemented approach.</li>
 <li><code>docs/STATUS.md</code> — remove Q56 row (isolated commit).</li>

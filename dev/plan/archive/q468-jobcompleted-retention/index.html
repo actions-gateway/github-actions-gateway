@@ -2715,84 +2715,47 @@
 
 
 <h1 id="q468-how-long-does-github-hold-a-jobcompleted-when-no-session-exists">Q468: how long does GitHub hold a <code>JobCompleted</code> when no session exists?<a class="headerlink" href="#q468-how-long-does-github-hold-a-jobcompleted-when-no-session-exists" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> answered 2026-07-29 and concluded. GitHub redelivered the
-unacknowledged <code>JobCompleted</code> to a session created <strong>13 h 3 m 40 s</strong> after the
-arming session was deleted, with no session in existence for the whole gap. That
-is past Q438's 12 h default <code>maxWorkerLifetime</code>, which is the comparison that
-decides the question: beyond that point the kubelet has already killed the
-worker, so retention outlasts the entire window in which the replay path could
-still have something to reclaim. The Q435 replay path is a <strong>recovery path</strong>, and
-the architecture and runbook may say so. Scale set torn down; experiment closed.</p>
+<p><strong>Status:</strong> answered 2026-07-29 and concluded.
+GitHub redelivered the unacknowledged <code>JobCompleted</code> to a session created <strong>13 h 3 m 40 s</strong> after the arming session was deleted, with no session in existence for the whole gap.
+That is past Q438's 12 h default <code>maxWorkerLifetime</code>, which is the comparison that decides the question: beyond that point the kubelet has already killed the worker, so retention outlasts the entire window in which the replay path could still have something to reclaim.
+The Q435 replay path is a <strong>recovery path</strong>, and the architecture and runbook may say so.
+Scale set torn down; experiment closed.</p>
 <h2 id="why-the-question-was-open">Why the question was open<a class="headerlink" href="#why-the-question-was-open" title="Permanent link">&para;</a></h2>
-<p><a href="../q435-restart-orphan-reclaim/">Q435</a> measured which worker-pod orphan classes
-a restarted AGC reclaims. Three of the four are reclaimed unconditionally. The
-fourth — a <code>Running</code> worker whose job ended <em>while the AGC was down</em> — has no
-durable deadline of its own, and is reclaimed only if GitHub redelivers that
-job's terminal <code>JobCompleted</code> to the restarted AGC's <strong>new</strong> session, which
-stamps the pod and lets the reaper act.</p>
-<p>Whether GitHub does that is not something the AGC decides, and
-<a href="../q438-worker-lifetime-deadline/">Q438</a> §3 established that it is not
-something reading settles either. The published contract covers only the
-<em>within-session</em> acknowledgement loop: a client acknowledges with
-<code>DeleteMessage</code>, and messages it never acknowledged are redelivered on its next
-poll. That describes a client crashing mid-batch with its session still alive.
-It says nothing about how long the backend holds an unacknowledged message when
-<strong>no session exists at all</strong> for hours, which is exactly the Q435 replay path.</p>
-<p>Two things follow from that, and they are why this needs a live measurement
-rather than more reading:</p>
+<p><a href="../q435-restart-orphan-reclaim/">Q435</a> measured which worker-pod orphan classes a restarted AGC reclaims.
+Three of the four are reclaimed unconditionally.
+The fourth — a <code>Running</code> worker whose job ended <em>while the AGC was down</em> — has no durable deadline of its own, and is reclaimed only if GitHub redelivers that job's terminal <code>JobCompleted</code> to the restarted AGC's <strong>new</strong> session, which stamps the pod and lets the reaper act.</p>
+<p>Whether GitHub does that is not something the AGC decides, and <a href="../q438-worker-lifetime-deadline/">Q438</a> §3 established that it is not something reading settles either.
+The published contract covers only the <em>within-session</em> acknowledgement loop: a client acknowledges with <code>DeleteMessage</code>, and messages it never acknowledged are redelivered on its next poll.
+That describes a client crashing mid-batch with its session still alive.
+It says nothing about how long the backend holds an unacknowledged message when <strong>no session exists at all</strong> for hours, which is exactly the Q435 replay path.</p>
+<p>Two things follow from that, and they are why this needs a live measurement rather than more reading:</p>
 <ul>
-<li><strong>The fake cannot answer it, by construction.</strong> <code>scaleset/scalesettest</code>'s
-  queue log is scale-set-scoped rather than session-scoped and never expires, so
-  a message survives any gap. That is the deliberately <em>permissive</em> assumption —
-  it lets the integration tier exercise the replay path at all — but it means
-  every green test on that path is conditional on a real retention window we
-  have never observed.</li>
-<li><strong>The answer changes confidence, not design.</strong> Q438's <code>maxWorkerLifetime</code> cap
-  is on by default either way. What the answer changes is whether replay is a
-  <em>recovery path</em> that usually works or a coincidence that occasionally does —
-  and therefore whether <a href="../../../design/02-architecture/">the architecture doc</a> and
-  the <a href="../../../operations/troubleshooting/">troubleshooting runbook</a> may keep
-  presenting it as recovery.</li>
+<li><strong>The fake cannot answer it, by construction.</strong> <code>scaleset/scalesettest</code>'s queue log is scale-set-scoped rather than session-scoped and never expires, so a message survives any gap.
+  That is the deliberately <em>permissive</em> assumption — it lets the integration tier exercise the replay path at all — but it means every green test on that path is conditional on a real retention window we have never observed.</li>
+<li><strong>The answer changes confidence, not design.</strong> Q438's <code>maxWorkerLifetime</code> cap is on by default either way.
+  What the answer changes is whether replay is a <em>recovery path</em> that usually works or a coincidence that occasionally does — and therefore whether <a href="../../../design/02-architecture/">the architecture doc</a> and the <a href="../../../operations/troubleshooting/">troubleshooting runbook</a> may keep presenting it as recovery.</li>
 </ul>
 <h2 id="what-is-actually-being-measured">What is actually being measured<a class="headerlink" href="#what-is-actually-being-measured" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p>After a gap of <em>G</em> during which the scale set had <strong>no session</strong>, does a newly
-created session receive an unacknowledged <code>JobCompleted</code> that provably existed
-and was provably unacknowledged when the gap began?</p>
+<p>After a gap of <em>G</em> during which the scale set had <strong>no session</strong>, does a newly created session receive an unacknowledged <code>JobCompleted</code> that provably existed and was provably unacknowledged when the gap began?</p>
 </blockquote>
-<p>Four constraints fall out of that sentence, and between them they fix the shape
-of the harness:</p>
+<p>Four constraints fall out of that sentence, and between them they fix the shape of the harness:</p>
 <ol>
-<li><strong>No session may exist during the gap.</strong> So the arming run must delete its
-   session and exit. A process that stays up holding a session measures
-   something else entirely.</li>
-<li><strong>The gap is hours.</strong> So it outlives any single process, and the experiment's
-   state has to be on disk rather than in memory.</li>
-<li><strong>The message must provably have been there, unacknowledged, at <em>T</em>₀.</strong> A
-   negative result is only interesting if the message existed to be lost. So the
-   arming run polls until it <em>sees</em> the <code>JobCompleted</code>, and then deliberately
-   does not acknowledge it — it neither advances the cursor past it nor issues
-   the <code>DeleteMessage</code> half of the ack. The recorded cursor is the id of the
-   message <em>before</em> it.</li>
-<li><strong>The scale set must survive the gap.</strong> So Investigation F's scale set is
-   durable and named, unlike Investigation E's throwaway, and is torn down by an
-   explicit third phase.</li>
+<li><strong>No session may exist during the gap.</strong> So the arming run must delete its session and exit.
+   A process that stays up holding a session measures something else entirely.</li>
+<li><strong>The gap is hours.</strong> So it outlives any single process, and the experiment's state has to be on disk rather than in memory.</li>
+<li><strong>The message must provably have been there, unacknowledged, at <em>T</em>₀.</strong> A negative result is only interesting if the message existed to be lost.
+   So the arming run polls until it <em>sees</em> the <code>JobCompleted</code>, and then deliberately does not acknowledge it — it neither advances the cursor past it nor issues the <code>DeleteMessage</code> half of the ack.
+   The recorded cursor is the id of the message <em>before</em> it.</li>
+<li><strong>The scale set must survive the gap.</strong> So Investigation F's scale set is durable and named, unlike Investigation E's throwaway, and is torn down by an explicit third phase.</li>
 </ol>
 <h3 id="producing-a-jobcompleted-without-running-a-job">Producing a <code>JobCompleted</code> without running a job<a class="headerlink" href="#producing-a-jobcompleted-without-running-a-job" title="Permanent link">&para;</a></h3>
-<p>The arming run needs a job to reach a terminal state at GitHub. Running one for
-real would need a live runner registered against the probe's scale set, which
-drags in the JIT-config and container machinery Investigation E uses for its
-hold mode.</p>
-<p>It cancels the workflow run instead: acquire the job, read the run identity off
-the <code>JobAssigned</code> (<code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code> — confirmed
-present on the live wire by Q417's verification run), then
-<code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/cancel</code>. The job goes terminal
-and the backend queues its <code>JobCompleted</code> with nothing listening. This needs the
-App to hold <code>actions: write</code>, which the Investigation C/D driver already
-requires for <code>workflow_dispatch</code>.</p>
-<p>A cancelled job is the right shape for this question, not a compromise: the
-Q434 incident's jobs ended without their AGC observing it, and <em>how</em> a job
-became terminal is not something the message queue's retention can depend on.</p>
+<p>The arming run needs a job to reach a terminal state at GitHub.
+Running one for real would need a live runner registered against the probe's scale set, which drags in the JIT-config and container machinery Investigation E uses for its hold mode.</p>
+<p>It cancels the workflow run instead: acquire the job, read the run identity off the <code>JobAssigned</code> (<code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code> — confirmed present on the live wire by Q417's verification run), then <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/cancel</code>.
+The job goes terminal and the backend queues its <code>JobCompleted</code> with nothing listening.
+This needs the App to hold <code>actions: write</code>, which the Investigation C/D driver already requires for <code>workflow_dispatch</code>.</p>
+<p>A cancelled job is the right shape for this question, not a compromise: the Q434 incident's jobs ended without their AGC observing it, and <em>how</em> a job became terminal is not something the message queue's retention can depend on.</p>
 <h2 id="phases">Phases<a class="headerlink" href="#phases" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2820,89 +2783,51 @@ became terminal is not something the message queue's retention can depend on.</p
 </tr>
 </tbody>
 </table>
-<p>The state file (<code>PROBE_RETENTION_STATE</code>, default <code>tmp/q468-retention-state.json</code>)
-carries the scale set id, the job and run identity, the cursor, the observed
-<code>JobCompleted</code> message id, and <code>armedAt</code> — the instant the session was deleted,
-which is when the gap starts.</p>
+<p>The state file (<code>PROBE_RETENTION_STATE</code>, default <code>tmp/q468-retention-state.json</code>) carries the scale set id, the job and run identity, the cursor, the observed <code>JobCompleted</code> message id, and <code>armedAt</code> — the instant the session was deleted, which is when the gap starts.</p>
 <h3 id="operating-recipe">Operating recipe<a class="headerlink" href="#operating-recipe" title="Permanent link">&para;</a></h3>
-<p>Two things carried over from the Q264/Q417 live runs
-(<a href="../../scaleset-eviction-recovery/#reproducing-the-run">scaleset-eviction-recovery.md</a>) and
-they are not optional here either:</p>
+<p>Two things carried over from the Q264/Q417 live runs (<a href="../../scaleset-eviction-recovery/#reproducing-the-run">scaleset-eviction-recovery.md</a>) and they are not optional here either:</p>
 <ul>
-<li><strong>Register repo-scoped, not org-scoped.</strong> This repo is public and the org's
-  <code>Default</code> runner group sets <code>allows_public_repositories: false</code>, so an
-  org-scoped scale set never receives the job. A repo config URL bypasses runner
-  groups entirely. Do not "fix" that by enabling public repositories on the
-  runner group — it exposes self-hosted runners to fork pull requests.</li>
-<li><strong>Dispatch first, then arm.</strong> A job queued against a not-yet-registered
-  scale-set label waits server-side and is assigned the moment the scale set
-  appears, which removes the race the probe's own <code>dispatch … NOW</code> prompt
-  implies.</li>
+<li><strong>Register repo-scoped, not org-scoped.</strong> This repo is public and the org's <code>Default</code> runner group sets <code>allows_public_repositories: false</code>, so an org-scoped scale set never receives the job.
+  A repo config URL bypasses runner groups entirely.
+  Do not "fix" that by enabling public repositories on the runner group — it exposes self-hosted runners to fork pull requests.</li>
+<li><strong>Dispatch first, then arm.</strong> A job queued against a not-yet-registered scale-set label waits server-side and is assigned the moment the scale set appears, which removes the race the probe's own <code>dispatch … NOW</code> prompt implies.</li>
 </ul>
-<p>The fixture is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q468-retention-probe.yml"><code>q468-retention-probe.yml</code></a>
-(<code>runs-on: gag-q468-retention</code>, one job, dispatch-only):</p>
+<p>The fixture is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q468-retention-probe.yml"><code>q468-retention-probe.yml</code></a> (<code>runs-on: gag-q468-retention</code>, one job, dispatch-only):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>q468-retention-probe.yml<span class="w"> </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway
 </code></pre></div>
-<p>Then arm. The App key comes from the macOS keychain and reaches the probe as a
-file path, never as an env-var value:</p>
+<p>Then arm.
+The App key comes from the macOS keychain and reaches the probe as a file path, never as an env-var value:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">KEY_FILE</span><span class="o">=</span>./tmp/gag-probe-key.pem<span class="p">;</span><span class="w"> </span><span class="nb">trap</span><span class="w"> </span><span class="s1">&#39;rm -f ./tmp/gag-probe-key.pem&#39;</span><span class="w"> </span>EXIT<span class="w"> </span>INT<span class="w"> </span>TERM<span class="p">;</span><span class="w"> </span>install<span class="w"> </span>-m<span class="w"> </span><span class="m">600</span><span class="w"> </span>/dev/null<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$KEY_FILE</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>security<span class="w"> </span>find-generic-password<span class="w"> </span>-a<span class="w"> </span>actions-gateway-test<span class="w"> </span>-s<span class="w"> </span>github-app-private-key<span class="w"> </span>-w<span class="w"> </span><span class="p">|</span><span class="w"> </span>xxd<span class="w"> </span>-r<span class="w"> </span>-p<span class="w"> </span>&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$KEY_FILE</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">GITHUB_APP_ID</span><span class="o">=</span><span class="m">3752347</span><span class="w"> </span><span class="nv">GITHUB_APP_INSTALLATION_ID</span><span class="o">=</span><span class="m">135739122</span><span class="w"> </span><span class="nv">GITHUB_ORG_URL</span><span class="o">=</span>https://github.com/actions-gateway/github-actions-gateway<span class="w"> </span><span class="nv">GITHUB_APP_PRIVATE_KEY</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">/tmp/gag-probe-key.pem&quot;</span><span class="w"> </span><span class="nv">PROBE_RETENTION_TEST</span><span class="o">=</span>arm<span class="w"> </span><span class="nv">PROBE_RETENTION_STATE</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">/tmp/q468-retention-state.json&quot;</span><span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>-C<span class="w"> </span>cmd/probe<span class="w"> </span>.
 </code></pre></div>
-<p>Wait the gap, then re-run the same command with <code>PROBE_RETENTION_TEST=check</code>,
-and when the experiment is over, once more with <code>PROBE_RETENTION_TEST=cleanup</code>.
+<p>Wait the gap, then re-run the same command with <code>PROBE_RETENTION_TEST=check</code>, and when the experiment is over, once more with <code>PROBE_RETENTION_TEST=cleanup</code>.
 The state file carries the experiment between them.</p>
 <p>Two details that cost a run each if missed:</p>
 <ul>
-<li><strong>The key file goes in the repo-local <code>./tmp/</code>, not <code>mktemp -t</code>.</strong> The
-  host-wide temp directory is shared across worktrees and outside the project
-  root; <code>workspace-guard</code> blocks writes there, and the older Investigation E
-  recipe predates that.</li>
-<li><strong>Pass <code>PROBE_RETENTION_STATE</code> as an absolute path.</strong> <code>go run -C cmd/probe .</code>
-  changes the process's working directory, so the default relative
-  <code>tmp/q468-retention-state.json</code> would land under <code>cmd/probe/</code> and the next
-  phase would not find it.</li>
+<li><strong>The key file goes in the repo-local <code>./tmp/</code>, not <code>mktemp -t</code>.</strong> The host-wide temp directory is shared across worktrees and outside the project root; <code>workspace-guard</code> blocks writes there, and the older Investigation E recipe predates that.</li>
+<li><strong>Pass <code>PROBE_RETENTION_STATE</code> as an absolute path.</strong> <code>go run -C cmd/probe .</code> changes the process's working directory, so the default relative <code>tmp/q468-retention-state.json</code> would land under <code>cmd/probe/</code> and the next phase would not find it.</li>
 </ul>
-<p><code>PROBE_RETENTION_KEEP_ARMED=true</code> on a <code>RETAINED</code> check leaves the message
-unacknowledged and appends the result to the state file's check history, so one
-armed job can be probed at 1 h, 4 h, 12 h. Read that ladder with the caveat
-below.</p>
+<p><code>PROBE_RETENTION_KEEP_ARMED=true</code> on a <code>RETAINED</code> check leaves the message unacknowledged and appends the result to the state file's check history, so one armed job can be probed at 1 h, 4 h, 12 h.
+Read that ladder with the caveat below.</p>
 <h2 id="what-would-make-a-result-invalid">What would make a result invalid<a class="headerlink" href="#what-would-make-a-result-invalid" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>A check may itself reset retention.</strong> Creating a session is an event the
-  backend sees; if retention is measured from the last session rather than from
-  the message's arrival, every rung of a ladder after the first is measuring a
-  shorter gap than it claims. The headline number should come from a single
-  check on a freshly armed experiment. The ladder is exploratory only.</li>
-<li><strong>A negative result is bounded by the check window.</strong> <code>LOST</code> means "not
-  redelivered within the check's poll window", not "provably deleted". The
-  window is a few poll cycles, which is what a restarting AGC gets in practice,
-  so that bound is the operationally meaningful one — but it is a bound.</li>
-<li><strong>One tenant, one region, one point in time.</strong> Retention is backend policy and
-  is not published; a measurement constrains what we may claim, it does not
-  establish a contract. Anything written from a run says "observed", with the
-  date.</li>
-<li><strong>An unacknowledged <code>JobAssigned</code> would confound it.</strong> The arming run
-  acknowledges the assignment fully (cursor <em>and</em> <code>DeleteMessage</code>) before
-  cancelling, so the only unacknowledged message in the log at <em>T</em>₀ is the
-  <code>JobCompleted</code> under test.</li>
+<li><strong>A check may itself reset retention.</strong> Creating a session is an event the backend sees; if retention is measured from the last session rather than from the message's arrival, every rung of a ladder after the first is measuring a shorter gap than it claims.
+  The headline number should come from a single check on a freshly armed experiment.
+  The ladder is exploratory only.</li>
+<li><strong>A negative result is bounded by the check window.</strong> <code>LOST</code> means "not redelivered within the check's poll window", not "provably deleted".
+  The window is a few poll cycles, which is what a restarting AGC gets in practice, so that bound is the operationally meaningful one — but it is a bound.</li>
+<li><strong>One tenant, one region, one point in time.</strong> Retention is backend policy and is not published; a measurement constrains what we may claim, it does not establish a contract.
+  Anything written from a run says "observed", with the date.</li>
+<li><strong>An unacknowledged <code>JobAssigned</code> would confound it.</strong> The arming run acknowledges the assignment fully (cursor <em>and</em> <code>DeleteMessage</code>) before cancelling, so the only unacknowledged message in the log at <em>T</em>₀ is the <code>JobCompleted</code> under test.</li>
 </ul>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
-<p>Investigation F is exercised against the <code>scalesettest</code> stub in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/probe/retention_test.go"><code>cmd/probe/retention_test.go</code></a>: config
-parsing and phase selection, the arm→check state round-trip, the <code>RETAINED</code>
-verdict, the <code>LOST</code> verdict, the check history under
-<code>PROBE_RETENTION_KEEP_ARMED</code>, and cleanup deleting the scale set.</p>
-<p>The stub grew one route for this — <code>POST /repos/{owner}/{repo}/actions/runs/{id}/cancel</code>,
-which completes the run's assigned jobs and queues their <code>JobCompleted</code>. That
-models the causal chain the arming phase depends on, so the test covers the
-probe's cancel wiring rather than stubbing around it.</p>
-<p>What these tests cannot cover is the measurement itself: the stub's queue never
-expires, so <code>RETAINED</code> is the only outcome it can produce from a real arm. The
-<code>LOST</code> case is driven from a state file pointing at an empty queue. <strong>A green
-suite here means the harness works, not that the replay path does.</strong></p>
+<p>Investigation F is exercised against the <code>scalesettest</code> stub in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/probe/retention_test.go"><code>cmd/probe/retention_test.go</code></a>: config parsing and phase selection, the arm→check state round-trip, the <code>RETAINED</code> verdict, the <code>LOST</code> verdict, the check history under <code>PROBE_RETENTION_KEEP_ARMED</code>, and cleanup deleting the scale set.</p>
+<p>The stub grew one route for this — <code>POST /repos/{owner}/{repo}/actions/runs/{id}/cancel</code>, which completes the run's assigned jobs and queues their <code>JobCompleted</code>.
+That models the causal chain the arming phase depends on, so the test covers the probe's cancel wiring rather than stubbing around it.</p>
+<p>What these tests cannot cover is the measurement itself: the stub's queue never expires, so <code>RETAINED</code> is the only outcome it can produce from a real arm.
+The <code>LOST</code> case is driven from a state file pointing at an empty queue. <strong>A green suite here means the harness works, not that the replay path does.</strong></p>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="the-first-rung-retained-at-29-s-2026-07-28">The first rung: RETAINED at 29 s (2026-07-28)<a class="headerlink" href="#the-first-rung-retained-at-29-s-2026-07-28" title="Permanent link">&para;</a></h3>
-<p>Armed against <code>actions-gateway/github-actions-gateway</code>, scale set
-<code>gag-q468-retention</code> (id 11), job <code>2446648c-…</code>, run <code>30409332447</code>.</p>
+<p>Armed against <code>actions-gateway/github-actions-gateway</code>, scale set <code>gag-q468-retention</code> (id 11), job <code>2446648c-…</code>, run <code>30409332447</code>.</p>
 <table>
 <thead>
 <tr>
@@ -2935,22 +2860,18 @@ suite here means the harness works, not that the replay path does.</strong></p>
 </table>
 <p>What that does and does not establish:</p>
 <ul>
-<li><strong>Does:</strong> the replay path is real on the live wire, not just in the fake. A
-  session that never saw the job receives its terminal message, which is exactly
-  the mechanism Q435's fourth orphan class depends on. And the harness itself is
-  validated end to end against GitHub rather than only against <code>scalesettest</code>.</li>
-<li><strong>Does not:</strong> answer the question. 29 s is not a multi-hour outage. The Q434
-  incident's window was 16 hours. A backend that holds a message for a minute
-  and drops it at an hour would produce exactly this result.</li>
+<li><strong>Does:</strong> the replay path is real on the live wire, not just in the fake.
+  A session that never saw the job receives its terminal message, which is exactly the mechanism Q435's fourth orphan class depends on.
+  And the harness itself is validated end to end against GitHub rather than only against <code>scalesettest</code>.</li>
+<li><strong>Does not:</strong> answer the question.
+  29 s is not a multi-hour outage.
+  The Q434 incident's window was 16 hours.
+  A backend that holds a message for a minute and drops it at an hour would produce exactly this result.</li>
 </ul>
-<p><strong>One divergence the live run caught.</strong> GitHub spells the cancelled result
-<code>canceled</code>, one L. <code>scalesettest</code> had been written with <code>cancelled</code>, so the fake
-and the wire disagreed on a field a client can branch on. Corrected in the same
-change — which is the whole argument for driving these probes against the
-shipping client rather than a bespoke one.</p>
+<p><strong>One divergence the live run caught.</strong> GitHub spells the cancelled result <code>canceled</code>, one L. <code>scalesettest</code> had been written with <code>cancelled</code>, so the fake and the wire disagreed on a field a client can branch on.
+Corrected in the same change — which is the whole argument for driving these probes against the shipping client rather than a bespoke one.</p>
 <h3 id="the-answer-retained-at-13-h-3-m-40-s-2026-07-29">The answer: RETAINED at 13 h 3 m 40 s (2026-07-29)<a class="headerlink" href="#the-answer-retained-at-13-h-3-m-40-s-2026-07-29" title="Permanent link">&para;</a></h3>
-<p>The same armed experiment, checked once more at 05:56 PDT / 12:56 UTC — a gap of
-<strong>13 h 3 m 40 s</strong> during which the scale set had no session at all.</p>
+<p>The same armed experiment, checked once more at 05:56 PDT / 12:56 UTC — a gap of <strong>13 h 3 m 40 s</strong> during which the scale set had no session at all.</p>
 <table>
 <thead>
 <tr>
@@ -2977,43 +2898,27 @@ shipping client rather than a bespoke one.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>The intervening-session caveat does not bite here, and the arithmetic is why.</strong>
-The worry was that a check is itself a session, so if the backend measures
-retention from the last session rather than from the message's arrival, every
-later rung is measuring a shorter gap than it claims. The only intervening
-session was the 29 s check, which ended ~31 s after arming. So the pessimistic
-model gives 13 h 0 m 50 s and the optimistic one 13 h 3 m 40 s — a 0.2 %
-difference, both on the same side of every threshold that matters. The ladder is
-exploratory <em>in general</em>; this particular ladder has its second rung more than
-three orders of magnitude past its first, which collapses the two models onto the
-same answer. No freshly armed confirmation is needed to write the number down.</p>
-<p><strong>Why 13 h settles a question the 16 h incident might look like it reopens.</strong> The
-Q434 outage ran 16 hours, and this measurement does not reach that far. It does
-not need to: <code>maxWorkerLifetime</code> defaults to 12 h and is enforced by the kubelet
-with no live AGC, so at the 12 h mark the stranded worker is already <code>Failed</code>/
-<code>DeadlineExceeded</code> and is reclaimed by the ordinary terminal-orphan path that
-Q435 proved unconditional. Retention only has to outlast the window in which a
-<code>Running</code> worker can still exist for redelivery to be worth anything, and 13 h
-outlasts 12 h. The two mechanisms overlap rather than leaving a gap between them.</p>
+<p><strong>The intervening-session caveat does not bite here, and the arithmetic is why.</strong> The worry was that a check is itself a session, so if the backend measures retention from the last session rather than from the message's arrival, every later rung is measuring a shorter gap than it claims.
+The only intervening session was the 29 s check, which ended ~31 s after arming.
+So the pessimistic model gives 13 h 0 m 50 s and the optimistic one 13 h 3 m 40 s — a 0.2 % difference, both on the same side of every threshold that matters.
+The ladder is exploratory <em>in general</em>; this particular ladder has its second rung more than three orders of magnitude past its first, which collapses the two models onto the same answer.
+No freshly armed confirmation is needed to write the number down.</p>
+<p><strong>Why 13 h settles a question the 16 h incident might look like it reopens.</strong> The Q434 outage ran 16 hours, and this measurement does not reach that far.
+It does not need to: <code>maxWorkerLifetime</code> defaults to 12 h and is enforced by the kubelet with no live AGC, so at the 12 h mark the stranded worker is already <code>Failed</code>/ <code>DeadlineExceeded</code> and is reclaimed by the ordinary terminal-orphan path that Q435 proved unconditional.
+Retention only has to outlast the window in which a <code>Running</code> worker can still exist for redelivery to be worth anything, and 13 h outlasts 12 h.
+The two mechanisms overlap rather than leaving a gap between them.</p>
 <p>What this does <strong>not</strong> establish:</p>
 <ul>
-<li><strong>A retention window — only a lower bound.</strong> <code>LOST</code> was never observed at any
-  gap, so the measurement says retention ≥ 13 h and says nothing about where it
-  ends. Anyone tempted to derive a timeout from this number should not.</li>
-<li><strong>A contract.</strong> One tenant, one region, one point in time, on an undocumented
-  backend policy. The claim written into the docs is "observed, 2026-07-29",
-  not "GitHub guarantees".</li>
-<li><strong>That redelivery is sufficient on its own.</strong> It is a recovery path, not the
-  recovery mechanism. Q438's cap remains the unconditional backstop precisely
-  because it depends on nothing GitHub does.</li>
+<li><strong>A retention window — only a lower bound.</strong> <code>LOST</code> was never observed at any gap, so the measurement says retention ≥ 13 h and says nothing about where it ends.
+  Anyone tempted to derive a timeout from this number should not.</li>
+<li><strong>A contract.</strong> One tenant, one region, one point in time, on an undocumented backend policy.
+  The claim written into the docs is "observed, 2026-07-29", not "GitHub guarantees".</li>
+<li><strong>That redelivery is sufficient on its own.</strong> It is a recovery path, not the recovery mechanism.
+  Q438's cap remains the unconditional backstop precisely because it depends on nothing GitHub does.</li>
 </ul>
 <h2 id="outcome">Outcome<a class="headerlink" href="#outcome" title="Permanent link">&para;</a></h2>
-<p>The redelivery sentences in <a href="../../../design/02-architecture/">architecture §Worker-Pod Reaper</a>
-and the <a href="../../../operations/troubleshooting/">troubleshooting runbook</a> stood as
-written and were upgraded from hedged to measured; the <code>LOST</code> contingency that
-would have demoted them did not occur. The harness stays in <code>cmd/probe</code> — the
-experiment is re-armable against a future GitHub, which is the point of building
-it as three phases around a state file rather than as a one-off script.</p>
+<p>The redelivery sentences in <a href="../../../design/02-architecture/">architecture §Worker-Pod Reaper</a> and the <a href="../../../operations/troubleshooting/">troubleshooting runbook</a> stood as written and were upgraded from hedged to measured; the <code>LOST</code> contingency that would have demoted them did not occur.
+The harness stays in <code>cmd/probe</code> — the experiment is re-armable against a future GitHub, which is the point of building it as three phases around a state file rather than as a one-off script.</p>
 
 
 

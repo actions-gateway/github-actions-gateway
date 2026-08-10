@@ -2768,7 +2768,8 @@
 <h1 id="appendix-a--capacity-targets--slos">Appendix A — Capacity Targets &amp; SLOs<a class="headerlink" href="#appendix-a--capacity-targets--slos" title="Permanent link">&para;</a></h1>
 <p>← <a href="../08-glossary/">Glossary</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-b-worker-isolation/">Appendix B — Worker Isolation →</a></p>
 <hr />
-<p>The following targets are conservative defaults derived from the architectural constraints in <a href="../02-architecture/">§2</a> and <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a>. They are intended as starting points to be refined against real production data; operators are expected to override them based on their cluster size, GitHub plan, and workload profile.</p>
+<p>The following targets are conservative defaults derived from the architectural constraints in <a href="../02-architecture/">§2</a> and <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a>.
+They are intended as starting points to be refined against real production data; operators are expected to override them based on their cluster size, GitHub plan, and workload profile.</p>
 <h2 id="latency-slos-per-job-per-tenant">Latency SLOs (per-job, per-tenant)<a class="headerlink" href="#latency-slos-per-job-per-tenant" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2920,25 +2921,11 @@
 </table>
 <hr />
 <h2 id="per-session-memory--density-measured">Per-session memory &amp; density (measured)<a class="headerlink" href="#per-session-memory--density-measured" title="Permanent link">&para;</a></h2>
-<p>The peak-burst sizing above uses a deliberately conservative ~60 KiB/session. To
-pin the AGC's <em>actual</em> per-session overhead — the figure behind the
-density-versus-pod-per-runner claim — <code>TestAGCPerSessionMemory</code>
-(<code>cmd/agc/test/load/mem_test.go</code>, <code>make mem-profile</code>) isolates it locally, with
-no cluster, no real broker, and <strong>no in-process broker stub</strong> (the stub
-inflated the earlier ~127 KiB figure because its server side runs in the same
-process).</p>
-<p><strong>Methodology.</strong> The probe drives the real multiplexing core
-(<code>listener.Multiplexer</code> + <code>agentpool.Pool</code> + per-goroutine <code>broker.Client</code>) but
-replaces the broker stub with <code>memTransport</code>, an in-process <code>http.RoundTripper</code>
-that answers the OAuth/CreateSession/GetMessage calls with canned responses and
-<strong>no server, socket, or per-session server-side state</strong>. <code>GET …/message</code> parks
-the caller on its request context, so each of the 1,000 started listeners rests
-in exactly one goroutine blocked in its long-poll — the steady idle-session
-state. It then takes a three-point heap+stack differential: shared infra only →
-plus N pooled agents and empty multiplexers → plus all N goroutines parked. The
-last delta (<code>mFull − mAgents</code>) is the marginal cost of one more concurrent
-session and excludes both the agent pool and the fake k8s client's retained
-Secrets (an apiserver-side cost in production, not AGC memory).</p>
+<p>The peak-burst sizing above uses a deliberately conservative ~60 KiB/session.
+To pin the AGC's <em>actual</em> per-session overhead — the figure behind the density-versus-pod-per-runner claim — <code>TestAGCPerSessionMemory</code> (<code>cmd/agc/test/load/mem_test.go</code>, <code>make mem-profile</code>) isolates it locally, with no cluster, no real broker, and <strong>no in-process broker stub</strong> (the stub inflated the earlier ~127 KiB figure because its server side runs in the same process).</p>
+<p><strong>Methodology.</strong> The probe drives the real multiplexing core (<code>listener.Multiplexer</code> + <code>agentpool.Pool</code> + per-goroutine <code>broker.Client</code>) but replaces the broker stub with <code>memTransport</code>, an in-process <code>http.RoundTripper</code> that answers the OAuth/CreateSession/GetMessage calls with canned responses and <strong>no server, socket, or per-session server-side state</strong>. <code>GET …/message</code> parks the caller on its request context, so each of the 1,000 started listeners rests in exactly one goroutine blocked in its long-poll — the steady idle-session state.
+It then takes a three-point heap+stack differential: shared infra only → plus N pooled agents and empty multiplexers → plus all N goroutines parked.
+The last delta (<code>mFull − mAgents</code>) is the marginal cost of one more concurrent session and excludes both the agent pool and the fake k8s client's retained Secrets (an apiserver-side cost in production, not AGC memory).</p>
 <p><strong>Result (1,000 sessions, Go on <code>darwin/arm64</code>):</strong></p>
 <table>
 <thead>
@@ -2962,36 +2949,26 @@ Secrets (an apiserver-side cost in production, not AGC memory).</p>
 </tr>
 </tbody>
 </table>
-<p>The pre-registered agent struct (Ed25519 key + credentials, no JIT blob in this
-path) adds sub-KiB on top; the agent <em>Secret</em> itself is apiserver-resident in
-production. The measured ~12.2 KiB is <strong>~5× below</strong> the ~60 KiB design estimate —
-the gap is the per-connection HTTP transport buffers that an active long-poll
-holds in production, which the in-process transport omits. The design estimate is
-therefore confirmed as a conservative upper bound.</p>
-<p><strong>Density versus ARC — a pod-count argument, not a memory ratio.</strong> The honest
-comparison against ARC scale-set mode is structural: ARC runs <strong>one always-on
-listener pod per scale set</strong> (a Go binary, <code>cmd/ghalistener</code> in
-<code>actions/actions-runner-controller</code>, built on the same official
-<code>github.com/actions/scaleset</code> client library this repo tracks), each costing a
-pod slot, a cluster IP, a scheduling unit, an image pull, an upgrade surface,
-and a Go runtime baseline. GAG runs every listener as a goroutine in <strong>one
-shared AGC pod per tenant</strong> — N runner sets is N pods and N cluster IPs there,
-1 pod and 1 cluster IP here, at ~12.2 KiB of measured AGC state per session.</p>
+<p>The pre-registered agent struct (Ed25519 key + credentials, no JIT blob in this path) adds sub-KiB on top; the agent <em>Secret</em> itself is apiserver-resident in production.
+The measured ~12.2 KiB is <strong>~5× below</strong> the ~60 KiB design estimate — the gap is the per-connection HTTP transport buffers that an active long-poll holds in production, which the in-process transport omits.
+The design estimate is therefore confirmed as a conservative upper bound.</p>
+<p><strong>Density versus ARC — a pod-count argument, not a memory ratio.</strong> The honest comparison against ARC scale-set mode is structural: ARC runs <strong>one always-on listener pod per scale set</strong> (a Go binary, <code>cmd/ghalistener</code> in <code>actions/actions-runner-controller</code>, built on the same official <code>github.com/actions/scaleset</code> client library this repo tracks), each costing a pod slot, a cluster IP, a scheduling unit, an image pull, an upgrade surface, and a Go runtime baseline.
+GAG runs every listener as a goroutine in <strong>one shared AGC pod per tenant</strong> — N runner sets is N pods and N cluster IPs there, 1 pod and 1 cluster IP here, at ~12.2 KiB of measured AGC state per session.</p>
 <blockquote>
-<p><strong>Why no memory ratio is published.</strong> Earlier revisions published a "~4,000×"
-figure derived from a "~256 MiB .NET listener" baseline. That baseline was
-retired (<a href="https://github.com/actions-gateway/github-actions-gateway/issues/781">#781</a>):
-ARC's scale-set listener is the Go <code>ghalistener</code>, not the .NET
-<code>Runner.Listener</code> (which runs inside the runner pod, a different component),
-and the <code>gha-runner-scale-set</code> chart ships <strong>no default listener resource
-requests or limits</strong> — so there was no measured denominator to ratio against.
-If a memory comparison is reintroduced, it must benchmark an actual ARC
-<code>ghalistener</code> pod at a stated ARC version and cite that measurement.</p>
+<p><strong>Why no memory ratio is published.</strong> Earlier revisions published a "~4,000×" figure derived from a "~256 MiB .NET listener" baseline.
+That baseline was retired (<a href="https://github.com/actions-gateway/github-actions-gateway/issues/781">#781</a>): ARC's scale-set listener is the Go <code>ghalistener</code>, not the .NET <code>Runner.Listener</code> (which runs inside the runner pod, a different component), and the <code>gha-runner-scale-set</code> chart ships <strong>no default listener resource requests or limits</strong> — so there was no measured denominator to ratio against.
+If a memory comparison is reintroduced, it must benchmark an actual ARC <code>ghalistener</code> pod at a stated ARC version and cite that measurement.</p>
 </blockquote>
 <hr />
-<p>These numbers should still be re-derived once two consecutive weeks of production telemetry are available. Treat the locally-measured figures as validated lower bounds on efficiency, not as a production-scale contract.</p>
+<p>These numbers should still be re-derived once two consecutive weeks of production telemetry are available.
+Treat the locally-measured figures as validated lower bounds on efficiency, not as a production-scale contract.</p>
 <blockquote>
-<p><strong>Validation status.</strong> The session-multiplexing core <strong>has been load-tested</strong>, and its <strong>per-session memory is now pinned</strong>. The in-process harness (<code>cmd/agc/test/load/</code>, Q13; <code>make load-test-quick</code>) holds <strong>~1,000 concurrent virtual sessions in a single AGC</strong> — a representative run sustained avg 998/1,000 with <strong>zero goroutine leak</strong> and 1.0 re-registrations per job (the single-use model under load). The faithful results from that tier are the <strong>sustained-session count, the no-leak guarantee, and the re-registration rate</strong>; it deliberately stubs the apiserver, registrar, and broker, so it does not speak to real apiserver/GitHub latency or worker-pod scheduling. The earlier ~127 KiB/session figure was an <strong>upper bound inflated by the in-process broker stub</strong>; the stub-free probe above (Q181) isolates the AGC's own structures at <strong>~12.2 KiB/session</strong>, well under the ~60 KiB conservative design bound. One caveat remains: the <strong>real-cluster, real-GitHub scale run</strong> — worker-pod scheduling and cross-tenant network at full concurrency — is still deferred. Operators should size against their own observed telemetry rather than treat these ceilings as proven.</p>
+<p><strong>Validation status.</strong> The session-multiplexing core <strong>has been load-tested</strong>, and its <strong>per-session memory is now pinned</strong>.
+The in-process harness (<code>cmd/agc/test/load/</code>, Q13; <code>make load-test-quick</code>) holds <strong>~1,000 concurrent virtual sessions in a single AGC</strong> — a representative run sustained avg 998/1,000 with <strong>zero goroutine leak</strong> and 1.0 re-registrations per job (the single-use model under load).
+The faithful results from that tier are the <strong>sustained-session count, the no-leak guarantee, and the re-registration rate</strong>; it deliberately stubs the apiserver, registrar, and broker, so it does not speak to real apiserver/GitHub latency or worker-pod scheduling.
+The earlier ~127 KiB/session figure was an <strong>upper bound inflated by the in-process broker stub</strong>; the stub-free probe above (Q181) isolates the AGC's own structures at <strong>~12.2 KiB/session</strong>, well under the ~60 KiB conservative design bound.
+One caveat remains: the <strong>real-cluster, real-GitHub scale run</strong> — worker-pod scheduling and cross-tenant network at full concurrency — is still deferred.
+Operators should size against their own observed telemetry rather than treat these ceilings as proven.</p>
 </blockquote>
 <hr />
 <p>← <a href="../08-glossary/">Glossary</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-b-worker-isolation/">Appendix B — Worker Isolation →</a></p>

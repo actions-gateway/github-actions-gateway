@@ -2648,11 +2648,9 @@
 
 
 <h1 id="keeping-pinned-dependencies-current">Keeping pinned dependencies current<a class="headerlink" href="#keeping-pinned-dependencies-current" title="Permanent link">&para;</a></h1>
-<p>Everything this repo builds on is pinned for reproducibility — Go modules,
-Docker base images, GitHub Actions, and a handful of tool versions. Pinning
-trades automatic freshness for determinism, so each pinned surface needs a
-channel that bumps it on a schedule. This doc is the map of those channels: what
-is automated, by what, and where the manual edges are.</p>
+<p>Everything this repo builds on is pinned for reproducibility — Go modules, Docker base images, GitHub Actions, and a handful of tool versions.
+Pinning trades automatic freshness for determinism, so each pinned surface needs a channel that bumps it on a schedule.
+This doc is the map of those channels: what is automated, by what, and where the manual edges are.</p>
 <h2 id="what-updates-each-surface">What updates each surface<a class="headerlink" href="#what-updates-each-surface" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2730,66 +2728,34 @@ is automated, by what, and where the manual edges are.</p>
 </tr>
 </tbody>
 </table>
-<p>Dependabot config: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>. The
-supply-chain gates that catch drift on any of these (<code>vendor-check</code>,
-<code>tidy-check</code>, <code>license-notices</code>, trivy, govulncheck) run in CI and via
-<code>make check</code>.</p>
+<p>Dependabot config: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>.
+The supply-chain gates that catch drift on any of these (<code>vendor-check</code>, <code>tidy-check</code>, <code>license-notices</code>, trivy, govulncheck) run in CI and via <code>make check</code>.</p>
 <h2 id="why-updatecli-and-not-just-dependabot">Why updatecli, and not just Dependabot<a class="headerlink" href="#why-updatecli-and-not-just-dependabot" title="Permanent link">&para;</a></h2>
-<p>Dependabot only updates dependencies it can recognise inside a package manifest
-(a <code>go.mod</code>, a <code>Dockerfile</code> <code>FROM</code>, a workflow <code>uses:</code>). Several versions we pin
-are plain <strong>shell env vars</strong> in CI workflows — <code>KIND_VERSION</code>, <code>CALICO_VERSION</code>,
-<code>POLARIS_VERSION</code>, <code>SHELLCHECK_VERSION</code> — and Dependabot is blind to them. Worse,
-some pair a version with a <strong>companion checksum</strong> (<code>KIND_BINARY_SHA256</code>, and the
-polaris/shellcheck SHAs): even a regex-based bumper would update the version and
-leave the checksum stale.</p>
-<p><a href="https://www.updatecli.io/">updatecli</a> closes that gap. Its declarative
-manifests resolve an upstream version <em>and</em> fetch/compute the matching checksum,
-then open a PR updating both together — the version+checksum coupling no
-manifest-aware bot handles.</p>
+<p>Dependabot only updates dependencies it can recognise inside a package manifest (a <code>go.mod</code>, a <code>Dockerfile</code> <code>FROM</code>, a workflow <code>uses:</code>).
+Several versions we pin are plain <strong>shell env vars</strong> in CI workflows — <code>KIND_VERSION</code>, <code>CALICO_VERSION</code>, <code>POLARIS_VERSION</code>, <code>SHELLCHECK_VERSION</code> — and Dependabot is blind to them.
+Worse, some pair a version with a <strong>companion checksum</strong> (<code>KIND_BINARY_SHA256</code>, and the polaris/shellcheck SHAs): even a regex-based bumper would update the version and leave the checksum stale.</p>
+<p><a href="https://www.updatecli.io/">updatecli</a> closes that gap.
+Its declarative manifests resolve an upstream version <em>and</em> fetch/compute the matching checksum, then open a PR updating both together — the version+checksum coupling no manifest-aware bot handles.</p>
 <h2 id="the-manifests">The manifests<a class="headerlink" href="#the-manifests" title="Permanent link">&para;</a></h2>
-<p>Each pin gets one <code>updatecli.d/*.yaml</code> manifest; the workflow applies them all in
-one run, opening a separate PR per manifest. They share a shape:</p>
+<p>Each pin gets one <code>updatecli.d/*.yaml</code> manifest; the workflow applies them all in one run, opening a separate PR per manifest.
+They share a shape:</p>
 <ol>
-<li><strong>A version source</strong> — a <code>githubrelease</code> source with a <code>semver</code> filter that
-   resolves the latest non-prerelease tag of the upstream repo.</li>
-<li><strong>(version+checksum pins only) a checksum source</strong> — a <code>shell</code> source that
-   <code>dependson</code> the version source and, with the resolved tag templated in,
-   produces the matching SHA-256. Two strategies, picked per upstream:</li>
-<li><strong>Fetch a published checksum</strong> — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/kind-linux-amd64-sha256.sh"><code>scripts/updatecli/kind-linux-amd64-sha256.sh</code></a>
-     reads kind's per-binary <code>kind-linux-amd64.sha256sum</code> (the value a human would
-     copy by hand). Cheap; preferred when the upstream publishes one.</li>
-<li><strong>Hash the bytes</strong> — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/sha256-of-url.sh"><code>scripts/updatecli/sha256-of-url.sh</code></a>
-     downloads the asset and hashes it, for upstreams (e.g. shellcheck) that
-     publish no checksum file.</li>
+<li><strong>A version source</strong> — a <code>githubrelease</code> source with a <code>semver</code> filter that resolves the latest non-prerelease tag of the upstream repo.</li>
+<li><strong>(version+checksum pins only) a checksum source</strong> — a <code>shell</code> source that <code>dependson</code> the version source and, with the resolved tag templated in, produces the matching SHA-256.
+   Two strategies, picked per upstream:</li>
+<li><strong>Fetch a published checksum</strong> — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/kind-linux-amd64-sha256.sh"><code>scripts/updatecli/kind-linux-amd64-sha256.sh</code></a> reads kind's per-binary <code>kind-linux-amd64.sha256sum</code> (the value a human would copy by hand).
+     Cheap; preferred when the upstream publishes one.</li>
+<li><strong>Hash the bytes</strong> — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/sha256-of-url.sh"><code>scripts/updatecli/sha256-of-url.sh</code></a> downloads the asset and hashes it, for upstreams (e.g. shellcheck) that publish no checksum file.</li>
 <li><strong>File targets</strong> — regex-replace each pin in place and open one PR.</li>
 </ol>
-<p>Three exceptions to the <code>githubrelease</code> source. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>buildkit.yaml</code></a>
-pins a Docker image <em>digest</em>, not a release tarball, so its source is a
-<code>dockerdigest</code> (resolving the current digest of the floating <code>buildx-stable-1</code>
-tag); it still ends in file targets — rewriting the <code>@sha256:…</code> suffix across all
-three workflows that boot a buildx builder. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/envtest.yaml"><code>envtest.yaml</code></a>
-has no GitHub release to track (envtest binaries are an index, not tagged
-releases), so its source is a <code>shell</code> script
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/latest-envtest-version.sh"><code>scripts/updatecli/latest-envtest-version.sh</code></a>)
-that reads controller-tools' <code>envtest-releases.yaml</code> and prints the latest stable
-<code>1.&lt;minor&gt;.x</code> — guaranteeing the chosen minor has published binaries — then
-rewrites <code>ENVTEST_K8S_VERSION</code> across the workflow and both controller Makefiles.</p>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>cluster-autoscaler.yaml</code></a> is the
-third, and the only manifest that resolves a version <strong>relative to the pin it is
-replacing</strong>. It reads the current <code>CA_VERSION</code> out of
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a> with a
-<code>file</code> source, then hands it to
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/latest-cluster-autoscaler-patch.sh"><code>scripts/updatecli/latest-cluster-autoscaler-patch.sh</code></a>,
-which returns the newest patch published <strong>inside that same Kubernetes minor</strong> —
-never a newer minor, never older than the pin. The minor belongs to the kind bump
-(cluster-autoscaler ships one series per Kubernetes minor, and the harness runs
-kind's default node image), so letting this manifest cross one would manufacture
-exactly the version skew the drift gate exists to report. Both invariants are
-asserted by <code>scripts/updatecli/latest-cluster-autoscaler-patch-test.sh</code> under
-<code>make scripts-test</code>. Its source is the registry's own OCI tag list rather than
-GitHub releases: the harness pulls <code>registry.k8s.io/autoscaling/cluster-autoscaler</code>,
-a git tag exists before its image is published, and the release tags
-(<code>cluster-autoscaler-1.36.1</code>) are not semver anyway.</p>
+<p>Three exceptions to the <code>githubrelease</code> source.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>buildkit.yaml</code></a> pins a Docker image <em>digest</em>, not a release tarball, so its source is a <code>dockerdigest</code> (resolving the current digest of the floating <code>buildx-stable-1</code> tag); it still ends in file targets — rewriting the <code>@sha256:…</code> suffix across all three workflows that boot a buildx builder.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/envtest.yaml"><code>envtest.yaml</code></a> has no GitHub release to track (envtest binaries are an index, not tagged releases), so its source is a <code>shell</code> script (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/latest-envtest-version.sh"><code>scripts/updatecli/latest-envtest-version.sh</code></a>) that reads controller-tools' <code>envtest-releases.yaml</code> and prints the latest stable <code>1.&lt;minor&gt;.x</code> — guaranteeing the chosen minor has published binaries — then rewrites <code>ENVTEST_K8S_VERSION</code> across the workflow and both controller Makefiles.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>cluster-autoscaler.yaml</code></a> is the third, and the only manifest that resolves a version <strong>relative to the pin it is replacing</strong>.
+It reads the current <code>CA_VERSION</code> out of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a> with a <code>file</code> source, then hands it to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/latest-cluster-autoscaler-patch.sh"><code>scripts/updatecli/latest-cluster-autoscaler-patch.sh</code></a>, which returns the newest patch published <strong>inside that same Kubernetes minor</strong> — never a newer minor, never older than the pin.
+The minor belongs to the kind bump (cluster-autoscaler ships one series per Kubernetes minor, and the harness runs kind's default node image), so letting this manifest cross one would manufacture exactly the version skew the drift gate exists to report.
+Both invariants are asserted by <code>scripts/updatecli/latest-cluster-autoscaler-patch-test.sh</code> under <code>make scripts-test</code>.
+Its source is the registry's own OCI tag list rather than GitHub releases: the harness pulls <code>registry.k8s.io/autoscaling/cluster-autoscaler</code>, a git tag exists before its image is published, and the release tags (<code>cluster-autoscaler-1.36.1</code>) are not semver anyway.</p>
 <table>
 <thead>
 <tr>
@@ -2841,15 +2807,9 @@ a git tag exists before its image is published, and the release tags
 </tr>
 </tbody>
 </table>
-<p><strong>Gate tools open PRs that may go red.</strong> shellcheck and polaris are lint/scan
-gates: a new release can add findings. The bump PR running CI is
-exactly the point — a human adopts the new version (fixing or justifying the new
-findings) or holds it, instead of the pin silently rotting. <code>cluster-autoscaler.yaml</code>
-and <code>karpenter.yaml</code> are the strongest form of this: the bump is not a refresh
-with a test attached, it <em>is</em> the experiment. Their PRs exist so the
-<a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate</a>
-installs the new release and checks whether upstream reworded the event
-vocabulary the capacity gate matches on.</p>
+<p><strong>Gate tools open PRs that may go red.</strong> shellcheck and polaris are lint/scan gates: a new release can add findings.
+The bump PR running CI is exactly the point — a human adopts the new version (fixing or justifying the new findings) or holds it, instead of the pin silently rotting. <code>cluster-autoscaler.yaml</code> and <code>karpenter.yaml</code> are the strongest form of this: the bump is not a refresh with a test attached, it <em>is</em> the experiment.
+Their PRs exist so the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate</a> installs the new release and checks whether upstream reworded the event vocabulary the capacity gate matches on.</p>
 <h3 id="running-it-locally">Running it locally<a class="headerlink" href="#running-it-locally" title="Permanent link">&para;</a></h3>
 <p><code>updatecli diff</code> is a read-only dry run — it prints the changes and opens no PR:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Download the binary once (e.g. into the gitignored tmp/), then from the repo root:</span>
@@ -2859,62 +2819,27 @@ vocabulary the capacity gate matches on.</p>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">UPDATECLI_GITHUB_TOKEN</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>gh<span class="w"> </span>auth<span class="w"> </span>token<span class="k">)</span><span class="s2">&quot;</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>updatecli<span class="w"> </span>diff<span class="w"> </span>--config<span class="w"> </span>updatecli.d/
 </code></pre></div>
-<p>The scheduled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/updatecli.yml"><code>updatecli.yml</code></a> workflow
-runs <code>apply</code> weekly (Mondays, after the Dependabot wave); <code>workflow_dispatch</code>
-with <code>dry_run: true</code> runs <code>diff</code>.</p>
+<p>The scheduled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/updatecli.yml"><code>updatecli.yml</code></a> workflow runs <code>apply</code> weekly (Mondays, after the Dependabot wave); <code>workflow_dispatch</code> with <code>dry_run: true</code> runs <code>diff</code>.</p>
 <h2 id="operating-notes">Operating notes<a class="headerlink" href="#operating-notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Repo setting prerequisite.</strong> updatecli opens PRs with the default
-  <code>GITHUB_TOKEN</code>, so <em>Settings → Actions → General → "Allow GitHub Actions to
-  create and approve pull requests"</em> must be enabled.</li>
-<li><strong>CI does not auto-run on the bump PR.</strong> GitHub never triggers workflows from a
-  <code>GITHUB_TOKEN</code>-authored PR (the same constraint <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-go-sync.yml"><code>dependabot-go-sync.yml</code></a>
-  documents). The relevant gate must run before merge — e2e for a kind or Calico
-  bump, the lint job for shellcheck — so a maintainer re-triggers checks by
-  closing and reopening the PR. <strong>On a kind, cluster-autoscaler, or Karpenter
-  bump this step is the whole point, not a formality:</strong> those PRs are the only
-  triggers the
-  <a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate</a>
-  has, so merging one without re-running checks is the one path that lets an
-  upstream vocabulary reword through unobserved. A stored App token would remove this step; it is
-  deliberately not used yet (one more secret to manage), matching the go-sync
-  rationale.</li>
-<li><strong>Triage cadence.</strong> updatecli is scheduled just after Dependabot so all
-  dependency PRs land together and are reviewed in one weekly pass.</li>
-<li><strong>A stale Go bump PR rebases itself, but never merge one by hand.</strong> The vendor
-  sync commit makes Dependabot disown the branch, so a Go bump PR left unmerged
-  while <code>main</code> moves goes conflicting and cannot self-rebase.
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-rebase-stale.yml"><code>dependabot-rebase-stale.yml</code></a>
-  replays its bumps onto current <code>main</code> instead (Q427). Resolving that conflict
-  by hand can silently downgrade a module; see
-  <a href="../go-workspaces/#a-synced-branch-stops-auto-rebasing-and-is-rebased-for-you">go-workspaces.md</a>.</li>
-<li><strong>Manifest rot.</strong> A manifest is bespoke: if an upstream renames a release asset
-  or changes its checksum-file layout, the run fails or no-ops. Watch the
-  scheduled run's status; a silent green with no PR for a long-stale pin is the
-  signal to check the manifest.</li>
+<li><strong>Repo setting prerequisite.</strong> updatecli opens PRs with the default <code>GITHUB_TOKEN</code>, so <em>Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"</em> must be enabled.</li>
+<li><strong>CI does not auto-run on the bump PR.</strong> GitHub never triggers workflows from a <code>GITHUB_TOKEN</code>-authored PR (the same constraint <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-go-sync.yml"><code>dependabot-go-sync.yml</code></a> documents).
+  The relevant gate must run before merge — e2e for a kind or Calico bump, the lint job for shellcheck — so a maintainer re-triggers checks by closing and reopening the PR. <strong>On a kind, cluster-autoscaler, or Karpenter bump this step is the whole point, not a formality:</strong> those PRs are the only triggers the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate</a> has, so merging one without re-running checks is the one path that lets an upstream vocabulary reword through unobserved.
+  A stored App token would remove this step; it is deliberately not used yet (one more secret to manage), matching the go-sync rationale.</li>
+<li><strong>Triage cadence.</strong> updatecli is scheduled just after Dependabot so all dependency PRs land together and are reviewed in one weekly pass.</li>
+<li><strong>A stale Go bump PR rebases itself, but never merge one by hand.</strong> The vendor sync commit makes Dependabot disown the branch, so a Go bump PR left unmerged while <code>main</code> moves goes conflicting and cannot self-rebase.
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-rebase-stale.yml"><code>dependabot-rebase-stale.yml</code></a> replays its bumps onto current <code>main</code> instead (Q427).
+  Resolving that conflict by hand can silently downgrade a module; see <a href="../go-workspaces/#a-synced-branch-stops-auto-rebasing-and-is-rebased-for-you">go-workspaces.md</a>.</li>
+<li><strong>Manifest rot.</strong> A manifest is bespoke: if an upstream renames a release asset or changes its checksum-file layout, the run fails or no-ops.
+  Watch the scheduled run's status; a silent green with no PR for a long-stale pin is the signal to check the manifest.</li>
 </ul>
 <h2 id="deliberately-manual-pins">Deliberately manual pins<a class="headerlink" href="#deliberately-manual-pins" title="Permanent link">&para;</a></h2>
-<p>These are pinned but <strong>not</strong> on the updatecli cadence, for a concrete reason
-rather than because automation is missing:</p>
+<p>These are pinned but <strong>not</strong> on the updatecli cadence, for a concrete reason rather than because automation is missing:</p>
 <ul>
-<li><strong><code>KIND_NODE_IMAGE</code></strong> — the node image a kind release recommends lives in its
-  release notes, not a clean datasource, and bumping it changes the tested
-  Kubernetes version (and the Calico compatibility window). Review and bump it by
-  hand in the kind updatecli PR when the Kubernetes version should move.</li>
-<li><strong><code>CA_VERSION</code>'s Kubernetes minor, and <code>KWOK_VERSION</code></strong> (both copies — its
-  twin in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/karpenter-cluster.sh"><code>scripts/e2e/karpenter-cluster.sh</code></a>
-  is kept the same), in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a> — the
-  cluster-autoscaler and kwok releases behind the
-  <a href="../testing/#the-live-autoscaler-drift-gate">live-autoscaler drift gate</a>.
-  cluster-autoscaler ships one release series per Kubernetes minor and the
-  harness runs kind's <em>default</em> node image, so the minor is not this pin's to
-  choose: it follows <code>KIND_NODE_IMAGE</code>'s and moves by hand, in the kind bump PR,
-  with <code>make test-autoscaler</code> run in the same change. Only the <strong>patch</strong> inside
-  that minor is automated
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>cluster-autoscaler.yaml</code></a>) — the
-  version move is what triggers the gate, so patch releases that no one pinned
-  used to go untested until the next minor came round (Q483).</li>
+<li><strong><code>KIND_NODE_IMAGE</code></strong> — the node image a kind release recommends lives in its release notes, not a clean datasource, and bumping it changes the tested Kubernetes version (and the Calico compatibility window).
+  Review and bump it by hand in the kind updatecli PR when the Kubernetes version should move.</li>
+<li><strong><code>CA_VERSION</code>'s Kubernetes minor, and <code>KWOK_VERSION</code></strong> (both copies — its twin in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/karpenter-cluster.sh"><code>scripts/e2e/karpenter-cluster.sh</code></a> is kept the same), in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a> — the cluster-autoscaler and kwok releases behind the <a href="../testing/#the-live-autoscaler-drift-gate">live-autoscaler drift gate</a>. cluster-autoscaler ships one release series per Kubernetes minor and the harness runs kind's <em>default</em> node image, so the minor is not this pin's to choose: it follows <code>KIND_NODE_IMAGE</code>'s and moves by hand, in the kind bump PR, with <code>make test-autoscaler</code> run in the same change.
+  Only the <strong>patch</strong> inside that minor is automated (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>cluster-autoscaler.yaml</code></a>) — the version move is what triggers the gate, so patch releases that no one pinned used to go untested until the next minor came round (Q483).</li>
 </ul>
 
 

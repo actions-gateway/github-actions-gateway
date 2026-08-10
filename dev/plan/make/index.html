@@ -2804,8 +2804,9 @@
 
 <h1 id="makefile-ux-plan">Makefile UX Plan<a class="headerlink" href="#makefile-ux-plan" title="Permanent link">&para;</a></h1>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
-<p>Last refreshed 2026-05-26. Phase 1 (day-one UX) has fully landed. Phase 2
-(consistency cleanup) is fully done.</p>
+<p>Last refreshed 2026-05-26.
+Phase 1 (day-one UX) has fully landed.
+Phase 2 (consistency cleanup) is fully done.</p>
 <table>
 <thead>
 <tr>
@@ -2897,21 +2898,31 @@
 </tbody>
 </table>
 <h3 id="open-work">Open work<a class="headerlink" href="#open-work" title="Permanent link">&para;</a></h3>
-<p>None — all Phase 2 items are done. 2.5 and 2.7b remain cosmetic defers.</p>
+<p>None — all Phase 2 items are done.
+2.5 and 2.7b remain cosmetic defers.</p>
 <hr />
 <h2 id="current-state">Current state<a class="headerlink" href="#current-state" title="Permanent link">&para;</a></h2>
-<p>The repo has three Makefiles — the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> plus per-binary Makefiles at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">cmd/gmc/Makefile</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile">cmd/agc/Makefile</a>. They work, but discoverability is poor (no <code>help</code> target, ~14 root targets that don't appear in the README), the local e2e workflow is a four-step ordered sequence with no umbrella target, and several details have drifted between the three files (image variable names, envtest install path, <code>all</code> semantics). This plan describes the changes worth making in two phases: a "day-one contributor" pass that lands the user-visible UX wins, followed by a cleanup pass that removes inconsistencies between Makefiles.</p>
+<p>The repo has three Makefiles — the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> plus per-binary Makefiles at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">cmd/gmc/Makefile</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile">cmd/agc/Makefile</a>.
+They work, but discoverability is poor (no <code>help</code> target, ~14 root targets that don't appear in the README), the local e2e workflow is a four-step ordered sequence with no umbrella target, and several details have drifted between the three files (image variable names, envtest install path, <code>all</code> semantics).
+This plan describes the changes worth making in two phases: a "day-one contributor" pass that lands the user-visible UX wins, followed by a cleanup pass that removes inconsistencies between Makefiles.</p>
 <p>The goal is that a new contributor can clone the repo, type <code>make</code>, and learn what is available; and that running the e2e suite locally takes one command, not four.</p>
 <hr />
 <h2 id="phase-1--day-one-contributor-ux">Phase 1 — Day-one contributor UX<a class="headerlink" href="#phase-1--day-one-contributor-ux" title="Permanent link">&para;</a></h2>
-<p>These changes are what a new contributor would feel on their first afternoon. None of them are architectural; they are visible quality-of-life improvements.</p>
+<p>These changes are what a new contributor would feel on their first afternoon.
+None of them are architectural; they are visible quality-of-life improvements.</p>
 <h3 id="11-add-make-help-and-make-it-the-default-goal">1.1 Add <code>make help</code> and make it the default goal<a class="headerlink" href="#11-add-make-help-and-make-it-the-default-goal" title="Permanent link">&para;</a></h3>
-<p>Add a self-documenting <code>help</code> target to the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> (and to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">cmd/gmc/Makefile</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile">cmd/agc/Makefile</a>) that parses <code>##</code> comments after the target name and prints them as a grouped table. Set <code>.DEFAULT_GOAL := help</code> so a bare <code>make</code> prints the menu instead of starting a build.</p>
-<p>Annotate every public target with a one-line <code>##</code> description. Group with section headers (<code>##@ Build</code>, <code>##@ e2e</code>, <code>##@ Tools</code>) so the output is browsable. The README's Development section should be updated to direct users to <code>make help</code> rather than enumerating a subset of targets.</p>
+<p>Add a self-documenting <code>help</code> target to the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> (and to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">cmd/gmc/Makefile</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile">cmd/agc/Makefile</a>) that parses <code>##</code> comments after the target name and prints them as a grouped table.
+Set <code>.DEFAULT_GOAL := help</code> so a bare <code>make</code> prints the menu instead of starting a build.</p>
+<p>Annotate every public target with a one-line <code>##</code> description.
+Group with section headers (<code>##@ Build</code>, <code>##@ e2e</code>, <code>##@ Tools</code>) so the output is browsable.
+The README's Development section should be updated to direct users to <code>make help</code> rather than enumerating a subset of targets.</p>
 <h3 id="12-fix-the-phony-declaration">1.2 Fix the <code>.PHONY</code> declaration<a class="headerlink" href="#12-fix-the-phony-declaration" title="Permanent link">&para;</a></h3>
-<p>The root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L21">Makefile:21‑24</a> lists most targets but omits <code>e2e-load-images</code>. Add it. While there, consider switching to one <code>.PHONY:</code> line per target (the style used in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile">cmd/agc/Makefile</a>) — it makes future additions less error-prone than maintaining a single multi-line block.</p>
+<p>The root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L21">Makefile:21‑24</a> lists most targets but omits <code>e2e-load-images</code>.
+Add it.
+While there, consider switching to one <code>.PHONY:</code> line per target (the style used in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile">cmd/agc/Makefile</a>) — it makes future additions less error-prone than maintaining a single multi-line block.</p>
 <h3 id="13-stop-swallowing-kind-errors">1.3 Stop swallowing <code>kind</code> errors<a class="headerlink" href="#13-stop-swallowing-kind-errors" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L40">Makefile:40</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L44">Makefile:44</a> use <code>|| true</code> to make <code>e2e-cluster</code> and <code>e2e-cluster-delete</code> idempotent, but they also hide "kind not installed", "Docker daemon not running", and every other real error. Replace with a conditional:</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L40">Makefile:40</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L44">Makefile:44</a> use <code>|| true</code> to make <code>e2e-cluster</code> and <code>e2e-cluster-delete</code> idempotent, but they also hide "kind not installed", "Docker daemon not running", and every other real error.
+Replace with a conditional:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>e2e-cluster:
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    @if kind get clusters | grep -qx $(KIND_CLUSTER); then \
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        echo &quot;==&gt; kind cluster $(KIND_CLUSTER) already exists&quot;; \
@@ -2930,46 +2941,75 @@
 <p>Make <code>e2e-load-images</code> depend on <code>e2e-images</code>, and add an umbrella <code>e2e-up</code> target that ensures the cluster exists and runs the full sequence:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>e2e-up: e2e-cluster e2e-load-images e2e
 </code></pre></div>
-<p>The standalone targets stay so CI (which builds images differently) is unaffected. The README and <code>docs/development/testing.md</code> should reference <code>make e2e-up</code> as the canonical local command.</p>
+<p>The standalone targets stay so CI (which builds images differently) is unaffected.
+The README and <code>docs/development/testing.md</code> should reference <code>make e2e-up</code> as the canonical local command.</p>
 <h3 id="15-default-kind_config-to-the-2-node-ci-config">1.5 Default <code>KIND_CONFIG</code> to the 2-node CI config<a class="headerlink" href="#15-default-kind_config-to-the-2-node-ci-config" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L13">Makefile:13‑14</a> defaults to <code>test/kind-config.yaml</code> (3 nodes), but the default <code>make e2e</code> target excludes multi-node tests with <code>--label-filter '!multi-node'</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L75">Makefile:75</a>). Local developers pay for an extra worker node they don't use unless they remember the override.</p>
-<p>Change the default to <code>test/kind-config-ci.yaml</code>. Have <code>e2e-multi-node</code> and <code>e2e-all</code> override <code>KIND_CONFIG</code> to the 3-node config so they continue to work. Document in the file comment that the 3-node config is opt-in via those targets.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L13">Makefile:13‑14</a> defaults to <code>test/kind-config.yaml</code> (3 nodes), but the default <code>make e2e</code> target excludes multi-node tests with <code>--label-filter '!multi-node'</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L75">Makefile:75</a>).
+Local developers pay for an extra worker node they don't use unless they remember the override.</p>
+<p>Change the default to <code>test/kind-config-ci.yaml</code>.
+Have <code>e2e-multi-node</code> and <code>e2e-all</code> override <code>KIND_CONFIG</code> to the 3-node config so they continue to work.
+Document in the file comment that the 3-node config is opt-in via those targets.</p>
 <hr />
 <h2 id="phase-2--cleanup-and-consistency">Phase 2 — Cleanup and consistency<a class="headerlink" href="#phase-2--cleanup-and-consistency" title="Permanent link">&para;</a></h2>
 <p>These are not user-facing but they reduce drift and make the Makefiles easier to maintain.</p>
 <h3 id="21-unify-image-variable-names">2.1 Unify image variable names<a class="headerlink" href="#21-unify-image-variable-names" title="Permanent link">&para;</a></h3>
-<p>Root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> uses <code>GMC_IMG</code>, <code>AGC_IMG</code>, <code>PROXY_IMG</code>, <code>FAKEGITHUB_IMG</code>. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">cmd/gmc/Makefile</a> uses <code>IMG</code>, <code>AGC_IMAGE</code>, <code>PROXY_IMAGE</code>. A user running <code>make e2e-images</code> followed by <code>make -C cmd/gmc deploy</code> has to re-pass the same value with different names.</p>
-<p>Pick one set of names (the <code>*_IMG</code> short form is shorter and already in the root file) and use them consistently across all three Makefiles. Have the GMC Makefile read defaults from the root names with <code>?=</code>.</p>
+<p>Root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> uses <code>GMC_IMG</code>, <code>AGC_IMG</code>, <code>PROXY_IMG</code>, <code>FAKEGITHUB_IMG</code>.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">cmd/gmc/Makefile</a> uses <code>IMG</code>, <code>AGC_IMAGE</code>, <code>PROXY_IMAGE</code>.
+A user running <code>make e2e-images</code> followed by <code>make -C cmd/gmc deploy</code> has to re-pass the same value with different names.</p>
+<p>Pick one set of names (the <code>*_IMG</code> short form is shorter and already in the root file) and use them consistently across all three Makefiles.
+Have the GMC Makefile read defaults from the root names with <code>?=</code>.</p>
 <h3 id="22-consistent-sha-based-image-tagging">2.2 Consistent SHA-based image tagging<a class="headerlink" href="#22-consistent-sha-based-image-tagging" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L16">Makefile:16</a> tags <code>GMC_IMG</code> with <code>:e2e-$(GIT_SHA)</code> but the other three images use static <code>:e2e</code>. The intent of the SHA tag is to invalidate kind's image cache when code changes — but it only works for GMC. Either tag all four images with the SHA (the right answer; mixed builds are an obscure source of stale-image bugs) or tag none of them. Recommend the former.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L16">Makefile:16</a> tags <code>GMC_IMG</code> with <code>:e2e-$(GIT_SHA)</code> but the other three images use static <code>:e2e</code>.
+The intent of the SHA tag is to invalidate kind's image cache when code changes — but it only works for GMC.
+Either tag all four images with the SHA (the right answer; mixed builds are an obscure source of stale-image bugs) or tag none of them.
+Recommend the former.</p>
 <h3 id="23-single-source-of-truth-for-envtest">2.3 Single source of truth for envtest<a class="headerlink" href="#23-single-source-of-truth-for-envtest" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L118">Makefile:118‑120</a> builds <code>setup-envtest</code> from the vendored <code>tools/</code> module. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile#L63">cmd/gmc/Makefile:63‑64</a> installs it separately with <code>go install ...@release-0.23</code>. These are two version pins that can drift. Delete the <code>go install</code> path in the GMC Makefile and depend on <code>$(SETUP_ENVTEST)</code> from the root, the same way the GMC Makefile already depends on <code>$(CONTROLLER_GEN)</code>.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L118">Makefile:118‑120</a> builds <code>setup-envtest</code> from the vendored <code>tools/</code> module.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile#L63">cmd/gmc/Makefile:63‑64</a> installs it separately with <code>go install ...@release-0.23</code>.
+These are two version pins that can drift.
+Delete the <code>go install</code> path in the GMC Makefile and depend on <code>$(SETUP_ENVTEST)</code> from the root, the same way the GMC Makefile already depends on <code>$(CONTROLLER_GEN)</code>.</p>
 <h3 id="24-dry-the-ginkgo-invocations">2.4 DRY the ginkgo invocations<a class="headerlink" href="#24-dry-the-ginkgo-invocations" title="Permanent link">&para;</a></h3>
-<p>The <code>e2e</code>, <code>e2e-multi-node</code>, and <code>e2e-all</code> targets at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L70">Makefile:70‑99</a> repeat the same env block (<code>KIND_CLUSTER</code>, four image vars) and most of the same flags. Factor:</p>
+<p>The <code>e2e</code>, <code>e2e-multi-node</code>, and <code>e2e-all</code> targets at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L70">Makefile:70‑99</a> repeat the same env block (<code>KIND_CLUSTER</code>, four image vars) and most of the same flags.
+Factor:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>GINKGO_E2E_ENV  := KIND_CLUSTER=$(KIND_CLUSTER) GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG)
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>GINKGO_E2E_BASE := --tags e2e --timeout 30m --github-output --poll-progress-after 60s
 </code></pre></div>
 <p>Each target then sets only its label filter, <code>--procs</code>, and <code>--junit-report</code> path.</p>
 <h3 id="25-consistent-build-invocation-style">2.5 Consistent build invocation style<a class="headerlink" href="#25-consistent-build-invocation-style" title="Permanent link">&para;</a></h3>
-<p>Root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L31">Makefile:31,34</a> uses Go's <code>-C cmd/agc</code> flag. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L71">Makefile:71</a> uses shell <code>cd cmd/gmc &amp;&amp;</code>. Pick one. <code>go build -C</code> is cleaner for Go invocations; for ginkgo (not a Go subcommand) <code>cd &amp;&amp; ...</code> is fine — but the inconsistency is worth a comment if both stay.</p>
+<p>Root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L31">Makefile:31,34</a> uses Go's <code>-C cmd/agc</code> flag.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L71">Makefile:71</a> uses shell <code>cd cmd/gmc &amp;&amp;</code>.
+Pick one. <code>go build -C</code> is cleaner for Go invocations; for ginkgo (not a Go subcommand) <code>cd &amp;&amp; ...</code> is fine — but the inconsistency is worth a comment if both stay.</p>
 <h3 id="26-align-all-semantics-across-makefiles">2.6 Align <code>all</code> semantics across Makefiles<a class="headerlink" href="#26-align-all-semantics-across-makefiles" title="Permanent link">&para;</a></h3>
-<p>Root: <code>all: build</code>. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile#L7">cmd/agc/Makefile:7</a>: <code>all: generate build test</code>. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile#L16">cmd/gmc/Makefile:16</a>: <code>all: generate build test</code>. A user who runs <code>make</code> in different directories gets surprisingly different behavior. Once <code>help</code> is the default goal (Phase 1.1), <code>all</code> becomes opt-in and can be defined consistently — recommend <code>all: generate build test</code> everywhere, or remove <code>all</code> entirely and use named targets.</p>
+<p>Root: <code>all: build</code>.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile#L7">cmd/agc/Makefile:7</a>: <code>all: generate build test</code>.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile#L16">cmd/gmc/Makefile:16</a>: <code>all: generate build test</code>.
+A user who runs <code>make</code> in different directories gets surprisingly different behavior.
+Once <code>help</code> is the default goal (Phase 1.1), <code>all</code> becomes opt-in and can be defined consistently — recommend <code>all: generate build test</code> everywhere, or remove <code>all</code> entirely and use named targets.</p>
 <h3 id="27-minor">2.7 Minor<a class="headerlink" href="#27-minor" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>e2e-clean</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L102">Makefile:102</a>) is a one-line alias for <code>e2e-cluster-delete</code>. Either drop it or make it actually clean — delete the kind cluster <em>and</em> remove the built images and <code>.build/</code> artifacts (which is what <code>clean</code> usually means in a Makefile).</li>
-<li><code>make tools</code> is silent. Borrow the <code>==&gt; building controller-gen</code> style from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/setup.sh">scripts/dev/setup.sh</a> so users can see which tool is being built when it takes 30 seconds.</li>
+<li><code>e2e-clean</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L102">Makefile:102</a>) is a one-line alias for <code>e2e-cluster-delete</code>.
+  Either drop it or make it actually clean — delete the kind cluster <em>and</em> remove the built images and <code>.build/</code> artifacts (which is what <code>clean</code> usually means in a Makefile).</li>
+<li><code>make tools</code> is silent.
+  Borrow the <code>==&gt; building controller-gen</code> style from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/setup.sh">scripts/dev/setup.sh</a> so users can see which tool is being built when it takes 30 seconds.</li>
 </ul>
 <hr />
 <h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Build-time caching of Docker images.</strong> <code>e2e-images</code> rebuilds all four images on every invocation even if nothing changed. A sentinel-file approach (touch <code>.build/img-gmc.stamp</code> after a successful build, depend the target on the source files) would skip rebuilds, but is enough complexity to deserve its own design pass. Not in this plan.</li>
-<li><strong>Parallel image builds.</strong> <code>make -j4 e2e-images</code> already works for the four <code>docker-build-*</code> targets in principle; whether the Docker daemon can keep up is a separate question. No change required.</li>
-<li><strong>Replacing Make with Task / Just / Mage.</strong> This plan keeps Make. A tool migration is a larger discussion with its own tradeoffs.</li>
+<li><strong>Build-time caching of Docker images.</strong> <code>e2e-images</code> rebuilds all four images on every invocation even if nothing changed.
+  A sentinel-file approach (touch <code>.build/img-gmc.stamp</code> after a successful build, depend the target on the source files) would skip rebuilds, but is enough complexity to deserve its own design pass.
+  Not in this plan.</li>
+<li><strong>Parallel image builds.</strong> <code>make -j4 e2e-images</code> already works for the four <code>docker-build-*</code> targets in principle; whether the Docker daemon can keep up is a separate question.
+  No change required.</li>
+<li><strong>Replacing Make with Task / Just / Mage.</strong> This plan keeps Make.
+  A tool migration is a larger discussion with its own tradeoffs.</li>
 </ul>
 <hr />
 <h2 id="order-of-work">Order of work<a class="headerlink" href="#order-of-work" title="Permanent link">&para;</a></h2>
-<p>Phase 1 lands as one PR — five small, independent commits. Each is reversible and adds no new dependencies. The PR description should call out the change in <code>KIND_CONFIG</code> default (1.5) since it's the one behavioral change a returning contributor might notice.</p>
-<p>Phase 2 lands as a second PR after Phase 1 has been in <code>main</code> for a few days. It is pure cleanup and can be split further if review surfaces concerns about any individual change.</p>
+<p>Phase 1 lands as one PR — five small, independent commits.
+Each is reversible and adds no new dependencies.
+The PR description should call out the change in <code>KIND_CONFIG</code> default (1.5) since it's the one behavioral change a returning contributor might notice.</p>
+<p>Phase 2 lands as a second PR after Phase 1 has been in <code>main</code> for a few days.
+It is pure cleanup and can be split further if review surfaces concerns about any individual change.</p>
 
 
 

@@ -2715,31 +2715,22 @@
 
 <h1 id="caching-and-worker-storage">Caching and Worker Storage<a class="headerlink" href="#caching-and-worker-storage" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: goal stated 2026-08-07, nothing built.</strong> This is a map and a
-definition of done, not a design. The image-pull half already has a design in
-<a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a> and is not restated
-here. The job-cache and storage halves have no design yet, and the first thing
-this document does is establish that they are three different problems.</p>
+<p><strong>Status: goal stated 2026-08-07, nothing built.</strong> This is a map and a definition of done, not a design.
+The image-pull half already has a design in <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a> and is not restated here.
+The job-cache and storage halves have no design yet, and the first thing this document does is establish that they are three different problems.</p>
 </blockquote>
 <h2 id="why-this-is-a-goal">Why this is a goal<a class="headerlink" href="#why-this-is-a-goal" title="Permanent link">&para;</a></h2>
-<p>Caching is the most common thing a CI platform is measured on that GAG has no
-answer for, and it is the one place where the
-<a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> goal actively makes
-the problem worse rather than better. Closing untrusted-PR egress removes the
-cache that works today. Nothing in the individual Queue rows says that, which is
-why they need an umbrella.</p>
-<p>It is also where the competitive position is most often misread in GAG's own
-favour and against it at the same time. See
-<a href="../../alternatives/#no-offering-is-perfect-yet">alternatives.md</a>: ARC has no
-in-cluster cache either, so this is not a reason to prefer ARC. GitLab Runner
-and the managed services do have one, so it is a real loss against that lane.</p>
+<p>Caching is the most common thing a CI platform is measured on that GAG has no answer for, and it is the one place where the <a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> goal actively makes the problem worse rather than better.
+Closing untrusted-PR egress removes the cache that works today.
+Nothing in the individual Queue rows says that, which is why they need an umbrella.</p>
+<p>It is also where the competitive position is most often misread in GAG's own favour and against it at the same time.
+See <a href="../../alternatives/#no-offering-is-perfect-yet">alternatives.md</a>: ARC has no in-cluster cache either, so this is not a reason to prefer ARC.
+GitLab Runner and the managed services do have one, so it is a real loss against that lane.</p>
 <h2 id="three-caches-routinely-conflated">Three caches, routinely conflated<a class="headerlink" href="#three-caches-routinely-conflated" title="Permanent link">&para;</a></h2>
-<p>Treating these as one item is why the roadmap entry reads as though caching does
-not work at all. They have different data, different threat models, and
-different owners.</p>
-<p><strong>This is a split by problem, not by tool.</strong> The content classes are genuinely
-distinct; the backends that serve them overlap heavily, and the section after
-next is about that overlap. Do not read this table as three deployments.</p>
+<p>Treating these as one item is why the roadmap entry reads as though caching does not work at all.
+They have different data, different threat models, and different owners.</p>
+<p><strong>This is a split by problem, not by tool.</strong> The content classes are genuinely distinct; the backends that serve them overlap heavily, and the section after next is about that overlap.
+Do not read this table as three deployments.</p>
 <table>
 <thead>
 <tr>
@@ -2790,170 +2781,99 @@ next is about that overlap. Do not read this table as three deployments.</p>
 </tbody>
 </table>
 <h3 id="actionscache-works-today-and-the-roadmap-says-otherwise"><code>actions/cache</code> works today, and the roadmap says otherwise<a class="headerlink" href="#actionscache-works-today-and-the-roadmap-says-otherwise" title="Permanent link">&para;</a></h3>
-<p><code>*.blob.core.windows.net</code> is in the GMC's default GitHub egress allowlist
-(<code>cmd/gmc/internal/controller/egressproxy_fqdn.go</code>, the entry commented as the
-Azure-blob-backed Actions results / cache / artifact store), asserted by both
-<code>egressproxy_fqdn_test.go</code> and <code>egressproxy_builder_test.go</code>. A tenant's worker
-reaches the Actions cache data plane through its own proxy pool like any other
-GitHub endpoint.</p>
+<p><code>*.blob.core.windows.net</code> is in the GMC's default GitHub egress allowlist (<code>cmd/gmc/internal/controller/egressproxy_fqdn.go</code>, the entry commented as the Azure-blob-backed Actions results / cache / artifact store), asserted by both <code>egressproxy_fqdn_test.go</code> and <code>egressproxy_builder_test.go</code>.
+A tenant's worker reaches the Actions cache data plane through its own proxy pool like any other GitHub endpoint.</p>
 <h3 id="one-backend-can-serve-several-classes">One backend can serve several classes<a class="headerlink" href="#one-backend-can-serve-several-classes" title="Permanent link">&para;</a></h3>
-<p>Distinct problems do not imply distinct deployments, and scoping them as three
-projects is how this becomes three times the work it needs to be.</p>
-<p>Dragonfly is the concrete case, and it is already the scheduled mirror candidate
-in <a href="../../STATUS/#Q539">Q539</a>. It is a <strong>general file-distribution system</strong> whose
-registry-mirror use is one application, not its definition. Measured from the
-upstream docs on 2026-08-07:</p>
+<p>Distinct problems do not imply distinct deployments, and scoping them as three projects is how this becomes three times the work it needs to be.</p>
+<p>Dragonfly is the concrete case, and it is already the scheduled mirror candidate in <a href="../../STATUS/#Q539">Q539</a>.
+It is a <strong>general file-distribution system</strong> whose registry-mirror use is one application, not its definition.
+Measured from the upstream docs on 2026-08-07:</p>
 <ul>
-<li><code>dfget</code> downloads arbitrary files and directories, with native backends for
-  HTTP/HTTPS, <strong>S3, GCS, Azure Blob Storage, OSS, OBS, COS, HDFS</strong>, plus Hugging
-  Face and ModelScope.</li>
-<li><code>dfdaemon</code> exposes a configurable HTTP proxy whose rules are content-agnostic,
-  rather than an image-specific shim.</li>
-<li><strong>Git LFS is a documented integration</strong>, which is the existing proof that a
-  non-image artifact class rides the same P2P mesh.</li>
+<li><code>dfget</code> downloads arbitrary files and directories, with native backends for HTTP/HTTPS, <strong>S3, GCS, Azure Blob Storage, OSS, OBS, COS, HDFS</strong>, plus Hugging Face and ModelScope.</li>
+<li><code>dfdaemon</code> exposes a configurable HTTP proxy whose rules are content-agnostic, rather than an image-specific shim.</li>
+<li><strong>Git LFS is a documented integration</strong>, which is the existing proof that a non-image artifact class rides the same P2P mesh.</li>
 </ul>
-<p>The Azure Blob Storage backend is the one to notice: <code>actions/cache</code> stores to
-<code>*.blob.core.windows.net</code>, which is exactly the host the hardened posture in the
-next section removes. Whether a Dragonfly deployment can front the Actions cache
-API specifically is <strong>unverified</strong> and not a small question, since that API is
-authenticated and signed-URL based rather than a plain blob <code>GET</code>. Treat this as
-the thing Q539 and Q540 should be scoped to answer, not as a capability GAG has.</p>
+<p>The Azure Blob Storage backend is the one to notice: <code>actions/cache</code> stores to <code>*.blob.core.windows.net</code>, which is exactly the host the hardened posture in the next section removes.
+Whether a Dragonfly deployment can front the Actions cache API specifically is <strong>unverified</strong> and not a small question, since that API is authenticated and signed-URL based rather than a plain blob <code>GET</code>.
+Treat this as the thing Q539 and Q540 should be scoped to answer, not as a capability GAG has.</p>
 <h3 id="the-mirror-contract-is-read-only-and-a-job-cache-is-not">The mirror contract is read-only, and a job cache is not<a class="headerlink" href="#the-mirror-contract-is-read-only-and-a-job-cache-is-not" title="Permanent link">&para;</a></h3>
-<p>The obstacle is not the backend. It is the contract.</p>
-<p><a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">q408 §3.5</a> defines
-the mirror role as four properties, one of which is that <strong>non-GET operations
-are refused, not forwarded</strong>. That property is load-bearing: it is most of why
-an untrusted job can be allowed to talk to the mirror at all.</p>
-<p>A job cache is read-write by definition. <code>actions/cache</code> saves entries as well
-as restoring them, and a cache nothing writes to is empty. So the artifact cache
-<strong>cannot simply reuse the mirror role</strong>, however well the same software serves
-both. It needs either a second role with its own contract, or a writable variant
-whose isolation argument is made separately, and that argument is the hard part:
-a write path reachable by an untrusted fork pull request is a way to plant
-content that a later trusted job restores and executes.</p>
-<p>That is the sharpest version of the review <a href="../../STATUS/#Q215">Q215</a> is blocked
-on, and it is a contract question rather than a storage question.</p>
+<p>The obstacle is not the backend.
+It is the contract.</p>
+<p><a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">q408 §3.5</a> defines the mirror role as four properties, one of which is that <strong>non-GET operations are refused, not forwarded</strong>.
+That property is load-bearing: it is most of why an untrusted job can be allowed to talk to the mirror at all.</p>
+<p>A job cache is read-write by definition. <code>actions/cache</code> saves entries as well as restoring them, and a cache nothing writes to is empty.
+So the artifact cache <strong>cannot simply reuse the mirror role</strong>, however well the same software serves both.
+It needs either a second role with its own contract, or a writable variant whose isolation argument is made separately, and that argument is the hard part: a write path reachable by an untrusted fork pull request is a way to plant content that a later trusted job restores and executes.</p>
+<p>That is the sharpest version of the review <a href="../../STATUS/#Q215">Q215</a> is blocked on, and it is a contract question rather than a storage question.</p>
 <h3 id="the-accurate-gap">The accurate gap<a class="headerlink" href="#the-accurate-gap" title="Permanent link">&para;</a></h3>
-<p>The gap is <strong>a cache inside the cluster</strong>, not caching. What a local
-cache would buy is egress cost and restore latency, not capability. Stating it
-the current way concedes a loss that has not happened, and it hides the loss
-that has: no local cache means every restore is a round trip out of the cluster
-and back, which on-premises or on metered egress is the expensive path.</p>
+<p>The gap is <strong>a cache inside the cluster</strong>, not caching.
+What a local cache would buy is egress cost and restore latency, not capability.
+Stating it the current way concedes a loss that has not happened, and it hides the loss that has: no local cache means every restore is a round trip out of the cluster and back, which on-premises or on metered egress is the expensive path.</p>
 <h2 id="the-collision-with-the-security-goal">The collision with the security goal<a class="headerlink" href="#the-collision-with-the-security-goal" title="Permanent link">&para;</a></h2>
 <p><strong>This is the reason the two goals cannot be planned separately.</strong></p>
-<p><a href="../../STATUS/#Q408">Q408</a> Phase 1 closes untrusted-PR egress down to GitHub,
-the registry mirror, and DNS. The Actions cache data plane is a <strong>non-GitHub
-host</strong>, so closing that egress removes <code>actions/cache</code>. This is already the
-measured state of GAG's own self-hosted CI lane, where every <code>actions/cache</code>
-step is skipped because the hardened egress rule does not admit it
-(<a href="../../development/testing/#the-e2e-workflows-kindnet-and-calico">testing.md</a>, and
-<a href="../q408-untrusted-pr-egress/">q408 §3</a> has the measurement).</p>
+<p><a href="../../STATUS/#Q408">Q408</a> Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
+The Actions cache data plane is a <strong>non-GitHub host</strong>, so closing that egress removes <code>actions/cache</code>.
+This is already the measured state of GAG's own self-hosted CI lane, where every <code>actions/cache</code> step is skipped because the hardened egress rule does not admit it (<a href="../../development/testing/#the-e2e-workflows-kindnet-and-calico">testing.md</a>, and <a href="../q408-untrusted-pr-egress/">q408 §3</a> has the measurement).</p>
 <p>The consequences run one way:</p>
 <ol>
-<li>For a <strong>trusted</strong> tenant, <code>actions/cache</code> works and a local cache is an
-   optimisation.</li>
-<li>For an <strong>untrusted-PR</strong> tenant under the Q408 posture, <code>actions/cache</code> is
-   gone, and an in-cluster cache is the only cache there can be. Q215 stops
-   being an optimisation and becomes the thing that makes the security posture
-   usable.</li>
-<li>That in-cluster cache is then reachable by hostile job code by construction,
-   which is exactly the review Q215 is blocked on. A cache shared across
-   tenants is an exfiltration path; a cache shared across <em>jobs of one tenant</em>
-   is the useful thing and a narrower risk.</li>
-<li>And it must be <strong>writable</strong> by that job, which is the property the mirror
-   role deliberately refuses. The two roles cannot be the same endpoint even
-   when they are the same software.</li>
+<li>For a <strong>trusted</strong> tenant, <code>actions/cache</code> works and a local cache is an optimisation.</li>
+<li>For an <strong>untrusted-PR</strong> tenant under the Q408 posture, <code>actions/cache</code> is gone, and an in-cluster cache is the only cache there can be.
+   Q215 stops being an optimisation and becomes the thing that makes the security posture usable.</li>
+<li>That in-cluster cache is then reachable by hostile job code by construction, which is exactly the review Q215 is blocked on.
+   A cache shared across tenants is an exfiltration path; a cache shared across <em>jobs of one tenant</em> is the useful thing and a narrower risk.</li>
+<li>And it must be <strong>writable</strong> by that job, which is the property the mirror role deliberately refuses.
+   The two roles cannot be the same endpoint even when they are the same software.</li>
 </ol>
-<p>The sequencing that falls out: <strong>the cross-tenant isolation review is not a
-prerequisite to be cleared, it is the design.</strong> Q215 should not be scoped as
-"add a PVC" and then reviewed. It should be scoped as "what cache can an
-untrusted job be given", and the storage follows from the answer.</p>
+<p>The sequencing that falls out: <strong>the cross-tenant isolation review is not a prerequisite to be cleared, it is the design.</strong> Q215 should not be scoped as "add a PVC" and then reviewed.
+It should be scoped as "what cache can an untrusted job be given", and the storage follows from the answer.</p>
 <h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <p>Each demonstrated rather than argued:</p>
 <ol>
-<li>A worker pulls its image from an in-cluster source on a warm node, and an
-   end-to-end run's logs name no upstream registry.</li>
-<li>A job restores a dependency cache without leaving the cluster, and the same
-   workflow run on a hardened-egress tenant restores it too.</li>
-<li>A job cannot read another tenant's cache entries, asserted by a test rather
-   than by namespace convention.</li>
-<li>Cache entries written by an untrusted fork pull request cannot be read by a
-   trusted job of the same tenant, or that boundary is explicitly declared
-   absent with a reason.</li>
-<li>The write path is contracted, not incidental: whatever endpoint accepts a
-   cache save states what it accepts, from whom, and what it refuses, in the
-   same form <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">q408 §3.5</a>
-   states the read path. Four properties for the mirror, its own set for this.</li>
-<li>A <code>ReadWriteMany</code> volume is mounted into a worker in a validated reference
-   architecture, and the storage classes it has been exercised against are
-   named. Failing that, the stance that workers stay storage-less is written
-   down as a decision with its migration consequence for ARC's
-   <code>containerMode: kubernetes</code>.</li>
-<li>The cost claim is measured, not asserted: egress bytes and restore latency
-   with and without the local cache, on one real workload.</li>
+<li>A worker pulls its image from an in-cluster source on a warm node, and an end-to-end run's logs name no upstream registry.</li>
+<li>A job restores a dependency cache without leaving the cluster, and the same workflow run on a hardened-egress tenant restores it too.</li>
+<li>A job cannot read another tenant's cache entries, asserted by a test rather than by namespace convention.</li>
+<li>Cache entries written by an untrusted fork pull request cannot be read by a trusted job of the same tenant, or that boundary is explicitly declared absent with a reason.</li>
+<li>The write path is contracted, not incidental: whatever endpoint accepts a cache save states what it accepts, from whom, and what it refuses, in the same form <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">q408 §3.5</a> states the read path.
+   Four properties for the mirror, its own set for this.</li>
+<li>A <code>ReadWriteMany</code> volume is mounted into a worker in a validated reference architecture, and the storage classes it has been exercised against are named.
+   Failing that, the stance that workers stay storage-less is written down as a decision with its migration consequence for ARC's <code>containerMode: kubernetes</code>.</li>
+<li>The cost claim is measured, not asserted: egress bytes and restore latency with and without the local cache, on one real workload.</li>
 </ol>
 <h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Building a cache service.</strong> The deliverable is integration and a validated
-  reference architecture, not a new storage system. If an existing backend can
-  hold it, that is the answer, and preferring one backend across content classes
-  over a best-of-breed per class is deliberate: each additional deployment is
-  another NetworkPolicy scope, another upstream allowlist, and another thing an
-  untrusted job can reach.</li>
-<li><strong>Cross-tenant cache sharing, at any scale.</strong> Deduplicating identical entries
-  across tenants is the obvious efficiency and the obvious exfiltration path.
-  Not now, and not without a threat model that survives the untrusted
-  contributor in <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>.</li>
-<li><strong>Persistent worker state between jobs.</strong> A worker executes one job and is
-  deleted. A cache is data a <em>new</em> worker can mount, never a worker that
-  survives.</li>
-<li><strong>Competing with the managed lane on build speed.</strong> Those services own
-  hardware and a purpose-built cache tier. Local caching here is about egress
-  cost and untrusted-PR viability, and
-  <a href="../go-to-market/">go-to-market §1</a> disclaims the speed race outright.</li>
+<li><strong>Building a cache service.</strong> The deliverable is integration and a validated reference architecture, not a new storage system.
+  If an existing backend can hold it, that is the answer, and preferring one backend across content classes over a best-of-breed per class is deliberate: each additional deployment is another NetworkPolicy scope, another upstream allowlist, and another thing an untrusted job can reach.</li>
+<li><strong>Cross-tenant cache sharing, at any scale.</strong> Deduplicating identical entries across tenants is the obvious efficiency and the obvious exfiltration path.
+  Not now, and not without a threat model that survives the untrusted contributor in <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>.</li>
+<li><strong>Persistent worker state between jobs.</strong> A worker executes one job and is deleted.
+  A cache is data a <em>new</em> worker can mount, never a worker that survives.</li>
+<li><strong>Competing with the managed lane on build speed.</strong> Those services own hardware and a purpose-built cache tier.
+  Local caching here is about egress cost and untrusted-PR viability, and <a href="../go-to-market/">go-to-market §1</a> disclaims the speed race outright.</li>
 </ul>
 <h2 id="what-the-site-may-claim-today">What the site may claim today<a class="headerlink" href="#what-the-site-may-claim-today" title="Permanent link">&para;</a></h2>
 <p>Current state only:</p>
 <blockquote>
-<p><code>actions/cache</code> works on a GAG tenant today: the Actions cache data plane is
-in the default egress allowlist. What is missing is a cache <em>inside</em> the
-cluster, which would cut egress cost and restore latency. ARC has none
-either, so this is not a reason to prefer ARC; GitLab Runner and the managed
-services do have one.</p>
+<p><code>actions/cache</code> works on a GAG tenant today: the Actions cache data plane is in the default egress allowlist.
+What is missing is a cache <em>inside</em> the cluster, which would cut egress cost and restore latency.
+ARC has none either, so this is not a reason to prefer ARC; GitLab Runner and the managed services do have one.</p>
 </blockquote>
 <p>Do not claim a local cache, a shared build cache, or persistent worker storage.
 Do not repeat that <code>actions/cache</code> has no home.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: per-tenant egress that admits the Actions cache data plane; the
-registry-mirror contract and the Athens pattern it derives from.</p>
-<p>Open, with rows: <a href="../../STATUS/#Q408">Q408</a> (mirror design and phases),
-<a href="../../STATUS/#Q539">Q539</a> (Dragonfly as the mirror backend),
-<a href="../../STATUS/#Q540">Q540</a> (composed node-layer and guest-layer stack),
-<a href="../../STATUS/#Q215">Q215</a> (job and build-layer cache, blocked on the isolation
-review this document reframes as the design),
-<a href="../../STATUS/#Q719">Q719</a> (RWX validation and the reference-architecture
-stance), <a href="../../STATUS/#Q268">Q268</a> (warm worker pool, the competing lever for
-the latency half of the same complaint).</p>
-<p><strong>Scope note for Q539 and Q540.</strong> Both are currently written as image-only
-validations. Because the candidate backend is a general file distributor, both
-should also answer whether <em>one</em> deployment serves the artifact class as well,
-and at what cost to the §3.5 contract. Answering it there is nearly free while
-the deployment is already stood up, and expensive later. Grade the four contract
-properties <strong>per content class</strong>, not once: a backend that refuses non-GET for
-images has said nothing about what it does for a cache save.</p>
+<p>Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from.</p>
+<p>Open, with rows: <a href="../../STATUS/#Q408">Q408</a> (mirror design and phases), <a href="../../STATUS/#Q539">Q539</a> (Dragonfly as the mirror backend), <a href="../../STATUS/#Q540">Q540</a> (composed node-layer and guest-layer stack), <a href="../../STATUS/#Q215">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../STATUS/#Q719">Q719</a> (RWX validation and the reference-architecture stance), <a href="../../STATUS/#Q268">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
+<p><strong>Scope note for Q539 and Q540.</strong> Both are currently written as image-only validations.
+Because the candidate backend is a general file distributor, both should also answer whether <em>one</em> deployment serves the artifact class as well, and at what cost to the §3.5 contract.
+Answering it there is nearly free while the deployment is already stood up, and expensive later.
+Grade the four contract properties <strong>per content class</strong>, not once: a backend that refuses non-GET for images has said nothing about what it does for a cache save.</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
 <p>Each needs a decision before it needs a row:</p>
 <ol>
-<li><strong>Whether an untrusted job gets a cache at all.</strong> The honest answer may be
-   no, in which case the untrusted lane is permanently slower and that should be
-   a stated trade rather than an unmet goal.</li>
-<li><strong>Cache entry lifetime and eviction.</strong> GitHub's own cache has a size cap and
-   an eviction policy tenants already reason about. A local cache with different
-   semantics is a surprise, and matching them is work nobody has scoped.</li>
-<li><strong>Who pays for the storage.</strong> A cache inside a tenant's namespace consumes
-   the platform-owned <code>ResourceQuota</code> that bounds the tenant, and a cache
-   outside it is platform capacity a tenant can fill. Neither is obviously
-   right, and the quota model has no answer today.</li>
+<li><strong>Whether an untrusted job gets a cache at all.</strong> The honest answer may be no, in which case the untrusted lane is permanently slower and that should be a stated trade rather than an unmet goal.</li>
+<li><strong>Cache entry lifetime and eviction.</strong> GitHub's own cache has a size cap and an eviction policy tenants already reason about.
+   A local cache with different semantics is a surprise, and matching them is work nobody has scoped.</li>
+<li><strong>Who pays for the storage.</strong> A cache inside a tenant's namespace consumes the platform-owned <code>ResourceQuota</code> that bounds the tenant, and a cache outside it is platform capacity a tenant can fill.
+   Neither is obviously right, and the quota model has no answer today.</li>
 </ol>
 
 

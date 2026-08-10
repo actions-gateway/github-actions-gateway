@@ -2737,73 +2737,39 @@
 
 <h1 id="live-gke-egress-validation-campaign--q243--q245--q230">Live-GKE Egress-Validation Campaign — Q243 + Q245 + Q230<a class="headerlink" href="#live-gke-egress-validation-campaign--q243--q245--q230" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-07-07): COMPLETE — cluster torn down.</strong> One coordinated live-GKE
-campaign on ONE throwaway Dataplane V2 cluster, batching three deferred live
-validations that share a platform and a theme (egress on GKE DPv2). <strong>Results:
-Q245 PASS, Q230 PASS, Q243 mechanism PASS + API-pinning gap found (follow-up
-filed).</strong> Evidence below; folded back into each item's own plan doc + STATUS.
-The throwaway project <code>gag-egress-val-260707</code> was deleted same-session
-(atomic teardown — cluster, node pools, subnets, Cloud NATs, static IPs, router).</p>
+<p><strong>Status (2026-07-07): COMPLETE — cluster torn down.</strong> One coordinated live-GKE campaign on ONE throwaway Dataplane V2 cluster, batching three deferred live validations that share a platform and a theme (egress on GKE DPv2). <strong>Results: Q245 PASS, Q230 PASS, Q243 mechanism PASS + API-pinning gap found (follow-up filed).</strong> Evidence below; folded back into each item's own plan doc + STATUS.
+The throwaway project <code>gag-egress-val-260707</code> was deleted same-session (atomic teardown — cluster, node pools, subnets, Cloud NATs, static IPs, router).</p>
 </blockquote>
 <h2 id="cluster-as-built-for-reproducibility">Cluster as built (for reproducibility)<a class="headerlink" href="#cluster-as-built-for-reproducibility" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Project <code>gag-egress-val-260707</code> (throwaway, deleted); cluster <code>gag-val</code>, zone
-  <code>us-east1-b</code>, GKE <code>1.35.5-gke.1241004</code>, Standard, Dataplane V2.</li>
-<li>Flags: <code>--enable-dataplane-v2 --enable-fqdn-network-policy
-  --addons=...,NodeLocalDNS --enable-private-nodes --disable-default-snat</code>
-  (private nodes + <code>--disable-default-snat</code> so <strong>pod IPs</strong> are the Cloud NAT
-  source, enabling per-pod-range → per-IP mapping; Private Google Access on the
-  subnet so nodes bootstrap before NAT exists).</li>
-<li>Custom VPC <code>gag-val-net</code> / subnet <code>gag-val-subnet</code> (10.0.0.0/22) with <strong>three
-  pod secondary ranges</strong>: <code>pods-default</code> (10.4/16), <code>pods-a</code> (10.5/16), <code>pods-b</code>
-  (10.6/16), plus <code>svc</code>. Node pools: <code>default-pool</code> (GMC), <code>pool-a</code>
-  (<code>--pod-ipv4-range=pods-a</code>), <code>pool-b</code> (<code>--pod-ipv4-range=pods-b</code>).</li>
-<li>One Cloud Router + <strong>three Cloud NAT gateways</strong> on it, each scoped to a
-  disjoint range (<code>nat-default</code> = primary+pods-default → 34.23.242.48; <code>nat-a</code> =
-  pods-a → 34.24.58.224; <code>nat-b</code> = pods-b → 34.26.87.185). <strong>Finding:</strong> three
-  NATs on one router covering disjoint secondary ranges of one subnet is
-  accepted by GCP — this is the single-cluster per-tenant-IP mechanism (the
-  reference arch's "dedicated subnet per tenant" is inaccurate for GKE, which
-  puts all node pools on the cluster subnet; the accurate primitive is
-  per-pod-secondary-range NAT + <code>--disable-default-snat</code>).</li>
-<li>GMC built from HEAD (<code>daf977b</code>, has #576 gke backend + Q229 DNS fix), pushed to
-  <code>ghcr.io/actions-gateway/gmc</code>, installed <code>--fqdn-policy-backend=gke</code>. Proxy
-  image reused <code>proxy:0ef4c6fa</code>. No AGC/RunnerSet/workers/GitHub-App needed.</li>
+<li>Project <code>gag-egress-val-260707</code> (throwaway, deleted); cluster <code>gag-val</code>, zone <code>us-east1-b</code>, GKE <code>1.35.5-gke.1241004</code>, Standard, Dataplane V2.</li>
+<li>Flags: <code>--enable-dataplane-v2 --enable-fqdn-network-policy --addons=...,NodeLocalDNS --enable-private-nodes --disable-default-snat</code> (private nodes + <code>--disable-default-snat</code> so <strong>pod IPs</strong> are the Cloud NAT source, enabling per-pod-range → per-IP mapping; Private Google Access on the subnet so nodes bootstrap before NAT exists).</li>
+<li>Custom VPC <code>gag-val-net</code> / subnet <code>gag-val-subnet</code> (10.0.0.0/22) with <strong>three pod secondary ranges</strong>: <code>pods-default</code> (10.4/16), <code>pods-a</code> (10.5/16), <code>pods-b</code> (10.6/16), plus <code>svc</code>.
+  Node pools: <code>default-pool</code> (GMC), <code>pool-a</code> (<code>--pod-ipv4-range=pods-a</code>), <code>pool-b</code> (<code>--pod-ipv4-range=pods-b</code>).</li>
+<li>One Cloud Router + <strong>three Cloud NAT gateways</strong> on it, each scoped to a disjoint range (<code>nat-default</code> = primary+pods-default → 34.23.242.48; <code>nat-a</code> = pods-a → 34.24.58.224; <code>nat-b</code> = pods-b → 34.26.87.185). <strong>Finding:</strong> three NATs on one router covering disjoint secondary ranges of one subnet is accepted by GCP — this is the single-cluster per-tenant-IP mechanism (the reference arch's "dedicated subnet per tenant" is inaccurate for GKE, which puts all node pools on the cluster subnet; the accurate primitive is per-pod-secondary-range NAT + <code>--disable-default-snat</code>).</li>
+<li>GMC built from HEAD (<code>daf977b</code>, has #576 gke backend + Q229 DNS fix), pushed to <code>ghcr.io/actions-gateway/gmc</code>, installed <code>--fqdn-policy-backend=gke</code>.
+  Proxy image reused <code>proxy:0ef4c6fa</code>.
+  No AGC/RunnerSet/workers/GitHub-App needed.</li>
 </ul>
 <p>Batches the deferred live-validation residuals of:</p>
 <ul>
-<li><strong><a href="../q243-egress-ip-reference-arch/">Q243</a></strong> — per-tenant egress-IP reference
-  arch; residual = live proof that 2 tenants egress from <strong>distinct, stable</strong>
-  source IPs.</li>
-<li><strong><a href="../q245-fqdn-intent-backend-split/">Q245</a></strong> — the <code>gke</code> <code>--fqdn-policy-backend</code>
-  shipped (impl+envtest, #576); residual = live GKE <code>FQDNNetworkPolicy</code>
-  <strong>enforcement</strong> validation.</li>
-<li><strong><a href="../../operations/troubleshooting/#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">Q230</a></strong>
-  — DNS-resolves-under-egress-NP on DPv2 + NodeLocal DNSCache (the Q229 fix);
-  currently Deferred, its trigger fired by greenlighting this campaign.</li>
+<li><strong><a href="../q243-egress-ip-reference-arch/">Q243</a></strong> — per-tenant egress-IP reference arch; residual = live proof that 2 tenants egress from <strong>distinct, stable</strong> source IPs.</li>
+<li><strong><a href="../q245-fqdn-intent-backend-split/">Q245</a></strong> — the <code>gke</code> <code>--fqdn-policy-backend</code> shipped (impl+envtest, #576); residual = live GKE <code>FQDNNetworkPolicy</code> <strong>enforcement</strong> validation.</li>
+<li><strong><a href="../../operations/troubleshooting/#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">Q230</a></strong> — DNS-resolves-under-egress-NP on DPv2 + NodeLocal DNSCache (the Q229 fix); currently Deferred, its trigger fired by greenlighting this campaign.</li>
 </ul>
 <h2 id="why-one-cluster">Why one cluster<a class="headerlink" href="#why-one-cluster" title="Permanent link">&para;</a></h2>
-<p>Q245 and Q230 both <strong>require</strong> GKE Dataplane V2 (managed Cilium) with
-<code>--enable-fqdn-network-policy</code> and NodeLocal DNSCache. Q243 needs an egress-IP
-mechanism; the <a href="../q243-egress-ip-reference-arch/">reference arch</a> offers two:</p>
+<p>Q245 and Q230 both <strong>require</strong> GKE Dataplane V2 (managed Cilium) with <code>--enable-fqdn-network-policy</code> and NodeLocal DNSCache.
+Q243 needs an egress-IP mechanism; the <a href="../q243-egress-ip-reference-arch/">reference arch</a> offers two:</p>
 <ul>
-<li><strong>Approach B — per-tenant cloud NAT</strong> — works on managed/DPv2 GKE. Chosen, so
-  <strong>one DPv2 cluster serves all three validations.</strong></li>
-<li><strong>Approach A — Cilium Egress Gateway</strong> — needs self-managed Cilium, i.e. DPv2
-  <strong>disabled</strong> → a <em>second</em> cluster. Rejected for this campaign to bound cost:
-  Approach B demonstrates the reference arch's headline claim (distinct, stable
-  per-tenant egress IP) on the same DPv2 cluster the other two need. Approach A's
-  distinct properties (fail-open pod-start window, single-gateway HA) are already
-  documented as tradeoffs in the reference arch and do not need a live spike to
-  confirm the <em>per-tenant-IP</em> claim. If a future task wants Approach A validated
-  live, it is a separate self-managed-Cilium spike (documented two-cluster cost).</li>
+<li><strong>Approach B — per-tenant cloud NAT</strong> — works on managed/DPv2 GKE.
+  Chosen, so <strong>one DPv2 cluster serves all three validations.</strong></li>
+<li><strong>Approach A — Cilium Egress Gateway</strong> — needs self-managed Cilium, i.e. DPv2 <strong>disabled</strong> → a <em>second</em> cluster.
+  Rejected for this campaign to bound cost: Approach B demonstrates the reference arch's headline claim (distinct, stable per-tenant egress IP) on the same DPv2 cluster the other two need.
+  Approach A's distinct properties (fail-open pod-start window, single-gateway HA) are already documented as tradeoffs in the reference arch and do not need a live spike to confirm the <em>per-tenant-IP</em> claim.
+  If a future task wants Approach A validated live, it is a separate self-managed-Cilium spike (documented two-cluster cost).</li>
 </ul>
 <h2 id="topology">Topology<a class="headerlink" href="#topology" title="Permanent link">&para;</a></h2>
-<p>One GKE <strong>Standard zonal</strong> cluster, Dataplane V2, <code>us-east1-b</code> (same region as
-dogfood — known-good quota), in a <strong>dedicated throwaway GCP project</strong> deleted
-wholesale at teardown (atomic cost hygiene — no orphaned static IPs / NAT /
-subnets). <strong>NOT</strong> the dogfood cluster/project (<code>gag-dogfood</code> /
-<code>actions-gateway-dogfood</code>, prod-classified by <code>.claude/prod-guard.json</code>).</p>
+<p>One GKE <strong>Standard zonal</strong> cluster, Dataplane V2, <code>us-east1-b</code> (same region as dogfood — known-good quota), in a <strong>dedicated throwaway GCP project</strong> deleted wholesale at teardown (atomic cost hygiene — no orphaned static IPs / NAT / subnets). <strong>NOT</strong> the dogfood cluster/project (<code>gag-dogfood</code> / <code>actions-gateway-dogfood</code>, prod-classified by <code>.claude/prod-guard.json</code>).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>  validation cluster (GKE Standard, Dataplane V2 + FQDN NP + NodeLocal DNSCache)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  ═════════════════════════════════════════════════════════════════════════════
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>   default-pool (system): GMC control plane + CRDs
@@ -2811,109 +2777,63 @@ subnets). <strong>NOT</strong> the dogfood cluster/project (<code>gag-dogfood</c
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>   pool-tenant-b  ── subnet-b ── Cloud NAT nat-b ── static IP-B ─▶ GitHub/echo
 </code></pre></div>
 <ul>
-<li>Cluster flags: <code>--enable-dataplane-v2 --enable-fqdn-network-policy
-  --addons=NodeLocalDNS --enable-ip-alias</code> (Standard, not Autopilot — Approach B
-  needs node-pool/subnet/NAT control).</li>
+<li>Cluster flags: <code>--enable-dataplane-v2 --enable-fqdn-network-policy --addons=NodeLocalDNS --enable-ip-alias</code> (Standard, not Autopilot — Approach B needs node-pool/subnet/NAT control).</li>
 <li>Small: <code>e2-standard-2</code>, 1 node system pool; 1 node each tenant pool.</li>
 </ul>
 <h2 id="prerequisites--what-to-build-what-to-skip">Prerequisites — what to build, what to skip<a class="headerlink" href="#prerequisites--what-to-build-what-to-skip" title="Permanent link">&para;</a></h2>
-<p><strong>Only the GMC control plane is needed</strong> — no AGC, RunnerSet, workers, GitHub
-App, Athens, or job execution. The validations probe NetworkPolicy /
-FQDNNetworkPolicy enforcement and NAT source-IP with <strong>labeled test pods</strong>, not
-runners.</p>
+<p><strong>Only the GMC control plane is needed</strong> — no AGC, RunnerSet, workers, GitHub App, Athens, or job execution.
+The validations probe NetworkPolicy / FQDNNetworkPolicy enforcement and NAT source-IP with <strong>labeled test pods</strong>, not runners.</p>
 <ul>
-<li><strong>GMC image</strong>: the dogfood image (<code>0ef4c6fa</code>, at #529 = Q245 <em>design</em>)
-  <strong>predates #576</strong> (the <code>gke</code> backend impl), so build+push a GMC image from
-  <strong>HEAD</strong> (has #576 + the Q229 DNS fix): <code>docker buildx bake gmc --set
-  '*.platform=linux/amd64' --set gmc.tags=ghcr.io/actions-gateway/gmc:&lt;sha&gt;</code>,
-  then <code>gh auth refresh -s write:packages</code> + push. The <code>gmc</code> package already
-  exists public, so a new tag stays public (no visibility flip needed).</li>
-<li><strong>CRDs</strong>: from HEAD (matches the GMC image), applied <code>helm template | kubectl
-  apply --server-side</code> (v2 CRD chart &gt;1 MiB — Q276/Q277).</li>
-<li><strong>proxy image</strong> (only for Q243 real proxy pods): reuse the already-public
-  <code>ghcr.io/actions-gateway/proxy:0ef4c6fa</code> (proxy behavior unchanged for this
-  purpose).</li>
+<li><strong>GMC image</strong>: the dogfood image (<code>0ef4c6fa</code>, at #529 = Q245 <em>design</em>) <strong>predates #576</strong> (the <code>gke</code> backend impl), so build+push a GMC image from <strong>HEAD</strong> (has #576 + the Q229 DNS fix): <code>docker buildx bake gmc --set '*.platform=linux/amd64' --set gmc.tags=ghcr.io/actions-gateway/gmc:&lt;sha&gt;</code>, then <code>gh auth refresh -s write:packages</code> + push.
+  The <code>gmc</code> package already exists public, so a new tag stays public (no visibility flip needed).</li>
+<li><strong>CRDs</strong>: from HEAD (matches the GMC image), applied <code>helm template | kubectl apply --server-side</code> (v2 CRD chart &gt;1 MiB — Q276/Q277).</li>
+<li><strong>proxy image</strong> (only for Q243 real proxy pods): reuse the already-public <code>ghcr.io/actions-gateway/proxy:0ef4c6fa</code> (proxy behavior unchanged for this purpose).</li>
 </ul>
 <h2 id="feasibility-findings-that-shape-the-method-discovered-pre-flight">Feasibility findings that shape the method (discovered pre-flight)<a class="headerlink" href="#feasibility-findings-that-shape-the-method-discovered-pre-flight" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>EgressProxySpec</code> has no <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code></strong>, and the
-  builder sets a <strong>required cross-node pod anti-affinity that <em>spreads</em> proxy
-  pods across nodes</strong> (<code>egressproxy_builder.go</code>). So the CR <strong>cannot</strong> be pinned
-  to a tenant's node pool/subnet — and its anti-affinity actively spreads it
-  across pools, making its NAT egress IP non-deterministic. The
-  <a href="../q243-egress-ip-reference-arch/#approach-b--per-tenant-cloud-nat">reference arch Approach B</a>
-  <em>assumes</em> "the tenant's EgressProxy pods … via nodeSelector/toleration to the
-  tenant pool" — <strong>the API can't express that today.</strong> → <strong>Q243 method:</strong>
-  validate the cloud-NAT <em>mechanism</em> (distinct + stable IP per subnet) with a
-  pinned representative pod, AND record the API-integration gap as a follow-up
-  (add scheduling constraints to <code>EgressProxy</code>, or a platform-owned tenant→pool
-  mapping). Also run a real GMC-provisioned <code>EgressProxy</code> to show its pods land
-  arbitrarily (concretely demonstrating the gap).</li>
+<li><strong><code>EgressProxySpec</code> has no <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code></strong>, and the builder sets a <strong>required cross-node pod anti-affinity that <em>spreads</em> proxy pods across nodes</strong> (<code>egressproxy_builder.go</code>).
+  So the CR <strong>cannot</strong> be pinned to a tenant's node pool/subnet — and its anti-affinity actively spreads it across pools, making its NAT egress IP non-deterministic.
+  The <a href="../q243-egress-ip-reference-arch/#approach-b--per-tenant-cloud-nat">reference arch Approach B</a> <em>assumes</em> "the tenant's EgressProxy pods … via nodeSelector/toleration to the tenant pool" — <strong>the API can't express that today.</strong> → <strong>Q243 method:</strong> validate the cloud-NAT <em>mechanism</em> (distinct + stable IP per subnet) with a pinned representative pod, AND record the API-integration gap as a follow-up (add scheduling constraints to <code>EgressProxy</code>, or a platform-owned tenant→pool mapping).
+  Also run a real GMC-provisioned <code>EgressProxy</code> to show its pods land arbitrarily (concretely demonstrating the gap).</li>
 </ul>
 <h2 id="sequencing-on-the-one-cluster">Sequencing (on the one cluster)<a class="headerlink" href="#sequencing-on-the-one-cluster" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Stand up</strong> — throwaway project + billing + APIs; create cluster (DPv2 + FQDN
-   NP + NodeLocal DNSCache); build+push GMC image; install CRDs + GMC
-   (<code>--fqdn-policy-backend=gke</code>); create tenant namespaces.</li>
-<li><strong>Q230</strong> first (cheapest, no NAT): base egress NP + labeled test pod; confirm
-   DNS resolves under the NP on DPv2 + NodeLocal DNSCache (Q229 fix holds live).</li>
-<li><strong>Q245</strong>: EgressProxy <code>egressPolicyMode: FQDN</code>; confirm <code>FQDNNetworkPolicy</code>
-   emitted + <strong>enforces</strong> (GitHub reachable by name; base default-deny NP still
-   blocks all other egress — additive-allow invariant); confirm fail-closed if
-   the feature/CRD absent.</li>
-<li><strong>Q243</strong> last (most infra): 2 subnets + 2 NATs + 2 static IPs + 2 tenant
-   pools; observe distinct + stable egress IP per tenant at an echo endpoint,
-   stable across pod reschedule.</li>
+<li><strong>Stand up</strong> — throwaway project + billing + APIs; create cluster (DPv2 + FQDN NP + NodeLocal DNSCache); build+push GMC image; install CRDs + GMC (<code>--fqdn-policy-backend=gke</code>); create tenant namespaces.</li>
+<li><strong>Q230</strong> first (cheapest, no NAT): base egress NP + labeled test pod; confirm DNS resolves under the NP on DPv2 + NodeLocal DNSCache (Q229 fix holds live).</li>
+<li><strong>Q245</strong>: EgressProxy <code>egressPolicyMode: FQDN</code>; confirm <code>FQDNNetworkPolicy</code> emitted + <strong>enforces</strong> (GitHub reachable by name; base default-deny NP still blocks all other egress — additive-allow invariant); confirm fail-closed if the feature/CRD absent.</li>
+<li><strong>Q243</strong> last (most infra): 2 subnets + 2 NATs + 2 static IPs + 2 tenant pools; observe distinct + stable egress IP per tenant at an echo endpoint, stable across pod reschedule.</li>
 <li><strong>Record + tear down + STATUS.</strong></li>
 </ol>
 <h2 id="cost-estimate">Cost estimate<a class="headerlink" href="#cost-estimate" title="Permanent link">&para;</a></h2>
-<p>Order-of-magnitude, <strong>hours not days</strong>: 2nd zonal cluster mgmt fee (~$0.10/hr),
-~3 <code>e2-standard-2</code> nodes (~$0.20/hr), 2 Cloud NAT gateways (~$0.09/hr) + trivial
-data, 2 in-use static IPs (~negligible). <strong>≈ $0.40–0.60/hr → a few USD</strong> for a
-same-session run. Left running: ~$10–14/day — hence same-session teardown.</p>
+<p>Order-of-magnitude, <strong>hours not days</strong>: 2nd zonal cluster mgmt fee (~$0.10/hr), ~3 <code>e2-standard-2</code> nodes (~$0.20/hr), 2 Cloud NAT gateways (~$0.09/hr) + trivial data, 2 in-use static IPs (~negligible). <strong>≈ $0.40–0.60/hr → a few USD</strong> for a same-session run.
+Left running: ~$10–14/day — hence same-session teardown.</p>
 <h2 id="teardown">Teardown<a class="headerlink" href="#teardown" title="Permanent link">&para;</a></h2>
-<p><code>gcloud projects delete &lt;throwaway-project&gt;</code> — atomic; removes cluster, pools,
-subnets, NATs, and reserved IPs in one step. Confirm the project ID is the
-throwaway (NOT <code>actions-gateway-dogfood</code>) before deleting.</p>
+<p><code>gcloud projects delete &lt;throwaway-project&gt;</code> — atomic; removes cluster, pools, subnets, NATs, and reserved IPs in one step.
+Confirm the project ID is the throwaway (NOT <code>actions-gateway-dogfood</code>) before deleting.</p>
 <h2 id="validation-methods--passfail">Validation methods &amp; pass/fail<a class="headerlink" href="#validation-methods--passfail" title="Permanent link">&para;</a></h2>
 <h3 id="q230--dns-under-egress-np-dpv2--nodelocal-dnscache">Q230 — DNS under egress NP (DPv2 + NodeLocal DNSCache)<a class="headerlink" href="#q230--dns-under-egress-np-dpv2--nodelocal-dnscache" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Setup:</strong> tenant ns with a GMC-managed base egress NP (via an EgressProxy or
-  the tenant default); a test pod labeled as a workload (matched by the NP
-  podSelector).</li>
-<li><strong>Assert:</strong> confirm <code>node-local-dns</code> pods exist (<code>k8s-app=node-local-dns</code>,
-  <code>kube-system</code>); the NP's DNS egress rule carries the 3rd <code>node-local-dns</code> peer;
-  DNS resolves from the governed pod (<code>nslookup github.com</code>) while a
-  non-allowlisted <strong>non-DNS</strong> egress is denied.</li>
+<li><strong>Setup:</strong> tenant ns with a GMC-managed base egress NP (via an EgressProxy or the tenant default); a test pod labeled as a workload (matched by the NP podSelector).</li>
+<li><strong>Assert:</strong> confirm <code>node-local-dns</code> pods exist (<code>k8s-app=node-local-dns</code>, <code>kube-system</code>); the NP's DNS egress rule carries the 3rd <code>node-local-dns</code> peer; DNS resolves from the governed pod (<code>nslookup github.com</code>) while a non-allowlisted <strong>non-DNS</strong> egress is denied.</li>
 <li><strong>PASS</strong> = DNS resolves under the NP; <strong>FAIL</strong> = times out (Q229 regression).</li>
-<li><strong>Decision to record:</strong> is an automated GKE-DPv2 CI lane worth building vs
-  staying deferred (do NOT build a full GKE-in-CI lane here unless cheap).</li>
+<li><strong>Decision to record:</strong> is an automated GKE-DPv2 CI lane worth building vs staying deferred (do NOT build a full GKE-in-CI lane here unless cheap).</li>
 </ul>
 <h3 id="q245--gke-fqdnnetworkpolicy-enforcement">Q245 — gke <code>FQDNNetworkPolicy</code> enforcement<a class="headerlink" href="#q245--gke-fqdnnetworkpolicy-enforcement" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Setup:</strong> EgressProxy <code>egressPolicyMode: FQDN</code>, GMC <code>--fqdn-policy-backend=gke</code>.</li>
-<li><strong>Assert:</strong> <code>FQDNNetworkPolicy</code> (<code>networking.gke.io/v1alpha1</code>) emitted + owned;
-  from a governed pod, GitHub host (e.g. <code>api.github.com:443</code>) reachable; a
-  <strong>non-allowlisted</strong> host blocked by the base default-deny NP (additive-allow
-  invariant: FQDN policy widens, never replaces default-deny). Confirm
-  fail-closed if <code>--enable-fqdn-network-policy</code>/CRD absent (egress stays denied).</li>
-<li><strong>PASS</strong> = GitHub allowed, everything else denied, base NP still fail-closed;
-  <strong>FAIL</strong> = non-GitHub egress leaks, or GitHub blocked, or not fail-closed.</li>
+<li><strong>Assert:</strong> <code>FQDNNetworkPolicy</code> (<code>networking.gke.io/v1alpha1</code>) emitted + owned; from a governed pod, GitHub host (e.g. <code>api.github.com:443</code>) reachable; a <strong>non-allowlisted</strong> host blocked by the base default-deny NP (additive-allow invariant: FQDN policy widens, never replaces default-deny).
+  Confirm fail-closed if <code>--enable-fqdn-network-policy</code>/CRD absent (egress stays denied).</li>
+<li><strong>PASS</strong> = GitHub allowed, everything else denied, base NP still fail-closed; <strong>FAIL</strong> = non-GitHub egress leaks, or GitHub blocked, or not fail-closed.</li>
 </ul>
 <h3 id="q243--per-tenant-egress-ip-cloud-nat">Q243 — per-tenant egress IP (cloud NAT)<a class="headerlink" href="#q243--per-tenant-egress-ip-cloud-nat" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Setup:</strong> 2 tenant pools on 2 subnets, each with its own Cloud NAT + reserved
-  static IP; a pinned representative egress pod per tenant (nodeSelector to its
-  pool). Echo endpoint reflecting source IP (e.g. an owned <code>/ip</code> or a public
-  reflector).</li>
-<li><strong>Assert:</strong> tenant-A egresses from IP-A, tenant-B from IP-B, A ≠ B (distinct);
-  delete/relocate a pod → IP unchanged (stable). Also apply a real
-  GMC-provisioned EgressProxy and record where its (unpinnable) pods land.</li>
-<li><strong>PASS</strong> = distinct + stable per-tenant IPs via NAT + documented API-pinning
-  gap; <strong>FAIL</strong> = shared or unstable IPs.</li>
+<li><strong>Setup:</strong> 2 tenant pools on 2 subnets, each with its own Cloud NAT + reserved static IP; a pinned representative egress pod per tenant (nodeSelector to its pool).
+  Echo endpoint reflecting source IP (e.g. an owned <code>/ip</code> or a public reflector).</li>
+<li><strong>Assert:</strong> tenant-A egresses from IP-A, tenant-B from IP-B, A ≠ B (distinct); delete/relocate a pod → IP unchanged (stable).
+  Also apply a real GMC-provisioned EgressProxy and record where its (unpinnable) pods land.</li>
+<li><strong>PASS</strong> = distinct + stable per-tenant IPs via NAT + documented API-pinning gap; <strong>FAIL</strong> = shared or unstable IPs.</li>
 </ul>
-<p><strong>If any validation fails, that is a real security/correctness finding — record
-it honestly here and file a follow-up; do not paper over it (secure-by-default).</strong></p>
+<p><strong>If any validation fails, that is a real security/correctness finding — record it honestly here and file a follow-up; do not paper over it (secure-by-default).</strong></p>
 <h2 id="findings-log">Findings log<a class="headerlink" href="#findings-log" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2943,23 +2863,11 @@ it honestly here and file a follow-up; do not paper over it (secure-by-default).
 </table>
 <h2 id="decisions-recorded">Decisions recorded<a class="headerlink" href="#decisions-recorded" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Q230 automated GKE-DPv2 CI lane → stay DEFERRED (do not build).</strong> A per-PR
-  GKE lane is expensive (real cluster provisioning + cloud spend per run) and
-  redundant for the actual regression vector — the GMC dropping the
-  <code>node-local-dns</code> DNS peer — which is already locked in by a unit assertion
-  (<code>cmd/gmc/internal/controller/builder_test.go</code>, Q136/Q229). Guard = that unit
-  test; re-run <em>this</em> manual live validation at major egress-path changes.</li>
-<li><strong>Q243 is NOT fully closed.</strong> The reference-arch mechanism claim (distinct +
-  stable per-tenant egress IP via Cloud NAT) is validated, and the EgressProxy API
-  change needed to bind a tenant's proxy pods to one egress path has since landed
-  (<strong>Q282</strong> — <code>spec.scheduling</code> pass-through on the <code>EgressProxy</code> +
-  <code>ActionsGateway</code> CRs; see
-  <a href="../q243-egress-ip-reference-arch/#placement-pass-through-q282">Placement pass-through</a>).
-  What remains for Q243 is a live end-to-end validation that a pinned proxy pool
-  egresses from exactly one IP. Note Q282 reversed this campaign's original
-  "platform-governed placement" design point — placement is CR-author-settable, and
-  constraining it is a policy-engine concern; the reasoning is recorded in the Q243
-  plan.</li>
+<li><strong>Q230 automated GKE-DPv2 CI lane → stay DEFERRED (do not build).</strong> A per-PR GKE lane is expensive (real cluster provisioning + cloud spend per run) and redundant for the actual regression vector — the GMC dropping the <code>node-local-dns</code> DNS peer — which is already locked in by a unit assertion (<code>cmd/gmc/internal/controller/builder_test.go</code>, Q136/Q229).
+  Guard = that unit test; re-run <em>this</em> manual live validation at major egress-path changes.</li>
+<li><strong>Q243 is NOT fully closed.</strong> The reference-arch mechanism claim (distinct + stable per-tenant egress IP via Cloud NAT) is validated, and the EgressProxy API change needed to bind a tenant's proxy pods to one egress path has since landed (<strong>Q282</strong> — <code>spec.scheduling</code> pass-through on the <code>EgressProxy</code> + <code>ActionsGateway</code> CRs; see <a href="../q243-egress-ip-reference-arch/#placement-pass-through-q282">Placement pass-through</a>).
+  What remains for Q243 is a live end-to-end validation that a pinned proxy pool egresses from exactly one IP.
+  Note Q282 reversed this campaign's original "platform-governed placement" design point — placement is CR-author-settable, and constraining it is a policy-engine concern; the reasoning is recorded in the Q243 plan.</li>
 </ul>
 
 

@@ -2659,34 +2659,23 @@
 
 
 <h1 id="q64--replace-provisioner-per-session-poll-with-a-shared-pod-informer-waiter">Q64 — Replace provisioner per-session poll with a shared Pod informer waiter<a class="headerlink" href="#q64--replace-provisioner-per-session-poll-with-a-shared-pod-informer-waiter" title="Permanent link">&para;</a></h1>
-<p>Tracked as <a href="../../../STATUS/">Q64</a>; split from the k8s-best-practices audit
-<a href="../k8s-best-practices/#a-controller-correctness-">§A4</a>.</p>
+<p>Tracked as <a href="../../../STATUS/">Q64</a>; split from the k8s-best-practices audit <a href="../k8s-best-practices/#a-controller-correctness-">§A4</a>.</p>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Make worker-pod completion detection in the AGC provisioner event-driven instead
-of poll-driven, so detection latency drops from ~5 s to near-zero and the
-provisioner stops spawning one polling ticker per in-flight session.</p>
+<p>Make worker-pod completion detection in the AGC provisioner event-driven instead of poll-driven, so detection latency drops from ~5 s to near-zero and the provisioner stops spawning one polling ticker per in-flight session.</p>
 <h2 id="background--what-the-poll-actually-costs">Background — what the poll actually costs<a class="headerlink" href="#background--what-the-poll-actually-costs" title="Permanent link">&para;</a></h2>
-<p><code>provisioner.go</code>'s <code>waitForPodCompletion</code> opens a <code>time.NewTicker(5s)</code> per
-<code>provision()</code> call and, on every tick, issues <code>Client.Get</code> for the pod until it
-reaches a terminal phase. At the project's target of thousands of concurrent
-virtual sessions, that is thousands of goroutines each holding a ticker.</p>
-<p>The audit row framed this as "~200 gets/s at 1,000 sessions" of <strong>API-server</strong>
-load. That framing is inaccurate: the provisioner's <code>Client</code> is
-<code>mgr.GetClient()</code>, the controller-runtime <strong>cache-backed</strong> client. Pods are not
-in the cache <code>DisableFor</code> list (only Secrets are — see <code>main.go</code> §5), so those
-<code>Get</code> calls are already served from the in-process shared Pod informer, not the
-API server. The real costs the poll imposes are therefore:</p>
+<p><code>provisioner.go</code>'s <code>waitForPodCompletion</code> opens a <code>time.NewTicker(5s)</code> per <code>provision()</code> call and, on every tick, issues <code>Client.Get</code> for the pod until it reaches a terminal phase.
+At the project's target of thousands of concurrent virtual sessions, that is thousands of goroutines each holding a ticker.</p>
+<p>The audit row framed this as "~200 gets/s at 1,000 sessions" of <strong>API-server</strong> load.
+That framing is inaccurate: the provisioner's <code>Client</code> is <code>mgr.GetClient()</code>, the controller-runtime <strong>cache-backed</strong> client.
+Pods are not in the cache <code>DisableFor</code> list (only Secrets are — see <code>main.go</code> §5), so those <code>Get</code> calls are already served from the in-process shared Pod informer, not the API server.
+The real costs the poll imposes are therefore:</p>
 <ol>
-<li><strong>Detection latency</strong> — up to one <code>PollInterval</code> (5 s) between a pod going
-   terminal and the provisioner noticing. On a 10 s job that is a 50 % tail.</li>
-<li><strong>Per-session goroutine + ticker churn</strong> — N tickers waking N goroutines to
-   re-read the cache, instead of the informer pushing one event when the pod
-   actually changes.</li>
+<li><strong>Detection latency</strong> — up to one <code>PollInterval</code> (5 s) between a pod going terminal and the provisioner noticing.
+   On a 10 s job that is a 50 % tail.</li>
+<li><strong>Per-session goroutine + ticker churn</strong> — N tickers waking N goroutines to re-read the cache, instead of the informer pushing one event when the pod actually changes.</li>
 </ol>
-<p>A single shared Pod informer already exists (the cache lazily starts one on the
-first Pod read). The fix is to <strong>register one event handler on it</strong> and have each
-session block on a channel that the handler signals, rather than each session
-polling the cache on a timer.</p>
+<p>A single shared Pod informer already exists (the cache lazily starts one on the first Pod read).
+The fix is to <strong>register one event handler on it</strong> and have each session block on a channel that the handler signals, rather than each session polling the cache on a timer.</p>
 <h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
 <p>Introduce a <code>PodWaiter</code> seam in the provisioner:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">PodWaiter</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
@@ -2695,69 +2684,45 @@ polling the cache on a timer.</p>
 </code></pre></div>
 <ul>
 <li>
-<p><strong><code>InformerPodWaiter</code></strong> (production): registers a single
-  <code>ResourceEventHandler</code> on the shared Pod informer
-  (<code>cache.Cache.GetInformer(ctx, &amp;corev1.Pod{})</code>) and keeps a registry of
-  per-pod waiter channels. Add/Update events that reach a terminal phase, and
-  Delete events, signal the matching waiters. It implements <code>manager.Runnable</code>
-  so the handler is registered after the cache syncs; <code>main.go</code> wires it with
-  <code>mgr.Add(...)</code> and sets <code>prov.Waiter</code>.</p>
+<p><strong><code>InformerPodWaiter</code></strong> (production): registers a single <code>ResourceEventHandler</code> on the shared Pod informer (<code>cache.Cache.GetInformer(ctx, &amp;corev1.Pod{})</code>) and keeps a registry of per-pod waiter channels.
+  Add/Update events that reach a terminal phase, and Delete events, signal the matching waiters.
+  It implements <code>manager.Runnable</code> so the handler is registered after the cache syncs; <code>main.go</code> wires it with <code>mgr.Add(...)</code> and sets <code>prov.Waiter</code>.</p>
 </li>
 <li>
-<p><strong>Legacy poll fallback</strong>: when <code>prov.Waiter</code> is nil the provisioner keeps the
-  existing <code>waitForPodCompletion</code> ticker loop. This path is used only by the
-  fake-client unit tests (which have no informer) and as a defensive fallback;
-  production always wires the informer waiter, so the hot path no longer polls.</p>
+<p><strong>Legacy poll fallback</strong>: when <code>prov.Waiter</code> is nil the provisioner keeps the existing <code>waitForPodCompletion</code> ticker loop.
+  This path is used only by the fake-client unit tests (which have no informer) and as a defensive fallback; production always wires the informer waiter, so the hot path no longer polls.</p>
 </li>
 </ul>
 <h3 id="race-handling">Race handling<a class="headerlink" href="#race-handling" title="Permanent link">&para;</a></h3>
-<p>The handler is registered once at startup and persists, so every created pod
-produces an Add event to it (client-go replays current cache state to a freshly
-added handler and watches thereafter). Per <code>WaitForCompletion</code> call:</p>
+<p>The handler is registered once at startup and persists, so every created pod produces an Add event to it (client-go replays current cache state to a freshly added handler and watches thereafter).
+Per <code>WaitForCompletion</code> call:</p>
 <ol>
 <li>Register the waiter channel under <code>ns/name</code> <strong>first</strong>.</li>
 <li>Read current state from the cache:</li>
-<li>terminal phase → resolve immediately (covers the event-fired-before-register
-     race);</li>
+<li>terminal phase → resolve immediately (covers the event-fired-before-register race);</li>
 <li>found non-terminal → block for an event;</li>
-<li><code>NotFound</code> → block for an event (do <strong>not</strong> conclude success — the cache may
-     simply not have observed our just-issued <code>Create</code> yet; the Add event will
-     arrive).</li>
+<li><code>NotFound</code> → block for an event (do <strong>not</strong> conclude success — the cache may simply not have observed our just-issued <code>Create</code> yet; the Add event will arrive).</li>
 <li>Block on the channel or <code>ctx.Done()</code>.</li>
 </ol>
-<p>Terminal-phase detection matches the existing poll exactly
-(<code>Succeeded</code>/<code>Failed</code>/<code>Unknown</code>, carrying <code>Status.Reason</code> for eviction
-detection). A Delete event resolves as <code>Succeeded</code> with empty reason — matching
-the poll's existing "pod deleted externally → treat as completion" behaviour.</p>
+<p>Terminal-phase detection matches the existing poll exactly (<code>Succeeded</code>/<code>Failed</code>/<code>Unknown</code>, carrying <code>Status.Reason</code> for eviction detection).
+A Delete event resolves as <code>Succeeded</code> with empty reason — matching the poll's existing "pod deleted externally → treat as completion" behaviour.</p>
 <h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>cmd/agc/internal/provisioner/podwaiter.go</code> (new) — <code>PodWaiter</code> interface,
-  <code>InformerPodWaiter</code>, terminal-phase helper.</li>
-<li><code>cmd/agc/internal/provisioner/provisioner.go</code> — add <code>Waiter PodWaiter</code> field;
-  <code>provision</code> step 5 calls the waiter when set, else the legacy poll.</li>
-<li><code>cmd/agc/main.go</code> — construct <code>InformerPodWaiter</code>, <code>mgr.Add</code> it, set
-  <code>prov.Waiter</code>.</li>
+<li><code>cmd/agc/internal/provisioner/podwaiter.go</code> (new) — <code>PodWaiter</code> interface, <code>InformerPodWaiter</code>, terminal-phase helper.</li>
+<li><code>cmd/agc/internal/provisioner/provisioner.go</code> — add <code>Waiter PodWaiter</code> field; <code>provision</code> step 5 calls the waiter when set, else the legacy poll.</li>
+<li><code>cmd/agc/main.go</code> — construct <code>InformerPodWaiter</code>, <code>mgr.Add</code> it, set <code>prov.Waiter</code>.</li>
 </ul>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>cmd/agc/internal/provisioner/podwaiter_internal_test.go</code> (white-box,
-  <code>package provisioner</code>): drive <code>onUpdate</code>/<code>onDelete</code> directly against a fake
-  <code>client.Reader</code> for the initial-state read. Cases: terminal-before-wait,
-  event-driven Succeeded/Failed-Evicted, delete→Succeeded, ctx cancel,
-  NotFound-then-terminal (no premature success), multiple concurrent waiters.</li>
-<li><code>cmd/agc/internal/controller/integration/</code> (envtest, <code>integration</code> tag): a
-  focused test that runs a manager with an <code>InformerPodWaiter</code>, creates a pod,
-  transitions it to a terminal phase, and asserts <code>WaitForCompletion</code> returns
-  promptly with the right phase — proving the real informer wiring.</li>
-<li>Existing fake-client provisioner tests stay green unchanged (nil Waiter →
-  poll path).</li>
+<li><code>cmd/agc/internal/provisioner/podwaiter_internal_test.go</code> (white-box, <code>package provisioner</code>): drive <code>onUpdate</code>/<code>onDelete</code> directly against a fake <code>client.Reader</code> for the initial-state read.
+  Cases: terminal-before-wait, event-driven Succeeded/Failed-Evicted, delete→Succeeded, ctx cancel, NotFound-then-terminal (no premature success), multiple concurrent waiters.</li>
+<li><code>cmd/agc/internal/controller/integration/</code> (envtest, <code>integration</code> tag): a focused test that runs a manager with an <code>InformerPodWaiter</code>, creates a pod, transitions it to a terminal phase, and asserts <code>WaitForCompletion</code> returns promptly with the right phase — proving the real informer wiring.</li>
+<li>Existing fake-client provisioner tests stay green unchanged (nil Waiter → poll path).</li>
 </ul>
 <h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
 <ul>
-<li>A pod-completion-latency metric (the 5 s → event-driven win is the deliverable;
-  a histogram can follow if operators want to track it).</li>
-<li>Q63 (RunnerGroup pod watch for <code>ActiveSessions</code> self-heal) — paired but
-  separate; this change does not touch the RunnerGroup controller.</li>
+<li>A pod-completion-latency metric (the 5 s → event-driven win is the deliverable; a histogram can follow if operators want to track it).</li>
+<li>Q63 (RunnerGroup pod watch for <code>ActiveSessions</code> self-heal) — paired but separate; this change does not touch the RunnerGroup controller.</li>
 </ul>
 
 

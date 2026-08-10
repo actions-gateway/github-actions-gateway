@@ -2731,9 +2731,8 @@
 
 
 <h1 id="q506--audit-githubcom-hardcoded-where-a-ghes-endpoint-belongs">Q506 — Audit <code>github.com</code> hardcoded where a GHES endpoint belongs<a class="headerlink" href="#q506--audit-githubcom-hardcoded-where-a-ghes-endpoint-belongs" title="Permanent link">&para;</a></h1>
-<p><strong>Status: DONE — Option A shipped 2026-07-31.</strong> The audit below stands as written;
-this header records what was decided and built on top of it. The decision was
-<strong>Option A, fix the class</strong>, taken by the maintainer.</p>
+<p><strong>Status: DONE — Option A shipped 2026-07-31.</strong> The audit below stands as written; this header records what was decided and built on top of it.
+The decision was <strong>Option A, fix the class</strong>, taken by the maintainer.</p>
 <table>
 <thead>
 <tr>
@@ -2766,38 +2765,23 @@ this header records what was decided and built on top of it. The decision was
 </table>
 <p>Two things the build learned that the audit could not:</p>
 <ul>
-<li><strong>The #3 remedy is platform-gated, not tenant-self-serve.</strong> <code>destinationCIDRs</code> is
-  bounded by the GMC's <code>--allowed-egress-cidrs</code> allowlist, so clearing
-  <code>GitHubEgressIncomplete</code> needs a platform admin's entry. The integration test had
-  to pick a CIDR inside the suite's allowlist to clear the condition — the same
-  constraint the audit noted for <code>destinationFQDNs</code> under #2 applies here.</li>
-<li><strong>An envtest watch assertion is vacuous unless the pool is driven Ready first.</strong> A
-  not-ready proxy short-requeues every 15 s, and that alone carried the new gateway
-  into the reconcile — the first draft of the #2 integration test passed with both
-  watch edges deleted. Disabling the suite's 2 s resync was not enough; the Q326
-  quota-watch test had already solved this by writing the Deployment status.</li>
+<li><strong>The #3 remedy is platform-gated, not tenant-self-serve.</strong> <code>destinationCIDRs</code> is bounded by the GMC's <code>--allowed-egress-cidrs</code> allowlist, so clearing <code>GitHubEgressIncomplete</code> needs a platform admin's entry.
+  The integration test had to pick a CIDR inside the suite's allowlist to clear the condition — the same constraint the audit noted for <code>destinationFQDNs</code> under #2 applies here.</li>
+<li><strong>An envtest watch assertion is vacuous unless the pool is driven Ready first.</strong> A not-ready proxy short-requeues every 15 s, and that alone carried the new gateway into the reconcile — the first draft of the #2 integration test passed with both watch edges deleted.
+  Disabling the suite's 2 s resync was not enough; the Q326 quota-watch test had already solved this by writing the Deployment status.</li>
 </ul>
-<p><strong>Every finding below is from source inspection only.</strong> Nothing was run against a
-GHES appliance. Read the severities as "what the code says will happen", and see
-<a href="#what-this-audit-did-not-verify">What this audit did not verify</a> — the #1
-measurement named there is now covered by the integration tests, but the end-to-end
-GHES behaviour is still unobserved.</p>
+<p><strong>Every finding below is from source inspection only.</strong> Nothing was run against a GHES appliance.
+Read the severities as "what the code says will happen", and see <a href="#what-this-audit-did-not-verify">What this audit did not verify</a> — the #1 measurement named there is now covered by the integration tests, but the end-to-end GHES behaviour is still unobserved.</p>
 <h2 id="what-q504-fixed-and-what-it-implied">What Q504 fixed, and what it implied<a class="headerlink" href="#what-q504-fixed-and-what-it-implied" title="Permanent link">&para;</a></h2>
-<p><a href="../../../operations/upgrade/#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">Q504</a>
-fixed one call: the eviction/preemption <code>rerun-failed-jobs</code> request read a
-provisioner field nothing assigned and fell back to <code>https://api.github.com</code>, so on
-GHES it posted a valid installation token to a host that had never issued it. The
-fix routes that call through <code>githubapp.ResolveAPIBaseURL</code>, the same helper the
-token exchange uses.</p>
-<p>Q506 was filed on the suspicion that the same shape recurs elsewhere. It does — but
-not where the Queue row guessed. The row named <code>githubEgressFQDNs</code> and "the noproxy
-guard list". <code>githubEgressFQDNs</code> is a real defect; the noproxy guard is not (its
-callers already resolve the GHES host). Meanwhile the resolution Q504 leaned
-on — <code>GITHUB_API_BASE_URL</code> — has <strong>no supported way to be set</strong> on a
-GMC-provisioned Actions Gateway Controller (AGC).</p>
+<p><a href="../../../operations/upgrade/#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">Q504</a> fixed one call: the eviction/preemption <code>rerun-failed-jobs</code> request read a provisioner field nothing assigned and fell back to <code>https://api.github.com</code>, so on GHES it posted a valid installation token to a host that had never issued it.
+The fix routes that call through <code>githubapp.ResolveAPIBaseURL</code>, the same helper the token exchange uses.</p>
+<p>Q506 was filed on the suspicion that the same shape recurs elsewhere.
+It does — but not where the Queue row guessed.
+The row named <code>githubEgressFQDNs</code> and "the noproxy guard list". <code>githubEgressFQDNs</code> is a real defect; the noproxy guard is not (its callers already resolve the GHES host).
+Meanwhile the resolution Q504 leaned on — <code>GITHUB_API_BASE_URL</code> — has <strong>no supported way to be set</strong> on a GMC-provisioned Actions Gateway Controller (AGC).</p>
 <h2 id="the-inventory">The inventory<a class="headerlink" href="#the-inventory" title="Permanent link">&para;</a></h2>
-<p>Every <code>github.com</code> / <code>api.github.com</code> / <code>codeload.github.com</code> occurrence outside
-<code>vendor/</code>, classified. Three real defects, two ambiguities, the rest legitimate.</p>
+<p>Every <code>github.com</code> / <code>api.github.com</code> / <code>codeload.github.com</code> occurrence outside <code>vendor/</code>, classified.
+Three real defects, two ambiguities, the rest legitimate.</p>
 <table>
 <thead>
 <tr>
@@ -2847,128 +2831,75 @@ GMC-provisioned Actions Gateway Controller (AGC).</p>
 </tbody>
 </table>
 <h3 id="1-the-agcs-github-api-base-url-is-never-derived-from-githuburl">1. The AGC's GitHub API base URL is never derived from <code>gitHubURL</code><a class="headerlink" href="#1-the-agcs-github-api-base-url-is-never-derived-from-githuburl" title="Permanent link">&para;</a></h3>
-<p><strong>The largest finding, and the one Q506 did not anticipate.</strong> The AGC resolves its
-REST API base from the <code>GITHUB_API_BASE_URL</code> env var, defaulting to
-<code>https://api.github.com</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth.go"><code>githubapp/auth.go:202</code></a>). The
-Gateway Manager Controller (GMC) never sets it. Both builders inject
-<code>GITHUB_ORG_URL</code> from <code>spec.gitHubURL</code> and stop there —
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go"><code>builder.go:642</code></a> (v1) and
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go:383</code></a>
-(v2). There is no CRD field for it, no Helm value, and no other injection site.</p>
-<p>The only route to that variable is <code>AGC_EXTRA_GITHUB_API_BASE_URL</code> behind the GMC's
-<code>--allow-agc-extra-env</code> flag, whose own help text reads <em>"Intended for testing
-only"</em> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/flags.go"><code>flags.go:95</code></a>) and which
-<a href="../../../operations/security-operations/#github-api-base-url-must-be-https">security-operations.md</a>
-tells operators not to use in production.</p>
-<p>So on a GHES gateway the App JWT is POSTed to
-<code>https://api.github.com/app/installations/&lt;id&gt;/access_tokens</code> — an App that host
-has never heard of. Every token mint fails, on both acquisition tiers, before any
-job is acquired.</p>
+<p><strong>The largest finding, and the one Q506 did not anticipate.</strong> The AGC resolves its REST API base from the <code>GITHUB_API_BASE_URL</code> env var, defaulting to <code>https://api.github.com</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth.go"><code>githubapp/auth.go:202</code></a>).
+The Gateway Manager Controller (GMC) never sets it.
+Both builders inject <code>GITHUB_ORG_URL</code> from <code>spec.gitHubURL</code> and stop there — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go"><code>builder.go:642</code></a> (v1) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go:383</code></a> (v2).
+There is no CRD field for it, no Helm value, and no other injection site.</p>
+<p>The only route to that variable is <code>AGC_EXTRA_GITHUB_API_BASE_URL</code> behind the GMC's <code>--allow-agc-extra-env</code> flag, whose own help text reads <em>"Intended for testing only"</em> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/flags.go"><code>flags.go:95</code></a>) and which <a href="../../../operations/security-operations/#github-api-base-url-must-be-https">security-operations.md</a> tells operators not to use in production.</p>
+<p>So on a GHES gateway the App JWT is POSTed to <code>https://api.github.com/app/installations/&lt;id&gt;/access_tokens</code> — an App that host has never heard of.
+Every token mint fails, on both acquisition tiers, before any job is acquired.</p>
 <p>Two consequences worth separating:</p>
 <ul>
-<li><strong>The runner-registration path already gets this right and disagrees.</strong>
-  <code>GithubRegistrar.apiBase()</code> derives <code>https://&lt;ghes-host&gt;/api/v3</code> from <code>OrgURL</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go:383</code></a>),
-  and the scale-set tier derives the same base from <code>gitHubURL</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>runnerset_scaleset.go:260</code></a>).
-  Three components answer "which GitHub API?" from two different sources. Q504
-  collapsed two of them; the env-var source is still unbridged to <code>gitHubURL</code>.</li>
-<li><strong>Shipped docs already assume the variable is set.</strong>
-  <a href="../../../operations/upgrade/#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">upgrade.md</a>
-  scopes Q504's fix to <em>"any deployment that sets <code>GITHUB_API_BASE_URL</code> — that is,
-  every GitHub Enterprise Server install"</em>, and
-  <a href="../../../operations/tenant-onboarding/">tenant-onboarding.md</a> lists a GHES URL as a
-  supported <code>spec.gitHubURL</code>. If this finding holds, Q504's fix cannot reach a
-  GMC-provisioned GHES tenant, because that tenant cannot get past token exchange.</li>
+<li><strong>The runner-registration path already gets this right and disagrees.</strong> <code>GithubRegistrar.apiBase()</code> derives <code>https://&lt;ghes-host&gt;/api/v3</code> from <code>OrgURL</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go:383</code></a>), and the scale-set tier derives the same base from <code>gitHubURL</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>runnerset_scaleset.go:260</code></a>).
+  Three components answer "which GitHub API?" from two different sources.
+  Q504 collapsed two of them; the env-var source is still unbridged to <code>gitHubURL</code>.</li>
+<li><strong>Shipped docs already assume the variable is set.</strong> <a href="../../../operations/upgrade/#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">upgrade.md</a> scopes Q504's fix to <em>"any deployment that sets <code>GITHUB_API_BASE_URL</code> — that is, every GitHub Enterprise Server install"</em>, and <a href="../../../operations/tenant-onboarding/">tenant-onboarding.md</a> lists a GHES URL as a supported <code>spec.gitHubURL</code>.
+  If this finding holds, Q504's fix cannot reach a GMC-provisioned GHES tenant, because that tenant cannot get past token exchange.</li>
 </ul>
-<p><strong>Blast radius: total, for every GHES tenant.</strong> Not a degraded mode — no job is
-ever acquired. Nothing the operator can configure changes it.</p>
+<p><strong>Blast radius: total, for every GHES tenant.</strong> Not a degraded mode — no job is ever acquired.
+Nothing the operator can configure changes it.</p>
 <h3 id="2-githubegressfqdns-omits-the-ghes-host-on-two-surfaces">2. <code>githubEgressFQDNs</code> omits the GHES host, on two surfaces<a class="headerlink" href="#2-githubegressfqdns-omits-the-ghes-host-on-two-surfaces" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_fqdn.go"><code>githubEgressFQDNs</code></a> is a
-package-level <code>[]string</code> of six public hostnames. It feeds:</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_fqdn.go"><code>githubEgressFQDNs</code></a> is a package-level <code>[]string</code> of six public hostnames.
+It feeds:</p>
 <ul>
 <li>the FQDN-mode CNI policy (Cilium / Calico / GKE), via <code>egressFQDNs</code>; and</li>
-<li>the proxy CONNECT allowlist <code>PROXY_ALLOWED_HOST_SUFFIXES</code>, via
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>proxyAllowlistEnv</code></a>.</li>
+<li>the proxy CONNECT allowlist <code>PROXY_ALLOWED_HOST_SUFFIXES</code>, via <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>proxyAllowlistEnv</code></a>.</li>
 </ul>
-<p>Neither can see a GHES host. The <code>EgressProxy</code> carries no <code>gitHubURL</code> of its own —
-that lives on the referring <code>ActionsGateway</code> — and the controller never resolves
-the referrers, so a GHES tenant in an FQDN egress mode gets an allowlist naming six
-hosts none of its traffic uses.</p>
-<p><strong>Blast radius: total for GHES tenants that use an <code>EgressProxy</code> in an FQDN mode,
-zero otherwise.</strong> The proxy is optional (<code>spec.proxy</code> on v1, <code>defaultProxyRef</code> on
-v2 are both <code>+optional</code>), and FQDN is not the default mode, so this is the
-narrowest of the three.</p>
-<p><strong>The workaround is real but not tenant-self-serve.</strong> <code>spec.destinationFQDNs</code> would
-carry the GHES host, but the field is documented as <em>"EXTRA, </em><em>non-GitHub</em><em> DNS host
-suffixes"</em> and is gated by the platform-owned <code>--allowed-egress-fqdns</code> allowlist
-(<a href="../q242-g1-proxy-destination-allowlist/">Q242 G.1</a>). A tenant cannot add
-its own GHES host; a platform admin must allowlist it, into a field whose stated
-purpose it contradicts.</p>
+<p>Neither can see a GHES host.
+The <code>EgressProxy</code> carries no <code>gitHubURL</code> of its own — that lives on the referring <code>ActionsGateway</code> — and the controller never resolves the referrers, so a GHES tenant in an FQDN egress mode gets an allowlist naming six hosts none of its traffic uses.</p>
+<p><strong>Blast radius: total for GHES tenants that use an <code>EgressProxy</code> in an FQDN mode, zero otherwise.</strong> The proxy is optional (<code>spec.proxy</code> on v1, <code>defaultProxyRef</code> on v2 are both <code>+optional</code>), and FQDN is not the default mode, so this is the narrowest of the three.</p>
+<p><strong>The workaround is real but not tenant-self-serve.</strong> <code>spec.destinationFQDNs</code> would carry the GHES host, but the field is documented as <em>"EXTRA, </em><em>non-GitHub</em><em> DNS host suffixes"</em> and is gated by the platform-owned <code>--allowed-egress-fqdns</code> allowlist (<a href="../q242-g1-proxy-destination-allowlist/">Q242 G.1</a>).
+A tenant cannot add its own GHES host; a platform admin must allowlist it, into a field whose stated purpose it contradicts.</p>
 <h3 id="3-cidr-mode-programs-public-githubs-ranges-which-never-contain-ghes">3. CIDR mode programs public GitHub's ranges, which never contain GHES<a class="headerlink" href="#3-cidr-mode-programs-public-githubs-ranges-which-never-contain-ghes" title="Permanent link">&para;</a></h3>
-<p>The default <code>egressPolicyMode</code> is <code>CIDR</code>. In it, the <code>IPRangeReconciler</code> fetches
-<code>https://api.github.com/meta</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go"><code>ipranges.go:133</code></a>) and programs
-the merged <code>api</code>/<code>actions</code>/<code>web</code> ranges as the proxy pool's egress <code>ipBlock</code>. A
-GHES appliance sits on the customer's own address space and appears in none of
-them, so the NetworkPolicy denies the proxy's traffic to the one host it exists to
-reach.</p>
-<p><strong>Blast radius: total for GHES tenants that use an <code>EgressProxy</code>, which in the
-default mode is the likeliest GHES-plus-proxy combination.</strong> Same platform-gated
-workaround as #2, via <code>destinationCIDRs</code>.</p>
-<p>This one has <strong>no clean code fix</strong>. A GHES appliance's address is knowable only to
-the operator. Pointing the fetcher at a GHES <code>/meta</code> is not a mechanical swap: GHES
-serves that endpoint, but it describes that appliance's own configuration, and
-whether those ranges are the right allowlist is a design question, not a
-substitution. Treat #3 as a documentation-and-validation problem regardless of
-which path is chosen for #1 and #2.</p>
+<p>The default <code>egressPolicyMode</code> is <code>CIDR</code>.
+In it, the <code>IPRangeReconciler</code> fetches <code>https://api.github.com/meta</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go"><code>ipranges.go:133</code></a>) and programs the merged <code>api</code>/<code>actions</code>/<code>web</code> ranges as the proxy pool's egress <code>ipBlock</code>.
+A GHES appliance sits on the customer's own address space and appears in none of them, so the NetworkPolicy denies the proxy's traffic to the one host it exists to reach.</p>
+<p><strong>Blast radius: total for GHES tenants that use an <code>EgressProxy</code>, which in the default mode is the likeliest GHES-plus-proxy combination.</strong> Same platform-gated workaround as #2, via <code>destinationCIDRs</code>.</p>
+<p>This one has <strong>no clean code fix</strong>.
+A GHES appliance's address is knowable only to the operator.
+Pointing the fetcher at a GHES <code>/meta</code> is not a mechanical swap: GHES serves that endpoint, but it describes that appliance's own configuration, and whether those ranges are the right allowlist is a design question, not a substitution.
+Treat #3 as a documentation-and-validation problem regardless of which path is chosen for #1 and #2.</p>
 <h3 id="4-two-different-detectors-answer-is-this-public-github">4. Two different detectors answer "is this public GitHub?"<a class="headerlink" href="#4-two-different-detectors-answer-is-this-public-github" title="Permanent link">&para;</a></h3>
-<p><code>isHostedServer</code> tests <code>strings.Contains(githubURL, "github.com")</code> over the <strong>whole
-URL including its path</strong>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go:390</code></a>),
-so a GHES org path literally named <code>github.com</code> — <code>https://ghes.corp/github.com</code> —
-misclassifies as public SaaS. <code>scaleSetAPIBase</code> answers the same question by
-parsing the URL and switching on <code>u.Host</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>runnerset_scaleset.go:260</code></a>),
-which has no such hole.</p>
-<p>Low severity on its own — the triggering org name is contrived. It matters as a
-symptom: the repo has no single "resolve this gateway's GitHub API base" helper, so
-each caller invented one. Any fix for #1 should collapse all three.</p>
+<p><code>isHostedServer</code> tests <code>strings.Contains(githubURL, "github.com")</code> over the <strong>whole URL including its path</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go:390</code></a>), so a GHES org path literally named <code>github.com</code> — <code>https://ghes.corp/github.com</code> — misclassifies as public SaaS. <code>scaleSetAPIBase</code> answers the same question by parsing the URL and switching on <code>u.Host</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>runnerset_scaleset.go:260</code></a>), which has no such hole.</p>
+<p>Low severity on its own — the triggering org name is contrived.
+It matters as a symptom: the repo has no single "resolve this gateway's GitHub API base" helper, so each caller invented one.
+Any fix for #1 should collapse all three.</p>
 <h3 id="5-the-noproxy-guard-is-not-a-defect--the-queue-rows-claim-doesnt-hold">5. The noproxy guard is not a defect — the Queue row's claim doesn't hold<a class="headerlink" href="#5-the-noproxy-guard-is-not-a-defect--the-queue-rows-claim-doesnt-hold" title="Permanent link">&para;</a></h3>
-<p><code>noproxy.GitHubHosts</code> is a public-only list, but it is never the whole protected
-set. Both callers add the tenant's GHES host:</p>
+<p><code>noproxy.GitHubHosts</code> is a public-only list, but it is never the whole protected set.
+Both callers add the tenant's GHES host:</p>
 <ul>
-<li>v1 parses <code>spec.gitHubURL</code> and appends its hostname
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go"><code>actionsgateway_webhook.go:402</code></a>).</li>
-<li>v2 resolves it from every referrer, in both directions, through the uncached API
-  reader
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/noproxy_referrers.go"><code>noproxy_referrers.go</code></a>) —
-  this was Q322, filed precisely as the GHES residual of the original guard.</li>
+<li>v1 parses <code>spec.gitHubURL</code> and appends its hostname (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go"><code>actionsgateway_webhook.go:402</code></a>).</li>
+<li>v2 resolves it from every referrer, in both directions, through the uncached API reader (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/noproxy_referrers.go"><code>noproxy_referrers.go</code></a>) — this was Q322, filed precisely as the GHES residual of the original guard.</li>
 </ul>
-<p>The package doc says so explicitly. The residual is the opposite of the row's
-claim: a GHES tenant is <em>also</em> barred from listing <code>github.com</code> in <code>noProxyCIDRs</code>,
-which is over-strict in the fail-safe direction. Retire the claim rather than
-carrying it forward.</p>
+<p>The package doc says so explicitly.
+The residual is the opposite of the row's claim: a GHES tenant is <em>also</em> barred from listing <code>github.com</code> in <code>noProxyCIDRs</code>, which is over-strict in the fail-safe direction.
+Retire the claim rather than carrying it forward.</p>
 <h3 id="6-legitimately-githubcom">6. Legitimately <code>github.com</code><a class="headerlink" href="#6-legitimately-githubcom" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Chart and CRD <code>actions-gateway.github.com</code></strong> — the v1 API group name. A DNS-shaped
-  identifier, not an endpoint.</li>
-<li><strong><code>cmd/agc/names/names.go:49</code> <code>ghcr.io/actions/actions-runner</code></strong> — the worker image
-  default, overridable via <code>WorkerImage</code>. An image registry, not an API endpoint.
-  Adjacent: an air-gapped GHES install cannot pull it. Out of scope here.</li>
-<li><strong><code>cmd/probe/main.go:79,100</code></strong> — investigation probes deliberately aimed at live
-  public GitHub.</li>
+<li><strong>Chart and CRD <code>actions-gateway.github.com</code></strong> — the v1 API group name.
+  A DNS-shaped identifier, not an endpoint.</li>
+<li><strong><code>cmd/agc/names/names.go:49</code> <code>ghcr.io/actions/actions-runner</code></strong> — the worker image default, overridable via <code>WorkerImage</code>.
+  An image registry, not an API endpoint.
+  Adjacent: an air-gapped GHES install cannot pull it.
+  Out of scope here.</li>
+<li><strong><code>cmd/probe/main.go:79,100</code></strong> — investigation probes deliberately aimed at live public GitHub.</li>
 <li><strong>Test fixtures and specs</strong> — <code>test/fakegithub</code> and the <code>cmd/gmc/test/e2e</code> suite.</li>
-<li><strong>CRD field docs and godoc examples</strong> (<code>https://github.com/my-org</code>) — documentation,
-  and each already names the GHES form alongside.</li>
+<li><strong>CRD field docs and godoc examples</strong> (<code>https://github.com/my-org</code>) — documentation, and each already names the GHES form alongside.</li>
 <li><strong>Comments</strong> in <code>cmd/agc/main.go:525</code> and <code>transport/trustpool.go:31</code>.</li>
 </ul>
-<p>One adjacent gap worth naming so it is not rediscovered as part of this class:
-<code>BuildProxyTrustPool</code> builds system roots plus the proxy CA
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/trustpool.go"><code>trustpool.go</code></a>). A GHES
-appliance fronted by a private CA is not trusted by that pool. That is a
-certificate-trust gap, not a hardcoded endpoint, and needs its own item if the
-project commits to GHES.</p>
+<p>One adjacent gap worth naming so it is not rediscovered as part of this class: <code>BuildProxyTrustPool</code> builds system roots plus the proxy CA (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/trustpool.go"><code>trustpool.go</code></a>).
+A GHES appliance fronted by a private CA is not trusted by that pool.
+That is a certificate-trust gap, not a hardcoded endpoint, and needs its own item if the project commits to GHES.</p>
 <h2 id="the-open-decision">The open decision<a class="headerlink" href="#the-open-decision" title="Permanent link">&para;</a></h2>
 <p>The three defects do not share a fix, so the choice is not one lever.</p>
 <table>
@@ -3007,110 +2938,61 @@ project commits to GHES.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Option A — fix the class.</strong> #1 is genuinely small: the derivation already exists
-twice (<code>scaleSetAPIBase</code>, <code>apiBase</code>), so this is one shared helper plus two builder
-call sites, and it collapses #4 on the way through. #2 is moderate — the resolution
-logic exists as <code>referrerGitHubHosts</code> in the v2 webhook, but moving it into a
-reconcile adds a watch edge (a gateway's <code>gitHubURL</code> change must requeue the
-proxy). #3 has no code answer at all, so even Option A ends with a documented
-operator obligation. Note that #1 is an operator-visible behaviour change: a new
-env var on every AGC Deployment means every AGC pod restarts on the rollout.</p>
-<p><strong>Option B — document GHES as a bounded limitation.</strong> Cheap to write, and honest
-about today's code. The cost is not the page — it is the retraction. GHES is
-currently presented as supported in
-<a href="../../../operations/tenant-onboarding/">tenant-onboarding.md</a>, in
-<a href="../../../design/02-architecture/">02-architecture.md</a> ("Both hosted github.com and
-GitHub Enterprise Server (GHES) endpoints are supported"), and implicitly in
-Q504's upgrade note, which addresses GHES operators as an existing audience. B
-means walking all three back, and doing so for a platform whose registration path
-was deliberately built to handle it.</p>
-<p><strong>Option C — split by decidability, and recommended.</strong> Fix what the code can
-determine (#1, #2, #4 — all from <code>gitHubURL</code>, which the operator already supplies),
-document what it cannot (#3 — the appliance's address space), and add a validation
-signal so the undecidable part fails loudly rather than as a timeout. This is not a
-compromise between A and B: it is the observation that #3 is a different kind of
-problem from #1 and #2, and grouping all three under one verb is what makes the
-decision look harder than it is.</p>
-<p><strong>The judgement C rests on, stated so it can be disagreed with:</strong> #1 is a small,
-well-precedented change with a large payoff, and shipping it alone converts GHES
-from "cannot start" to "starts, and needs egress ranges configured". If the project
-is willing to say that sentence, C is right. If it is not willing to support GHES
-at all, B is right and #1 should not be built — but then the retraction is the
-work, and it should be scoped as such.</p>
-<p><strong>Sequencing, whichever path wins:</strong> #1 is a prerequisite for the others being
-observable. Until token exchange reaches the GHES host, no GHES tenant gets far
-enough to hit an egress-allowlist problem, so fixing #2 or #3 first is unverifiable.</p>
+<p><strong>Option A — fix the class.</strong> #1 is genuinely small: the derivation already exists twice (<code>scaleSetAPIBase</code>, <code>apiBase</code>), so this is one shared helper plus two builder call sites, and it collapses #4 on the way through. #2 is moderate — the resolution logic exists as <code>referrerGitHubHosts</code> in the v2 webhook, but moving it into a reconcile adds a watch edge (a gateway's <code>gitHubURL</code> change must requeue the proxy). #3 has no code answer at all, so even Option A ends with a documented operator obligation.
+Note that #1 is an operator-visible behaviour change: a new env var on every AGC Deployment means every AGC pod restarts on the rollout.</p>
+<p><strong>Option B — document GHES as a bounded limitation.</strong> Cheap to write, and honest about today's code.
+The cost is not the page — it is the retraction.
+GHES is currently presented as supported in <a href="../../../operations/tenant-onboarding/">tenant-onboarding.md</a>, in <a href="../../../design/02-architecture/">02-architecture.md</a> ("Both hosted github.com and GitHub Enterprise Server (GHES) endpoints are supported"), and implicitly in Q504's upgrade note, which addresses GHES operators as an existing audience.
+B means walking all three back, and doing so for a platform whose registration path was deliberately built to handle it.</p>
+<p><strong>Option C — split by decidability, and recommended.</strong> Fix what the code can determine (#1, #2, #4 — all from <code>gitHubURL</code>, which the operator already supplies), document what it cannot (#3 — the appliance's address space), and add a validation signal so the undecidable part fails loudly rather than as a timeout.
+This is not a compromise between A and B: it is the observation that #3 is a different kind of problem from #1 and #2, and grouping all three under one verb is what makes the decision look harder than it is.</p>
+<p><strong>The judgement C rests on, stated so it can be disagreed with:</strong> #1 is a small, well-precedented change with a large payoff, and shipping it alone converts GHES from "cannot start" to "starts, and needs egress ranges configured".
+If the project is willing to say that sentence, C is right.
+If it is not willing to support GHES at all, B is right and #1 should not be built — but then the retraction is the work, and it should be scoped as such.</p>
+<p><strong>Sequencing, whichever path wins:</strong> #1 is a prerequisite for the others being observable.
+Until token exchange reaches the GHES host, no GHES tenant gets far enough to hit an egress-allowlist problem, so fixing #2 or #3 first is unverifiable.</p>
 <h2 id="acceptance">Acceptance<a class="headerlink" href="#acceptance" title="Permanent link">&para;</a></h2>
 <h3 id="if-option-a-or-c">If Option A or C<a class="headerlink" href="#if-option-a-or-c" title="Permanent link">&para;</a></h3>
 <ul>
-<li>One helper resolves a gateway's GitHub API base from <code>spec.gitHubURL</code>, and
-  <code>GithubRegistrar.apiBase</code>, <code>scaleSetAPIBase</code>, and the GMC's env injection all call
-  it. No second detector remains (closes #4).</li>
-<li>The GMC sets <code>GITHUB_API_BASE_URL</code> on the AGC Deployment on both the v1 and v2
-  paths, derived from <code>gitHubURL</code>. A <code>github.com</code> gateway keeps the value it has
-  today, so no public-SaaS deployment changes behaviour.</li>
-<li>The testing-only <code>AGC_EXTRA_*</code> override still wins on conflict, matching how
-  <code>GITHUB_ORG_URL</code> and the tracing vars already behave — the e2e suite points the
-  AGC at <code>fakegithub</code> through it.</li>
-<li>An integration test asserts a GHES <code>gitHubURL</code> produces an AGC Deployment whose
-  <code>GITHUB_API_BASE_URL</code> addresses that host and not <code>api.github.com</code>. It must fail
-  if the injection is removed — a test that passes on a missing env var is the
-  negative-assertion trap this repo already has a rule about.</li>
-<li><strong>Option A only:</strong> the FQDN allowlist and CONNECT suffix list carry every
-  referrer's <code>gitHubURL</code> host, and a change to a referrer's <code>gitHubURL</code> requeues
-  the <code>EgressProxy</code>.</li>
-<li>Operator docs updated per the doc-update-matrix: onboarding states what a GHES
-  tenant must supply, and the upgrade notes describe the new env var on AGC
-  Deployments (a rollout restart).</li>
+<li>One helper resolves a gateway's GitHub API base from <code>spec.gitHubURL</code>, and <code>GithubRegistrar.apiBase</code>, <code>scaleSetAPIBase</code>, and the GMC's env injection all call it.
+  No second detector remains (closes #4).</li>
+<li>The GMC sets <code>GITHUB_API_BASE_URL</code> on the AGC Deployment on both the v1 and v2 paths, derived from <code>gitHubURL</code>.
+  A <code>github.com</code> gateway keeps the value it has today, so no public-SaaS deployment changes behaviour.</li>
+<li>The testing-only <code>AGC_EXTRA_*</code> override still wins on conflict, matching how <code>GITHUB_ORG_URL</code> and the tracing vars already behave — the e2e suite points the AGC at <code>fakegithub</code> through it.</li>
+<li>An integration test asserts a GHES <code>gitHubURL</code> produces an AGC Deployment whose <code>GITHUB_API_BASE_URL</code> addresses that host and not <code>api.github.com</code>.
+  It must fail if the injection is removed — a test that passes on a missing env var is the negative-assertion trap this repo already has a rule about.</li>
+<li><strong>Option A only:</strong> the FQDN allowlist and CONNECT suffix list carry every referrer's <code>gitHubURL</code> host, and a change to a referrer's <code>gitHubURL</code> requeues the <code>EgressProxy</code>.</li>
+<li>Operator docs updated per the doc-update-matrix: onboarding states what a GHES tenant must supply, and the upgrade notes describe the new env var on AGC Deployments (a rollout restart).</li>
 </ul>
 <h3 id="if-option-b">If Option B<a class="headerlink" href="#if-option-b" title="Permanent link">&para;</a></h3>
 <ul>
-<li>One operator-facing page states plainly that GHES is not supported, names which
-  of the three surfaces breaks and how each presents, and is linked from
-  onboarding.</li>
-<li>The GHES <code>gitHubURL</code> example is removed from
-  <a href="../../../operations/tenant-onboarding/">tenant-onboarding.md</a>, and the GHES support
-  sentence in <a href="../../../design/02-architecture/">02-architecture.md</a> is narrowed to the
-  registration path it actually describes.</li>
-<li>Q504's upgrade note is amended — it currently addresses GHES operators as a
-  supported audience.</li>
-<li>Admission rejects a GHES <code>gitHubURL</code> outright, or the docs say why it is admitted
-  and then fails at runtime. Admitting a configuration documented as unsupported,
-  silently, is the worse of the two.</li>
+<li>One operator-facing page states plainly that GHES is not supported, names which of the three surfaces breaks and how each presents, and is linked from onboarding.</li>
+<li>The GHES <code>gitHubURL</code> example is removed from <a href="../../../operations/tenant-onboarding/">tenant-onboarding.md</a>, and the GHES support sentence in <a href="../../../design/02-architecture/">02-architecture.md</a> is narrowed to the registration path it actually describes.</li>
+<li>Q504's upgrade note is amended — it currently addresses GHES operators as a supported audience.</li>
+<li>Admission rejects a GHES <code>gitHubURL</code> outright, or the docs say why it is admitted and then fails at runtime.
+  Admitting a configuration documented as unsupported, silently, is the worse of the two.</li>
 </ul>
 <h3 id="common-to-every-path">Common to every path<a class="headerlink" href="#common-to-every-path" title="Permanent link">&para;</a></h3>
 <ul>
 <li>The Q506 Queue row's noproxy claim is retired, not carried forward (#5).</li>
 <li>
-<h1 id="3s-operator-obligation-is-documented-wherever-it-lands-a-ghes-tenant-using-an">3's operator obligation is documented wherever it lands: a GHES tenant using an<a class="headerlink" href="#3s-operator-obligation-is-documented-wherever-it-lands-a-ghes-tenant-using-an" title="Permanent link">&para;</a></h1>
-<code>EgressProxy</code> must have its appliance's ranges allowlisted, whichever egress mode
-  it runs.</li>
+<h1 id="3s-operator-obligation-is-documented-wherever-it-lands-a-ghes-tenant-using-an-egressproxy-must-have-its-appliances-ranges-allowlisted-whichever-egress-mode-it-runs">3's operator obligation is documented wherever it lands: a GHES tenant using an <code>EgressProxy</code> must have its appliance's ranges allowlisted, whichever egress mode it runs.<a class="headerlink" href="#3s-operator-obligation-is-documented-wherever-it-lands-a-ghes-tenant-using-an-egressproxy-must-have-its-appliances-ranges-allowlisted-whichever-egress-mode-it-runs" title="Permanent link">&para;</a></h1>
+</li>
 </ul>
 <h2 id="what-this-audit-did-not-verify">What this audit did not verify<a class="headerlink" href="#what-this-audit-did-not-verify" title="Permanent link">&para;</a></h2>
-<p>Source inspection only — no GHES appliance was involved, and this repo's rule is to
-treat an investigation finding as unverified until it is confirmed end to end.</p>
+<p>Source inspection only — no GHES appliance was involved, and this repo's rule is to treat an investigation finding as unverified until it is confirmed end to end.</p>
 <p>The specific claims that carry the most weight and the least evidence:</p>
 <ul>
-<li><strong>#1 fails at token exchange on GHES.</strong> Inferred from the env-var default plus the
-  absence of any injection site. Not observed.</li>
-<li><strong>#2 and #3 deny GHES traffic.</strong> Inferred from the emitted policy contents. Not
-  observed against a live CNI.</li>
+<li><strong>#1 fails at token exchange on GHES.</strong> Inferred from the env-var default plus the absence of any injection site.
+  Not observed.</li>
+<li><strong>#2 and #3 deny GHES traffic.</strong> Inferred from the emitted policy contents.
+  Not observed against a live CNI.</li>
 </ul>
-<p><strong>Cheapest confirming measurement for #1</strong>, and the one to run before committing to
-any option: apply a <code>gitHubURL</code> pointing at a non-<code>github.com</code> host on a kind
-cluster and read the resulting AGC Deployment's env. If <code>GITHUB_API_BASE_URL</code> is
-absent, #1 holds without needing a real GHES appliance — the defect is the missing
-injection, not anything the appliance does. An envtest against the existing
-<code>cmd/gmc/internal/controller/integration/</code> suites reaches the same evidence without
-a cluster.</p>
-<p><strong>What the fix did and did not verify.</strong> That envtest measurement is now
-<code>TestGMC_GHESGateway_AGCAddressesTheAppliance</code> and its v2 twin, so the <em>injection</em>
-is proven against a real apiserver, and the #4 detector defect was confirmed
-end-to-end (restoring the substring test made a GHES-org registration escape to
-real <code>api.github.com</code> and come back <code>401 Bad credentials</code>). Still unobserved: any
-call against an actual GHES appliance — token exchange, registration, or egress —
-and the CIDR-mode denial of #3, which is inferred from the emitted policy contents
-rather than watched on a live CNI.</p>
+<p><strong>Cheapest confirming measurement for #1</strong>, and the one to run before committing to any option: apply a <code>gitHubURL</code> pointing at a non-<code>github.com</code> host on a kind cluster and read the resulting AGC Deployment's env.
+If <code>GITHUB_API_BASE_URL</code> is absent, #1 holds without needing a real GHES appliance — the defect is the missing injection, not anything the appliance does.
+An envtest against the existing <code>cmd/gmc/internal/controller/integration/</code> suites reaches the same evidence without a cluster.</p>
+<p><strong>What the fix did and did not verify.</strong> That envtest measurement is now <code>TestGMC_GHESGateway_AGCAddressesTheAppliance</code> and its v2 twin, so the <em>injection</em> is proven against a real apiserver, and the #4 detector defect was confirmed end-to-end (restoring the substring test made a GHES-org registration escape to real <code>api.github.com</code> and come back <code>401 Bad credentials</code>).
+Still unobserved: any call against an actual GHES appliance — token exchange, registration, or egress — and the CIDR-mode denial of #3, which is inferred from the emitted policy contents rather than watched on a live CNI.</p>
 
 
 

@@ -2692,11 +2692,15 @@
 
 
 <h1 id="per-module-unit-test-coverage--75">Per-module unit-test coverage → ≥75%<a class="headerlink" href="#per-module-unit-test-coverage--75" title="Permanent link">&para;</a></h1>
-<p><strong>Status: ✅ Done (Q255, 2026-07-01).</strong> Every Go module now measures ≥75% hand-written unit-test coverage: api 100%, broker 82.1%, cmd/agc 75.1%, cmd/gmc 75.0%, cmd/probe 81.0%, cmd/proxy 76.7%, cmd/worker 81.2%, githubapp 84.2%. Delivered via an agent Workflow (see <a href="#execution--single-agent-workflow">Execution</a>); <code>probe.run()</code> was extracted behind an injected token provider + <code>getenv</code> (<code>runProbe</code>) to make the session orchestration unit-testable, and <code>parseProbeConfig</code> was extracted earlier for the same reason.</p>
+<p><strong>Status: ✅ Done (Q255, 2026-07-01).</strong> Every Go module now measures ≥75% hand-written unit-test coverage: api 100%, broker 82.1%, cmd/agc 75.1%, cmd/gmc 75.0%, cmd/probe 81.0%, cmd/proxy 76.7%, cmd/worker 81.2%, githubapp 84.2%.
+Delivered via an agent Workflow (see <a href="#execution--single-agent-workflow">Execution</a>); <code>probe.run()</code> was extracted behind an injected token provider + <code>getenv</code> (<code>runProbe</code>) to make the session orchestration unit-testable, and <code>parseProbeConfig</code> was extracted earlier for the same reason.</p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p><strong>Goal:</strong> bring every Go module's hand-written unit-test coverage to <strong>≥75%</strong>, as measured by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>scripts/go/coverage.sh</code></a> (generated DeepCopy/scheme boilerplate and test-helper packages already excluded).</p>
-<p><strong>Why now:</strong> the coverage gate is a <a href="../../development/testing/#coverage-measurement-and-the-ratchet">no-regression ratchet, not an absolute target</a> — deliberately, to avoid manufacturing low-value tests. So this plan is <em>not</em> about chasing a number for its own sake. It is about closing the specific gaps where the untested code carries real production risk, and doing so lands every module at ≥75% as a side effect. Where a gap is a genuinely-thin entrypoint whose logic is already factored into tested helpers, we leave it uncovered by design and say so.</p>
+<p><strong>Why now:</strong> the coverage gate is a <a href="../../development/testing/#coverage-measurement-and-the-ratchet">no-regression ratchet, not an absolute target</a> — deliberately, to avoid manufacturing low-value tests.
+So this plan is <em>not</em> about chasing a number for its own sake.
+It is about closing the specific gaps where the untested code carries real production risk, and doing so lands every module at ≥75% as a side effect.
+Where a gap is a genuinely-thin entrypoint whose logic is already factored into tested helpers, we leave it uncovered by design and say so.</p>
 <p><strong>Baseline (2026-06-30), from <code>make cover</code>:</strong></p>
 <table>
 <thead>
@@ -2761,7 +2765,8 @@
 <p><code>./test/fakegithub</code> is a test-helper module (<code>n/a</code>, excluded from the ratchet) — out of scope.</p>
 <hr />
 <h2 id="entrypoint-thinness-audit">Entrypoint thinness audit<a class="headerlink" href="#entrypoint-thinness-audit" title="Permanent link">&para;</a></h2>
-<p>Skipping an entrypoint is only acceptable when it is <em>thin</em> — its non-trivial logic already lives in separately-tested helpers, so there is little hidden-bug surface to miss. Audit result:</p>
+<p>Skipping an entrypoint is only acceptable when it is <em>thin</em> — its non-trivial logic already lives in separately-tested helpers, so there is little hidden-bug surface to miss.
+Audit result:</p>
 <table>
 <thead>
 <tr>
@@ -2798,11 +2803,17 @@
 </tr>
 </tbody>
 </table>
-<p>Exactly one entrypoint fails the test: <code>probe.run()</code>. Everywhere else the risky logic is already extracted, so the remaining work is test-only.</p>
+<p>Exactly one entrypoint fails the test: <code>probe.run()</code>.
+Everywhere else the risky logic is already extracted, so the remaining work is test-only.</p>
 <hr />
 <h2 id="execution--single-agent-workflow">Execution — single agent Workflow<a class="headerlink" href="#execution--single-agent-workflow" title="Permanent link">&para;</a></h2>
-<p>This lands as <strong>one branch → one PR</strong>, produced by a single agent Workflow rather than one-PR-per-module. The workstreams below are the fan-out units.</p>
-<p><strong>Why a Workflow (and why one PR).</strong> The compute hazard on a GUI dev machine is <em>running</em> tests, not writing them. So the agents <strong>author only — they never run tests</strong>; a single validation stage runs <code>make cover</code> + <code>make check</code> once, at the end. That makes this the cheapest possible option on local compute: exactly <strong>one</strong> throttled test run total, versus one per module with separate PRs or chips. The machine-wide <code>serialize_heavy_build</code> flock and <code>local-throttle.sh</code> (<code>utility</code> QoS, cores−2) keep even that run desktop-safe. The files each workstream touches are disjoint, so parallel authoring into the shared worktree is conflict-free.</p>
+<p>This lands as <strong>one branch → one PR</strong>, produced by a single agent Workflow rather than one-PR-per-module.
+The workstreams below are the fan-out units.</p>
+<p><strong>Why a Workflow (and why one PR).</strong> The compute hazard on a GUI dev machine is <em>running</em> tests, not writing them.
+So the agents <strong>author only — they never run tests</strong>; a single validation stage runs <code>make cover</code> + <code>make check</code> once, at the end.
+That makes this the cheapest possible option on local compute: exactly <strong>one</strong> throttled test run total, versus one per module with separate PRs or chips.
+The machine-wide <code>serialize_heavy_build</code> flock and <code>local-throttle.sh</code> (<code>utility</code> QoS, cores−2) keep even that run desktop-safe.
+The files each workstream touches are disjoint, so parallel authoring into the shared worktree is conflict-free.</p>
 <p><strong>Shape (pipeline with one barrier):</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Wave 1 (parallel authoring, disjoint files):
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  ├─ api/v2alpha1/types_test.go              (Workstream A)
@@ -2822,18 +2833,21 @@
 <li><code>make cover-update</code> — the raised <code>coverage-baseline.txt</code> floors, isolated commit.</li>
 <li><code>docs/STATUS.md</code> (delete the Q255 row) — isolated commit, per the high-contention rule.</li>
 </ol>
-<p><strong>Blind-authoring risk.</strong> Agents write tests without executing them, so compile errors or wrong assertions surface only at the validation stage. The validate→repair loop absorbs that; the cost is agent tokens, not local compute (the machine stays quiet until the single final run).</p>
+<p><strong>Blind-authoring risk.</strong> Agents write tests without executing them, so compile errors or wrong assertions surface only at the validation stage.
+The validate→repair loop absorbs that; the cost is agent tokens, not local compute (the machine stays quiet until the single final run).</p>
 <hr />
 <h2 id="workstreams">Workstreams<a class="headerlink" href="#workstreams" title="Permanent link">&para;</a></h2>
 <p>Ordered by ROI (cheapest, highest-certainty first).</p>
 <h3 id="a--api--100-test-only-one-pr">A — <code>api</code> → ~100% (test-only, one PR)<a class="headerlink" href="#a--api--100-test-only-one-pr" title="Permanent link">&para;</a></h3>
-<p>The whole <code>api/v2alpha1/</code> package has no test file; only <code>apilabels</code> is covered. After excluding generated code, the only uncovered hand-written funcs are:</p>
+<p>The whole <code>api/v2alpha1/</code> package has no test file; only <code>apilabels</code> is covered.
+After excluding generated code, the only uncovered hand-written funcs are:</p>
 <ul>
 <li><code>(*ActionsGatewaySpec).GitHubAppSecretName()</code> — nil-<code>GitHubApp</code> vs set branch</li>
 <li><code>EffectiveSecurityProfile(profile)</code> — empty→<code>SecurityProfileBaseline</code> vs passthrough</li>
 <li>4× <code>init()</code> (SchemeBuilder registration) — run on package load, so merely <em>having</em> a test in the package counts them covered</li>
 </ul>
-<p><strong>Add <code>api/v2alpha1/types_test.go</code>:</strong> table tests for both helpers + a scheme-registration smoke test (<code>AddToScheme</code> into a fresh <code>runtime.Scheme</code>, assert no error). Clears the module on its own.</p>
+<p><strong>Add <code>api/v2alpha1/types_test.go</code>:</strong> table tests for both helpers + a scheme-registration smoke test (<code>AddToScheme</code> into a fresh <code>runtime.Scheme</code>, assert no error).
+Clears the module on its own.</p>
 <p>Optionally fold a one-case buffer test into whichever module sits on the tolerance edge (<code>cmd/agc</code>) here or in Workstream B.</p>
 <h3 id="b--cmdworker--77-test-only-one-pr">B — <code>cmd/worker</code> → ~77% (test-only, one PR)<a class="headerlink" href="#b--cmdworker--77-test-only-one-pr" title="Permanent link">&para;</a></h3>
 <p>Extend <code>cmd/worker/worker_test.go</code> with cases for the uncovered branches of <code>run()</code> (65%) and <code>installSelf()</code> (71.4%) — the extracted, testable paths (bad dir, missing binary, env fallbacks). <code>main()</code> stays 0% by design (thin dispatch).</p>
@@ -2844,21 +2858,26 @@
 <li><code>parseAllowedEgressCIDRs(raw)</code> — including the malformed-CIDR error branch</li>
 <li><code>mustEnv(name)</code> — set vs unset</li>
 </ul>
-<p>Add <code>cmd/gmc/cmd/main_test.go</code> (or extend the existing test) with table tests. No code change.</p>
+<p>Add <code>cmd/gmc/cmd/main_test.go</code> (or extend the existing test) with table tests.
+No code change.</p>
 <h3 id="d--cmdgmc-controllerwebhookmetrics-test-only-part-of-the-gmc-pr">D — <code>cmd/gmc</code> controller/webhook/metrics (test-only, part of the gmc PR)<a class="headerlink" href="#d--cmdgmc-controllerwebhookmetrics-test-only-part-of-the-gmc-pr" title="Permanent link">&para;</a></h3>
-<p>The bulk of the +8.7pp. All pure logic, unit-testable without a cluster:</p>
+<p>The bulk of the +8.7pp.
+All pure logic, unit-testable without a cluster:</p>
 <ul>
-<li><strong>v2 webhook validators</strong> (<code>internal/webhook/v2alpha1</code>, package at 26.8%): <code>egressproxy_webhook</code> <code>validateEgressDestinations</code> + <code>ValidateCreate/Update/Delete</code>; <code>runnertemplate_webhook</code> <code>ValidateCreate/Update/Delete</code> (both types) + <code>logRejection</code>. All 0%.</li>
+<li><strong>v2 webhook validators</strong> (<code>internal/webhook/v2alpha1</code>, package at 26.8%): <code>egressproxy_webhook</code> <code>validateEgressDestinations</code> + <code>ValidateCreate/Update/Delete</code>; <code>runnertemplate_webhook</code> <code>ValidateCreate/Update/Delete</code> (both types) + <code>logRejection</code>.
+  All 0%.</li>
 <li><strong>Builder helpers</strong>: <code>builder.go</code> <code>workerLabels</code>, <code>buildWorkerServiceAccount</code>, <code>securityProfileOrDefault</code>; <code>egressproxy_builder.go</code> <code>proxyAllowlistEnv</code>, <code>proxyHostSuffix</code>; <code>actionsgateway_v2_builder.go</code> <code>agcResources</code>.</li>
 <li><strong>Metrics collectors</strong> (<code>metrics.go</code>, all 0%): <code>NewMetrics</code> + each collector's <code>Describe</code>/<code>Collect</code>, driven by <code>prometheus/testutil</code>.</li>
 <li><strong>Migrate</strong>: <code>internal/migrate/render.go</code> <code>renderWarningsComment</code>; <code>migrate.go</code> <code>runnerGroupName</code>/<code>labelSafe</code> partials.</li>
 </ul>
 <p><code>Reconcile</code>/<code>SetupWithManager</code> (0%) stay for the existing <code>internal/controller/integration/</code> envtest suite — add a couple of reconcile cases there only if C+D fall short of +8.7pp.</p>
 <h3 id="e--cmdprobe--75-the-one-refactor-two-commits">E — <code>cmd/probe</code> → ≥75% (the one refactor, <strong>two commits</strong>)<a class="headerlink" href="#e--cmdprobe--75-the-one-refactor-two-commits" title="Permanent link">&para;</a></h3>
-<p><strong>E1 — refactor only, behavior-preserving</strong> (its own commit). Extract from <code>run()</code>:
+<p><strong>E1 — refactor only, behavior-preserving</strong> (its own commit).
+Extract from <code>run()</code>:
 - <code>parseProbeConfig(getenv func(string) string) (probeConfig, error)</code> — the ~60-line env/config block (app ID/installation ID parsing, PEM load, broker URL/v2 selection, pool ID) with all its error branches.
 - keep the <code>investigate*</code>/<code>probeAcknowledge</code> broker calls at package scope (they already are).</p>
-<p><code>run()</code> shrinks to thin orchestration (mint token → open session → dispatch investigations). <strong>Existing tests stay green and unchanged</strong> — that is the safety proof. No new tests in this commit.</p>
+<p><code>run()</code> shrinks to thin orchestration (mint token → open session → dispatch investigations). <strong>Existing tests stay green and unchanged</strong> — that is the safety proof.
+No new tests in this commit.</p>
 <p><strong>E2 — tests only.</strong> Unit-test:
 - <code>parseProbeConfig</code> branches (missing var, unparseable int, bad PEM, v2-URL override, pool-ID default/override).
 - pure helpers <code>backoffDelay</code>, <code>jitter</code> (bounds), <code>mustEnv</code>, <code>loadPEM</code> (inline PEM / <code>@file</code> / error).

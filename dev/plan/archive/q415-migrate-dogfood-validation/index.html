@@ -2819,40 +2819,21 @@
 
 
 <h1 id="q415--validate-gag-migrate-v1v2-on-the-dogfood-cluster-plan">Q415 — validate <code>gag-migrate</code> v1→v2 on the dogfood cluster (plan)<a class="headerlink" href="#q415--validate-gag-migrate-v1v2-on-the-dogfood-cluster-plan" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ <strong>COMPLETE — validated end to end on the live GKE dogfood cluster
-2026-07-28.</strong> Every acceptance criterion passed, including a real GitHub Actions
-DinD job green on the migrated tenant, on the scale-set path, with a green baseline
-before the migration for attribution. The v2 GA Definition of Done row
-<em>"≥1 representative tenant migrated v1→v2 with the tool for real"</em> moves from
-⚠️ Unverified to ✅. All four defects found — Q463, Q465, Q466 and Q467 — have since
-been <strong>fixed</strong> by parallel sessions (#911, #912, #915, and the Q467 fix). Full
-evidence in <a href="#findings">Findings</a>.</p>
+<p><strong>Status:</strong> ✅ <strong>COMPLETE — validated end to end on the live GKE dogfood cluster 2026-07-28.</strong> Every acceptance criterion passed, including a real GitHub Actions DinD job green on the migrated tenant, on the scale-set path, with a green baseline before the migration for attribution.
+The v2 GA Definition of Done row <em>"≥1 representative tenant migrated v1→v2 with the tool for real"</em> moves from ⚠️ Unverified to ✅.
+All four defects found — Q463, Q465, Q466 and Q467 — have since been <strong>fixed</strong> by parallel sessions (#911, #912, #915, and the Q467 fix).
+Full evidence in <a href="#findings">Findings</a>.</p>
 <blockquote>
-<p>That 2026-07-28 run confirmed none of those fixes — it ran against an <code>agc</code> image
-predating all of them, with <code>noProxyCIDRs</code> pinned and a deliberately short gateway
-name as workarounds. <strong>All three are now confirmed live</strong> on a control plane built
-from <code>2715e7f8</code>, with both workarounds removed:
-<a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">Re-validation (Q472)</a>.
-That run found one new defect of its own,
-<a href="#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535">Q535</a>,
-since fixed.
-<strong>Scope:</strong> the last unverified item in the v2 GA Definition of Done —
-<a href="../../v2-ga/#definition-of-done-audit-as-of-this-change">v2-ga.md § Definition of Done audit</a>
-row <em>"≥1 representative tenant migrated v1→v2 with the tool for real"</em>, today
-marked ⚠️ <strong>Unverified</strong>. Closing it needs a live migration, not another test.</p>
+<p>That 2026-07-28 run confirmed none of those fixes — it ran against an <code>agc</code> image predating all of them, with <code>noProxyCIDRs</code> pinned and a deliberately short gateway name as workarounds. <strong>All three are now confirmed live</strong> on a control plane built from <code>2715e7f8</code>, with both workarounds removed: <a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">Re-validation (Q472)</a>.
+That run found one new defect of its own, <a href="#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535">Q535</a>, since fixed. <strong>Scope:</strong> the last unverified item in the v2 GA Definition of Done — <a href="../../v2-ga/#definition-of-done-audit-as-of-this-change">v2-ga.md § Definition of Done audit</a> row <em>"≥1 representative tenant migrated v1→v2 with the tool for real"</em>, today marked ⚠️ <strong>Unverified</strong>.
+Closing it needs a live migration, not another test.</p>
 </blockquote>
 <h2 id="goal-one-sentence">Goal (one sentence)<a class="headerlink" href="#goal-one-sentence" title="Permanent link">&para;</a></h2>
-<p>Migrate a real, running <code>v1alpha1</code> Docker-in-Docker tenant to v2 on the GKE dogfood
-cluster with <code>gag-migrate</code>, then have the migrated tenant run a real GitHub Actions
-DinD job — so the GA DoD row can move from ⚠️ Unverified to ✅ on evidence.</p>
+<p>Migrate a real, running <code>v1alpha1</code> Docker-in-Docker tenant to v2 on the GKE dogfood cluster with <code>gag-migrate</code>, then have the migrated tenant run a real GitHub Actions DinD job — so the GA DoD row can move from ⚠️ Unverified to ✅ on evidence.</p>
 <h2 id="why-the-existing-e2e-is-not-enough">Why the existing e2e is not enough<a class="headerlink" href="#why-the-existing-e2e-is-not-enough" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go">Q414</a> already covers the tool
-on a live <code>kind</code> cluster, and covers it well: dry-run fan-out, the
-<code>ClusterRunnerTemplate</code>-vs-<code>RunnerTemplate</code> admission split, the namespace patch,
-v1/v2 coexistence, and the migrated control plane reconciling to Ready. That spec
-says so itself — it names this plan as the follow-up.</p>
-<p>Three things it deliberately does not do, each of which is where a real migration
-can still fail:</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go">Q414</a> already covers the tool on a live <code>kind</code> cluster, and covers it well: dry-run fan-out, the <code>ClusterRunnerTemplate</code>-vs-<code>RunnerTemplate</code> admission split, the namespace patch, v1/v2 coexistence, and the migrated control plane reconciling to Ready.
+That spec says so itself — it names this plan as the follow-up.</p>
+<p>Three things it deliberately does not do, each of which is where a real migration can still fail:</p>
 <table>
 <thead>
 <tr>
@@ -2877,30 +2858,16 @@ can still fail:</p>
 </table>
 <h2 id="what-is-being-validated-precisely">What is being validated, precisely<a class="headerlink" href="#what-is-being-validated-precisely" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>gag-migrate</code> dry-run then <code>--apply</code> against a <strong>live v1 tenant with real
-   credentials</strong>, on the cluster GAG actually dogfoods on.</li>
-<li>The migrated tenant reconciles into a working per-gateway AGC <strong>and</strong> a working
-   <code>EgressProxy</code> pool.</li>
-<li>The migrated tenant <strong>acquires and completes a real GitHub Actions job</strong> whose
-   worker is a privileged DinD pod — proving the migration preserved the capability,
-   not just the object graph.</li>
-<li>The <strong>Q231 recreate</strong> is exercised and documented: <code>gag-migrate</code> emits <code>v2alpha1</code>,
-   so the conversion webhook stamps
-   <code>conversion.actions-gateway.com/acquisition-protocol: Classic</code> on the stored
-   <code>v2beta1</code> object, and the migrated set keeps running Classic until the <code>RunnerSet</code>
-   is recreated v2beta1-native. This is the one migration step an operator must be
-   told about explicitly, and it is exactly the step this run confirms.</li>
+<li><code>gag-migrate</code> dry-run then <code>--apply</code> against a <strong>live v1 tenant with real credentials</strong>, on the cluster GAG actually dogfoods on.</li>
+<li>The migrated tenant reconciles into a working per-gateway AGC <strong>and</strong> a working <code>EgressProxy</code> pool.</li>
+<li>The migrated tenant <strong>acquires and completes a real GitHub Actions job</strong> whose worker is a privileged DinD pod — proving the migration preserved the capability, not just the object graph.</li>
+<li>The <strong>Q231 recreate</strong> is exercised and documented: <code>gag-migrate</code> emits <code>v2alpha1</code>, so the conversion webhook stamps <code>conversion.actions-gateway.com/acquisition-protocol: Classic</code> on the stored <code>v2beta1</code> object, and the migrated set keeps running Classic until the <code>RunnerSet</code> is recreated v2beta1-native.
+   This is the one migration step an operator must be told about explicitly, and it is exactly the step this run confirms.</li>
 </ol>
-<p><strong>The runner label is deliberately unchanged across the migration</strong>
-(<code>gag-migrate-v1</code>). v1 Classic permits many labels and v2beta1 ScaleSet permits
-exactly one, so choosing a single-label v1 tenant means the workflow's <code>runs-on</code>
-survives the migration untouched — which is both the friendlier operator story and a
-cleaner assertion (same workflow, same label, before and after).</p>
+<p><strong>The runner label is deliberately unchanged across the migration</strong> (<code>gag-migrate-v1</code>). v1 Classic permits many labels and v2beta1 ScaleSet permits exactly one, so choosing a single-label v1 tenant means the workflow's <code>runs-on</code> survives the migration untouched — which is both the friendlier operator story and a cleaner assertion (same workflow, same label, before and after).</p>
 <h2 id="assets-built-by-this-change">Assets built by this change<a class="headerlink" href="#assets-built-by-this-change" title="Permanent link">&para;</a></h2>
-<p>Neither is a permanent fixture. Both describe a path that <strong>ceases to exist at
-<code>v2.0.0</code></strong>, when <code>v1alpha1</code> is removed (<a href="../../v2-ga/">v2-ga.md</a> Phase 3), so they are
-deliberately small and are deleted with the rest of the v1 surface at that cut
-rather than maintained forever.</p>
+<p>Neither is a permanent fixture.
+Both describe a path that <strong>ceases to exist at <code>v2.0.0</code></strong>, when <code>v1alpha1</code> is removed (<a href="../../v2-ga/">v2-ga.md</a> Phase 3), so they are deliberately small and are deleted with the rest of the v1 surface at that cut rather than maintained forever.</p>
 <table>
 <thead>
 <tr>
@@ -2920,164 +2887,102 @@ rather than maintained forever.</p>
 </tbody>
 </table>
 <h3 id="why-a-smoke-job-not-the-full-e2e-suite">Why a smoke job, not the full e2e suite<a class="headerlink" href="#why-a-smoke-job-not-the-full-e2e-suite" title="Permanent link">&para;</a></h3>
-<p>The DoD asks for a representative tenant migrated for real, not for a second copy of
-the e2e gate. A <code>docker build</code> + <code>docker run</code> inside the migrated tenant's privileged
-DinD worker proves every link in the chain — job acquisition, worker provisioning,
-the native-sidecar dockerd, egress to Docker Hub through the migrated proxy, and
-completion reporting — at a fraction of the cost and wall-clock of the
-kind-in-DinD suite. Running the full suite would validate the <em>e2e tenant</em>, which is
-already validated, rather than the <em>migration</em>.</p>
+<p>The DoD asks for a representative tenant migrated for real, not for a second copy of the e2e gate.
+A <code>docker build</code> + <code>docker run</code> inside the migrated tenant's privileged DinD worker proves every link in the chain — job acquisition, worker provisioning, the native-sidecar dockerd, egress to Docker Hub through the migrated proxy, and completion reporting — at a fraction of the cost and wall-clock of the kind-in-DinD suite.
+Running the full suite would validate the <em>e2e tenant</em>, which is already validated, rather than the <em>migration</em>.</p>
 <h3 id="why-no-reusable-script">Why no reusable script<a class="headerlink" href="#why-no-reusable-script" title="Permanent link">&para;</a></h3>
-<p>The repo's convention is to script live dogfood operations under <code>scripts/dogfood/</code>
-with stub tests in <code>make check</code>. This run is deliberately an exception: it is a
-one-time DoD checkbox on a code path that is deleted at <code>v2.0.0</code>, so a committed
-orchestration script plus its stub test would be dead code within one release. The
-runbook below is executed step by step instead, and the findings recorded here.</p>
+<p>The repo's convention is to script live dogfood operations under <code>scripts/dogfood/</code> with stub tests in <code>make check</code>.
+This run is deliberately an exception: it is a one-time DoD checkbox on a code path that is deleted at <code>v2.0.0</code>, so a committed orchestration script plus its stub test would be dead code within one release.
+The runbook below is executed step by step instead, and the findings recorded here.</p>
 <h2 id="runbook">Runbook<a class="headerlink" href="#runbook" title="Permanent link">&para;</a></h2>
-<p>Every step pins <code>--project</code>/<code>--zone</code>/<code>--context</code> explicitly rather than relying on
-ambient context, per
-<a href="../../../development/kind-iteration/">kind-iteration.md § Target the cluster explicitly</a>.
-The dogfood cluster is hard-classified prod in <code>.claude/prod-guard.json</code>, so each
-mutating command needs <code>PROD_GUARD_OVERRIDE</code> naming this plan.</p>
+<p>Every step pins <code>--project</code>/<code>--zone</code>/<code>--context</code> explicitly rather than relying on ambient context, per <a href="../../../development/kind-iteration/">kind-iteration.md § Target the cluster explicitly</a>.
+The dogfood cluster is hard-classified prod in <code>.claude/prod-guard.json</code>, so each mutating command needs <code>PROD_GUARD_OVERRIDE</code> naming this plan.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PROJECT</span><span class="o">=</span>actions-gateway-dogfood<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>gag-dogfood<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>us-east1-b
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>actions-gateway/github-actions-gateway
 </code></pre></div>
 <ol>
-<li><strong>Bring the cluster up.</strong> <code>scripts/dogfood/start.sh</code> (system pool from 0 to the
-   derived running size). The <code>e2e</code> node pool autoscales 0→N on job arrival on its
-   own.</li>
-<li><strong>Create the tenant namespace and its App credential Secret</strong> (out of band — a
-   credential, never in git), then apply the v1 tenant:
-   <code>kubectl apply -k deploy/dogfood-migrate</code>.</li>
-<li><strong>Wait for the v1 AGC to be Ready.</strong> Migrating a tenant that never came up would
-   prove nothing — establish a live v1 tenant first, exactly as the Q414 spec does.</li>
-<li><strong>Baseline (optional but cheap):</strong> dispatch the smoke workflow against the v1
-   tenant and confirm green <em>before</em> migrating. Without this, a post-migration
-   failure cannot be attributed to the migration.</li>
+<li><strong>Bring the cluster up.</strong> <code>scripts/dogfood/start.sh</code> (system pool from 0 to the derived running size).
+   The <code>e2e</code> node pool autoscales 0→N on job arrival on its own.</li>
+<li><strong>Create the tenant namespace and its App credential Secret</strong> (out of band — a credential, never in git), then apply the v1 tenant: <code>kubectl apply -k deploy/dogfood-migrate</code>.</li>
+<li><strong>Wait for the v1 AGC to be Ready.</strong> Migrating a tenant that never came up would prove nothing — establish a live v1 tenant first, exactly as the Q414 spec does.</li>
+<li><strong>Baseline (optional but cheap):</strong> dispatch the smoke workflow against the v1 tenant and confirm green <em>before</em> migrating.
+   Without this, a post-migration failure cannot be attributed to the migration.</li>
 <li><strong>Dry run:</strong> <code>gag-migrate --namespace gag-dogfood-migrate --context &lt;ctx&gt;</code>.
-   Review the fan-out and both warnings (cluster-scoped object; namespace patch needs
-   the downgrade opt-in).</li>
-<li><strong>Grant the downgrade opt-in</strong> the dry run asks for
-   (<code>allow-profile-downgrade=allowed</code> on the namespace). The tool deliberately does
-   not write this — opting into a downgrade is the operator's call.</li>
-<li><strong>Apply:</strong> <code>gag-migrate … --apply</code>. Verify the emitted object set was admitted and
-   that the v1 objects survive alongside it.</li>
-<li><strong>Wait for the migrated control plane</strong> — the <code>&lt;gateway&gt;-agc</code> Deployment and the
-   <code>&lt;gateway&gt;-egress-proxy</code> pool.</li>
-<li><strong>Recreate the <code>RunnerSet</code> (Q231)</strong> so it comes back v2beta1-native on ScaleSet
-   rather than inheriting <code>Classic</code> from the conversion annotation. Confirm the
-   annotation is gone and the set registers a scale set at GitHub.</li>
-<li><strong>Dispatch the smoke workflow again</strong> — same workflow, same <code>runs-on</code> label — and
-    confirm it goes green on the migrated tenant.</li>
+   Review the fan-out and both warnings (cluster-scoped object; namespace patch needs the downgrade opt-in).</li>
+<li><strong>Grant the downgrade opt-in</strong> the dry run asks for (<code>allow-profile-downgrade=allowed</code> on the namespace).
+   The tool deliberately does not write this — opting into a downgrade is the operator's call.</li>
+<li><strong>Apply:</strong> <code>gag-migrate … --apply</code>.
+   Verify the emitted object set was admitted and that the v1 objects survive alongside it.</li>
+<li><strong>Wait for the migrated control plane</strong> — the <code>&lt;gateway&gt;-agc</code> Deployment and the <code>&lt;gateway&gt;-egress-proxy</code> pool.</li>
+<li><strong>Recreate the <code>RunnerSet</code> (Q231)</strong> so it comes back v2beta1-native on ScaleSet rather than inheriting <code>Classic</code> from the conversion annotation.
+   Confirm the annotation is gone and the set registers a scale set at GitHub.</li>
+<li><strong>Dispatch the smoke workflow again</strong> — same workflow, same <code>runs-on</code> label — and confirm it goes green on the migrated tenant.</li>
 <li>
-<p><strong>Tear down, CRs first.</strong> Order is load-bearing and the live run proved it — see
-    <a href="#the-teardown-order-is-load-bearing-and-undocumented">the teardown deadlock</a>
-    below. Delete the <strong>CRs while their controllers are still running</strong>, exactly as
-    <a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md § Step 4</a> prescribes:</p>
-<p><strong>RunnerSets before gateways</strong> — the v2 <code>RunnerSet</code> is not gateway-owned, so
-deleting the gateway first cascades the AGC away and strands the set's finalizer:</p>
+<p><strong>Tear down, CRs first.</strong> Order is load-bearing and the live run proved it — see <a href="#the-teardown-order-is-load-bearing-and-undocumented">the teardown deadlock</a> below.
+    Delete the <strong>CRs while their controllers are still running</strong>, exactly as <a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md § Step 4</a> prescribes:</p>
+<p><strong>RunnerSets before gateways</strong> — the v2 <code>RunnerSet</code> is not gateway-owned, so deleting the gateway first cascades the AGC away and strands the set's finalizer:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>gag-dogfood-migrate<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>gag-dogfood-migrate<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>gag-dogfood-migrate<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>--all
 </code></pre></div>
-<p>Only then delete the namespace, then reclaim the cluster-scoped migration outputs
-(the <code>ClusterRunnerTemplate</code> by its <code>MigratedFromNamespaceLabel</code> provenance label
-and the matching ClusterRoleBinding — namespace deletion does not reclaim them,
-which is the whole reason the tool stamps the label), then take the system pool
-back to 0.</p>
-<p>Both orderings were learned the hard way here — deleting the namespace first, and
-deleting the gateway before its RunnerSet, each deadlock in their own way. See
-<a href="#the-teardown-order-is-load-bearing-and-undocumented">the teardown findings</a>.</p>
+<p>Only then delete the namespace, then reclaim the cluster-scoped migration outputs (the <code>ClusterRunnerTemplate</code> by its <code>MigratedFromNamespaceLabel</code> provenance label and the matching ClusterRoleBinding — namespace deletion does not reclaim them, which is the whole reason the tool stamps the label), then take the system pool back to 0.</p>
+<p>Both orderings were learned the hard way here — deleting the namespace first, and deleting the gateway before its RunnerSet, each deadlock in their own way.
+See <a href="#the-teardown-order-is-load-bearing-and-undocumented">the teardown findings</a>.</p>
 </li>
 </ol>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
-<p>The run closes Q415 only if all of these hold, each recorded with its evidence in
-Findings below. <strong>All met 2026-07-28.</strong></p>
+<p>The run closes Q415 only if all of these hold, each recorded with its evidence in Findings below. <strong>All met 2026-07-28.</strong></p>
 <ul>
 <li>[x] <code>gag-migrate --apply</code> completes without error against the live v1 tenant.</li>
-<li>[x] The migrated <code>&lt;gateway&gt;-agc</code> and <code>&lt;gateway&gt;-egress-proxy</code> Deployments reach
-      Ready.</li>
+<li>[x] The migrated <code>&lt;gateway&gt;-agc</code> and <code>&lt;gateway&gt;-egress-proxy</code> Deployments reach Ready.</li>
 <li>[x] The v1 objects survive the migration (coexistence, so rollback stays possible).</li>
-<li>[x] After the Q231 recreate, the <code>RunnerSet</code> is ScaleSet-native (no
-      <code>acquisition-protocol: Classic</code> annotation) and registers at GitHub.</li>
-<li>[x] A real GitHub Actions DinD job completes <strong>green</strong> on the migrated tenant —
-      confirmed on the scale-set path from the AGC's own provisioning log, with a
-      green baseline beforehand for attribution.</li>
+<li>[x] After the Q231 recreate, the <code>RunnerSet</code> is ScaleSet-native (no <code>acquisition-protocol: Classic</code> annotation) and registers at GitHub.</li>
+<li>[x] A real GitHub Actions DinD job completes <strong>green</strong> on the migrated tenant — confirmed on the scale-set path from the AGC's own provisioning log, with a green baseline beforehand for attribution.</li>
 <li>[x] Teardown leaves no orphaned cluster-scoped objects.</li>
 </ul>
-<p>Anything that fails is a finding to fix, not a reason to soften the criterion — this
-is the run that decides whether the DoD row is honest.</p>
+<p>Anything that fails is a finding to fix, not a reason to soften the criterion — this is the run that decides whether the DoD row is honest.</p>
 <h2 id="cost-and-blast-radius">Cost and blast radius<a class="headerlink" href="#cost-and-blast-radius" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Billable:</strong> the system pool for the run window plus one <code>c2-standard-8</code> spot node
-  in the <code>e2e</code> pool while the smoke job runs. Both return to zero on teardown.</li>
-<li><strong>Blast radius:</strong> a new, isolated namespace (<code>gag-dogfood-migrate</code>). The always-on
-  <code>dogfood</code>/<code>dogfoodss</code> CI tenants and the on-demand <code>gag-dogfood-e2e</code> tenant are
-  untouched, and no repo variable that routes real CI is changed — the smoke workflow
-  is <code>workflow_dispatch</code>-only and targets its own label.</li>
-<li><strong>Not reversible by itself:</strong> the namespace metadata patch and the cluster-scoped
-  <code>ClusterRunnerTemplate</code>. Both are reclaimed by step 11.</li>
+<li><strong>Billable:</strong> the system pool for the run window plus one <code>c2-standard-8</code> spot node in the <code>e2e</code> pool while the smoke job runs.
+  Both return to zero on teardown.</li>
+<li><strong>Blast radius:</strong> a new, isolated namespace (<code>gag-dogfood-migrate</code>).
+  The always-on <code>dogfood</code>/<code>dogfoodss</code> CI tenants and the on-demand <code>gag-dogfood-e2e</code> tenant are untouched, and no repo variable that routes real CI is changed — the smoke workflow is <code>workflow_dispatch</code>-only and targets its own label.</li>
+<li><strong>Not reversible by itself:</strong> the namespace metadata patch and the cluster-scoped <code>ClusterRunnerTemplate</code>.
+  Both are reclaimed by step 11.</li>
 </ul>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="rehearsal-on-kind-2026-07-27--assets-validated-one-tool-defect-found">Rehearsal on <code>kind</code> (2026-07-27) — assets validated, one tool defect found<a class="headerlink" href="#rehearsal-on-kind-2026-07-27--assets-validated-one-tool-defect-found" title="Permanent link">&para;</a></h3>
-<p>Before spending anything on GKE, the tenant manifest was applied to the local <code>kind</code>
-e2e cluster and <code>gag-migrate</code> was run against it in dry-run. This validated the
-asset, not the migration — the live run below is still outstanding.</p>
-<p><strong>Validated.</strong> All four objects pass the real v1 CRD schema and the GMC validating
-webhook, including <code>securityProfile: privileged</code>. The dry-run fans the tenant out to
-all four expected v2 kinds (<code>ActionsGateway</code>, <code>EgressProxy</code>, <code>ClusterRunnerTemplate</code>,
-<code>RunnerSet</code>), puts the privileged worker shape on the <strong>cluster-scoped</strong> kind, and
-emits the two expected warnings (cluster-scoped object; namespace patch needs the
-downgrade opt-in).</p>
-<p><strong>Two manifest bugs the rehearsal caught</strong>, both of which would have failed only
-after the cluster was already up:</p>
+<p>Before spending anything on GKE, the tenant manifest was applied to the local <code>kind</code> e2e cluster and <code>gag-migrate</code> was run against it in dry-run.
+This validated the asset, not the migration — the live run below is still outstanding.</p>
+<p><strong>Validated.</strong> All four objects pass the real v1 CRD schema and the GMC validating webhook, including <code>securityProfile: privileged</code>.
+The dry-run fans the tenant out to all four expected v2 kinds (<code>ActionsGateway</code>, <code>EgressProxy</code>, <code>ClusterRunnerTemplate</code>, <code>RunnerSet</code>), puts the privileged worker shape on the <strong>cluster-scoped</strong> kind, and emits the two expected warnings (cluster-scoped object; namespace patch needs the downgrade opt-in).</p>
+<p><strong>Two manifest bugs the rehearsal caught</strong>, both of which would have failed only after the cluster was already up:</p>
 <ol>
-<li><code>v1alpha1</code> spells the credential fields <code>gitHubAppRef</code> / <code>gitHubURL</code> — capital H —
-   unlike v2's <code>githubURL</code>. Both are required, so the wrong casing is a hard reject.</li>
-<li>The privileged grant was initially written on the <strong>v2</strong> label domain (copied from
-   the v2 e2e overlay). It must be the v1 domain for an authentic pre-migration
-   tenant — see the defect below for why that distinction is load-bearing.</li>
+<li><code>v1alpha1</code> spells the credential fields <code>gitHubAppRef</code> / <code>gitHubURL</code> — capital H — unlike v2's <code>githubURL</code>.
+   Both are required, so the wrong casing is a hard reject.</li>
+<li>The privileged grant was initially written on the <strong>v2</strong> label domain (copied from the v2 e2e overlay).
+   It must be the v1 domain for an authentic pre-migration tenant — see the defect below for why that distinction is load-bearing.</li>
 </ol>
 <h3 id="defect-found-gag-migrates-grant-detection-does-not-dual-read">Defect found: <code>gag-migrate</code>'s grant detection does not dual-read<a class="headerlink" href="#defect-found-gag-migrates-grant-detection-does-not-dual-read" title="Permanent link">&para;</a></h3>
-<p>The v1 validating webhook <strong>dual-reads</strong> the privileged-eligibility grant across both
-label domains for the v1/v2 coexistence window — deliberately, per §H.12, so that
-relabelling a namespace onto the v2 domain does not strand a still-running v1
-gateway (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go">actionsgateway_webhook.go:279</a>).</p>
-<p><code>gag-migrate</code> does not. Its carry-forward check reads only the <strong>v1</strong> domain
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/migrate.go">migrate.go:387</a>), while the warning it
-emits on a miss names the <strong>v2</strong> label:</p>
+<p>The v1 validating webhook <strong>dual-reads</strong> the privileged-eligibility grant across both label domains for the v1/v2 coexistence window — deliberately, per §H.12, so that relabelling a namespace onto the v2 domain does not strand a still-running v1 gateway (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go">actionsgateway_webhook.go:279</a>).</p>
+<p><code>gag-migrate</code> does not.
+Its carry-forward check reads only the <strong>v1</strong> domain (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/migrate.go">migrate.go:387</a>), while the warning it emits on a miss names the <strong>v2</strong> label:</p>
 <blockquote>
-<p>namespace … migrates to securityProfile=privileged but holds no
-<code>actions-gateway.com/privileged-profile=allowed</code> grant; a platform administrator
-must apply the v2 eligibility label or the profile will be rejected</p>
+<p>namespace … migrates to securityProfile=privileged but holds no <code>actions-gateway.com/privileged-profile=allowed</code> grant; a platform administrator must apply the v2 eligibility label or the profile will be rejected</p>
 </blockquote>
-<p>So a namespace granted eligibility via the v2 label alone — legal, and admitted by
-the webhook — is reported as ungranted, and the remedy the warning prescribes is the
-label that is <em>already there</em>. Re-running after following the advice produces the
-identical warning. Observed directly: the first rehearsal namespace carried
-<code>actions-gateway.com/privileged-profile=allowed</code>, was admitted privileged by the
-webhook, and was still warned about.</p>
-<p><strong>Impact is low but the shape is bad.</strong> The end state stays correct — the v2 label is
-present either way, so the skipped carry-forward is a no-op — so this is an
-unactionable, self-contradicting warning rather than a broken migration. It is
-exactly the rough edge Q273 set out to polish, and it surfaces during the one
-operation where an operator is least able to judge whether a warning is safe to
-ignore. Filed as Q463; <strong>not</strong> fixed here, because changing the
-tool's behaviour in the middle of the run that validates it would invalidate the run.</p>
-<p><strong>Fixed under Q463 (after this run).</strong> The grant read is now one shared function,
-<code>gmc/internal/webhook/validation.PrivilegedGrantPresent</code>, called by both the v1 webhook
-and the tool, so the two cannot drift again; the warning text names what is actually
-missing (a grant on <em>either</em> domain) instead of prescribing the v2 label unconditionally.</p>
-<p>Working around it is why this plan's tenant grants privileged on the <strong>v1</strong> label
-domain: that is both the authentic pre-migration shape and the path that actually
-exercises the grant carry-forward.</p>
+<p>So a namespace granted eligibility via the v2 label alone — legal, and admitted by the webhook — is reported as ungranted, and the remedy the warning prescribes is the label that is <em>already there</em>.
+Re-running after following the advice produces the identical warning.
+Observed directly: the first rehearsal namespace carried <code>actions-gateway.com/privileged-profile=allowed</code>, was admitted privileged by the webhook, and was still warned about.</p>
+<p><strong>Impact is low but the shape is bad.</strong> The end state stays correct — the v2 label is present either way, so the skipped carry-forward is a no-op — so this is an unactionable, self-contradicting warning rather than a broken migration.
+It is exactly the rough edge Q273 set out to polish, and it surfaces during the one operation where an operator is least able to judge whether a warning is safe to ignore.
+Filed as Q463; <strong>not</strong> fixed here, because changing the tool's behaviour in the middle of the run that validates it would invalidate the run.</p>
+<p><strong>Fixed under Q463 (after this run).</strong> The grant read is now one shared function, <code>gmc/internal/webhook/validation.PrivilegedGrantPresent</code>, called by both the v1 webhook and the tool, so the two cannot drift again; the warning text names what is actually missing (a grant on <em>either</em> domain) instead of prescribing the v2 label unconditionally.</p>
+<p>Working around it is why this plan's tenant grants privileged on the <strong>v1</strong> label domain: that is both the authentic pre-migration shape and the path that actually exercises the grant carry-forward.</p>
 <h3 id="live-run-on-gke-2026-07-27--migration-validated-job-half-blocked">Live run on GKE (2026-07-27) — migration validated, job half blocked<a class="headerlink" href="#live-run-on-gke-2026-07-27--migration-validated-job-half-blocked" title="Permanent link">&para;</a></h3>
-<p>Executed against the real dogfood cluster with real GitHub App credentials, in an
-isolated <code>gag-dogfood-migrate</code> namespace. The always-on <code>dogfood</code> CI tenant and the
-on-demand <code>gag-dogfood-e2e</code> tenant were untouched and verified healthy afterwards;
-the cluster was returned to 0 nodes.</p>
-<p><strong>Q415 is NOT closed.</strong> Everything except the job ran and passed. The DoD row stays
-⚠️ Unverified until a real DinD job completes on the migrated tenant.</p>
+<p>Executed against the real dogfood cluster with real GitHub App credentials, in an isolated <code>gag-dogfood-migrate</code> namespace.
+The always-on <code>dogfood</code> CI tenant and the on-demand <code>gag-dogfood-e2e</code> tenant were untouched and verified healthy afterwards; the cluster was returned to 0 nodes.</p>
+<p><strong>Q415 is NOT closed.</strong> Everything except the job ran and passed.
+The DoD row stays ⚠️ Unverified until a real DinD job completes on the migrated tenant.</p>
 <table>
 <thead>
 <tr>
@@ -3112,16 +3017,10 @@ the cluster was returned to 0 nodes.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>The namespace patch worked exactly as designed</strong>, and this is the part the v1-domain
-grant label was chosen to exercise: the platform grant was carried <em>forward</em> onto the
-v2 domain (<code>actions-gateway.com/privileged-profile=allowed</code> added beside the original
-v1 label), <code>security-profile=privileged</code> was relocated from the gateway to the
-namespace, the v2 tenant marker was added, and every v1 marker survived.</p>
-<p><code>noProxyCIDRs</code> also carried across onto the emitted <code>EgressProxy</code>, which is what let
-the migrated AGC start — see the defect immediately below.</p>
+<p><strong>The namespace patch worked exactly as designed</strong>, and this is the part the v1-domain grant label was chosen to exercise: the platform grant was carried <em>forward</em> onto the v2 domain (<code>actions-gateway.com/privileged-profile=allowed</code> added beside the original v1 label), <code>security-profile=privileged</code> was relocated from the gateway to the namespace, the v2 tenant marker was added, and every v1 marker survived.</p>
+<p><code>noProxyCIDRs</code> also carried across onto the emitted <code>EgressProxy</code>, which is what let the migrated AGC start — see the defect immediately below.</p>
 <h3 id="part-2--the-job-half-run-after-the-workflow-reached-main-2026-07-28">Part 2 — the job half, run after the workflow reached <code>main</code> (2026-07-28)<a class="headerlink" href="#part-2--the-job-half-run-after-the-workflow-reached-main-2026-07-28" title="Permanent link">&para;</a></h3>
-<p>With the smoke workflow on the default branch the dispatch blocker cleared and the
-full ordered sequence ran. <strong>All acceptance criteria pass.</strong></p>
+<p>With the smoke workflow on the default branch the dispatch blocker cleared and the full ordered sequence ran. <strong>All acceptance criteria pass.</strong></p>
 <table>
 <thead>
 <tr>
@@ -3160,173 +3059,98 @@ full ordered sequence ran. <strong>All acceptance criteria pass.</strong></p>
 </tr>
 </tbody>
 </table>
-<p><strong>The job is confirmed to have run on the migrated tenant's scale-set path</strong>, not
-inferred from the green tick. The migrated AGC logged it at
-<code>provisioner.go:646</code>:</p>
+<p><strong>The job is confirmed to have run on the migrated tenant's scale-set path</strong>, not inferred from the green tick.
+The migrated AGC logged it at <code>provisioner.go:646</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>&quot;scale-set worker pod created&quot; owner=dfmigrate-gag-migrate-v1-18c32e1
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  podName=runner-dfmigrate-gag-migrate-v1-18c32e1-8b9a78b-9e56291d-225d-5
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  jobID=9e56291d-225d-52b2-9e97-219aa94380ce
 </code></pre></div>
-<p>The worker pod was observed <code>Pending</code> → <code>2/2 Running</code> → <code>Completed</code>, i.e. the runner
-container plus the privileged DinD native sidecar, which is the shape the whole
-exercise is about.</p>
-<p><strong>Method note — v1 was decommissioned before the post-migration dispatch.</strong> Both
-tenants advertise the same <code>gag-migrate-v1</code> label, so with both live GitHub could
-route the job to either and a green result would not have proven the <em>migrated</em>
-tenant ran it. Coexistence was already verified independently at the <code>--apply</code> step,
-so v1 was removed first — which is
-<a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md § Step 4</a> anyway — making
-the final job unambiguous. Deleting the v1 gateway cascaded its AGC and proxy away
-cleanly, confirming that guide's "nothing is stranded" claim for v1.</p>
+<p>The worker pod was observed <code>Pending</code> → <code>2/2 Running</code> → <code>Completed</code>, i.e. the runner container plus the privileged DinD native sidecar, which is the shape the whole exercise is about.</p>
+<p><strong>Method note — v1 was decommissioned before the post-migration dispatch.</strong> Both tenants advertise the same <code>gag-migrate-v1</code> label, so with both live GitHub could route the job to either and a green result would not have proven the <em>migrated</em> tenant ran it.
+Coexistence was already verified independently at the <code>--apply</code> step, so v1 was removed first — which is <a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md § Step 4</a> anyway — making the final job unambiguous.
+Deleting the v1 gateway cascaded its AGC and proxy away cleanly, confirming that guide's "nothing is stranded" claim for v1.</p>
 <h3 id="blocker-part-1-since-cleared-the-job-half-could-not-run-until-the-workflow-was-on-main">Blocker (part 1, since cleared): the job half could not run until the workflow was on <code>main</code><a class="headerlink" href="#blocker-part-1-since-cleared-the-job-half-could-not-run-until-the-workflow-was-on-main" title="Permanent link">&para;</a></h3>
 <p><code>gh workflow run</code> returns:</p>
 <blockquote>
 <p>HTTP 404: workflow dogfood-migrate-validate.yml not found on the default branch</p>
 </blockquote>
-<p>GitHub only dispatches a <code>workflow_dispatch</code> workflow that exists on the <strong>default
-branch</strong>; the <code>--ref</code> selects which <em>version</em> runs, it does not register the workflow.
-So the smoke workflow must be merged to <code>main</code> before either the baseline or the
-post-migration job can be dispatched.</p>
-<p><strong>Consequence for sequencing:</strong> the live run splits in two. This session validated the
-migration itself (independent of the job) as a real-infrastructure rehearsal. The
-remaining session runs the full ordered sequence — baseline → migrate → job — once
-this PR is merged.</p>
+<p>GitHub only dispatches a <code>workflow_dispatch</code> workflow that exists on the <strong>default branch</strong>; the <code>--ref</code> selects which <em>version</em> runs, it does not register the workflow.
+So the smoke workflow must be merged to <code>main</code> before either the baseline or the post-migration job can be dispatched.</p>
+<p><strong>Consequence for sequencing:</strong> the live run splits in two.
+This session validated the migration itself (independent of the job) as a real-infrastructure rehearsal.
+The remaining session runs the full ordered sequence — baseline → migrate → job — once this PR is merged.</p>
 <h3 id="defect-the-agcs-default-no_proxy-only-works-on-kindkubeadm-q465">Defect: the AGC's default <code>NO_PROXY</code> only works on kind/kubeadm (Q465)<a class="headerlink" href="#defect-the-agcs-default-no_proxy-only-works-on-kindkubeadm-q465" title="Permanent link">&para;</a></h3>
 <p>The most valuable find of the run, and one no existing test could have caught.</p>
-<p>A proxied tenant's AGC gets a generated <code>NO_PROXY</code> that defaults to
-<code>svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_agc_deployment.go">shared_agc_deployment.go:50</a>).
-That last entry is the <strong>kind/kubeadm</strong> Service CIDR. This cluster's is
-<code>34.118.224.0/20</code>, so the AGC dialled the API server <em>through the egress proxy</em>, could
-not verify the proxy's CA, and <code>CrashLoopBackOff</code>ed at startup:</p>
+<p>A proxied tenant's AGC gets a generated <code>NO_PROXY</code> that defaults to <code>svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_agc_deployment.go">shared_agc_deployment.go:50</a>).
+That last entry is the <strong>kind/kubeadm</strong> Service CIDR.
+This cluster's is <code>34.118.224.0/20</code>, so the AGC dialled the API server <em>through the egress proxy</em>, could not verify the proxy's CA, and <code>CrashLoopBackOff</code>ed at startup:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>detect actions-gateway.com/v2alpha1 RunnerSet CRD: … Get &quot;https://34.118.224.1:443/api&quot;:
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>proxyconnect tcp: tls: failed to verify certificate: x509: certificate signed by unknown authority
 </code></pre></div>
-<p>Adding the real Service CIDR to <code>noProxyCIDRs</code> fixed it immediately — root cause
-confirmed by measurement, not inferred.</p>
-<p><strong>This is not GKE-specific.</strong> <code>10.96.0.0/12</code> covers <code>10.96.0.0</code>–<code>10.111.255.255</code>, so
-the default also misses EKS (<code>172.20.0.0/16</code>) and AKS (<code>10.0.0.0/16</code>). Every managed
-Kubernetes offering breaks; only kind/kubeadm works.</p>
-<p><strong>Why nothing caught it:</strong> the kind e2e runs on a cluster whose Service CIDR <em>is</em>
-<code>10.96.0.0/12</code>, and both dogfood tenants run <code>Direct</code> egress, so <code>NO_PROXY</code> is never
-consulted. It takes a proxied tenant on a managed cluster — precisely what this plan
-constructs — to reach the bug. Filed as Q465.</p>
-<p><strong>Fixed (Q465).</strong> The hardcoded range is gone. The GMC now exempts the API server by
-the address the cluster reports — its own <code>KUBERNETES_SERVICE_HOST</code>, which is the
-ClusterIP the AGC pod will dial — falling back to the literal
-<code>$(KUBERNETES_SERVICE_HOST)</code> for the kubelet to expand when the GMC itself runs
-out-of-cluster, and bracketing an IPv6 ClusterIP so Go's <code>NO_PROXY</code> parser matches
-it. <code>kubernetes.default.svc</code> joins the static half for clusters whose cluster domain
-is not <code>cluster.local</code>. Worker pods lose the range outright and gain nothing: they
-hold no kubeconfig and never dial the API server. The net effect is a <em>narrower</em>
-default on every distribution — one API server address instead of a /12 of
-unrelated hosts. The workaround <code>noProxyCIDRs: [34.118.224.0/20]</code> was removed from
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-migrate/resources.yaml"><code>deploy/dogfood-migrate/resources.yaml</code></a>
-so that a clean AGC startup would itself be the verification —
-<a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">confirmed live 2026-07-31</a>.</p>
+<p>Adding the real Service CIDR to <code>noProxyCIDRs</code> fixed it immediately — root cause confirmed by measurement, not inferred.</p>
+<p><strong>This is not GKE-specific.</strong> <code>10.96.0.0/12</code> covers <code>10.96.0.0</code>–<code>10.111.255.255</code>, so the default also misses EKS (<code>172.20.0.0/16</code>) and AKS (<code>10.0.0.0/16</code>).
+Every managed Kubernetes offering breaks; only kind/kubeadm works.</p>
+<p><strong>Why nothing caught it:</strong> the kind e2e runs on a cluster whose Service CIDR <em>is</em> <code>10.96.0.0/12</code>, and both dogfood tenants run <code>Direct</code> egress, so <code>NO_PROXY</code> is never consulted.
+It takes a proxied tenant on a managed cluster — precisely what this plan constructs — to reach the bug.
+Filed as Q465.</p>
+<p><strong>Fixed (Q465).</strong> The hardcoded range is gone.
+The GMC now exempts the API server by the address the cluster reports — its own <code>KUBERNETES_SERVICE_HOST</code>, which is the ClusterIP the AGC pod will dial — falling back to the literal <code>$(KUBERNETES_SERVICE_HOST)</code> for the kubelet to expand when the GMC itself runs out-of-cluster, and bracketing an IPv6 ClusterIP so Go's <code>NO_PROXY</code> parser matches it. <code>kubernetes.default.svc</code> joins the static half for clusters whose cluster domain is not <code>cluster.local</code>.
+Worker pods lose the range outright and gain nothing: they hold no kubeconfig and never dial the API server.
+The net effect is a <em>narrower</em> default on every distribution — one API server address instead of a /12 of unrelated hosts.
+The workaround <code>noProxyCIDRs: [34.118.224.0/20]</code> was removed from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-migrate/resources.yaml"><code>deploy/dogfood-migrate/resources.yaml</code></a> so that a clean AGC startup would itself be the verification — <a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">confirmed live 2026-07-31</a>.</p>
 <h3 id="defect-v1-and-v2-collide-during-coexistence-q466">Defect: v1 and v2 collide during coexistence (Q466)<a class="headerlink" href="#defect-v1-and-v2-collide-during-coexistence-q466" title="Permanent link">&para;</a></h3>
-<p>With both control planes live after the migration, the <strong>migrated v2 AGC was clean (0
-warnings/errors) while the v1 AGC errored continuously</strong> (14 errors in 3 minutes),
-in two distinct ways:</p>
+<p>With both control planes live after the migration, the <strong>migrated v2 AGC was clean (0 warnings/errors) while the v1 AGC errored continuously</strong> (14 errors in 3 minutes), in two distinct ways:</p>
 <ol>
-<li><strong>Agent-pool Secret collision.</strong> The v1 <code>RunnerGroup</code> and the migrated v2
-   <code>RunnerSet</code> share a name, so both derive the <em>same</em> agent-pool Secret name and both
-   controllers try to manage it:
-   <code>agentpool: create agent 1: secrets "agentpool-dogfood-migrate-…-1" already exists</code>.
-   The Secrets carry <strong>no owner references</strong>, so nothing arbitrates — verified
-   directly.</li>
-<li><strong>v1 AGC lacks RBAC for a v2 kind it watches.</strong> <code>clusterrunnertemplates… is
-   forbidden: User "system:serviceaccount:gag-dogfood-migrate:actions-gateway-controller"
-   cannot list…</code> — the migration grants the <em>migrated</em> AGC's ServiceAccount, not the
-   v1 one.</li>
+<li><strong>Agent-pool Secret collision.</strong> The v1 <code>RunnerGroup</code> and the migrated v2 <code>RunnerSet</code> share a name, so both derive the <em>same</em> agent-pool Secret name and both controllers try to manage it: <code>agentpool: create agent 1: secrets "agentpool-dogfood-migrate-…-1" already exists</code>.
+   The Secrets carry <strong>no owner references</strong>, so nothing arbitrates — verified directly.</li>
+<li><strong>v1 AGC lacks RBAC for a v2 kind it watches.</strong> <code>clusterrunnertemplates… is forbidden: User "system:serviceaccount:gag-dogfood-migrate:actions-gateway-controller" cannot list…</code> — the migration grants the <em>migrated</em> AGC's ServiceAccount, not the v1 one.</li>
 </ol>
-<p>This matters because coexistence is load-bearing in the migration story: v1 is left
-running specifically so rollback stays possible. In practice the v1 tenant is left in
-a broken reconcile loop the moment v2 comes up, which weakens that guarantee. Filed as
-Q466.</p>
-<p><strong>Fixed.</strong> The agent pool now derives its Secret name, selector label, and GitHub runner
-name from the owner's <em>kind</em> as well as its name, so the two pools are disjoint; each
-agent Secret carries an owner reference (back-filled onto existing ones); and an
-existing v2 install's Secrets are moved onto the new names on first reconcile rather
-than orphaned. Splitting the Kubernetes name alone would not have been enough — GitHub
-runner names are unique per registration scope, so the two pools would have gone on
-deregistering each other's live records through the 409-conflict path.</p>
-<p>The second symptom had a different root cause than the row's framing implies, found
-while fixing it: the v1 singleton AGC reconciles <strong>every</strong> <code>RunnerSet</code> (its
-<code>GATEWAY_NAME</code> is empty, which disables gateway scoping), so it was resolving the
-migrated set's <code>templateRef</code> and reaching for a cluster-scoped kind it is not bound to.
-The fix is to stop the read rather than widen the grant — a <code>RunnerSet</code> belongs to the
-AGC of the gateway its <code>gatewayRef</code> names, so an AGC with no <code>GATEWAY_NAME</code> no longer
-registers the reconciler at all. That also closes an exposure the RBAC error had been
-masking: with the grant added and the scoping left alone, the v1 AGC would have run a
-second listener pool and a second set of GitHub registrations for a set the migrated
-gateway's AGC was already serving. Convention written up in
-<a href="../../../development/kubernetes-conventions/#derive-a-per-owner-name-from-the-owners-kind-not-just-its-name-q466">kubernetes-conventions.md § Derive a per-owner name from the owner's kind</a>.</p>
-<p><a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">Confirmed live 2026-07-31</a>:
-both symptoms absent, the two pools' Secrets disjoint and owner-referenced. That run
-also found the symmetric case this fix left open —
-<a href="#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535">Q535</a>,
-fixed by the same shape of gate.</p>
+<p>This matters because coexistence is load-bearing in the migration story: v1 is left running specifically so rollback stays possible.
+In practice the v1 tenant is left in a broken reconcile loop the moment v2 comes up, which weakens that guarantee.
+Filed as Q466.</p>
+<p><strong>Fixed.</strong> The agent pool now derives its Secret name, selector label, and GitHub runner name from the owner's <em>kind</em> as well as its name, so the two pools are disjoint; each agent Secret carries an owner reference (back-filled onto existing ones); and an existing v2 install's Secrets are moved onto the new names on first reconcile rather than orphaned.
+Splitting the Kubernetes name alone would not have been enough — GitHub runner names are unique per registration scope, so the two pools would have gone on deregistering each other's live records through the 409-conflict path.</p>
+<p>The second symptom had a different root cause than the row's framing implies, found while fixing it: the v1 singleton AGC reconciles <strong>every</strong> <code>RunnerSet</code> (its <code>GATEWAY_NAME</code> is empty, which disables gateway scoping), so it was resolving the migrated set's <code>templateRef</code> and reaching for a cluster-scoped kind it is not bound to.
+The fix is to stop the read rather than widen the grant — a <code>RunnerSet</code> belongs to the AGC of the gateway its <code>gatewayRef</code> names, so an AGC with no <code>GATEWAY_NAME</code> no longer registers the reconciler at all.
+That also closes an exposure the RBAC error had been masking: with the grant added and the scoping left alone, the v1 AGC would have run a second listener pool and a second set of GitHub registrations for a set the migrated gateway's AGC was already serving.
+Convention written up in <a href="../../../development/kubernetes-conventions/#derive-a-per-owner-name-from-the-owners-kind-not-just-its-name-q466">kubernetes-conventions.md § Derive a per-owner name from the owner's kind</a>.</p>
+<p><a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">Confirmed live 2026-07-31</a>: both symptoms absent, the two pools' Secrets disjoint and owner-referenced.
+That run also found the symmetric case this fix left open — <a href="#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535">Q535</a>, fixed by the same shape of gate.</p>
 <h3 id="defect-a-truncated-worker-pod-name-can-be-invalid-and-then-no-job-ever-runs-q467">Defect: a truncated worker pod name can be invalid, and then no job ever runs (Q467)<a class="headerlink" href="#defect-a-truncated-worker-pod-name-can-be-invalid-and-then-no-job-ever-runs-q467" title="Permanent link">&para;</a></h3>
-<p>The most serious find of the exercise, and the one that made the first baseline job
-fail. The provisioner derives the worker pod name and truncates it to the 63-char DNS
-label limit <strong>without trimming a trailing hyphen</strong>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:391</a>):</p>
+<p>The most serious find of the exercise, and the one that made the first baseline job fail.
+The provisioner derives the worker pod name and truncates it to the 63-char DNS label limit <strong>without trimming a trailing hyphen</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:391</a>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">podName</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">&quot;runner-%s-%s&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">safeName</span><span class="p">(</span><span class="nx">key</span><span class="p">.</span><span class="nx">Name</span><span class="p">),</span><span class="w"> </span><span class="nx">safePlanID</span><span class="p">)</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="nx">podName</span><span class="p">)</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="mi">63</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">podName</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">podName</span><span class="p">[:</span><span class="mi">63</span><span class="p">]</span><span class="w">   </span><span class="c1">// may land on &#39;-&#39;</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">}</span>
 </code></pre></div>
-<p>The plan ID is a UUID, whose hyphens sit at indices 8, 13, 18 and 23. If the cut
-lands on one, the apiserver rejects <strong>every</strong> worker pod:</p>
+<p>The plan ID is a UUID, whose hyphens sit at indices 8, 13, 18 and 23.
+If the cut lands on one, the apiserver rejects <strong>every</strong> worker pod:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>provisioner: create Pod runner-dogfood-migrate-gag-migrate-v1-18c32e1-d4766d0-a20852f8-:
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  metadata.name: Invalid value: &quot;…-&quot;: a lowercase RFC 1123 subdomain must … end with
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  an alphanumeric character
 </code></pre></div>
 <p>Three things make this worse than a naming nit:</p>
 <ol>
-<li><strong>Deterministic, not flaky.</strong> Whether a tenant can run jobs at all is fixed by the
-   character lengths of its gateway name and runner label. The original tenant landed
-   exactly on index 8 and could never have run a single job.</li>
-<li><strong>Both tiers.</strong> <code>scaleSetPodName</code>
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:718</a>) does the
-   identical naive truncation, so this does <strong>not</strong> disappear when classic is removed
-   at <code>v2.0.0</code>.</li>
-<li><strong>The symptom points the wrong way.</strong> No worker pod is ever created, and GitHub
-   reports <em>"The self-hosted runner lost communication with the server… verify the
-   machine is running and has a healthy network connection."</em> An operator debugs
-   networking, not name validation.</li>
+<li><strong>Deterministic, not flaky.</strong> Whether a tenant can run jobs at all is fixed by the character lengths of its gateway name and runner label.
+   The original tenant landed exactly on index 8 and could never have run a single job.</li>
+<li><strong>Both tiers.</strong> <code>scaleSetPodName</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:718</a>) does the identical naive truncation, so this does <strong>not</strong> disappear when classic is removed at <code>v2.0.0</code>.</li>
+<li><strong>The symptom points the wrong way.</strong> No worker pod is ever created, and GitHub reports <em>"The self-hosted runner lost communication with the server… verify the machine is running and has a healthy network connection."</em> An operator debugs networking, not name validation.</li>
 </ol>
-<p><strong>Proof by controlled change.</strong> The only variable altered was the gateway name —
-<code>dogfood-migrate</code> (cut at index 8, a hyphen) → <code>dfmigrate</code> (cut at index 14, a hex
-digit). Same tenant, same workflow, same label: the job went from <em>no pod, runner
-lost communication</em> to green, with a valid 63-char pod name ending in <code>4</code>.</p>
-<p>Truncation is effectively unavoidable — <code>runner-</code> + key + <code>-</code> + a 36-char UUID
-exceeds 63 for any realistic tenant name — so every tenant is rolling against the
-hyphen positions. The kind e2e tenants and the dogfood CI tenant happen to land
-safely, which is why nothing caught it. Filed as Q467; the fix
-belongs in <code>provisioner.go</code> in its own PR, and cannot be validated here anyway
-because dogfood runs the released <code>agc</code> image, not a branch build.</p>
-<p>The tenant manifest pins a deliberately short gateway name as the workaround, with
-the arithmetic inline.</p>
-<p><strong>Fixed.</strong> The provisioner now splits the 63-char budget across the name's segments
-before joining them and replaces each truncated tail with a hash of that whole
-segment, so a derived name is always a valid DNS label <em>and</em> still unique per job —
-trimming the trailing hyphen alone would have traded a rejected pod for a colliding
-one. Both tiers share the one derivation. An envtest at the boundary length pins it
-against a real API server, and a <code>WorkerPodCreateFailed</code> Warning Event now carries the
-API server's message to the owner object, so the next rejection of any kind is
-diagnosable from <code>kubectl describe</code> instead of a live debugging session
-(<a href="../../../development/kubernetes-conventions/#derive-every-name-through-apiapinames-q467-q473">convention</a> ·
-<a href="../../../operations/troubleshooting/#runner-lost-communication-and-no-worker-pod-was-ever-created">runbook</a>).
-The dogfood tenant's natural name was restored once the cluster ran a build carrying
-the fix, and both tiers then produced valid 63-char names —
-<a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">confirmed live 2026-07-31</a>.</p>
+<p><strong>Proof by controlled change.</strong> The only variable altered was the gateway name — <code>dogfood-migrate</code> (cut at index 8, a hyphen) → <code>dfmigrate</code> (cut at index 14, a hex digit).
+Same tenant, same workflow, same label: the job went from <em>no pod, runner lost communication</em> to green, with a valid 63-char pod name ending in <code>4</code>.</p>
+<p>Truncation is effectively unavoidable — <code>runner-</code> + key + <code>-</code> + a 36-char UUID exceeds 63 for any realistic tenant name — so every tenant is rolling against the hyphen positions.
+The kind e2e tenants and the dogfood CI tenant happen to land safely, which is why nothing caught it.
+Filed as Q467; the fix belongs in <code>provisioner.go</code> in its own PR, and cannot be validated here anyway because dogfood runs the released <code>agc</code> image, not a branch build.</p>
+<p>The tenant manifest pins a deliberately short gateway name as the workaround, with the arithmetic inline.</p>
+<p><strong>Fixed.</strong> The provisioner now splits the 63-char budget across the name's segments before joining them and replaces each truncated tail with a hash of that whole segment, so a derived name is always a valid DNS label <em>and</em> still unique per job — trimming the trailing hyphen alone would have traded a rejected pod for a colliding one.
+Both tiers share the one derivation.
+An envtest at the boundary length pins it against a real API server, and a <code>WorkerPodCreateFailed</code> Warning Event now carries the API server's message to the owner object, so the next rejection of any kind is diagnosable from <code>kubectl describe</code> instead of a live debugging session (<a href="../../../development/kubernetes-conventions/#derive-every-name-through-apiapinames-q467-q473">convention</a> · <a href="../../../operations/troubleshooting/#runner-lost-communication-and-no-worker-pod-was-ever-created">runbook</a>).
+The dogfood tenant's natural name was restored once the cluster ran a build carrying the fix, and both tiers then produced valid 63-char names — <a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">confirmed live 2026-07-31</a>.</p>
 <h3 id="re-validation-on-a-fixed-control-plane-2026-07-31-q472">Re-validation on a fixed control plane (2026-07-31, Q472)<a class="headerlink" href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472" title="Permanent link">&para;</a></h3>
-<p>The run the caveat above asks for. Dogfood now pins <code>2715e7f8</code> for both GMC and AGC,
-which carries all three fixes, so each is live-verifiable for the first time. The
-tenant ran with <code>noProxyCIDRs</code> unset <strong>and</strong> its natural gateway name <code>dogfood-migrate</code>
-restored — both workarounds removed, so a clean run is itself the evidence.</p>
+<p>The run the caveat above asks for.
+Dogfood now pins <code>2715e7f8</code> for both GMC and AGC, which carries all three fixes, so each is live-verifiable for the first time.
+The tenant ran with <code>noProxyCIDRs</code> unset <strong>and</strong> its natural gateway name <code>dogfood-migrate</code> restored — both workarounds removed, so a clean run is itself the evidence.</p>
 <table>
 <thead>
 <tr>
@@ -3353,133 +3177,62 @@ restored — both workarounds removed, so a clean run is itself the evidence.</p
 </tr>
 </tbody>
 </table>
-<p>Both smoke jobs went green with the natural name — baseline
-<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647304201">run 30647304201</a>
-on the v1 classic path (runner <code>dogfood-migrate-gag-migrate-v1-18c32e1-0</code>) and
-<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647976704">run 30647976704</a>
-after the migration on the scale-set path (runner
-<code>gag-migrate-v1-1085497c-…</code>, provisioned via <code>scaleSetPodName</code>). The
-Q231 recreate flipped the stored annotation <code>Classic</code> → <code>ScaleSet</code> as before.
-Teardown followed the documented order and deadlocked nowhere: RunnerSets, gateway,
-namespace and the cluster-scoped <code>ClusterRunnerTemplate</code> all cleared without a
-stranded finalizer, leaving no orphan. Both workarounds are now removed from
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-migrate/resources.yaml"><code>resources.yaml</code></a> permanently.</p>
-<p><strong>The workarounds were load-bearing, and removing them proved it.</strong> The natural name
-is the case Q467 originally failed on: the old derivation cut
-<code>runner-dogfood-migrate-gag-migrate-v1-18c32e1-&lt;planID&gt;</code> at index 63, landing on the
-UUID's hyphen at index 8, and every worker pod was rejected.</p>
+<p>Both smoke jobs went green with the natural name — baseline <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647304201">run 30647304201</a> on the v1 classic path (runner <code>dogfood-migrate-gag-migrate-v1-18c32e1-0</code>) and <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647976704">run 30647976704</a> after the migration on the scale-set path (runner <code>gag-migrate-v1-1085497c-…</code>, provisioned via <code>scaleSetPodName</code>).
+The Q231 recreate flipped the stored annotation <code>Classic</code> → <code>ScaleSet</code> as before.
+Teardown followed the documented order and deadlocked nowhere: RunnerSets, gateway, namespace and the cluster-scoped <code>ClusterRunnerTemplate</code> all cleared without a stranded finalizer, leaving no orphan.
+Both workarounds are now removed from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-migrate/resources.yaml"><code>resources.yaml</code></a> permanently.</p>
+<p><strong>The workarounds were load-bearing, and removing them proved it.</strong> The natural name is the case Q467 originally failed on: the old derivation cut <code>runner-dogfood-migrate-gag-migrate-v1-18c32e1-&lt;planID&gt;</code> at index 63, landing on the UUID's hyphen at index 8, and every worker pod was rejected.</p>
 <h3 id="defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535">Defect: a v2 AGC also reconciles the v1 RunnerGroups in its namespace (Q535)<a class="headerlink" href="#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535" title="Permanent link">&para;</a></h3>
-<p>Found by this run, in the window Q466 was being re-checked. It is <strong>not</strong> a Q466
-regression — the registration below is unconditional at <code>#915</code>'s parent too — but it
-is the mirror image of the case Q466 closed, and Q466's fix did not close it.</p>
-<p>The v1 <code>RunnerGroupReconciler</code> is registered unconditionally on every AGC
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">main.go:433</a>), and gateway scoping is a field selector on
-<code>RunnerSet</code> alone (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">main.go:294</a>) — nothing scopes the
-RunnerGroup informer. So during coexistence the migrated per-gateway AGC serves the
-v1 tenant's <code>RunnerGroup</code> <em>as well as</em> the v1 AGC that owns it. Measured, both live at
-once:</p>
+<p>Found by this run, in the window Q466 was being re-checked.
+It is <strong>not</strong> a Q466 regression — the registration below is unconditional at <code>#915</code>'s parent too — but it is the mirror image of the case Q466 closed, and Q466's fix did not close it.</p>
+<p>The v1 <code>RunnerGroupReconciler</code> is registered unconditionally on every AGC (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">main.go:433</a>), and gateway scoping is a field selector on <code>RunnerSet</code> alone (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">main.go:294</a>) — nothing scopes the RunnerGroup informer.
+So during coexistence the migrated per-gateway AGC serves the v1 tenant's <code>RunnerGroup</code> <em>as well as</em> the v1 AGC that owns it.
+Measured, both live at once:</p>
 <ul>
-<li><strong>Duplicate listener pools on one group.</strong> The v2 AGC started its own listener at
-  <code>agentIndex: 0</code> for <code>dogfood-migrate-gag-migrate-v1-18c32e1</code> — the index the v1 AGC
-  was already running. Same index means the same agent Secret and the same GitHub
-  runner name, which is exactly the hazard the Q466 fix text describes ("two
-  controllers on one object, which no amount of naming can separate") in the direction
-  it did not fix.</li>
-<li><strong>A hot retry loop against GitHub.</strong> The duplicate listener took
-  <code>409</code> from the broker on every <code>CreateSession</code> — <strong>153 in ~2.5 minutes</strong>, roughly
-  1/s, listener index climbing monotonically, no backoff.</li>
-<li><strong>Continuous status contention.</strong> Both AGCs' RunnerGroup reconcilers wrote the same
-  object: ~35 <code>the object has been modified</code> errors per minute <em>each</em>, not settling.</li>
+<li><strong>Duplicate listener pools on one group.</strong> The v2 AGC started its own listener at <code>agentIndex: 0</code> for <code>dogfood-migrate-gag-migrate-v1-18c32e1</code> — the index the v1 AGC was already running.
+  Same index means the same agent Secret and the same GitHub runner name, which is exactly the hazard the Q466 fix text describes ("two controllers on one object, which no amount of naming can separate") in the direction it did not fix.</li>
+<li><strong>A hot retry loop against GitHub.</strong> The duplicate listener took <code>409</code> from the broker on every <code>CreateSession</code> — <strong>153 in ~2.5 minutes</strong>, roughly 1/s, listener index climbing monotonically, no backoff.</li>
+<li><strong>Continuous status contention.</strong> Both AGCs' RunnerGroup reconcilers wrote the same object: ~35 <code>the object has been modified</code> errors per minute <em>each</em>, not settling.</li>
 </ul>
-<p><strong>Proof by controlled change.</strong> Deleting the v1 gateway — the only variable altered —
-removed the v1 <code>RunnerGroup</code> and the 409s stopped at that instant (last one 16:37:29),
-leaving the v2 AGC quiet.</p>
-<p>Why the first run missed it: the v1 AGC's own Secret-collision and RBAC errors
-dominated that window, and the v2 AGC was checked for <em>its</em> kind rather than for the
-v1 kind it had also picked up.</p>
-<p><strong>Fixed.</strong> The AGC registers the v1 <code>RunnerGroup</code> reconciler only when <code>GATEWAY_NAME</code> is
-empty — the exact mirror of Q466's gate, and, as predicted, a decline rather than a
-widening. Since a <code>RunnerGroup</code> names no gateway, "the RunnerGroups that gateway does
-not own" is all of them, so there is no informer to scope: a gateway-scoped AGC simply
-does not serve the kind. Net effect, now stated in
-<a href="../../../design/05-security/">05-security.md</a>: <strong>each AGC process serves exactly one API</strong>.</p>
+<p><strong>Proof by controlled change.</strong> Deleting the v1 gateway — the only variable altered — removed the v1 <code>RunnerGroup</code> and the 409s stopped at that instant (last one 16:37:29), leaving the v2 AGC quiet.</p>
+<p>Why the first run missed it: the v1 AGC's own Secret-collision and RBAC errors dominated that window, and the v2 AGC was checked for <em>its</em> kind rather than for the v1 kind it had also picked up.</p>
+<p><strong>Fixed.</strong> The AGC registers the v1 <code>RunnerGroup</code> reconciler only when <code>GATEWAY_NAME</code> is empty — the exact mirror of Q466's gate, and, as predicted, a decline rather than a widening.
+Since a <code>RunnerGroup</code> names no gateway, "the RunnerGroups that gateway does not own" is all of them, so there is no informer to scope: a gateway-scoped AGC simply does not serve the kind.
+Net effect, now stated in <a href="../../../design/05-security/">05-security.md</a>: <strong>each AGC process serves exactly one API</strong>.</p>
 <p>Two consequences fell out of the change rather than being sought:</p>
 <ul>
-<li><strong>No AGC serves both APIs any more.</strong> The two gates are complementary, so the
-  process shape the Q466 coexistence suite modelled — one manager running both
-  reconcilers — no longer exists. That suite still earns its keep (its assertions are
-  about the <em>objects</em>: disjoint Secret names, labels, runner names and owner refs keep
-  the pools separable however they are deployed) and now runs a strictly harsher
-  configuration than production does.</li>
-<li><strong>A gateway-scoped AGC on a v1-only install now has no reconciler at all</strong>, so it
-  fails fast at startup instead of passing its probes and reconciling nothing. Reachable
-  only by uninstalling the v2 CRD chart under live v2 gateways;
-  <a href="../../../operations/troubleshooting/#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing">troubleshooting.md</a>
-  covers it.</li>
+<li><strong>No AGC serves both APIs any more.</strong> The two gates are complementary, so the process shape the Q466 coexistence suite modelled — one manager running both reconcilers — no longer exists.
+  That suite still earns its keep (its assertions are about the <em>objects</em>: disjoint Secret names, labels, runner names and owner refs keep the pools separable however they are deployed) and now runs a strictly harsher configuration than production does.</li>
+<li><strong>A gateway-scoped AGC on a v1-only install now has no reconciler at all</strong>, so it fails fast at startup instead of passing its probes and reconciling nothing.
+  Reachable only by uninstalling the v2 CRD chart under live v2 gateways; <a href="../../../operations/troubleshooting/#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing">troubleshooting.md</a> covers it.</li>
 </ul>
-<p>Regression cover is <code>TestQ535_GatewayScopedAGCDeclinesV1RunnerGroups</code>
-(<code>cmd/agc/internal/controller/integration/</code>), which runs the two AGCs a mid-migration
-namespace actually has and asserts the v1 group keeps exactly one listener, still on the
-session the v1 AGC opened. It shares <code>controller.ServesRunnerGroups</code> with <code>main.go</code>, and
-was confirmed to fail on that assertion with the gate reverted.</p>
-<p><strong>One finding the test surfaced about the fake.</strong> A broker session's <code>ownerName</code> is
-<code>&lt;CR name&gt;-&lt;agentIndex&gt;</code> for <em>both</em> kinds — the kind disambiguation Q466 added to agent
-Secret names and GitHub runner names never reached it. That is cosmetic in the protocol
-(GitHub keys session conflicts on the agent, not the owner string), but it means
-<code>brokertest.Server.ActiveSessionsForOwner</code> cannot separate a same-named RunnerGroup and
-RunnerSet, and its doc comment still claims the owner identifies a RunnerGroup. Filed as
-Q538; the test works around it by naming its RunnerSet distinctly.</p>
-<p>Q538 later measured the production client and refuted the "cosmetic" reading above: the
-listener sends that same string as <code>agent.name</code>, so for a RunnerSet it names no runner
-GitHub has registered. The fake's own name scoping and doc were fixed there; the wire-name
-divergence carried to <a href="../../../STATUS/#Q677">Q677</a>.</p>
+<p>Regression cover is <code>TestQ535_GatewayScopedAGCDeclinesV1RunnerGroups</code> (<code>cmd/agc/internal/controller/integration/</code>), which runs the two AGCs a mid-migration namespace actually has and asserts the v1 group keeps exactly one listener, still on the session the v1 AGC opened.
+It shares <code>controller.ServesRunnerGroups</code> with <code>main.go</code>, and was confirmed to fail on that assertion with the gate reverted.</p>
+<p><strong>One finding the test surfaced about the fake.</strong> A broker session's <code>ownerName</code> is <code>&lt;CR name&gt;-&lt;agentIndex&gt;</code> for <em>both</em> kinds — the kind disambiguation Q466 added to agent Secret names and GitHub runner names never reached it.
+That is cosmetic in the protocol (GitHub keys session conflicts on the agent, not the owner string), but it means <code>brokertest.Server.ActiveSessionsForOwner</code> cannot separate a same-named RunnerGroup and RunnerSet, and its doc comment still claims the owner identifies a RunnerGroup.
+Filed as Q538; the test works around it by naming its RunnerSet distinctly.</p>
+<p>Q538 later measured the production client and refuted the "cosmetic" reading above: the listener sends that same string as <code>agent.name</code>, so for a RunnerSet it names no runner GitHub has registered.
+The fake's own name scoping and doc were fixed there; the wire-name divergence carried to <a href="../../../STATUS/#Q677">Q677</a>.</p>
 <h3 id="the-teardown-order-is-load-bearing-and-undocumented">The teardown order is load-bearing and undocumented<a class="headerlink" href="#the-teardown-order-is-load-bearing-and-undocumented" title="Permanent link">&para;</a></h3>
-<p>Deleting the tenant namespace directly left it in <code>Terminating</code> indefinitely on three
-finalizers (<code>actions-gateway.com/agentpool-cleanup</code>,
-<code>actions-gateway.github.com/agentpool-cleanup</code>,
-<code>actions-gateway.github.com/gmc-cleanup</code>). The reason is structural: the AGC
-Deployments live <em>inside</em> the tenant namespace, so namespace deletion removes the very
-controllers that must clear those finalizers.</p>
-<p><a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md § Step 4</a> does prescribe
-the correct order — delete the CRs first, while the controllers still run — so this
-was a bug in <strong>this plan's runbook</strong>, since corrected in step 11, rather than a
-product defect. What is missing is any warning that the obvious alternative deadlocks;
-that doc gap is folded into Q466 rather than filed separately.</p>
-<p><strong>Fixed.</strong> <a href="../../../operations/migration-v1-to-v2/#teardown-order-is-load-bearing-never-delete-the-namespace-first">migration-v1-to-v2.md § Teardown order is load-bearing</a>
-now states the order, names the three finalizers, explains why the deadlock is
-structural rather than a slow reconcile, and gives the recovery — including what the
-recovery skips (the GitHub-side deregistration). A
-<a href="../../../operations/troubleshooting/#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers">troubleshooting entry</a>
-points there from the symptom. The rollback snippet in Step 3 was also reordered: it
-deleted the v2 <code>ActionsGateway</code> before its <code>RunnerSet</code>s, which cascades away the AGC
-whose finalizer they wait on — the same deadlock, in the doc that prescribes it.</p>
-<p>Recovery, for the record: all namespace content was already deleted and no
-cluster-scoped object was at risk of being orphaned (verified before acting), so the
-three finalizers were cleared with a merge patch and the namespace drained
-immediately.</p>
-<p><strong>A second, different ordering trap on the v2 side (part 2).</strong> Following the
-corrected "CRs first" rule was still not enough, because <em>which</em> CR comes first
-matters:</p>
+<p>Deleting the tenant namespace directly left it in <code>Terminating</code> indefinitely on three finalizers (<code>actions-gateway.com/agentpool-cleanup</code>, <code>actions-gateway.github.com/agentpool-cleanup</code>, <code>actions-gateway.github.com/gmc-cleanup</code>).
+The reason is structural: the AGC Deployments live <em>inside</em> the tenant namespace, so namespace deletion removes the very controllers that must clear those finalizers.</p>
+<p><a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md § Step 4</a> does prescribe the correct order — delete the CRs first, while the controllers still run — so this was a bug in <strong>this plan's runbook</strong>, since corrected in step 11, rather than a product defect.
+What is missing is any warning that the obvious alternative deadlocks; that doc gap is folded into Q466 rather than filed separately.</p>
+<p><strong>Fixed.</strong> <a href="../../../operations/migration-v1-to-v2/#teardown-order-is-load-bearing-never-delete-the-namespace-first">migration-v1-to-v2.md § Teardown order is load-bearing</a> now states the order, names the three finalizers, explains why the deadlock is structural rather than a slow reconcile, and gives the recovery — including what the recovery skips (the GitHub-side deregistration).
+A <a href="../../../operations/troubleshooting/#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers">troubleshooting entry</a> points there from the symptom.
+The rollback snippet in Step 3 was also reordered: it deleted the v2 <code>ActionsGateway</code> before its <code>RunnerSet</code>s, which cascades away the AGC whose finalizer they wait on — the same deadlock, in the doc that prescribes it.</p>
+<p>Recovery, for the record: all namespace content was already deleted and no cluster-scoped object was at risk of being orphaned (verified before acting), so the three finalizers were cleared with a merge patch and the namespace drained immediately.</p>
+<p><strong>A second, different ordering trap on the v2 side (part 2).</strong> Following the corrected "CRs first" rule was still not enough, because <em>which</em> CR comes first matters:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all<span class="w">   </span><span class="c1"># cascades away the AGC…</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all<span class="w">        </span><span class="c1"># …now this hangs forever</span>
 </code></pre></div>
-<p>Deleting the <code>ActionsGateway</code> cascades its AGC Deployment away, but a <strong>v2
-<code>RunnerSet</code> is not owned by the gateway</strong> — <a href="../../../operations/backup-restore/">backup-restore.md</a>
-says so explicitly ("they are never deleted by gateway teardown"). So the RunnerSet
-survives the cascade and is then left holding <code>actions-gateway.com/agentpool-cleanup</code>
-with no controller alive to clear it. Observed: the set sat <code>Terminating</code> from
-03:40:22 with <code>dfmigrate-agc</code> already gone.</p>
-<p>This is not the same bug as the namespace deadlock, and the existing docs do not
-cover it. <a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md § Step 4</a> says
-<code>delete actionsgateways --all</code> and states children cascade — <strong>true for v1</strong>, where
-<code>RunnerGroup</code>s <em>are</em> gateway-owned (confirmed here: deleting the v1 gateway removed
-its AGC, proxy and RunnerGroup cleanly), and <strong>false for v2</strong>.</p>
-<p><strong>The correct v2 order is RunnerSets first, then the ActionsGateway, then the
-namespace, then the cluster-scoped outputs.</strong> Both deadlocks are now documented for
-operators — the Q466 fix (#915) added
-<a href="../../../operations/migration-v1-to-v2/#teardown-order-is-load-bearing-never-delete-the-namespace-first">Teardown order is load-bearing: never delete the namespace first</a>
-to the migration guide, covering the namespace-first case <em>and</em> the
-gateway-before-RunnerSet case this run found. Nothing further outstanding here.</p>
+<p>Deleting the <code>ActionsGateway</code> cascades its AGC Deployment away, but a <strong>v2 <code>RunnerSet</code> is not owned by the gateway</strong> — <a href="../../../operations/backup-restore/">backup-restore.md</a> says so explicitly ("they are never deleted by gateway teardown").
+So the RunnerSet survives the cascade and is then left holding <code>actions-gateway.com/agentpool-cleanup</code> with no controller alive to clear it.
+Observed: the set sat <code>Terminating</code> from 03:40:22 with <code>dfmigrate-agc</code> already gone.</p>
+<p>This is not the same bug as the namespace deadlock, and the existing docs do not cover it.
+<a href="../../../operations/migration-v1-to-v2/">migration-v1-to-v2.md § Step 4</a> says <code>delete actionsgateways --all</code> and states children cascade — <strong>true for v1</strong>, where <code>RunnerGroup</code>s <em>are</em> gateway-owned (confirmed here: deleting the v1 gateway removed its AGC, proxy and RunnerGroup cleanly), and <strong>false for v2</strong>.</p>
+<p><strong>The correct v2 order is RunnerSets first, then the ActionsGateway, then the namespace, then the cluster-scoped outputs.</strong> Both deadlocks are now documented for operators — the Q466 fix (#915) added <a href="../../../operations/migration-v1-to-v2/#teardown-order-is-load-bearing-never-delete-the-namespace-first">Teardown order is load-bearing: never delete the namespace first</a> to the migration guide, covering the namespace-first case <em>and</em> the gateway-before-RunnerSet case this run found.
+Nothing further outstanding here.</p>
 
 
 

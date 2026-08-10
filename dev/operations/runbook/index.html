@@ -3602,14 +3602,17 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer</p>
 </blockquote>
-<p>For initial setup steps see <a href="../../getting-started/">Getting Started</a>. For detailed symptom → diagnosis steps see <a href="../troubleshooting/">Troubleshooting</a>.</p>
+<p>For initial setup steps see <a href="../../getting-started/">Getting Started</a>.
+For detailed symptom → diagnosis steps see <a href="../troubleshooting/">Troubleshooting</a>.</p>
 <hr />
 <h2 id="day-2-operations">Day-2 Operations<a class="headerlink" href="#day-2-operations" title="Permanent link">&para;</a></h2>
 <h3 id="adding-a-tenant">Adding a Tenant<a class="headerlink" href="#adding-a-tenant" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Ensure the tenant namespace exists: <code>kubectl get namespace &lt;namespace&gt;</code>.</li>
-<li>Have the tenant create the GitHub App Secret in their namespace. See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</li>
-<li>Have the tenant create the gateway CR(s) — the recommended v2 <code>ActionsGateway</code> + <code>RunnerSet</code>, or the legacy v1 <code>ActionsGateway</code>. See <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started §4</a>.</li>
+<li>Have the tenant create the GitHub App Secret in their namespace.
+   See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</li>
+<li>Have the tenant create the gateway CR(s) — the recommended v2 <code>ActionsGateway</code> + <code>RunnerSet</code>, or the legacy v1 <code>ActionsGateway</code>.
+   See <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started §4</a>.</li>
 <li>Confirm the GMC has provisioned resources within ~30 seconds:
    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy,hpa,networkpolicy,resourcequota<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
@@ -3619,25 +3622,36 @@
 <p>No cluster-admin involvement is required after initial GMC deployment.</p>
 <hr />
 <h3 id="adjusting-tenant-quota">Adjusting Tenant Quota<a class="headerlink" href="#adjusting-tenant-quota" title="Permanent link">&para;</a></h3>
-<p>The namespace <code>ResourceQuota</code> is <strong>platform-owned</strong> — it is not a field on the <code>ActionsGateway</code> CR. Edit the <code>ResourceQuota</code> object on the tenant namespace directly (or through your GitOps / tenant-operator stack, if that is what manages it):</p>
+<p>The namespace <code>ResourceQuota</code> is <strong>platform-owned</strong> — it is not a field on the <code>ActionsGateway</code> CR.
+Edit the <code>ResourceQuota</code> object on the tenant namespace directly (or through your GitOps / tenant-operator stack, if that is what manages it):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>resourcequota<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;quota-name&gt;
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Update spec.hard values, save and exit</span>
 </code></pre></div>
-<p>The change takes effect immediately. Running jobs are not interrupted; the new quota applies on the next pod creation attempt. The gateway reads remaining quota and reacts to exhaustion but never writes the quota itself. On the <strong>classic</strong> acquisition tier it declines to claim a job the quota can't place, leaving it queued at GitHub for a sibling with capacity; if headroom is lost after the claim, the pod create is retried in place (<code>maxQuotaRetries</code> × <code>quotaRetryDelay</code>) and the job is abandoned if the budget runs out. On a <code>ScaleSet</code> set — the default — there is no pre-claim quota rung: the set advertises its configured worker ceiling to GitHub, so a quota-blocked job is assigned and goes straight to that same in-place retry. Either way, watch <code>actions_gateway_quota_retries_exhausted_total</code>.</p>
+<p>The change takes effect immediately.
+Running jobs are not interrupted; the new quota applies on the next pod creation attempt.
+The gateway reads remaining quota and reacts to exhaustion but never writes the quota itself.
+On the <strong>classic</strong> acquisition tier it declines to claim a job the quota can't place, leaving it queued at GitHub for a sibling with capacity; if headroom is lost after the claim, the pod create is retried in place (<code>maxQuotaRetries</code> × <code>quotaRetryDelay</code>) and the job is abandoned if the budget runs out.
+On a <code>ScaleSet</code> set — the default — there is no pre-claim quota rung: the set advertises its configured worker ceiling to GitHub, so a quota-blocked job is assigned and goes straight to that same in-place retry.
+Either way, watch <code>actions_gateway_quota_retries_exhausted_total</code>.</p>
 <hr />
 <h3 id="scaling-maxlisteners">Scaling maxListeners<a class="headerlink" href="#scaling-maxlisteners" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Update spec.runnerGroups[N].maxListeners</span>
 </code></pre></div>
-<p>The GMC propagates the change to the <code>RunnerGroup</code> CR. The AGC reconciles the new ceiling on its next reconcile cycle (a few seconds). No restart needed.</p>
+<p>The GMC propagates the change to the <code>RunnerGroup</code> CR.
+The AGC reconciles the new ceiling on its next reconcile cycle (a few seconds).
+No restart needed.</p>
 <hr />
 <h3 id="rotating-github-app-credentials">Rotating GitHub App Credentials<a class="headerlink" href="#rotating-github-app-credentials" title="Permanent link">&para;</a></h3>
 <p>See <a href="../../getting-started/#rotating-github-app-credentials">Getting Started — Rotating GitHub App Credentials</a> for the full procedure.</p>
-<p>In brief: create a new Secret with the new private key, then change <code>spec.gitHubAppRef.name</code> in the <code>ActionsGateway</code> CR to reference the new Secret. The GMC detects the Secret reference change and rolls the AGC Deployment. Do not update the existing Secret in-place; the GMC does not watch Secret contents, only the reference.</p>
+<p>In brief: create a new Secret with the new private key, then change <code>spec.gitHubAppRef.name</code> in the <code>ActionsGateway</code> CR to reference the new Secret.
+The GMC detects the Secret reference change and rolls the AGC Deployment.
+Do not update the existing Secret in-place; the GMC does not watch Secret contents, only the reference.</p>
 <hr />
 <h2 id="alerting">Alerting<a class="headerlink" href="#alerting" title="Permanent link">&para;</a></h2>
 <p>Reference the SLO targets in <a href="../../design/appendix-a-capacity-slos/">Appendix A</a> for threshold derivation.</p>
-<p>The alerts below cover availability and SLO breaches. For <strong>abuse and compromise</strong> detection (eviction-retry loops, proxy slowloris, credential harvesting), see <a href="../security-operations/">security-operations.md</a>.</p>
+<p>The alerts below cover availability and SLO breaches.
+For <strong>abuse and compromise</strong> detection (eviction-retry loops, proxy slowloris, credential harvesting), see <a href="../security-operations/">security-operations.md</a>.</p>
 <h3 id="which-metrics-to-alert-on">Which Metrics to Alert On<a class="headerlink" href="#which-metrics-to-alert-on" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3726,54 +3740,77 @@
 - HPA metric unknown — autoscaling broken; proxy may not handle burst load.</p>
 <hr />
 <h2 id="alert-rule-reference">Alert Rule Reference<a class="headerlink" href="#alert-rule-reference" title="Permanent link">&para;</a></h2>
-<p>Every alert shipped in the reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a>
-(reproduced in <a href="../observability-alerting/#recommended-alert-rules">Recommended Alert Rules</a>) carries a
-<code>runbook_url</code> annotation that resolves to the matching entry below, so on-call lands on a response
-procedure rather than just the alert's <code>summary</code>/<code>description</code>. Severity classes follow
-<a href="#page-worthy-vs-ticket-worthy">Page-Worthy vs. Ticket-Worthy</a>.</p>
+<p>Every alert shipped in the reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> (reproduced in <a href="../observability-alerting/#recommended-alert-rules">Recommended Alert Rules</a>) carries a <code>runbook_url</code> annotation that resolves to the matching entry below, so on-call lands on a response procedure rather than just the alert's <code>summary</code>/<code>description</code>.
+Severity classes follow <a href="#page-worthy-vs-ticket-worthy">Page-Worthy vs. Ticket-Worthy</a>.</p>
 <h3 id="actionsgatewaynoactivesessions">ActionsGatewayNoActiveSessions<a class="headerlink" href="#actionsgatewaynoactivesessions" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> The AGC has no open long-poll sessions, so no jobs are acquired and the queue backs up indefinitely. Restore sessions with <a href="#active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero</a>.</p>
+<p><strong>Page.</strong> The AGC has no open long-poll sessions, so no jobs are acquired and the queue backs up indefinitely.
+Restore sessions with <a href="#active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero</a>.</p>
 <h3 id="actionsgatewaytokenrefresherrors">ActionsGatewayTokenRefreshErrors<a class="headerlink" href="#actionsgatewaytokenrefresherrors" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> GitHub App token refresh has been failing; sessions will fail once the current token expires (~1 hour). See <a href="../troubleshooting/#token-refresh-errors-spiking">Token Refresh Errors Spiking</a>.</p>
+<p><strong>Page.</strong> GitHub App token refresh has been failing; sessions will fail once the current token expires (~1 hour).
+See <a href="../troubleshooting/#token-refresh-errors-spiking">Token Refresh Errors Spiking</a>.</p>
 <h3 id="actionsgatewayrenewjoberrors">ActionsGatewayRenewJobErrors<a class="headerlink" href="#actionsgatewayrenewjoberrors" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> RenewJob is failing at a sustained rate, so running jobs may be cancelled by GitHub. See <a href="../troubleshooting/#renewjob-failures-rising">RenewJob Failures Rising</a>.</p>
+<p><strong>Page.</strong> RenewJob is failing at a sustained rate, so running jobs may be cancelled by GitHub.
+See <a href="../troubleshooting/#renewjob-failures-rising">RenewJob Failures Rising</a>.</p>
 <h3 id="actionsgatewaypodcreationlatencyp99">ActionsGatewayPodCreationLatencyP99<a class="headerlink" href="#actionsgatewaypodcreationlatencyp99" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> p99 pod-creation latency has breached the 60s SLO, indicating a scheduling stall or quota exhaustion. Triage with <a href="#pod_creation_latency_seconds-p95--15s"><code>pod_creation_latency_seconds p95 &gt; 15s</code></a>.</p>
+<p><strong>Page.</strong> p99 pod-creation latency has breached the 60s SLO, indicating a scheduling stall or quota exhaustion.
+Triage with <a href="#pod_creation_latency_seconds-p95--15s"><code>pod_creation_latency_seconds p95 &gt; 15s</code></a>.</p>
 <h3 id="actionsgatewaypodcreationlatencyp95">ActionsGatewayPodCreationLatencyP95<a class="headerlink" href="#actionsgatewaypodcreationlatencyp95" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> p95 pod-creation latency has breached the 15s SLO — degraded but jobs still complete. Triage with <a href="#pod_creation_latency_seconds-p95--15s"><code>pod_creation_latency_seconds p95 &gt; 15s</code></a>.</p>
+<p><strong>Ticket.</strong> p95 pod-creation latency has breached the 15s SLO — degraded but jobs still complete.
+Triage with <a href="#pod_creation_latency_seconds-p95--15s"><code>pod_creation_latency_seconds p95 &gt; 15s</code></a>.</p>
 <h3 id="actionsgatewayevictionretriesexhausted">ActionsGatewayEvictionRetriesExhausted<a class="headerlink" href="#actionsgatewayevictionretriesexhausted" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> A job's eviction-retry budget is exhausted and the job requires a manual re-run. See <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a>.</p>
+<p><strong>Ticket.</strong> A job's eviction-retry budget is exhausted and the job requires a manual re-run.
+See <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a>.</p>
 <h3 id="actionsgatewayquotaretriesexhausted">ActionsGatewayQuotaRetriesExhausted<a class="headerlink" href="#actionsgatewayquotaretriesexhausted" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> A job's quota-retry budget is exhausted — worker pod creation kept being rejected by the namespace <code>ResourceQuota</code> — and the job was abandoned and requires a manual re-run. Raise the quota or lower <code>maxWorkers</code> — see <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a> and <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>.</p>
+<p><strong>Ticket.</strong> A job's quota-retry budget is exhausted — worker pod creation kept being rejected by the namespace <code>ResourceQuota</code> — and the job was abandoned and requires a manual re-run.
+Raise the quota or lower <code>maxWorkers</code> — see <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a> and <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>.</p>
 <h3 id="actionsgatewayworkerquotaexceeded">ActionsGatewayWorkerQuotaExceeded<a class="headerlink" href="#actionsgatewayworkerquotaexceeded" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> The namespace <code>ResourceQuota</code> is rejecting worker pods, so acquired jobs cannot schedule. Raise the quota or lower <code>maxWorkers</code> — see <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a> and <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>.</p>
+<p><strong>Page.</strong> The namespace <code>ResourceQuota</code> is rejecting worker pods, so acquired jobs cannot schedule.
+Raise the quota or lower <code>maxWorkers</code> — see <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a> and <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>.</p>
 <h3 id="actionsgatewayproxyquotaexceeded">ActionsGatewayProxyQuotaExceeded<a class="headerlink" href="#actionsgatewayproxyquotaexceeded" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> The <code>ResourceQuota</code> is holding the egress proxy pool below the HPA's target. Raise the quota or lower <code>proxy.maxReplicas</code> — see <a href="../troubleshooting/#proxy-pool-not-scaling">Proxy Pool Not Scaling</a>.</p>
+<p><strong>Page.</strong> The <code>ResourceQuota</code> is holding the egress proxy pool below the HPA's target.
+Raise the quota or lower <code>proxy.maxReplicas</code> — see <a href="../troubleshooting/#proxy-pool-not-scaling">Proxy Pool Not Scaling</a>.</p>
 <h3 id="actionsgatewayquotapressure">ActionsGatewayQuotaPressure<a class="headerlink" href="#actionsgatewayquotapressure" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> A proxy or worker pool cannot reach its configured ceiling within the namespace <code>ResourceQuota</code> headroom. Plan a quota increase before the next load spike — see <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a> and <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>.</p>
+<p><strong>Ticket.</strong> A proxy or worker pool cannot reach its configured ceiling within the namespace <code>ResourceQuota</code> headroom.
+Plan a quota increase before the next load spike — see <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a> and <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>.</p>
 <h3 id="actionsgatewayreconcileerrors">ActionsGatewayReconcileErrors<a class="headerlink" href="#actionsgatewayreconcileerrors" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> A controller is logging sustained reconcile errors and owned resources may be stale. See <a href="../troubleshooting/#gmc-not-provisioning-tenant-resources">GMC Not Provisioning Tenant Resources</a>.</p>
+<p><strong>Ticket.</strong> A controller is logging sustained reconcile errors and owned resources may be stale.
+See <a href="../troubleshooting/#gmc-not-provisioning-tenant-resources">GMC Not Provisioning Tenant Resources</a>.</p>
 <h3 id="actionsgatewayworkersunschedulable">ActionsGatewayWorkersUnschedulable<a class="headerlink" href="#actionsgatewayworkersunschedulable" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> Worker pods are stuck <code>Pending</code> past the scheduling grace because the scheduler cannot place them (no matching node / affinity / taints — not quota); capacity is not materializing. See <a href="../troubleshooting/#runnergroup-reports-workersunschedulable">RunnerGroup Reports WorkersUnschedulable</a> and <a href="../troubleshooting/#worker-pods-stuck-pending">Worker Pods Stuck Pending</a>.</p>
+<p><strong>Page.</strong> Worker pods are stuck <code>Pending</code> past the scheduling grace because the scheduler cannot place them (no matching node / affinity / taints — not quota); capacity is not materializing.
+See <a href="../troubleshooting/#runnergroup-reports-workersunschedulable">RunnerGroup Reports WorkersUnschedulable</a> and <a href="../troubleshooting/#worker-pods-stuck-pending">Worker Pods Stuck Pending</a>.</p>
 <h3 id="actionsgatewayegressrulesstale">ActionsGatewayEgressRulesStale<a class="headerlink" href="#actionsgatewayegressrulesstale" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy <code>NetworkPolicy</code> may drift from GitHub's published ranges. See <a href="../troubleshooting/#actionsgateway-reports-egressrulesstale">ActionsGateway Reports EgressRulesStale</a>.</p>
+<p><strong>Page.</strong> The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy <code>NetworkPolicy</code> may drift from GitHub's published ranges.
+See <a href="../troubleshooting/#actionsgateway-reports-egressrulesstale">ActionsGateway Reports EgressRulesStale</a>.</p>
 <h3 id="actionsgatewaygithubegressincomplete">ActionsGatewayGitHubEgressIncomplete<a class="headerlink" href="#actionsgatewaygithubegressincomplete" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> A referring gateway names a GitHub Enterprise Server host the <code>EgressProxy</code> pool's <code>CIDR</code>-mode allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs. The fix is yours to make — the appliance's ranges are knowable only to you, so this will not self-heal: supply them in <code>spec.destinationCIDRs</code> (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode. See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>.</p>
+<p><strong>Ticket.</strong> A referring gateway names a GitHub Enterprise Server host the <code>EgressProxy</code> pool's <code>CIDR</code>-mode allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs.
+The fix is yours to make — the appliance's ranges are knowable only to you, so this will not self-heal: supply them in <code>spec.destinationCIDRs</code> (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode.
+See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>.</p>
 <h3 id="actionsgatewayagentrecycleerrors">ActionsGatewayAgentRecycleErrors<a class="headerlink" href="#actionsgatewayagentrecycleerrors" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> Single-use JIT agent re-registration is failing; sustained growth shrinks listener capacity and decays tenant throughput job by job. See <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner">Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)</a>.</p>
+<p><strong>Ticket.</strong> Single-use JIT agent re-registration is failing; sustained growth shrinks listener capacity and decays tenant throughput job by job.
+See <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner">Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)</a>.</p>
 <h3 id="actionsgatewayfanoutfallbacktimeout">ActionsGatewayFanoutFallbackTimeout<a class="headerlink" href="#actionsgatewayfanoutfallbacktimeout" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> Deduped fan-out losers are recycling on the fallback timeout because their winner never concluded within the bound — a class of stuck winners. Investigate long-running or wedged winning jobs; see <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)</a>.</p>
+<p><strong>Ticket.</strong> Deduped fan-out losers are recycling on the fallback timeout because their winner never concluded within the bound — a class of stuck winners.
+Investigate long-running or wedged winning jobs; see <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)</a>.</p>
 <h3 id="actionsgatewayabandoneddeliveryerrors">ActionsGatewayAbandonedDeliveryErrors<a class="headerlink" href="#actionsgatewayabandoneddeliveryerrors" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> The winner of a fanned-out job is failing to issue <code>completejob</code> on a deduped sibling delivery; affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. See <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)</a>.</p>
+<p><strong>Ticket.</strong> The winner of a fanned-out job is failing to issue <code>completejob</code> on a deduped sibling delivery; affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout.
+See <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)</a>.</p>
 <h3 id="actionsgatewayscalesetprovisioningstalled">ActionsGatewayScaleSetProvisioningStalled<a class="headerlink" href="#actionsgatewayscalesetprovisioningstalled" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> The scale-set acquisition tier (the default protocol) is receiving <code>JobAssigned</code> messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start. A ScaleSet-protocol RunnerSet emits no <code>actions_gateway_active_sessions</code>, so this demand-vs-supply signal is the scale-set analog of <a href="#active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero</a>. Respond with <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
+<p><strong>Page.</strong> The scale-set acquisition tier (the default protocol) is receiving <code>JobAssigned</code> messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start.
+A ScaleSet-protocol RunnerSet emits no <code>actions_gateway_active_sessions</code>, so this demand-vs-supply signal is the scale-set analog of <a href="#active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero</a>.
+Respond with <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
 <h3 id="actionsgatewayscalesetprovisionerrors">ActionsGatewayScaleSetProvisionErrors<a class="headerlink" href="#actionsgatewayscalesetprovisionerrors" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> The scale-set tier is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate. A transient failure retries on a later poll; a sustained rate means provisioning is degraded. Check the run service's <code>generate-jitconfig</code> responses and namespace quota headroom, then triage as for <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
+<p><strong>Ticket.</strong> The scale-set tier is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate.
+A transient failure retries on a later poll; a sustained rate means provisioning is degraded.
+Check the run service's <code>generate-jitconfig</code> responses and namespace quota headroom, then triage as for <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
 <h3 id="actionsgatewayscalesetjobsdeferred">ActionsGatewayScaleSetJobsDeferred<a class="headerlink" href="#actionsgatewayscalesetjobsdeferred" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> One or more jobs assigned to a scale set cannot register their runner name (<code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name cleared), so no worker is running them. The listener holds each one and re-offers it on a backoff, so the run starts by itself as soon as the name is free — but until then it sits queued at GitHub. Read the job ids off the <code>RunnerSet</code>'s <code>JobProvisionStalled</code> condition, then free the conflicting runner records per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
-<p>The alert is scoped to <code>reason="name_conflict"</code>. The other reason the same gauge carries, <code>reason="ceiling"</code>, is a set running at the worker concurrency its spec declares — expected backpressure with no action to take, covered by <a href="../troubleshooting/#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached">Scale-Set Jobs Waiting at the Worker Ceiling</a>.</p>
+<p><strong>Ticket.</strong> One or more jobs assigned to a scale set cannot register their runner name (<code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name cleared), so no worker is running them.
+The listener holds each one and re-offers it on a backoff, so the run starts by itself as soon as the name is free — but until then it sits queued at GitHub.
+Read the job ids off the <code>RunnerSet</code>'s <code>JobProvisionStalled</code> condition, then free the conflicting runner records per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
+<p>The alert is scoped to <code>reason="name_conflict"</code>.
+The other reason the same gauge carries, <code>reason="ceiling"</code>, is a set running at the worker concurrency its spec declares — expected backpressure with no action to take, covered by <a href="../troubleshooting/#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached">Scale-Set Jobs Waiting at the Worker Ceiling</a>.</p>
 <h3 id="actionsgatewayproxyconnectdenied">ActionsGatewayProxyConnectDenied<a class="headerlink" href="#actionsgatewayproxyconnectdenied" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> The egress proxy is refusing CONNECT requests to destinations off the egress allowlist at a sustained rate — a Server-Side Request Forgery (SSRF) / egress-policy signal. Every increment is an explicit allowlist denial (sharper than <code>dial_errors</code>, which also counts transient failures to <em>allowed</em> hosts).</p>
+<p><strong>Ticket.</strong> The egress proxy is refusing CONNECT requests to destinations off the egress allowlist at a sustained rate — a Server-Side Request Forgery (SSRF) / egress-policy signal.
+Every increment is an explicit allowlist denial (sharper than <code>dial_errors</code>, which also counts transient failures to <em>allowed</em> hosts).</p>
 <ol>
 <li>Identify the denied destinations from the proxy's <code>CONNECT destination not allowed</code> warning logs, which record the rejected <code>host</code>: <code>kubectl logs -n &lt;namespace&gt; deploy/&lt;proxy-deployment&gt; | grep "destination not allowed"</code>.</li>
 <li>If the destinations are unexpected, treat it as SSRF probing or a compromised workload — inspect the workflow acquiring the affected runner and correlate with <code>proxy_dial_errors_total</code>.</li>
@@ -3788,7 +3825,8 @@ procedure rather than just the alert's <code>summary</code>/<code>description</c
 <li>Describe a pending pod for scheduling events: <code>kubectl describe pod -n &lt;namespace&gt; &lt;pod&gt;</code>.</li>
 <li>If quota is exhausted: raise the platform-owned <code>ResourceQuota</code> on the namespace (<code>kubectl edit resourcequota -n &lt;namespace&gt; &lt;quota-name&gt;</code>) or wait for running pods to complete.</li>
 <li>If no schedulable nodes: check node autoscaler or provision capacity.</li>
-<li>If PriorityClass is missing: create it. See <a href="../troubleshooting/#worker-pods-stuck-pending">Troubleshooting — Worker Pods Stuck Pending</a>.</li>
+<li>If PriorityClass is missing: create it.
+   See <a href="../troubleshooting/#worker-pods-stuck-pending">Troubleshooting — Worker Pods Stuck Pending</a>.</li>
 </ol>
 <h3 id="active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero<a class="headerlink" href="#active_sessions-flatlining-at-zero" title="Permanent link">&para;</a></h3>
 <ol>
@@ -3810,14 +3848,17 @@ procedure rather than just the alert's <code>summary</code>/<code>description</c
 <p>The scale-set tier is the default protocol; it emits no <code>active_sessions</code> gauge, so a wedge shows up as <code>scaleset_jobs_assigned_total</code> climbing while <code>scaleset_jobs_provisioned_total</code> stays flat.</p>
 <ol>
 <li>Confirm the wedge: <code>scaleset_jobs_assigned_total</code> is rising but <code>scaleset_jobs_provisioned_total</code> is not, for the affected <code>namespace</code>/<code>runner_set</code>.</li>
-<li>Check the provision-error rate: <code>rate(actions_gateway_scaleset_provision_errors_total[5m])</code>. A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs (<code>kubectl logs -n &lt;namespace&gt; deploy/actions-gateway-controller --tail=100</code>) for <code>generate-jitconfig</code> errors and worker-pod create rejections.</li>
+<li>Check the provision-error rate: <code>rate(actions_gateway_scaleset_provision_errors_total[5m])</code>.
+   A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs (<code>kubectl logs -n &lt;namespace&gt; deploy/actions-gateway-controller --tail=100</code>) for <code>generate-jitconfig</code> errors and worker-pod create rejections.</li>
 <li>Check the worker-pod <code>ResourceQuota</code> (see <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>) and the <code>WorkerQuotaExceeded</code> / <code>WorkersUnschedulable</code> conditions — a full quota or an unschedulable pod stalls provisioning with no provision <em>error</em>.</li>
-<li>If provision errors are zero and quota is healthy, check the listener session itself: the RunnerSet's <code>Ready</code>/<code>RateLimited</code>/<code>Degraded</code> conditions (<code>kubectl get runnerset -n &lt;namespace&gt; -o yaml</code>) surface a rate-limited or unauthorized scale-set session (Q325). The conditions are a <em>state</em> signal that only trips once an episode persists (<code>RateLimited</code> after ten minutes), so pair them with the <em>rate</em> signal <code>rate(actions_gateway_message_poll_errors_total[5m])</code> for the same namespace — a stream of brief 429 or transport episodes throttles polling without ever setting a condition (Q446).</li>
+<li>If provision errors are zero and quota is healthy, check the listener session itself: the RunnerSet's <code>Ready</code>/<code>RateLimited</code>/<code>Degraded</code> conditions (<code>kubectl get runnerset -n &lt;namespace&gt; -o yaml</code>) surface a rate-limited or unauthorized scale-set session (Q325).
+   The conditions are a <em>state</em> signal that only trips once an episode persists (<code>RateLimited</code> after ten minutes), so pair them with the <em>rate</em> signal <code>rate(actions_gateway_message_poll_errors_total[5m])</code> for the same namespace — a stream of brief 429 or transport episodes throttles polling without ever setting a condition (Q446).</li>
 <li>If the queue is genuinely empty, <code>scaleset_jobs_assigned_total</code> will also be flat — the alert only fires when assignment is <em>active</em>, so a flat-both state is benign.</li>
 </ol>
 <hr />
 <h2 id="incident-response">Incident Response<a class="headerlink" href="#incident-response" title="Permanent link">&para;</a></h2>
-<p>For restoring a deleted or corrupted <code>ActionsGateway</code> CR, a lost tenant namespace, or a full cluster, see the dedicated <a href="../backup-restore/">Backup, Restore, and Disaster Recovery</a> guide. The CR is the source of truth; deleting it cascades to the resources the GMC owns, and re-applying it reconciles them back.</p>
+<p>For restoring a deleted or corrupted <code>ActionsGateway</code> CR, a lost tenant namespace, or a full cluster, see the dedicated <a href="../backup-restore/">Backup, Restore, and Disaster Recovery</a> guide.
+The CR is the source of truth; deleting it cascades to the resources the GMC owns, and re-applying it reconciles them back.</p>
 <h3 id="github-app-key-compromise">GitHub App Key Compromise<a class="headerlink" href="#github-app-key-compromise" title="Permanent link">&para;</a></h3>
 <p><strong>Immediate steps (&lt; 5 minutes):</strong></p>
 <ol>
@@ -3844,26 +3885,32 @@ procedure rather than just the alert's <code>summary</code>/<code>description</c
 <li>Confirm <code>actions_gateway_token_refresh_errors_total</code> is no longer incrementing.</li>
 <li>Delete the old Secret once confirmed healthy, and delete the downloaded <code>.pem</code> file from disk (<code>shred -u &lt;path&gt;</code> on Linux, <code>rm -P &lt;path&gt;</code> on macOS) — the key now lives only in the Kubernetes Secret.</li>
 </ol>
-<p><strong>Scope assessment.</strong> The compromised key could have been used to acquire installation tokens (scoped to <code>Actions: Read</code>, <code>Administration: Read</code>). Check GitHub's audit log for unusual API activity from the App installation: Settings → Organizations → <code>&lt;org&gt;</code> → Audit log → filter by the App name.</p>
+<p><strong>Scope assessment.</strong> The compromised key could have been used to acquire installation tokens (scoped to <code>Actions: Read</code>, <code>Administration: Read</code>).
+Check GitHub's audit log for unusual API activity from the App installation: Settings → Organizations → <code>&lt;org&gt;</code> → Audit log → filter by the App name.</p>
 <hr />
 <h3 id="agc-total-failure">AGC Total Failure<a class="headerlink" href="#agc-total-failure" title="Permanent link">&para;</a></h3>
 <p>If the AGC pod is destroyed and cannot restart (e.g. node failure without rescheduling, OOM loop):</p>
 <ol>
-<li><strong>In-flight jobs</strong> whose <code>renewjob</code> loop has lapsed will be cancelled by GitHub. There is no automatic recovery for these — they require manual re-run.</li>
+<li><strong>In-flight jobs</strong> whose <code>renewjob</code> loop has lapsed will be cancelled by GitHub.
+   There is no automatic recovery for these — they require manual re-run.</li>
 <li><strong>Queued jobs</strong> (not yet acquired) will be redelivered by GitHub to the next healthy session within ~2 minutes of the AGC restarting.</li>
 <li><strong>To force restart:</strong> <code>kubectl rollout restart deploy/actions-gateway-controller -n &lt;namespace&gt;</code>.</li>
 <li>Monitor <code>actions_gateway_active_sessions</code> — it should reach 1 per RunnerGroup within a few seconds of the pod starting.</li>
 </ol>
-<p><strong>State that persists:</strong> All RunnerGroup CRs, Secrets, and Kubernetes resources are durable. The AGC reconstructs all in-memory state (session registry, per-job renewers) from scratch on restart. The only non-recoverable state is in-flight job locks that expire during the blackout window.</p>
+<p><strong>State that persists:</strong> All RunnerGroup CRs, Secrets, and Kubernetes resources are durable.
+The AGC reconstructs all in-memory state (session registry, per-job renewers) from scratch on restart.
+The only non-recoverable state is in-flight job locks that expire during the blackout window.</p>
 <hr />
 <h3 id="gmc-total-failure">GMC Total Failure<a class="headerlink" href="#gmc-total-failure" title="Permanent link">&para;</a></h3>
 <p>If the GMC pod is unavailable:</p>
 <ol>
-<li><strong>Existing tenant gateways continue operating normally.</strong> The GMC is not in the data plane; it only responds to <code>ActionsGateway</code> CR changes. Provisioned AGCs, proxies, and RunnerGroups are not affected.</li>
+<li><strong>Existing tenant gateways continue operating normally.</strong> The GMC is not in the data plane; it only responds to <code>ActionsGateway</code> CR changes.
+   Provisioned AGCs, proxies, and RunnerGroups are not affected.</li>
 <li><strong>New <code>ActionsGateway</code> CRs will not be provisioned</strong> until the GMC recovers.</li>
 <li><strong>Spec changes to existing <code>ActionsGateway</code> CRs will not be reconciled</strong> until the GMC recovers.</li>
 <li>To restore: <code>kubectl rollout restart deploy/gmc-controller-manager -n gmc-system</code>.</li>
-<li>On recovery, the GMC reconciles all <code>ActionsGateway</code> CRs idempotently — it compares desired vs. actual state and only applies changes. No resources are duplicated or deleted.</li>
+<li>On recovery, the GMC reconciles all <code>ActionsGateway</code> CRs idempotently — it compares desired vs. actual state and only applies changes.
+   No resources are duplicated or deleted.</li>
 </ol>
 <hr />
 <h2 id="on-call-handoff-checklist">On-Call Handoff Checklist<a class="headerlink" href="#on-call-handoff-checklist" title="Permanent link">&para;</a></h2>

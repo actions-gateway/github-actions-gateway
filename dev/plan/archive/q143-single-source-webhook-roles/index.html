@@ -2661,15 +2661,11 @@
 <h1 id="plan-single-source-chart-webhook--remaining-roles-q143">Plan: Single-source chart webhook + remaining roles (Q143)<a class="headerlink" href="#plan-single-source-chart-webhook--remaining-roles-q143" title="Permanent link">&para;</a></h1>
 <p>← <a href="../../../STATUS/">STATUS</a> · extends <a href="../drop-kustomize/">Q142</a></p>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Extend the Q142 single-source + drift-gate pattern (CRDs, manager-role) to the
-chart resources the plan left as a follow-up: the <strong>validating webhook config</strong>
-and the <strong>agc-tenant-role</strong>. Eliminate every remaining hand-copy that can drift
-from its authoritative source, with <strong>zero change to the rendered RBAC/webhook</strong>
-(no permission change).</p>
+<p>Extend the Q142 single-source + drift-gate pattern (CRDs, manager-role) to the chart resources the plan left as a follow-up: the <strong>validating webhook config</strong> and the <strong>agc-tenant-role</strong>.
+Eliminate every remaining hand-copy that can drift from its authoritative source, with <strong>zero change to the rendered RBAC/webhook</strong> (no permission change).</p>
 <h2 id="ground-truth-verified-before-designing">Ground truth (verified before designing)<a class="headerlink" href="#ground-truth-verified-before-designing" title="Permanent link">&para;</a></h2>
-<p>The Q143 Queue note (and the drop-kustomize "Out of scope" bullet) assumed all
-four resources still have a <code>config/</code> duplicate to generate from. They don't —
-slice C of Q142 already removed most of them:</p>
+<p>The Q143 Queue note (and the drop-kustomize "Out of scope" bullet) assumed all four resources still have a <code>config/</code> duplicate to generate from.
+They don't — slice C of Q142 already removed most of them:</p>
 <table>
 <thead>
 <tr>
@@ -2708,58 +2704,36 @@ slice C of Q142 already removed most of them:</p>
 </table>
 <p>Two important safety facts:</p>
 <ul>
-<li><strong>agc-tenant-role must NOT be generated from the AGC markers</strong>
-  (<code>cmd/agc/config/rbac/role.yaml</code>, ClusterRole <code>agc-role</code>). That role grants
-  <code>create</code>/<code>delete</code> on <code>runnergroups</code> and <code>patch</code> on <code>secrets</code>; the deployed
-  agc-tenant-role deliberately withholds them (least privilege — AGCs reconcile
-  RunnerGroups, they don't create/delete them). Generating from the markers
-  would be a <strong>privilege escalation</strong> — forbidden by "secure by default". The
-  chart's hand-authored role is authoritative; we single-source it <em>structurally</em>
-  (one file, two readers) rather than from controller-gen.</li>
-<li>The Go mirror <code>installAGCTenantClusterRole</code> had already <strong>drifted</strong> from the
-  chart (it granted <code>watch</code> on secrets and omitted <code>update</code> + the events rules) —
-  so the RBAC-scope integration test was exercising a different role than ships.
+<li><strong>agc-tenant-role must NOT be generated from the AGC markers</strong> (<code>cmd/agc/config/rbac/role.yaml</code>, ClusterRole <code>agc-role</code>).
+  That role grants <code>create</code>/<code>delete</code> on <code>runnergroups</code> and <code>patch</code> on <code>secrets</code>; the deployed agc-tenant-role deliberately withholds them (least privilege — AGCs reconcile RunnerGroups, they don't create/delete them).
+  Generating from the markers would be a <strong>privilege escalation</strong> — forbidden by "secure by default".
+  The chart's hand-authored role is authoritative; we single-source it <em>structurally</em> (one file, two readers) rather than from controller-gen.</li>
+<li>The Go mirror <code>installAGCTenantClusterRole</code> had already <strong>drifted</strong> from the chart (it granted <code>watch</code> on secrets and omitted <code>update</code> + the events rules) — so the RBAC-scope integration test was exercising a different role than ships.
   Sharing one fragment fixes that and prevents recurrence.</li>
 </ul>
-<p>metrics/leader-election have exactly one copy each (the chart), no controller-gen
-generator exists for these standard scaffolding roles, and no test mirrors them —
-so there is nothing to single-source. Adding a generator with a single reader
-would be indirection without drift protection.</p>
+<p>metrics/leader-election have exactly one copy each (the chart), no controller-gen generator exists for these standard scaffolding roles, and no test mirrors them — so there is nothing to single-source.
+Adding a generator with a single reader would be indirection without drift protection.</p>
 <h2 id="changes">Changes<a class="headerlink" href="#changes" title="Permanent link">&para;</a></h2>
 <h3 id="a-webhook--full-file-generator--drift-gate-the-crd-precedent">A. Webhook — full-file generator + drift gate (the CRD precedent)<a class="headerlink" href="#a-webhook--full-file-generator--drift-gate-the-crd-precedent" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>scripts/manifest/sync-chart-webhook.sh</code> transforms <code>cmd/gmc/config/webhook/manifests.yaml</code>
-  into <code>charts/actions-gateway/templates/webhook.yaml</code>, re-injecting the chart's
-  Helm templating (name prefix + labels, the <code>certManager.enabled</code> CA-inject
-  annotation, <code>namespace: {{ .Release.Namespace }}</code>, and the non-cert-manager
-  caBundle block). The webhook <em>body</em> (admissionReviewVersions, failurePolicy,
-  name, rules, sideEffects, service path) is copied verbatim — that is the
-  marker-generated, drift-prone content.</li>
-<li><code>make chart-webhook</code> writes it; <code>make chart-webhook-check</code> (<code>--check</code>) renders
-  to a temp file and diffs against the committed chart copy.</li>
-<li>Wired into <code>make check</code> and <code>make manifest-validate</code>; <code>manifest-validate.yml</code>
-  picks it up via <code>make manifest-validate</code> and gains the script to its
-  paths-filter.</li>
+<li><code>scripts/manifest/sync-chart-webhook.sh</code> transforms <code>cmd/gmc/config/webhook/manifests.yaml</code> into <code>charts/actions-gateway/templates/webhook.yaml</code>, re-injecting the chart's Helm templating (name prefix + labels, the <code>certManager.enabled</code> CA-inject annotation, <code>namespace: {{ .Release.Namespace }}</code>, and the non-cert-manager caBundle block).
+  The webhook <em>body</em> (admissionReviewVersions, failurePolicy, name, rules, sideEffects, service path) is copied verbatim — that is the marker-generated, drift-prone content.</li>
+<li><code>make chart-webhook</code> writes it; <code>make chart-webhook-check</code> (<code>--check</code>) renders to a temp file and diffs against the committed chart copy.</li>
+<li>Wired into <code>make check</code> and <code>make manifest-validate</code>; <code>manifest-validate.yml</code> picks it up via <code>make manifest-validate</code> and gains the script to its paths-filter.</li>
 </ul>
 <h3 id="b-agc-tenant-role--shared-rules-fragment">B. agc-tenant-role — shared rules fragment<a class="headerlink" href="#b-agc-tenant-role--shared-rules-fragment" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>charts/actions-gateway/files/agc-tenant-role-rules.yaml</code> holds the policy
-  rules (with their explanatory comments), reproduced byte-for-byte from today's
-  chart template — the authoritative copy.</li>
-<li><code>templates/agc-tenant-role.yaml</code> embeds it via <code>.Files.Get | nindent 0</code>
-  (mirrors <code>manager-role</code> embedding <code>manager-role-rules.yaml</code>).</li>
-<li><code>installAGCTenantClusterRole</code> in the GMC integration suite reads and unmarshals
-  the same fragment instead of hardcoding rules — eliminating the drifted mirror.</li>
+<li><code>charts/actions-gateway/files/agc-tenant-role-rules.yaml</code> holds the policy rules (with their explanatory comments), reproduced byte-for-byte from today's chart template — the authoritative copy.</li>
+<li><code>templates/agc-tenant-role.yaml</code> embeds it via <code>.Files.Get | nindent 0</code> (mirrors <code>manager-role</code> embedding <code>manager-role-rules.yaml</code>).</li>
+<li><code>installAGCTenantClusterRole</code> in the GMC integration suite reads and unmarshals the same fragment instead of hardcoding rules — eliminating the drifted mirror.</li>
 </ul>
 <h3 id="c-metrics--leader-election--documented-no-op">C. metrics / leader-election — documented no-op<a class="headerlink" href="#c-metrics--leader-election--documented-no-op" title="Permanent link">&para;</a></h3>
 <p>Already single-sourced post-slice-C; recorded here and in drop-kustomize.md.</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>helm template</code> (cert-manager on <strong>and</strong> off) byte-identical before/after for
-  the webhook and agc-tenant-role resources.</li>
+<li><code>helm template</code> (cert-manager on <strong>and</strong> off) byte-identical before/after for the webhook and agc-tenant-role resources.</li>
 <li><code>make check</code> + <code>make chart-webhook-check</code> + <code>helm lint</code>/<code>template</code> green.</li>
-<li>GMC integration suite (envtest) green — the RBAC-scope test now runs against
-  the real shipped role.</li>
+<li>GMC integration suite (envtest) green — the RBAC-scope test now runs against the real shipped role.</li>
 </ul>
 
 

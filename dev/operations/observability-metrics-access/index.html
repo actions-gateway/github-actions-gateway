@@ -2776,58 +2776,39 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer</p>
 </blockquote>
-<p>Part of the <a href="../observability/">Observability</a> guide. See also: <a href="../observability-metrics/">Metrics reference</a> · <a href="../observability-alerting/">Alerting &amp; SLOs</a> · <a href="../observability-dashboards/">Grafana dashboards</a> · <a href="../observability-logging/">Logging &amp; tracing</a>.</p>
+<p>Part of the <a href="../observability/">Observability</a> guide.
+See also: <a href="../observability-metrics/">Metrics reference</a> · <a href="../observability-alerting/">Alerting &amp; SLOs</a> · <a href="../observability-dashboards/">Grafana dashboards</a> · <a href="../observability-logging/">Logging &amp; tracing</a>.</p>
 <h2 id="how-to-access-metrics">How to Access Metrics<a class="headerlink" href="#how-to-access-metrics" title="Permanent link">&para;</a></h2>
-<p><strong>Port forward (ad-hoc):</strong> the per-tenant AGC/proxy metrics ports require a client
-certificate (mTLS), so a plain <code>curl</code> is rejected at the TLS handshake. Present the
-published scraper bundle (see <a href="#scraping-per-tenant-agc-and-proxy-metrics-mtls">the per-tenant section</a>
-for the Secret name and an end-to-end <code>curl --cert/--key/--cacert</code> example).</p>
-<p><strong>Prometheus operator (production):</strong> the chart wires scraping automatically when
-<code>metrics.serviceMonitor.enabled=true</code> — both the GMC manager <code>ServiceMonitor</code> and a
-per-tenant <code>ServiceMonitor</code> for each provisioned tenant's AGC/proxy. The metrics port
-is named <code>metrics</code> (<code>:8443</code>) on every Service. You do not hand-author these
-<code>ServiceMonitor</code>s; the sections below describe what they wire and the prerequisites.</p>
+<p><strong>Port forward (ad-hoc):</strong> the per-tenant AGC/proxy metrics ports require a client certificate (mTLS), so a plain <code>curl</code> is rejected at the TLS handshake.
+Present the published scraper bundle (see <a href="#scraping-per-tenant-agc-and-proxy-metrics-mtls">the per-tenant section</a> for the Secret name and an end-to-end <code>curl --cert/--key/--cacert</code> example).</p>
+<p><strong>Prometheus operator (production):</strong> the chart wires scraping automatically when <code>metrics.serviceMonitor.enabled=true</code> — both the GMC manager <code>ServiceMonitor</code> and a per-tenant <code>ServiceMonitor</code> for each provisioned tenant's AGC/proxy.
+The metrics port is named <code>metrics</code> (<code>:8443</code>) on every Service.
+You do not hand-author these <code>ServiceMonitor</code>s; the sections below describe what they wire and the prerequisites.</p>
 <h3 id="install-time-scraping-prerequisites-gmc-manager">Install-time scraping prerequisites (GMC manager)<a class="headerlink" href="#install-time-scraping-prerequisites-gmc-manager" title="Permanent link">&para;</a></h3>
-<p>The default GMC install ships the manager NetworkPolicy <strong>enabled by default</strong>
-(<code>networkPolicy.enabled=true</code>). Selecting the manager pod flips it to default-deny on
-ingress, so its <code>/metrics</code> endpoint admits traffic only from namespaces carrying
-the right label:</p>
+<p>The default GMC install ships the manager NetworkPolicy <strong>enabled by default</strong> (<code>networkPolicy.enabled=true</code>).
+Selecting the manager pod flips it to default-deny on ingress, so its <code>/metrics</code> endpoint admits traffic only from namespaces carrying the right label:</p>
 <ul>
-<li><strong>Scraping the GMC manager metrics:</strong> label your Prometheus namespace
-  <code>metrics: enabled</code>, or no scrape will reach the manager:
+<li><strong>Scraping the GMC manager metrics:</strong> label your Prometheus namespace <code>metrics: enabled</code>, or no scrape will reach the manager:
   <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span><span class="nv">metrics</span><span class="o">=</span>enabled
 </code></pre></div></li>
 </ul>
-<p>The validating-webhook port (container <code>9443</code>) is intentionally re-allowed from
-<strong>any source</strong> — the kube-apiserver that calls it is not a pod in a labeled
-namespace, so a source restriction there would silently break every
-<code>ActionsGateway</code> admission (<code>failurePolicy: Fail</code>). The webhook is TLS +
-caBundle authenticated, so the sensitive surface stays the <code>metrics: enabled</code>
-restriction above. No namespace label is required for CR admission.</p>
-<p>This applies to the <strong>GMC manager</strong> only. The per-tenant AGC and proxy metrics
-are governed by the per-tenant NetworkPolicies the GMC generates (the AGC and
-proxy NPs already admit monitoring-namespace scrapes of the metrics port) and use
-mutual TLS — see <a href="#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>.</p>
+<p>The validating-webhook port (container <code>9443</code>) is intentionally re-allowed from <strong>any source</strong> — the kube-apiserver that calls it is not a pod in a labeled namespace, so a source restriction there would silently break every <code>ActionsGateway</code> admission (<code>failurePolicy: Fail</code>).
+The webhook is TLS + caBundle authenticated, so the sensitive surface stays the <code>metrics: enabled</code> restriction above.
+No namespace label is required for CR admission.</p>
+<p>This applies to the <strong>GMC manager</strong> only.
+The per-tenant AGC and proxy metrics are governed by the per-tenant NetworkPolicies the GMC generates (the AGC and proxy NPs already admit monitoring-namespace scrapes of the metrics port) and use mutual TLS — see <a href="#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>.</p>
 <blockquote>
-<p>Runtime enforcement of these policies depends on the CNI; kindnet's
-<code>kube-network-policies</code> does not drop all egress negatives (see the worker
-egress limitation in <a href="../troubleshooting/">troubleshooting.md</a>). The manager NP
-is verified by manifest review and is pending a cluster-only runtime check.</p>
+<p>Runtime enforcement of these policies depends on the CNI; kindnet's <code>kube-network-policies</code> does not drop all egress negatives (see the worker egress limitation in <a href="../troubleshooting/">troubleshooting.md</a>).
+The manager NP is verified by manifest review and is pending a cluster-only runtime check.</p>
 </blockquote>
-<p>The <code>ServiceMonitor</code> integration stays <strong>opt-in</strong>, behind the
-<code>metrics.serviceMonitor.enabled</code> chart value (default <code>false</code>): out-of-box
-Prometheus Operator scraping. It is left off by default because the
-<code>ServiceMonitor</code> CRD only exists once the Prometheus Operator is installed, so
-rendering it unconditionally would break <code>helm install</code> on clusters without it.</p>
+<p>The <code>ServiceMonitor</code> integration stays <strong>opt-in</strong>, behind the <code>metrics.serviceMonitor.enabled</code> chart value (default <code>false</code>): out-of-box Prometheus Operator scraping.
+It is left off by default because the <code>ServiceMonitor</code> CRD only exists once the Prometheus Operator is installed, so rendering it unconditionally would break <code>helm install</code> on clusters without it.</p>
 <h3 id="verifying-the-metrics-scrape-tls-gmc-manager">Verifying the metrics scrape TLS (GMC manager)<a class="headerlink" href="#verifying-the-metrics-scrape-tls-gmc-manager" title="Permanent link">&para;</a></h3>
-<p>The GMC metrics endpoint (<code>:8443</code>) is served over TLS. How the scrape verifies
-that certificate is controlled by <code>metrics.tls.certManager.enabled</code>:</p>
+<p>The GMC metrics endpoint (<code>:8443</code>) is served over TLS.
+How the scrape verifies that certificate is controlled by <code>metrics.tls.certManager.enabled</code>:</p>
 <ul>
-<li><strong><code>true</code> (default, secure):</strong> cert-manager issues a dedicated metrics serving
-  cert — the <code>metrics-serving-cert</code> <code>Certificate</code>, minted from the same
-  <code>selfsigned-issuer</code> as the webhook into the <code>metrics-server-cert</code> Secret. The
-  GMC serves it (<code>--metrics-cert-path</code>), and the rendered <code>ServiceMonitor</code>
-  verifies it against the issuing CA:</li>
+<li><strong><code>true</code> (default, secure):</strong> cert-manager issues a dedicated metrics serving cert — the <code>metrics-serving-cert</code> <code>Certificate</code>, minted from the same <code>selfsigned-issuer</code> as the webhook into the <code>metrics-server-cert</code> Secret.
+  The GMC serves it (<code>--metrics-cert-path</code>), and the rendered <code>ServiceMonitor</code> verifies it against the issuing CA:</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">tlsConfig</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">serverName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;namePrefix&gt;-controller-manager-metrics-service.&lt;namespace&gt;.svc</span>
@@ -2836,46 +2817,25 @@ that certificate is controlled by <code>metrics.tls.certManager.enabled</code>:<
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics-server-cert</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca.crt</span>
 </code></pre></div>
-<p>The scrape is authenticated end-to-end and <strong>not</strong> MITM-able. This path
-  requires cert-manager (it reuses the webhook's Issuer) and is automatically
-  inert when <code>certManager.enabled=false</code>.</p>
+<p>The scrape is authenticated end-to-end and <strong>not</strong> MITM-able.
+  This path requires cert-manager (it reuses the webhook's Issuer) and is automatically inert when <code>certManager.enabled=false</code>.</p>
 <ul>
-<li><strong><code>false</code>, or <code>certManager.enabled=false</code>:</strong> the GMC falls back to
-  controller-runtime's auto-generated self-signed metrics cert, and the
-  <code>ServiceMonitor</code> scrapes with <code>tlsConfig.insecureSkipVerify: true</code>. Prometheus
-  cannot verify the server, so an in-cluster attacker who can intercept the
-  scrape connection could impersonate the metrics endpoint (the bearer token
-  still authenticates the <em>scraper</em> to the server, but not the server to the
-  scraper). Use this only on clusters without cert-manager, accepting the weaker
-  posture.</li>
+<li><strong><code>false</code>, or <code>certManager.enabled=false</code>:</strong> the GMC falls back to controller-runtime's auto-generated self-signed metrics cert, and the <code>ServiceMonitor</code> scrapes with <code>tlsConfig.insecureSkipVerify: true</code>.
+  Prometheus cannot verify the server, so an in-cluster attacker who can intercept the scrape connection could impersonate the metrics endpoint (the bearer token still authenticates the <em>scraper</em> to the server, but not the server to the scraper).
+  Use this only on clusters without cert-manager, accepting the weaker posture.</li>
 </ul>
-<p>The metrics-server-cert Secret is read from the <strong>ServiceMonitor's namespace</strong>
-(the GMC release namespace), where the chart creates it — no extra copying is
-needed. Because verification follows <code>certManager.enabled</code> by default, an
-install that already uses cert-manager for the webhook (the default) gets
-verified metrics scraping automatically once the <code>ServiceMonitor</code> is enabled.</p>
+<p>The metrics-server-cert Secret is read from the <strong>ServiceMonitor's namespace</strong> (the GMC release namespace), where the chart creates it — no extra copying is needed.
+Because verification follows <code>certManager.enabled</code> by default, an install that already uses cert-manager for the webhook (the default) gets verified metrics scraping automatically once the <code>ServiceMonitor</code> is enabled.</p>
 <h3 id="scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)<a class="headerlink" href="#scraping-per-tenant-agc-and-proxy-metrics-mtls" title="Permanent link">&para;</a></h3>
-<p>Each provisioned tenant runs its own AGC and egress-proxy pods, which serve
-<code>/metrics</code> over <strong>mutual TLS</strong> on <code>:8443</code>. Unlike the GMC manager, the listener
-<strong>requires a client certificate</strong> signed by that tenant's metrics CA — there is
-no bearer-token or <code>insecureSkipVerify</code> fallback. Three things are wired
-per tenant so Prometheus can scrape them:</p>
+<p>Each provisioned tenant runs its own AGC and egress-proxy pods, which serve <code>/metrics</code> over <strong>mutual TLS</strong> on <code>:8443</code>.
+Unlike the GMC manager, the listener <strong>requires a client certificate</strong> signed by that tenant's metrics CA — there is no bearer-token or <code>insecureSkipVerify</code> fallback.
+Three things are wired per tenant so Prometheus can scrape them:</p>
 <ol>
-<li><strong>Metrics Services (always created).</strong> The GMC creates a <code>metrics</code>-named
-   <code>:8443</code> port on the proxy <code>Service</code> (<code>actions-gateway-proxy</code>) and a dedicated
-   AGC <code>Service</code> (<code>actions-gateway-controller</code>), both in the tenant namespace.
+<li><strong>Metrics Services (always created).</strong> The GMC creates a <code>metrics</code>-named <code>:8443</code> port on the proxy <code>Service</code> (<code>actions-gateway-proxy</code>) and a dedicated AGC <code>Service</code> (<code>actions-gateway-controller</code>), both in the tenant namespace.
    These exist regardless of the scrape toggle.</li>
-<li><strong>Per-tenant <code>ServiceMonitor</code>s (opt-in).</strong> When <code>metrics.serviceMonitor.enabled=true</code>,
-   the GMC also creates one <code>ServiceMonitor</code> per component in the tenant
-   namespace (<code>actions-gateway-proxy-metrics</code>, <code>actions-gateway-controller-metrics</code>).
-   Each selects only its own component's Service via the tenant's owner labels, so
-   one tenant's monitor never selects another tenant's pods.</li>
-<li><strong>The scraper client bundle (mTLS).</strong> Each <code>ServiceMonitor</code> presents the
-   per-tenant scraper client bundle from the <code>actions-gateway-metrics-client</code>
-   Secret in the tenant namespace — <code>tls.crt</code>/<code>tls.key</code> authenticate the scraper
-   to the listener and <code>ca.crt</code> verifies the listener's server cert. <code>serverName</code>
-   is the component's <code>&lt;service&gt;.&lt;namespace&gt;.svc</code> DNS name (a SAN on the server
-   cert), so the scrape is verified end-to-end and <strong>not</strong> MITM-able:</li>
+<li><strong>Per-tenant <code>ServiceMonitor</code>s (opt-in).</strong> When <code>metrics.serviceMonitor.enabled=true</code>, the GMC also creates one <code>ServiceMonitor</code> per component in the tenant namespace (<code>actions-gateway-proxy-metrics</code>, <code>actions-gateway-controller-metrics</code>).
+   Each selects only its own component's Service via the tenant's owner labels, so one tenant's monitor never selects another tenant's pods.</li>
+<li><strong>The scraper client bundle (mTLS).</strong> Each <code>ServiceMonitor</code> presents the per-tenant scraper client bundle from the <code>actions-gateway-metrics-client</code> Secret in the tenant namespace — <code>tls.crt</code>/<code>tls.key</code> authenticate the scraper to the listener and <code>ca.crt</code> verifies the listener's server cert. <code>serverName</code> is the component's <code>&lt;service&gt;.&lt;namespace&gt;.svc</code> DNS name (a SAN on the server cert), so the scrape is verified end-to-end and <strong>not</strong> MITM-able:</li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">tlsConfig</span><span class="p">:</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">serverName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway-proxy.&lt;tenant-namespace&gt;.svc</span>
@@ -2884,10 +2844,8 @@ per tenant so Prometheus can scrape them:</p>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">actions-gateway-metrics-client</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">tls.key</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <h4 id="v2-egressproxy-proxy-metrics">v2 <code>EgressProxy</code> proxy metrics<a class="headerlink" href="#v2-egressproxy-proxy-metrics" title="Permanent link">&para;</a></h4>
-<p>The names above are the <strong>classic/v1</strong> layout, where a single proxy pool per
-namespace uses fixed names. Under the <strong>v2 API</strong>, the egress proxy is a standalone
-<code>EgressProxy</code> resource (multiple per namespace are allowed), so its proxy-metrics
-objects are keyed on the <code>EgressProxy</code> name <code>&lt;ep&gt;</code> instead:</p>
+<p>The names above are the <strong>classic/v1</strong> layout, where a single proxy pool per namespace uses fixed names.
+Under the <strong>v2 API</strong>, the egress proxy is a standalone <code>EgressProxy</code> resource (multiple per namespace are allowed), so its proxy-metrics objects are keyed on the <code>EgressProxy</code> name <code>&lt;ep&gt;</code> instead:</p>
 <table>
 <thead>
 <tr>
@@ -2919,36 +2877,19 @@ objects are keyed on the <code>EgressProxy</code> name <code>&lt;ep&gt;</code> i
 </tr>
 </tbody>
 </table>
-<p>Each <code>EgressProxy</code> owns its <strong>own</strong> metrics CA — distinct from the AGC's and from
-every other <code>EgressProxy</code> — so Prometheus must read that proxy's own
-<code>&lt;ep&gt;-metrics-client</code> bundle, with <code>serverName: &lt;ep&gt;-proxy.&lt;namespace&gt;.svc</code>. The
-same toggle (<code>metrics.serviceMonitor.enabled</code> → <code>--enable-tenant-service-monitors</code>),
-the same <code>metrics: enabled</code> NetworkPolicy prerequisite, and the same graceful
-<code>ServiceMonitorCRDMissing</code> handling apply; the AGC metrics under v2 keep their own
-per-gateway <code>&lt;gateway&gt;-agc-metrics-{tls,client}</code> bundle.</p>
+<p>Each <code>EgressProxy</code> owns its <strong>own</strong> metrics CA — distinct from the AGC's and from every other <code>EgressProxy</code> — so Prometheus must read that proxy's own <code>&lt;ep&gt;-metrics-client</code> bundle, with <code>serverName: &lt;ep&gt;-proxy.&lt;namespace&gt;.svc</code>.
+The same toggle (<code>metrics.serviceMonitor.enabled</code> → <code>--enable-tenant-service-monitors</code>), the same <code>metrics: enabled</code> NetworkPolicy prerequisite, and the same graceful <code>ServiceMonitorCRDMissing</code> handling apply; the AGC metrics under v2 keep their own per-gateway <code>&lt;gateway&gt;-agc-metrics-{tls,client}</code> bundle.</p>
 <p><strong>Prerequisites:</strong></p>
 <ul>
-<li><strong>Prometheus Operator</strong> must be installed (the <code>monitoring.coreos.com</code>
-  <code>ServiceMonitor</code> CRD must exist). The toggle is off by default precisely
-  because the CRD is not present on every cluster. If the CRD is absent when the
-  toggle is on, the GMC logs a warning and emits a <code>ServiceMonitorCRDMissing</code>
-  Event on the <code>ActionsGateway</code> and continues — a missing scrape prerequisite
-  never blocks tenant provisioning.</li>
-<li><strong>Prometheus reads the client bundle from the <code>ServiceMonitor</code>'s namespace</strong>
-  (the tenant namespace), so the scraping Prometheus must be configured to select
-  <code>ServiceMonitor</code>s across tenant namespaces (<code>serviceMonitorNamespaceSelector</code>)
-  and granted read access to the per-tenant <code>actions-gateway-metrics-client</code>
-  Secret. Each tenant has a distinct CA and client cert, which is why a single
-  cluster-wide <code>ServiceMonitor</code> cannot scrape them — the wiring is necessarily
-  per tenant.</li>
-<li><strong>NetworkPolicy:</strong> label the Prometheus namespace <code>metrics: enabled</code> so the
-  per-tenant NetworkPolicy admits the scrape (the AGC and proxy policies admit
-  the <code>:8443</code> metrics port only from <code>metrics=enabled</code> namespaces).</li>
+<li><strong>Prometheus Operator</strong> must be installed (the <code>monitoring.coreos.com</code> <code>ServiceMonitor</code> CRD must exist).
+  The toggle is off by default precisely because the CRD is not present on every cluster.
+  If the CRD is absent when the toggle is on, the GMC logs a warning and emits a <code>ServiceMonitorCRDMissing</code> Event on the <code>ActionsGateway</code> and continues — a missing scrape prerequisite never blocks tenant provisioning.</li>
+<li><strong>Prometheus reads the client bundle from the <code>ServiceMonitor</code>'s namespace</strong> (the tenant namespace), so the scraping Prometheus must be configured to select <code>ServiceMonitor</code>s across tenant namespaces (<code>serviceMonitorNamespaceSelector</code>) and granted read access to the per-tenant <code>actions-gateway-metrics-client</code> Secret.
+  Each tenant has a distinct CA and client cert, which is why a single cluster-wide <code>ServiceMonitor</code> cannot scrape them — the wiring is necessarily per tenant.</li>
+<li><strong>NetworkPolicy:</strong> label the Prometheus namespace <code>metrics: enabled</code> so the per-tenant NetworkPolicy admits the scrape (the AGC and proxy policies admit the <code>:8443</code> metrics port only from <code>metrics=enabled</code> namespaces).</li>
 </ul>
-<p><strong>Ad-hoc verification</strong> (mounting the published bundle locally). The Service and
-Secret are named per <strong>gateway</strong> under v2 and with a fixed name under v1, so set
-<code>svc</code>/<code>secret</code> for the tenant you are scraping and the rest of the block is
-identical:</p>
+<p><strong>Ad-hoc verification</strong> (mounting the published bundle locally).
+The Service and Secret are named per <strong>gateway</strong> under v2 and with a fixed name under v1, so set <code>svc</code>/<code>secret</code> for the tenant you are scraping and the rest of the block is identical:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nv">ns</span><span class="o">=</span>&lt;tenant-namespace&gt;
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># v2 tenant (per ActionsGateway, e.g. gateway &quot;dogfood&quot; -&gt; dogfood-agc):</span>
@@ -2971,11 +2912,8 @@ identical:</p>
 <a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">  </span><span class="s2">&quot;</span><span class="nv">$svc</span><span class="s2">.</span><span class="nv">$ns</span><span class="s2">.svc:8443:127.0.0.1&quot;</span>
 <a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>rm<span class="w"> </span>-f<span class="w"> </span>client.crt<span class="w"> </span>client.key<span class="w"> </span>ca.crt<span class="w">   </span><span class="c1"># delete the cert material when done</span>
 </code></pre></div>
-<p>The <code>--resolve</code> host must match <code>$svc.$ns.svc</code> exactly: that name is what the
-AGC's serving certificate is issued for, so substituting <code>localhost</code> fails the
-TLS handshake rather than the authorization check.</p>
-<p>(The bundle is a client <em>certificate</em>, not a long-lived account credential; still
-remove the files when finished.)</p>
+<p>The <code>--resolve</code> host must match <code>$svc.$ns.svc</code> exactly: that name is what the AGC's serving certificate is issued for, so substituting <code>localhost</code> fails the TLS handshake rather than the authorization check.</p>
+<p>(The bundle is a client <em>certificate</em>, not a long-lived account credential; still remove the files when finished.)</p>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>
 

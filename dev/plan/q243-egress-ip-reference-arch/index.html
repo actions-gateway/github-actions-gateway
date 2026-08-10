@@ -2937,76 +2937,37 @@
 
 
 <h1 id="per-tenant-egress-ip-reference-architecture-cloud">Per-Tenant Egress-IP Reference Architecture (Cloud)<a class="headerlink" href="#per-tenant-egress-ip-reference-architecture-cloud" title="Permanent link">&para;</a></h1>
-<p>Reference architecture for how GAG delivers <strong>per-tenant egress-IP
-isolation</strong> — each tenant's GitHub traffic egressing from a distinct, stable
-set of source IPs — on a production cloud cluster. It compares the two viable
-production mechanisms (Cilium Egress Gateway vs per-tenant cloud NAT),
-documents the single-tenant-direct (dogfood) vs multi-tenant (production)
-topology and its cost, and defines a live-validation plan for a follow-up.</p>
-<p><strong>Scope of this document: design + written reference architecture, now fully
-live-validated.</strong> Two live runs on throwaway GKE Dataplane V2 clusters (torn down
-same-session) proved the claim end-to-end:</p>
+<p>Reference architecture for how GAG delivers <strong>per-tenant egress-IP isolation</strong> — each tenant's GitHub traffic egressing from a distinct, stable set of source IPs — on a production cloud cluster.
+It compares the two viable production mechanisms (Cilium Egress Gateway vs per-tenant cloud NAT), documents the single-tenant-direct (dogfood) vs multi-tenant (production) topology and its cost, and defines a live-validation plan for a follow-up.</p>
+<p><strong>Scope of this document: design + written reference architecture, now fully live-validated.</strong> Two live runs on throwaway GKE Dataplane V2 clusters (torn down same-session) proved the claim end-to-end:</p>
 <ul>
-<li>✅ The <strong>Cloud NAT mechanism is proven</strong> (<a href="../q243-q245-q230-live-validation-campaign/">campaign, 2026-07-07</a>):
-  two tenants (distinguished by node pool + pod secondary range) egress from
-  <strong>distinct, stable</strong> source IPs, stable across pod reschedule (see
-  <a href="#live-validation-results-2026-07-07">Live-validation results</a>).</li>
-<li>✅ <strong>GAG binds a real EgressProxy to its egress IP — proven live</strong> <em>(2026-07-13;
-  the design was resolved by <a href="../../STATUS/">Q282</a> and asserted only in envtest until
-  this run)</em>: a GMC-provisioned <code>EgressProxy</code> with <code>spec.scheduling</code> lands <strong>both</strong>
-  replicas on one tenant pool → <strong>one</strong> Cloud NAT IP, distinct per tenant and stable
-  across reschedule. <code>EgressProxy.spec.scheduling</code> and <code>ActionsGateway.spec.scheduling</code>
-  carry <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code> through to the proxy pool and AGC pods,
-  and a supplied <code>podAntiAffinity</code> <strong>replaces</strong> the builder's required cross-node
-  spread (so a single-node tenant pool no longer strands replicas in <code>Pending</code>). The
-  2026-07-07 two-IP spread is gone. See <a href="#result--pass-2026-07-13">Result — PASS (2026-07-13)</a>
-  and <a href="#placement-pass-through-q282">Placement pass-through</a>.</li>
-<li>📝 <strong>GKE mechanism corrected</strong>: Approach B's "dedicated <em>subnet</em> per tenant" is
-  inaccurate for GKE (all node pools share the cluster subnet). The working
-  primitive is a <strong>dedicated pod secondary range per tenant node pool + a per-range
-  Cloud NAT + <code>--disable-default-snat</code></strong> (so pod IPs, not the node IP, are the NAT
-  source). Corrected in <a href="#approach-b--per-tenant-cloud-nat">Approach B</a>.</li>
+<li>✅ The <strong>Cloud NAT mechanism is proven</strong> (<a href="../q243-q245-q230-live-validation-campaign/">campaign, 2026-07-07</a>): two tenants (distinguished by node pool + pod secondary range) egress from <strong>distinct, stable</strong> source IPs, stable across pod reschedule (see <a href="#live-validation-results-2026-07-07">Live-validation results</a>).</li>
+<li>✅ <strong>GAG binds a real EgressProxy to its egress IP — proven live</strong> <em>(2026-07-13; the design was resolved by <a href="../../STATUS/">Q282</a> and asserted only in envtest until this run)</em>: a GMC-provisioned <code>EgressProxy</code> with <code>spec.scheduling</code> lands <strong>both</strong> replicas on one tenant pool → <strong>one</strong> Cloud NAT IP, distinct per tenant and stable across reschedule. <code>EgressProxy.spec.scheduling</code> and <code>ActionsGateway.spec.scheduling</code> carry <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code> through to the proxy pool and AGC pods, and a supplied <code>podAntiAffinity</code> <strong>replaces</strong> the builder's required cross-node spread (so a single-node tenant pool no longer strands replicas in <code>Pending</code>).
+  The 2026-07-07 two-IP spread is gone.
+  See <a href="#result--pass-2026-07-13">Result — PASS (2026-07-13)</a> and <a href="#placement-pass-through-q282">Placement pass-through</a>.</li>
+<li>📝 <strong>GKE mechanism corrected</strong>: Approach B's "dedicated <em>subnet</em> per tenant" is inaccurate for GKE (all node pools share the cluster subnet).
+  The working primitive is a <strong>dedicated pod secondary range per tenant node pool + a per-range Cloud NAT + <code>--disable-default-snat</code></strong> (so pod IPs, not the node IP, are the NAT source).
+  Corrected in <a href="#approach-b--per-tenant-cloud-nat">Approach B</a>.</li>
 </ul>
-<p>Completes Q243 (the <a href="../../STATUS/">STATUS</a> Queue row is removed on completion —
-this doc is the durable reference). Was a v2beta1 (Q74) blocker alongside Q224 and
-<a href="../archive/q242-g1-proxy-destination-allowlist/">Q242</a>.</p>
+<p>Completes Q243 (the <a href="../../STATUS/">STATUS</a> Queue row is removed on completion — this doc is the durable reference).
+Was a v2beta1 (Q74) blocker alongside Q224 and <a href="../archive/q242-g1-proxy-destination-allowlist/">Q242</a>.</p>
 <hr />
 <h2 id="why-this-exists-the-claim-vs-the-current-mechanism">Why this exists: the claim vs. the current mechanism<a class="headerlink" href="#why-this-exists-the-claim-vs-the-current-mechanism" title="Permanent link">&para;</a></h2>
 <p>GAG's headline multi-tenant differentiator is per-tenant egress-IP isolation.
 The executive summary states it plainly:</p>
 <blockquote>
-<p>Every tenant's GitHub traffic exits through a dedicated egress IP pool,
-enabling per-team IP allowlisting on the GitHub side and per-tenant audit
-attribution. — <a href="../../design/01-executive-summary/">01-executive-summary.md</a></p>
+<p>Every tenant's GitHub traffic exits through a dedicated egress IP pool, enabling per-team IP allowlisting on the GitHub side and per-tenant audit attribution. — <a href="../../design/01-executive-summary/">01-executive-summary.md</a></p>
 </blockquote>
-<p>And <a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">§2.3</a> describes
-the Tier-3 proxy pool as "giving each tenant a distinct set of egress IPs that
-are never shared with other tenants."</p>
-<p><strong>The gap this plan closes: the per-tenant egress <em>proxy pool</em> is a necessary
-prerequisite for that claim, but it is not by itself sufficient.</strong> The proxy
-pool gives each tenant a per-tenant <strong>choke point</strong> — a single, identifiable
-set of pods through which <em>all</em> of that tenant's GitHub traffic (AGC control
-plane + worker data plane) is funnelled. What source IP GitHub actually
-<em>sees</em>, however, is decided one layer lower, by how the cluster masquerades
-(SNATs) pod traffic on the way out of the node:</p>
+<p>And <a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">§2.3</a> describes the Tier-3 proxy pool as "giving each tenant a distinct set of egress IPs that are never shared with other tenants."</p>
+<p><strong>The gap this plan closes: the per-tenant egress <em>proxy pool</em> is a necessary prerequisite for that claim, but it is not by itself sufficient.</strong> The proxy pool gives each tenant a per-tenant <strong>choke point</strong> — a single, identifiable set of pods through which <em>all</em> of that tenant's GitHub traffic (AGC control plane + worker data plane) is funnelled.
+What source IP GitHub actually <em>sees</em>, however, is decided one layer lower, by how the cluster masquerades (SNATs) pod traffic on the way out of the node:</p>
 <ul>
-<li>On a stock cloud cluster, proxy-pod egress is SNATed to the <strong>node's</strong>
-  external IP (GKE Cloud NAT, an EKS NAT gateway, an AKS outbound rule, or
-  node IP masquerade). That node IP is <strong>shared</strong> across every pod on the node
-  — including other tenants' proxy pods — and is <strong>not stable</strong> across a proxy
-  pod rescheduling to a different node (HPA scale, node drain, rolling
-  update).</li>
-<li>So today, absent an egress-IP mechanism, "distinct set of egress IPs per
-  tenant" is <strong>aspirational</strong>: the choke point exists, but the source IP at
-  GitHub is the cluster's shared egress IP set, not a per-tenant one.</li>
+<li>On a stock cloud cluster, proxy-pod egress is SNATed to the <strong>node's</strong> external IP (GKE Cloud NAT, an EKS NAT gateway, an AKS outbound rule, or node IP masquerade).
+  That node IP is <strong>shared</strong> across every pod on the node — including other tenants' proxy pods — and is <strong>not stable</strong> across a proxy pod rescheduling to a different node (HPA scale, node drain, rolling update).</li>
+<li>So today, absent an egress-IP mechanism, "distinct set of egress IPs per tenant" is <strong>aspirational</strong>: the choke point exists, but the source IP at GitHub is the cluster's shared egress IP set, not a per-tenant one.</li>
 </ul>
-<p>This is visible in the existing tradeoff table
-(<a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md</a>,
-<a href="../worker-egress-proxy/">worker-egress-proxy.md</a>), which lists the chosen path
-as "Egress IP at GitHub: Per-tenant, stable." That column is only true once an
-<strong>egress-IP mechanism</strong> binds each tenant's choke-point traffic to a distinct,
-stable source IP. <strong>This plan specifies that mechanism.</strong> It does not change
-the proxy pool; it adds the source-IP binding underneath it.</p>
+<p>This is visible in the existing tradeoff table (<a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md</a>, <a href="../worker-egress-proxy/">worker-egress-proxy.md</a>), which lists the chosen path as "Egress IP at GitHub: Per-tenant, stable."
+That column is only true once an <strong>egress-IP mechanism</strong> binds each tenant's choke-point traffic to a distinct, stable source IP. <strong>This plan specifies that mechanism.</strong> It does not change the proxy pool; it adds the source-IP binding underneath it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>   What exists today (proxy pool = choke point)      What Q243 adds (source-IP binding)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>   ────────────────────────────────────────────      ──────────────────────────────────
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>   tenant-A workers ─┐                                tenant-A proxy ─▶ egress-IP-A ─▶ GitHub
@@ -3063,42 +3024,27 @@ the proxy pool; it adds the source-IP binding underneath it.</p>
 </tr>
 </tbody>
 </table>
-<p>Because dogfood runs single-tenant-direct, the production multi-tenant
-isolation claim is currently <strong>un-substantiated by any running system</strong> — the
-reason Q243 is a v2beta1 blocker.</p>
+<p>Because dogfood runs single-tenant-direct, the production multi-tenant isolation claim is currently <strong>un-substantiated by any running system</strong> — the reason Q243 is a v2beta1 blocker.</p>
 <hr />
 <h2 id="what-per-tenant-egress-ip-actually-requires">What "per-tenant egress IP" actually requires<a class="headerlink" href="#what-per-tenant-egress-ip-actually-requires" title="Permanent link">&para;</a></h2>
-<p>Four downstream properties depend on the egress IP being per-tenant, distinct,
-and stable (from <a href="../worker-egress-proxy/#why-route-worker-traffic-through-the-proxy">worker-egress-proxy.md</a>):</p>
+<p>Four downstream properties depend on the egress IP being per-tenant, distinct, and stable (from <a href="../worker-egress-proxy/#why-route-worker-traffic-through-the-proxy">worker-egress-proxy.md</a>):</p>
 <ol>
-<li><strong>GitHub-side IP allowlisting</strong> — GHES / GitHub App IP-allowlist filters
-   inbound by source IP. Only works if a tenant's traffic arrives from a
-   <em>known, stable, tenant-specific</em> IP set.</li>
-<li><strong>Per-tenant audit attribution</strong> — GitHub's audit log groups by source IP;
-   a shared node IP attributes to the cluster, not the tenant.</li>
-<li><strong>GitHub-side incident containment</strong> — a rate limit / abuse flag / IP ban
-   against one tenant's IPs must not touch another tenant. Shared IPs collapse
-   this.</li>
-<li><strong>Per-tenant kill-switch</strong> — halting one tenant's egress must be one
-   operation on that tenant's egress path.</li>
+<li><strong>GitHub-side IP allowlisting</strong> — GHES / GitHub App IP-allowlist filters inbound by source IP.
+   Only works if a tenant's traffic arrives from a <em>known, stable, tenant-specific</em> IP set.</li>
+<li><strong>Per-tenant audit attribution</strong> — GitHub's audit log groups by source IP; a shared node IP attributes to the cluster, not the tenant.</li>
+<li><strong>GitHub-side incident containment</strong> — a rate limit / abuse flag / IP ban against one tenant's IPs must not touch another tenant.
+   Shared IPs collapse this.</li>
+<li><strong>Per-tenant kill-switch</strong> — halting one tenant's egress must be one operation on that tenant's egress path.</li>
 </ol>
-<p>A mechanism satisfies Q243 iff it makes GitHub observe, for tenant <em>T</em>, a
-<strong>distinct</strong> and <strong>stable</strong> source-IP set <em>S(T)</em>, disjoint from <em>S(T′)</em> for
-every other tenant <em>T′</em>, and stable across proxy-pod reschedules. Two
-production mechanisms can do this. Neither replaces the proxy pool or the
-NetworkPolicy — they bind a source IP to the choke point the proxy already
-establishes.</p>
+<p>A mechanism satisfies Q243 iff it makes GitHub observe, for tenant <em>T</em>, a <strong>distinct</strong> and <strong>stable</strong> source-IP set <em>S(T)</em>, disjoint from <em>S(T′)</em> for every other tenant <em>T′</em>, and stable across proxy-pod reschedules.
+Two production mechanisms can do this.
+Neither replaces the proxy pool or the NetworkPolicy — they bind a source IP to the choke point the proxy already establishes.</p>
 <hr />
 <h2 id="approach-a--cilium-egress-gateway">Approach A — Cilium Egress Gateway<a class="headerlink" href="#approach-a--cilium-egress-gateway" title="Permanent link">&para;</a></h2>
-<p>Cilium's Egress Gateway SNATs traffic from selected pods, leaving the cluster
-through a designated <strong>gateway node</strong> with a configured <strong>egress IP</strong>
-(<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).
-Mapping tenants → egress IPs is a direct fit because the policy selects pods by
-namespace label.</p>
+<p>Cilium's Egress Gateway SNATs traffic from selected pods, leaving the cluster through a designated <strong>gateway node</strong> with a configured <strong>egress IP</strong> (<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).
+Mapping tenants → egress IPs is a direct fit because the policy selects pods by namespace label.</p>
 <h3 id="how-it-maps-tenants--egress-ips">How it maps tenants → egress IPs<a class="headerlink" href="#how-it-maps-tenants--egress-ips" title="Permanent link">&para;</a></h3>
-<p>One cluster-scoped <code>CiliumEgressGatewayPolicy</code> per tenant selects that tenant's
-proxy pods (by the <code>io.kubernetes.pod.namespace</code> label) and pins their egress
-to a specific gateway node + egress IP:</p>
+<p>One cluster-scoped <code>CiliumEgressGatewayPolicy</code> per tenant selects that tenant's proxy pods (by the <code>io.kubernetes.pod.namespace</code> label) and pins their egress to a specific gateway node + egress IP:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cilium.io/v2</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CiliumEgressGatewayPolicy</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3117,85 +3063,45 @@ to a specific gateway node + egress IP:</p>
 <a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">        </span><span class="nt">egress-gateway</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="nt">egressIP</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">203.0.113.10</span><span class="w">        </span><span class="c1"># distinct, stable per-tenant source IP</span>
 </code></pre></div>
-<p>Selecting only <code>app: actions-gateway-proxy</code> (not all namespace pods) keeps the
-egress IP bound to the choke point; worker/AGC pods already reach GitHub only
-<em>through</em> the proxy, so their external identity follows the proxy's.</p>
+<p>Selecting only <code>app: actions-gateway-proxy</code> (not all namespace pods) keeps the egress IP bound to the choke point; worker/AGC pods already reach GitHub only <em>through</em> the proxy, so their external identity follows the proxy's.</p>
 <h3 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Self-managed Cilium</strong> with the egress-gateway feature: <code>egressGateway.enabled=true</code>,
-  <code>bpf.masquerade=true</code>, <code>kubeProxyReplacement=true</code>, and <code>identityAllocationMode=crd</code>
-  (<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).</li>
-<li>One or more <strong>gateway nodes</strong> with the per-tenant egress IPs configured on a
-  node interface (or assigned as cloud secondary/alias IPs the node can source
-  from).</li>
-<li><strong>Not available on GKE Dataplane V2.</strong> GKE's managed Cilium does not expose
-  <code>CiliumEgressGatewayPolicy</code> (it does not even install the <code>CiliumNetworkPolicy</code>
-  CRD — the same limitation that makes Q208 <code>CiliumFQDN</code> unusable on dogfood,
-  see <a href="../../design/network-architecture/#cni-native-fqdn-egress-mode-opt-in-q208-q245">network-architecture.md</a>).
-  Using this approach on GKE means a <strong>self-managed Cilium</strong> cluster
-  (<code>--enable-dataplane-v2=false</code> + BYO Cilium), forfeiting DPv2's managed
-  operations. On EKS it means replacing the AWS VPC CNI with self-managed
-  Cilium (unsupported by AWS). On AKS it is reachable via Azure CNI Powered by
-  Cilium / BYOCNI (<a href="https://isovalent.com/blog/post/cilium-egress-gateway-aks/">Isovalent: Cilium Egress Gateway on AKS</a>).</li>
+<li><strong>Self-managed Cilium</strong> with the egress-gateway feature: <code>egressGateway.enabled=true</code>, <code>bpf.masquerade=true</code>, <code>kubeProxyReplacement=true</code>, and <code>identityAllocationMode=crd</code> (<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).</li>
+<li>One or more <strong>gateway nodes</strong> with the per-tenant egress IPs configured on a node interface (or assigned as cloud secondary/alias IPs the node can source from).</li>
+<li><strong>Not available on GKE Dataplane V2.</strong> GKE's managed Cilium does not expose <code>CiliumEgressGatewayPolicy</code> (it does not even install the <code>CiliumNetworkPolicy</code> CRD — the same limitation that makes Q208 <code>CiliumFQDN</code> unusable on dogfood, see <a href="../../design/network-architecture/#cni-native-fqdn-egress-mode-opt-in-q208-q245">network-architecture.md</a>).
+  Using this approach on GKE means a <strong>self-managed Cilium</strong> cluster (<code>--enable-dataplane-v2=false</code> + BYO Cilium), forfeiting DPv2's managed operations.
+  On EKS it means replacing the AWS VPC CNI with self-managed Cilium (unsupported by AWS).
+  On AKS it is reachable via Azure CNI Powered by Cilium / BYOCNI (<a href="https://isovalent.com/blog/post/cilium-egress-gateway-aks/">Isovalent: Cilium Egress Gateway on AKS</a>).</li>
 </ul>
 <h3 id="high-availability--scale-caveats-secure-by-default-relevant">High-availability &amp; scale caveats (secure-by-default relevant)<a class="headerlink" href="#high-availability--scale-caveats-secure-by-default-relevant" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Single active gateway per endpoint.</strong> Traffic from a matched pod egresses
-  through <strong>one</strong> gateway node, not all — and <em>"changing the gateway node will
-  break existing egress connections"</em> with <strong>no automatic failover</strong> in-flight
-  (<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).
-  The gateway node is a per-tenant availability chokepoint and a SNAT
-  port-exhaustion ceiling under high concurrent-connection fan-out (relevant
-  given GAG's thousands-of-sessions design).</li>
-<li><strong>Policy-application delay on pod start</strong> — a brief window where a
-  newly-scheduled proxy pod's traffic may egress <strong>un-SNATed</strong> (node IP) before
-  the egress policy applies. This is a <em>fail-open</em> window on the isolation
-  property and must be called out: it means the per-tenant IP guarantee is
-  "eventually, within seconds of pod start," not "from the first packet."
-  <strong>(to be validated</strong> — measure the window and whether GitHub calls land in
-  it.)</li>
+<li><strong>Single active gateway per endpoint.</strong> Traffic from a matched pod egresses through <strong>one</strong> gateway node, not all — and <em>"changing the gateway node will break existing egress connections"</em> with <strong>no automatic failover</strong> in-flight (<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).
+  The gateway node is a per-tenant availability chokepoint and a SNAT port-exhaustion ceiling under high concurrent-connection fan-out (relevant given GAG's thousands-of-sessions design).</li>
+<li><strong>Policy-application delay on pod start</strong> — a brief window where a newly-scheduled proxy pod's traffic may egress <strong>un-SNATed</strong> (node IP) before the egress policy applies.
+  This is a <em>fail-open</em> window on the isolation property and must be called out: it means the per-tenant IP guarantee is "eventually, within seconds of pod start," not "from the first packet." <strong>(to be validated</strong> — measure the window and whether GitHub calls land in it.)</li>
 </ul>
 <h3 id="composition-with-the-existing-stack">Composition with the existing stack<a class="headerlink" href="#composition-with-the-existing-stack" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Proxy pool:</strong> unchanged. The egress-gateway policy binds the source IP of
-  the proxy pods' already-funnelled traffic.</li>
-<li><strong>NetworkPolicy:</strong> orthogonal and complementary — the three per-tenant
-  <code>NetworkPolicy</code> objects still enforce the choke point; the egress-gateway
-  policy only rewrites source IP for traffic that policy already permits.</li>
-<li><strong>Q242 allowlist:</strong> unchanged. Widened destinations still egress from the
-  same per-tenant gateway IP, preserving attribution for non-GitHub
-  destinations too.</li>
+<li><strong>Proxy pool:</strong> unchanged.
+  The egress-gateway policy binds the source IP of the proxy pods' already-funnelled traffic.</li>
+<li><strong>NetworkPolicy:</strong> orthogonal and complementary — the three per-tenant <code>NetworkPolicy</code> objects still enforce the choke point; the egress-gateway policy only rewrites source IP for traffic that policy already permits.</li>
+<li><strong>Q242 allowlist:</strong> unchanged.
+  Widened destinations still egress from the same per-tenant gateway IP, preserving attribution for non-GitHub destinations too.</li>
 </ul>
 <hr />
 <h2 id="approach-b--per-tenant-cloud-nat">Approach B — Per-tenant cloud NAT<a class="headerlink" href="#approach-b--per-tenant-cloud-nat" title="Permanent link">&para;</a></h2>
-<p>Give each tenant a distinct cloud egress IP by routing its proxy pods through a
-tenant-dedicated NAT path. On GCP this is <strong>Cloud NAT scoped to a
-tenant-dedicated subnet/node-pool</strong> with a reserved static IP pool; the
-equivalent on EKS is a per-tenant subnet + NAT gateway, on AKS a per-node-pool
-NAT gateway.</p>
+<p>Give each tenant a distinct cloud egress IP by routing its proxy pods through a tenant-dedicated NAT path.
+On GCP this is <strong>Cloud NAT scoped to a tenant-dedicated subnet/node-pool</strong> with a reserved static IP pool; the equivalent on EKS is a per-tenant subnet + NAT gateway, on AKS a per-node-pool NAT gateway.</p>
 <h3 id="ip-allocation-model-gke-reference">IP-allocation model (GKE reference)<a class="headerlink" href="#ip-allocation-model-gke-reference" title="Permanent link">&para;</a></h3>
-<p>Cloud NAT is a <strong>VPC/subnet-level</strong> construct — it has <strong>no native
-per-namespace granularity</strong>
-(<a href="https://docs.cloud.google.com/nat/docs/ports-and-addresses">GCP Cloud NAT docs</a>).</p>
+<p>Cloud NAT is a <strong>VPC/subnet-level</strong> construct — it has <strong>no native per-namespace granularity</strong> (<a href="https://docs.cloud.google.com/nat/docs/ports-and-addresses">GCP Cloud NAT docs</a>).</p>
 <blockquote>
-<p><strong>Corrected against live validation (2026-07-07).</strong> On GKE all node pools of a
-cluster share the <strong>cluster subnet</strong> — you cannot put node pools on separate
-subnets in one cluster, so "a dedicated <em>subnet</em> per tenant" (the diagram below)
-is not how it works on a single GKE cluster. The validated mechanism is a
-<strong>dedicated pod <em>secondary range</em> per tenant node pool</strong> (<code>--pod-ipv4-range</code>),
-a <strong>per-range Cloud NAT</strong> (<code>--nat-custom-subnet-ip-ranges=SUBNET:RANGE</code>, one per
-tenant, all on one Cloud Router), and <strong><code>--disable-default-snat</code></strong> on the
-cluster so pods egress with their pod IP (from the tenant range) instead of
-being masqueraded to the shared node IP — that is what makes the per-range NAT
-deterministic. Confirmed: 3 NATs covering 3 disjoint secondary ranges of one
-subnet coexist on one router, giving distinct + stable per-tenant IPs
-(<a href="#live-validation-results-2026-07-07">results</a>). Read "subnet" below as "pod
-secondary range." The EKS/AKS shapes (genuinely per-subnet / per-node-pool NAT)
-are unaffected.</p>
+<p><strong>Corrected against live validation (2026-07-07).</strong> On GKE all node pools of a cluster share the <strong>cluster subnet</strong> — you cannot put node pools on separate subnets in one cluster, so "a dedicated <em>subnet</em> per tenant" (the diagram below) is not how it works on a single GKE cluster.
+The validated mechanism is a <strong>dedicated pod <em>secondary range</em> per tenant node pool</strong> (<code>--pod-ipv4-range</code>), a <strong>per-range Cloud NAT</strong> (<code>--nat-custom-subnet-ip-ranges=SUBNET:RANGE</code>, one per tenant, all on one Cloud Router), and <strong><code>--disable-default-snat</code></strong> on the cluster so pods egress with their pod IP (from the tenant range) instead of being masqueraded to the shared node IP — that is what makes the per-range NAT deterministic.
+Confirmed: 3 NATs covering 3 disjoint secondary ranges of one subnet coexist on one router, giving distinct + stable per-tenant IPs (<a href="#live-validation-results-2026-07-07">results</a>).
+Read "subnet" below as "pod secondary range."
+The EKS/AKS shapes (genuinely per-subnet / per-node-pool NAT) are unaffected.</p>
 </blockquote>
-<p>Per-tenant IPs are achieved by pinning each tenant's proxy pods to a dedicated
-<strong>node pool</strong> on a dedicated <strong>subnet</strong>, and attaching a Cloud NAT config with
-a reserved static IP pool to that subnet's ranges:</p>
+<p>Per-tenant IPs are achieved by pinning each tenant's proxy pods to a dedicated <strong>node pool</strong> on a dedicated <strong>subnet</strong>, and attaching a Cloud NAT config with a reserved static IP pool to that subnet's ranges:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>  Tenant A                          Tenant B
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  ────────                          ────────
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  node pool: pool-tenant-a          node pool: pool-tenant-b
@@ -3210,35 +3116,21 @@ a reserved static IP pool to that subnet's ranges:</p>
 <a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>                 GitHub sees IP-A                  GitHub sees IP-B
 </code></pre></div>
 <ul>
-<li>The tenant's <code>EgressProxy</code> pods (and only those — via nodeSelector/toleration
-  to the tenant pool) schedule on <code>pool-tenant-a</code>; their egress SNATs through
-  <code>nat-a</code>'s reserved static IP(s).</li>
-<li>Cloud NAT covers the pod secondary range via the <code>:ALL</code> / custom-subnet-range
-  option so pod IPs (not just node IPs) are NATed
-  (<a href="https://dev.to/lbcristaldo/static-ip-addresses-for-gke-outbound-traffic-a-practical-guide-to-cloud-nat-1ie8">DEV: Static IPs for GKE outbound via Cloud NAT</a>).</li>
+<li>The tenant's <code>EgressProxy</code> pods (and only those — via nodeSelector/toleration to the tenant pool) schedule on <code>pool-tenant-a</code>; their egress SNATs through <code>nat-a</code>'s reserved static IP(s).</li>
+<li>Cloud NAT covers the pod secondary range via the <code>:ALL</code> / custom-subnet-range option so pod IPs (not just node IPs) are NATed (<a href="https://dev.to/lbcristaldo/static-ip-addresses-for-gke-outbound-traffic-a-practical-guide-to-cloud-nat-1ie8">DEV: Static IPs for GKE outbound via Cloud NAT</a>).</li>
 </ul>
 <h3 id="scaling--cost">Scaling &amp; cost<a class="headerlink" href="#scaling--cost" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>IP allocation</strong> is per Cloud NAT gateway; multiple static IPs per tenant
-  give SNAT port headroom (Cloud NAT allocates ports per NAT IP). Heavy
-  fan-out tenants raise their IP count, not their gateway count.</li>
-<li><strong>Cost drivers:</strong> reserved static IPs (per-IP hourly), Cloud NAT data
-  processing per GB, and — the real cost — a <strong>dedicated node pool per tenant</strong>
-  (minimum node footprint even at idle, which fights GAG's zero-idle-compute
-  premise). This is the crux tradeoff vs. Approach A (see cost model below).</li>
-<li><strong>Managed HA:</strong> Cloud NAT is a managed, horizontally-redundant service — no
-  single gateway-node SPOF (unlike Approach A), and no in-flight-connection
-  break on scaling.</li>
+<li><strong>IP allocation</strong> is per Cloud NAT gateway; multiple static IPs per tenant give SNAT port headroom (Cloud NAT allocates ports per NAT IP).
+  Heavy fan-out tenants raise their IP count, not their gateway count.</li>
+<li><strong>Cost drivers:</strong> reserved static IPs (per-IP hourly), Cloud NAT data processing per GB, and — the real cost — a <strong>dedicated node pool per tenant</strong> (minimum node footprint even at idle, which fights GAG's zero-idle-compute premise).
+  This is the crux tradeoff vs. Approach A (see cost model below).</li>
+<li><strong>Managed HA:</strong> Cloud NAT is a managed, horizontally-redundant service — no single gateway-node SPOF (unlike Approach A), and no in-flight-connection break on scaling.</li>
 </ul>
 <h3 id="composition-with-the-existing-stack_1">Composition with the existing stack<a class="headerlink" href="#composition-with-the-existing-stack_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Proxy pool / NetworkPolicy / Q242:</strong> all unchanged and orthogonal, same as
-  Approach A. The NAT binds the source IP; the policies still enforce the choke
-  point.</li>
-<li><strong>Portability:</strong> the pattern (dedicated subnet/node-pool + managed NAT +
-  reserved IP pool) maps cleanly to <strong>EKS</strong> (subnet + NAT gateway per tenant)
-  and <strong>AKS</strong> (NAT gateway per node pool) — a <strong>cloud-portable</strong> pattern that
-  does not depend on a specific CNI.</li>
+<li><strong>Proxy pool / NetworkPolicy / Q242:</strong> all unchanged and orthogonal, same as Approach A. The NAT binds the source IP; the policies still enforce the choke point.</li>
+<li><strong>Portability:</strong> the pattern (dedicated subnet/node-pool + managed NAT + reserved IP pool) maps cleanly to <strong>EKS</strong> (subnet + NAT gateway per tenant) and <strong>AKS</strong> (NAT gateway per node pool) — a <strong>cloud-portable</strong> pattern that does not depend on a specific CNI.</li>
 </ul>
 <hr />
 <h2 id="comparison">Comparison<a class="headerlink" href="#comparison" title="Permanent link">&para;</a></h2>
@@ -3294,29 +3186,16 @@ a reserved static IP pool to that subnet's ranges:</p>
 </tbody>
 </table>
 <h3 id="recommendation-secure-by-default">Recommendation (secure-by-default)<a class="headerlink" href="#recommendation-secure-by-default" title="Permanent link">&para;</a></h3>
-<p><strong>No single default yet — the choice is platform-shaped, and the recommended
-default is the one that does not trade away an isolation or availability
-property on the target platform.</strong> Concretely:</p>
+<p><strong>No single default yet — the choice is platform-shaped, and the recommended default is the one that does not trade away an isolation or availability property on the target platform.</strong> Concretely:</p>
 <ul>
-<li><strong>Prefer Approach B (per-tenant cloud NAT) as the portable, managed-HA
-  default</strong> where the per-tenant node-pool cost is acceptable. It has no
-  fail-open pod-start window, no gateway-node SPOF, and is cloud-portable
-  without a CNI swap — so it does not regress availability or the
-  from-first-packet isolation property. Its cost (a node-pool floor per tenant)
-  is an economic tradeoff, not a security regression.</li>
-<li><strong>Approach A (Cilium Egress Gateway)</strong> is the better fit for
-  <strong>already-self-managed-Cilium</strong> clusters and cost-sensitive high-tenant-density
-  deployments, <strong>provided</strong> the pod-start fail-open window and single-active-gateway
-  HA characteristics are validated as acceptable for the tenant's threat model.
-  Per secure-by-default, A must not become the default on a platform where it
-  silently introduces the fail-open window without operator sign-off.</li>
-<li><strong>On GKE Dataplane V2 specifically</strong> (GAG's dogfood/reference platform), A is
-  <strong>not available</strong> without abandoning DPv2 — so B is the de-facto GKE path.</li>
+<li><strong>Prefer Approach B (per-tenant cloud NAT) as the portable, managed-HA default</strong> where the per-tenant node-pool cost is acceptable.
+  It has no fail-open pod-start window, no gateway-node SPOF, and is cloud-portable without a CNI swap — so it does not regress availability or the from-first-packet isolation property.
+  Its cost (a node-pool floor per tenant) is an economic tradeoff, not a security regression.</li>
+<li><strong>Approach A (Cilium Egress Gateway)</strong> is the better fit for <strong>already-self-managed-Cilium</strong> clusters and cost-sensitive high-tenant-density deployments, <strong>provided</strong> the pod-start fail-open window and single-active-gateway HA characteristics are validated as acceptable for the tenant's threat model.
+  Per secure-by-default, A must not become the default on a platform where it silently introduces the fail-open window without operator sign-off.</li>
+<li><strong>On GKE Dataplane V2 specifically</strong> (GAG's dogfood/reference platform), A is <strong>not available</strong> without abandoning DPv2 — so B is the de-facto GKE path.</li>
 </ul>
-<p>The mechanism should be an <strong>operator choice</strong>, surfaced as an explicit,
-documented opt-in with the tradeoff spelled out — never a silent default that
-regresses isolation or availability. <strong>The final default is a decision to
-confirm against the live-validation results, not to fix in this doc.</strong></p>
+<p>The mechanism should be an <strong>operator choice</strong>, surfaced as an explicit, documented opt-in with the tradeoff spelled out — never a silent default that regresses isolation or availability. <strong>The final default is a decision to confirm against the live-validation results, not to fix in this doc.</strong></p>
 <hr />
 <h2 id="topology-single-tenant-direct-dogfood-vs-production-multi-tenant">Topology: single-tenant-direct (dogfood) vs. production multi-tenant<a class="headerlink" href="#topology-single-tenant-direct-dogfood-vs-production-multi-tenant" title="Permanent link">&para;</a></h2>
 <h3 id="single-tenant-direct--what-dogfood-does-today">Single-tenant-DIRECT — what dogfood does today<a class="headerlink" href="#single-tenant-direct--what-dogfood-does-today" title="Permanent link">&para;</a></h3>
@@ -3328,15 +3207,10 @@ confirm against the live-validation results, not to fix in this doc.</strong></p
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>                (cluster-shared egress IP)
 </code></pre></div>
 <ul>
-<li><strong>No <code>EgressProxy</code>, no per-tenant egress IP.</strong> Workers egress directly to
-  GitHub behind the default-deny NetworkPolicy (DNS + GitHub CIDR)
-  (<a href="../gke-dogfood/">gke-dogfood.md</a>).</li>
-<li><strong>Why acceptable for dogfood:</strong> dogfood is <strong>single-tenant</strong> — there is no
-  second tenant to be isolated <em>from</em>, so the per-tenant-IP property is vacuous.
-  Direct egress also avoids running a proxy pool on the small <code>e2-standard-2</code>
-  system node, which cannot fit a proxy pool alongside GMC + AGC + Athens. The
-  isolation claim is a <strong>multi-tenant</strong> property; dogfood exercises the runner
-  lifecycle, not tenant isolation.</li>
+<li><strong>No <code>EgressProxy</code>, no per-tenant egress IP.</strong> Workers egress directly to GitHub behind the default-deny NetworkPolicy (DNS + GitHub CIDR) (<a href="../gke-dogfood/">gke-dogfood.md</a>).</li>
+<li><strong>Why acceptable for dogfood:</strong> dogfood is <strong>single-tenant</strong> — there is no second tenant to be isolated <em>from</em>, so the per-tenant-IP property is vacuous.
+  Direct egress also avoids running a proxy pool on the small <code>e2-standard-2</code> system node, which cannot fit a proxy pool alongside GMC + AGC + Athens.
+  The isolation claim is a <strong>multi-tenant</strong> property; dogfood exercises the runner lifecycle, not tenant isolation.</li>
 </ul>
 <h3 id="production-multi-tenant--per-tenant-egress-ip">Production MULTI-TENANT — per-tenant egress IP<a class="headerlink" href="#production-multi-tenant--per-tenant-egress-ip" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>  Cluster (egress-enforcing CNI; egress-IP mechanism A or B)
@@ -3359,10 +3233,8 @@ confirm against the live-validation results, not to fix in this doc.</strong></p
 <a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>                    per-tenant)                         per-tenant)
 </code></pre></div>
 <ul>
-<li>All of tenant A's GitHub traffic (AGC + workers, via proxy-a) egresses from
-  IP-set A; tenant B's from IP-set B; A ∩ B = ∅. This is what makes GitHub-side
-  IP allowlisting, per-tenant audit attribution, incident containment, and the
-  per-tenant kill-switch coherent claims.</li>
+<li>All of tenant A's GitHub traffic (AGC + workers, via proxy-a) egresses from IP-set A; tenant B's from IP-set B; A ∩ B = ∅.
+  This is what makes GitHub-side IP allowlisting, per-tenant audit attribution, incident containment, and the per-tenant kill-switch coherent claims.</li>
 </ul>
 <h3 id="cost-model-per-tenant-order-of-magnitude-gke">Cost model (per tenant, order-of-magnitude, GKE)<a class="headerlink" href="#cost-model-per-tenant-order-of-magnitude-gke" title="Permanent link">&para;</a></h3>
 <table>
@@ -3401,18 +3273,11 @@ confirm against the live-validation results, not to fix in this doc.</strong></p
 </tr>
 </tbody>
 </table>
-<p>The exact figures are cloud- and region-specific and are a <strong>live-validation
-deliverable</strong> — this table gives the shape (A is cheaper per tenant; B trades
-cost for managed HA and portability), not billable numbers.</p>
+<p>The exact figures are cloud- and region-specific and are a <strong>live-validation deliverable</strong> — this table gives the shape (A is cheaper per tenant; B trades cost for managed HA and portability), not billable numbers.</p>
 <hr />
 <h2 id="live-validation-results-2026-07-07">Live-validation results (2026-07-07)<a class="headerlink" href="#live-validation-results-2026-07-07" title="Permanent link">&para;</a></h2>
-<p>Run on a throwaway GKE Standard / Dataplane V2 cluster (<code>gag-val</code>, project
-deleted after) — full setup in <a href="../q243-q245-q230-live-validation-campaign/">the campaign plan</a>.
-The mechanism used was <strong>Approach B on a single cluster</strong>: three pod secondary
-ranges (<code>pods-default</code>/<code>pods-a</code>/<code>pods-b</code>) on one subnet, one node pool per
-tenant pinned to its range (<code>--pod-ipv4-range</code>), three per-range Cloud NAT
-gateways on one router, and <code>--disable-default-snat</code> so pod IPs are the NAT
-source.</p>
+<p>Run on a throwaway GKE Standard / Dataplane V2 cluster (<code>gag-val</code>, project deleted after) — full setup in <a href="../q243-q245-q230-live-validation-campaign/">the campaign plan</a>.
+The mechanism used was <strong>Approach B on a single cluster</strong>: three pod secondary ranges (<code>pods-default</code>/<code>pods-a</code>/<code>pods-b</code>) on one subnet, one node pool per tenant pinned to its range (<code>--pod-ipv4-range</code>), three per-range Cloud NAT gateways on one router, and <code>--disable-default-snat</code> so pod IPs are the NAT source.</p>
 <table>
 <thead>
 <tr>
@@ -3439,107 +3304,48 @@ source.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>The gap as found (2026-07-07).</strong> <code>EgressProxy.spec</code> exposed no
-<code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>, and <code>buildEgressProxyDeployment</code> set a
-<strong>required cross-node pod anti-affinity</strong> that <em>spreads</em> proxy pods across nodes.
-Live proof: scaling one tenant's <code>EgressProxy</code> to 2 replicas landed the pods on
-<strong>different</strong> pools — <code>10.5.0.5</code> (pool-a → nat-a → <code>34.24.58.224</code>) <em>and</em> <code>10.6.0.6</code>
-(pool-b → nat-b → <code>34.26.87.185</code>) — so a single tenant egressed from <strong>two</strong> IPs.
-The reference arch's Approach B assumes "the tenant's <code>EgressProxy</code> pods … via
-nodeSelector/toleration to the tenant pool"; that binding did not exist in the API,
-and the anti-affinity actively worked against it. GAG delivered the <em>choke point</em>
-but not the <em>per-tenant IP</em>.</p>
+<p><strong>The gap as found (2026-07-07).</strong> <code>EgressProxy.spec</code> exposed no <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>, and <code>buildEgressProxyDeployment</code> set a <strong>required cross-node pod anti-affinity</strong> that <em>spreads</em> proxy pods across nodes.
+Live proof: scaling one tenant's <code>EgressProxy</code> to 2 replicas landed the pods on <strong>different</strong> pools — <code>10.5.0.5</code> (pool-a → nat-a → <code>34.24.58.224</code>) <em>and</em> <code>10.6.0.6</code> (pool-b → nat-b → <code>34.26.87.185</code>) — so a single tenant egressed from <strong>two</strong> IPs.
+The reference arch's Approach B assumes "the tenant's <code>EgressProxy</code> pods … via nodeSelector/toleration to the tenant pool"; that binding did not exist in the API, and the anti-affinity actively worked against it.
+GAG delivered the <em>choke point</em> but not the <em>per-tenant IP</em>.</p>
 <h3 id="placement-pass-through-q282">Placement pass-through (Q282)<a class="headerlink" href="#placement-pass-through-q282" title="Permanent link">&para;</a></h3>
-<p><strong>Closed 2026-07-07.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2beta1/egressproxy_types.go"><code>EgressProxy.spec.scheduling</code></a>
-and <code>ActionsGateway.spec.scheduling</code> (a shared <code>PodScheduling</code>:
-<code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>, served at both <code>v2alpha1</code> and <code>v2beta1</code>) are
-plumbed into the proxy pool Deployment and the AGC Deployment
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go</code></a>,
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a>).
+<p><strong>Closed 2026-07-07.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2beta1/egressproxy_types.go"><code>EgressProxy.spec.scheduling</code></a> and <code>ActionsGateway.spec.scheduling</code> (a shared <code>PodScheduling</code>: <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>, served at both <code>v2alpha1</code> and <code>v2beta1</code>) are plumbed into the proxy pool Deployment and the AGC Deployment (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a>).
 The two design points the gap raised were resolved as:</p>
-<p><strong>(a) Anti-affinity composition.</strong> A supplied <code>nodeAffinity</code>/<code>podAffinity</code> is applied
-<em>alongside</em> the builder's required cross-node anti-affinity, which is preserved
-(pinning to a pool should not disable HA <em>within</em> it). A supplied <code>podAntiAffinity</code> —
-any non-nil value — <strong>replaces</strong> the built-in term entirely. An explicit
-<code>podAntiAffinity: {}</code> therefore opts out of spreading, which is what a single-node
-tenant pool needs; <code>minReplicas: 1</code> is the other route. That the apiserver preserves
-an empty known object as a non-nil pointer is the load-bearing fact, asserted
-end-to-end in envtest rather than assumed.</p>
-<p><strong>(b) Governance — reversed from the original framing.</strong> The gap note asserted
-placement must be "platform-owned, not tenant-set (a tenant must not self-select an
-egress IP)". <strong>That was wrong</strong>, and Q282 reversed it after review:</p>
+<p><strong>(a) Anti-affinity composition.</strong> A supplied <code>nodeAffinity</code>/<code>podAffinity</code> is applied <em>alongside</em> the builder's required cross-node anti-affinity, which is preserved (pinning to a pool should not disable HA <em>within</em> it).
+A supplied <code>podAntiAffinity</code> — any non-nil value — <strong>replaces</strong> the built-in term entirely.
+An explicit <code>podAntiAffinity: {}</code> therefore opts out of spreading, which is what a single-node tenant pool needs; <code>minReplicas: 1</code> is the other route.
+That the apiserver preserves an empty known object as a non-nil pointer is the load-bearing fact, asserted end-to-end in envtest rather than assumed.</p>
+<p><strong>(b) Governance — reversed from the original framing.</strong> The gap note asserted placement must be "platform-owned, not tenant-set (a tenant must not self-select an egress IP)". <strong>That was wrong</strong>, and Q282 reversed it after review:</p>
 <ul>
-<li><strong>A distinct egress IP is a feature, not an escape.</strong> Tenants want one so they do
-  not share a rate limit or a block radius. Electing one's own egress path is the
-  intended use.</li>
-<li>The capability is <strong>already reachable, but the symmetry is only partial</strong> — worth
-  stating precisely rather than overselling. <code>RunnerTemplate.spec.podTemplate</code> is a
-  full <code>PodTemplateSpec</code> whose reserved-field guardrail (§H.4) withholds
-  <code>serviceAccountName</code>, <code>automountServiceAccountToken</code>, <code>hostPID</code>, <code>hostNetwork</code>,
-  <code>hostIPC</code> — and <em>deliberately not</em> scheduling. In <strong>direct</strong>-egress mode (§H.10)
-  worker placement already selects the egress IP, un-gated. In the <strong>proxied default</strong>
-  it does not: NetworkPolicy forces worker traffic through the proxy, so the <em>proxy
-  pool's</em> placement selects the IP. <code>EgressProxy.spec.scheduling</code> therefore does
-  extend the capability to the default posture. Gating it would still leave the
-  direct-egress path open — and, per the next bullet, no validating gate could be
-  sound regardless.</li>
-<li><strong>A validating allowlist of placement values is unsound.</strong>
-  <code>affinity.nodeAffinity</code> supports <code>NotIn</code>/<code>DoesNotExist</code>, so "any pool except mine"
-  is expressible and no key=value allowlist rejects it in general. Pinning
-  <code>nodeSelector</code> by <strong>mutation</strong> <em>is</em> sound (Kubernetes ANDs it with <code>nodeAffinity</code>,
-  and affinity can only narrow) — which is a policy-engine job, not a CRD-webhook job.</li>
+<li><strong>A distinct egress IP is a feature, not an escape.</strong> Tenants want one so they do not share a rate limit or a block radius.
+  Electing one's own egress path is the intended use.</li>
+<li>The capability is <strong>already reachable, but the symmetry is only partial</strong> — worth stating precisely rather than overselling. <code>RunnerTemplate.spec.podTemplate</code> is a full <code>PodTemplateSpec</code> whose reserved-field guardrail (§H.4) withholds <code>serviceAccountName</code>, <code>automountServiceAccountToken</code>, <code>hostPID</code>, <code>hostNetwork</code>, <code>hostIPC</code> — and <em>deliberately not</em> scheduling.
+  In <strong>direct</strong>-egress mode (§H.10) worker placement already selects the egress IP, un-gated.
+  In the <strong>proxied default</strong> it does not: NetworkPolicy forces worker traffic through the proxy, so the <em>proxy pool's</em> placement selects the IP. <code>EgressProxy.spec.scheduling</code> therefore does extend the capability to the default posture.
+  Gating it would still leave the direct-egress path open — and, per the next bullet, no validating gate could be sound regardless.</li>
+<li><strong>A validating allowlist of placement values is unsound.</strong> <code>affinity.nodeAffinity</code> supports <code>NotIn</code>/<code>DoesNotExist</code>, so "any pool except mine" is expressible and no key=value allowlist rejects it in general.
+  Pinning <code>nodeSelector</code> by <strong>mutation</strong> <em>is</em> sound (Kubernetes ANDs it with <code>nodeAffinity</code>, and affinity can only narrow) — which is a policy-engine job, not a CRD-webhook job.</li>
 </ul>
-<p>What this actually costs is <strong>attribution</strong>, not isolation: a CR author who retargets
-onto another pool's egress path makes both tenants leave via one IP. Recorded in
-<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">05-security.md §5.2</a>,
-with Kyverno + Gatekeeper mutating-pin samples in
-<a href="../../operations/admission-policies/#governing-where-gag-pods-schedule">admission-policies.md § Governing where GAG pods schedule</a>
-for operators who attribute by source IP and do not fully trust tenant CR authors.
-The same layer is where a cluster granting tenants <code>pods: create</code> must constrain
-placement anyway — GAG's NetworkPolicies select GAG-labelled pods, so an unlabelled
-tenant-created pod is selected by none of them.</p>
+<p>What this actually costs is <strong>attribution</strong>, not isolation: a CR author who retargets onto another pool's egress path makes both tenants leave via one IP.
+Recorded in <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">05-security.md §5.2</a>, with Kyverno + Gatekeeper mutating-pin samples in <a href="../../operations/admission-policies/#governing-where-gag-pods-schedule">admission-policies.md § Governing where GAG pods schedule</a> for operators who attribute by source IP and do not fully trust tenant CR authors.
+The same layer is where a cluster granting tenants <code>pods: create</code> must constrain placement anyway — GAG's NetworkPolicies select GAG-labelled pods, so an unlabelled tenant-created pod is selected by none of them.</p>
 <p>Operator recipe: <a href="../../operations/security-operations/#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling">security-operations.md § Pinning a tenant's proxy pool to its egress IP</a>.</p>
 <h2 id="re-runnable-live-validation">Re-runnable live validation<a class="headerlink" href="#re-runnable-live-validation" title="Permanent link">&para;</a></h2>
-<p>The one gate that Q282 left un-exercised is a <strong>live</strong> end-to-end run: with
-<code>spec.scheduling</code> set, does a real GMC-provisioned <code>EgressProxy</code> land <em>all</em> its
-replicas on one tenant node pool — so the whole pool egresses from a <em>single</em>
-Cloud NAT IP — rather than spreading (the 2026-07-07 two-IP result)? Q282's fix
-is only asserted in envtest; envtest has no scheduler, so it can prove the emitted
-pod spec but not the placement + the NAT source IP end-to-end. That needs a cloud
-run, and per the repo rule ("treat ✅ findings as unverified until confirmed
-end-to-end — actually exec the thing") it is the honest close for Q243.</p>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a> automates it,
-teardown-safe, so the run is one authorized command rather than a bespoke sequence
-(and re-runnable at future egress-path changes — this class of regression is exactly
-what unit/envtest can miss):</p>
+<p>The one gate that Q282 left un-exercised is a <strong>live</strong> end-to-end run: with <code>spec.scheduling</code> set, does a real GMC-provisioned <code>EgressProxy</code> land <em>all</em> its replicas on one tenant node pool — so the whole pool egresses from a <em>single</em> Cloud NAT IP — rather than spreading (the 2026-07-07 two-IP result)?
+Q282's fix is only asserted in envtest; envtest has no scheduler, so it can prove the emitted pod spec but not the placement + the NAT source IP end-to-end.
+That needs a cloud run, and per the repo rule ("treat ✅ findings as unverified until confirmed end-to-end — actually exec the thing") it is the honest close for Q243.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a> automates it, teardown-safe, so the run is one authorized command rather than a bespoke sequence (and re-runnable at future egress-path changes — this class of regression is exactly what unit/envtest can miss):</p>
 <ol>
-<li>Stands up a throwaway GKE <strong>Standard / Dataplane V2</strong> cluster with a system pool
-   plus two tenant node pools, each pinned to its own <strong>pod secondary range</strong>
-   (<code>--pod-ipv4-range</code>), behind <strong>per-range Cloud NAT</strong> gateways + reserved static
-   IPs and <code>--disable-default-snat</code> (so pod IPs, from the tenant range, are the NAT
-   source — the mechanism already proven on 2026-07-07).</li>
-<li>Installs the GMC (from <code>GAG_IMAGE_TAG</code>, which must carry Q282), then deploys one
-   <code>EgressProxy</code> per tenant whose <code>spec.scheduling</code> pins it to the tenant pool with
-   <code>affinity.podAntiAffinity: {}</code> (opting out of the built-in spread). <code>minReplicas</code>
-   defaults to 2, so each pool has two pods to (dis)prove pinning.</li>
-<li><strong>Asserts</strong> per tenant: every proxy pod's IP is inside the tenant's pod range
-   (no spill to the other pool), a probe pinned like the proxy egresses from the
-   tenant's reserved static IP, the two tenants' IPs are disjoint, and the IP is
-   unchanged after deleting a proxy pod (stability across reschedule).</li>
-<li>Tears the infra down on exit (<code>KEEP=1</code> to inspect; <code>--teardown-only</code> to clean up
-   later). The billable steps are gated behind a dogfood-project guard + confirmation.</li>
+<li>Stands up a throwaway GKE <strong>Standard / Dataplane V2</strong> cluster with a system pool plus two tenant node pools, each pinned to its own <strong>pod secondary range</strong> (<code>--pod-ipv4-range</code>), behind <strong>per-range Cloud NAT</strong> gateways + reserved static IPs and <code>--disable-default-snat</code> (so pod IPs, from the tenant range, are the NAT source — the mechanism already proven on 2026-07-07).</li>
+<li>Installs the GMC (from <code>GAG_IMAGE_TAG</code>, which must carry Q282), then deploys one <code>EgressProxy</code> per tenant whose <code>spec.scheduling</code> pins it to the tenant pool with <code>affinity.podAntiAffinity: {}</code> (opting out of the built-in spread). <code>minReplicas</code> defaults to 2, so each pool has two pods to (dis)prove pinning.</li>
+<li><strong>Asserts</strong> per tenant: every proxy pod's IP is inside the tenant's pod range (no spill to the other pool), a probe pinned like the proxy egresses from the tenant's reserved static IP, the two tenants' IPs are disjoint, and the IP is unchanged after deleting a proxy pod (stability across reschedule).</li>
+<li>Tears the infra down on exit (<code>KEEP=1</code> to inspect; <code>--teardown-only</code> to clean up later).
+   The billable steps are gated behind a dogfood-project guard + confirmation.</li>
 </ol>
-<p><strong>PASS</strong> = each tenant's pool → one distinct, stable IP. <strong>FAIL</strong> (a pool spanning
-ranges / &gt;1 egress IP, colliding IPs, or an IP that moves on reschedule) is a real
-Q243 regression — record it honestly, do not paper over it. Cost/teardown/method
-mirror <a href="../q243-q245-q230-live-validation-campaign/">the 2026-07-07 campaign</a>: a few
-USD if torn down same-session; prefer a throwaway project deleted wholesale for
-atomic cost hygiene.</p>
+<p><strong>PASS</strong> = each tenant's pool → one distinct, stable IP. <strong>FAIL</strong> (a pool spanning ranges / &gt;1 egress IP, colliding IPs, or an IP that moves on reschedule) is a real Q243 regression — record it honestly, do not paper over it.
+Cost/teardown/method mirror <a href="../q243-q245-q230-live-validation-campaign/">the 2026-07-07 campaign</a>: a few USD if torn down same-session; prefer a throwaway project deleted wholesale for atomic cost hygiene.</p>
 <h3 id="result--pass-2026-07-13">Result — PASS (2026-07-13)<a class="headerlink" href="#result--pass-2026-07-13" title="Permanent link">&para;</a></h3>
-<p>Ran end-to-end on a throwaway GKE Standard / Dataplane V2 cluster (a scratch
-project, torn down same-session). <strong>Every assertion passed</strong>, closing the last
-Q243 gate — the per-tenant egress-IP claim is now substantiated by a running
-system, not just design:</p>
+<p>Ran end-to-end on a throwaway GKE Standard / Dataplane V2 cluster (a scratch project, torn down same-session). <strong>Every assertion passed</strong>, closing the last Q243 gate — the per-tenant egress-IP claim is now substantiated by a running system, not just design:</p>
 <table>
 <thead>
 <tr>
@@ -3566,89 +3372,47 @@ system, not just design:</p>
 </tr>
 </tbody>
 </table>
-<p>This is the live proof Q282 lacked: with <code>spec.scheduling</code> (<code>nodeSelector</code> +
-tolerations + <code>affinity.podAntiAffinity: {}</code>), a real GMC-provisioned
-<code>EgressProxy</code> lands <strong>both</strong> replicas on the one tenant node pool, so the pool
-egresses from a <strong>single</strong> Cloud NAT IP — the 2026-07-07 two-IP spread is gone.</p>
-<p><strong>Per the repo rule ("treat ✅ findings as unverified until confirmed
-end-to-end"), the first real run mattered:</strong> the harness (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a>)
-had never been executed against live GKE, and seven distinct defects surfaced
-only on contact — each gating a step deeper: private-nodes control-plane access
-(authorize the operator IP), the <code>--disable-default-snat</code>/<code>--enable-private-nodes</code>
-coupling, the GMC Deployment name (<code>gmc-controller-manager</code>), the missing
-conversion-webhook caBundle wiring (Q279), the <code>tenant=managed</code> namespace label
-the <code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy requires, a
-Deployment-vs-pod label mismatch in the readiness wait, and <code>kubectl run -i --rm</code>
-polluting the captured egress IP. All fixed; the script is now green and
-re-runnable at future egress-path changes — the regression class unit/envtest
-can't catch.</p>
+<p>This is the live proof Q282 lacked: with <code>spec.scheduling</code> (<code>nodeSelector</code> + tolerations + <code>affinity.podAntiAffinity: {}</code>), a real GMC-provisioned <code>EgressProxy</code> lands <strong>both</strong> replicas on the one tenant node pool, so the pool egresses from a <strong>single</strong> Cloud NAT IP — the 2026-07-07 two-IP spread is gone.</p>
+<p><strong>Per the repo rule ("treat ✅ findings as unverified until confirmed end-to-end"), the first real run mattered:</strong> the harness (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a>) had never been executed against live GKE, and seven distinct defects surfaced only on contact — each gating a step deeper: private-nodes control-plane access (authorize the operator IP), the <code>--disable-default-snat</code>/<code>--enable-private-nodes</code> coupling, the GMC Deployment name (<code>gmc-controller-manager</code>), the missing conversion-webhook caBundle wiring (Q279), the <code>tenant=managed</code> namespace label the <code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy requires, a Deployment-vs-pod label mismatch in the readiness wait, and <code>kubectl run -i --rm</code> polluting the captured egress IP.
+All fixed; the script is now green and re-runnable at future egress-path changes — the regression class unit/envtest can't catch.</p>
 <h2 id="live-validation-plan-original-spec--retained-for-the-deferred-parts">Live-validation plan (original spec — retained for the deferred parts)<a class="headerlink" href="#live-validation-plan-original-spec--retained-for-the-deferred-parts" title="Permanent link">&para;</a></h2>
-<p><strong>The distinct/stable/composition parts above are DONE.</strong> The parts below that
-were <em>not</em> exercised (Approach A's fail-open window, kill-switch, SNAT-port
-headroom) stay deferred. Rationale for the original deferral: a live
-egress spike consumes cloud spend and would contend with / risk the shared
-dogfood cluster.</p>
+<p><strong>The distinct/stable/composition parts above are DONE.</strong> The parts below that were <em>not</em> exercised (Approach A's fail-open window, kill-switch, SNAT-port headroom) stay deferred.
+Rationale for the original deferral: a live egress spike consumes cloud spend and would contend with / risk the shared dogfood cluster.</p>
 <h3 id="what-the-spike-must-prove">What the spike must prove<a class="headerlink" href="#what-the-spike-must-prove" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>Distinct egress IPs.</strong> Two tenants (namespace-a, namespace-b), each with a
-   proxy pool and an egress-IP binding, are observed by an external
-   IP-reflector (e.g. an owned <code>https://&lt;echo&gt;/ip</code> endpoint, or GitHub's
-   received-from IP in an audit event) egressing from <strong>disjoint</strong> source-IP
-   sets.</li>
-<li><strong>Stability across reschedule.</strong> Delete/relocate a tenant's proxy pod (force
-   a node change); confirm the observed egress IP is unchanged.</li>
-<li><strong>Isolation holds under the mechanism's failure mode.</strong> For A: measure the
-   pod-start fail-open window (does any GitHub-bound call egress un-SNATed
-   before the policy applies?) and gateway-node-failover behavior. For B:
-   confirm no cross-tenant IP bleed when pods churn.</li>
-<li><strong>Composition is intact.</strong> The three per-tenant <code>NetworkPolicy</code> objects
-   still enforce the choke point (direct-to-GitHub still blocked), and a Q242
-   allowlisted non-GitHub destination still egresses from the per-tenant IP.</li>
+<li><strong>Distinct egress IPs.</strong> Two tenants (namespace-a, namespace-b), each with a proxy pool and an egress-IP binding, are observed by an external IP-reflector (e.g. an owned <code>https://&lt;echo&gt;/ip</code> endpoint, or GitHub's received-from IP in an audit event) egressing from <strong>disjoint</strong> source-IP sets.</li>
+<li><strong>Stability across reschedule.</strong> Delete/relocate a tenant's proxy pod (force a node change); confirm the observed egress IP is unchanged.</li>
+<li><strong>Isolation holds under the mechanism's failure mode.</strong> For A: measure the pod-start fail-open window (does any GitHub-bound call egress un-SNATed before the policy applies?) and gateway-node-failover behavior.
+   For B: confirm no cross-tenant IP bleed when pods churn.</li>
+<li><strong>Composition is intact.</strong> The three per-tenant <code>NetworkPolicy</code> objects still enforce the choke point (direct-to-GitHub still blocked), and a Q242 allowlisted non-GitHub destination still egresses from the per-tenant IP.</li>
 <li><strong>Kill-switch.</strong> Draining one tenant's egress path halts only that tenant.</li>
 </ol>
 <h3 id="smallest-cluster-to-prove-it">Smallest cluster to prove it<a class="headerlink" href="#smallest-cluster-to-prove-it" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Two tenant namespaces</strong> on <strong>one</strong> cluster is sufficient — isolation is a
-  pairwise property; more tenants add no proof.</li>
-<li><strong>Approach A:</strong> a self-managed-Cilium cluster (e.g. GKE with DPv2 disabled +
-  BYO Cilium, or kind/self-managed) with ≥1 gateway node and 2 reserved egress
-  IPs. 3 small nodes (1 gateway + 2 workload) suffices.</li>
-<li><strong>Approach B:</strong> a GKE cluster with 2 tenant node pools (1 node each), 2
-  dedicated subnets, 2 Cloud NAT configs, 2 reserved static IPs. Autopilot is
-  unsuitable (narrower NAT/node-pool control); use Standard.</li>
-<li><strong>Teardown-on-completion</strong> runbook (mirror <a href="../gke-dogfood/">gke-dogfood.md</a>'s
-  scale-to-zero / delete discipline) so the spike leaves no idle spend.</li>
+<li><strong>Two tenant namespaces</strong> on <strong>one</strong> cluster is sufficient — isolation is a pairwise property; more tenants add no proof.</li>
+<li><strong>Approach A:</strong> a self-managed-Cilium cluster (e.g.
+  GKE with DPv2 disabled + BYO Cilium, or kind/self-managed) with ≥1 gateway node and 2 reserved egress IPs.
+  3 small nodes (1 gateway + 2 workload) suffices.</li>
+<li><strong>Approach B:</strong> a GKE cluster with 2 tenant node pools (1 node each), 2 dedicated subnets, 2 Cloud NAT configs, 2 reserved static IPs.
+  Autopilot is unsuitable (narrower NAT/node-pool control); use Standard.</li>
+<li><strong>Teardown-on-completion</strong> runbook (mirror <a href="../gke-dogfood/">gke-dogfood.md</a>'s scale-to-zero / delete discipline) so the spike leaves no idle spend.</li>
 </ul>
 <h3 id="rough-cost">Rough cost<a class="headerlink" href="#rough-cost" title="Permanent link">&para;</a></h3>
-<p>Order-of-magnitude, <strong>hours not days</strong> of a 3-node small cluster + a handful of
-reserved IPs + minimal NAT data processing — target <strong>&lt; a few USD</strong> if torn
-down same-session. The follow-up should confirm exact figures as deliverable
-(1) above; do not commit to a number here.</p>
+<p>Order-of-magnitude, <strong>hours not days</strong> of a 3-node small cluster + a handful of reserved IPs + minimal NAT data processing — target <strong>&lt; a few USD</strong> if torn down same-session.
+The follow-up should confirm exact figures as deliverable (1) above; do not commit to a number here.</p>
 <h3 id="follow-up-task--done">Follow-up task — DONE<a class="headerlink" href="#follow-up-task--done" title="Permanent link">&para;</a></h3>
-<p>The live-cloud egress-IP validation that was the actual v2beta1 gate <strong>has run
-and PASSED</strong> (2026-07-13; see <a href="#result--pass-2026-07-13">Result — PASS</a>), so the
-Q243 Queue row is removed. What remains is genuinely deferred and out of the
-critical path: Approach A's (Cilium Egress Gateway) fail-open pod-start window,
-gateway-node failover, kill-switch drain, and SNAT-port headroom under
-thousands-of-sessions fan-out — none of which apply to the validated Approach-B
-(per-tenant Cloud NAT) GKE path, and all of which only matter once a
-self-managed-Cilium deployment is in scope (see the deferred section below).</p>
+<p>The live-cloud egress-IP validation that was the actual v2beta1 gate <strong>has run and PASSED</strong> (2026-07-13; see <a href="#result--pass-2026-07-13">Result — PASS</a>), so the Q243 Queue row is removed.
+What remains is genuinely deferred and out of the critical path: Approach A's (Cilium Egress Gateway) fail-open pod-start window, gateway-node failover, kill-switch drain, and SNAT-port headroom under thousands-of-sessions fan-out — none of which apply to the validated Approach-B (per-tenant Cloud NAT) GKE path, and all of which only matter once a self-managed-Cilium deployment is in scope (see the deferred section below).</p>
 <hr />
 <h2 id="open-questions-resolve-during-validation">Open questions (resolve during validation)<a class="headerlink" href="#open-questions-resolve-during-validation" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Default mechanism per platform</strong> — confirm B-on-GKE / A-on-self-managed-Cilium
-  against measured cost + the A fail-open window; encode the default only after.</li>
-<li><strong>Where the egress-IP config attaches in the API</strong> — a field on <code>EgressProxy</code>
-  (e.g. <code>spec.egressIP</code> / <code>spec.egressMechanism</code>), a platform-owned mapping
-  (tenant → IP) the GMC consumes, or out-of-band infra (Terraform) the operator
-  wires. Leaning platform-owned (secure-by-default: tenants must not choose
-  their own egress IP). Decide with the API-graduation work
-  (Q74).</li>
-<li><strong>Per-RunnerSet egress IPs</strong> — whether a heavy runner group can get its own
-  IP (finer than per-tenant). Out of scope until per-tenant is proven.</li>
-<li><strong>SNAT port exhaustion under thousands-of-sessions fan-out</strong> — both
-  mechanisms have a per-IP port ceiling; validate headroom and the
-  IPs-per-tenant knob.</li>
+<li><strong>Default mechanism per platform</strong> — confirm B-on-GKE / A-on-self-managed-Cilium against measured cost + the A fail-open window; encode the default only after.</li>
+<li><strong>Where the egress-IP config attaches in the API</strong> — a field on <code>EgressProxy</code> (e.g. <code>spec.egressIP</code> / <code>spec.egressMechanism</code>), a platform-owned mapping (tenant → IP) the GMC consumes, or out-of-band infra (Terraform) the operator wires.
+  Leaning platform-owned (secure-by-default: tenants must not choose their own egress IP).
+  Decide with the API-graduation work (Q74).</li>
+<li><strong>Per-RunnerSet egress IPs</strong> — whether a heavy runner group can get its own IP (finer than per-tenant).
+  Out of scope until per-tenant is proven.</li>
+<li><strong>SNAT port exhaustion under thousands-of-sessions fan-out</strong> — both mechanisms have a per-IP port ceiling; validate headroom and the IPs-per-tenant knob.</li>
 </ul>
 <hr />
 <h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>

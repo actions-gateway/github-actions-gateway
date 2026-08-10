@@ -2631,63 +2631,43 @@
 
 
 <h1 id="q273--make-v2-the-front-door--exemplary-v1v2-migration-plan">Q273 — Make v2 the front door + exemplary v1→v2 migration (plan)<a class="headerlink" href="#q273--make-v2-the-front-door--exemplary-v1v2-migration-plan" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ▶ Started 2026-07-06. <strong>Scope:</strong> the <em>do-now</em> front-door / positioning /
-onboarding / migration slice of <a href="../../STATUS/#Q273">Q273</a>. Full "v2-only" (v1
-removal) stays gated on v2beta1 (Q74) — <strong>this plan removes
-nothing</strong>. Strategy source: <a href="../v1-classic-sunset-review/">v1-classic-sunset-review.md §6.2</a>.</p>
+<p><strong>Status:</strong> ▶ Started 2026-07-06. <strong>Scope:</strong> the <em>do-now</em> front-door / positioning / onboarding / migration slice of <a href="../../STATUS/#Q273">Q273</a>.
+Full "v2-only" (v1 removal) stays gated on v2beta1 (Q74) — <strong>this plan removes nothing</strong>.
+Strategy source: <a href="../v1-classic-sunset-review/">v1-classic-sunset-review.md §6.2</a>.</p>
 <h2 id="goal-one-sentence">Goal (one sentence)<a class="headerlink" href="#goal-one-sentence" title="Permanent link">&para;</a></h2>
-<p>Make v2 (<code>actions-gateway.com/v2alpha1</code> — <code>ActionsGateway</code> + <code>RunnerSet</code> +
-<code>RunnerTemplate</code> + <code>EgressProxy</code>) the recommended front door across README /
-onboarding / positioning, keep v1 (<code>v1alpha1</code>, classic) reachable-but-clearly-secondary
-with deprecation banners, and make the <code>gag-migrate</code> v1→v2 story exemplary.</p>
+<p>Make v2 (<code>actions-gateway.com/v2alpha1</code> — <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code> + <code>EgressProxy</code>) the recommended front door across README / onboarding / positioning, keep v1 (<code>v1alpha1</code>, classic) reachable-but-clearly-secondary with deprecation banners, and make the <code>gag-migrate</code> v1→v2 story exemplary.</p>
 <h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
-<p>Align the whole doc surface to the posture <a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a>
-<em>already states</em> ("new tenants onboard on v2") — today README / getting-started /
-roadmap still contradict it by calling v1 "the standard path." Route new users to
-v2 (the better shape), be honest it is alpha-but-recommended, mark v1 the
-stable-but-deprecated legacy path. Positioning stays true whether or not the
-sibling P5 ScaleSet-default flip has merged yet.</p>
+<p>Align the whole doc surface to the posture <a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a> <em>already states</em> ("new tenants onboard on v2") — today README / getting-started / roadmap still contradict it by calling v1 "the standard path."
+Route new users to v2 (the better shape), be honest it is alpha-but-recommended, mark v1 the stable-but-deprecated legacy path.
+Positioning stays true whether or not the sibling P5 ScaleSet-default flip has merged yet.</p>
 <h2 id="doc-ownership-partition-avoid-collision-with-the-q264-p5-chip">Doc-ownership partition (avoid collision with the Q264-P5 chip)<a class="headerlink" href="#doc-ownership-partition-avoid-collision-with-the-q264-p5-chip" title="Permanent link">&para;</a></h2>
-<p><strong>P5 owns:</strong> the code default flip + the <code>acquisitionProtocol</code> CRD field docs +
-the classic-protocol operator reference (in <code>docs/operations/</code> protocol section and
-the <code>tenant-onboarding</code> field reference). <strong>This chip owns:</strong>
-everything front-door / positioning / onboarding-flow / migration.
-- <strong>Do NOT edit</strong> the <code>acquisitionProtocol</code> field reference or classic-protocol
-  operator docs. On conflict, rebase and defer to P5 on protocol-field specifics.
-- Positioning frames the single-acquirer ScaleSet model as v2's acquisition story
-  <strong>without hard-asserting the shipped default is already ScaleSet</strong> (true whether
-  or not P5 has merged). PR body flags this coupling so P5 can tighten to "default"
-  language on flip.</p>
+<p><strong>P5 owns:</strong> the code default flip + the <code>acquisitionProtocol</code> CRD field docs + the classic-protocol operator reference (in <code>docs/operations/</code> protocol section and the <code>tenant-onboarding</code> field reference). <strong>This chip owns:</strong> everything front-door / positioning / onboarding-flow / migration.
+- <strong>Do NOT edit</strong> the <code>acquisitionProtocol</code> field reference or classic-protocol operator docs.
+  On conflict, rebase and defer to P5 on protocol-field specifics.
+- Positioning frames the single-acquirer ScaleSet model as v2's acquisition story <strong>without hard-asserting the shipped default is already ScaleSet</strong> (true whether or not P5 has merged).
+  PR body flags this coupling so P5 can tighten to "default" language on flip.</p>
 <h2 id="work-items">Work items<a class="headerlink" href="#work-items" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Front door → v2</strong> (recommended path is v2, v1 secondary):</li>
-<li><code>docs/getting-started.md</code> — restructure to lead with the v2 object set; move
-     the v1 walkthrough to a clearly-secondary "legacy v1 API" section.</li>
-<li><code>README.md</code> — Quick Start / Installation: name v2 the recommended tenant API,
-     link the migration guide; keep v1 reachable.</li>
-<li><code>docs/operations/tenant-onboarding.md</code> — v2-first flow ordering (NOT the
-     acquisitionProtocol field — P5's).</li>
-<li><code>charts/actions-gateway/templates/sample-gateway.yaml</code> — assess; keep v1 sample
-     valid but add a v2 pointer if user-facing.</li>
+<li><code>docs/getting-started.md</code> — restructure to lead with the v2 object set; move the v1 walkthrough to a clearly-secondary "legacy v1 API" section.</li>
+<li><code>README.md</code> — Quick Start / Installation: name v2 the recommended tenant API, link the migration guide; keep v1 reachable.</li>
+<li><code>docs/operations/tenant-onboarding.md</code> — v2-first flow ordering (NOT the acquisitionProtocol field — P5's).</li>
+<li><code>charts/actions-gateway/templates/sample-gateway.yaml</code> — assess; keep v1 sample valid but add a v2 pointer if user-facing.</li>
 <li><code>docs/roadmap.md</code> — stop calling v1 "the standard path"; v2 = recommended.</li>
 <li><strong>Positioning (§4.7):</strong> <code>docs/why-gag.md</code>, <code>docs/index.md</code> — v2-first, ARC-current.
-   Keep the goroutine-listener density claims (they hold under ScaleSet per review
-   §3.2). Route sample CRs / capability rows to v2 as the recommended shape.</li>
-<li><strong>Deprecate-v1 banners:</strong> admonition banners ("v1 is deprecated — start on v2")
-   on v1-primary doc pages (getting-started v1 section, tenant-onboarding v1 parts,
-   why-gag v1 sample). Banners only — no removal.</li>
-<li><strong>Migration exemplary:</strong> polish <code>cmd/gmc/migrate/main.go</code> UX + <code>docs/operations/
-   migration-v1-to-v2.md</code> so v1→v2 is smooth and well-documented.</li>
+   Keep the goroutine-listener density claims (they hold under ScaleSet per review §3.2).
+   Route sample CRs / capability rows to v2 as the recommended shape.</li>
+<li><strong>Deprecate-v1 banners:</strong> admonition banners ("v1 is deprecated — start on v2") on v1-primary doc pages (getting-started v1 section, tenant-onboarding v1 parts, why-gag v1 sample).
+   Banners only — no removal.</li>
+<li><strong>Migration exemplary:</strong> polish <code>cmd/gmc/migrate/main.go</code> UX + <code>docs/operations/ migration-v1-to-v2.md</code> so v1→v2 is smooth and well-documented.</li>
 </ol>
 <h2 id="guardrails">Guardrails<a class="headerlink" href="#guardrails" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Fresh <code>claude/</code> worktree; rebased on origin/main. No cluster / no dogfood.</li>
-<li><code>docs/STATUS.md</code> edit is an ISOLATED commit (keep Q273 row; note do-now routing
-  done, full v2-only still gated on Q74).</li>
-<li>Human docs never link to <code>CLAUDE.md</code>. <code>make check</code> (+ docs build if touched) green
-  before PR. No Claude attribution.
-</content>
-</invoke></li>
+<li>Fresh <code>claude/</code> worktree; rebased on origin/main.
+  No cluster / no dogfood.</li>
+<li><code>docs/STATUS.md</code> edit is an ISOLATED commit (keep Q273 row; note do-now routing done, full v2-only still gated on Q74).</li>
+<li>Human docs never link to <code>CLAUDE.md</code>. <code>make check</code> (+ docs build if touched) green before PR.
+  No Claude attribution. </content> </invoke></li>
 </ul>
 
 

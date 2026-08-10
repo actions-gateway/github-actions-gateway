@@ -2842,7 +2842,11 @@
 
 
 <h1 id="kata-containers-on-gke--secure-ci-reference-architecture">Kata Containers on GKE — Secure CI Reference Architecture<a class="headerlink" href="#kata-containers-on-gke--secure-ci-reference-architecture" title="Permanent link">&para;</a></h1>
-<p>GAG's own e2e CI suite uses <code>kind create cluster</code> inside a runner pod (Docker-in-Docker). That means the runner needs a Docker daemon. The obvious solution — privileged DinD — is unacceptable for an OSS project: external contributors open PRs and CI runs their code, making the runner a direct target for "pwn request" attacks. GAG must also dogfood its own isolation model. This plan scopes a spike to validate Kata Containers on GKE as the right path, then build a reusable reference architecture that users with the same requirement (regulated environments, multi-tenant shops, public OSS projects) can follow.</p>
+<p>GAG's own e2e CI suite uses <code>kind create cluster</code> inside a runner pod (Docker-in-Docker).
+That means the runner needs a Docker daemon.
+The obvious solution — privileged DinD — is unacceptable for an OSS project: external contributors open PRs and CI runs their code, making the runner a direct target for "pwn request" attacks.
+GAG must also dogfood its own isolation model.
+This plan scopes a spike to validate Kata Containers on GKE as the right path, then build a reusable reference architecture that users with the same requirement (regulated environments, multi-tenant shops, public OSS projects) can follow.</p>
 <p><strong>Status at a glance</strong></p>
 <table>
 <thead>
@@ -2878,13 +2882,8 @@
 </tr>
 </tbody>
 </table>
-<p><strong>The core claim holds.</strong> On a throwaway GKE cluster (<code>gag-kata-spike-c2</code>,
-GKE <code>1.35.5-gke.1241004</code>, Ubuntu 24.04 / containerd 2.1.5, <code>c2-standard-4</code> with
-nested virtualization, Kata 3.32.0 / QEMU), <code>kind create cluster</code> completed inside
-a pod with <code>runtimeClassName: kata</code> and <strong>zero</strong> <code>privileged: true</code> in its spec.
-The full inner control plane (etcd, kube-apiserver, scheduler, controller-manager,
-CoreDNS, kindnet) reached <code>Ready</code>, <code>kind load docker-image</code> worked, and a pod
-scheduled and ran in the inner cluster.</p>
+<p><strong>The core claim holds.</strong> On a throwaway GKE cluster (<code>gag-kata-spike-c2</code>, GKE <code>1.35.5-gke.1241004</code>, Ubuntu 24.04 / containerd 2.1.5, <code>c2-standard-4</code> with nested virtualization, Kata 3.32.0 / QEMU), <code>kind create cluster</code> completed inside a pod with <code>runtimeClassName: kata</code> and <strong>zero</strong> <code>privileged: true</code> in its spec.
+The full inner control plane (etcd, kube-apiserver, scheduler, controller-manager, CoreDNS, kindnet) reached <code>Ready</code>, <code>kind load docker-image</code> worked, and a pod scheduled and ran in the inner cluster.</p>
 <p>Evidence the boundary is a real VM, not a runc fallback:</p>
 <table>
 <thead>
@@ -2961,105 +2960,81 @@ scheduled and ran in the inner cluster.</p>
 <h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
 <p>Three independent reasons converge on this work:</p>
 <h3 id="1-oss-pwn-request-threat">1. OSS "pwn request" threat<a class="headerlink" href="#1-oss-pwn-request-threat" title="Permanent link">&para;</a></h3>
-<p>GAG is a public OSS project. Any contributor can open a PR, and GitHub Actions CI runs
-their code on GAG infrastructure. Privileged DinD in a runner pod means:</p>
+<p>GAG is a public OSS project.
+Any contributor can open a PR, and GitHub Actions CI runs their code on GAG infrastructure.
+Privileged DinD in a runner pod means:</p>
 <ul>
 <li>The pod can write to <code>/proc</code> and <code>/sys</code> on the host node.</li>
-<li>Node service account tokens are reachable via the GKE metadata server from inside the
-  pod — a direct path to cluster-scoped credentials.</li>
-<li>A compromised runner can pivot to other tenant namespaces if network policy is not
-  perfectly airtight.</li>
+<li>Node service account tokens are reachable via the GKE metadata server from inside the pod — a direct path to cluster-scoped credentials.</li>
+<li>A compromised runner can pivot to other tenant namespaces if network policy is not perfectly airtight.</li>
 </ul>
 <blockquote>
-<p><strong>Correction (validated in the spike).</strong> Kata fixes the <em>first</em> bullet and not the
-second. Kata isolates the <strong>kernel</strong>, not the <strong>pod network</strong>. Probing from inside
-the micro-VM, <code>169.254.169.254</code> remained reachable and
-<code>computeMetadata/v1/instance/service-accounts/default/token</code> returned <strong>HTTP 200</strong>,
-i.e. the node's GCE service-account token. The micro-VM alone does <strong>not</strong> close the
-node-credential path.</p>
-<p>The control that does close it is <strong>Workload Identity</strong> (<code>--workload-pool</code> plus
-<code>--workload-metadata=GKE_METADATA</code> on the node pool). Re-probed with it enabled, the
-metadata server serves the workload-pool identity (<code>&lt;project&gt;.svc.id.goog</code>) instead
-of the node's GCE service account. Treat Workload Identity as a hard prerequisite of
-this architecture, not an optional extra; add <code>automountServiceAccountToken: false</code>
-so the runner carries no Kubernetes API token either. A NetworkPolicy denying egress
-to <code>169.254.169.254/32</code> is worthwhile defence in depth.</p>
+<p><strong>Correction (validated in the spike).</strong> Kata fixes the <em>first</em> bullet and not the second.
+Kata isolates the <strong>kernel</strong>, not the <strong>pod network</strong>.
+Probing from inside the micro-VM, <code>169.254.169.254</code> remained reachable and <code>computeMetadata/v1/instance/service-accounts/default/token</code> returned <strong>HTTP 200</strong>, i.e. the node's GCE service-account token.
+The micro-VM alone does <strong>not</strong> close the node-credential path.</p>
+<p>The control that does close it is <strong>Workload Identity</strong> (<code>--workload-pool</code> plus <code>--workload-metadata=GKE_METADATA</code> on the node pool).
+Re-probed with it enabled, the metadata server serves the workload-pool identity (<code>&lt;project&gt;.svc.id.goog</code>) instead of the node's GCE service account.
+Treat Workload Identity as a hard prerequisite of this architecture, not an optional extra; add <code>automountServiceAccountToken: false</code> so the runner carries no Kubernetes API token either.
+A NetworkPolicy denying egress to <code>169.254.169.254/32</code> is worthwhile defence in depth.</p>
 </blockquote>
-<p>This is the "pwn request" attack class, actively exploited against OSS projects. GitHub's
-mitigations (approval gates for first-time contributors, <code>pull_request</code> vs
-<code>pull_request_target</code> scoping) are process controls, not isolation. They reduce but do not
-eliminate the risk.</p>
+<p>This is the "pwn request" attack class, actively exploited against OSS projects.
+GitHub's mitigations (approval gates for first-time contributors, <code>pull_request</code> vs <code>pull_request_target</code> scoping) are process controls, not isolation.
+They reduce but do not eliminate the risk.</p>
 <h3 id="2-gag-must-dogfood-its-own-security-model">2. GAG must dogfood its own security model<a class="headerlink" href="#2-gag-must-dogfood-its-own-security-model" title="Permanent link">&para;</a></h3>
-<p>GAG's core value proposition is secure multi-tenant runner isolation. Running GAG's own CI
-in privileged DinD would mean:</p>
+<p>GAG's core value proposition is secure multi-tenant runner isolation.
+Running GAG's own CI in privileged DinD would mean:</p>
 <ul>
 <li>The project claims secure isolation but does not use it for its own workloads.</li>
-<li>The privileged-DinD path is implicitly endorsed as acceptable for users who need kind
-  inside a runner.</li>
+<li>The privileged-DinD path is implicitly endorsed as acceptable for users who need kind inside a runner.</li>
 </ul>
-<p>Both undermine the product. GAG's CI runners should use the same isolation model GAG
-provides to tenants — or a stricter one.</p>
+<p>Both undermine the product.
+GAG's CI runners should use the same isolation model GAG provides to tenants — or a stricter one.</p>
 <h3 id="3-reference-architecture-for-users">3. Reference architecture for users<a class="headerlink" href="#3-reference-architecture-for-users" title="Permanent link">&para;</a></h3>
-<p>Many GAG users have the same requirement: run kind (or Docker builds) inside a self-hosted
-runner without <code>privileged: true</code>. This includes:</p>
+<p>Many GAG users have the same requirement: run kind (or Docker builds) inside a self-hosted runner without <code>privileged: true</code>.
+This includes:</p>
 <ul>
-<li>Regulated environments (FedRAMP, SOC 2, PCI) where privileged containers are
-  prohibited or require compensating controls.</li>
+<li>Regulated environments (FedRAMP, SOC 2, PCI) where privileged containers are prohibited or require compensating controls.</li>
 <li>Multi-tenant clusters where operator policy blocks privileged pods cluster-wide.</li>
 <li>Other OSS projects that want to run their own e2e CI through GAG.</li>
 </ul>
-<p>A validated, documented reference architecture turns a one-off internal fix into a
-reusable deliverable. It also differentiates GAG from ARC: ARC users typically accept
-privileged DinD; GAG provides a secure path.</p>
+<p>A validated, documented reference architecture turns a one-off internal fix into a reusable deliverable.
+It also differentiates GAG from ARC: ARC users typically accept privileged DinD; GAG provides a secure path.</p>
 <hr />
 <h2 id="why-not-the-other-options">Why not the other options?<a class="headerlink" href="#why-not-the-other-options" title="Permanent link">&para;</a></h2>
-<p><strong>Sysbox</strong> — <code>nestybox/sysbox#920</code> (opened March 2025) documents that kind inside Sysbox
-breaks for K8s v1.25+ node images. The only kind-specific fix in the Sysbox changelog was
-v0.5.0 (March 2022, fixing #415). v0.6.1 (April 2023) added K8s 1.24–1.26 support in the
-<code>sysbox-deploy-k8s</code> installer but contains no changelog entry for kind with 1.25+ node
-images, and issue #920 post-dates it. Claims that a Sysbox v0.7.0 released in June 2026
-resolves this were adversarially checked and refuted (no such release found). Docker
-acquired Nestybox in May 2022 and development has slowed sharply. Contributing a fix would
-take 4–8 weeks of low-level systems work with uncertain upstream acceptance and indefinite
-fork-maintenance cost.</p>
-<p><strong>kindbox</strong> — Nestybox's own Sysbox-aware kind replacement is a bash script wrapper
-explicitly documented as "a reference example, not a replacement for kind." Last commit:
-2021-10-12. No <code>kind load docker-image</code> equivalent. Calico CNI (which GAG's e2e uses)
-requires Sysbox-EE (enterprise edition), which was archived in May 2022 at
-<code>docker-archive/nestybox.sysbox-ee</code> after the Docker acquisition and has received no
-releases since.</p>
-<p><strong>Rootless Docker + rootless kind</strong> — Requires cgroup v2 on the host node and four
-iptables kernel modules pre-loaded: <code>ip_tables</code>, <code>iptable_nat</code>, <code>ip6_tables</code>,
-<code>ip6table_nat</code>. Doable on GKE COS nodes but requires a privileged DaemonSet to
-<code>modprobe</code> the modules — the runner pod stays unprivileged but the setup requires node
-surgery. Lower isolation gain than Kata (shared kernel vs. micro-VM).</p>
-<p><strong>Kata Containers</strong> — Runs each pod inside a lightweight VM via an OCI-compatible
-<code>RuntimeClass</code>. The pod itself requires no <code>privileged: true</code>; isolation is enforced at
-the hypervisor layer. Inside the Kata VM, Docker and kind run natively with no DinD
-tricks. This is the strongest <em>container-escape</em> boundary available on GKE.</p>
-<p>It is not, on its own, a security posture. Kata bounds the kernel, not the pod network:
-the node's metadata server stays reachable (measured — see <a href="#1-oss-pwn-request-threat">Motivation</a>),
-so Workload Identity is a prerequisite. The capabilities an unprivileged DinD runner still
-needs inside the guest (<code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_PTRACE</code>, <code>SYS_CHROOT</code>, rw <code>/proc/sys</code>
-and <code>/sys/fs/cgroup</code>) approach <code>privileged</code> on an ordinary runtime, so the guarantee rests
-entirely on the VM boundary rather than on defence in depth. And it trades a large,
-well-trodden kernel-CVE surface for a smaller, more exotic hypervisor one — much harder to
-exploit, not impossible, and on GKE the hypervisor is itself nested inside a GCE VM.
-Q226 verified the boundary exists (guest kernel ≠ node kernel, no host privilege); it did
-not attempt a breakout. The full accounting is in
-<a href="../../../operations/kata-dind-workloads/#what-kata-does-not-buy-you">What Kata does not buy you</a>.</p>
+<p><strong>Sysbox</strong> — <code>nestybox/sysbox#920</code> (opened March 2025) documents that kind inside Sysbox breaks for K8s v1.25+ node images.
+The only kind-specific fix in the Sysbox changelog was v0.5.0 (March 2022, fixing #415). v0.6.1 (April 2023) added K8s 1.24–1.26 support in the <code>sysbox-deploy-k8s</code> installer but contains no changelog entry for kind with 1.25+ node images, and issue #920 post-dates it.
+Claims that a Sysbox v0.7.0 released in June 2026 resolves this were adversarially checked and refuted (no such release found).
+Docker acquired Nestybox in May 2022 and development has slowed sharply.
+Contributing a fix would take 4–8 weeks of low-level systems work with uncertain upstream acceptance and indefinite fork-maintenance cost.</p>
+<p><strong>kindbox</strong> — Nestybox's own Sysbox-aware kind replacement is a bash script wrapper explicitly documented as "a reference example, not a replacement for kind."
+Last commit: 2021-10-12.
+No <code>kind load docker-image</code> equivalent.
+Calico CNI (which GAG's e2e uses) requires Sysbox-EE (enterprise edition), which was archived in May 2022 at <code>docker-archive/nestybox.sysbox-ee</code> after the Docker acquisition and has received no releases since.</p>
+<p><strong>Rootless Docker + rootless kind</strong> — Requires cgroup v2 on the host node and four iptables kernel modules pre-loaded: <code>ip_tables</code>, <code>iptable_nat</code>, <code>ip6_tables</code>, <code>ip6table_nat</code>.
+Doable on GKE COS nodes but requires a privileged DaemonSet to <code>modprobe</code> the modules — the runner pod stays unprivileged but the setup requires node surgery.
+Lower isolation gain than Kata (shared kernel vs. micro-VM).</p>
+<p><strong>Kata Containers</strong> — Runs each pod inside a lightweight VM via an OCI-compatible <code>RuntimeClass</code>.
+The pod itself requires no <code>privileged: true</code>; isolation is enforced at the hypervisor layer.
+Inside the Kata VM, Docker and kind run natively with no DinD tricks.
+This is the strongest <em>container-escape</em> boundary available on GKE.</p>
+<p>It is not, on its own, a security posture.
+Kata bounds the kernel, not the pod network: the node's metadata server stays reachable (measured — see <a href="#1-oss-pwn-request-threat">Motivation</a>), so Workload Identity is a prerequisite.
+The capabilities an unprivileged DinD runner still needs inside the guest (<code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_PTRACE</code>, <code>SYS_CHROOT</code>, rw <code>/proc/sys</code> and <code>/sys/fs/cgroup</code>) approach <code>privileged</code> on an ordinary runtime, so the guarantee rests entirely on the VM boundary rather than on defence in depth.
+And it trades a large, well-trodden kernel-CVE surface for a smaller, more exotic hypervisor one — much harder to exploit, not impossible, and on GKE the hypervisor is itself nested inside a GCE VM.
+Q226 verified the boundary exists (guest kernel ≠ node kernel, no host privilege); it did not attempt a breakout.
+The full accounting is in <a href="../../../operations/kata-dind-workloads/#what-kata-does-not-buy-you">What Kata does not buy you</a>.</p>
 <blockquote>
-<p><strong>Common confusion:</strong> GKE's nested-virtualization documentation mentions
-<code>securityContext.privileged: true</code> in some contexts. That requirement applies to pods
-that interact <em>directly</em> with the nested hypervisor (e.g. launching their own VMs). A
-pod that uses <code>runtimeClassName: kata</code> does not do this — the Kata shim handles VM
-lifecycle outside the pod. The runner pod runs without any privileged context.</p>
+<p><strong>Common confusion:</strong> GKE's nested-virtualization documentation mentions <code>securityContext.privileged: true</code> in some contexts.
+That requirement applies to pods that interact <em>directly</em> with the nested hypervisor (e.g. launching their own VMs).
+A pod that uses <code>runtimeClassName: kata</code> does not do this — the Kata shim handles VM lifecycle outside the pod.
+The runner pod runs without any privileged context.</p>
 </blockquote>
 <hr />
 <h2 id="technical-approach">Technical approach<a class="headerlink" href="#technical-approach" title="Permanent link">&para;</a></h2>
-<p>GKE nodes are themselves VMs (on GCE). To run VMs inside them (as Kata requires), GKE
-must be configured with nested virtualization on the node pool. This is a node-level config
-— the runner pod does not need <code>privileged: true</code>.</p>
+<p>GKE nodes are themselves VMs (on GCE).
+To run VMs inside them (as Kata requires), GKE must be configured with nested virtualization on the node pool.
+This is a node-level config — the runner pod does not need <code>privileged: true</code>.</p>
 <p>The setup has three layers:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>GKE node (GCE VM, nested-virt enabled)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  └── kubelet hands pod to kata-containerd shim
@@ -3074,34 +3049,21 @@ must be configured with nested virtualization on the node pool. This is a node-l
 - Docker daemon inside the runner: standard <code>dockerd</code>, no <code>--insecure</code> or <code>--privileged</code>
 - kind node containers: standard <code>kindest/node</code> images, no Sysbox patches needed
 - Node-level: nested virtualization enabled in the GKE node pool config</p>
-<p><strong>Why kind-in-runner rather than a shared test cluster.</strong> An alternative would run the
-e2e suite against a pre-provisioned GKE cluster rather than spinning up kind inside each
-runner pod. This eliminates the Docker-in-runner requirement but breaks parallel PR
-testing: CRDs, webhooks, and ClusterRoles are cluster-scoped, so concurrent runs collide
-unless each gets a fully isolated API server (e.g. via vcluster). kind-in-runner avoids
-this entirely — each CI run gets its own cluster, and any number of PRs can run
-simultaneously without coordination. For a project developed with multiple concurrent
-sessions this parallelism property is load-bearing.</p>
-<p><strong>Why this can't be validated locally on a Mac.</strong> Kata boots a KVM guest per pod, so it
-needs <code>/dev/kvm</code> — i.e. nested virtualization — on the node. On a Mac, containers already
-run inside a Linux VM (Docker Desktop's LinuxKit VM, Colima, …), so Kata would need that
-outer VM to expose <em>nested</em> virt to its guest and the container tooling to pass <code>/dev/kvm</code>
-through to the kind node-container. Every link in that chain has to cooperate, and most
-Macs break it:</p>
+<p><strong>Why kind-in-runner rather than a shared test cluster.</strong> An alternative would run the e2e suite against a pre-provisioned GKE cluster rather than spinning up kind inside each runner pod.
+This eliminates the Docker-in-runner requirement but breaks parallel PR testing: CRDs, webhooks, and ClusterRoles are cluster-scoped, so concurrent runs collide unless each gets a fully isolated API server (e.g. via vcluster). kind-in-runner avoids this entirely — each CI run gets its own cluster, and any number of PRs can run simultaneously without coordination.
+For a project developed with multiple concurrent sessions this parallelism property is load-bearing.</p>
+<p><strong>Why this can't be validated locally on a Mac.</strong> Kata boots a KVM guest per pod, so it needs <code>/dev/kvm</code> — i.e. nested virtualization — on the node.
+On a Mac, containers already run inside a Linux VM (Docker Desktop's LinuxKit VM, Colima, …), so Kata would need that outer VM to expose <em>nested</em> virt to its guest and the container tooling to pass <code>/dev/kvm</code> through to the kind node-container.
+Every link in that chain has to cooperate, and most Macs break it:</p>
 <ul>
-<li><strong>Apple Silicon M1 / M2</strong> — no nested virt at the silicon/framework level. Not possible.</li>
-<li><strong>Apple Silicon M3+ (macOS 15 Sequoia+)</strong> — Apple's <code>Virtualization.framework</code> added
-  nested virt here, so the host/OS link finally exists, but (a) the container tooling does
-  not generally wire <code>/dev/kvm</code> through to workloads, and (b) the whole GAG e2e stack is
-  x86_64 while the machine is arm64 (emulation, or nothing). Worth re-checking against
-  current Docker Desktop / Colima release notes before ruling out a specific M3/M4 box.</li>
-<li><strong>Intel Macs</strong> — macOS's <code>Hypervisor.framework</code> does not expose nested VT-x into the
-  Linux guest, so <code>/dev/kvm</code> inside the Docker VM does not function.</li>
+<li><strong>Apple Silicon M1 / M2</strong> — no nested virt at the silicon/framework level.
+  Not possible.</li>
+<li><strong>Apple Silicon M3+ (macOS 15 Sequoia+)</strong> — Apple's <code>Virtualization.framework</code> added nested virt here, so the host/OS link finally exists, but (a) the container tooling does not generally wire <code>/dev/kvm</code> through to workloads, and (b) the whole GAG e2e stack is x86_64 while the machine is arm64 (emulation, or nothing).
+  Worth re-checking against current Docker Desktop / Colima release notes before ruling out a specific M3/M4 box.</li>
+<li><strong>Intel Macs</strong> — macOS's <code>Hypervisor.framework</code> does not expose nested VT-x into the Linux guest, so <code>/dev/kvm</code> inside the Docker VM does not function.</li>
 </ul>
-<p>This is why the local test tier (<a href="../../../development/testing/"><code>docs/development/testing.md</code></a>)
-routes the <em>other</em> sandbox runtime — gVisor — to <code>minikube</code> (its systrap platform needs no
-KVM), and keeps Kata on GKE nested-virt or bare metal. A genuinely local Kata loop needs a
-Linux host with <code>/dev/kvm</code> (bare metal, or a cloud VM with nested virt) — not a Mac.</p>
+<p>This is why the local test tier (<a href="../../../development/testing/"><code>docs/development/testing.md</code></a>) routes the <em>other</em> sandbox runtime — gVisor — to <code>minikube</code> (its systrap platform needs no KVM), and keeps Kata on GKE nested-virt or bare metal.
+A genuinely local Kata loop needs a Linux host with <code>/dev/kvm</code> (bare metal, or a cloud VM with nested virt) — not a Mac.</p>
 <hr />
 <h2 id="spike-acceptance-criteria--results">Spike acceptance criteria — results<a class="headerlink" href="#spike-acceptance-criteria--results" title="Permanent link">&para;</a></h2>
 <table>
@@ -3145,18 +3107,16 @@ Linux host with <code>/dev/kvm</code> (bare metal, or a cloud VM with nested vir
 </tr>
 </tbody>
 </table>
-<p>AC#5 is deferred, not failed: it requires an image bundling <code>dockerd</code> + <code>kind</code> + the
-Go/test toolchain + the repo checkout, which GAG does not publish today. Everything
-that criterion would exercise beneath the suite — Docker, <code>kind</code>, image loading, pod
-scheduling in the inner cluster — is proven by AC#2/#3/#4. Building that image and
-running the suite is part of the CI-integration follow-up.</p>
+<p>AC#5 is deferred, not failed: it requires an image bundling <code>dockerd</code> + <code>kind</code> + the Go/test toolchain + the repo checkout, which GAG does not publish today.
+Everything that criterion would exercise beneath the suite — Docker, <code>kind</code>, image loading, pod scheduling in the inner cluster — is proven by AC#2/#3/#4.
+Building that image and running the suite is part of the CI-integration follow-up.</p>
 <p><strong>Verdict: GO.</strong></p>
 <hr />
 <h2 id="exact-validated-configuration">Exact validated configuration<a class="headerlink" href="#exact-validated-configuration" title="Permanent link">&para;</a></h2>
 <h3 id="1-node-pool">1. Node pool<a class="headerlink" href="#1-node-pool" title="Permanent link">&para;</a></h3>
-<p><code>--enable-nested-virtualization</code> is a <strong>GA</strong> flag, available on both
-<code>gcloud container clusters create</code> and <code>gcloud container node-pools create</code>. It requires
-<code>UBUNTU_CONTAINERD</code>, or <code>COS_CONTAINERD</code> at <code>1.28.4-gke.1083000</code>+. Autopilot cannot do it.</p>
+<p><code>--enable-nested-virtualization</code> is a <strong>GA</strong> flag, available on both <code>gcloud container clusters create</code> and <code>gcloud container node-pools create</code>.
+It requires <code>UBUNTU_CONTAINERD</code>, or <code>COS_CONTAINERD</code> at <code>1.28.4-gke.1083000</code>+.
+Autopilot cannot do it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>create<span class="w"> </span>&lt;cluster&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--zone<span class="w"> </span>&lt;zone&gt;<span class="w"> </span>--machine-type<span class="w"> </span>c2-standard-4<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--image-type<span class="w"> </span>UBUNTU_CONTAINERD<span class="w"> </span><span class="se">\</span>
@@ -3168,321 +3128,171 @@ running the suite is part of the CI-integration follow-up.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>debug<span class="w"> </span>node/&lt;node&gt;<span class="w"> </span>-it<span class="w"> </span>--image<span class="o">=</span>busybox<span class="w"> </span>--<span class="w"> </span>ls<span class="w"> </span>-l<span class="w"> </span>/host/dev/kvm<span class="w">   </span><span class="c1"># expect: crw-rw---- 10, 232</span>
 </code></pre></div>
 <h3 id="2-kata-install">2. Kata install<a class="headerlink" href="#2-kata-install" title="Permanent link">&para;</a></h3>
-<p>Upstream <strong>no longer ships raw <code>kata-deploy.yaml</code> / <code>kata-rbac.yaml</code></strong>; those release-asset
-URLs now 404. The canonical installer is an OCI Helm chart:</p>
+<p>Upstream <strong>no longer ships raw <code>kata-deploy.yaml</code> / <code>kata-rbac.yaml</code></strong>; those release-asset URLs now 404.
+The canonical installer is an OCI Helm chart:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>helm<span class="w"> </span>install<span class="w"> </span>kata-deploy<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>oci://quay.io/kata-containers/kata-deploy-charts/kata-deploy<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">3</span>.32.0<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-f<span class="w"> </span>deploy/kata-ci/kata-values.yaml<span class="w"> </span>--wait
 </code></pre></div>
 <p>Values live in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/kata-values.yaml"><code>deploy/kata-ci/kata-values.yaml</code></a>.
-The chart creates the <code>kata-qemu</code> RuntimeClass (with <code>overhead: 160Mi / 250m</code>); we ship
-only the <code>kata</code> alias in-repo.</p>
-<p><strong>Do not conflate the two node labels.</strong> <code>kata-deploy</code> must be <em>selected</em> by the pool's own
-label (<code>gag.dev/kata-ci</code>), and it <em>sets</em> <code>katacontainers.io/kata-runtime=true</code> once the
-runtime is installed — which is what the RuntimeClass schedules on. Using one label for
-both lets a Kata pod land on a node whose runtime does not exist yet.</p>
+The chart creates the <code>kata-qemu</code> RuntimeClass (with <code>overhead: 160Mi / 250m</code>); we ship only the <code>kata</code> alias in-repo.</p>
+<p><strong>Do not conflate the two node labels.</strong> <code>kata-deploy</code> must be <em>selected</em> by the pool's own label (<code>gag.dev/kata-ci</code>), and it <em>sets</em> <code>katacontainers.io/kata-runtime=true</code> once the runtime is installed — which is what the RuntimeClass schedules on.
+Using one label for both lets a Kata pod land on a node whose runtime does not exist yet.</p>
 <h3 id="3-the-runner-pod--six-non-obvious-requirements">3. The runner pod — six non-obvious requirements<a class="headerlink" href="#3-the-runner-pod--six-non-obvious-requirements" title="Permanent link">&para;</a></h3>
-<p>Everything below was discovered by running it. See
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
+<p>Everything below was discovered by running it.
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
 <ol>
-<li><strong><code>/var/lib/docker</code> must be a raw block volume, not an <code>emptyDir</code>.</strong> Kata surfaces an
-   <code>emptyDir</code> as <strong>virtiofs</strong>, on which Docker cannot use <code>overlay2</code>; it silently falls
-   back to <code>vfs</code>. kind then switches its node snapshotter to <code>fuse-overlayfs</code>, which needs
-   <code>/dev/fuse</code> — absent from the guest — and the inner kubelet dies with
-   <code>failed to create kubelet: open /dev/kmsg</code> / snapshotter errors. Use
-   <code>volumeMode: Block</code> + <code>volumeDevices</code>, then <code>mkfs.ext4</code> inside the guest.
-   <em>Gotcha:</em> <code>docker:dind</code> declares <code>VOLUME /var/lib/docker</code> and Kata pre-mounts virtiofs
-   there, so a naive "is it mounted?" check passes and skips your ext4 mount. Test for the
-   <strong>device</strong>, not the mountpoint.</li>
-<li><strong><code>/dev/kmsg</code> does not exist in the Kata guest</strong>, and the inner kubelet hard-requires it
-   (<code>open /dev/kmsg: no such file or directory</code>). <code>mknod /dev/kmsg c 1 11</code> (needs
-   <code>CAP_MKNOD</code>), then bind it into kind's node container via <code>extraMounts</code>.</li>
-<li><strong><code>/sys/fs/cgroup</code> is mounted read-only</strong> for a non-privileged container, so <code>runc</code>
-   cannot create the kind node's cgroup. <code>mount -o remount,rw /sys/fs/cgroup</code> succeeds with
-   <code>CAP_SYS_ADMIN</code>. Under Kata this hierarchy belongs to the <strong>guest</strong> kernel, so the
-   remount grants nothing on the host — under plain runc the same tree is the host's, which
-   is precisely why classic DinD demands <code>privileged: true</code>.</li>
-<li><strong><code>/proc/sys</code> is read-only</strong> likewise; Docker writes per-veth
-   <code>net.ipv6.conf.&lt;iface&gt;.disable_ipv6</code>. Same remount, same guest-only reasoning.
+<li><strong><code>/var/lib/docker</code> must be a raw block volume, not an <code>emptyDir</code>.</strong> Kata surfaces an <code>emptyDir</code> as <strong>virtiofs</strong>, on which Docker cannot use <code>overlay2</code>; it silently falls back to <code>vfs</code>. kind then switches its node snapshotter to <code>fuse-overlayfs</code>, which needs <code>/dev/fuse</code> — absent from the guest — and the inner kubelet dies with <code>failed to create kubelet: open /dev/kmsg</code> / snapshotter errors.
+   Use <code>volumeMode: Block</code> + <code>volumeDevices</code>, then <code>mkfs.ext4</code> inside the guest. <em>Gotcha:</em> <code>docker:dind</code> declares <code>VOLUME /var/lib/docker</code> and Kata pre-mounts virtiofs there, so a naive "is it mounted?" check passes and skips your ext4 mount.
+   Test for the <strong>device</strong>, not the mountpoint.</li>
+<li><strong><code>/dev/kmsg</code> does not exist in the Kata guest</strong>, and the inner kubelet hard-requires it (<code>open /dev/kmsg: no such file or directory</code>). <code>mknod /dev/kmsg c 1 11</code> (needs <code>CAP_MKNOD</code>), then bind it into kind's node container via <code>extraMounts</code>.</li>
+<li><strong><code>/sys/fs/cgroup</code> is mounted read-only</strong> for a non-privileged container, so <code>runc</code> cannot create the kind node's cgroup. <code>mount -o remount,rw /sys/fs/cgroup</code> succeeds with <code>CAP_SYS_ADMIN</code>.
+   Under Kata this hierarchy belongs to the <strong>guest</strong> kernel, so the remount grants nothing on the host — under plain runc the same tree is the host's, which is precisely why classic DinD demands <code>privileged: true</code>.</li>
+<li><strong><code>/proc/sys</code> is read-only</strong> likewise; Docker writes per-veth <code>net.ipv6.conf.&lt;iface&gt;.disable_ipv6</code>.
+   Same remount, same guest-only reasoning.
    (<code>net.ipv4.ip_forward</code> is already <code>1</code> in the guest, so Docker never writes it.)</li>
-<li><strong>cgroup v2 nesting.</strong> The cgroup-namespace root holds our shell + <code>dockerd</code>, and cgroup
-   v2 forbids a cgroup from holding processes <em>and</em> delegating controllers to children — so
-   systemd inside kind's node cannot create <code>/init.scope</code>
-   (<code>Failed to create /init.scope control group: Structure needs cleaning</code>). Evacuate the
-   root into a leaf cgroup, then populate <code>cgroup.subtree_control</code>. <code>docker:dind</code>'s own
-   entrypoint does this; overriding <code>command:</code> skips it.</li>
-<li><strong>IPv6 is disabled in the guest</strong>, but kind unconditionally creates its Docker network
-   with <code>--ipv6</code>. Pre-create an IPv4-only bridge network named <code>kind</code>; kind reuses it.</li>
+<li><strong>cgroup v2 nesting.</strong> The cgroup-namespace root holds our shell + <code>dockerd</code>, and cgroup v2 forbids a cgroup from holding processes <em>and</em> delegating controllers to children — so systemd inside kind's node cannot create <code>/init.scope</code> (<code>Failed to create /init.scope control group: Structure needs cleaning</code>).
+   Evacuate the root into a leaf cgroup, then populate <code>cgroup.subtree_control</code>. <code>docker:dind</code>'s own entrypoint does this; overriding <code>command:</code> skips it.</li>
+<li><strong>IPv6 is disabled in the guest</strong>, but kind unconditionally creates its Docker network with <code>--ipv6</code>.
+   Pre-create an IPv4-only bridge network named <code>kind</code>; kind reuses it.</li>
 </ol>
 <h3 id="4-capabilities">4. Capabilities<a class="headerlink" href="#4-capabilities" title="Permanent link">&para;</a></h3>
-<p><code>drop: [ALL]</code>, then add Docker's default set plus four extras. <code>privileged: true</code> is never
-needed and must never be added.</p>
+<p><code>drop: [ALL]</code>, then add Docker's default set plus four extras. <code>privileged: true</code> is never needed and must never be added.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>CHOWN DAC_OVERRIDE FSETID FOWNER MKNOD NET_RAW SETGID SETUID
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>SETFCAP SETPCAP NET_BIND_SERVICE SYS_CHROOT KILL AUDIT_WRITE   # Docker defaults
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>SYS_ADMIN NET_ADMIN SYS_RESOURCE SYS_PTRACE                    # rootful dockerd + runc
 </code></pre></div>
-<p>Two of these are easy to miss: <strong><code>FOWNER</code></strong> (image layer unpack <code>chmod</code>s files it does not
-own — <code>chmod /run/rpcbind: operation not permitted</code>) and <strong><code>SYS_CHROOT</code></strong> (runc <code>setns()</code>
-into the container mount namespace — <code>join container mntns: setns: operation not permitted</code>).</p>
+<p>Two of these are easy to miss: <strong><code>FOWNER</code></strong> (image layer unpack <code>chmod</code>s files it does not own — <code>chmod /run/rpcbind: operation not permitted</code>) and <strong><code>SYS_CHROOT</code></strong> (runc <code>setns()</code> into the container mount namespace — <code>join container mntns: setns: operation not permitted</code>).</p>
 <hr />
 <h2 id="constraints-and-gotchas-found">Constraints and gotchas found<a class="headerlink" href="#constraints-and-gotchas-found" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Capacity, not quota.</strong> <code>n2-standard-4</code> and <code>n2d-standard-4</code> were both
-  <code>ZONE_RESOURCE_POOL_EXHAUSTED</code> in <code>us-central1-a</code> while <code>N2_CPUS</code> quota sat at 0/200.
-  A plain non-nested-virt <code>n2</code> also failed, so nested virt does <strong>not</strong> narrow the capacity
-  pool, and <code>n2d</code> is not rejected for lacking AMD SVM — the <code>n2/n2d/c2/c2d</code> allowlist in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> is correct.
-  <code>c2-standard-4</code> and <code>c2d-standard-4</code> both worked. Watch the per-family regional quota:
-  <code>C2_CPUS</code> defaulted to <strong>8</strong> on a fresh project.</li>
-<li><strong>A stockout wedges the cluster.</strong> A failing <code>CREATE_NODE_POOL</code> op holds a cluster-level
-  lock (<code>Cluster is running incompatible operation</code>) and blocks even deleting the pool,
-  for tens of minutes. Prefer creating the nested-virt pool as the cluster's <em>initial</em> pool
-  (<code>clusters create --enable-nested-virtualization</code>) so a stockout fails fast.</li>
-<li><strong>GKE preinstalls <code>gvisor</code> and <code>confidential-linked-runner</code> RuntimeClasses.</strong> They are
-  unrelated to Kata; do not assume a <code>RuntimeClass</code> listing means Kata is installed.</li>
-<li><strong><code>kata-deploy</code> is a DaemonSet, so it self-heals.</strong> Recreating the node pool (e.g. to flip
-  <code>--workload-metadata</code>) reinstalls Kata automatically; the RuntimeClass survives.</li>
-<li>The chart's post-delete cleanup Job uses <code>quay.io/kata-containers/kubectl:latest</code> —
-  unpinned. Note it if supply-chain pinning matters to you.</li>
-<li>Kata VM boot overhead is small (~2 s), but the RuntimeClass <code>overhead</code>
-  (160Mi / 250m per pod) is real and must be included when sizing nodes.</li>
-<li><strong>Deleting the cluster orphans the Block PVC's Persistent Disk.</strong> A <code>Delete</code>
-  reclaim policy fires when the <em>PVC</em> is deleted, not when the cluster is. The
-  100Gi <code>pd-balanced</code> survives cluster teardown and keeps billing — delete the PVC
-  first, then check <code>gcloud compute disks list</code>.</li>
-<li>Kata guest kernel <code>6.18.35</code> supports <code>ext4</code>, <code>xfs</code>, <code>overlay</code>, <code>fuse</code> and
-  <code>virtiofs</code>. The <code>overlay2</code> failure is a <em>backing-filesystem</em> limitation
-  (virtiofs), not missing kernel support — which is why a block device fixes it.</li>
+<li><strong>Capacity, not quota.</strong> <code>n2-standard-4</code> and <code>n2d-standard-4</code> were both <code>ZONE_RESOURCE_POOL_EXHAUSTED</code> in <code>us-central1-a</code> while <code>N2_CPUS</code> quota sat at 0/200.
+  A plain non-nested-virt <code>n2</code> also failed, so nested virt does <strong>not</strong> narrow the capacity pool, and <code>n2d</code> is not rejected for lacking AMD SVM — the <code>n2/n2d/c2/c2d</code> allowlist in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> is correct. <code>c2-standard-4</code> and <code>c2d-standard-4</code> both worked.
+  Watch the per-family regional quota: <code>C2_CPUS</code> defaulted to <strong>8</strong> on a fresh project.</li>
+<li><strong>A stockout wedges the cluster.</strong> A failing <code>CREATE_NODE_POOL</code> op holds a cluster-level lock (<code>Cluster is running incompatible operation</code>) and blocks even deleting the pool, for tens of minutes.
+  Prefer creating the nested-virt pool as the cluster's <em>initial</em> pool (<code>clusters create --enable-nested-virtualization</code>) so a stockout fails fast.</li>
+<li><strong>GKE preinstalls <code>gvisor</code> and <code>confidential-linked-runner</code> RuntimeClasses.</strong> They are unrelated to Kata; do not assume a <code>RuntimeClass</code> listing means Kata is installed.</li>
+<li><strong><code>kata-deploy</code> is a DaemonSet, so it self-heals.</strong> Recreating the node pool (e.g. to flip <code>--workload-metadata</code>) reinstalls Kata automatically; the RuntimeClass survives.</li>
+<li>The chart's post-delete cleanup Job uses <code>quay.io/kata-containers/kubectl:latest</code> — unpinned.
+  Note it if supply-chain pinning matters to you.</li>
+<li>Kata VM boot overhead is small (~2 s), but the RuntimeClass <code>overhead</code> (160Mi / 250m per pod) is real and must be included when sizing nodes.</li>
+<li><strong>Deleting the cluster orphans the Block PVC's Persistent Disk.</strong> A <code>Delete</code> reclaim policy fires when the <em>PVC</em> is deleted, not when the cluster is.
+  The 100Gi <code>pd-balanced</code> survives cluster teardown and keeps billing — delete the PVC first, then check <code>gcloud compute disks list</code>.</li>
+<li>Kata guest kernel <code>6.18.35</code> supports <code>ext4</code>, <code>xfs</code>, <code>overlay</code>, <code>fuse</code> and <code>virtiofs</code>.
+  The <code>overlay2</code> failure is a <em>backing-filesystem</em> limitation (virtiofs), not missing kernel support — which is why a block device fixes it.</li>
 </ul>
 <hr />
 <h2 id="reference-architecture-deliverable">Reference architecture deliverable<a class="headerlink" href="#reference-architecture-deliverable" title="Permanent link">&para;</a></h2>
-<p>The spike validates the approach on GKE, but the reference architecture
-(<a href="../../../operations/kata-dind-workloads/"><code>docs/operations/kata-dind-workloads.md</code></a>) is
-provider-agnostic. It covers three tiers:</p>
-<p><strong>Tier 1 — cloud-hosted (GKE, AKS, EKS).</strong> Nested-virtualization node pool + Kata
-RuntimeClass. Variant-specific guidance per provider: machine family requirements
-(n2/n2d/c2/c2d on GKE), Standard vs. Autopilot trade-offs (Autopilot blocks nested
-virt), Kata DaemonSet installer vs. managed add-on. Best fit for teams already
-cloud-native.</p>
-<p><strong>Tier 2 — bare metal and on-prem.</strong> Kata on real hardware requires no nested
-virtualization — QEMU or Cloud Hypervisor runs directly. No machine-family constraints,
-lower overhead, and the correct path for GPU workloads: PCIe passthrough of NVIDIA or AMD
-GPUs into the Kata micro-VM works from bare metal. GKE's GPU machine families (a2, a3,
-g2) do not support nested virtualization, so GPU + Kata on cloud requires bare-metal or
-dedicated instances.</p>
+<p>The spike validates the approach on GKE, but the reference architecture (<a href="../../../operations/kata-dind-workloads/"><code>docs/operations/kata-dind-workloads.md</code></a>) is provider-agnostic.
+It covers three tiers:</p>
+<p><strong>Tier 1 — cloud-hosted (GKE, AKS, EKS).</strong> Nested-virtualization node pool + Kata RuntimeClass.
+Variant-specific guidance per provider: machine family requirements (n2/n2d/c2/c2d on GKE), Standard vs. Autopilot trade-offs (Autopilot blocks nested virt), Kata DaemonSet installer vs. managed add-on.
+Best fit for teams already cloud-native.</p>
+<p><strong>Tier 2 — bare metal and on-prem.</strong> Kata on real hardware requires no nested virtualization — QEMU or Cloud Hypervisor runs directly.
+No machine-family constraints, lower overhead, and the correct path for GPU workloads: PCIe passthrough of NVIDIA or AMD GPUs into the Kata micro-VM works from bare metal.
+GKE's GPU machine families (a2, a3, g2) do not support nested virtualization, so GPU + Kata on cloud requires bare-metal or dedicated instances.</p>
 <!-- Correction 2026-08-08: a2/a3/g2 DO support nested virtualization; gcloud named all
 three as capable on 2026-08-02. The bare-metal conclusion holds for a different reason
 (BIOS ACS/IOMMU, no host NVIDIA driver, whole-GPU-per-guest). See
 docs/plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal. -->
-<p>This tier is the reference architecture for teams running GPU CI on
-owned hardware or cost-sensitive on-prem environments.</p>
-<p><strong>Tier 3 — pragmatic fallback (any provider).</strong> Privileged DinD on a dedicated,
-locked-down node pool. Documents compensating controls explicitly: workload-identity
-scope-down, metadata-server block, network policy, node taint isolation. For teams where
-Kata is not feasible but full privilege is also unacceptable.</p>
-<p>Each tier covers: pod security context, RuntimeClass or equivalent, node requirements,
-<code>ActionsGateway</code> CR configuration to target the right pool, observed startup overhead,
-and CI timeout guidance.</p>
+<p>This tier is the reference architecture for teams running GPU CI on owned hardware or cost-sensitive on-prem environments.</p>
+<p><strong>Tier 3 — pragmatic fallback (any provider).</strong> Privileged DinD on a dedicated, locked-down node pool.
+Documents compensating controls explicitly: workload-identity scope-down, metadata-server block, network policy, node taint isolation.
+For teams where Kata is not feasible but full privilege is also unacceptable.</p>
+<p>Each tier covers: pod security context, RuntimeClass or equivalent, node requirements, <code>ActionsGateway</code> CR configuration to target the right pool, observed startup overhead, and CI timeout guidance.</p>
 <hr />
 <h2 id="ci-integration--the-follow-up">CI integration — the follow-up<a class="headerlink" href="#ci-integration--the-follow-up" title="Permanent link">&para;</a></h2>
-<p>The spike deliberately stopped at the reference architecture. The Q286 wiring has since
-landed in-repo; what follows records what shipped, the one design correction it forced,
-and the remaining live gate.</p>
+<p>The spike deliberately stopped at the reference architecture.
+The Q286 wiring has since landed in-repo; what follows records what shipped, the one design correction it forced, and the remaining live gate.</p>
 <h3 id="what-landed-q286-wiring">What landed (Q286 wiring)<a class="headerlink" href="#what-landed-q286-wiring" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>No bundled runner image after all.</strong> The spike's item "a GAG e2e runner image
-   bundling <code>dockerd</code>, <code>kind</code>, the Go/test toolchain and the repo checkout" predated the
-   Q231 sidecar split. In the dogfood e2e shape the <em>daemon</em> is a native-sidecar
-   <code>docker:28-dind</code> and the <em>toolchain</em> rides the existing
-   <code>dogfood-e2e-runner</code> client image (docker CLI + buildx + helm + kubectl + jq); the
-   workflow installs <code>kind</code> and Go itself. The six Kata setup steps live in the sidecar's
-   entrypoint (<code>args:</code> block of
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/resources.yaml"><code>overlays/kata/resources.yaml</code></a>,
-   adapted from the spike's <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>runner-pod.yaml</code></a>),
-   with two sidecar-specific deltas: <code>dockerd</code> listens on tcp for the runner container,
-   and the per-worker block device is a <strong>generic ephemeral volume</strong> (PVC created and
-   deleted with the pod — no orphaned Persistent Disks).</li>
-<li><strong>kind config passes <code>/dev/kmsg</code></strong> into every node via <code>extraMounts</code>
-   (<code>test/kind-config-{1,2}worker.yaml</code>) — harmless where the device already exists,
-   required in the Kata guest.</li>
-<li><strong>The variant knob</strong>: <code>E2E_VARIANT=kata scripts/dogfood/e2e-start.sh</code> applies
-   <code>overlays/kata</code>; <code>dind</code> stays the default until the flip.
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-setup.sh"><code>e2e-setup.sh</code></a> now owns only cluster infra
-   (pool, Kata install, RuntimeClass, namespace, Secret) — the tenant objects it used to
-   apply directly (an outdated pre-spike Kata RunnerTemplate) are overlay-owned.</li>
+<li><strong>No bundled runner image after all.</strong> The spike's item "a GAG e2e runner image bundling <code>dockerd</code>, <code>kind</code>, the Go/test toolchain and the repo checkout" predated the Q231 sidecar split.
+   In the dogfood e2e shape the <em>daemon</em> is a native-sidecar <code>docker:28-dind</code> and the <em>toolchain</em> rides the existing <code>dogfood-e2e-runner</code> client image (docker CLI + buildx + helm + kubectl + jq); the workflow installs <code>kind</code> and Go itself.
+   The six Kata setup steps live in the sidecar's entrypoint (<code>args:</code> block of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/resources.yaml"><code>overlays/kata/resources.yaml</code></a>, adapted from the spike's <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>runner-pod.yaml</code></a>), with two sidecar-specific deltas: <code>dockerd</code> listens on tcp for the runner container, and the per-worker block device is a <strong>generic ephemeral volume</strong> (PVC created and deleted with the pod — no orphaned Persistent Disks).</li>
+<li><strong>kind config passes <code>/dev/kmsg</code></strong> into every node via <code>extraMounts</code> (<code>test/kind-config-{1,2}worker.yaml</code>) — harmless where the device already exists, required in the Kata guest.</li>
+<li><strong>The variant knob</strong>: <code>E2E_VARIANT=kata scripts/dogfood/e2e-start.sh</code> applies <code>overlays/kata</code>; <code>dind</code> stays the default until the flip.
+   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-setup.sh"><code>e2e-setup.sh</code></a> now owns only cluster infra (pool, Kata install, RuntimeClass, namespace, Secret) — the tenant objects it used to apply directly (an outdated pre-spike Kata RunnerTemplate) are overlay-owned.</li>
 </ol>
 <h3 id="the-design-correction-the-namespace-cannot-stay-psa-baseline">The design correction: the namespace cannot stay PSA-baseline<a class="headerlink" href="#the-design-correction-the-namespace-cannot-stay-psa-baseline" title="Permanent link">&para;</a></h3>
-<p>Earlier revisions of this plan (and the overlay stub) claimed the Kata variant keeps the
-namespace at <code>baseline</code> with no privileged profile. That is wrong: the unprivileged
-<code>dockerd</code>'s validated capability set (<code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_RESOURCE</code>,
-<code>SYS_PTRACE</code>, <code>NET_RAW</code>) exceeds PSS baseline's fixed <code>capabilities.add</code> allowlist, and
-PSA is not Kata-aware — it cannot credit the VM boundary. <strong>Verified against a real
-apiserver</strong> (envtest, 2026-07-16): a namespace with <code>enforce=baseline</code> rejects the Kata
-worker pod as Forbidden; <code>enforce=privileged</code> admits it. So the kata overlay carries the
-same four privileged-namespace gates as dind, and the "no privileged container" property
-is enforced by the worker shape being a <strong>platform-owned <code>ClusterRunnerTemplate</code></strong> (v2
-refuses tenant-authored privileged shapes; tenants cannot edit cluster-scoped templates),
-not by the PSA level. A second Kata-specific delta: <strong>CPU limits are load-bearing</strong> in the
-kata overlay — Kata sizes the guest VM's vCPUs from them — so the dind overlay's
-"requests-only CPU" idiom does not port.</p>
+<p>Earlier revisions of this plan (and the overlay stub) claimed the Kata variant keeps the namespace at <code>baseline</code> with no privileged profile.
+That is wrong: the unprivileged <code>dockerd</code>'s validated capability set (<code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_RESOURCE</code>, <code>SYS_PTRACE</code>, <code>NET_RAW</code>) exceeds PSS baseline's fixed <code>capabilities.add</code> allowlist, and PSA is not Kata-aware — it cannot credit the VM boundary. <strong>Verified against a real apiserver</strong> (envtest, 2026-07-16): a namespace with <code>enforce=baseline</code> rejects the Kata worker pod as Forbidden; <code>enforce=privileged</code> admits it.
+So the kata overlay carries the same four privileged-namespace gates as dind, and the "no privileged container" property is enforced by the worker shape being a <strong>platform-owned <code>ClusterRunnerTemplate</code></strong> (v2 refuses tenant-authored privileged shapes; tenants cannot edit cluster-scoped templates), not by the PSA level.
+A second Kata-specific delta: <strong>CPU limits are load-bearing</strong> in the kata overlay — Kata sizes the guest VM's vCPUs from them — so the dind overlay's "requests-only CPU" idiom does not port.</p>
 <h3 id="live-validation-checklist-the-remaining-q286-gate">Live-validation checklist (the remaining Q286 gate)<a class="headerlink" href="#live-validation-checklist-the-remaining-q286-gate" title="Permanent link">&para;</a></h3>
-<p><strong>Executed 2026-07-16/17 — all steps complete; AC#5 green</strong> (run 29549402471:
-56 passed / 0 failed / 2 skipped, ~18.5 min — dind parity). Step 2's stale
-RunnerTemplate turned out not to exist; every other prediction held. The
-defects found on the way are in
-<a href="#what-the-live-session-found-2026-07-16">what the live session found</a>.</p>
+<p><strong>Executed 2026-07-16/17 — all steps complete; AC#5 green</strong> (run 29549402471: 56 passed / 0 failed / 2 skipped, ~18.5 min — dind parity).
+Step 2's stale RunnerTemplate turned out not to exist; every other prediction held.
+The defects found on the way are in <a href="#what-the-live-session-found-2026-07-16">what the live session found</a>.</p>
 <ol>
-<li><strong>Verify the live e2e pool</strong> actually matches what
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-setup.sh"><code>e2e-setup.sh</code></a> now creates
-   (<code>c2-standard-8</code>, <code>UBUNTU_CONTAINERD</code>, <code>--enable-nested-virtualization</code>,
-   <code>--workload-metadata=GKE_METADATA</code>, label <code>gag.dev/kata-ci=true</code>). History says it
-   won't: Q231 provisioned <code>n2-standard-4</code>, docs elsewhere say the live dind pool is
-   <code>e2-standard-8</code>, and the script skips creation when a pool named <code>e2e</code> exists. Expect
-   to delete + recreate the pool (fine for dind too — it doesn't care about nested virt).
-   Confirm <code>/dev/kvm</code> on a node and that kata-deploy labels it
-   <code>katacontainers.io/kata-runtime=true</code>.</li>
-<li><strong>Delete the stale namespaced RunnerTemplate <code>kata</code></strong> in <code>gag-dogfood-e2e</code> if present
-   (applied by the old <code>e2e-setup.sh apply_cr</code>; superseded by the ClusterRunnerTemplate).</li>
-<li><code>E2E_VARIANT=kata scripts/dogfood/e2e-start.sh</code>, then dispatch an e2e run
-   (<code>gh workflow run e2e-calico.yml</code> or re-run a PR's e2e) and watch the worker pod:
-   dind sidecar must log <code>dockerd up on overlay2</code>, the suite must go green end-to-end.
-   Also confirm <code>automountServiceAccountToken: false</code> held and the ephemeral PVC is
-   deleted with the pod (<code>kubectl get pvc -n gag-dogfood-e2e</code>, then
-   <code>gcloud compute disks list</code> after teardown).</li>
-<li><strong>Flip the default</strong> on green: <code>E2E_VARIANT</code> default <code>dind</code> → <code>kata</code> in
-   <code>e2e-start.sh</code>, demote dind to explicit opt-in in the docs
-   (secure-by-default rule), update
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>deploy/dogfood-e2e/README.md</code></a> status and this
-   table, and close Q286.</li>
+<li><strong>Verify the live e2e pool</strong> actually matches what <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-setup.sh"><code>e2e-setup.sh</code></a> now creates (<code>c2-standard-8</code>, <code>UBUNTU_CONTAINERD</code>, <code>--enable-nested-virtualization</code>, <code>--workload-metadata=GKE_METADATA</code>, label <code>gag.dev/kata-ci=true</code>).
+   History says it won't: Q231 provisioned <code>n2-standard-4</code>, docs elsewhere say the live dind pool is <code>e2-standard-8</code>, and the script skips creation when a pool named <code>e2e</code> exists.
+   Expect to delete + recreate the pool (fine for dind too — it doesn't care about nested virt).
+   Confirm <code>/dev/kvm</code> on a node and that kata-deploy labels it <code>katacontainers.io/kata-runtime=true</code>.</li>
+<li><strong>Delete the stale namespaced RunnerTemplate <code>kata</code></strong> in <code>gag-dogfood-e2e</code> if present (applied by the old <code>e2e-setup.sh apply_cr</code>; superseded by the ClusterRunnerTemplate).</li>
+<li><code>E2E_VARIANT=kata scripts/dogfood/e2e-start.sh</code>, then dispatch an e2e run (<code>gh workflow run e2e-calico.yml</code> or re-run a PR's e2e) and watch the worker pod: dind sidecar must log <code>dockerd up on overlay2</code>, the suite must go green end-to-end.
+   Also confirm <code>automountServiceAccountToken: false</code> held and the ephemeral PVC is deleted with the pod (<code>kubectl get pvc -n gag-dogfood-e2e</code>, then <code>gcloud compute disks list</code> after teardown).</li>
+<li><strong>Flip the default</strong> on green: <code>E2E_VARIANT</code> default <code>dind</code> → <code>kata</code> in <code>e2e-start.sh</code>, demote dind to explicit opt-in in the docs (secure-by-default rule), update <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>deploy/dogfood-e2e/README.md</code></a> status and this table, and close Q286.</li>
 </ol>
-<p>Note that GAG's per-PR e2e still runs on GitHub-hosted runners unless
-<code>GAG_E2E_RUNNER</code> routes it to GAG, so this is a change of <em>where</em> e2e runs as much as
-<em>how</em>.</p>
+<p>Note that GAG's per-PR e2e still runs on GitHub-hosted runners unless <code>GAG_E2E_RUNNER</code> routes it to GAG, so this is a change of <em>where</em> e2e runs as much as <em>how</em>.</p>
 <h3 id="what-the-live-session-found-2026-07-16">What the live session found (2026-07-16)<a class="headerlink" href="#what-the-live-session-found-2026-07-16" title="Permanent link">&para;</a></h3>
-<p>The checklist's step 1 prediction held (the live pool was <code>e2-standard-8</code>/COS, no
-nested virt — deleted and recreated), and five defects stood between the committed
-wiring and a working Kata worker, each root-caused live and fixed in-repo:</p>
+<p>The checklist's step 1 prediction held (the live pool was <code>e2-standard-8</code>/COS, no nested virt — deleted and recreated), and five defects stood between the committed wiring and a working Kata worker, each root-caused live and fixed in-repo:</p>
 <ol>
-<li><strong>The cluster had no Workload Identity pool</strong> — <code>--workload-metadata=GKE_METADATA</code>
-   is rejected with a 400 without cluster-level <code>--workload-pool</code> (the Q226 spike ran
-   on a spike cluster that had it). Enabled live; the Part A create command in
-   <a href="../../gke-dogfood/">gke-dogfood.md</a> now carries <code>--workload-pool</code> plus a retrofit note.</li>
-<li><strong><code>helm --set</code> typed the pool label as a boolean</strong> — <code>nodeSelector</code> values must be
-   strings, so kata-deploy's server-side apply failed. <code>e2e-setup.sh</code> now uses
-   <code>--set-string</code>.</li>
-<li><strong>kata-deploy ships no tolerations</strong> — it could never schedule onto the
-   <code>dedicated=e2e:NoSchedule</code> pool. <code>e2e-setup.sh</code> now passes a matching
-   <code>tolerations[0]</code> value.</li>
-<li><strong>Autoscale-from-zero never fired</strong>: the <code>kata</code> RuntimeClass schedules on
-   <code>katacontainers.io/kata-runtime=true</code>, which kata-deploy applies post-install — but
-   the cluster autoscaler simulates against the pool's <em>configured</em> labels only, so no
-   Kata pod could ever trigger the 0→N scale-up. <code>e2e-setup.sh</code> now bakes the runtime
-   label into the pool's <code>--node-labels</code> (the same pattern GKE uses for gVisor sandbox
-   pools); the bind-before-install window resolves via kubelet sandbox-create retries.</li>
-<li><strong><code>blkid || mkfs</code> never formatted the fresh PVC</strong> — <code>docker:dind</code>'s <code>blkid</code> is
-   busybox blkid, which exits 0 on a blank device, so the mkfs was skipped and the
-   ext4 mount failed <code>EINVAL</code> on every fresh ephemeral volume. The Q226 spike masked
-   this: its <em>static</em> PVC had been formatted once by hand, so the gate always found a
-   filesystem. Isolated by cloning the AGC-rendered pod and bisecting against a
-   working debug pod. The entrypoint (overlay + <code>deploy/kata-ci/runner-pod.yaml</code>) now
-   mounts first and reformats on failure.</li>
+<li><strong>The cluster had no Workload Identity pool</strong> — <code>--workload-metadata=GKE_METADATA</code> is rejected with a 400 without cluster-level <code>--workload-pool</code> (the Q226 spike ran on a spike cluster that had it).
+   Enabled live; the Part A create command in <a href="../../gke-dogfood/">gke-dogfood.md</a> now carries <code>--workload-pool</code> plus a retrofit note.</li>
+<li><strong><code>helm --set</code> typed the pool label as a boolean</strong> — <code>nodeSelector</code> values must be strings, so kata-deploy's server-side apply failed. <code>e2e-setup.sh</code> now uses <code>--set-string</code>.</li>
+<li><strong>kata-deploy ships no tolerations</strong> — it could never schedule onto the <code>dedicated=e2e:NoSchedule</code> pool. <code>e2e-setup.sh</code> now passes a matching <code>tolerations[0]</code> value.</li>
+<li><strong>Autoscale-from-zero never fired</strong>: the <code>kata</code> RuntimeClass schedules on <code>katacontainers.io/kata-runtime=true</code>, which kata-deploy applies post-install — but the cluster autoscaler simulates against the pool's <em>configured</em> labels only, so no Kata pod could ever trigger the 0→N scale-up. <code>e2e-setup.sh</code> now bakes the runtime label into the pool's <code>--node-labels</code> (the same pattern GKE uses for gVisor sandbox pools); the bind-before-install window resolves via kubelet sandbox-create retries.</li>
+<li><strong><code>blkid || mkfs</code> never formatted the fresh PVC</strong> — <code>docker:dind</code>'s <code>blkid</code> is busybox blkid, which exits 0 on a blank device, so the mkfs was skipped and the ext4 mount failed <code>EINVAL</code> on every fresh ephemeral volume.
+   The Q226 spike masked this: its <em>static</em> PVC had been formatted once by hand, so the gate always found a filesystem.
+   Isolated by cloning the AGC-rendered pod and bisecting against a working debug pod.
+   The entrypoint (overlay + <code>deploy/kata-ci/runner-pod.yaml</code>) now mounts first and reformats on failure.</li>
 </ol>
-<p>One consequence fix: while dind crash-looped, the <strong>runner container still took the
-job</strong> (a native sidecar only gates main-container start on having <em>started</em> once) and
-failed it with "Cannot connect to the Docker daemon". The dind sidecar now carries a
-<code>startupProbe</code> on :2375 so the runner cannot start — and cannot register — before
-dockerd is actually up.</p>
-<p>With the wiring fixed, the first full suite run surfaced two more Kata-specific
-defects in the worker shape itself:</p>
+<p>One consequence fix: while dind crash-looped, the <strong>runner container still took the job</strong> (a native sidecar only gates main-container start on having <em>started</em> once) and failed it with "Cannot connect to the Docker daemon".
+The dind sidecar now carries a <code>startupProbe</code> on :2375 so the runner cannot start — and cannot register — before dockerd is actually up.</p>
+<p>With the wiring fixed, the first full suite run surfaced two more Kata-specific defects in the worker shape itself:</p>
 <ol>
-<li><strong>The dind-derived resource split starved the guest</strong> (53/2, 25 min vs dind's
-   ~18): under Kata the limits are the guest's whole world — vCPUs from CPU limits,
-   guest RAM including page cache from memory limits — and the entire kind cluster
-   lives inside the dind container's slice, which had 3 of 8 vCPUs and 4Gi.
-   calico-node exec probes timed out (10s) and two specs missed their
-   enforcement/rollout deadlines. Rebalanced to an even 4/4 vCPU split with dind at
-   8Gi — the rerun went 54/1 at dind-parity runtime (~18.5 min).</li>
-<li><strong>A nested workload can only gain caps present in the sidecar's bounding set</strong> —
-   the suite's dev-mode test Vault requested <code>IPC_LOCK</code>, and nested runc failed with
-   "unable to apply caps: operation not permitted" (invisible under privileged dind,
-   which has every cap). Fixed the <em>right</em> way in
-   <a href="https://github.com/actions-gateway/github-actions-gateway/pull/658">#658</a>: drop
-   the Vault pod's <code>IPC_LOCK</code> request and set <code>SKIP_SETCAP=true</code> (a dev-mode Vault
-   holds everything in memory and never mlocks) rather than widen the sidecar's
-   bounding set — keeping the worker's capability floor as tight as possible
-   (secure-by-default). The rest of the e2e suite only drops capabilities, so this
-   was the sole nested-cap conflict.</li>
+<li><strong>The dind-derived resource split starved the guest</strong> (53/2, 25 min vs dind's ~18): under Kata the limits are the guest's whole world — vCPUs from CPU limits, guest RAM including page cache from memory limits — and the entire kind cluster lives inside the dind container's slice, which had 3 of 8 vCPUs and 4Gi. calico-node exec probes timed out (10s) and two specs missed their enforcement/rollout deadlines.
+   Rebalanced to an even 4/4 vCPU split with dind at 8Gi — the rerun went 54/1 at dind-parity runtime (~18.5 min).</li>
+<li><strong>A nested workload can only gain caps present in the sidecar's bounding set</strong> — the suite's dev-mode test Vault requested <code>IPC_LOCK</code>, and nested runc failed with "unable to apply caps: operation not permitted" (invisible under privileged dind, which has every cap).
+   Fixed the <em>right</em> way in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/658">#658</a>: drop the Vault pod's <code>IPC_LOCK</code> request and set <code>SKIP_SETCAP=true</code> (a dev-mode Vault holds everything in memory and never mlocks) rather than widen the sidecar's bounding set — keeping the worker's capability floor as tight as possible (secure-by-default).
+   The rest of the e2e suite only drops capabilities, so this was the sole nested-cap conflict.</li>
 </ol>
-<p>Two operational findings, not blocking: reaped never-started workers leave offline
-runner records at GitHub that 409-collide re-provisions of the same jobID (Q334), and
-the single e2-standard-2 system node no longer fits the on-demand e2e AGC alongside the
-CI AGC + GMC + Athens (Q335; the session ran with the system pool at 2 nodes).</p>
+<p>Two operational findings, not blocking: reaped never-started workers leave offline runner records at GitHub that 409-collide re-provisions of the same jobID (Q334), and the single e2-standard-2 system node no longer fits the on-demand e2e AGC alongside the CI AGC + GMC + Athens (Q335; the session ran with the system pool at 2 nodes).</p>
 <hr />
 <h2 id="two-variants-one-base--and-defaulting-to-kata">Two variants, one base — and defaulting to Kata<a class="headerlink" href="#two-variants-one-base--and-defaulting-to-kata" title="Permanent link">&para;</a></h2>
-<p>The dogfood e2e deployment and the reference architecture should each carry <strong>both</strong>
-isolation mechanisms — privileged DinD and Kata — as sibling variants over a shared base,
-not two forked stacks and not one stack with a runtime toggle. This is already the
-committed shape and it answers the "two variants vs. one configurable" question in one
-move: the variants <em>are</em> the configuration surface, selected by a single knob.</p>
+<p>The dogfood e2e deployment and the reference architecture should each carry <strong>both</strong> isolation mechanisms — privileged DinD and Kata — as sibling variants over a shared base, not two forked stacks and not one stack with a runtime toggle.
+This is already the committed shape and it answers the "two variants vs. one configurable" question in one move: the variants <em>are</em> the configuration surface, selected by a single knob.</p>
 <h3 id="structure--sibling-overlays-over-a-shared-base">Structure — sibling overlays over a shared base<a class="headerlink" href="#structure--sibling-overlays-over-a-shared-base" title="Permanent link">&para;</a></h3>
-<p>The dogfood manifests already use this layout
-(<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-e2e"><code>deploy/dogfood-e2e/</code></a>):</p>
+<p>The dogfood manifests already use this layout (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-e2e"><code>deploy/dogfood-e2e/</code></a>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>deploy/dogfood-e2e/
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  base/                 # RunnerSet, namespace, egress policy — mechanism-agnostic
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  overlays/dind/        # privileged DinD — explicit opt-in fallback
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  overlays/kata/        # Kata micro-VM — the e2e-start.sh default (AC#5 green)
 </code></pre></div>
-<p>The Kata overlay's delta vs. <code>dind/</code> is the worker-isolation mechanism <em>only</em>
-(<code>runtimeClassName: kata</code>, unprivileged sidecar with the six-step entrypoint, ephemeral
-block volume). The namespace gates are identical — see
-<a href="#the-design-correction-the-namespace-cannot-stay-psa-baseline">the design correction</a>
-for why Kata cannot keep the namespace at PSA <code>baseline</code>. Keeping the overlays side by
-side is deliberate: <code>diff -r overlays/dind overlays/kata</code> is exactly the
-security/complexity tradeoff, reviewable in one place.
-Kustomize has no clean conditional, so two thin overlays over one base is both DRY <em>and</em>
-"configurable" — do <strong>not</strong> collapse them into a single overlay with in-manifest toggles.</p>
-<p>The selection knob is the overlay name:
-<code>E2E_VARIANT=kata|dind</code> on <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-start.sh"><code>scripts/dogfood/e2e-start.sh</code></a>
-(default <code>dind</code> until the flip). The cluster-infra half that kustomize can't express
-(nested-virt node pool, Kata DaemonSet, RuntimeClass) is unconditional in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-setup.sh"><code>scripts/dogfood/e2e-setup.sh</code></a> — the dind variant
-simply ignores it.</p>
-<p>The reference architecture (<a href="../../../operations/kata-dind-workloads/"><code>docs/operations/kata-dind-workloads.md</code></a>)
-mirrors this: it already presents Kata (Tier 1 cloud, Tier 2 bare metal) as primary and
-privileged DinD (Tier 3) as the documented fallback. No restructure needed — the dogfood
-config should track that same ordering.</p>
+<p>The Kata overlay's delta vs. <code>dind/</code> is the worker-isolation mechanism <em>only</em> (<code>runtimeClassName: kata</code>, unprivileged sidecar with the six-step entrypoint, ephemeral block volume).
+The namespace gates are identical — see <a href="#the-design-correction-the-namespace-cannot-stay-psa-baseline">the design correction</a> for why Kata cannot keep the namespace at PSA <code>baseline</code>.
+Keeping the overlays side by side is deliberate: <code>diff -r overlays/dind overlays/kata</code> is exactly the security/complexity tradeoff, reviewable in one place.
+Kustomize has no clean conditional, so two thin overlays over one base is both DRY <em>and</em> "configurable" — do <strong>not</strong> collapse them into a single overlay with in-manifest toggles.</p>
+<p>The selection knob is the overlay name: <code>E2E_VARIANT=kata|dind</code> on <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-start.sh"><code>scripts/dogfood/e2e-start.sh</code></a> (default <code>dind</code> until the flip).
+The cluster-infra half that kustomize can't express (nested-virt node pool, Kata DaemonSet, RuntimeClass) is unconditional in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-setup.sh"><code>scripts/dogfood/e2e-setup.sh</code></a> — the dind variant simply ignores it.</p>
+<p>The reference architecture (<a href="../../../operations/kata-dind-workloads/"><code>docs/operations/kata-dind-workloads.md</code></a>) mirrors this: it already presents Kata (Tier 1 cloud, Tier 2 bare metal) as primary and privileged DinD (Tier 3) as the documented fallback.
+No restructure needed — the dogfood config should track that same ordering.</p>
 <h3 id="the-default-kata-once-it-reaches-parity">The default: Kata, once it reaches parity<a class="headerlink" href="#the-default-kata-once-it-reaches-parity" title="Permanent link">&para;</a></h3>
-<p>Per the project's secure-by-default rule, the more secure option is the default and a
-regression may only be an explicit opt-in. So once Kata clears validation, <strong>Kata becomes
-the dogfood default and privileged DinD becomes the opt-in fallback</strong> — not the reverse.</p>
-<p>This flip was <em>gated</em>, not immediate. The gate was one condition — <strong>AC#5, the GAG
-e2e suite green through the Kata runner</strong> (the
-<a href="#live-validation-checklist-the-remaining-q286-gate">live-validation checklist</a>
-above) — and it <strong>cleared on 2026-07-17</strong>, so the flip is done: <code>E2E_VARIANT</code>
-defaults to <code>kata</code> and DinD is the explicit opt-in.</p>
-<p>The reasons that keep DinD <em>available</em> as a variant after the flip — and keep it the
-recommended tier for some external users — are environmental, not a knock on Kata:</p>
+<p>Per the project's secure-by-default rule, the more secure option is the default and a regression may only be an explicit opt-in.
+So once Kata clears validation, <strong>Kata becomes the dogfood default and privileged DinD becomes the opt-in fallback</strong> — not the reverse.</p>
+<p>This flip was <em>gated</em>, not immediate.
+The gate was one condition — <strong>AC#5, the GAG e2e suite green through the Kata runner</strong> (the <a href="#live-validation-checklist-the-remaining-q286-gate">live-validation checklist</a> above) — and it <strong>cleared on 2026-07-17</strong>, so the flip is done: <code>E2E_VARIANT</code> defaults to <code>kata</code> and DinD is the explicit opt-in.</p>
+<p>The reasons that keep DinD <em>available</em> as a variant after the flip — and keep it the recommended tier for some external users — are environmental, not a knock on Kata:</p>
 <ul>
-<li><strong>Nested virt is required.</strong> Only <code>c2/c2d</code> (and <code>n2/n2d</code>) families on GKE, subject to
-  per-family capacity (<code>ZONE_RESOURCE_POOL_EXHAUSTED</code>) and the stockout-wedge failure mode;
-  GKE <strong>Autopilot cannot do it at all</strong>. Bare metal needs no nested virt but is not
-  everyone's substrate.</li>
+<li><strong>Nested virt is required.</strong> Only <code>c2/c2d</code> (and <code>n2/n2d</code>) families on GKE, subject to per-family capacity (<code>ZONE_RESOURCE_POOL_EXHAUSTED</code>) and the stockout-wedge failure mode; GKE <strong>Autopilot cannot do it at all</strong>.
+  Bare metal needs no nested virt but is not everyone's substrate.</li>
 <li><strong>Per-pod overhead</strong> (RuntimeClass <code>overhead</code> 160Mi / 250m) and a small boot cost.</li>
-<li><strong>Workload Identity is a hard prerequisite</strong> of the secure Kata path (the micro-VM does
-  not close the node-metadata credential path — see <a href="#1-oss-pwn-request-threat">Motivation</a>).</li>
+<li><strong>Workload Identity is a hard prerequisite</strong> of the secure Kata path (the micro-VM does not close the node-metadata credential path — see <a href="#1-oss-pwn-request-threat">Motivation</a>).</li>
 </ul>
-<p>For GAG's own dogfood, all three are satisfiable, so the default flips to Kata on AC#5
-green. For external users without nested-virt-capable nodes, the reference architecture
-keeps DinD (Tier 3, with its compensating controls) as the honest fallback — Kata
-recommended, DinD supported.</p>
-<p><strong>Follow-up work, in order:</strong> (1) ✅ build out <code>overlays/kata/</code>; (2) ✅ parameterise
-<code>e2e-start.sh</code> on the variant knob (<code>E2E_VARIANT</code>); (3) ✅ run the
-<a href="#live-validation-checklist-the-remaining-q286-gate">live-validation checklist</a> —
-pool recreated, seven defects fixed, <code>make e2e</code> green through the Kata runner (AC#5,
-2026-07-17); (4) ✅ default flipped to Kata, DinD demoted to explicit opt-in. Q286
-complete. The residual long-horizon item — the untrusted-PR posture (tight egress +
-in-cluster pull-through mirror) — is recorded in
-<a href="../../../design/appendix-g-future-enhancements/">appendix G</a>.</p>
+<p>For GAG's own dogfood, all three are satisfiable, so the default flips to Kata on AC#5 green.
+For external users without nested-virt-capable nodes, the reference architecture keeps DinD (Tier 3, with its compensating controls) as the honest fallback — Kata recommended, DinD supported.</p>
+<p><strong>Follow-up work, in order:</strong> (1) ✅ build out <code>overlays/kata/</code>; (2) ✅ parameterise <code>e2e-start.sh</code> on the variant knob (<code>E2E_VARIANT</code>); (3) ✅ run the <a href="#live-validation-checklist-the-remaining-q286-gate">live-validation checklist</a> — pool recreated, seven defects fixed, <code>make e2e</code> green through the Kata runner (AC#5, 2026-07-17); (4) ✅ default flipped to Kata, DinD demoted to explicit opt-in.
+Q286 complete.
+The residual long-horizon item — the untrusted-PR posture (tight egress + in-cluster pull-through mirror) — is recorded in <a href="../../../design/appendix-g-future-enhancements/">appendix G</a>.</p>
 
 
 

@@ -2804,45 +2804,25 @@
 
 <h1 id="gag-dogfood-ci-runner-right-sizing">GAG Dogfood CI Runner Right-Sizing<a class="headerlink" href="#gag-dogfood-ci-runner-right-sizing" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: ✅ COMPLETE (2026-07-07).</strong> Node-pool disk class RESOLVED (2026-07-05);
-general-worker pod <code>requests</code>/<code>limits</code> RIGHT-SIZED (2026-07-06); <strong>e2e-worker
-(DinD) pod <code>requests</code>/<code>limits</code> RIGHT-SIZED from a measured clean-green Calico run
-(2026-07-07)</strong>; the optional "small" tier <strong>measured and formally declined</strong> (the
-packing waste is not material). Tracked as <a href="../../STATUS/#Q248">Q248</a>.
-Every worker pod's original <code>requests</code>/<code>limits</code> were an unmeasured guess; they are
-now replaced with values derived from measured peak — general workers see
-<a href="#phase-2--derived-requestslimits-2026-07-06-general-workers">§ Phase 2 — general</a>,
-e2e workers see <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>,
-the small tier see <a href="#small-tier--measured-then-declined-2026-07-07">§ Small tier</a>.
-<strong>The dominant general-pool capacity ceiling turned out to be the node-pool <em>disk
-class</em>, not the pod requests</strong> — see <a href="#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05">§ Node-pool disk class</a> below (resolved 2026-07-05: <code>pd-balanced</code>→<code>pd-standard</code>, no quota bump).</p>
+<p><strong>Status: ✅ COMPLETE (2026-07-07).</strong> Node-pool disk class RESOLVED (2026-07-05); general-worker pod <code>requests</code>/<code>limits</code> RIGHT-SIZED (2026-07-06); <strong>e2e-worker (DinD) pod <code>requests</code>/<code>limits</code> RIGHT-SIZED from a measured clean-green Calico run (2026-07-07)</strong>; the optional "small" tier <strong>measured and formally declined</strong> (the packing waste is not material).
+Tracked as <a href="../../STATUS/#Q248">Q248</a>.
+Every worker pod's original <code>requests</code>/<code>limits</code> were an unmeasured guess; they are now replaced with values derived from measured peak — general workers see <a href="#phase-2--derived-requestslimits-2026-07-06-general-workers">§ Phase 2 — general</a>, e2e workers see <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>, the small tier see <a href="#small-tier--measured-then-declined-2026-07-07">§ Small tier</a>. <strong>The dominant general-pool capacity ceiling turned out to be the node-pool <em>disk class</em>, not the pod requests</strong> — see <a href="#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05">§ Node-pool disk class</a> below (resolved 2026-07-05: <code>pd-balanced</code>→<code>pd-standard</code>, no quota bump).</p>
 </blockquote>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Right-size the GAG dogfood worker pods (CPU/memory <code>requests</code> and <code>limits</code>) and
-the worker node pool from <strong>measured peak</strong> usage, so CI jobs run on GAG without
-OOM or CPU throttling at the fewest spot-node-hours.</p>
+<p>Right-size the GAG dogfood worker pods (CPU/memory <code>requests</code> and <code>limits</code>) and the worker node pool from <strong>measured peak</strong> usage, so CI jobs run on GAG without OOM or CPU throttling at the fewest spot-node-hours.</p>
 <h2 id="scope-note--this-is-costcorrectness-not-speed">Scope note — this is cost/correctness, not speed<a class="headerlink" href="#scope-note--this-is-costcorrectness-not-speed" title="Permanent link">&para;</a></h2>
-<p>Establish up front what this is <em>not</em>: it is <strong>not</strong> a play to make CI faster than
-GitHub-hosted. The 2026-06-30 baseline measurement (last ~25 runs each of
-unit/integration/e2e) showed:</p>
+<p>Establish up front what this is <em>not</em>: it is <strong>not</strong> a play to make CI faster than GitHub-hosted.
+The 2026-06-30 baseline measurement (last ~25 runs each of unit/integration/e2e) showed:</p>
 <ul>
-<li><strong>GitHub-hosted has no queue to eliminate</strong> — median job pickup was <strong>2s</strong>
-  (p90 3s; 0% of 150 jobs queued over 2 min). The repo's fan-out sits far under
-  GitHub's concurrency cap, so GAG's main potential advantage (absorbing a queue)
-  does not apply here.</li>
-<li><strong>The global long pole is <code>e2e</code> (~9 min)</strong>, which is <code>kind</code>-cluster-spin-up
-  bound (not CPU-bound), runs on its own nested-virt pool, and is kept on
-  GitHub-hosted. So routing unit/integration jobs to GAG cannot reduce total PR
-  wall-clock — the binding constraint isn't on GAG and isn't node-size-sensitive.</li>
+<li><strong>GitHub-hosted has no queue to eliminate</strong> — median job pickup was <strong>2s</strong> (p90 3s; 0% of 150 jobs queued over 2 min).
+  The repo's fan-out sits far under GitHub's concurrency cap, so GAG's main potential advantage (absorbing a queue) does not apply here.</li>
+<li><strong>The global long pole is <code>e2e</code> (~9 min)</strong>, which is <code>kind</code>-cluster-spin-up bound (not CPU-bound), runs on its own nested-virt pool, and is kept on GitHub-hosted.
+  So routing unit/integration jobs to GAG cannot reduce total PR wall-clock — the binding constraint isn't on GAG and isn't node-size-sensitive.</li>
 </ul>
-<p>Right-sizing therefore serves the <strong>isolation + dogfooding</strong> use case: running
-those jobs <em>correctly and cheaply</em> on GAG when GAG is used to dogfood itself, not
-to beat GitHub on throughput.</p>
+<p>Right-sizing therefore serves the <strong>isolation + dogfooding</strong> use case: running those jobs <em>correctly and cheaply</em> on GAG when GAG is used to dogfood itself, not to beat GitHub on throughput.</p>
 <h2 id="design-decision--do-we-need-multiple-runner-types">Design decision — do we need multiple runner types?<a class="headerlink" href="#design-decision--do-we-need-multiple-runner-types" title="Permanent link">&para;</a></h2>
-<p>Separate two ideas that get conflated: <strong>node pools</strong> (VMs) and <strong>runner pod
-tiers</strong> (per-job resource requests). Kubernetes <code>requests</code> + bin-packing already
-let different-sized pods share one node size, so size variance alone is <em>not</em> a
-reason to multiply node pools.</p>
+<p>Separate two ideas that get conflated: <strong>node pools</strong> (VMs) and <strong>runner pod tiers</strong> (per-job resource requests).
+Kubernetes <code>requests</code> + bin-packing already let different-sized pods share one node size, so size variance alone is <em>not</em> a reason to multiply node pools.</p>
 <table>
 <thead>
 <tr>
@@ -2865,12 +2845,9 @@ reason to multiply node pools.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Conclusion: two runner types to start — general + e2e — split by the
-nested-virt requirement, not by size.</strong> Add a "small" tier only if the
-measurement earns it. Resist per-workflow runner proliferation: every extra
-runner label couples the workflow files to the runner taxonomy and is a
-maintenance tax. Let <code>requests</code> and the autoscaler absorb size variance on a
-single general pool.</p>
+<p><strong>Conclusion: two runner types to start — general + e2e — split by the nested-virt requirement, not by size.</strong> Add a "small" tier only if the measurement earns it.
+Resist per-workflow runner proliferation: every extra runner label couples the workflow files to the runner taxonomy and is a maintenance tax.
+Let <code>requests</code> and the autoscaler absorb size variance on a single general pool.</p>
 <h2 id="baseline-job-profile-github-hosted-2026-06-30">Baseline job profile (GitHub-hosted, 2026-06-30)<a class="headerlink" href="#baseline-job-profile-github-hosted-2026-06-30" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2923,118 +2900,67 @@ single general pool.</p>
 </tr>
 </tbody>
 </table>
-<p>These are <em>durations</em>, not resource usage. Phase 1 measures the actual peak CPU
-and memory each consumes, which is what <code>requests</code>/<code>limits</code> must be set from.</p>
+<p>These are <em>durations</em>, not resource usage.
+Phase 1 measures the actual peak CPU and memory each consumes, which is what <code>requests</code>/<code>limits</code> must be set from.</p>
 <h2 id="resource-model-principles">Resource-model principles<a class="headerlink" href="#resource-model-principles" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>requests</code> drive scheduling/packing; <code>limits</code> drive throttling (CPU) and
-  OOM-kill (memory).</strong></li>
-<li><strong>Memory is non-compressible</strong> → set <code>limit ≥ measured peak × ~1.3</code>; exceeding
-  the memory limit kills the job. Start the headroom factor at 1.3 and widen if
-  any run OOMs.</li>
-<li><strong>CPU is compressible</strong> → a CPU <code>limit</code> <em>throttles</em> bursty jobs (slows them for
-  no packing benefit). Prefer <strong>CPU <code>requests</code> only, no CPU limit</strong> for CI workers:
-  requests still drive packing, while jobs burst to fill otherwise-idle node
-  capacity. Keep memory limits for OOM / noisy-neighbor safety. (The current
-  template sets a 4-vCPU CPU limit — likely worth removing.)</li>
-<li><strong>Measure peak, not average</strong> — <code>-race</code> and envtest spike well above their
-  steady state.</li>
+<li><strong><code>requests</code> drive scheduling/packing; <code>limits</code> drive throttling (CPU) and OOM-kill (memory).</strong></li>
+<li><strong>Memory is non-compressible</strong> → set <code>limit ≥ measured peak × ~1.3</code>; exceeding the memory limit kills the job.
+  Start the headroom factor at 1.3 and widen if any run OOMs.</li>
+<li><strong>CPU is compressible</strong> → a CPU <code>limit</code> <em>throttles</em> bursty jobs (slows them for no packing benefit).
+  Prefer <strong>CPU <code>requests</code> only, no CPU limit</strong> for CI workers: requests still drive packing, while jobs burst to fill otherwise-idle node capacity.
+  Keep memory limits for OOM / noisy-neighbor safety.
+  (The current template sets a 4-vCPU CPU limit — likely worth removing.)</li>
+<li><strong>Measure peak, not average</strong> — <code>-race</code> and envtest spike well above their steady state.</li>
 </ul>
 <h2 id="plan">Plan<a class="headerlink" href="#plan" title="Permanent link">&para;</a></h2>
-<p><strong>Phase 1 — Measure (needs the live cluster).</strong> Dispatch each job class to GAG
-and sample the runner container's usage during the run:</p>
+<p><strong>Phase 1 — Measure (needs the live cluster).</strong> Dispatch each job class to GAG and sample the runner container's usage during the run:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># while a job pod is Running, poll every ~3s and keep the peak</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>gag-dogfood<span class="w"> </span>--containers<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--no-headers
 </code></pre></div>
-<p>Record peak CPU + peak memory + duration per job. Watch <code>kubectl get events
--n gag-dogfood</code> for <code>OOMKilled</code>, and watch for CPU usage pinned at the limit
-(throttling). Sample the <strong>runner</strong> container, not the injected wrapper sidecar.
+<p>Record peak CPU + peak memory + duration per job.
+Watch <code>kubectl get events -n gag-dogfood</code> for <code>OOMKilled</code>, and watch for CPU usage pinned at the limit (throttling).
+Sample the <strong>runner</strong> container, not the injected wrapper sidecar.
 Output: a measurement table appended to this plan.</p>
-<p><strong>Phase 2 — Derive <code>requests</code>/<code>limits</code></strong> per the principles above (memory limit =
-peak × 1.3, CPU requests = ~p90, no CPU limit). Decide tiering from the observed
-spread: a "small" tier is justified only if trivial jobs land at, say, ≤1 vCPU /
-≤1 GiB while heavy jobs need ~4 vCPU / 8–10 GiB.</p>
-<p><strong>Phase 3 — Size the general worker node</strong> as a clean multiple of the dominant
-(heavy) pod so stranded capacity is minimal — e.g. a <code>*-standard-8</code> spot node
-holds 2× a 4-vCPU pod. <code>c3</code>/<code>n2</code> for faster cores on the CPU-bound jobs, <code>e2</code> for
-the cost floor. Keep <code>e2e</code> on its <code>n2-standard-4</code> nested-virt pool, sized for
-<code>kind</code>-in-DinD memory (measured separately).</p>
-<p><strong>Phase 4 — Validate.</strong> Run the full suite on GAG; confirm zero OOM and no
-throttle-induced slowdown; compare job durations and total spot-node-hours to the
-baseline; adjust.</p>
-<p><strong>Phase 5 — Persist.</strong> Bake the final <code>requests</code>/<code>limits</code> into the
-<code>RunnerTemplate</code>(s) and the node sizes into
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> + the
-<a href="../gke-dogfood/">runbook</a>; record the measurement table here, then archive this
-plan.</p>
+<p><strong>Phase 2 — Derive <code>requests</code>/<code>limits</code></strong> per the principles above (memory limit = peak × 1.3, CPU requests = ~p90, no CPU limit).
+Decide tiering from the observed spread: a "small" tier is justified only if trivial jobs land at, say, ≤1 vCPU / ≤1 GiB while heavy jobs need ~4 vCPU / 8–10 GiB.</p>
+<p><strong>Phase 3 — Size the general worker node</strong> as a clean multiple of the dominant (heavy) pod so stranded capacity is minimal — e.g. a <code>*-standard-8</code> spot node holds 2× a 4-vCPU pod. <code>c3</code>/<code>n2</code> for faster cores on the CPU-bound jobs, <code>e2</code> for the cost floor.
+Keep <code>e2e</code> on its <code>n2-standard-4</code> nested-virt pool, sized for <code>kind</code>-in-DinD memory (measured separately).</p>
+<p><strong>Phase 4 — Validate.</strong> Run the full suite on GAG; confirm zero OOM and no throttle-induced slowdown; compare job durations and total spot-node-hours to the baseline; adjust.</p>
+<p><strong>Phase 5 — Persist.</strong> Bake the final <code>requests</code>/<code>limits</code> into the <code>RunnerTemplate</code>(s) and the node sizes into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> + the <a href="../gke-dogfood/">runbook</a>; record the measurement table here, then archive this plan.</p>
 <h2 id="e2e-track--validate-then-size-kata-deferred">e2e track — validate, then size (Kata deferred)<a class="headerlink" href="#e2e-track--validate-then-size-kata-deferred" title="Permanent link">&para;</a></h2>
-<p>e2e is the heaviest, most mis-sizing-sensitive job (<code>kind</code>-in-DinD OOMs mid
-cluster-bringup if under-sized) and the priciest pool, so it gets its own track.
+<p>e2e is the heaviest, most mis-sizing-sensitive job (<code>kind</code>-in-DinD OOMs mid cluster-bringup if under-sized) and the priciest pool, so it gets its own track.
 The chosen sequence is <strong>functional validation first, security hardening later</strong>:</p>
 <ol>
-<li><strong>✅ Validate e2e works on GAG via privileged DinD — no Kata.</strong> Privileged DinD
-   needs no nested virtualization (dockerd uses the host kernel directly), so it
-   runs on a normal spot pool with no N2 / no Kata DaemonSet. The empirical risk
-   is <code>kind</code>-in-DinD on GKE COS <strong>cgroup v2</strong> — validate by running it, not by
-   inspection. This is a <strong>deliberate, platform-gated, dogfood-only</strong> use of the
-   <code>privileged</code> profile (v2 gates it by the platform-set namespace label
-   <code>actions-gateway.com/security-profile=privileged</code> + PSA <code>enforce=privileged</code>;
-   tenants cannot self-elevate). It is <strong>never</strong> a shipped default. <em>Confirmed
-   working — a full Calico e2e ran clean-green on GAG (2026-07-07), pod
-   <code>Completed</code>, no OOM.</em></li>
-<li><strong>✅ Right-size</strong> the DinD/<code>kind</code> pod from measured peak usage — done 2026-07-07,
-   see <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>.
-   (The e2e <em>node</em> was found memory-over-provisioned but kept for <code>kind</code>-OOM headroom;
-   see the node-allocatable check there.)</li>
-<li><strong>Re-introduce Kata</strong> (<code>baseline</code> profile, KVM micro-VM) for isolation once the
-   functional path and sizing are settled — the secure end-state. Tracked as the
-   follow-up; the privileged path is the validation scaffold, not the destination.</li>
+<li><strong>✅ Validate e2e works on GAG via privileged DinD — no Kata.</strong> Privileged DinD needs no nested virtualization (dockerd uses the host kernel directly), so it runs on a normal spot pool with no N2 / no Kata DaemonSet.
+   The empirical risk is <code>kind</code>-in-DinD on GKE COS <strong>cgroup v2</strong> — validate by running it, not by inspection.
+   This is a <strong>deliberate, platform-gated, dogfood-only</strong> use of the <code>privileged</code> profile (v2 gates it by the platform-set namespace label <code>actions-gateway.com/security-profile=privileged</code> + PSA <code>enforce=privileged</code>; tenants cannot self-elevate).
+   It is <strong>never</strong> a shipped default. <em>Confirmed working — a full Calico e2e ran clean-green on GAG (2026-07-07), pod <code>Completed</code>, no OOM.</em></li>
+<li><strong>✅ Right-size</strong> the DinD/<code>kind</code> pod from measured peak usage — done 2026-07-07, see <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>.
+   (The e2e <em>node</em> was found memory-over-provisioned but kept for <code>kind</code>-OOM headroom; see the node-allocatable check there.)</li>
+<li><strong>Re-introduce Kata</strong> (<code>baseline</code> profile, KVM micro-VM) for isolation once the functional path and sizing are settled — the secure end-state.
+   Tracked as the follow-up; the privileged path is the validation scaffold, not the destination.</li>
 </ol>
-<p>Setup for step 1 (no nested virt): a dedicated <code>e2-standard-8</code> spot e2e pool
-(taint <code>dedicated=e2e</code>, autoscale 0→2); a <code>gag-dogfood-e2e</code> namespace labelled
-<code>security-profile=privileged</code>; a v2 <code>ActionsGateway</code> + a cluster-scoped
-<code>ClusterRunnerTemplate</code> (runner + a <code>privileged: true</code> <code>docker:dind</code> sidecar,
-<code>DOCKER_HOST=tcp://localhost:2375</code>) + <code>RunnerSet</code> (<code>gag-ci-e2e</code>); and
-<code>e2e-reusable.yml</code> wired to <code>GAG_E2E_RUNNER</code>.</p>
+<p>Setup for step 1 (no nested virt): a dedicated <code>e2-standard-8</code> spot e2e pool (taint <code>dedicated=e2e</code>, autoscale 0→2); a <code>gag-dogfood-e2e</code> namespace labelled <code>security-profile=privileged</code>; a v2 <code>ActionsGateway</code> + a cluster-scoped <code>ClusterRunnerTemplate</code> (runner + a <code>privileged: true</code> <code>docker:dind</code> sidecar, <code>DOCKER_HOST=tcp://localhost:2375</code>) + <code>RunnerSet</code> (<code>gag-ci-e2e</code>); and <code>e2e-reusable.yml</code> wired to <code>GAG_E2E_RUNNER</code>.</p>
 <h3 id="validation-findings-2026-06-30">Validation findings (2026-06-30)<a class="headerlink" href="#validation-findings-2026-06-30" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Privileged DinD works on GKE COS cgroup v2.</strong> The DinD daemon came up clean
-  (<code>storage-driver=overlay2</code>, daemon initialized, listening on <code>:2375</code>) — the main
-  unknown is cleared. GAG <em>can</em> host DinD e2e without Kata.</li>
-<li><strong>v2 routes privileged through a platform-owned <code>ClusterRunnerTemplate</code>, gated
-  four ways.</strong> A namespaced (tenant) <code>RunnerTemplate</code> rejects privileged
-  containers; the shape must be a cluster-scoped <code>ClusterRunnerTemplate</code>. The
-  namespace needs <code>tenant=managed</code>, <code>security-profile=privileged</code>, the
-  <code>allow-profile-downgrade=allowed</code> annotation, <strong>and</strong> the platform
-  <code>privileged-profile=allowed</code> label — none tenant-settable (secure-by-default
-  working as intended).</li>
-<li><strong>e2e needs broad non-GitHub egress.</strong> The job pulls from <code>get.helm.sh</code>
-  (<code>setup-helm</code>), Docker Hub (curl/vault/buildkit), <code>quay.io</code> (Calico), and
-  <code>registry.k8s.io</code> (metrics-server) — all blocked by GAG's default-deny +
-  GitHub-only workload <code>NetworkPolicy</code>, and <strong>v2 has no managed-NP opt-out</strong>.</li>
+<li><strong>Privileged DinD works on GKE COS cgroup v2.</strong> The DinD daemon came up clean (<code>storage-driver=overlay2</code>, daemon initialized, listening on <code>:2375</code>) — the main unknown is cleared.
+  GAG <em>can</em> host DinD e2e without Kata.</li>
+<li><strong>v2 routes privileged through a platform-owned <code>ClusterRunnerTemplate</code>, gated four ways.</strong> A namespaced (tenant) <code>RunnerTemplate</code> rejects privileged containers; the shape must be a cluster-scoped <code>ClusterRunnerTemplate</code>.
+  The namespace needs <code>tenant=managed</code>, <code>security-profile=privileged</code>, the <code>allow-profile-downgrade=allowed</code> annotation, <strong>and</strong> the platform <code>privileged-profile=allowed</code> label — none tenant-settable (secure-by-default working as intended).</li>
+<li><strong>e2e needs broad non-GitHub egress.</strong> The job pulls from <code>get.helm.sh</code> (<code>setup-helm</code>), Docker Hub (curl/vault/buildkit), <code>quay.io</code> (Calico), and <code>registry.k8s.io</code> (metrics-server) — all blocked by GAG's default-deny + GitHub-only workload <code>NetworkPolicy</code>, and <strong>v2 has no managed-NP opt-out</strong>.</li>
 </ul>
 <h3 id="egress-interim-workaround--deferred-hardening">Egress: interim workaround + deferred hardening<a class="headerlink" href="#egress-interim-workaround--deferred-hardening" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Interim (accepted):</strong> an <strong>additive allow-all-egress <code>NetworkPolicy</code></strong> on the
-  <code>gag-dogfood-e2e</code> workload pods (unions with GAG's managed default-deny to open
-  egress). This is a <strong>deliberate, documented property of the DinD variant</strong>
-  (trusted CI only) — <strong>never</strong> for untrusted PRs (that's the Kata variant's job).</li>
-<li><strong>Collecting the allowlist:</strong> the e2e job's external destinations are gathered
-  (from the job + <code>dockerd</code> logs; the deps are also pinned in <code>e2e-reusable.yml</code>)
-  to seed a future precise allowlist.</li>
-<li><strong>Durable hardening (deferred, backlog):</strong> the destinations are CDN-fronted
-  (Docker Hub→Cloudflare, helm→Azure, quay→Fastly), so an IP allowlist rots and a
-  precise <strong>FQDN</strong> allowlist isn't <em>enforced</em> on the dogfood cluster today — its
-  managed Cilium has no <code>CiliumNetworkPolicy</code>, and while GKE's alpha
-  <code>FQDNNetworkPolicy</code> is now emitted by GAG's <code>gke</code> backend, dogfood doesn't
-  enable the opt-in <code>--enable-fqdn-network-policy</code> it needs (<a href="../q245-fqdn-intent-backend-split/">Q245</a>). The durable answer is
-  an <strong>in-cluster pull-through mirror</strong> (collapses e2e egress to one in-cluster
-  destination — air-gappable, no CDN rot), pairing with the Kata variant for
-  untrusted jobs.</li>
+<li><strong>Interim (accepted):</strong> an <strong>additive allow-all-egress <code>NetworkPolicy</code></strong> on the <code>gag-dogfood-e2e</code> workload pods (unions with GAG's managed default-deny to open egress).
+  This is a <strong>deliberate, documented property of the DinD variant</strong> (trusted CI only) — <strong>never</strong> for untrusted PRs (that's the Kata variant's job).</li>
+<li><strong>Collecting the allowlist:</strong> the e2e job's external destinations are gathered (from the job + <code>dockerd</code> logs; the deps are also pinned in <code>e2e-reusable.yml</code>) to seed a future precise allowlist.</li>
+<li><strong>Durable hardening (deferred, backlog):</strong> the destinations are CDN-fronted (Docker Hub→Cloudflare, helm→Azure, quay→Fastly), so an IP allowlist rots and a precise <strong>FQDN</strong> allowlist isn't <em>enforced</em> on the dogfood cluster today — its managed Cilium has no <code>CiliumNetworkPolicy</code>, and while GKE's alpha <code>FQDNNetworkPolicy</code> is now emitted by GAG's <code>gke</code> backend, dogfood doesn't enable the opt-in <code>--enable-fqdn-network-policy</code> it needs (<a href="../q245-fqdn-intent-backend-split/">Q245</a>).
+  The durable answer is an <strong>in-cluster pull-through mirror</strong> (collapses e2e egress to one in-cluster destination — air-gappable, no CDN rot), pairing with the Kata variant for untrusted jobs.</li>
 </ul>
 <h2 id="phase-1-results--general-workers-2026-06-30-first-pass">Phase 1 results — general workers (2026-06-30, first pass)<a class="headerlink" href="#phase-1-results--general-workers-2026-06-30-first-pass" title="Permanent link">&para;</a></h2>
-<p>Re-dispatched <code>unit-test</code> + organic PR traffic on GAG; <code>kubectl top</code> sampled every
-5s, peak tracked per pod. Two heavy-job pods captured (lifetime ~145–165s):</p>
+<p>Re-dispatched <code>unit-test</code> + organic PR traffic on GAG; <code>kubectl top</code> sampled every 5s, peak tracked per pod.
+Two heavy-job pods captured (lifetime ~145–165s):</p>
 <table>
 <thead>
 <tr>
@@ -3061,53 +2987,29 @@ The chosen sequence is <strong>functional validation first, security hardening l
 </table>
 <p>Envelope: <strong>max 3802m CPU, 2134Mi memory</strong> across all runner pods.</p>
 <p>Findings:
-- <strong>CPU-bound and throttled.</strong> Peak ~3.8 vCPU sits right against the 4-vCPU
-  <em>limit</em> → the heavy jobs hit the limit and throttle. Confirms they want ≥4
-  cores; switching to <strong>requests-only (no CPU limit)</strong> should let them burst and
-  finish faster.
-- <strong>Memory is ~4× over-provisioned.</strong> Peak ~2.1 GiB against an 8 GiB limit. Drop
-  the memory limit to ~3 GiB (peak × ~1.4) and request ~2 GiB → much better
-  bin-packing.</p>
-<p>Caveats (first pass): only 2 pods captured; <code>lint</code> (the longest job) and the full
-<code>-race</code> memory peak may not be among them, and <code>-race</code> can spike memory higher —
-confirm with a targeted run before finalizing. Attribution is by lifetime only.</p>
+- <strong>CPU-bound and throttled.</strong> Peak ~3.8 vCPU sits right against the 4-vCPU <em>limit</em> → the heavy jobs hit the limit and throttle.
+  Confirms they want ≥4 cores; switching to <strong>requests-only (no CPU limit)</strong> should let them burst and finish faster.
+- <strong>Memory is ~4× over-provisioned.</strong> Peak ~2.1 GiB against an 8 GiB limit.
+  Drop the memory limit to ~3 GiB (peak × ~1.4) and request ~2 GiB → much better bin-packing.</p>
+<p>Caveats (first pass): only 2 pods captured; <code>lint</code> (the longest job) and the full <code>-race</code> memory peak may not be among them, and <code>-race</code> can spike memory higher — confirm with a targeted run before finalizing.
+Attribution is by lifetime only.</p>
 <h2 id="node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05">Node-pool disk class: the real <code>maxWorkers</code> ceiling (Q248, 2026-07-05)<a class="headerlink" href="#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05" title="Permanent link">&para;</a></h2>
-<p>Phase 1 assumed the worker <strong>pod</strong> requests were the binding constraint. Live
-capacity work (re-routes #4–#6) surfaced a bigger, unrelated ceiling: the worker
-<strong>node</strong> boot <strong>disk class</strong>.</p>
-<p><strong>Root cause.</strong> Each worker node (<code>workers</code>/<code>workers-od</code>, <code>e2-standard-4</code>) had a
-100 GB <strong><code>pd-balanced</code></strong> boot disk. <code>pd-balanced</code> is SSD-class and counts against
-the regional <strong><code>SSD_TOTAL_GB</code> = 500 GB</strong> quota. With the system pool (2×50 GB) and
-base usage also on SSD, ~4 worker nodes exhausted the 500 GB → <code>maxWorkers ≈ 4</code>.
-This read as a quota shortage but is <strong>self-inflicted</strong>: the CI workload is tiny
-(peak ~3.8 GiB mem, 34 % node CPU), so SSD-class disks for worker nodes buy
-nothing.</p>
-<p><strong>Fix (no quota bump).</strong> Recreate the worker pool with <strong><code>--disk-type=pd-standard</code></strong>
-(HDD). <code>pd-standard</code> counts against <strong><code>DISKS_TOTAL_GB</code> = 4096 GB</strong>, <em>not</em> the SSD
-quota, so worker capacity becomes <strong>CPU/mem-bound</strong> (<code>CPUS</code> = 200 quota), not
-SSD-bound. Disk size stays 100 GB for container-image pull scratch (pd-standard is
-a <em>quota class</em> change, not a size cut, so no scratch-space risk). The CI job
-classes (Go build/test/lint/envtest) are CPU/mem-bound, not scratch-IOPS-bound, so
-HDD is appropriate; a job class that genuinely needed SSD scratch IOPS would keep
-<code>pd-balanced</code> and pay the SSD quota.</p>
-<p><strong>Live proof (2026-07-05).</strong> Recreated <code>workers-od</code> as <code>pd-standard</code> ×4
-(<code>e2-standard-4</code>). With 4 worker nodes + 2 system nodes up: <code>DISKS_TOTAL_GB</code> usage
-= <strong>400</strong> (= the 4×100 GB worker disks, now HDD), <code>SSD_TOTAL_GB</code> = 220/500 (system
-only — workers no longer counted), <code>CPUS</code> = 24/200. Under the old <code>pd-balanced</code>
-config those same 4 workers would have pushed SSD to ~620 &gt; 500 → blocked. The
-SSD ceiling is gone; <code>maxWorkers</code> is now limited by CPU/mem (≈ 48 <code>e2-standard-4</code>
-nodes' worth of headroom), not disk quota.</p>
-<p><strong>Persisted.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a>
-<code>create_worker_pool</code> and the mirrored recipe in <a href="../gke-dogfood/"><code>gke-dogfood.md</code></a>
-now provision the <code>workers</code> pool with <code>--disk-type=pd-standard</code> and <code>max-nodes=8</code>.
-<code>RunnerSet.maxWorkers</code> raised 4→8 (still far under the CPU-bound ceiling; the
-dogfood matrix is ~7 concurrent jobs). Remaining Q248 work: the pod
-<code>requests</code>/<code>limits</code> refinement (drop the CPU limit, memory limit → peak×1.3) is
-still open — orthogonal to the disk-class fix.</p>
+<p>Phase 1 assumed the worker <strong>pod</strong> requests were the binding constraint.
+Live capacity work (re-routes #4–#6) surfaced a bigger, unrelated ceiling: the worker <strong>node</strong> boot <strong>disk class</strong>.</p>
+<p><strong>Root cause.</strong> Each worker node (<code>workers</code>/<code>workers-od</code>, <code>e2-standard-4</code>) had a 100 GB <strong><code>pd-balanced</code></strong> boot disk. <code>pd-balanced</code> is SSD-class and counts against the regional <strong><code>SSD_TOTAL_GB</code> = 500 GB</strong> quota.
+With the system pool (2×50 GB) and base usage also on SSD, ~4 worker nodes exhausted the 500 GB → <code>maxWorkers ≈ 4</code>.
+This read as a quota shortage but is <strong>self-inflicted</strong>: the CI workload is tiny (peak ~3.8 GiB mem, 34 % node CPU), so SSD-class disks for worker nodes buy nothing.</p>
+<p><strong>Fix (no quota bump).</strong> Recreate the worker pool with <strong><code>--disk-type=pd-standard</code></strong> (HDD). <code>pd-standard</code> counts against <strong><code>DISKS_TOTAL_GB</code> = 4096 GB</strong>, <em>not</em> the SSD quota, so worker capacity becomes <strong>CPU/mem-bound</strong> (<code>CPUS</code> = 200 quota), not SSD-bound.
+Disk size stays 100 GB for container-image pull scratch (pd-standard is a <em>quota class</em> change, not a size cut, so no scratch-space risk).
+The CI job classes (Go build/test/lint/envtest) are CPU/mem-bound, not scratch-IOPS-bound, so HDD is appropriate; a job class that genuinely needed SSD scratch IOPS would keep <code>pd-balanced</code> and pay the SSD quota.</p>
+<p><strong>Live proof (2026-07-05).</strong> Recreated <code>workers-od</code> as <code>pd-standard</code> ×4 (<code>e2-standard-4</code>).
+With 4 worker nodes + 2 system nodes up: <code>DISKS_TOTAL_GB</code> usage = <strong>400</strong> (= the 4×100 GB worker disks, now HDD), <code>SSD_TOTAL_GB</code> = 220/500 (system only — workers no longer counted), <code>CPUS</code> = 24/200.
+Under the old <code>pd-balanced</code> config those same 4 workers would have pushed SSD to ~620 &gt; 500 → blocked.
+The SSD ceiling is gone; <code>maxWorkers</code> is now limited by CPU/mem (≈ 48 <code>e2-standard-4</code> nodes' worth of headroom), not disk quota.</p>
+<p><strong>Persisted.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> <code>create_worker_pool</code> and the mirrored recipe in <a href="../gke-dogfood/"><code>gke-dogfood.md</code></a> now provision the <code>workers</code> pool with <code>--disk-type=pd-standard</code> and <code>max-nodes=8</code>. <code>RunnerSet.maxWorkers</code> raised 4→8 (still far under the CPU-bound ceiling; the dogfood matrix is ~7 concurrent jobs).
+Remaining Q248 work: the pod <code>requests</code>/<code>limits</code> refinement (drop the CPU limit, memory limit → peak×1.3) is still open — orthogonal to the disk-class fix.</p>
 <h2 id="phase-2--derived-requestslimits-2026-07-06-general-workers">Phase 2 — derived <code>requests</code>/<code>limits</code> (2026-07-06, general workers)<a class="headerlink" href="#phase-2--derived-requestslimits-2026-07-06-general-workers" title="Permanent link">&para;</a></h2>
-<p>Applying the <a href="#resource-model-principles">resource-model principles</a> to the
-<a href="#phase-1-results--general-workers-2026-06-30-first-pass">Phase 1 envelope</a>
-(peak <strong>3802m CPU, 2134Mi memory</strong> across all runner pods):</p>
+<p>Applying the <a href="#resource-model-principles">resource-model principles</a> to the <a href="#phase-1-results--general-workers-2026-06-30-first-pass">Phase 1 envelope</a> (peak <strong>3802m CPU, 2134Mi memory</strong> across all runner pods):</p>
 <table>
 <thead>
 <tr>
@@ -3144,62 +3046,30 @@ still open — orthogonal to the disk-class fix.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Why keep CPU <code>request</code> at <code>2</code> rather than lower it.</strong> A burst-tuning experiment
-(gke-dogfood.md re-route) tried <code>request=1</code> to pack ~3 pods per node; it packed
-cleanly, but the serialization it was chasing turned out to be an AGC
-agent-pool-recycling bug (Q259, since resolved), <strong>not</strong> node capacity. At <code>request=1</code> with no CPU limit, three co-scheduled heavy jobs (each
-peaking ~3.8 vCPU) would contend for one node's ~3.4 allocatable vCPU → ~1.1 vCPU
-each → ~3× throttle-induced slowdown, exactly what Phase 4 says to avoid. The
-measured peak says a heavy job wants ~a whole <code>e2-standard-4</code>; <code>request=2</code> reflects
-that (one heavy pod per node) while staying schedulable. Trivial jobs
-(<code>shellcheck</code>/<code>tidy</code>/<code>vendor</code>, 10–20s, near-zero CPU) over-request under this single
-tier — see the deferred "small" tier in <a href="#open-questions">Open questions</a>; the
-packing waste (a few short-lived spot-node-slots) is not yet material enough to
-justify a second runner label.</p>
+<p><strong>Why keep CPU <code>request</code> at <code>2</code> rather than lower it.</strong> A burst-tuning experiment (gke-dogfood.md re-route) tried <code>request=1</code> to pack ~3 pods per node; it packed cleanly, but the serialization it was chasing turned out to be an AGC agent-pool-recycling bug (Q259, since resolved), <strong>not</strong> node capacity.
+At <code>request=1</code> with no CPU limit, three co-scheduled heavy jobs (each peaking ~3.8 vCPU) would contend for one node's ~3.4 allocatable vCPU → ~1.1 vCPU each → ~3× throttle-induced slowdown, exactly what Phase 4 says to avoid.
+The measured peak says a heavy job wants ~a whole <code>e2-standard-4</code>; <code>request=2</code> reflects that (one heavy pod per node) while staying schedulable.
+Trivial jobs (<code>shellcheck</code>/<code>tidy</code>/<code>vendor</code>, 10–20s, near-zero CPU) over-request under this single tier — see the deferred "small" tier in <a href="#open-questions">Open questions</a>; the packing waste (a few short-lived spot-node-slots) is not yet material enough to justify a second runner label.</p>
 <h3 id="node-allocatable-validation-maxworkers-vs-the-worker-pool">Node-allocatable validation (<code>maxWorkers</code> vs the worker pool)<a class="headerlink" href="#node-allocatable-validation-maxworkers-vs-the-worker-pool" title="Permanent link">&para;</a></h3>
-<p>Worker node = <code>e2-standard-4</code> (4 vCPU / 16 GiB), <code>--disk-type=pd-standard</code>,
-autoscale 0→8. GKE's <a href="https://cloud.google.com/kubernetes-engine/docs/concepts/plan-node-sizes#memory_cpu_reservations">reserved-resource formula</a>
-gives node allocatable ≈ <strong>3920m CPU</strong> (reserve 6%/1%/0.5% tiers = 80m) and
-<strong>≈13.3 GiB memory</strong> (reserve 25%/20%/10% tiers + 100Mi eviction). GKE system
-DaemonSets that tolerate the <code>dedicated=workers</code> taint (kube-proxy, DPv2 <code>anetd</code>,
-metadata, logging) consume a further ~0.4–0.6 vCPU / ~0.4–0.6 GiB, leaving
-<strong>~3.3–3.5 vCPU and ~12.7 GiB available for worker pods per node</strong>.</p>
+<p>Worker node = <code>e2-standard-4</code> (4 vCPU / 16 GiB), <code>--disk-type=pd-standard</code>, autoscale 0→8.
+GKE's <a href="https://cloud.google.com/kubernetes-engine/docs/concepts/plan-node-sizes#memory_cpu_reservations">reserved-resource formula</a> gives node allocatable ≈ <strong>3920m CPU</strong> (reserve 6%/1%/0.5% tiers = 80m) and <strong>≈13.3 GiB memory</strong> (reserve 25%/20%/10% tiers + 100Mi eviction).
+GKE system DaemonSets that tolerate the <code>dedicated=workers</code> taint (kube-proxy, DPv2 <code>anetd</code>, metadata, logging) consume a further ~0.4–0.6 vCPU / ~0.4–0.6 GiB, leaving <strong>~3.3–3.5 vCPU and ~12.7 GiB available for worker pods per node</strong>.</p>
 <ul>
-<li><strong>CPU is binding.</strong> <code>request=2</code> → <code>2 + 2 = 4 &gt; ~3.4</code>, so <strong>exactly one worker pod
-  schedules per node</strong>. <code>maxWorkers=8</code> therefore fans out to <strong>≤ 8 worker nodes</strong>,
-  matching the pool's <code>max-nodes=8</code>. Consistent; no over- or under-commit.</li>
-<li><strong>Memory is slack, not binding.</strong> At <code>request=2Gi</code> a node could hold ~6 pods by
-  memory, but CPU caps it at 1 — so the 2Gi request / 3Gi limit never gates
-  scheduling and leaves ample OOM headroom.</li>
+<li><strong>CPU is binding.</strong> <code>request=2</code> → <code>2 + 2 = 4 &gt; ~3.4</code>, so <strong>exactly one worker pod schedules per node</strong>. <code>maxWorkers=8</code> therefore fans out to <strong>≤ 8 worker nodes</strong>, matching the pool's <code>max-nodes=8</code>.
+  Consistent; no over- or under-commit.</li>
+<li><strong>Memory is slack, not binding.</strong> At <code>request=2Gi</code> a node could hold ~6 pods by memory, but CPU caps it at 1 — so the 2Gi request / 3Gi limit never gates scheduling and leaves ample OOM headroom.</li>
 </ul>
-<p>The sizing is therefore <strong>CPU-bound at one heavy pod per node</strong>, and <code>maxWorkers=8</code>
-is validated against <code>max-nodes=8</code>. (This is orthogonal to — and downstream of —
-the disk-class fix that lifted the node ceiling off the SSD quota.)</p>
+<p>The sizing is therefore <strong>CPU-bound at one heavy pod per node</strong>, and <code>maxWorkers=8</code> is validated against <code>max-nodes=8</code>.
+(This is orthogonal to — and downstream of — the disk-class fix that lifted the node ceiling off the SSD quota.)</p>
 <h3 id="agc-control-plane-pod--no-change-defaults-are-right-sized">AGC control-plane pod — no change (defaults are right-sized)<a class="headerlink" href="#agc-control-plane-pod--no-change-defaults-are-right-sized" title="Permanent link">&para;</a></h3>
-<p>The per-tenant AGC pod uses the platform default footprint
-(<code>defaultAGCResources</code>: requests <code>500m</code>/<code>2Gi</code>, limits <code>2</code>/<code>4Gi</code>; overridable via
-<code>spec.agcResources</code>). The dogfood <code>ActionsGateway</code> sets <strong>no</strong> <code>agcResources</code>
-override, so it inherits those defaults, and it schedules on the <code>default-pool</code>
-(<code>e2-standard-2</code>, alongside the single-replica GMC and Athens — the taint keeps it
-off the worker pool). Across the extensive live dogfood runs (Q224/Q259/Q260/Q267
-re-routes, up to <code>maxListeners=16</code> / <code>maxWorkers=8</code>) the AGC has never OOMed or
-CPU-starved at these defaults, and its ~2Gi request fits comfortably beside the GMC
-(<code>10m</code>/<code>64Mi</code>) and Athens on the ~5.9 GiB-allocatable system node. <strong>Decision: keep
-the AGC at platform defaults for dogfood</strong> — a smaller override is unwarranted
-(2Gi is already modest for a session-multiplexing control plane) and any change
-should follow an AGC-specific <code>kubectl top</code> measurement, not a guess.</p>
+<p>The per-tenant AGC pod uses the platform default footprint (<code>defaultAGCResources</code>: requests <code>500m</code>/<code>2Gi</code>, limits <code>2</code>/<code>4Gi</code>; overridable via <code>spec.agcResources</code>).
+The dogfood <code>ActionsGateway</code> sets <strong>no</strong> <code>agcResources</code> override, so it inherits those defaults, and it schedules on the <code>default-pool</code> (<code>e2-standard-2</code>, alongside the single-replica GMC and Athens — the taint keeps it off the worker pool).
+Across the extensive live dogfood runs (Q224/Q259/Q260/Q267 re-routes, up to <code>maxListeners=16</code> / <code>maxWorkers=8</code>) the AGC has never OOMed or CPU-starved at these defaults, and its ~2Gi request fits comfortably beside the GMC (<code>10m</code>/<code>64Mi</code>) and Athens on the ~5.9 GiB-allocatable system node. <strong>Decision: keep the AGC at platform defaults for dogfood</strong> — a smaller override is unwarranted (2Gi is already modest for a session-multiplexing control plane) and any change should follow an AGC-specific <code>kubectl top</code> measurement, not a guess.</p>
 <h2 id="e2e-worker-sizing--measured-then-derived-dind-2026-07-07">e2e worker sizing — measured, then derived (DinD, 2026-07-07)<a class="headerlink" href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07" title="Permanent link">&para;</a></h2>
-<p>The e2e worker is the DinD variant (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-e2e/overlays/dind"><code>deploy/dogfood-e2e/overlays/dind</code></a>):
-a <code>runner</code> container + a native-sidecar <code>docker:dind</code> initContainer, on the
-<code>e2-standard-8</code> spot e2e pool (no nested virt). This is the plan's step-2 sizing
-target — the Kata end-state (step 3, <a href="../archive/kata-on-gke/">Q286</a>) is deferred and, per
-the finding below, needs a <em>bigger</em> nested-virt node than the current
-<code>n2-standard-4</code>, so its sizing is tracked separately.</p>
-<p><strong>Measurement (Phase 1).</strong> Routed a full <strong>Calico</strong> e2e run (the heaviest lane —
-most container images, so the conservative peak) to GAG and sampled
-<code>kubectl top pod --containers</code> every 3s over the ~18-min run. The pod reached
-<code>Completed</code> (clean; no <a href="../archive/gke-dogfood-turnup-findings/">Q247</a> orphan this run) with <strong>zero OOM
-events</strong>:</p>
+<p>The e2e worker is the DinD variant (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-e2e/overlays/dind"><code>deploy/dogfood-e2e/overlays/dind</code></a>): a <code>runner</code> container + a native-sidecar <code>docker:dind</code> initContainer, on the <code>e2-standard-8</code> spot e2e pool (no nested virt).
+This is the plan's step-2 sizing target — the Kata end-state (step 3, <a href="../archive/kata-on-gke/">Q286</a>) is deferred and, per the finding below, needs a <em>bigger</em> nested-virt node than the current <code>n2-standard-4</code>, so its sizing is tracked separately.</p>
+<p><strong>Measurement (Phase 1).</strong> Routed a full <strong>Calico</strong> e2e run (the heaviest lane — most container images, so the conservative peak) to GAG and sampled <code>kubectl top pod --containers</code> every 3s over the ~18-min run.
+The pod reached <code>Completed</code> (clean; no <a href="../archive/gke-dogfood-turnup-findings/">Q247</a> orphan this run) with <strong>zero OOM events</strong>:</p>
 <table>
 <thead>
 <tr>
@@ -3224,23 +3094,9 @@ events</strong>:</p>
 </tr>
 </tbody>
 </table>
-<p>Envelope per worker pod: <strong>~6.25 vCPU / ~3.3 GiB combined peak.</strong> The split is the
-key insight — CPU concentrates in the runner (test execution), memory in the dind
-sidecar (the nested cluster). <em>Caveat: 3s sampling, and dind memory varies run-to-run
-(a second clean-green run at the derived sizing peaked dind at only 859Mi but the
-runner higher at 5638m) — hence the memory limits below carry ≥1.7× headroom over the
-worst observed peak, with the "widen on OOM" rule as the escape hatch.</em></p>
-<p><strong>Applied + re-validated (2026-07-07).</strong> The derived values below were applied to the
-live <code>ClusterRunnerTemplate</code> and a second full Calico run went clean-green (pod
-<code>Completed</code>, <strong>no OOM/eviction</strong>, ~15 min): the pod scheduled with the higher
-combined <code>request</code> (4 vCPU) on a single <code>e2-standard-8</code> node — one pod per node, as
-designed — the runner burst to 5638m (well past its <code>request=3</code>, no CPU limit), and
-both memory limits (runner 3Gi, dind 4Gi) cleared the observed peaks with headroom.
-<em>Concurrent 2-worker scheduling is guaranteed by construction — the 4-vCPU combined
-request admits exactly one pod per ~7-vCPU node — rather than exercised with two
-simultaneous e2e jobs (not run, to bound spot cost).</em></p>
-<p><strong>Derivation (Phase 2)</strong> — same <a href="#resource-model-principles">principles</a> as the
-general worker (CPU requests-only, memory <code>limit ≈ peak × ~1.4</code>):</p>
+<p>Envelope per worker pod: <strong>~6.25 vCPU / ~3.3 GiB combined peak.</strong> The split is the key insight — CPU concentrates in the runner (test execution), memory in the dind sidecar (the nested cluster). <em>Caveat: 3s sampling, and dind memory varies run-to-run (a second clean-green run at the derived sizing peaked dind at only 859Mi but the runner higher at 5638m) — hence the memory limits below carry ≥1.7× headroom over the worst observed peak, with the "widen on OOM" rule as the escape hatch.</em></p>
+<p><strong>Applied + re-validated (2026-07-07).</strong> The derived values below were applied to the live <code>ClusterRunnerTemplate</code> and a second full Calico run went clean-green (pod <code>Completed</code>, <strong>no OOM/eviction</strong>, ~15 min): the pod scheduled with the higher combined <code>request</code> (4 vCPU) on a single <code>e2-standard-8</code> node — one pod per node, as designed — the runner burst to 5638m (well past its <code>request=3</code>, no CPU limit), and both memory limits (runner 3Gi, dind 4Gi) cleared the observed peaks with headroom. <em>Concurrent 2-worker scheduling is guaranteed by construction — the 4-vCPU combined request admits exactly one pod per ~7-vCPU node — rather than exercised with two simultaneous e2e jobs (not run, to bound spot cost).</em></p>
+<p><strong>Derivation (Phase 2)</strong> — same <a href="#resource-model-principles">principles</a> as the general worker (CPU requests-only, memory <code>limit ≈ peak × ~1.4</code>):</p>
 <table>
 <thead>
 <tr>
@@ -3302,36 +3158,23 @@ general worker (CPU requests-only, memory <code>limit ≈ peak × ~1.4</code>):<
 </tbody>
 </table>
 <h3 id="node-allocatable-validation-maxworkers-vs-the-e2e-pool">Node-allocatable validation (<code>maxWorkers</code> vs the e2e pool)<a class="headerlink" href="#node-allocatable-validation-maxworkers-vs-the-e2e-pool" title="Permanent link">&para;</a></h3>
-<p>e2e node = <code>e2-standard-8</code> (8 vCPU / 32 GiB) spot, taint <code>dedicated=e2e</code>, autoscale
-0→2. GKE reserves ~90m CPU + ~3.6 GiB → <strong>≈7.4 vCPU / ≈28 GiB allocatable</strong>; system
-DaemonSets that tolerate the taint take a further ~0.4–0.6 vCPU.</p>
+<p>e2e node = <code>e2-standard-8</code> (8 vCPU / 32 GiB) spot, taint <code>dedicated=e2e</code>, autoscale 0→2.
+GKE reserves ~90m CPU + ~3.6 GiB → <strong>≈7.4 vCPU / ≈28 GiB allocatable</strong>; system DaemonSets that tolerate the taint take a further ~0.4–0.6 vCPU.</p>
 <ul>
 <li><strong>CPU is the binding/packing resource.</strong> Combined <code>request</code> = <code>3 + 1 = 4</code> vCPU.
-  A second pod (another 4) would need <code>8 &gt; ~7</code>, so <strong>exactly one worker pod schedules
-  per node</strong>. <code>maxWorkers=2</code> therefore fans out to <strong>≤2 e2e nodes</strong>, matching the
-  pool's <code>max-nodes=2</code>. This is deliberate: the ~6.25-vCPU combined <em>peak</em> means two
-  co-scheduled pods would contend for one node's ~7 vCPU and CPU-throttle each other —
-  bad when e2e's kindnet and Calico legs run concurrently (both trigger on push to
-  main). One-pod-per-node prevents that; the removed CPU limits let the lone pod burst
-  to the whole node.</li>
-<li><strong>Memory is hugely slack.</strong> Combined <code>request</code> = <code>1 + 3 = 4Gi</code>, peak ~3.3 GiB, vs
-  ~28 GiB allocatable — memory never gates scheduling and leaves ample OOM headroom.
-  The <code>e2-standard-8</code> is consequently ~8× over-provisioned <em>on memory</em> for this
-  workload; an <code>e2-highcpu-8</code> (8 vCPU / 8 GiB) would right-size it and cut spot cost,
-  since the workload is CPU-bound. <strong>Deferred, not taken:</strong> the surplus memory is
-  cheap insurance for the OOM-sensitive <code>kind</code> bringup (esp. on a heavier future
-  suite), and the node-type swap warrants its own validation run. Recorded as a cost
-  lever if memory stays low across more runs.</li>
+  A second pod (another 4) would need <code>8 &gt; ~7</code>, so <strong>exactly one worker pod schedules per node</strong>. <code>maxWorkers=2</code> therefore fans out to <strong>≤2 e2e nodes</strong>, matching the pool's <code>max-nodes=2</code>.
+  This is deliberate: the ~6.25-vCPU combined <em>peak</em> means two co-scheduled pods would contend for one node's ~7 vCPU and CPU-throttle each other — bad when e2e's kindnet and Calico legs run concurrently (both trigger on push to main).
+  One-pod-per-node prevents that; the removed CPU limits let the lone pod burst to the whole node.</li>
+<li><strong>Memory is hugely slack.</strong> Combined <code>request</code> = <code>1 + 3 = 4Gi</code>, peak ~3.3 GiB, vs ~28 GiB allocatable — memory never gates scheduling and leaves ample OOM headroom.
+  The <code>e2-standard-8</code> is consequently ~8× over-provisioned <em>on memory</em> for this workload; an <code>e2-highcpu-8</code> (8 vCPU / 8 GiB) would right-size it and cut spot cost, since the workload is CPU-bound. <strong>Deferred, not taken:</strong> the surplus memory is cheap insurance for the OOM-sensitive <code>kind</code> bringup (esp. on a heavier future suite), and the node-type swap warrants its own validation run.
+  Recorded as a cost lever if memory stays low across more runs.</li>
 </ul>
-<p><strong>Kata-track finding (informs <a href="../archive/kata-on-gke/">Q286</a>).</strong> The runner's ~5-vCPU
-peak <em>exceeds a whole <code>n2-standard-4</code></em> (4 vCPU) — the node the current Kata
-<code>e2e-setup.sh</code> provisions. So the Kata end-state needs a bigger nested-virt node
-(e.g. <code>n2-standard-8</code>) to avoid CPU-starving e2e; the DinD pod <code>requests</code> above do
-<strong>not</strong> port 1:1 to the smaller Kata node. Left for the Kata stand-up, not changed
-here.</p>
+<p><strong>Kata-track finding (informs <a href="../archive/kata-on-gke/">Q286</a>).</strong> The runner's ~5-vCPU peak <em>exceeds a whole <code>n2-standard-4</code></em> (4 vCPU) — the node the current Kata <code>e2e-setup.sh</code> provisions.
+So the Kata end-state needs a bigger nested-virt node (e.g. <code>n2-standard-8</code>) to avoid CPU-starving e2e; the DinD pod <code>requests</code> above do <strong>not</strong> port 1:1 to the smaller Kata node.
+Left for the Kata stand-up, not changed here.</p>
 <h2 id="small-tier--measured-then-declined-2026-07-07">Small tier — measured, then declined (2026-07-07)<a class="headerlink" href="#small-tier--measured-then-declined-2026-07-07" title="Permanent link">&para;</a></h2>
-<p>Routed the general CI matrix (<code>target_gag=true</code>) to the general pool and sampled the
-trivial jobs' real peak. The measured spread against the heavy jobs:</p>
+<p>Routed the general CI matrix (<code>target_gag=true</code>) to the general pool and sampled the trivial jobs' real peak.
+The measured spread against the heavy jobs:</p>
 <table>
 <thead>
 <tr>
@@ -3356,52 +3199,28 @@ trivial jobs' real peak. The measured spread against the heavy jobs:</p>
 </tr>
 </tbody>
 </table>
-<p>(The heavy peak also <strong>cross-validates</strong> the general-worker sizing: 3643m / 2502Mi
-sits right at the <a href="#phase-1-results--general-workers-2026-06-30-first-pass">Phase 1 envelope</a>
-of 3802m / 2134Mi, and 2502Mi stays under the committed 3Gi memory limit — no OOM.)</p>
-<p><strong>Decision: no small tier — keep the single general tier.</strong> The
-<a href="#plan">criterion</a> (trivial ≤1 vCPU/≤1 GiB <em>and</em> the packing waste is material) is
-half-met: trivial jobs are indeed ≤1 vCPU/≤1 GiB, but the waste is <strong>not</strong> material.
-A trivial job over-requesting ~1.1 vCPU for 20–58s on a spot node costs a fraction of
-a node-minute a few times per PR; a second runner tier costs a <strong>permanent</strong> coupling
-of the workflow files to the runner taxonomy (the maintenance tax this plan's
-<a href="#design-decision--do-we-need-multiple-runner-types">design decision</a> warns against).
-The measured data confirms the standing deferral rather than overturning it —
-this open question is now <strong>closed with numbers</strong>, not just reasoning.</p>
+<p>(The heavy peak also <strong>cross-validates</strong> the general-worker sizing: 3643m / 2502Mi sits right at the <a href="#phase-1-results--general-workers-2026-06-30-first-pass">Phase 1 envelope</a> of 3802m / 2134Mi, and 2502Mi stays under the committed 3Gi memory limit — no OOM.)</p>
+<p><strong>Decision: no small tier — keep the single general tier.</strong> The <a href="#plan">criterion</a> (trivial ≤1 vCPU/≤1 GiB <em>and</em> the packing waste is material) is half-met: trivial jobs are indeed ≤1 vCPU/≤1 GiB, but the waste is <strong>not</strong> material.
+A trivial job over-requesting ~1.1 vCPU for 20–58s on a spot node costs a fraction of a node-minute a few times per PR; a second runner tier costs a <strong>permanent</strong> coupling of the workflow files to the runner taxonomy (the maintenance tax this plan's <a href="#design-decision--do-we-need-multiple-runner-types">design decision</a> warns against).
+The measured data confirms the standing deferral rather than overturning it — this open question is now <strong>closed with numbers</strong>, not just reasoning.</p>
 <h2 id="phase-5--persisted-2026-07-06">Phase 5 — persisted (2026-07-06)<a class="headerlink" href="#phase-5--persisted-2026-07-06" title="Permanent link">&para;</a></h2>
-<p>The right-sized general-worker <code>requests</code>/<code>limits</code> are baked into the dogfood
-<code>RunnerTemplate</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a>
-(<code>apply_cr</code>) and mirrored in the <a href="../gke-dogfood/"><code>gke-dogfood.md</code></a> runbook. The
-node sizes and <code>maxWorkers=8</code> were already persisted with the disk-class fix. The
-tenant-onboarding quota formula is unchanged and remains correct — it sums only
-declared container <code>limits</code>, so dropping the worker CPU limit simply drops that
-term (documented there as "a term with no value drops out").</p>
-<p>The right-sized <strong>e2e-worker</strong> <code>requests</code>/<code>limits</code> are baked into the DinD
-<code>ClusterRunnerTemplate</code>, promoted under Q554 into the shipped library at
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/privileged-dind/template.yaml"><code>deploy/templates/privileged-dind/template.yaml</code></a>
-(the dind overlay now consumes it as a base), and its rationale mirrored in the deploy
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>README</code></a>. Applied live and re-validated by a
-second clean-green Calico run. <strong>All Q248 work is complete</strong>: node disk class,
-general-worker sizing, e2e-worker sizing, and the (declined) small tier. The only
-residual is the deferred Kata end-state, tracked separately under
-<a href="../archive/kata-on-gke/">Q286</a>.</p>
+<p>The right-sized general-worker <code>requests</code>/<code>limits</code> are baked into the dogfood <code>RunnerTemplate</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> (<code>apply_cr</code>) and mirrored in the <a href="../gke-dogfood/"><code>gke-dogfood.md</code></a> runbook.
+The node sizes and <code>maxWorkers=8</code> were already persisted with the disk-class fix.
+The tenant-onboarding quota formula is unchanged and remains correct — it sums only declared container <code>limits</code>, so dropping the worker CPU limit simply drops that term (documented there as "a term with no value drops out").</p>
+<p>The right-sized <strong>e2e-worker</strong> <code>requests</code>/<code>limits</code> are baked into the DinD <code>ClusterRunnerTemplate</code>, promoted under Q554 into the shipped library at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/privileged-dind/template.yaml"><code>deploy/templates/privileged-dind/template.yaml</code></a> (the dind overlay now consumes it as a base), and its rationale mirrored in the deploy <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>README</code></a>.
+Applied live and re-validated by a second clean-green Calico run. <strong>All Q248 work is complete</strong>: node disk class, general-worker sizing, e2e-worker sizing, and the (declined) small tier.
+The only residual is the deferred Kata end-state, tracked separately under <a href="../archive/kata-on-gke/">Q286</a>.</p>
 <h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
 <ul>
-<li>~~CPU <code>limit</code> vs requests-only~~ — <strong>RESOLVED (general workers):</strong> requests-only,
-  no CPU limit. No noisy-neighbor risk because <code>request=2</code> packs one heavy pod per
-  <code>e2-standard-4</code>, so a bursting pod has the node to itself.</li>
+<li>~~CPU <code>limit</code> vs requests-only~~ — <strong>RESOLVED (general workers):</strong> requests-only, no CPU limit.
+  No noisy-neighbor risk because <code>request=2</code> packs one heavy pod per <code>e2-standard-4</code>, so a bursting pod has the node to itself.</li>
 <li>Memory headroom factor — set to ~1.4× (peak 2134Mi → 3Gi limit); widen on any OOM.</li>
-<li>~~A 2nd "small" pod tier~~ — <strong>RESOLVED (declined, 2026-07-07):</strong> trivial jobs
-  measured at ≤945m/≤707Mi, but the packing waste isn't material vs the permanent
-  workflow-coupling cost of a second runner label. See
-  <a href="#small-tier--measured-then-declined-2026-07-07">§ Small tier</a>.</li>
-<li>~~<code>e2e</code> pod sizing~~ — <strong>RESOLVED (2026-07-07):</strong> the DinD path is validated and
-  the pod is right-sized from a measured clean-green run. See
-  <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>.
+<li>~~A 2nd "small" pod tier~~ — <strong>RESOLVED (declined, 2026-07-07):</strong> trivial jobs measured at ≤945m/≤707Mi, but the packing waste isn't material vs the permanent workflow-coupling cost of a second runner label.
+  See <a href="#small-tier--measured-then-declined-2026-07-07">§ Small tier</a>.</li>
+<li>~~<code>e2e</code> pod sizing~~ — <strong>RESOLVED (2026-07-07):</strong> the DinD path is validated and the pod is right-sized from a measured clean-green run.
+  See <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>.
   Kata (step 3) remains the deferred secure end-state (<a href="../archive/kata-on-gke/">Q286</a>).</li>
-<li>Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC
-  re-provisions cleanly (interacts with the <a href="../archive/gke-dogfood-turnup-findings/">Q247</a> session-
-  recovery investigation).</li>
+<li>Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC re-provisions cleanly (interacts with the <a href="../archive/gke-dogfood-turnup-findings/">Q247</a> session- recovery investigation).</li>
 </ul>
 
 

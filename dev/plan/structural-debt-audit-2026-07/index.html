@@ -2720,113 +2720,56 @@
 
 
 <h1 id="structural-debt-audit--2026-07">Structural debt audit — 2026-07<a class="headerlink" href="#structural-debt-audit--2026-07" title="Permanent link">&para;</a></h1>
-<p>A read-only audit of the whole codebase for technical debt, tangled control flow,
-readability, god functions, and oversized files. Run 2026-07-20 against
-<code>main</code> @ <code>d6874e2</code>. This doc holds the <em>evidence and rationale</em> for the Queue rows
-the audit produced, so each row can stay inside the 250-char cap without dropping
-a finding (per <a href="../../development/maintaining-backlog/">maintaining-backlog.md</a>).</p>
+<p>A read-only audit of the whole codebase for technical debt, tangled control flow, readability, god functions, and oversized files.
+Run 2026-07-20 against <code>main</code> @ <code>d6874e2</code>.
+This doc holds the <em>evidence and rationale</em> for the Queue rows the audit produced, so each row can stay inside the 250-char cap without dropping a finding (per <a href="../../development/maintaining-backlog/">maintaining-backlog.md</a>).</p>
 <p>Classification follows <a href="../../development/technical-debt/">technical-debt.md</a>.</p>
 <blockquote>
-<p><strong>Status: ✅ Done — filed 2026-07-20; every finding F1–F10 and the prevention gates shipped.</strong> The F1
-Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
-rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
-consolidation as Q364, F5's broker-double consolidation as Q368, F7's
-CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question
-out to Q394), F8's god-function decomposition as Q367, F9's
-error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the
-§Prevention gates (nolintlint + a ratcheted funlen) as Q371, and F6's foundation
-move as Q365 (which left the interleaved v1/v2 condition collectors to Q403,
-since shipped: the GMC's v1 collector passes now live in <code>metrics_v1.go</code>).
+<p><strong>Status: ✅ Done — filed 2026-07-20; every finding F1–F10 and the prevention gates shipped.</strong> The F1 Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule consolidation as Q364, F5's broker-double consolidation as Q368, F7's CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question out to Q394), F8's god-function decomposition as Q367, F9's error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the §Prevention gates (nolintlint + a ratcheted funlen) as Q371, and F6's foundation move as Q365 (which left the interleaved v1/v2 condition collectors to Q403, since shipped: the GMC's v1 collector passes now live in <code>metrics_v1.go</code>).
 <a href="../../STATUS/#Q372">Q372</a> (Deferred) carries the re-run trigger.</p>
-<p>The ID range is not contiguous because concurrent branches allocated IDs while
-this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a
-manifest-validate flake (#729), so this audit's F1 and F3 became Q373 and Q374.
-See <a href="#audit-cadence">§Audit cadence</a> — <code>Next ID</code> cannot stay correct under
-parallel work, so open PRs are the authority.</p>
+<p>The ID range is not contiguous because concurrent branches allocated IDs while this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a manifest-validate flake (#729), so this audit's F1 and F3 became Q373 and Q374.
+See <a href="#audit-cadence">§Audit cadence</a> — <code>Next ID</code> cannot stay correct under parallel work, so open PRs are the authority.</p>
 </blockquote>
 <h2 id="headline">Headline<a class="headerlink" href="#headline" title="Permanent link">&para;</a></h2>
-<p>The codebase is <strong>healthy overall</strong>. 41,011 non-test, non-generated Go lines
-against 54,687 test lines (1.33:1); exactly <strong>one</strong> <code>TODO</code> marker repo-wide; only
-21 functions over 100 lines and 5 over 200. Comment quality is a genuine asset —
-comments overwhelmingly explain <em>why a bound exists and what breaks without it</em>,
-and the Q-ID cross-references pay off when reading cold.</p>
-<p>The debt is <strong>concentrated and structural</strong>, not pervasive erosion. It clusters in
-three places:</p>
+<p>The codebase is <strong>healthy overall</strong>.
+41,011 non-test, non-generated Go lines against 54,687 test lines (1.33:1); exactly <strong>one</strong> <code>TODO</code> marker repo-wide; only 21 functions over 100 lines and 5 over 200.
+Comment quality is a genuine asset — comments overwhelmingly explain <em>why a bound exists and what breaks without it</em>, and the Q-ID cross-references pay off when reading cold.</p>
+<p>The debt is <strong>concentrated and structural</strong>, not pervasive erosion.
+It clusters in three places:</p>
 <ol>
-<li><strong>Version boundaries</strong> — v1/v2 in GMC, classic/scale-set in AGC, v2alpha1/v2beta1
-   in <code>api/</code>. The forks are mostly deliberate; the <em>mechanical</em> copy-paste riding
-   along with them is not.</li>
-<li><strong>Wiring entry points</strong> — two god <code>main</code>/<code>run</code> functions that grew past the
-   point where the extraction pattern they started with was abandoned.</li>
-<li><strong>Test doubles and probes</strong> — four independent hand-rolled implementations of
-   one wire protocol.</li>
+<li><strong>Version boundaries</strong> — v1/v2 in GMC, classic/scale-set in AGC, v2alpha1/v2beta1 in <code>api/</code>.
+   The forks are mostly deliberate; the <em>mechanical</em> copy-paste riding along with them is not.</li>
+<li><strong>Wiring entry points</strong> — two god <code>main</code>/<code>run</code> functions that grew past the point where the extraction pattern they started with was abandoned.</li>
+<li><strong>Test doubles and probes</strong> — four independent hand-rolled implementations of one wire protocol.</li>
 </ol>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="fixed-as-a-bug-not-flagged-as-debt">Fixed as a bug, not flagged as debt<a class="headerlink" href="#fixed-as-a-bug-not-flagged-as-debt" title="Permanent link">&para;</a></h3>
 <p><strong>F1 — ScaleSet worker leaks a JIT-config Secret per job.</strong> ✅ <strong>Shipped</strong> (Q373, #727)</p>
-<p><code>ProvisionScaleSetWorker</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:548</a>)
-stages <code>job-ss-&lt;jobID&gt;</code> at :573, then has three failure exits (:585 ceiling held,
-:597 scale-up throttle, :608 pod-create) — none delete it, and neither does the
-success path. The classic <code>provision()</code> deletes on all five failure paths and on
-success (:436, :446, :464, :473, :488, :526).</p>
-<p>Its doc comment delegates cleanup: <em>"Per-job Secret cleanup in steady state is the
-caller's responsibility (the reconciler wiring that drives this method)."</em> The
-caller is a one-line closure at
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go">runnerset_scaleset.go:170</a>
-that does no cleanup. <code>grep -rn 'job-ss'</code> returns exactly two hits — the
-construction site and one test. <code>runner_shared.go</code>'s reaper contains <strong>zero</strong>
-Secret references.</p>
-<p>Effect: credential-bearing Secrets accumulate one-per-job for the RunnerSet's
-lifetime, reclaimed only by cascade-GC on RunnerSet deletion — on what is now the
-<strong>default</strong> acquisition protocol. This is a documented-as-handled contract with no
-implementer, which is why it is a bug rather than debt.</p>
-<p>Remedy: mirror <code>provision()</code>'s cleanup on each failure exit, and delete on the
-listener's terminal <code>JobCompleted</code> (<code>scalesetlistener/listener.go</code> <code>completeJob</code>,
-which today only bumps a metric).</p>
-<p><strong>Shipped in #727</strong> — the reclaim went in at the listener's terminal-completion
-seam (<code>ReclaimJobSecret</code>), not just on the failure exits, so the steady-state
-success path is covered too. The <code>IsAlreadyExists</code> replay path deliberately does
-<strong>not</strong> delete: a replayed job's pod may still be mounting the Secret. Covered by
-an internal provisioner test, a listener-seam test, and an envtest integration
-test.</p>
+<p><code>ProvisionScaleSetWorker</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:548</a>) stages <code>job-ss-&lt;jobID&gt;</code> at :573, then has three failure exits (:585 ceiling held, :597 scale-up throttle, :608 pod-create) — none delete it, and neither does the success path.
+The classic <code>provision()</code> deletes on all five failure paths and on success (:436, :446, :464, :473, :488, :526).</p>
+<p>Its doc comment delegates cleanup: <em>"Per-job Secret cleanup in steady state is the caller's responsibility (the reconciler wiring that drives this method)."</em> The caller is a one-line closure at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go">runnerset_scaleset.go:170</a> that does no cleanup. <code>grep -rn 'job-ss'</code> returns exactly two hits — the construction site and one test. <code>runner_shared.go</code>'s reaper contains <strong>zero</strong> Secret references.</p>
+<p>Effect: credential-bearing Secrets accumulate one-per-job for the RunnerSet's lifetime, reclaimed only by cascade-GC on RunnerSet deletion — on what is now the <strong>default</strong> acquisition protocol.
+This is a documented-as-handled contract with no implementer, which is why it is a bug rather than debt.</p>
+<p>Remedy: mirror <code>provision()</code>'s cleanup on each failure exit, and delete on the listener's terminal <code>JobCompleted</code> (<code>scalesetlistener/listener.go</code> <code>completeJob</code>, which today only bumps a metric).</p>
+<p><strong>Shipped in #727</strong> — the reclaim went in at the listener's terminal-completion seam (<code>ReclaimJobSecret</code>), not just on the failure exits, so the steady-state success path is covered too.
+The <code>IsAlreadyExists</code> replay path deliberately does <strong>not</strong> delete: a replayed job's pod may still be mounting the Secret.
+Covered by an internal provisioner test, a listener-seam test, and an envtest integration test.</p>
 <h3 id="high">High<a class="headerlink" href="#high" title="Permanent link">&para;</a></h3>
 <p><strong>F2 — <code>cmd/probe</code> reimplements the <code>scaleset</code> package it exists to validate.</strong> ✅ <strong>Shipped</strong> (Q362)</p>
 <p><code>cmd/probe</code> never imports <code>scaleset</code> (verified: no import in any non-test file).
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/probe/scaleset.go">scaleset.go:187-208</a> declares lowercase shadow copies
-of five exported library types — <code>runnerScaleSet</code>, <code>runnerScaleSetSession</code>,
-<code>runnerScaleSetMessage</code>, <code>jitRunnerConfig</code>, <code>adminConnection</code> — mirroring
-<code>RunnerScaleSet</code>, <code>RunnerScaleSetSession</code>, <code>RunnerScaleSetMessage</code>,
-<code>JITRunnerConfig</code>, <code>AdminConnection</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/types.go">scaleset/types.go</a>.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/probe/scaleset.go">scaleset.go:187-208</a> declares lowercase shadow copies of five exported library types — <code>runnerScaleSet</code>, <code>runnerScaleSetSession</code>, <code>runnerScaleSetMessage</code>, <code>jitRunnerConfig</code>, <code>adminConnection</code> — mirroring <code>RunnerScaleSet</code>, <code>RunnerScaleSetSession</code>, <code>RunnerScaleSetMessage</code>, <code>JITRunnerConfig</code>, <code>AdminConnection</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/types.go">scaleset/types.go</a>.
 It hand-builds raw requests rather than calling <code>scaleset.Client</code>.</p>
-<p>Why it matters beyond duplication: the probe's <em>purpose</em> is validating the protocol
-the <code>scaleset</code> package speaks. Because it speaks its own dialect, a divergence
-between library and wire is invisible in exactly the case the probe exists to catch.</p>
-<p>Remedy: rewrite against <code>scaleset.Client</code>; where the probe needs raw-wire
-visibility the client hides, add a response hook to the client rather than keeping
-a parallel implementation. Highest-leverage deletion available — most of the 1,048
-lines go away.</p>
-<p><strong>Shipped (Q362).</strong> The probe now drives <code>scaleset.Client</code> end to end; all five
-shadow types and every hand-built modelled request are gone. The remedy's response
-hook is <code>scaleset.ResponseObserver</code> (<code>Config.Observer</code>), which reports status,
-headers, and latency for every response — including the 202 polls <code>GetMessage</code>
-returns as <code>(nil, nil)</code>, which is where the probe's rate-limit evidence lives.
-Three checks stayed outside the library on purpose, because delegating them would
-have made the probe agree with itself: the raw-wire reporting above, the acquire
-route/token matrix (the client's construction measured against alternatives it
-does not implement, reached through the new <code>Client.RawServiceCall</code> escape hatch so
-even those comparisons use the client's own auth), and the delivered
-<code>acquireJobUrl</code> fallback — which now tries the client's static route <em>first</em> and
-logs a <code>DIVERGENCE</code> when the delivered URL succeeds where it failed.</p>
+<p>Why it matters beyond duplication: the probe's <em>purpose</em> is validating the protocol the <code>scaleset</code> package speaks.
+Because it speaks its own dialect, a divergence between library and wire is invisible in exactly the case the probe exists to catch.</p>
+<p>Remedy: rewrite against <code>scaleset.Client</code>; where the probe needs raw-wire visibility the client hides, add a response hook to the client rather than keeping a parallel implementation.
+Highest-leverage deletion available — most of the 1,048 lines go away.</p>
+<p><strong>Shipped (Q362).</strong> The probe now drives <code>scaleset.Client</code> end to end; all five shadow types and every hand-built modelled request are gone.
+The remedy's response hook is <code>scaleset.ResponseObserver</code> (<code>Config.Observer</code>), which reports status, headers, and latency for every response — including the 202 polls <code>GetMessage</code> returns as <code>(nil, nil)</code>, which is where the probe's rate-limit evidence lives.
+Three checks stayed outside the library on purpose, because delegating them would have made the probe agree with itself: the raw-wire reporting above, the acquire route/token matrix (the client's construction measured against alternatives it does not implement, reached through the new <code>Client.RawServiceCall</code> escape hatch so even those comparisons use the client's own auth), and the delivered <code>acquireJobUrl</code> fallback — which now tries the client's static route <em>first</em> and logs a <code>DIVERGENCE</code> when the delivered URL succeeds where it failed.</p>
 <p>The "most of the 1,048 lines" estimate above was optimistic: the file lands at 847.
-The reimplementation itself did go — the five shadow types plus <code>mintAdminConnection</code>
-/ <code>registrationToken</code> / <code>adminConnection</code> / <code>svcCall</code> are 165 lines deleted outright,
-and every remaining modelled call is a one-line client method where it used to build
-a request — but three parts of the file were never protocol code and stay: the ~110-line
-<code>PROBE_SCALESET_*</code> environment contract, the diagnostic matrix above, and a doc comment
-that grew to record what the probe still asserts on its own.</p>
+The reimplementation itself did go — the five shadow types plus <code>mintAdminConnection</code> / <code>registrationToken</code> / <code>adminConnection</code> / <code>svcCall</code> are 165 lines deleted outright, and every remaining modelled call is a one-line client method where it used to build a request — but three parts of the file were never protocol code and stay: the ~110-line <code>PROBE_SCALESET_*</code> environment contract, the diagnostic matrix above, and a doc comment that grew to record what the probe still asserts on its own.</p>
 <p><strong>F3 — The v2 conditions sync gate covers 13% of the duplication it appears to.</strong> ✅ <strong>Shipped</strong> (Q374)</p>
-<p>Modulo the version string, nine files are byte-identical across <code>api/v2alpha1</code> and
-<code>api/v2beta1</code> — <strong>2,550 lines</strong>:</p>
+<p>Modulo the version string, nine files are byte-identical across <code>api/v2alpha1</code> and <code>api/v2beta1</code> — <strong>2,550 lines</strong>:</p>
 <table>
 <thead>
 <tr>
@@ -2883,299 +2826,118 @@ that grew to record what the probe still asserts on its own.</p>
 </tr>
 </tbody>
 </table>
-<p><code>check-conditions-sync.sh</code> (since replaced) hardcoded two
-paths (<code>alpha=</code>, <code>beta=</code>) and guarded <code>conditions.go</code> alone — <strong>332 of 2,550 lines</strong>.
-The other ~2,218 drifted silently. The sync test concedes the design: <em>"There is no
-generator; whoever edits one mirrors the other."</em></p>
-<p>Note <code>conditions.go</code> is <strong>pure constants plus one helper function — zero kubebuilder
-markers, zero API structs</strong>, so it does not require per-version duplication at all.
+<p><code>check-conditions-sync.sh</code> (since replaced) hardcoded two paths (<code>alpha=</code>, <code>beta=</code>) and guarded <code>conditions.go</code> alone — <strong>332 of 2,550 lines</strong>.
+The other ~2,218 drifted silently.
+The sync test concedes the design: <em>"There is no generator; whoever edits one mirrors the other."</em></p>
+<p>Note <code>conditions.go</code> is <strong>pure constants plus one helper function — zero kubebuilder markers, zero API structs</strong>, so it does not require per-version duplication at all.
 Same for <code>sidecar.go</code> (0 types, 0 markers).</p>
-<p>This inverts the project's own <em>"correct it twice, then automate it"</em> principle: the
-gate automates enforcement of a copy that deletion would remove.</p>
-<p>Remedy, cheapest first: (a) generalize the script to a file list covering all nine;
-(b) move the non-API identical files into a shared internal package that both
-versions type-alias (<code>type ProxyConfig = apishared.ProxyConfig</code> — aliases are
-deepcopy- and conversion-transparent), leaving only <code>runnerset_types.go</code> and
-<code>conversion.go</code> versioned.</p>
+<p>This inverts the project's own <em>"correct it twice, then automate it"</em> principle: the gate automates enforcement of a copy that deletion would remove.</p>
+<p>Remedy, cheapest first: (a) generalize the script to a file list covering all nine; (b) move the non-API identical files into a shared internal package that both versions type-alias (<code>type ProxyConfig = apishared.ProxyConfig</code> — aliases are deepcopy- and conversion-transparent), leaving only <code>runnerset_types.go</code> and <code>conversion.go</code> versioned.</p>
 <p><strong>Shipped in Q374.</strong> Both halves, split by whether the file holds versioned types.</p>
-<p><em>Shared.</em> The condition/reason vocabulary moved to <code>api/apiconditions</code> and the
-worker-pod sidecar contract to <code>api/apisidecar</code> — neither holds an API struct or a
-kubebuilder marker, so neither needs per-version duplication at all. The version
-packages keep thin re-export blocks (a one-line alias per name; a
-<code>RunnerTemplateSpec</code>-typed wrapper for the heuristic) so all 410 existing
-<code>v2alpha1.ConditionX</code> call sites compile unchanged. <code>conditions.go</code> fell 363 → 97
-lines and <code>sidecar.go</code> 83 → 28, with the values and the rationale now living in one
-place where they cannot diverge. Generated output — the five CRD manifests and both
-<code>zz_generated.deepcopy.go</code> — is byte-identical after <code>make -C api generate</code>.</p>
-<p><em>Gated.</em> <code>check-conditions-sync.sh</code> became <code>check-v2-api-sync.sh</code> with the default
-inverted: every <code>.go</code> file present in both packages must match unless named in an
-<code>EXEMPT</code> list with a reason, so a file added to both is covered the day it lands.
-Two differences are normalised away — the <code>package</code> clause and
-<code>+kubebuilder:storageversion</code> — which is what brings the three near-identical
-<code>*_types.go</code> files (804 lines) under the gate. Coverage went 363 → 1,397 lines
-across 8 files; a stale exemption fails the gate so the list cannot rot.</p>
-<p>Re-measured at implementation time, the audit's table had already shifted:
-<code>conditions.go</code> was 363 lines (not 332), <code>zz_generated.deepcopy.go</code> 1,001 (not 879),
-and <code>actionsgateway_types.go</code>/<code>egressproxy_types.go</code>/<code>runnertemplate_types.go</code>
-differed only by a <code>storageversion</code> marker (not 7 and 1 lines). <code>zz_generated.deepcopy.go</code>
-is exempt rather than gated: it is controller-gen output derived from the <em>versioned</em>
-<code>runnerset_types.go</code>, so requiring cross-version identity would assert an invariant
-the generator, not a contributor, decides — and <code>make generate</code> drift already guards it.</p>
-<p>Two things surfaced on the way: the gate had never run in CI at all (<code>make check</code>
-only, so the drift it guards could reach <code>main</code>), and <code>api/**</code> was missing from
-<code>unit-test.yml</code>'s <code>code</code> paths-filter, so an api-only change skipped its own gofmt,
-golangci-lint, and unit tests. Both fixed in the same change.</p>
+<p><em>Shared.</em> The condition/reason vocabulary moved to <code>api/apiconditions</code> and the worker-pod sidecar contract to <code>api/apisidecar</code> — neither holds an API struct or a kubebuilder marker, so neither needs per-version duplication at all.
+The version packages keep thin re-export blocks (a one-line alias per name; a <code>RunnerTemplateSpec</code>-typed wrapper for the heuristic) so all 410 existing <code>v2alpha1.ConditionX</code> call sites compile unchanged. <code>conditions.go</code> fell 363 → 97 lines and <code>sidecar.go</code> 83 → 28, with the values and the rationale now living in one place where they cannot diverge.
+Generated output — the five CRD manifests and both <code>zz_generated.deepcopy.go</code> — is byte-identical after <code>make -C api generate</code>.</p>
+<p><em>Gated.</em> <code>check-conditions-sync.sh</code> became <code>check-v2-api-sync.sh</code> with the default inverted: every <code>.go</code> file present in both packages must match unless named in an <code>EXEMPT</code> list with a reason, so a file added to both is covered the day it lands.
+Two differences are normalised away — the <code>package</code> clause and <code>+kubebuilder:storageversion</code> — which is what brings the three near-identical <code>*_types.go</code> files (804 lines) under the gate.
+Coverage went 363 → 1,397 lines across 8 files; a stale exemption fails the gate so the list cannot rot.</p>
+<p>Re-measured at implementation time, the audit's table had already shifted: <code>conditions.go</code> was 363 lines (not 332), <code>zz_generated.deepcopy.go</code> 1,001 (not 879), and <code>actionsgateway_types.go</code>/<code>egressproxy_types.go</code>/<code>runnertemplate_types.go</code> differed only by a <code>storageversion</code> marker (not 7 and 1 lines). <code>zz_generated.deepcopy.go</code> is exempt rather than gated: it is controller-gen output derived from the <em>versioned</em> <code>runnerset_types.go</code>, so requiring cross-version identity would assert an invariant the generator, not a contributor, decides — and <code>make generate</code> drift already guards it.</p>
+<p>Two things surfaced on the way: the gate had never run in CI at all (<code>make check</code> only, so the drift it guards could reach <code>main</code>), and <code>api/**</code> was missing from <code>unit-test.yml</code>'s <code>code</code> paths-filter, so an api-only change skipped its own gofmt, golangci-lint, and unit tests.
+Both fixed in the same change.</p>
 <p><strong>F4 — <code>githubCIDREgressRule</code> exists; the egress-proxy builder open-codes it twice.</strong> ✅ <strong>Shipped</strong> (Q364)</p>
-<p>The shared helper at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:404</a>
-is called from three sites — but not from <code>egressproxy_builder.go</code>, which
-open-codes the same peer-building loop at
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go">:470-476 and :487-493</a>.
+<p>The shared helper at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:404</a> is called from three sites — but not from <code>egressproxy_builder.go</code>, which open-codes the same peer-building loop at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go">:470-476 and :487-493</a>.
 The helper's own doc comment claims to be the shared one.</p>
-<p>Three independent spellings of "which CIDRs may we reach on 443" in a
-security-relevant allowlist builder is where a policy bug hides. Same failure class
-as the PR #59 <code>ipBlock</code> trap the file's own comments warn about.</p>
-<p><strong>Shipped in Q364, but only <em>one</em> of the two open-coded loops was a spelling of the
-GitHub-CIDR rule.</strong> The three-way equivalence check found: the first loop
-(<code>githubCIDRs []net.IPNet</code>, gated <code>managed &amp;&amp; egressUsesCIDR &amp;&amp; len&gt;0</code>) is
-byte-for-byte the helper's output — consolidated onto <code>githubCIDREgressRule</code>, so the
-GitHub-CIDR 443 allowlist now has one spelling across v1 and v2. The <em>second</em> loop is
-<strong>not</strong> the GitHub rule: it renders <code>spec.destinationCIDRs</code> — CRD-documented as
-"EXTRA, non-GitHub IP ranges" — a <code>[]string</code> operator allowlist gated <em>without</em>
-<code>egressUsesCIDR</code> (it applies in every egress mode, while the GitHub rule is CIDR-mode
-only). It shares only the port-443 ipBlock shape, not the meaning, so folding it into
-the GitHub helper would conflate two distinct allowlists; it stays a separate rule
-with a comment saying why. A <code>reflect.DeepEqual</code> drift test pins the GitHub rule to
-the helper's output (it passed against both the pre- and post-consolidation builders,
-proving the rendered policy is unchanged) and locks in that the destinationCIDRs rule
-stays distinct — including that it survives FQDN mode while the GitHub rule is gated
-out.</p>
+<p>Three independent spellings of "which CIDRs may we reach on 443" in a security-relevant allowlist builder is where a policy bug hides.
+Same failure class as the PR #59 <code>ipBlock</code> trap the file's own comments warn about.</p>
+<p><strong>Shipped in Q364, but only <em>one</em> of the two open-coded loops was a spelling of the GitHub-CIDR rule.</strong> The three-way equivalence check found: the first loop (<code>githubCIDRs []net.IPNet</code>, gated <code>managed &amp;&amp; egressUsesCIDR &amp;&amp; len&gt;0</code>) is byte-for-byte the helper's output — consolidated onto <code>githubCIDREgressRule</code>, so the GitHub-CIDR 443 allowlist now has one spelling across v1 and v2.
+The <em>second</em> loop is <strong>not</strong> the GitHub rule: it renders <code>spec.destinationCIDRs</code> — CRD-documented as "EXTRA, non-GitHub IP ranges" — a <code>[]string</code> operator allowlist gated <em>without</em> <code>egressUsesCIDR</code> (it applies in every egress mode, while the GitHub rule is CIDR-mode only).
+It shares only the port-443 ipBlock shape, not the meaning, so folding it into the GitHub helper would conflate two distinct allowlists; it stays a separate rule with a comment saying why.
+A <code>reflect.DeepEqual</code> drift test pins the GitHub rule to the helper's output (it passed against both the pre- and post-consolidation builders, proving the rendered policy is unchanged) and locks in that the destinationCIDRs rule stays distinct — including that it survives FQDN mode while the GitHub rule is gated out.</p>
 <p><strong>F5 — Four hand-rolled implementations of one broker wire protocol.</strong> ✅ <strong>Shipped</strong> (Q368)</p>
-<p><code>broker/brokertest/server.go</code> (746) + <code>test/fakegithub/main.go</code> (1118) +
-<code>cmd/agc/test/load/broker_stub.go</code> (373), plus the probe (F2).
-<code>handleSession</code>, <code>handleMessage</code>, <code>handleAcquireJob</code>, <code>handleRenewJob</code> recur across
-all of them — down to identical session-ID minting (<code>fmt.Sprintf("session-%d", …)</code>)
-and the same bearer-token DELETE fallback. ~1,200 of ~2,240 stub-server lines look
-recoverable.</p>
-<p>These carry real production cost: <code>test/fakegithub</code> is built and published as a
-container image, Dependabot-tracked, Trivy-scanned, and Dockerfile-linted — a
-shipped product surface at 1,118 lines with its own 661-line test suite.</p>
-<p>Related: <code>cmd/probe/compat/compat.go</code> is a non-<code>_test.go</code> file that imports
-<code>net/http/httptest</code> and <code>broker/brokertest</code> into the module's regular build graph.
-Its doc comment asserts it "never ships in a compiled artifact" — true today only
-because no <code>package main</code> imports it, with nothing enforcing that. A check asserting
-no <code>package main</code>-reachable file imports <code>httptest</code> would make the guarantee real.</p>
-<p><strong>Shipped in Q368.</strong> The session and credential <em>mechanics</em> — minting
-<code>session-&lt;n&gt;</code> IDs, resolving a DELETE by <code>sessionId</code> query param or bearer token,
-owner-scoped session listing, the <code>#POST − #DELETE</code> active count, connection-reuse-safe
-JSON framing, and the JWT-issuer extraction — moved to one stdlib-only library,
-<code>broker/brokerstub</code>. All three doubles build on it. What stayed per-double is the
-<em>policy</em> that legitimately differs: fan-out job accounting (Q260) in <code>brokertest</code>,
-the single-use JIT lifecycle + opportunistic redelivery + Q154 lease model +
-registration/control APIs in <code>fakegithub</code>, saturated auto-delivery in the load
-stub. Folding those divergent <code>handleMessage</code>/<code>handleAcquireJob</code> bodies into one
-configurable handler would produce the "worse function than either" the
-<a href="#deliberate-non-findings">deliberate non-findings</a> warn against — these are
-different test scenarios, not reimplementations of the wire protocol, which now
-exists once. <code>broker/brokerstub</code> is kept dependency-free so <code>fakegithub</code> links no
-third-party code (the <code>broker</code> client would pull in githubapp/JWT/Prometheus): the
-distroless Trivy-scanned image gains only the repo's own module, no new scan
-surface.</p>
-<p>The <code>httptest</code> guarantee is now real, not conventional:
-<code>TestNoPackageMainReachesHTTPTest</code> (in <code>cmd/probe/compat</code>) walks every
-<code>package main</code> in the workspace and fails if any transitively imports
-<code>net/http/httptest</code> in its compiled build graph — <code>go list -deps</code>, so a <code>_test.go</code>
-httptest import (fakegithub's own tests) is correctly ignored. It runs in
-<code>make check</code>.</p>
+<p><code>broker/brokertest/server.go</code> (746) + <code>test/fakegithub/main.go</code> (1118) + <code>cmd/agc/test/load/broker_stub.go</code> (373), plus the probe (F2). <code>handleSession</code>, <code>handleMessage</code>, <code>handleAcquireJob</code>, <code>handleRenewJob</code> recur across all of them — down to identical session-ID minting (<code>fmt.Sprintf("session-%d", …)</code>) and the same bearer-token DELETE fallback. ~1,200 of ~2,240 stub-server lines look recoverable.</p>
+<p>These carry real production cost: <code>test/fakegithub</code> is built and published as a container image, Dependabot-tracked, Trivy-scanned, and Dockerfile-linted — a shipped product surface at 1,118 lines with its own 661-line test suite.</p>
+<p>Related: <code>cmd/probe/compat/compat.go</code> is a non-<code>_test.go</code> file that imports <code>net/http/httptest</code> and <code>broker/brokertest</code> into the module's regular build graph.
+Its doc comment asserts it "never ships in a compiled artifact" — true today only because no <code>package main</code> imports it, with nothing enforcing that.
+A check asserting no <code>package main</code>-reachable file imports <code>httptest</code> would make the guarantee real.</p>
+<p><strong>Shipped in Q368.</strong> The session and credential <em>mechanics</em> — minting <code>session-&lt;n&gt;</code> IDs, resolving a DELETE by <code>sessionId</code> query param or bearer token, owner-scoped session listing, the <code>#POST − #DELETE</code> active count, connection-reuse-safe JSON framing, and the JWT-issuer extraction — moved to one stdlib-only library, <code>broker/brokerstub</code>.
+All three doubles build on it.
+What stayed per-double is the <em>policy</em> that legitimately differs: fan-out job accounting (Q260) in <code>brokertest</code>, the single-use JIT lifecycle + opportunistic redelivery + Q154 lease model + registration/control APIs in <code>fakegithub</code>, saturated auto-delivery in the load stub.
+Folding those divergent <code>handleMessage</code>/<code>handleAcquireJob</code> bodies into one configurable handler would produce the "worse function than either" the <a href="#deliberate-non-findings">deliberate non-findings</a> warn against — these are different test scenarios, not reimplementations of the wire protocol, which now exists once. <code>broker/brokerstub</code> is kept dependency-free so <code>fakegithub</code> links no third-party code (the <code>broker</code> client would pull in githubapp/JWT/Prometheus): the distroless Trivy-scanned image gains only the repo's own module, no new scan surface.</p>
+<p>The <code>httptest</code> guarantee is now real, not conventional: <code>TestNoPackageMainReachesHTTPTest</code> (in <code>cmd/probe/compat</code>) walks every <code>package main</code> in the workspace and fails if any transitively imports <code>net/http/httptest</code> in its compiled build graph — <code>go list -deps</code>, so a <code>_test.go</code> httptest import (fakegithub's own tests) is correctly ignored.
+It runs in <code>make check</code>.</p>
 <h3 id="medium-high">Medium-high<a class="headerlink" href="#medium-high" title="Permanent link">&para;</a></h3>
 <p><strong>F6 — Shared foundation lives in v1-named files; blocks the Q273 sunset.</strong> ✅ <strong>Shipped</strong> (Q365)</p>
 <p>Most cross-version foundation sits in files named for v1 that v2 imports:</p>
 <ul>
-<li><code>builder.go</code> — the constants block, <code>ptr</code>, <code>securityProfileOrDefault</code>,
-  <code>hardenedContainerSecurityContext</code>, <code>nonrootPodSecurityContext</code>,
-  <code>copyRecommendedLabels</code>, <code>dnsEgressRule</code>, <code>githubCIDREgressRule</code>,
-  <code>buildAGCNetworkPolicyFrom</code>, <code>agcWorkloadNames</code>, <code>buildAGCDeploymentFrom</code>,
-  <code>buildNoProxy</code>.</li>
-<li><code>actionsgateway_controller.go</code> — <code>provisioningError</code>, <code>quotaCheck</code>,
-  <code>footprintFromResources</code>, <code>evalProxyPoolQuota</code>, <code>quotaHeadroomViolations</code>,
-  <code>resourceListEqual</code>, <code>quotaHardChangedPredicate</code>, <code>labelSafe</code>.</li>
+<li><code>builder.go</code> — the constants block, <code>ptr</code>, <code>securityProfileOrDefault</code>, <code>hardenedContainerSecurityContext</code>, <code>nonrootPodSecurityContext</code>, <code>copyRecommendedLabels</code>, <code>dnsEgressRule</code>, <code>githubCIDREgressRule</code>, <code>buildAGCNetworkPolicyFrom</code>, <code>agcWorkloadNames</code>, <code>buildAGCDeploymentFrom</code>, <code>buildNoProxy</code>.</li>
+<li><code>actionsgateway_controller.go</code> — <code>provisioningError</code>, <code>quotaCheck</code>, <code>footprintFromResources</code>, <code>evalProxyPoolQuota</code>, <code>quotaHeadroomViolations</code>, <code>resourceListEqual</code>, <code>quotaHardChangedPredicate</code>, <code>labelSafe</code>.</li>
 </ul>
-<p>Same pattern in AGC: the <code>listener</code> package is treated as classic-only, but
-<code>provisioner</code>, <code>runnerset_target.go</code>, <code>runner_shared.go</code>, and <code>main.go</code> all import
-it for <code>listener.Metrics</code>, <code>JobHandlerFunc</code>, <code>AdmitFunc</code>, <code>EventRecorder</code> — types
-with nothing to do with classic acquisition.</p>
-<p>Consequence: <strong>deleting v1 today is a multi-hundred-line refactor, not a <code>git rm</code>.</strong>
-Doing the moves <em>now</em>, while both versions are live, is mechanical and
-behavior-free, and directly de-risks the already-blocked <a href="../../STATUS/#Q273">Q273</a>.
+<p>Same pattern in AGC: the <code>listener</code> package is treated as classic-only, but <code>provisioner</code>, <code>runnerset_target.go</code>, <code>runner_shared.go</code>, and <code>main.go</code> all import it for <code>listener.Metrics</code>, <code>JobHandlerFunc</code>, <code>AdmitFunc</code>, <code>EventRecorder</code> — types with nothing to do with classic acquisition.</p>
+<p>Consequence: <strong>deleting v1 today is a multi-hundred-line refactor, not a <code>git rm</code>.</strong> Doing the moves <em>now</em>, while both versions are live, is mechanical and behavior-free, and directly de-risks the already-blocked <a href="../../STATUS/#Q273">Q273</a>.
 This is why the row sorts adjacent to Q273 rather than by its own severity.</p>
-<p><strong>Shipped in Q365.</strong> Re-measured at implementation time (2026-07-24, after Q360,
-Q364 and Q366 reshaped the GMC package), the cross-version foundation moved into
-eight <code>shared_*.go</code> files in <code>cmd/gmc/internal/controller</code> and the v1-only
-IP-range pass into <code>ipranges_v1.go</code>; <code>cert.go</code> and <code>metrics_cert.go</code> turned out to
-hold the same problem (the PKI primitives and mount layout) and were split the same
-way. The AGC half became a new leaf package, <code>cmd/agc/internal/runnercore</code>, holding
-<code>Metrics</code>, <code>EventRecorder</code>, <code>ConditionUpdater</code> and <code>AdmitFunc</code>. One correction to
-the list above: <code>JobHandlerFunc</code> is <strong>not</strong> version-neutral — its parameters are the
-classic <code>AcquireJob</code> response and it returns a <code>broker.TaskResult</code> from the classic
-<code>broker</code> module — so it stayed in <code>listener</code>, where Q264 deletes it wholesale. The
-move was proven behaviour-free by an AST diff of every top-level declaration in both
-packages before and after: byte-identical apart from package qualifiers and the one
-deliberate <code>reconcileAll</code> → <code>refreshV1ProxyNetworkPolicies</code> extraction.</p>
+<p><strong>Shipped in Q365.</strong> Re-measured at implementation time (2026-07-24, after Q360, Q364 and Q366 reshaped the GMC package), the cross-version foundation moved into eight <code>shared_*.go</code> files in <code>cmd/gmc/internal/controller</code> and the v1-only IP-range pass into <code>ipranges_v1.go</code>; <code>cert.go</code> and <code>metrics_cert.go</code> turned out to hold the same problem (the PKI primitives and mount layout) and were split the same way.
+The AGC half became a new leaf package, <code>cmd/agc/internal/runnercore</code>, holding <code>Metrics</code>, <code>EventRecorder</code>, <code>ConditionUpdater</code> and <code>AdmitFunc</code>.
+One correction to the list above: <code>JobHandlerFunc</code> is <strong>not</strong> version-neutral — its parameters are the classic <code>AcquireJob</code> response and it returns a <code>broker.TaskResult</code> from the classic <code>broker</code> module — so it stayed in <code>listener</code>, where Q264 deletes it wholesale.
+The move was proven behaviour-free by an AST diff of every top-level declaration in both packages before and after: byte-identical apart from package qualifiers and the one deliberate <code>reconcileAll</code> → <code>refreshV1ProxyNetworkPolicies</code> extraction.</p>
 <h3 id="medium">Medium<a class="headerlink" href="#medium" title="Permanent link">&para;</a></h3>
 <p><strong>F7 — ~29 near-identical <code>CreateOrPatch</code> wrappers across three GMC reconcilers.</strong> ✅ <strong>Shipped</strong> (Q366)</p>
-<p>33 <code>CreateOrPatch</code> calls across 29 <code>apply*</code> functions
-(<code>actionsgateway_controller.go</code> 16/13, <code>actionsgateway_v2_controller.go</code> 8/7,
-<code>egressproxy_controller.go</code> 9/9). Each is the same 8–12 lines differing only by Go
-type, whether <code>SetControllerReference</code> is called, and which <code>Spec</code> fields are set.</p>
-<p>Collapsing them also surfaces a real latent issue: <strong>v1's owner-reference policy is
-inconsistent and undocumented.</strong> Only 4 of 11 v1 helpers call
-<code>SetControllerReference</code>; the rest rely entirely on the finalizer in
-<code>reconcileDelete</code>. v2 sets it on every child. Nothing states the v1 policy — you
-must read all eleven and notice the absence. A force-removed finalizer on v1 leaks
-ServiceAccounts, RoleBindings, NetworkPolicies, and HPAs.</p>
-<p>Keep three as bespoke: <code>applyRoleBinding</code> (immutable <code>roleRef</code>), <code>applyService</code>
-(preserve server-assigned <code>ClusterIP</code>), <code>applyProxyDeployment</code> (HPA owns replicas).</p>
-<p><strong>Shipped in Q366.</strong> Re-measured at implementation time (2026-07-24, after Q360 and
-Q364 reshaped the package) the counts had shrunk to <strong>26 <code>CreateOrPatch</code> calls / 26
-<code>apply*</code> wrappers</strong> (v1 11, v2 7, EgressProxy 8) — one call per wrapper, no
-double-call wrappers left. All 26 now delegate to a single generic
-<code>applyManagedChild[T client.Object]</code> (<code>apply_helpers.go</code>): it keys the shell by the
-desired object's namespace/name, writes the managed labels, runs a per-type
-<code>copyManaged</code> closure, and — <strong>only when the caller passes a non-nil owner</strong> —
-stamps the controller reference. The three "bespoke" behaviours did not need
-separate skeletons: the immutable-<code>roleRef</code> recreate is a thin branch <em>around</em> the
-one path (the closure returns <code>errRoleRefImmutable</code>; the wrapper does the
-delete+recreate), and <code>applyService</code>/<code>applyProxyDeployment</code>/the EgressProxy
-conditional-scale Deployment are just different <code>copyManaged</code> closures. So the
-8–12-line skeleton collapsed 26→1 while every wrapper kept its exact
-type/fields/owner behaviour.</p>
-<p>The refactor was strictly behaviour-preserving: the per-call-site owner-reference
-decision is passed through unchanged (v1 stays 4-of-11 owned, v2 all-but-the-
-cluster-scoped-binding, EgressProxy all-owned). New table tests
-(<code>apply_helpers_ownerref_test.go</code>) pin that contract per helper — including an
-explicit <code>4 of 11</code> assertion for v1 — so the collapse cannot silently add or drop
-an owner.</p>
-<p>The ownerRef-policy inconsistency itself was <strong>deliberately not resolved here</strong> — a
-force-removed-finalizer leak is a security-relevant behaviour question that must be
-decided on its own, not smuggled into a cleanup. It was filed as
-Q394 for a separate, signed-off decision.</p>
-<p><strong>Q394 resolved it (2026-07-26): defence in depth, not either/or.</strong> All 11 v1
-children are namespaced siblings of the CR, so all 11 now stamp a controller owner
-reference — matching v2 and the EgressProxy reconciler — while <code>reconcileDelete</code>
-stays exactly as it was. The finalizer remains the primary path (ordered: drain
-<code>RunnerGroup</code>s first; fail-closed: no finalizer removal until every delete is
-confirmed; and the only thing that reaches legacy objects the reconciler no longer
-applies), and cascade GC is purely a backstop for a force-removed finalizer. The
-ordered drain is unaffected because the CR does not leave etcd — and so GC does not
-fire — until the finalizer clears. The single remaining un-owned child is v2's
-cluster-scoped <code>ClusterRoleBinding</code>, which a namespaced gateway <em>cannot</em> legally
-own. The <code>4 of 11</code> assertion became <code>11 of 11</code>, and an envtest sweep
-(<code>TestGMC_V1Provisioning_EveryManagedChildIsOwnerReferenced</code>) now drives the
-assertion from what is on the cluster, so a twelfth child added through a new code
-path cannot ship un-owned without appearing in any table. Policy documented at
-<a href="../../design/04-operational-flows/#411-tenant-teardown-and-child-reclamation">design §4.1.1</a>.</p>
+<p>33 <code>CreateOrPatch</code> calls across 29 <code>apply*</code> functions (<code>actionsgateway_controller.go</code> 16/13, <code>actionsgateway_v2_controller.go</code> 8/7, <code>egressproxy_controller.go</code> 9/9).
+Each is the same 8–12 lines differing only by Go type, whether <code>SetControllerReference</code> is called, and which <code>Spec</code> fields are set.</p>
+<p>Collapsing them also surfaces a real latent issue: <strong>v1's owner-reference policy is inconsistent and undocumented.</strong> Only 4 of 11 v1 helpers call <code>SetControllerReference</code>; the rest rely entirely on the finalizer in <code>reconcileDelete</code>. v2 sets it on every child.
+Nothing states the v1 policy — you must read all eleven and notice the absence.
+A force-removed finalizer on v1 leaks ServiceAccounts, RoleBindings, NetworkPolicies, and HPAs.</p>
+<p>Keep three as bespoke: <code>applyRoleBinding</code> (immutable <code>roleRef</code>), <code>applyService</code> (preserve server-assigned <code>ClusterIP</code>), <code>applyProxyDeployment</code> (HPA owns replicas).</p>
+<p><strong>Shipped in Q366.</strong> Re-measured at implementation time (2026-07-24, after Q360 and Q364 reshaped the package) the counts had shrunk to <strong>26 <code>CreateOrPatch</code> calls / 26 <code>apply*</code> wrappers</strong> (v1 11, v2 7, EgressProxy 8) — one call per wrapper, no double-call wrappers left.
+All 26 now delegate to a single generic <code>applyManagedChild[T client.Object]</code> (<code>apply_helpers.go</code>): it keys the shell by the desired object's namespace/name, writes the managed labels, runs a per-type <code>copyManaged</code> closure, and — <strong>only when the caller passes a non-nil owner</strong> — stamps the controller reference.
+The three "bespoke" behaviours did not need separate skeletons: the immutable-<code>roleRef</code> recreate is a thin branch <em>around</em> the one path (the closure returns <code>errRoleRefImmutable</code>; the wrapper does the delete+recreate), and <code>applyService</code>/<code>applyProxyDeployment</code>/the EgressProxy conditional-scale Deployment are just different <code>copyManaged</code> closures.
+So the 8–12-line skeleton collapsed 26→1 while every wrapper kept its exact type/fields/owner behaviour.</p>
+<p>The refactor was strictly behaviour-preserving: the per-call-site owner-reference decision is passed through unchanged (v1 stays 4-of-11 owned, v2 all-but-the- cluster-scoped-binding, EgressProxy all-owned).
+New table tests (<code>apply_helpers_ownerref_test.go</code>) pin that contract per helper — including an explicit <code>4 of 11</code> assertion for v1 — so the collapse cannot silently add or drop an owner.</p>
+<p>The ownerRef-policy inconsistency itself was <strong>deliberately not resolved here</strong> — a force-removed-finalizer leak is a security-relevant behaviour question that must be decided on its own, not smuggled into a cleanup.
+It was filed as Q394 for a separate, signed-off decision.</p>
+<p><strong>Q394 resolved it (2026-07-26): defence in depth, not either/or.</strong> All 11 v1 children are namespaced siblings of the CR, so all 11 now stamp a controller owner reference — matching v2 and the EgressProxy reconciler — while <code>reconcileDelete</code> stays exactly as it was.
+The finalizer remains the primary path (ordered: drain <code>RunnerGroup</code>s first; fail-closed: no finalizer removal until every delete is confirmed; and the only thing that reaches legacy objects the reconciler no longer applies), and cascade GC is purely a backstop for a force-removed finalizer.
+The ordered drain is unaffected because the CR does not leave etcd — and so GC does not fire — until the finalizer clears.
+The single remaining un-owned child is v2's cluster-scoped <code>ClusterRoleBinding</code>, which a namespaced gateway <em>cannot</em> legally own.
+The <code>4 of 11</code> assertion became <code>11 of 11</code>, and an envtest sweep (<code>TestGMC_V1Provisioning_EveryManagedChildIsOwnerReferenced</code>) now drives the assertion from what is on the cluster, so a twelfth child added through a new code path cannot ship un-owned without appearing in any table.
+Policy documented at <a href="../../design/04-operational-flows/#411-tenant-teardown-and-child-reclamation">design §4.1.1</a>.</p>
 <p><strong>F8 — Two god wiring functions with the linter switched off.</strong> ✅ <strong>Shipped</strong> (Q367)</p>
 <ul>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">cmd/gmc/cmd/main.go:73</a> — <strong>669 lines</strong>, prefixed
-  <code>// nolint:gocyclo</code>, interleaving ~12 concerns: ~25 flag declarations, logging
-  bootstrap, HTTP/2 + webhook TLS, cross-flag validation, informer cache scoping,
-  manager construction, image-digest policy, v2 CRD detection, 8 controller
-  registrations, 6 webhook registrations, health checks. None of it is
-  test-reachable.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">cmd/agc/main.go</a> <code>run()</code> — <strong>431 lines</strong> (grown to 462 by
-  the time Q367 ran) with 23 (measured: 24) scattered inline <code>os.Getenv</code> calls, so
-  there is no single place to see the AGC's config surface, no validation pass, and
-  no way to unit-test config resolution.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">cmd/gmc/cmd/main.go:73</a> — <strong>669 lines</strong>, prefixed <code>// nolint:gocyclo</code>, interleaving ~12 concerns: ~25 flag declarations, logging bootstrap, HTTP/2 + webhook TLS, cross-flag validation, informer cache scoping, manager construction, image-digest policy, v2 CRD detection, 8 controller registrations, 6 webhook registrations, health checks.
+  None of it is test-reachable.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">cmd/agc/main.go</a> <code>run()</code> — <strong>431 lines</strong> (grown to 462 by the time Q367 ran) with 23 (measured: 24) scattered inline <code>os.Getenv</code> calls, so there is no single place to see the AGC's config surface, no validation pass, and no way to unit-test config resolution.</li>
 </ul>
-<p>Both already proved the fix works — <code>validateLeaderElectionTimings</code>,
-<code>parseAPIServerCIDRs</code>, <code>validateImageDigest</code>, <code>useImageVolume</code> were extracted. The
-extraction simply stopped.</p>
-<p><strong>Shipped in Q367.</strong> Pure refactor — same flags, env vars, defaults, and startup
-ordering (the argument: <code>os.Getenv</code> is side-effect-free and the environment is
-immutable during startup, so hoisting all reads to a snapshot cannot change
-behavior; every erroring/side-effecting step kept its original sequence position).</p>
-<p>GMC <code>main()</code> fell <strong>669 → 83 lines</strong>: flag declarations moved to <code>addFlags</code>
-(<code>flags.go</code>, bound to a passed <code>flag.FlagSet</code> so defaults are testable); cross-flag
-validation to <code>resolveConfig</code>/<code>buildCacheOptions</code> and image/digest policy to
-<code>resolveImages</code> (<code>config.go</code>); the option builders, <code>newManager</code>, and the
-controller/webhook/health registration to <code>config.go</code>/<code>wiring.go</code>. The inert
-<code>// nolint:gocyclo</code> is gone. AGC <code>run()</code> fell <strong>462 → 329 lines</strong>: the 24 env reads
-became a single <code>loadConfig</code> snapshot, with <code>buildRegistrar</code>, <code>buildBrokerConfig</code>,
-<code>buildScheme</code>, <code>configureProxyTrust</code>, <code>setupProvisioner</code>, and <code>setupUsageSampler</code>
-carved out. New unit tests cover the now-reachable config helpers (<code>loadConfig</code>,
-<code>buildRegistrar</code>, <code>buildBrokerConfig</code>, <code>buildScheme</code>, <code>addFlags</code>, <code>resolveConfig</code>,
-<code>buildCacheOptions</code>, <code>resolveImages</code>). The <code>funlen</code>/<code>nolintlint</code> gates that would
-lock this in stay with Q371.</p>
+<p>Both already proved the fix works — <code>validateLeaderElectionTimings</code>, <code>parseAPIServerCIDRs</code>, <code>validateImageDigest</code>, <code>useImageVolume</code> were extracted.
+The extraction simply stopped.</p>
+<p><strong>Shipped in Q367.</strong> Pure refactor — same flags, env vars, defaults, and startup ordering (the argument: <code>os.Getenv</code> is side-effect-free and the environment is immutable during startup, so hoisting all reads to a snapshot cannot change behavior; every erroring/side-effecting step kept its original sequence position).</p>
+<p>GMC <code>main()</code> fell <strong>669 → 83 lines</strong>: flag declarations moved to <code>addFlags</code> (<code>flags.go</code>, bound to a passed <code>flag.FlagSet</code> so defaults are testable); cross-flag validation to <code>resolveConfig</code>/<code>buildCacheOptions</code> and image/digest policy to <code>resolveImages</code> (<code>config.go</code>); the option builders, <code>newManager</code>, and the controller/webhook/health registration to <code>config.go</code>/<code>wiring.go</code>.
+The inert <code>// nolint:gocyclo</code> is gone.
+AGC <code>run()</code> fell <strong>462 → 329 lines</strong>: the 24 env reads became a single <code>loadConfig</code> snapshot, with <code>buildRegistrar</code>, <code>buildBrokerConfig</code>, <code>buildScheme</code>, <code>configureProxyTrust</code>, <code>setupProvisioner</code>, and <code>setupUsageSampler</code> carved out.
+New unit tests cover the now-reachable config helpers (<code>loadConfig</code>, <code>buildRegistrar</code>, <code>buildBrokerConfig</code>, <code>buildScheme</code>, <code>addFlags</code>, <code>resolveConfig</code>, <code>buildCacheOptions</code>, <code>resolveImages</code>).
+The <code>funlen</code>/<code>nolintlint</code> gates that would lock this in stay with Q371.</p>
 <p><strong>F9 — <code>broker</code> and <code>scaleset</code> duplicate the error taxonomy verbatim.</strong> ✅ <strong>Shipped</strong> (Q369)</p>
-<p><code>RateLimitError</code> and <code>UnauthorizedError</code> are each declared twice
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:33,47</a> and
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/errors.go">scaleset/errors.go:90,12</a>), and <code>parseRateLimitError</code>
-exists in both (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:647</a>,
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go">scaleset/client.go:789</a>) with identical bodies differing
-only in parameter type (<code>*http.Response</code> vs <code>http.Header</code>). Callers handling both
-protocols must type-switch on two unrelated types with the same name.
-<code>githubapp/httpx/</code> already exists as the natural home.</p>
-<p><strong>Shipped in Q369, premise confirmed on re-measurement.</strong> The two pairs were
-semantically identical — same single field (<code>RetryAfter time.Duration</code> with the same
--1 "no header, back off exponentially" sentinel; <code>StatusCode int</code>), no <code>Unwrap</code>/<code>Is</code>
-method on either, and <code>Error()</code> text differing only in the <code>broker:</code> / <code>scaleset:</code>
-prefix — so unifying them changed no protocol's behavior. Both now alias one
-declaration in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/httpx/errors.go">githubapp/httpx/errors.go</a>, which
-carries a <code>Source</code> field (<code>SourceBroker</code>/<code>SourceScaleSet</code>) purely to keep those
-message prefixes; it never gates matching. The two <code>parseRateLimitError</code> bodies
-collapsed into the exported <code>httpx.ParseRateLimitError(source, header)</code> — the
-<code>*http.Response</code> caller passes <code>resp.Header</code>.</p>
-<p>Aliases (not renames) were deliberate: <code>broker.RateLimitError</code> and
-<code>scaleset.UnauthorizedError</code> are referenced from <code>cmd/agc</code>, <code>cmd/probe</code>, and the
-compatibility matrix, and an alias keeps every one of those call sites valid <em>while</em>
-making the two names the same type — which is the actual fix, since an <code>errors.As</code>
-against either now matches an error from either protocol. The regression guard the
-compiler cannot give is <code>errors_q369_test.go</code> in both listener packages:
-<code>scalesetlistener</code>'s drives real 429/401 responses through <em>both</em> protocol clients
-and asserts that listener's own matchers (<code>isRateLimited</code>, <code>isUnauthorized</code>) fire
-for each, plus a cross-package assignment that fails to <em>compile</em> if the types are
-ever re-split; <code>listener</code>'s does the same for the classic matchers. Both halves were
-verified to fail by temporarily re-declaring a distinct <code>scaleset</code> type — the
-matcher assertions returned false and the assignment stopped compiling, as intended.</p>
+<p><code>RateLimitError</code> and <code>UnauthorizedError</code> are each declared twice (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:33,47</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/errors.go">scaleset/errors.go:90,12</a>), and <code>parseRateLimitError</code> exists in both (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:647</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go">scaleset/client.go:789</a>) with identical bodies differing only in parameter type (<code>*http.Response</code> vs <code>http.Header</code>).
+Callers handling both protocols must type-switch on two unrelated types with the same name. <code>githubapp/httpx/</code> already exists as the natural home.</p>
+<p><strong>Shipped in Q369, premise confirmed on re-measurement.</strong> The two pairs were semantically identical — same single field (<code>RetryAfter time.Duration</code> with the same -1 "no header, back off exponentially" sentinel; <code>StatusCode int</code>), no <code>Unwrap</code>/<code>Is</code> method on either, and <code>Error()</code> text differing only in the <code>broker:</code> / <code>scaleset:</code> prefix — so unifying them changed no protocol's behavior.
+Both now alias one declaration in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/httpx/errors.go">githubapp/httpx/errors.go</a>, which carries a <code>Source</code> field (<code>SourceBroker</code>/<code>SourceScaleSet</code>) purely to keep those message prefixes; it never gates matching.
+The two <code>parseRateLimitError</code> bodies collapsed into the exported <code>httpx.ParseRateLimitError(source, header)</code> — the <code>*http.Response</code> caller passes <code>resp.Header</code>.</p>
+<p>Aliases (not renames) were deliberate: <code>broker.RateLimitError</code> and <code>scaleset.UnauthorizedError</code> are referenced from <code>cmd/agc</code>, <code>cmd/probe</code>, and the compatibility matrix, and an alias keeps every one of those call sites valid <em>while</em> making the two names the same type — which is the actual fix, since an <code>errors.As</code> against either now matches an error from either protocol.
+The regression guard the compiler cannot give is <code>errors_q369_test.go</code> in both listener packages: <code>scalesetlistener</code>'s drives real 429/401 responses through <em>both</em> protocol clients and asserts that listener's own matchers (<code>isRateLimited</code>, <code>isUnauthorized</code>) fire for each, plus a cross-package assignment that fails to <em>compile</em> if the types are ever re-split; <code>listener</code>'s does the same for the classic matchers.
+Both halves were verified to fail by temporarily re-declaring a distinct <code>scaleset</code> type — the matcher assertions returned false and the assignment stopped compiling, as intended.</p>
 <p><strong>F10 — Script-layer sprawl.</strong> ✅ <strong>Shipped</strong> (Q370)</p>
 <ul>
-<li><code>scripts/dogfood/setup.sh</code> — 688 lines / 32KB, 15 functions spanning cluster
-  creation, node pools, credentials, CRD install, Helm install, CA-bundle patching,
-  namespace, secrets, quota, an Athens proxy, and CR apply behind one <code>main()</code>.
-  Larger than any Go file in scope; <code>scripts/dogfood/lib/</code> already exists as the
-  home for the split.</li>
-<li><code>scripts/lib/common.sh</code> is sourced by <strong>26 of 69</strong> scripts. The largest
-  non-adopters re-roll its helpers: <code>probe-live-run.sh</code> and
-  <code>probe-investigations-cd.sh</code> each define their own <code>step()</code>/<code>die()</code>/<code>gh_curl()</code>.
-  <code>repo_root=</code> is recomputed in 11 scripts; ad-hoc <code>command -v</code> guards appear in 12
-  despite <code>common.sh</code>'s <code>require_cmd</code>.</li>
-<li><code>scripts/sync-chart-{crds,rbac,webhook}.sh</code> triplicate an identical
-  trap/<code>render</code>/<code>sync</code>/<code>check</code>/<code>main</code> skeleton — even the header comments are
-  verbatim copies. Extract to <code>scripts/lib/chart-sync.sh</code>.</li>
+<li><code>scripts/dogfood/setup.sh</code> — 688 lines / 32KB, 15 functions spanning cluster creation, node pools, credentials, CRD install, Helm install, CA-bundle patching, namespace, secrets, quota, an Athens proxy, and CR apply behind one <code>main()</code>.
+  Larger than any Go file in scope; <code>scripts/dogfood/lib/</code> already exists as the home for the split.</li>
+<li><code>scripts/lib/common.sh</code> is sourced by <strong>26 of 69</strong> scripts.
+  The largest non-adopters re-roll its helpers: <code>probe-live-run.sh</code> and <code>probe-investigations-cd.sh</code> each define their own <code>step()</code>/<code>die()</code>/<code>gh_curl()</code>. <code>repo_root=</code> is recomputed in 11 scripts; ad-hoc <code>command -v</code> guards appear in 12 despite <code>common.sh</code>'s <code>require_cmd</code>.</li>
+<li><code>scripts/sync-chart-{crds,rbac,webhook}.sh</code> triplicate an identical trap/<code>render</code>/<code>sync</code>/<code>check</code>/<code>main</code> skeleton — even the header comments are verbatim copies.
+  Extract to <code>scripts/lib/chart-sync.sh</code>.</li>
 </ul>
-<p><strong>Shipped in Q370, two of the three threads — the other two premises were stale on
-re-measurement.</strong> The <code>sync-chart-*.sh</code> triplication is gone: the temp-file
-registry, EXIT-trap cleanup, and <code>--check</code>/write/usage dispatch moved to the new
-<code>scripts/lib/chart-sync.sh</code>, which the three now source (each keeps only its
-genuinely-different <code>render</code>/<code>sync</code>/<code>check</code>). The two named <code>common.sh</code>
-non-adopters now source it: the byte-identical <code>step</code>/<code>die</code>/<code>gh_curl</code> were promoted
-into <code>common.sh</code> and the local copies deleted (<code>info</code>/<code>warn</code> stayed local to
-<code>probe-investigations-cd.sh</code> — single-script, not duplicated). <code>docs-preview.sh</code>'s
-<code>die</code> was left alone: it prints a script-name-prefixed message, so it is not the
-same contract. <code>setup.sh</code> needed no work — re-measured at 730 lines but <strong>already
-decomposed</strong> into 16 concern-scoped functions (<code>create_cluster</code>, <code>install_gag</code>,
-<code>apply_cr</code>, …) behind a clean orchestrating <code>main()</code>; the length is inherent step
-complexity, not a god function, and moving single-use bootstrap functions into
-<code>dogfood/lib/</code> would split the from-zero flow across files for no reuse gain while
-risking the Q380 bootstrap. The <code>command -v</code>/<code>repo_root</code> counts were also stale:
-<code>repo_root="$(git rev-parse …)"</code> is the required pre-source idiom (<code>common.sh</code>'s own
-header mandates it, not sprawl), and the remaining <code>command -v</code> guards are
-graceful-detection sites where <code>require_cmd</code>'s fail-fast <code>exit 1</code> would be wrong
-(the tool-checker itself, the <code>PreToolUse</code> hooks, <code>local-throttle.sh</code>'s optional
-probes) — no clean swap exists, so none was forced.</p>
+<p><strong>Shipped in Q370, two of the three threads — the other two premises were stale on re-measurement.</strong> The <code>sync-chart-*.sh</code> triplication is gone: the temp-file registry, EXIT-trap cleanup, and <code>--check</code>/write/usage dispatch moved to the new <code>scripts/lib/chart-sync.sh</code>, which the three now source (each keeps only its genuinely-different <code>render</code>/<code>sync</code>/<code>check</code>).
+The two named <code>common.sh</code> non-adopters now source it: the byte-identical <code>step</code>/<code>die</code>/<code>gh_curl</code> were promoted into <code>common.sh</code> and the local copies deleted (<code>info</code>/<code>warn</code> stayed local to <code>probe-investigations-cd.sh</code> — single-script, not duplicated). <code>docs-preview.sh</code>'s <code>die</code> was left alone: it prints a script-name-prefixed message, so it is not the same contract. <code>setup.sh</code> needed no work — re-measured at 730 lines but <strong>already decomposed</strong> into 16 concern-scoped functions (<code>create_cluster</code>, <code>install_gag</code>, <code>apply_cr</code>, …) behind a clean orchestrating <code>main()</code>; the length is inherent step complexity, not a god function, and moving single-use bootstrap functions into <code>dogfood/lib/</code> would split the from-zero flow across files for no reuse gain while risking the Q380 bootstrap.
+The <code>command -v</code>/<code>repo_root</code> counts were also stale: <code>repo_root="$(git rev-parse …)"</code> is the required pre-source idiom (<code>common.sh</code>'s own header mandates it, not sprawl), and the remaining <code>command -v</code> guards are graceful-detection sites where <code>require_cmd</code>'s fail-fast <code>exit 1</code> would be wrong (the tool-checker itself, the <code>PreToolUse</code> hooks, <code>local-throttle.sh</code>'s optional probes) — no clean swap exists, so none was forced.</p>
 <h2 id="prevention-what-a-linter-could-and-could-not-have-caught">Prevention: what a linter could and could not have caught<a class="headerlink" href="#prevention-what-a-linter-could-and-could-not-have-caught" title="Permanent link">&para;</a></h2>
-<p>Scored after the fact, to decide whether more gates or more audits are the better
-investment. The answer is <strong>both, because they catch disjoint classes</strong> — and the
-audit class is the larger one here.</p>
+<p>Scored after the fact, to decide whether more gates or more audits are the better investment.
+The answer is <strong>both, because they catch disjoint classes</strong> — and the audit class is the larger one here.</p>
 <table>
 <thead>
 <tr>
@@ -3226,28 +2988,18 @@ audit class is the larger one here.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>The decisive evidence: <code>dupl</code> is already enabled</strong> (threshold 150, see
-<code>.golangci.yml</code>) and the codebase passes it — so by construction it did not catch
-any of the four duplication findings (F4, F5, F7, F9). Those clones are each below
-the token threshold, or span files and modules it does not compare. Lowering the
-threshold to reach them would drown the signal in table-test and struct-literal
-boilerplate, which is exactly why 150 was chosen.</p>
-<p><strong>F4 is the archetype of the irreducible class.</strong> <code>githubCIDREgressRule</code> existed,
-was documented as the shared helper, and the new code open-coded it anyway. No
-linter detects "you reimplemented an abstraction that already exists two files
-away" — that requires knowing intent. Roughly 7 of the 10 findings are this shape.</p>
+<p><strong>The decisive evidence: <code>dupl</code> is already enabled</strong> (threshold 150, see <code>.golangci.yml</code>) and the codebase passes it — so by construction it did not catch any of the four duplication findings (F4, F5, F7, F9).
+Those clones are each below the token threshold, or span files and modules it does not compare.
+Lowering the threshold to reach them would drown the signal in table-test and struct-literal boilerplate, which is exactly why 150 was chosen.</p>
+<p><strong>F4 is the archetype of the irreducible class.</strong> <code>githubCIDREgressRule</code> existed, was documented as the shared helper, and the new code open-coded it anyway.
+No linter detects "you reimplemented an abstraction that already exists two files away" — that requires knowing intent.
+Roughly 7 of the 10 findings are this shape.</p>
 <h3 id="suppression-discipline-is-a-strength">Suppression discipline is a strength<a class="headerlink" href="#suppression-discipline-is-a-strength" title="Permanent link">&para;</a></h3>
-<p>79 <code>nolint</code> directives across 41k first-party lines, and <strong>71 of them are <code>gosec</code></strong>
-— whose noisy rule families are already excluded wholesale with written
-justification in <code>.golangci.yml</code>. That leaves <strong>8 non-<code>gosec</code> suppressions in the
-entire codebase</strong>. This is unusually disciplined and makes a suppression gate cheap
-to adopt rather than a cleanup project.</p>
-<p>One concrete payoff has since been realized: the repo's only <code>nolint:gocyclo</code>
-(<code>cmd/gmc/cmd/main.go</code>) was inert — someone knew the function was over the line and
-pre-silenced a gate that does not exist (<code>gocyclo</code> is not enabled). Q367 removed it
-when the function shrank to 83 lines; <code>nolintlint</code> with <code>allow-unused: false</code>
-(Q371) would have converted such an inert suppression from invisible to a build
-failure.</p>
+<p>79 <code>nolint</code> directives across 41k first-party lines, and <strong>71 of them are <code>gosec</code></strong> — whose noisy rule families are already excluded wholesale with written justification in <code>.golangci.yml</code>.
+That leaves <strong>8 non-<code>gosec</code> suppressions in the entire codebase</strong>.
+This is unusually disciplined and makes a suppression gate cheap to adopt rather than a cleanup project.</p>
+<p>One concrete payoff has since been realized: the repo's only <code>nolint:gocyclo</code> (<code>cmd/gmc/cmd/main.go</code>) was inert — someone knew the function was over the line and pre-silenced a gate that does not exist (<code>gocyclo</code> is not enabled).
+Q367 removed it when the function shrank to 83 lines; <code>nolintlint</code> with <code>allow-unused: false</code> (Q371) would have converted such an inert suppression from invisible to a build failure.</p>
 <h3 id="the-funlen-threshold-curve">The <code>funlen</code> threshold curve<a class="headerlink" href="#the-funlen-threshold-curve" title="Permanent link">&para;</a></h3>
 <p>Measured 2026-07-20 over non-test, non-generated Go:</p>
 <table>
@@ -3280,68 +3032,39 @@ failure.</p>
 </tr>
 </tbody>
 </table>
-<p><a href="../../development/technical-debt/">technical-debt.md</a> previously recorded
-<em>"Cyclomatic complexity | Skip for now — most long functions are legitimate wiring;
-high noise-to-signal."</em> The curve showed that call was too pessimistic: at a high
-threshold the gate fires on a handful, not a flood. With Q367 clearing the two god
-<code>main</code>s, Q371 landed the gate at <code>lines: 200</code> — just above the worst legitimate
-survivor (<code>listener.Run</code>, 197 lines, measured 2026-07-23 after Q367 shrank the two
-<code>main</code>s to 178/191 and below) — set to ratchet down, the same "gates by not getting
-worse" pattern the coverage ratchet already uses, with no allowlist of shame. Q371
-updated that metrics-table row to match.</p>
+<p><a href="../../development/technical-debt/">technical-debt.md</a> previously recorded <em>"Cyclomatic complexity | Skip for now — most long functions are legitimate wiring; high noise-to-signal."</em> The curve showed that call was too pessimistic: at a high threshold the gate fires on a handful, not a flood.
+With Q367 clearing the two god <code>main</code>s, Q371 landed the gate at <code>lines: 200</code> — just above the worst legitimate survivor (<code>listener.Run</code>, 197 lines, measured 2026-07-23 after Q367 shrank the two <code>main</code>s to 178/191 and below) — set to ratchet down, the same "gates by not getting worse" pattern the coverage ratchet already uses, with no allowlist of shame.
+Q371 updated that metrics-table row to match.</p>
 <h3 id="audit-cadence">Audit cadence<a class="headerlink" href="#audit-cadence" title="Permanent link">&para;</a></h3>
-<p>Recurrence is tracked as <a href="../../STATUS/#Q372">Q372</a> in Deferred, triggered by the
-next minor release <strong>or</strong> ≥20% growth over the 41,011-line baseline — whichever
-first. Growth is the honest proxy: this audit surfaced ~10 items across 41k lines,
-so drift scales with code added rather than calendar time. A time-based schedule
-would run the sweep when nothing had changed and miss a burst of growth between
-ticks.</p>
-<p>The sweep is cheap — this one was three parallel read-only agents plus verification,
-with no code touched — which argues for triggering it more readily than a
-heavyweight process would justify.</p>
+<p>Recurrence is tracked as <a href="../../STATUS/#Q372">Q372</a> in Deferred, triggered by the next minor release <strong>or</strong> ≥20% growth over the 41,011-line baseline — whichever first.
+Growth is the honest proxy: this audit surfaced ~10 items across 41k lines, so drift scales with code added rather than calendar time.
+A time-based schedule would run the sweep when nothing had changed and miss a burst of growth between ticks.</p>
+<p>The sweep is cheap — this one was three parallel read-only agents plus verification, with no code touched — which argues for triggering it more readily than a heavyweight process would justify.</p>
 <h2 id="deliberate-non-findings">Deliberate non-findings<a class="headerlink" href="#deliberate-non-findings" title="Permanent link">&para;</a></h2>
 <p>Recorded so they are not re-litigated by the next audit.</p>
 <ul>
-<li><strong>The Makefile is fine.</strong> 574 lines / 147 targets, but six <code>##@</code> sections, no
-  include sprawl, longest recipe 22 lines, median single-digit. It delegates logic
-  to <code>scripts/</code> rather than embedding shell — which is <em>why</em> <code>scripts/</code> sprawled and
-  it did not. No action.</li>
-<li><strong>The GMC v1/v2 reconciler fork is correct.</strong> v2 genuinely diverges (standalone
-  <code>EgressProxy</code>, no PSA stamping, workload identity, direct egress, per-gateway
-  naming, FQDN backends, different status contracts). Merging would produce a worse
-  function than either. Only the <em>mechanical</em> copy-paste (F4, F6, F7) should go.</li>
-<li><strong>Done-channel discipline is honored.</strong> <code>listenerState.done</code>, <code>StartRenewLoop</code>'s
-  <code>renewDone</code>, <code>completeSiblingDeliveries</code>, and <code>Listener.Start</code> all return or expose
-  <code>&lt;-chan struct{}</code> per the repo convention. The AGC concurrency issues are
-  concern-mixing, not lifecycle discipline.</li>
-<li><strong>Comment density is an asset, not debt.</strong> Two spots drift into pure history and
-  could move to <code>docs/design/</code> with a pointer left behind:
-  <code>listener/config.go:186-208</code> (dogfood-experiment narrative on <code>FanoutCompletion</code>)
-  and <code>listener/job.go:126-141</code> (re-litigating an abandoned fix). Not worth a Queue
-  row on its own.</li>
-<li><strong><code>mulQuantity</code>'s O(n) addition</strong> is justified by the <code>Maximum=100</code> CRD cap, which
-  is present on both v1 and v2 (<code>api/v2alpha1/egressproxy_types.go</code>). Comment is
-  accurate; leave it.</li>
+<li><strong>The Makefile is fine.</strong> 574 lines / 147 targets, but six <code>##@</code> sections, no include sprawl, longest recipe 22 lines, median single-digit.
+  It delegates logic to <code>scripts/</code> rather than embedding shell — which is <em>why</em> <code>scripts/</code> sprawled and it did not.
+  No action.</li>
+<li><strong>The GMC v1/v2 reconciler fork is correct.</strong> v2 genuinely diverges (standalone <code>EgressProxy</code>, no PSA stamping, workload identity, direct egress, per-gateway naming, FQDN backends, different status contracts).
+  Merging would produce a worse function than either.
+  Only the <em>mechanical</em> copy-paste (F4, F6, F7) should go.</li>
+<li><strong>Done-channel discipline is honored.</strong> <code>listenerState.done</code>, <code>StartRenewLoop</code>'s <code>renewDone</code>, <code>completeSiblingDeliveries</code>, and <code>Listener.Start</code> all return or expose <code>&lt;-chan struct{}</code> per the repo convention.
+  The AGC concurrency issues are concern-mixing, not lifecycle discipline.</li>
+<li><strong>Comment density is an asset, not debt.</strong> Two spots drift into pure history and could move to <code>docs/design/</code> with a pointer left behind: <code>listener/config.go:186-208</code> (dogfood-experiment narrative on <code>FanoutCompletion</code>) and <code>listener/job.go:126-141</code> (re-litigating an abandoned fix).
+  Not worth a Queue row on its own.</li>
+<li><strong><code>mulQuantity</code>'s O(n) addition</strong> is justified by the <code>Maximum=100</code> CRD cap, which is present on both v1 and v2 (<code>api/v2alpha1/egressproxy_types.go</code>).
+  Comment is accurate; leave it.</li>
 </ul>
 <h2 id="unverified-residuals">Unverified residuals<a class="headerlink" href="#unverified-residuals" title="Permanent link">&para;</a></h2>
-<p>Reported by the audit sweep but <strong>not</strong> independently confirmed end-to-end. Per the
-standing rule that source-reading alone has produced wrong conclusions (PR #59),
-treat these as leads, not findings — confirm before acting.</p>
+<p>Reported by the audit sweep but <strong>not</strong> independently confirmed end-to-end.
+Per the standing rule that source-reading alone has produced wrong conclusions (PR #59), treat these as leads, not findings — confirm before acting.</p>
 <ul>
-<li><code>listener/job.go</code> <code>handleJob</code> (254 lines): correctness may rest on undocumented
-  LIFO ordering of four <code>defer</code>s, one of which reads a variable written ~60 lines
-  later.</li>
-<li><code>listener/goroutine.go</code> <code>Run</code> (277 lines): session ownership encoded as a
-  <code>sessionID = ""</code> sentinel, with the invariant held by two copies of a five-line
-  idiom staying in sync.</li>
-<li>The classic listener's empty-poll path may lack a pacing floor;
-  <code>scalesetlistener</code> added <code>minPollInterval</code> for exactly this request-storm hazard
-  and it may not have been backported.</li>
-<li>~230 lines of near-identical reconciler shells between <code>runnergroup_controller.go</code>
-  and <code>runnerset_controller.go</code>, including <code>drainConditions</code> — risky because both
-  implement the same Q333 retain-until-reflected protocol.</li>
-<li>v1's <code>reconcileDelete</code> may not verify its deletes; v2's does (ported via Q328,
-  possibly never back-ported).</li>
+<li><code>listener/job.go</code> <code>handleJob</code> (254 lines): correctness may rest on undocumented LIFO ordering of four <code>defer</code>s, one of which reads a variable written ~60 lines later.</li>
+<li><code>listener/goroutine.go</code> <code>Run</code> (277 lines): session ownership encoded as a <code>sessionID = ""</code> sentinel, with the invariant held by two copies of a five-line idiom staying in sync.</li>
+<li>The classic listener's empty-poll path may lack a pacing floor; <code>scalesetlistener</code> added <code>minPollInterval</code> for exactly this request-storm hazard and it may not have been backported.</li>
+<li>~230 lines of near-identical reconciler shells between <code>runnergroup_controller.go</code> and <code>runnerset_controller.go</code>, including <code>drainConditions</code> — risky because both implement the same Q333 retain-until-reflected protocol.</li>
+<li>v1's <code>reconcileDelete</code> may not verify its deletes; v2's does (ported via Q328, possibly never back-ported).</li>
 </ul>
 
 

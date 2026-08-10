@@ -2670,35 +2670,23 @@
 
 
 <h1 id="q284-expand-podscheduling-to-the-full-desirable-scheduling-surface">Q284: Expand <code>PodScheduling</code> to the full desirable scheduling surface<a class="headerlink" href="#q284-expand-podscheduling-to-the-full-desirable-scheduling-surface" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ Done (2026-07-12). Shipped: both fields on <code>PodScheduling</code>, the infra-only
-<code>--allowed-infra-priority-classes</code> allowlist with a boot-time disjointness check, the
-extended <code>EgressProxy</code> webhook, a new v2 <code>ActionsGateway</code> validating webhook, unit +
-envtest coverage, and operator/design docs. §2's two-allowlist governance is promoted into
-<a href="../../../design/05-security/#the-two-priorityclass-allowlists-must-stay-disjoint-worker-vs-infra-q284"><code>docs/design/05-security.md</code> §5.2</a>.</p>
+<p><strong>Status:</strong> ✅ Done (2026-07-12).
+Shipped: both fields on <code>PodScheduling</code>, the infra-only <code>--allowed-infra-priority-classes</code> allowlist with a boot-time disjointness check, the extended <code>EgressProxy</code> webhook, a new v2 <code>ActionsGateway</code> validating webhook, unit + envtest coverage, and operator/design docs. §2's two-allowlist governance is promoted into <a href="../../../design/05-security/#the-two-priorityclass-allowlists-must-stay-disjoint-worker-vs-infra-q284"><code>docs/design/05-security.md</code> §5.2</a>.</p>
 <blockquote>
-<p><strong>Sized <code>M</code>, not <code>S</code>.</strong> The API diff was two fields, but gating one of them needed a v2
-<code>ActionsGateway</code> validating webhook that did not exist (§2.3) — the bulk of the work.</p>
+<p><strong>Sized <code>M</code>, not <code>S</code>.</strong> The API diff was two fields, but gating one of them needed a v2 <code>ActionsGateway</code> validating webhook that did not exist (§2.3) — the bulk of the work.</p>
 </blockquote>
-<p><strong>Scope:</strong> Add <code>topologySpreadConstraints</code> and <code>priorityClassName</code> to the <code>PodScheduling</code>
-block shared by <code>EgressProxy</code> and <code>ActionsGateway</code> (<code>api/v2beta1/scheduling_types.go</code>).
+<p><strong>Scope:</strong> Add <code>topologySpreadConstraints</code> and <code>priorityClassName</code> to the <code>PodScheduling</code> block shared by <code>EgressProxy</code> and <code>ActionsGateway</code> (<code>api/v2beta1/scheduling_types.go</code>).
 Purely additive — no conversion work, no breaking change.</p>
-<p>This plan exists because the second field carries a security governance decision that
-does not fit in a Queue row, and that a future session would otherwise re-derive (or,
-worse, get wrong by reusing the obvious existing allowlist).</p>
+<p>This plan exists because the second field carries a security governance decision that does not fit in a Queue row, and that a future session would otherwise re-derive (or, worse, get wrong by reusing the obvious existing allowlist).</p>
 <hr />
 <h2 id="1-the-gap">1. The gap<a class="headerlink" href="#1-the-gap" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/pull/578">Q282</a> gave <code>EgressProxy</code> and
-<code>ActionsGateway</code> a <code>spec.scheduling</code> block carrying the three standard placement
-controls: <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>. Worker pods, by contrast, take
-placement through a full <code>corev1.PodTemplateSpec</code> on <code>RunnerTemplate</code>.</p>
-<p><code>PodScheduling</code> is deliberately a narrow block rather than a <code>PodTemplateSpec</code> — a
-<code>PodTemplateSpec</code> generates ~600 KB of OpenAPI, which is why the <code>RunnerTemplate</code> CRDs
-weigh 1.21 MB each and why the v2 CRDs ship in their own opt-in chart at all (§H.13,
-Q149). The rationale is recorded in full in the <code>PodScheduling</code> godoc; it is not
-repeated here.</p>
-<p>The consequence is a real gap. Workers can express <code>topologySpreadConstraints</code>,
-<code>priorityClassName</code>, <code>schedulerName</code>, <code>runtimeClassName</code>, and <code>nodeName</code>; the proxy and
-AGC pods cannot. Two of those five matter:</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/pull/578">Q282</a> gave <code>EgressProxy</code> and <code>ActionsGateway</code> a <code>spec.scheduling</code> block carrying the three standard placement controls: <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>.
+Worker pods, by contrast, take placement through a full <code>corev1.PodTemplateSpec</code> on <code>RunnerTemplate</code>.</p>
+<p><code>PodScheduling</code> is deliberately a narrow block rather than a <code>PodTemplateSpec</code> — a <code>PodTemplateSpec</code> generates ~600 KB of OpenAPI, which is why the <code>RunnerTemplate</code> CRDs weigh 1.21 MB each and why the v2 CRDs ship in their own opt-in chart at all (§H.13, Q149).
+The rationale is recorded in full in the <code>PodScheduling</code> godoc; it is not repeated here.</p>
+<p>The consequence is a real gap.
+Workers can express <code>topologySpreadConstraints</code>, <code>priorityClassName</code>, <code>schedulerName</code>, <code>runtimeClassName</code>, and <code>nodeName</code>; the proxy and AGC pods cannot.
+Two of those five matter:</p>
 <table>
 <thead>
 <tr>
@@ -2717,30 +2705,24 @@ AGC pods cannot. Two of those five matter:</p>
 </tr>
 </tbody>
 </table>
-<p>The remaining three (<code>schedulerName</code>, <code>runtimeClassName</code>, <code>nodeName</code>) are out of scope:
-<code>nodeName</code> bypasses scheduling entirely, and the other two have no demonstrated need on
-pods whose image and container spec are controller-enforced invariants.</p>
+<p>The remaining three (<code>schedulerName</code>, <code>runtimeClassName</code>, <code>nodeName</code>) are out of scope: <code>nodeName</code> bypasses scheduling entirely, and the other two have no demonstrated need on pods whose image and container spec are controller-enforced invariants.</p>
 <h2 id="2-the-governance-decision-priorityclassname-needs-a-separate-allowlist">2. The governance decision: <code>priorityClassName</code> needs a <em>separate</em> allowlist<a class="headerlink" href="#2-the-governance-decision-priorityclassname-needs-a-separate-allowlist" title="Permanent link">&para;</a></h2>
-<p><strong>Decision.</strong> <code>spec.scheduling.priorityClassName</code> on <code>EgressProxy</code> and <code>ActionsGateway</code>
-must be gated by a <strong>new, infra-only allowlist</strong> — not by the existing
-<code>--allowed-priority-classes</code> flag.</p>
+<p><strong>Decision.</strong> <code>spec.scheduling.priorityClassName</code> on <code>EgressProxy</code> and <code>ActionsGateway</code> must be gated by a <strong>new, infra-only allowlist</strong> — not by the existing <code>--allowed-priority-classes</code> flag.</p>
 <p><strong>Do not reuse <code>--allowed-priority-classes</code>.</strong> This is the trap, and it is not obvious.</p>
 <h3 id="21-why-the-obvious-approach-inverts-the-priority-ordering">2.1 Why the obvious approach inverts the priority ordering<a class="headerlink" href="#21-why-the-obvious-approach-inverts-the-priority-ordering" title="Permanent link">&para;</a></h3>
-<p><code>--allowed-priority-classes</code> (plus its ConfigMap augmentation,
-<code>--priority-class-allowlist-configmap</code>, Q188) is the <strong>worker-facing</strong> allowlist. It
-gates every place a <em>tenant</em> can name a PriorityClass for a <em>worker</em> pod:</p>
+<p><code>--allowed-priority-classes</code> (plus its ConfigMap augmentation, <code>--priority-class-allowlist-configmap</code>, Q188) is the <strong>worker-facing</strong> allowlist.
+It gates every place a <em>tenant</em> can name a PriorityClass for a <em>worker</em> pod:</p>
 <ul>
 <li><code>ActionsGateway.runnerGroups[].priorityTiers[].priorityClassName</code></li>
 <li><code>ActionsGateway.runnerGroups[].podTemplate.spec.priorityClassName</code> (Q289)</li>
 <li><code>RunnerTemplate.podTemplate.spec.priorityClassName</code> (Q289)</li>
 </ul>
-<p>Infra pods need to sit at a <strong>higher</strong> priority than workers — that is the whole point of
-gating them. Suppose we reuse the worker allowlist and add <code>gag-infra-critical</code> to it so
-that an <code>EgressProxy</code> may name it. The allowlist has exactly one namespace of meaning, so
-that same value is now nameable from <code>RunnerTemplate.podTemplate.spec.priorityClassName</code>.</p>
-<p>Any tenant can then lift its <strong>worker</strong> pods to infra priority — and preempt <em>other
-tenants'</em> proxy pods. The gate intended to protect the proxy becomes the mechanism for
-evicting it. The ordering inverts.</p>
+<p>Infra pods need to sit at a <strong>higher</strong> priority than workers — that is the whole point of gating them.
+Suppose we reuse the worker allowlist and add <code>gag-infra-critical</code> to it so that an <code>EgressProxy</code> may name it.
+The allowlist has exactly one namespace of meaning, so that same value is now nameable from <code>RunnerTemplate.podTemplate.spec.priorityClassName</code>.</p>
+<p>Any tenant can then lift its <strong>worker</strong> pods to infra priority — and preempt <em>other tenants'</em> proxy pods.
+The gate intended to protect the proxy becomes the mechanism for evicting it.
+The ordering inverts.</p>
 <p>Two allowlists, disjoint by construction:</p>
 <table>
 <thead>
@@ -2763,40 +2745,30 @@ evicting it. The ordering inverts.</p>
 </tr>
 </tbody>
 </table>
-<p>The platform admin pre-creates both sets of classes and is responsible for keeping them
-disjoint. A validating check that the two lists do not intersect at GMC startup is cheap
-and worth having — it converts a silent priority inversion into a boot-time error.</p>
+<p>The platform admin pre-creates both sets of classes and is responsible for keeping them disjoint.
+A validating check that the two lists do not intersect at GMC startup is cheap and worth having — it converts a silent priority inversion into a boot-time error.</p>
 <h3 id="22-why-priorityclassname-is-gated-at-all-when-the-rest-of-podscheduling-is-not">2.2 Why <code>priorityClassName</code> is gated at all, when the rest of <code>PodScheduling</code> is not<a class="headerlink" href="#22-why-priorityclassname-is-gated-at-all-when-the-rest-of-podscheduling-is-not" title="Permanent link">&para;</a></h3>
-<p>The <code>PodScheduling</code> godoc records a deliberate, reviewed decision (Q282) that
-<code>nodeSelector</code> / <code>tolerations</code> / <code>affinity</code> are <strong>tenant-settable and not allowlisted</strong>.
-<code>priorityClassName</code> is the exception, and the distinction is not arbitrary:</p>
+<p>The <code>PodScheduling</code> godoc records a deliberate, reviewed decision (Q282) that <code>nodeSelector</code> / <code>tolerations</code> / <code>affinity</code> are <strong>tenant-settable and not allowlisted</strong>. <code>priorityClassName</code> is the exception, and the distinction is not arbitrary:</p>
 <ul>
-<li>Placement is a <strong>choice about the tenant's own traffic</strong>. The property it weakens is
-  <em>attribution</em> (two tenants may egress via one IP), not isolation. Nothing about
-  namespace isolation, RBAC, or the egress choke point changes.</li>
-<li>Priority is a <strong>cluster-wide, cross-tenant preemption lever</strong>. A pod naming a
-  high-priority preempting class can evict <em>other tenants'</em> pods off a node. That is an
-  isolation property, not an attribution one.</li>
+<li>Placement is a <strong>choice about the tenant's own traffic</strong>.
+  The property it weakens is <em>attribution</em> (two tenants may egress via one IP), not isolation.
+  Nothing about namespace isolation, RBAC, or the egress choke point changes.</li>
+<li>Priority is a <strong>cluster-wide, cross-tenant preemption lever</strong>.
+  A pod naming a high-priority preempting class can evict <em>other tenants'</em> pods off a node.
+  That is an isolation property, not an attribution one.</li>
 </ul>
-<p>Additionally — and this is the fact that makes an ungated <code>priorityClassName</code> a
-cluster-wide bypass rather than a local nuisance:</p>
+<p>Additionally — and this is the fact that makes an ungated <code>priorityClassName</code> a cluster-wide bypass rather than a local nuisance:</p>
 <blockquote>
-<p><strong><code>system-*</code> PriorityClasses are not <code>kube-system</code>-scoped.</strong> A pod in <em>any</em> namespace
-may name <code>system-cluster-critical</code> (value <code>2000000000</code>, <code>preemptionPolicy:
-PreemptLowerPriority</code>). There is no built-in admission check restricting those classes
-to <code>kube-system</code>. Verified directly against a real apiserver — not inferred from the
-docs, which are easy to misread on this point.</p>
+<p><strong><code>system-*</code> PriorityClasses are not <code>kube-system</code>-scoped.</strong> A pod in <em>any</em> namespace may name <code>system-cluster-critical</code> (value <code>2000000000</code>, <code>preemptionPolicy: PreemptLowerPriority</code>).
+There is no built-in admission check restricting those classes to <code>kube-system</code>.
+Verified directly against a real apiserver — not inferred from the docs, which are easy to misread on this point.</p>
 </blockquote>
-<p>So an ungated <code>priorityClassName</code> anywhere on a tenant-writable CR is a cluster-wide
-preemption escape, which is precisely the Q289 finding: Q132's original allowlist covered
-<code>priorityTiers</code> but missed <code>podTemplate.spec.priorityClassName</code>, and any tenant could
-preempt cluster-wide until <a href="https://github.com/actions-gateway/github-actions-gateway/pull/584">#584</a>
-closed it. Adding a <em>new</em> <code>priorityClassName</code> field without a gate would reopen the same
-hole on a new path. Any future <code>PodTemplateSpec</code> passthrough must be audited for this.</p>
+<p>So an ungated <code>priorityClassName</code> anywhere on a tenant-writable CR is a cluster-wide preemption escape, which is precisely the Q289 finding: Q132's original allowlist covered <code>priorityTiers</code> but missed <code>podTemplate.spec.priorityClassName</code>, and any tenant could preempt cluster-wide until <a href="https://github.com/actions-gateway/github-actions-gateway/pull/584">#584</a> closed it.
+Adding a <em>new</em> <code>priorityClassName</code> field without a gate would reopen the same hole on a new path.
+Any future <code>PodTemplateSpec</code> passthrough must be audited for this.</p>
 <h3 id="23-enforcement-point--and-the-webhook-that-doesnt-exist-yet">2.3 Enforcement point — and the webhook that doesn't exist yet<a class="headerlink" href="#23-enforcement-point--and-the-webhook-that-doesnt-exist-yet" title="Permanent link">&para;</a></h3>
-<p>Both kinds carrying <code>spec.scheduling</code> are v2 (<code>api/v2beta1/{actionsgateway,egressproxy}_types.go</code>;
-the v1alpha1 <code>ActionsGateway</code> has no <code>scheduling</code> block at all). The webhook coverage is
-uneven, and this is the part most likely to be mis-scoped:</p>
+<p>Both kinds carrying <code>spec.scheduling</code> are v2 (<code>api/v2beta1/{actionsgateway,egressproxy}_types.go</code>; the v1alpha1 <code>ActionsGateway</code> has no <code>scheduling</code> block at all).
+The webhook coverage is uneven, and this is the part most likely to be mis-scoped:</p>
 <table>
 <thead>
 <tr>
@@ -2823,76 +2795,48 @@ uneven, and this is the part most likely to be mis-scoped:</p>
 </tr>
 </tbody>
 </table>
-<p>The v2 webhook package covers <code>egressproxy</code>, <code>runnerset</code>, and <code>runnertemplate</code> only. The
-v1alpha1 <code>ActionsGateway</code> webhook is a <strong>different API group</strong> and does not match v2
-<code>actionsgateways</code>. So gating <code>ActionsGateway.spec.scheduling.priorityClassName</code> requires
-standing up a v2 <code>ActionsGateway</code> validating webhook from scratch — registration, chart
-wiring (<code>make chart-webhook-check</code> enforces drift), and envtest coverage. <strong>This is the
-bulk of the work, and it is the reason Q284 is not the trivial <code>S</code> its diff size suggests.</strong></p>
-<p>The same residual G.7 recorded for the worker allowlist applies here: an operator who
-grants a tenant direct RBAC on the underlying resource bypasses the webhook, and stored
-objects are never re-validated. The Q289 <code>ValidatingAdmissionPolicy</code> backstop is now
-delivered for the worker PriorityClass allowlist
-(<a href="../../../design/appendix-g-future-enhancements/#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement">G.7</a>);
-a Q284 infra allowlist should get the same VAP treatment on its own pass, following that
-policy's paramKind-ConfigMap pattern.</p>
+<p>The v2 webhook package covers <code>egressproxy</code>, <code>runnerset</code>, and <code>runnertemplate</code> only.
+The v1alpha1 <code>ActionsGateway</code> webhook is a <strong>different API group</strong> and does not match v2 <code>actionsgateways</code>.
+So gating <code>ActionsGateway.spec.scheduling.priorityClassName</code> requires standing up a v2 <code>ActionsGateway</code> validating webhook from scratch — registration, chart wiring (<code>make chart-webhook-check</code> enforces drift), and envtest coverage. <strong>This is the bulk of the work, and it is the reason Q284 is not the trivial <code>S</code> its diff size suggests.</strong></p>
+<p>The same residual G.7 recorded for the worker allowlist applies here: an operator who grants a tenant direct RBAC on the underlying resource bypasses the webhook, and stored objects are never re-validated.
+The Q289 <code>ValidatingAdmissionPolicy</code> backstop is now delivered for the worker PriorityClass allowlist (<a href="../../../design/appendix-g-future-enhancements/#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement">G.7</a>); a Q284 infra allowlist should get the same VAP treatment on its own pass, following that policy's paramKind-ConfigMap pattern.</p>
 <h2 id="3-topologyspreadconstraints--composes-with-the-built-in-anti-affinity">3. <code>topologySpreadConstraints</code> — composes with the built-in anti-affinity<a class="headerlink" href="#3-topologyspreadconstraints--composes-with-the-built-in-anti-affinity" title="Permanent link">&para;</a></h2>
-<p>The GMC stamps a <strong>required</strong> cross-node <code>podAntiAffinity</code> on every proxy pool. The
-<code>affinity</code> field's rule (Q282) is <em>"set <code>podAntiAffinity</code> to any non-nil value and it
-replaces the built-in term entirely — set it and you own it."</em></p>
-<p><strong>Decision: <code>topologySpreadConstraints</code> COMPOSES with the built-in anti-affinity; it does
-not replace it.</strong> <code>podAntiAffinity: {}</code> remains the <em>single</em> opt-out lever for the
-built-in cross-node spread. Do not add a second one.</p>
-<p>It is tempting to make this field symmetric with <code>affinity</code> — it <em>is</em> the spread
-mechanism, after all, so "set it and you own it" reads as the consistent choice. That
-reasoning is wrong here, and the asymmetry is principled:</p>
+<p>The GMC stamps a <strong>required</strong> cross-node <code>podAntiAffinity</code> on every proxy pool.
+The <code>affinity</code> field's rule (Q282) is <em>"set <code>podAntiAffinity</code> to any non-nil value and it replaces the built-in term entirely — set it and you own it."</em></p>
+<p><strong>Decision: <code>topologySpreadConstraints</code> COMPOSES with the built-in anti-affinity; it does not replace it.</strong> <code>podAntiAffinity: {}</code> remains the <em>single</em> opt-out lever for the built-in cross-node spread.
+Do not add a second one.</p>
+<p>It is tempting to make this field symmetric with <code>affinity</code> — it <em>is</em> the spread mechanism, after all, so "set it and you own it" reads as the consistent choice.
+That reasoning is wrong here, and the asymmetry is principled:</p>
 <ul>
-<li><strong>Two opt-out levers for one invariant is worse than one.</strong> The built-in anti-affinity
-  is a durability invariant (one node failure must not take the pool down). <code>affinity</code>
-  has to be able to displace it because <code>podAntiAffinity</code> occupies the same field — there
-  is nowhere else for an author's anti-affinity to go. <code>topologySpreadConstraints</code> is a
-  <em>different</em> field with no such collision, so displacing the invariant would be a choice,
-  not a necessity. Making it a second, implicit opt-out means an author who wanted zonal
-  spread silently loses cross-node spread.</li>
-<li><strong>Composition is safe, and provably so.</strong> <code>topologySpreadConstraints</code> can only <em>narrow</em>
-  the candidate node set, never widen it — exactly like <code>nodeSelector</code> AND-ing with
-  <code>nodeAffinity</code>. And its <code>labelSelector</code> counts only pods in the constraint's own
-  namespace, so one tenant's spread constraint cannot be skewed by another tenant's pods.
+<li><strong>Two opt-out levers for one invariant is worse than one.</strong> The built-in anti-affinity is a durability invariant (one node failure must not take the pool down). <code>affinity</code> has to be able to displace it because <code>podAntiAffinity</code> occupies the same field — there is nowhere else for an author's anti-affinity to go. <code>topologySpreadConstraints</code> is a <em>different</em> field with no such collision, so displacing the invariant would be a choice, not a necessity.
+  Making it a second, implicit opt-out means an author who wanted zonal spread silently loses cross-node spread.</li>
+<li><strong>Composition is safe, and provably so.</strong> <code>topologySpreadConstraints</code> can only <em>narrow</em> the candidate node set, never widen it — exactly like <code>nodeSelector</code> AND-ing with <code>nodeAffinity</code>.
+  And its <code>labelSelector</code> counts only pods in the constraint's own namespace, so one tenant's spread constraint cannot be skewed by another tenant's pods.
   There is no soundness reason to drop the built-in term.</li>
 </ul>
-<p>The cost is the <code>Pending</code> trap: an author who asks for a soft zonal spread
-(<code>whenUnsatisfiable: ScheduleAnyway</code>) still inherits the <em>required</em> cross-node
-anti-affinity, so replicas beyond the node count strand in <code>Pending</code>. That is the
-existing behavior for any proxy pool with <code>minReplicas</code> above its node count, and the
-existing escapes apply — <code>podAntiAffinity: {}</code>, or lowering <code>minReplicas</code>. <strong>Document it
-on the field</strong>, in the godoc, next to the <code>affinity</code> precedence note.</p>
-<p>Unlike <code>priorityClassName</code>, <code>topologySpreadConstraints</code> needs <strong>no allowlist</strong>: it is
-namespace-scoped and narrowing, so it carries no cross-tenant lever.</p>
-<p>Lock the composition with a unit test in
-<code>cmd/gmc/internal/controller/egressproxy_scheduling_test.go</code>, alongside the existing
-<code>TestEgressProxyScheduling_NoneSetPreservesBuiltInAntiAffinity</code>.</p>
+<p>The cost is the <code>Pending</code> trap: an author who asks for a soft zonal spread (<code>whenUnsatisfiable: ScheduleAnyway</code>) still inherits the <em>required</em> cross-node anti-affinity, so replicas beyond the node count strand in <code>Pending</code>.
+That is the existing behavior for any proxy pool with <code>minReplicas</code> above its node count, and the existing escapes apply — <code>podAntiAffinity: {}</code>, or lowering <code>minReplicas</code>. <strong>Document it on the field</strong>, in the godoc, next to the <code>affinity</code> precedence note.</p>
+<p>Unlike <code>priorityClassName</code>, <code>topologySpreadConstraints</code> needs <strong>no allowlist</strong>: it is namespace-scoped and narrowing, so it carries no cross-tenant lever.</p>
+<p>Lock the composition with a unit test in <code>cmd/gmc/internal/controller/egressproxy_scheduling_test.go</code>, alongside the existing <code>TestEgressProxyScheduling_NoneSetPreservesBuiltInAntiAffinity</code>.</p>
 <h2 id="4-crd-size-budget">4. CRD size budget<a class="headerlink" href="#4-crd-size-budget" title="Permanent link">&para;</a></h2>
-<p><code>PodScheduling</code> is narrow specifically to keep the v2 CRDs under the apiserver's
-~1.5 MiB per-object ceiling. <code>affinity</code> alone added roughly 72 KB of CRD schema <em>per
-served version</em>.</p>
-<p><code>topologySpreadConstraints</code> carries a <code>labelSelector</code> plus <code>matchLabelKeys</code> /
-<code>nodeAffinityPolicy</code> / <code>nodeTaintsPolicy</code>; <code>priorityClassName</code> is a bare string. Both are
-far smaller than <code>affinity</code>, but the budget is real and shared across two served versions
-(<code>v2alpha1</code>, <code>v2beta1</code>).</p>
-<p><strong>Measure before and after.</strong> <code>make chart-crds</code> then check the rendered CRD sizes; the v2
-CRDs already ship via <code>helm template | kubectl apply --server-side</code> rather than
-<code>helm install</code> precisely because they exceed the 1 MiB Helm release-Secret limit.</p>
+<p><code>PodScheduling</code> is narrow specifically to keep the v2 CRDs under the apiserver's ~1.5 MiB per-object ceiling. <code>affinity</code> alone added roughly 72 KB of CRD schema <em>per served version</em>.</p>
+<p><code>topologySpreadConstraints</code> carries a <code>labelSelector</code> plus <code>matchLabelKeys</code> / <code>nodeAffinityPolicy</code> / <code>nodeTaintsPolicy</code>; <code>priorityClassName</code> is a bare string.
+Both are far smaller than <code>affinity</code>, but the budget is real and shared across two served versions (<code>v2alpha1</code>, <code>v2beta1</code>).</p>
+<p><strong>Measure before and after.</strong> <code>make chart-crds</code> then check the rendered CRD sizes; the v2 CRDs already ship via <code>helm template | kubectl apply --server-side</code> rather than <code>helm install</code> precisely because they exceed the 1 MiB Helm release-Secret limit.</p>
 <h2 id="5-definition-of-done">5. Definition of done<a class="headerlink" href="#5-definition-of-done" title="Permanent link">&para;</a></h2>
 <ul>
 <li>[x] <code>topologySpreadConstraints</code> and <code>priorityClassName</code> on <code>PodScheduling</code>, both <code>+optional</code>.</li>
 <li>[x] Godoc on each field carrying the rationale — matching the existing bar in <code>scheduling_types.go</code>.</li>
-<li>[x] <code>--allowed-infra-priority-classes</code> flag on the GMC, disjoint from <code>--allowed-priority-classes</code>, empty-by-default (forbids all). (Flag-only; a watched-ConfigMap augmentation like Q188's is deferred — filed as a Queue follow-up.)</li>
+<li>[x] <code>--allowed-infra-priority-classes</code> flag on the GMC, disjoint from <code>--allowed-priority-classes</code>, empty-by-default (forbids all).
+  (Flag-only; a watched-ConfigMap augmentation like Q188's is deferred — filed as a Queue follow-up.)</li>
 <li>[x] GMC startup rejects an intersection between the two allowlists (<code>allowlist.Intersection</code>).</li>
 <li>[x] <code>EgressProxy</code> webhook extended to gate <code>spec.scheduling.priorityClassName</code>.</li>
 <li>[x] <strong>A new v2 <code>ActionsGateway</code> validating webhook</strong> (none existed — see §2.3), registered, chart-wired (<code>make chart-webhook</code>), gating the same field.</li>
 <li>[x] Envtest coverage for both (<code>cmd/gmc/internal/controller/integration/v2_scheduling_admission_test.go</code>).</li>
 <li>[x] <code>topologySpreadConstraints</code> composes with (does not replace) the built-in anti-affinity — unit-tested (<code>egressproxy_scheduling_test.go</code>), and the <code>Pending</code> trap documented on the field.</li>
-<li>[x] CRD size measured before/after. Each of the two CRDs grew <strong>+34,336 bytes</strong> (≈17 KB per served version, almost all <code>topologySpreadConstraints</code>; <code>priorityClassName</code> is a bare string): <code>actionsgateways</code> 222,037 → 256,373; <code>egressproxies</code> 178,508 → 212,844. Both stay far under the ~1.5 MiB per-object ceiling.</li>
+<li>[x] CRD size measured before/after.
+  Each of the two CRDs grew <strong>+34,336 bytes</strong> (≈17 KB per served version, almost all <code>topologySpreadConstraints</code>; <code>priorityClassName</code> is a bare string): <code>actionsgateways</code> 222,037 → 256,373; <code>egressproxies</code> 178,508 → 212,844.
+  Both stay far under the ~1.5 MiB per-object ceiling.</li>
 <li>[x] Operator docs: <code>docs/operations/security-operations.md</code> (the new allowlist + disjointness, the two new fields) and <code>docs/operations/tenant-onboarding.md</code> (troubleshooting row).</li>
 <li>[x] <strong>On close:</strong> promoted §2 into <code>docs/design/05-security.md</code> §5.2 — the two-allowlist rule is durable API-surface governance and now outlives this plan's archival.</li>
 </ul>

@@ -2775,24 +2775,16 @@
 
 
 <h1 id="scale-set-eviction-recovery">Scale-Set Eviction Recovery<a class="headerlink" href="#scale-set-eviction-recovery" title="Permanent link">&para;</a></h1>
-<p>Port eviction recovery to the scale-set acquisition tier, then decide whether the
-AGC can release an evicted job's lock early instead of waiting out GitHub's
-timeout.</p>
-<p>Filed 2026-07-25 from a feasibility review of
-<a href="https://github.com/actions-gateway/github-actions-gateway/issues/811">issue #811</a>,
-which proposed the fast-release optimization. The review found the optimization
-sits on top of a prerequisite that does not exist yet, so this plan covers both
-and sequences them.</p>
+<p>Port eviction recovery to the scale-set acquisition tier, then decide whether the AGC can release an evicted job's lock early instead of waiting out GitHub's timeout.</p>
+<p>Filed 2026-07-25 from a feasibility review of <a href="https://github.com/actions-gateway/github-actions-gateway/issues/811">issue #811</a>, which proposed the fast-release optimization.
+The review found the optimization sits on top of a prerequisite that does not exist yet, so this plan covers both and sequences them.</p>
 <h2 id="why-this-matters">Why this matters<a class="headerlink" href="#why-this-matters" title="Permanent link">&para;</a></h2>
-<p><code>v2beta1</code> is ScaleSet-only, so the scale-set tier is the product's only future
-acquisition path. Classic is on the removal track for <code>v2.0.0</code>
-(<a href="../release-1.3/">release-1.3.md</a>). Eviction recovery works on classic and does
-not exist on scale-set, which means the capability is scheduled to disappear with
-the protocol it was built for.</p>
-<p>Worker right-sizing (<a href="../runner-sizing-profiles/">runner-sizing-profiles.md</a>)
-compounds this. Tighter memory limits raise OOM-kill probability, which is one of
-the two ways a worker pod gets evicted. The 1.3 headline feature increases
-exposure to a gap that only the deprecated tier covers.</p>
+<p><code>v2beta1</code> is ScaleSet-only, so the scale-set tier is the product's only future acquisition path.
+Classic is on the removal track for <code>v2.0.0</code> (<a href="../release-1.3/">release-1.3.md</a>).
+Eviction recovery works on classic and does not exist on scale-set, which means the capability is scheduled to disappear with the protocol it was built for.</p>
+<p>Worker right-sizing (<a href="../runner-sizing-profiles/">runner-sizing-profiles.md</a>) compounds this.
+Tighter memory limits raise OOM-kill probability, which is one of the two ways a worker pod gets evicted.
+The 1.3 headline feature increases exposure to a gap that only the deprecated tier covers.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2816,56 +2808,34 @@ exposure to a gap that only the deprecated tier covers.</p>
 </tr>
 </tbody>
 </table>
-<p>Phase 2 did not wait on Phase 1, as planned: it closes a functional regression
-rather than an optimization gap, so it was correct to land regardless of what the
-baseline measurement says.</p>
+<p>Phase 2 did not wait on Phase 1, as planned: it closes a functional regression rather than an optimization gap, so it was correct to land regardless of what the baseline measurement says.</p>
 <h2 id="what-exists-today">What exists today<a class="headerlink" href="#what-exists-today" title="Permanent link">&para;</a></h2>
 <h3 id="classic-full-recovery-no-fast-release">Classic: full recovery, no fast release<a class="headerlink" href="#classic-full-recovery-no-fast-release" title="Permanent link">&para;</a></h3>
-<p><code>provision()</code> waits for pod terminal state and branches on eviction at
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:528</a>:</p>
+<p><code>provision()</code> waits for pod terminal state and branches on eviction at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:528</a>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">if</span><span class="w"> </span><span class="nx">phase</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nx">corev1</span><span class="p">.</span><span class="nx">PodFailed</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">reason</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">&quot;Evicted&quot;</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nx">p</span><span class="p">.</span><span class="nx">handleEviction</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">target</span><span class="p">,</span><span class="w"> </span><span class="nx">owner</span><span class="p">,</span><span class="w"> </span><span class="nx">repo</span><span class="p">,</span><span class="w"> </span><span class="nx">runID</span><span class="p">,</span><span class="w"> </span><span class="nx">log</span><span class="p">,</span><span class="w"> </span><span class="nx">spec</span><span class="p">.</span><span class="nx">MaxEvictionRetries</span><span class="p">,</span><span class="w"> </span><span class="nx">spec</span><span class="p">.</span><span class="nx">EvictionRetryDelay</span><span class="p">)</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">}</span>
 </code></pre></div>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>handleEviction</code></a> reserves a slot
-from the sharded per-run retry budget (Q106), waits <code>evictionRetryDelay</code>, and
-calls <code>rerun-failed-jobs</code>. Renewal has already stopped, so GitHub concludes the
-job when the lock lapses.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>handleEviction</code></a> reserves a slot from the sharded per-run retry budget (Q106), waits <code>evictionRetryDelay</code>, and calls <code>rerun-failed-jobs</code>.
+Renewal has already stopped, so GitHub concludes the job when the lock lapses.</p>
 <h3 id="scale-set-no-recovery-at-all">Scale-set: no recovery at all<a class="headerlink" href="#scale-set-no-recovery-at-all" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>ProvisionScaleSetWorker</code></a> is
-fire-and-forget by design: the runner pulls and completes its own job through its
-own session, so the AGC neither hands off a payload nor blocks on completion. It
-never calls <code>waitForCompletion</code>, so it never observes <code>PodFailed</code>/<code>Evicted</code>,
-never reserves a retry slot, and never calls the rerun API.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>ProvisionScaleSetWorker</code></a> is fire-and-forget by design: the runner pulls and completes its own job through its own session, so the AGC neither hands off a payload nor blocks on completion.
+It never calls <code>waitForCompletion</code>, so it never observes <code>PodFailed</code>/<code>Evicted</code>, never reserves a retry slot, and never calls the rerun API.</p>
 <p><code>handleEviction</code> is reached from exactly one call site, the classic one above.</p>
-<p>An evicted scale-set worker today therefore gets no fast release <strong>and no
-rerun</strong>. The job fails and a human reruns it. Q264's transition plan listed
-eviction retry under "Reworked, carried over"
-(<a href="../archive/q264-scale-set-protocol-phases/">archive/q264-scale-set-protocol-phases.md</a>
-§3); that port was designed, not implemented.</p>
+<p>An evicted scale-set worker today therefore gets no fast release <strong>and no rerun</strong>.
+The job fails and a human reruns it.
+Q264's transition plan listed eviction retry under "Reworked, carried over" (<a href="../archive/q264-scale-set-protocol-phases/">archive/q264-scale-set-protocol-phases.md</a> §3); that port was designed, not implemented.</p>
 <h3 id="the-rerun-target-was-unidentified-on-scale-set--resolved-2026-07-26">The rerun target was unidentified on scale-set — resolved 2026-07-26<a class="headerlink" href="#the-rerun-target-was-unidentified-on-scale-set--resolved-2026-07-26" title="Permanent link">&para;</a></h3>
-<p><code>rerun-failed-jobs</code> needs <code>owner</code>, <code>repo</code>, and <code>run_id</code>. Classic extracts all
-three from the acquire payload via <code>jobMetaFrom</code>. Scale-set has no payload, and
-the provisioner passed an empty <code>jobMeta{}</code> when building the worker pod.</p>
-<p>The modeled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/types.go"><code>JobMessage</code></a> carried <code>messageType</code>,
-<code>runnerRequestId</code>, <code>acquireJobUrl</code>, <code>jobId</code>, <code>runnerId</code>, <code>runnerName</code>, and
-<code>result</code> — no run ID, no repository. That was a gap in <strong>GAG's model</strong>, not in the
-wire.</p>
-<p><strong>What settled it.</strong> The official Public-Preview <code>actions/scaleset</code> client — whose
-wire types this package deliberately mirrors — embeds <code>JobMessageBase</code> in
-<code>JobAvailable</code>, <code>JobAssigned</code>, <code>JobStarted</code>, and <code>JobCompleted</code> alike, and that base
-carries <code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>, <code>jobWorkflowRef</code>,
-<code>jobDisplayName</code>, and <code>eventName</code>
-(<a href="https://github.com/actions/scaleset/blob/main/types.go">types.go</a>). The identity was
-always on the wire; GAG simply did not decode it.</p>
-<p>Corroborating evidence from GAG's own live probe: Investigation E observed
-<code>scaleSetAssignTime</code> on a real <code>JobAssigned</code> from the dotcom broker-host backend
-(<a href="../archive/q264-scale-set-protocol-phases/">archive/q264-scale-set-protocol-phases.md</a>
-§2a-3). That is another <code>JobMessageBase</code> field this client did not model, so the raw
-body demonstrably <em>is</em> a <code>JobMessageBase</code> and not a narrower shape.</p>
-<p><strong>Measured live 2026-07-26 — the fields are on the wire.</strong> A repo-scoped probe run
-against <code>actions-gateway/github-actions-gateway</code> observed a real <code>JobAssigned</code> from the
-dotcom broker-host backend carrying every field the port depends on:</p>
+<p><code>rerun-failed-jobs</code> needs <code>owner</code>, <code>repo</code>, and <code>run_id</code>.
+Classic extracts all three from the acquire payload via <code>jobMetaFrom</code>.
+Scale-set has no payload, and the provisioner passed an empty <code>jobMeta{}</code> when building the worker pod.</p>
+<p>The modeled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/types.go"><code>JobMessage</code></a> carried <code>messageType</code>, <code>runnerRequestId</code>, <code>acquireJobUrl</code>, <code>jobId</code>, <code>runnerId</code>, <code>runnerName</code>, and <code>result</code> — no run ID, no repository.
+That was a gap in <strong>GAG's model</strong>, not in the wire.</p>
+<p><strong>What settled it.</strong> The official Public-Preview <code>actions/scaleset</code> client — whose wire types this package deliberately mirrors — embeds <code>JobMessageBase</code> in <code>JobAvailable</code>, <code>JobAssigned</code>, <code>JobStarted</code>, and <code>JobCompleted</code> alike, and that base carries <code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>, <code>jobWorkflowRef</code>, <code>jobDisplayName</code>, and <code>eventName</code> (<a href="https://github.com/actions/scaleset/blob/main/types.go">types.go</a>).
+The identity was always on the wire; GAG simply did not decode it.</p>
+<p>Corroborating evidence from GAG's own live probe: Investigation E observed <code>scaleSetAssignTime</code> on a real <code>JobAssigned</code> from the dotcom broker-host backend (<a href="../archive/q264-scale-set-protocol-phases/">archive/q264-scale-set-protocol-phases.md</a> §2a-3).
+That is another <code>JobMessageBase</code> field this client did not model, so the raw body demonstrably <em>is</em> a <code>JobMessageBase</code> and not a narrower shape.</p>
+<p><strong>Measured live 2026-07-26 — the fields are on the wire.</strong> A repo-scoped probe run against <code>actions-gateway/github-actions-gateway</code> observed a real <code>JobAssigned</code> from the dotcom broker-host backend carrying every field the port depends on:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span><span class="nt">&quot;messageType&quot;</span><span class="p">:</span><span class="s2">&quot;JobAssigned&quot;</span><span class="p">,</span><span class="nt">&quot;repositoryName&quot;</span><span class="p">:</span><span class="s2">&quot;github-actions-gateway&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w"> </span><span class="nt">&quot;ownerName&quot;</span><span class="p">:</span><span class="s2">&quot;actions-gateway&quot;</span><span class="p">,</span><span class="nt">&quot;workflowRunId&quot;</span><span class="p">:</span><span class="mi">30225287326</span><span class="p">,</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w"> </span><span class="nt">&quot;jobDisplayName&quot;</span><span class="p">:</span><span class="s2">&quot;probe-fast&quot;</span><span class="p">,</span><span class="nt">&quot;eventName&quot;</span><span class="p">:</span><span class="s2">&quot;workflow_dispatch&quot;</span><span class="p">,</span>
@@ -2873,134 +2843,76 @@ dotcom broker-host backend carrying every field the port depends on:</p>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w"> </span><span class="nt">&quot;requestLabels&quot;</span><span class="p">:[</span><span class="s2">&quot;gag-probe-scaleset&quot;</span><span class="p">],</span><span class="nt">&quot;scaleSetAssignTime&quot;</span><span class="p">:</span><span class="s2">&quot;2026-07-26T23:29:36Z&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w"> </span><span class="nt">&quot;jobId&quot;</span><span class="p">:</span><span class="s2">&quot;bd59f43d-2e1a-567a-b5a4-c147b94d0766&quot;</span><span class="p">,</span><span class="nt">&quot;runnerRequestId&quot;</span><span class="p">:</span><span class="mi">0</span><span class="p">}</span>
 </code></pre></div>
-<p>The probe's verdict line read <code>run identity present on JobAssigned — scale-set eviction
-recovery has a rerun target (Q417)</code>, resolving to
-<code>owner=actions-gateway repo=github-actions-gateway runId=30225287326</code>.</p>
-<p>The decisive detail is that <code>workflowRunId</code> is <strong>exactly</strong> the run id of the workflow
-dispatched to produce the job
-(<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30225287326">run 30225287326</a>).
-That is not merely "a number arrived in the field" — it is the same run
-<code>rerun-failed-jobs</code> addresses, which was the whole question. The wider <code>JobMessageBase</code>
-shape came with it (<code>eventName</code>, <code>jobWorkflowRef</code>, <code>requestLabels</code>, <code>queueTime</code>,
-<code>runnerAssignTime</code>, <code>finishTime</code>), so the parity argument above held.</p>
-<p><strong>What this does and does not change.</strong> The identity-optional design stays exactly as
-built. One observation, on one backend, is not a guarantee for GHES, for a different
-event type, or for a future protocol revision — and the <code>ok</code> branch costs one <code>if</code>.
-What it changes is the confidence ordering: the fields are measured rather than
-inferred, so <code>actions_gateway_eviction_recovery_identity_unknown_total</code> should read
-zero in practice, and a non-zero value is a real regression signal rather than an
-expected state.</p>
+<p>The probe's verdict line read <code>run identity present on JobAssigned — scale-set eviction recovery has a rerun target (Q417)</code>, resolving to <code>owner=actions-gateway repo=github-actions-gateway runId=30225287326</code>.</p>
+<p>The decisive detail is that <code>workflowRunId</code> is <strong>exactly</strong> the run id of the workflow dispatched to produce the job (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30225287326">run 30225287326</a>).
+That is not merely "a number arrived in the field" — it is the same run <code>rerun-failed-jobs</code> addresses, which was the whole question.
+The wider <code>JobMessageBase</code> shape came with it (<code>eventName</code>, <code>jobWorkflowRef</code>, <code>requestLabels</code>, <code>queueTime</code>, <code>runnerAssignTime</code>, <code>finishTime</code>), so the parity argument above held.</p>
+<p><strong>What this does and does not change.</strong> The identity-optional design stays exactly as built.
+One observation, on one backend, is not a guarantee for GHES, for a different event type, or for a future protocol revision — and the <code>ok</code> branch costs one <code>if</code>.
+What it changes is the confidence ordering: the fields are measured rather than inferred, so <code>actions_gateway_eviction_recovery_identity_unknown_total</code> should read zero in practice, and a non-zero value is a real regression signal rather than an expected state.</p>
 <h3 id="reproducing-the-run">Reproducing the run<a class="headerlink" href="#reproducing-the-run" title="Permanent link">&para;</a></h3>
-<p>The probe reports the verdict itself, so a run answers the question rather than merely
-containing the answer — grep the output for <code>run identity present</code> or <code>GAP</code>. It needs
-live GitHub App credentials; the private key stays in the Keychain and reaches the
-probe as a file path, never as an env-var value or a process argument
-(<a href="../../development/github-app-credentials/">github-app-credentials.md</a>).</p>
+<p>The probe reports the verdict itself, so a run answers the question rather than merely containing the answer — grep the output for <code>run identity present</code> or <code>GAP</code>.
+It needs live GitHub App credentials; the private key stays in the Keychain and reaches the probe as a file path, never as an env-var value or a process argument (<a href="../../development/github-app-credentials/">github-app-credentials.md</a>).</p>
 <p>Two corrections to the obvious recipe, both learned the hard way:</p>
 <ul>
-<li><strong>Register repo-scoped, not org-scoped.</strong> This repo is public and the org's <code>Default</code>
-  runner group has <code>allows_public_repositories: false</code>, so an org-scoped scale set never
-  receives the job — §2a-6 burned two three-minute windows on exactly this. A repo
-  config URL bypasses runner groups entirely. Do <strong>not</strong> "fix" it by enabling public
-  repositories on the runner group: that exposes self-hosted runners to fork pull
-  requests.</li>
-<li><strong>Dispatch first, then start the probe.</strong> A job queued against a not-yet-existing
-  scale-set label waits server-side and is assigned the moment the scale set registers
-  (~1 s in this run), which removes the three-minute-window race the probe's own
-  <code>dispatch … NOW</code> prompt implies.</li>
+<li><strong>Register repo-scoped, not org-scoped.</strong> This repo is public and the org's <code>Default</code> runner group has <code>allows_public_repositories: false</code>, so an org-scoped scale set never receives the job — §2a-6 burned two three-minute windows on exactly this.
+  A repo config URL bypasses runner groups entirely.
+  Do <strong>not</strong> "fix" it by enabling public repositories on the runner group: that exposes self-hosted runners to fork pull requests.</li>
+<li><strong>Dispatch first, then start the probe.</strong> A job queued against a not-yet-existing scale-set label waits server-side and is assigned the moment the scale set registers (~1 s in this run), which removes the three-minute-window race the probe's own <code>dispatch … NOW</code> prompt implies.</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>scaleset-probe.yml<span class="w"> </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nv">KEY_FILE</span><span class="o">=</span><span class="k">$(</span>mktemp<span class="w"> </span>-t<span class="w"> </span>gag-probe-key.XXXXXX<span class="k">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">trap</span><span class="w"> </span><span class="s1">&#39;rm -f &quot;$KEY_FILE&quot;&#39;</span><span class="w"> </span>EXIT<span class="w"> </span>INT<span class="w"> </span>TERM<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>security<span class="w"> </span>find-generic-password<span class="w"> </span>-a<span class="w"> </span>actions-gateway-test<span class="w"> </span>-s<span class="w"> </span>github-app-private-key<span class="w"> </span>-w<span class="w"> </span><span class="p">|</span><span class="w"> </span>xxd<span class="w"> </span>-r<span class="w"> </span>-p<span class="w"> </span>&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$KEY_FILE</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">GITHUB_APP_ID</span><span class="o">=</span><span class="m">3752347</span><span class="w"> </span><span class="nv">GITHUB_APP_INSTALLATION_ID</span><span class="o">=</span><span class="m">135739122</span><span class="w"> </span><span class="nv">GITHUB_ORG_URL</span><span class="o">=</span>https://github.com/actions-gateway/github-actions-gateway<span class="w"> </span><span class="nv">GITHUB_APP_PRIVATE_KEY</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$KEY_FILE</span><span class="s2">&quot;</span><span class="w"> </span><span class="nv">PROBE_SCALESET_TEST</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_JOB_TEST</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>-C<span class="w"> </span>cmd/probe<span class="w"> </span>.<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;run identity present|GAP|job test message&#39;</span>
 </code></pre></div>
-<p><strong>Cancel the dispatched run afterwards</strong> (<code>gh run cancel &lt;id&gt;</code>). The probe deletes its
-throwaway scale set on exit, so any job still queued against that label is stranded
-until GitHub times it out — the fixture queues two jobs and the probe consumes neither.</p>
-<p>Phase 2 was therefore built <strong>identity-optional</strong> rather than assuming presence:
-<code>JobMessage.RunIdentity</code> returns an <code>ok</code> flag, an incomplete identity is refused
-rather than defaulted, and the absence is counted
-(<code>actions_gateway_eviction_recovery_identity_unknown_total</code>) and surfaced as a
-Warning Event. The cost is one branch; the benefit is that if the fields ever do not
-arrive, the failure is loud and localized instead of a rerun posted against run <code>0</code>.
-That also demotes the live confirmation from a <strong>gate</strong> to a <strong>verification</strong>: it is
-worth doing on the next dogfood session, and nothing waits on it.</p>
+<p><strong>Cancel the dispatched run afterwards</strong> (<code>gh run cancel &lt;id&gt;</code>).
+The probe deletes its throwaway scale set on exit, so any job still queued against that label is stranded until GitHub times it out — the fixture queues two jobs and the probe consumes neither.</p>
+<p>Phase 2 was therefore built <strong>identity-optional</strong> rather than assuming presence: <code>JobMessage.RunIdentity</code> returns an <code>ok</code> flag, an incomplete identity is refused rather than defaulted, and the absence is counted (<code>actions_gateway_eviction_recovery_identity_unknown_total</code>) and surfaced as a Warning Event.
+The cost is one branch; the benefit is that if the fields ever do not arrive, the failure is loud and localized instead of a rerun posted against run <code>0</code>.
+That also demotes the live confirmation from a <strong>gate</strong> to a <strong>verification</strong>: it is worth doing on the next dogfood session, and nothing waits on it.</p>
 <h2 id="the-baseline-number-is-confounded">The baseline number is confounded<a class="headerlink" href="#the-baseline-number-is-confounded" title="Permanent link">&para;</a></h2>
-<p>Issue #811 opens from the U5 probe's ~9.5 minutes and asserts the delay is
-"purely the job lock's TTL lapsing." The probe does not support that reading.
-From §2b-5 of the archived Q264 phases doc, the runner was SIGKILLed at 16:19:06Z
-and GitHub concluded <code>failure</code> at 16:28:40Z, and the doc itself notes this
-coincided with the job's 10-minute <code>timeout-minutes</code> boundary.</p>
-<p>Three mechanisms are indistinguishable in that measurement: the lock TTL,
-GitHub's own liveness detection, and the workflow timeout. Optimizing against an
-unattributed number risks building a mechanism that removes none of it.</p>
+<p>Issue #811 opens from the U5 probe's ~9.5 minutes and asserts the delay is "purely the job lock's TTL lapsing."
+The probe does not support that reading.
+From §2b-5 of the archived Q264 phases doc, the runner was SIGKILLed at 16:19:06Z and GitHub concluded <code>failure</code> at 16:28:40Z, and the doc itself notes this coincided with the job's 10-minute <code>timeout-minutes</code> boundary.</p>
+<p>Three mechanisms are indistinguishable in that measurement: the lock TTL, GitHub's own liveness detection, and the workflow timeout.
+Optimizing against an unattributed number risks building a mechanism that removes none of it.</p>
 <p>Q396 already tracks a clean dogfood benchmark for classic.
-Extending it to scale-set, with no <code>timeout-minutes</code> confound, is the cheapest
-gate on the whole effort.</p>
+Extending it to scale-set, with no <code>timeout-minutes</code> confound, is the cheapest gate on the whole effort.</p>
 <h2 id="why-classic-only-is-not-worth-shipping">Why classic-only is not worth shipping<a class="headerlink" href="#why-classic-only-is-not-worth-shipping" title="Permanent link">&para;</a></h2>
-<p>The fast-release mechanism <code>#811</code> proposes does exist on classic:
-<code>broker.Client.CompleteJob</code> posts a terminal <code>TaskResult</code> with the job-scoped
-token the AGC already holds for renewal, and its 404/410 handling is already a
-documented benign no-op.</p>
-<p>Wiring it is real work rather than a one-liner. <code>handleEviction</code> receives only
-<code>owner</code>, <code>repo</code>, <code>runID</code>; the <code>planID</code>, <code>runServiceURL</code>, and job token live in
-the listener (<code>cmd/agc/internal/listener/job.go</code>). <code>SiblingDelivery</code> already
-carries the right shape, so the plumbing is tractable, but it crosses a layer
-boundary and moves a job-scoped credential into the provisioner.</p>
-<p>Against a tier scheduled for removal at <code>v2.0.0</code>, that cost buys a capability
-that ships and then is deleted. Do not implement classic-only.</p>
+<p>The fast-release mechanism <code>#811</code> proposes does exist on classic: <code>broker.Client.CompleteJob</code> posts a terminal <code>TaskResult</code> with the job-scoped token the AGC already holds for renewal, and its 404/410 handling is already a documented benign no-op.</p>
+<p>Wiring it is real work rather than a one-liner. <code>handleEviction</code> receives only <code>owner</code>, <code>repo</code>, <code>runID</code>; the <code>planID</code>, <code>runServiceURL</code>, and job token live in the listener (<code>cmd/agc/internal/listener/job.go</code>). <code>SiblingDelivery</code> already carries the right shape, so the plumbing is tractable, but it crosses a layer boundary and moves a job-scoped credential into the provisioner.</p>
+<p>Against a tier scheduled for removal at <code>v2.0.0</code>, that cost buys a capability that ships and then is deleted.
+Do not implement classic-only.</p>
 <h2 id="plan">Plan<a class="headerlink" href="#plan" title="Permanent link">&para;</a></h2>
-<p>Three gates, cheapest first. Each produces a recorded answer whether or not the
-next phase proceeds.</p>
+<p>Three gates, cheapest first.
+Each produces a recorded answer whether or not the next phase proceeds.</p>
 <h3 id="phase-1-measure-the-real-baseline-gate">Phase 1: measure the real baseline (gate)<a class="headerlink" href="#phase-1-measure-the-real-baseline-gate" title="Permanent link">&para;</a></h3>
-<p>Tracked by Q396, whose scope now covers both tiers. Evict a
-worker mid-job with no <code>timeout-minutes</code> set and timestamp eviction, GitHub's
-conclusion, and the annotation text.</p>
-<p><strong>Decides:</strong> whether there is meaningful latency to remove, and which mechanism
-owns it. If GitHub's own detection dominates, the fast-release idea is dead and
-only Phase 2 proceeds.</p>
+<p>Tracked by Q396, whose scope now covers both tiers.
+Evict a worker mid-job with no <code>timeout-minutes</code> set and timestamp eviction, GitHub's conclusion, and the annotation text.</p>
+<p><strong>Decides:</strong> whether there is meaningful latency to remove, and which mechanism owns it.
+If GitHub's own detection dominates, the fast-release idea is dead and only Phase 2 proceeds.</p>
 <h3 id="phase-2-port-eviction-recovery-to-scale-set">Phase 2: port eviction recovery to scale-set<a class="headerlink" href="#phase-2-port-eviction-recovery-to-scale-set" title="Permanent link">&para;</a></h3>
-<p>Independently valuable, and correct to do regardless of Phase 1's outcome, since
-it closes a functional regression rather than an optimization gap.</p>
+<p>Independently valuable, and correct to do regardless of Phase 1's outcome, since it closes a functional regression rather than an optimization gap.</p>
 <ol>
-<li><strong>Establish run identity.</strong> Dump a raw <code>JobAssigned</code> message body and check
-   what GitHub sends beyond the modeled fields. If run ID and repository are
-   absent, fall back to correlating <code>jobId</code> with the workflow-run API, or
-   stamping identity onto the worker pod at provision time from whatever the
-   listener does know. This step gates the rest of the phase.</li>
-<li><strong>Detect the eviction.</strong> Choose between a pod watch (mirrors classic, keeps
-   the existing terminal-phase logic) and keying off the queue's terminal
-   <code>JobCompleted</code> (the signal Q264 §2b-6 identified, but which arrives only after
-   the very delay this plan is trying to remove). The pod watch is likely correct
-   precisely because it is the early signal.</li>
-<li><strong>Reuse the retry budget.</strong> <code>reserveEvictionRetry</code> and the sweeper are
-   protocol-agnostic. Keep the Q106 sharded-reservation invariant authoritative:
-   at most <code>maxEvictionRetries</code> reruns per run, across both tiers.</li>
+<li><strong>Establish run identity.</strong> Dump a raw <code>JobAssigned</code> message body and check what GitHub sends beyond the modeled fields.
+   If run ID and repository are absent, fall back to correlating <code>jobId</code> with the workflow-run API, or stamping identity onto the worker pod at provision time from whatever the listener does know.
+   This step gates the rest of the phase.</li>
+<li><strong>Detect the eviction.</strong> Choose between a pod watch (mirrors classic, keeps the existing terminal-phase logic) and keying off the queue's terminal <code>JobCompleted</code> (the signal Q264 §2b-6 identified, but which arrives only after the very delay this plan is trying to remove).
+   The pod watch is likely correct precisely because it is the early signal.</li>
+<li><strong>Reuse the retry budget.</strong> <code>reserveEvictionRetry</code> and the sweeper are protocol-agnostic.
+   Keep the Q106 sharded-reservation invariant authoritative: at most <code>maxEvictionRetries</code> reruns per run, across both tiers.</li>
 </ol>
 <h3 id="phase-2-as-built">Phase 2 as built<a class="headerlink" href="#phase-2-as-built" title="Permanent link">&para;</a></h3>
-<p>Shipped 2026-07-26 (Q417). Each planned step and what it became:</p>
+<p>Shipped 2026-07-26 (Q417).
+Each planned step and what it became:</p>
 <ol>
-<li><strong>Establish run identity</strong> — resolved above. <code>scaleset.JobMessage</code> now models
-   <code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>, and <code>jobDisplayName</code>, with
-   <code>RunIdentity()</code> returning the <code>(owner, repo, run_id, ok)</code> triple. The listener
-   passes it through <code>scalesetlistener.Job</code>; <code>ProvisionScaleSetWorker</code> stamps it as the
-   existing <code>actions-gateway.com/run-id</code> / <code>/repository</code> annotations, so both tiers
-   share one worker-pod annotation vocabulary. The <code>scalesettest</code> fake now delivers the
-   fields too, because the real backend does — a fake that answered with them empty
-   would have hidden the gap until a live run.</li>
-<li><strong>Detect the eviction</strong> — pod watch, not the terminal <code>JobCompleted</code>, and via the
-   <strong>owning reconciler</strong> rather than a per-job goroutine. The reconciler already
-   watches worker pods for phase changes and already lists them every reconcile to
-   reap them, so detection costs one cached List. Choosing the reconciler over a
-   goroutine is the same call Q420 made and for the same reason: a fire-and-forget tier
-   has no process-scoped place to keep the state, so the pod has to carry it, and
-   recovery then survives an AGC restart between the eviction and the rerun.
-   <code>RecoverEvictedScaleSetWorkers</code> runs <strong>before</strong> the reaper, since the reaper would
-   otherwise delete the evidence.</li>
-<li><strong>Reuse the retry budget</strong> — unchanged. <code>handleEviction</code>, <code>reserveEvictionRetry</code>,
-   the sharded per-<code>run_id</code> lock, and the sweeper are all shared; the only addition is
-   a <code>tier</code> argument that labels the metrics. The Q106 invariant now holds <em>across</em>
-   tiers, which the concurrency regression test exercises by driving half its
-   evictions down each path.</li>
+<li><strong>Establish run identity</strong> — resolved above. <code>scaleset.JobMessage</code> now models <code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>, and <code>jobDisplayName</code>, with <code>RunIdentity()</code> returning the <code>(owner, repo, run_id, ok)</code> triple.
+   The listener passes it through <code>scalesetlistener.Job</code>; <code>ProvisionScaleSetWorker</code> stamps it as the existing <code>actions-gateway.com/run-id</code> / <code>/repository</code> annotations, so both tiers share one worker-pod annotation vocabulary.
+   The <code>scalesettest</code> fake now delivers the fields too, because the real backend does — a fake that answered with them empty would have hidden the gap until a live run.</li>
+<li><strong>Detect the eviction</strong> — pod watch, not the terminal <code>JobCompleted</code>, and via the <strong>owning reconciler</strong> rather than a per-job goroutine.
+   The reconciler already watches worker pods for phase changes and already lists them every reconcile to reap them, so detection costs one cached List.
+   Choosing the reconciler over a goroutine is the same call Q420 made and for the same reason: a fire-and-forget tier has no process-scoped place to keep the state, so the pod has to carry it, and recovery then survives an AGC restart between the eviction and the rerun. <code>RecoverEvictedScaleSetWorkers</code> runs <strong>before</strong> the reaper, since the reaper would otherwise delete the evidence.</li>
+<li><strong>Reuse the retry budget</strong> — unchanged. <code>handleEviction</code>, <code>reserveEvictionRetry</code>, the sharded per-<code>run_id</code> lock, and the sweeper are all shared; the only addition is a <code>tier</code> argument that labels the metrics.
+   The Q106 invariant now holds <em>across</em> tiers, which the concurrency regression test exercises by driving half its evictions down each path.</li>
 </ol>
 <p>Against the design constraints listed below:</p>
 <table>
@@ -3033,77 +2945,46 @@ it closes a functional regression rather than an optimization gap.</p>
 </tr>
 </tbody>
 </table>
-<p>Coverage: unit tests for the wire decode, the pod stamping, the detection predicate,
-the set-once claim (including a deterministic stale-writer race), and the
-identity-unknown path; an envtest that drives a worker pod provisioned by the real
-path to <code>Failed</code>/<code>Evicted</code> against a real apiserver and asserts the rerun fires once
-for the run the pod recorded.</p>
+<p>Coverage: unit tests for the wire decode, the pod stamping, the detection predicate, the set-once claim (including a deterministic stale-writer race), and the identity-unknown path; an envtest that drives a worker pod provisioned by the real path to <code>Failed</code>/<code>Evicted</code> against a real apiserver and asserts the rerun fires once for the run the pod recorded.</p>
 <h3 id="phase-3-fast-release-if-phase-1-justifies-it">Phase 3: fast release, if Phase 1 justifies it<a class="headerlink" href="#phase-3-fast-release-if-phase-1-justifies-it" title="Permanent link">&para;</a></h3>
 <p>Probe order, per #811, cheapest first:</p>
 <ol>
-<li><strong>Deregistration.</strong> <code>scaleset.Client.DeregisterRunnerByName</code> already exists,
-   and the manual workaround ARC users apply is deleting the stuck runner
-   (<a href="https://github.com/actions/actions-runner-controller/issues/4155">ARC#4155</a>,
-   <a href="https://github.com/actions/actions-runner-controller/issues/4307">ARC#4307</a>).
-   The open question is only how fast GitHub reacts to an explicit deregistration
-   versus a runner going silent.</li>
-<li><strong>A reachable completion endpoint.</strong> <code>RawServiceCall</code> is the escape hatch, but
-   there is no obvious job-scoped credential on this tier: the listener holds a
-   queue-scoped <code>messageQueueAccessToken</code> and an admin JWT, and the per-job
-   credentials generated by <code>generatejitconfig</code> go into the worker Secret and are
-   not retained. Lower confidence.</li>
-<li><strong>Neither works.</strong> Record that scale-set eviction latency is bounded by
-   GitHub, and close #811.</li>
+<li><strong>Deregistration.</strong> <code>scaleset.Client.DeregisterRunnerByName</code> already exists, and the manual workaround ARC users apply is deleting the stuck runner (<a href="https://github.com/actions/actions-runner-controller/issues/4155">ARC#4155</a>, <a href="https://github.com/actions/actions-runner-controller/issues/4307">ARC#4307</a>).
+   The open question is only how fast GitHub reacts to an explicit deregistration versus a runner going silent.</li>
+<li><strong>A reachable completion endpoint.</strong> <code>RawServiceCall</code> is the escape hatch, but there is no obvious job-scoped credential on this tier: the listener holds a queue-scoped <code>messageQueueAccessToken</code> and an admin JWT, and the per-job credentials generated by <code>generatejitconfig</code> go into the worker Secret and are not retained.
+   Lower confidence.</li>
+<li><strong>Neither works.</strong> Record that scale-set eviction latency is bounded by GitHub, and close #811.</li>
 </ol>
-<p><code>cmd/probe</code> already has the scale-set harness and a cleanup mode, so both probes
-are cheap to run.</p>
+<p><code>cmd/probe</code> already has the scale-set harness and a cleanup mode, so both probes are cheap to run.</p>
 <h2 id="design-constraints-for-the-implementer">Design constraints for the implementer<a class="headerlink" href="#design-constraints-for-the-implementer" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Do not double-report.</strong> Fire only when the pod died without the runner
-  reporting. Q385's SIGTERM relay already covers every case where something in
-  the pod gets to run. The 404/410 no-op covers the race, but make the intent
-  explicit rather than relying on it.</li>
-<li><strong>Cover deletion, not only terminal phase.</strong> Classic's branch fires on
-  <code>PodFailed</code>/<code>Evicted</code>, which is the kubelet's node-pressure signal.
-  API-initiated eviction (<code>kubectl drain</code>) deletes the pod instead, and
-  <code>waitForPodCompletion</code> reads a vanished pod as <code>PodSucceeded</code>, so the drain
-  path appears to reach no recovery at all. <strong>Measured 2026-07-27 (Q421) and
-  confirmed on both tiers</strong> — a drained worker pod publishes no terminal phase
-  before it disappears, so no rerun fires
-  (<a href="../eviction-oversubscription-validation/#result-measured-2026-07-27">result</a>).
-  The pod watch this phase adds should not inherit the gap; whether to close it at
-  all is <a href="../archive/q459-drained-worker-recovery/">Q459</a>.</li>
-<li><strong>Ordering and budget.</strong> Report the terminal result, then rerun, consuming
-  exactly one slot from the per-run budget.</li>
-<li><strong>Observability.</strong> A distinct metric or Event so a fast release is
-  distinguishable from a lapse in the field. Without it there is no way to tell
-  whether the mechanism works.</li>
-<li><strong>Which <code>TaskResult</code>.</strong> <code>failed</code> versus <code>canceled</code>, chosen by which one keeps
-  <code>rerun-failed-jobs</code> working afterwards. Probe both; the rerun is the point.</li>
+<li><strong>Do not double-report.</strong> Fire only when the pod died without the runner reporting.
+  Q385's SIGTERM relay already covers every case where something in the pod gets to run.
+  The 404/410 no-op covers the race, but make the intent explicit rather than relying on it.</li>
+<li><strong>Cover deletion, not only terminal phase.</strong> Classic's branch fires on <code>PodFailed</code>/<code>Evicted</code>, which is the kubelet's node-pressure signal.
+  API-initiated eviction (<code>kubectl drain</code>) deletes the pod instead, and <code>waitForPodCompletion</code> reads a vanished pod as <code>PodSucceeded</code>, so the drain path appears to reach no recovery at all. <strong>Measured 2026-07-27 (Q421) and confirmed on both tiers</strong> — a drained worker pod publishes no terminal phase before it disappears, so no rerun fires (<a href="../eviction-oversubscription-validation/#result-measured-2026-07-27">result</a>).
+  The pod watch this phase adds should not inherit the gap; whether to close it at all is <a href="../archive/q459-drained-worker-recovery/">Q459</a>.</li>
+<li><strong>Ordering and budget.</strong> Report the terminal result, then rerun, consuming exactly one slot from the per-run budget.</li>
+<li><strong>Observability.</strong> A distinct metric or Event so a fast release is distinguishable from a lapse in the field.
+  Without it there is no way to tell whether the mechanism works.</li>
+<li><strong>Which <code>TaskResult</code>.</strong> <code>failed</code> versus <code>canceled</code>, chosen by which one keeps <code>rerun-failed-jobs</code> working afterwards.
+  Probe both; the rerun is the point.</li>
 </ul>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <p>Phase 2 is the shippable unit:</p>
 <ul>
 <li>✅ An evicted scale-set worker triggers <code>rerun-failed-jobs</code> for the correct run.</li>
-<li>✅ The per-run retry budget is shared with classic and holds under concurrent
-  evictions of the same run (the Q106 invariant, envtest-covered as classic is).</li>
-<li>⚠️ Operator docs describe eviction recovery on both tiers — done — but with the
-  latency still <em>inferred</em> rather than measured, because Phase 1 has not run. The docs
-  say so where they discuss latency; Q396 closes it.</li>
+<li>✅ The per-run retry budget is shared with classic and holds under concurrent evictions of the same run (the Q106 invariant, envtest-covered as classic is).</li>
+<li>⚠️ Operator docs describe eviction recovery on both tiers — done — but with the latency still <em>inferred</em> rather than measured, because Phase 1 has not run.
+  The docs say so where they discuss latency; Q396 closes it.</li>
 </ul>
-<p>Phase 3 additionally requires a measured before/after latency on dogfood, and a
-metric that distinguishes the two paths.</p>
+<p>Phase 3 additionally requires a measured before/after latency on dogfood, and a metric that distinguishes the two paths.</p>
 <h2 id="release-positioning">Release positioning<a class="headerlink" href="#release-positioning" title="Permanent link">&para;</a></h2>
-<p>Not a 1.3 gate. <a href="../release-1.3/">release-1.3.md</a> is scoped to the right-sizing
-headline, the <code>v2.0.0</code> deprecation notice, and release mechanics, and every
-gating row is S-sized with a known outcome. This work is probe-first with an
-unknown outcome, and its live-GitHub probes would contend for the same dogfood
-session the release's headline validation needed. That validation is now done
-(Q359 closed 2026-07-25), so the contention argument no longer applies; the
-probe-first/unknown-outcome argument still does.</p>
-<p>Per
-<a href="../../development/maintaining-backlog/#dont-pre-assign-release-versions-to-backlog-items">maintaining-backlog.md</a>,
-no release label is assigned until a release is concretely scoped in a plan doc.
+<p>Not a 1.3 gate.
+<a href="../release-1.3/">release-1.3.md</a> is scoped to the right-sizing headline, the <code>v2.0.0</code> deprecation notice, and release mechanics, and every gating row is S-sized with a known outcome.
+This work is probe-first with an unknown outcome, and its live-GitHub probes would contend for the same dogfood session the release's headline validation needed.
+That validation is now done (Q359 closed 2026-07-25), so the contention argument no longer applies; the probe-first/unknown-outcome argument still does.</p>
+<p>Per <a href="../../development/maintaining-backlog/#dont-pre-assign-release-versions-to-backlog-items">maintaining-backlog.md</a>, no release label is assigned until a release is concretely scoped in a plan doc.
 Revisit when 1.4 is scoped.</p>
 
 

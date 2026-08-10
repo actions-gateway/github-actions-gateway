@@ -2764,81 +2764,40 @@
 
 
 <h1 id="v1--classic-sunset--strategic-architecture-review-decision-memo">v1 / classic sunset — strategic architecture review (decision memo)<a class="headerlink" href="#v1--classic-sunset--strategic-architecture-review-decision-memo" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ⓘ informational — strategy/review, read-only analysis. No code
-changed. Feeds the Q264 P5 cutover and the v1alpha1 removal-timeline decisions.
-Complete as a review: both follow-ups it filed are parked in Deferred, waiting on
-<a href="../v2-ga/">v2-ga.md</a> Phase 3 (<a href="../../STATUS/#Q273">Q273</a>, the v1 removal) and on
-upstream scale-set GA (<a href="../../STATUS/#Q272">Q272</a>).
-<strong>Date:</strong> 2026-07-05. <strong>Author view:</strong> adversarial review of the hypothesis that
-v1 may be fundamentally limited by its protocol constraints — and that if so, we
-should sunset it faster and focus on v2/scale-set. The review deliberately tests
-that hypothesis rather than assuming it.</p>
+<p><strong>Status:</strong> ⓘ informational — strategy/review, read-only analysis.
+No code changed.
+Feeds the Q264 P5 cutover and the v1alpha1 removal-timeline decisions.
+Complete as a review: both follow-ups it filed are parked in Deferred, waiting on <a href="../v2-ga/">v2-ga.md</a> Phase 3 (<a href="../../STATUS/#Q273">Q273</a>, the v1 removal) and on upstream scale-set GA (<a href="../../STATUS/#Q272">Q272</a>). <strong>Date:</strong> 2026-07-05. <strong>Author view:</strong> adversarial review of the hypothesis that v1 may be fundamentally limited by its protocol constraints — and that if so, we should sunset it faster and focus on v2/scale-set.
+The review deliberately tests that hypothesis rather than assuming it.</p>
 <blockquote>
-<p><strong>Update (2026-07-05) — P4 is in, and green on the acceptance gate.</strong>
-<a href="../q264-scale-set-protocol/">Q264</a> <strong>P4</strong> (live dogfood,
-<a href="https://github.com/actions-gateway/github-actions-gateway/pull/541">PR #541</a>)
-confirmed the scale-set path <strong>eliminates the <a href="../archive/gke-dogfood-turnup-findings/">Q224</a> fan-out
-distinct-delivery starvation by construction</strong>: the single-acquirer listener
-assigned, ran, and terminally concluded <strong>all 7</strong> distinct jobs (<strong>7/7</strong>, 0 dedup /
-collision) where classic managed <strong>2/7</strong> across eight re-routes. This is the single
-most important piece of evidence for the "accelerate" case (§6.4). <strong>Caveat — not a
-clean all-green sweep yet:</strong> the residual non-green is <em>orthogonal to acquisition</em>
-(a self-referential <code>WORKER_MODE=scaleset</code> test leak — GAG dogfooding its own CI on
-its own scale-set worker — plus CPU-starved envtest), and gates the <strong>P5 cutover</strong>,
-not the acceptance verdict. Q224/Q264 stay open until the clean-green re-run.</p>
+<p><strong>Update (2026-07-05) — P4 is in, and green on the acceptance gate.</strong> <a href="../q264-scale-set-protocol/">Q264</a> <strong>P4</strong> (live dogfood, <a href="https://github.com/actions-gateway/github-actions-gateway/pull/541">PR #541</a>) confirmed the scale-set path <strong>eliminates the <a href="../archive/gke-dogfood-turnup-findings/">Q224</a> fan-out distinct-delivery starvation by construction</strong>: the single-acquirer listener assigned, ran, and terminally concluded <strong>all 7</strong> distinct jobs (<strong>7/7</strong>, 0 dedup / collision) where classic managed <strong>2/7</strong> across eight re-routes.
+This is the single most important piece of evidence for the "accelerate" case (§6.4). <strong>Caveat — not a clean all-green sweep yet:</strong> the residual non-green is <em>orthogonal to acquisition</em> (a self-referential <code>WORKER_MODE=scaleset</code> test leak — GAG dogfooding its own CI on its own scale-set worker — plus CPU-starved envtest), and gates the <strong>P5 cutover</strong>, not the acceptance verdict.
+Q224/Q264 stay open until the clean-green re-run.</p>
 </blockquote>
 <hr />
 <h2 id="0-tldr">0. TL;DR<a class="headerlink" href="#0-tldr" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>"v1 is fundamentally limited" is too strong as a blanket statement, and — as
-  usually framed — conflates two orthogonal things.</strong>
-  The honest verdict: the <strong>classic acquisition protocol</strong> is structurally capped
-  at <em>reliable high-burst concurrency</em> — a real, GitHub-server-side, AGC-unfixable
-  ceiling — but works correctly for <strong>individual and low/moderate-concurrency
-  workloads</strong>, which is a large real segment. The <strong>v1alpha1 API</strong> is a separate
-  question with a separate (mostly unrelated) answer.</li>
-<li><strong>Two axes, one documented binding — still two separately-gated decisions.</strong> The
-  roadmap already binds the <em>endpoints</em>: <code>v1alpha1</code> is Classic-only and <code>v2beta1</code>
-  is ScaleSet-only, with <code>v2alpha1</code> as the <strong>dual-protocol bridge</strong> (default
-  <code>Classic</code>, per-set opt-in <code>ScaleSet</code>;
-  <a href="../archive/q264-scale-set-protocol-phases/#5a-the-three-decisions--analysis-and-recommendations-2026-07-04">Q264 §5a-U7/U8</a>).
-  So retiring the <strong>v1alpha1 API</strong> (Axis 1) and retiring the <strong>classic protocol</strong>
-  (Axis 2) are <em>not the same lever</em> even though they share an end. The fan-out wall
-  is an Axis-2 (protocol) property — a <code>v2alpha1</code> RunnerSet on <code>Classic</code> hits the
-  identical wall, so moving to the v2 API does not, by itself, fix it; selecting the
-  scale-set protocol does.</li>
-<li><strong>Recommendation (updated 2026-07-05 — full form in §6.2): v2/scale-set <em>is</em> the
-  product. Make it the only front door and let migration discipline carry the trust
-  signal.</strong> P4 proved scale-set clears the ceiling classic structurally cannot
-  (<strong>7/7 vs 2/7</strong>), and there are <strong>no real v1 adopters to protect</strong> (§6.3) — so the
-  goal is not to keep classic alive as a safety valve, it is to make v2 the obvious
-  on-ramp and retire v1 <em>cleanly</em>. Concretely:</li>
-<li><strong>Route every new user to v2 now</strong> and deprecate v1 loudly in the docs path —
-    the failure mode is a <em>new</em> user landing on v1, not a v1 user complaining.</li>
-<li><strong>Classic is terminal</strong> (no further investment — the eight re-routes were the
-    last of it) and <strong>v2beta1 stays ScaleSet-only</strong>; the earlier "retain the
-    protocol field as a fallback to v2 GA" hedge protected users who don't exist.
-    The graduation guardrail is <em>technical</em> (clean-green + a short stability soak),
-    not user-migration.</li>
-<li><strong>Commit v1 removal to a stated schedule gated on v2 <em>stability</em> (the v2beta1
-    graduation), not on adopters.</strong> The discipline — announced, scheduled, with a
-    working <code>gag-migrate</code> — <em>is</em> the "safe bet, won't strand you" signal a
-    prospective <strong>v2</strong> adopter is actually reading.</li>
-<li><strong>The real lever is v2 <em>maturation</em> (Q74 / v2beta1), not v1 removal</strong> — "v2 is
-    the front door" only pays off once v2 is beta-stable.</li>
-<li><strong>Building classic first was a defensible bet, not a mistake.</strong> The scale-set
-  protocol was undocumented-internal-to-ARC at design time; the official standalone
-  client only reached Public Preview in 2026. The world changed — that is what
-  makes Option E cheap <em>now</em>, not that it was obviously right <em>then</em>.</li>
-<li><strong>No security or secure-by-default regression</strong> in the migration; the
-  positioning story (the "virtual runners" identity) does shift and must be
-  rewritten in lockstep with the default flip.</li>
+<li><strong>"v1 is fundamentally limited" is too strong as a blanket statement, and — as usually framed — conflates two orthogonal things.</strong> The honest verdict: the <strong>classic acquisition protocol</strong> is structurally capped at <em>reliable high-burst concurrency</em> — a real, GitHub-server-side, AGC-unfixable ceiling — but works correctly for <strong>individual and low/moderate-concurrency workloads</strong>, which is a large real segment.
+  The <strong>v1alpha1 API</strong> is a separate question with a separate (mostly unrelated) answer.</li>
+<li><strong>Two axes, one documented binding — still two separately-gated decisions.</strong> The roadmap already binds the <em>endpoints</em>: <code>v1alpha1</code> is Classic-only and <code>v2beta1</code> is ScaleSet-only, with <code>v2alpha1</code> as the <strong>dual-protocol bridge</strong> (default <code>Classic</code>, per-set opt-in <code>ScaleSet</code>; <a href="../archive/q264-scale-set-protocol-phases/#5a-the-three-decisions--analysis-and-recommendations-2026-07-04">Q264 §5a-U7/U8</a>).
+  So retiring the <strong>v1alpha1 API</strong> (Axis 1) and retiring the <strong>classic protocol</strong> (Axis 2) are <em>not the same lever</em> even though they share an end.
+  The fan-out wall is an Axis-2 (protocol) property — a <code>v2alpha1</code> RunnerSet on <code>Classic</code> hits the identical wall, so moving to the v2 API does not, by itself, fix it; selecting the scale-set protocol does.</li>
+<li><strong>Recommendation (updated 2026-07-05 — full form in §6.2): v2/scale-set <em>is</em> the product.
+  Make it the only front door and let migration discipline carry the trust signal.</strong> P4 proved scale-set clears the ceiling classic structurally cannot (<strong>7/7 vs 2/7</strong>), and there are <strong>no real v1 adopters to protect</strong> (§6.3) — so the goal is not to keep classic alive as a safety valve, it is to make v2 the obvious on-ramp and retire v1 <em>cleanly</em>.
+  Concretely:</li>
+<li><strong>Route every new user to v2 now</strong> and deprecate v1 loudly in the docs path — the failure mode is a <em>new</em> user landing on v1, not a v1 user complaining.</li>
+<li><strong>Classic is terminal</strong> (no further investment — the eight re-routes were the last of it) and <strong>v2beta1 stays ScaleSet-only</strong>; the earlier "retain the protocol field as a fallback to v2 GA" hedge protected users who don't exist.
+    The graduation guardrail is <em>technical</em> (clean-green + a short stability soak), not user-migration.</li>
+<li><strong>Commit v1 removal to a stated schedule gated on v2 <em>stability</em> (the v2beta1 graduation), not on adopters.</strong> The discipline — announced, scheduled, with a working <code>gag-migrate</code> — <em>is</em> the "safe bet, won't strand you" signal a prospective <strong>v2</strong> adopter is actually reading.</li>
+<li><strong>The real lever is v2 <em>maturation</em> (Q74 / v2beta1), not v1 removal</strong> — "v2 is the front door" only pays off once v2 is beta-stable.</li>
+<li><strong>Building classic first was a defensible bet, not a mistake.</strong> The scale-set protocol was undocumented-internal-to-ARC at design time; the official standalone client only reached Public Preview in 2026.
+  The world changed — that is what makes Option E cheap <em>now</em>, not that it was obviously right <em>then</em>.</li>
+<li><strong>No security or secure-by-default regression</strong> in the migration; the positioning story (the "virtual runners" identity) does shift and must be rewritten in lockstep with the default flip.</li>
 </ul>
 <hr />
 <h2 id="1-untangle-the-axes-first-the-thing-the-question-conflates">1. Untangle the axes first (the thing the question conflates)<a class="headerlink" href="#1-untangle-the-axes-first-the-thing-the-question-conflates" title="Permanent link">&para;</a></h2>
-<p>The maintainer's question — "is v1 kneecapped by the protocol problems?" — folds
-two independent axes into one word ("v1"). The single most important thing this
-memo does is keep them apart.</p>
+<p>The maintainer's question — "is v1 kneecapped by the protocol problems?" — folds two independent axes into one word ("v1").
+The single most important thing this memo does is keep them apart.</p>
 <table>
 <thead>
 <tr>
@@ -2870,37 +2829,20 @@ memo does is keep them apart.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Proof they are orthogonal.</strong> The high-burst fan-out failure is a property of the
-<strong>many-acquirers topology</strong> (concurrency = registered runners = acquirers), not of
-the object schema. By design decision
-(<a href="../archive/q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">Q264 §5a-U7</a>),
-<code>acquisitionProtocol: ScaleSet</code> is <strong>v2-exclusive</strong>: a v2alpha1 RunnerSet set to
-<code>Classic</code> reproduces the identical wall, and v1alpha1 never gets ScaleSet at all.
+<p><strong>Proof they are orthogonal.</strong> The high-burst fan-out failure is a property of the <strong>many-acquirers topology</strong> (concurrency = registered runners = acquirers), not of the object schema.
+By design decision (<a href="../archive/q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">Q264 §5a-U7</a>), <code>acquisitionProtocol: ScaleSet</code> is <strong>v2-exclusive</strong>: a v2alpha1 RunnerSet set to <code>Classic</code> reproduces the identical wall, and v1alpha1 never gets ScaleSet at all.
 So:</p>
 <ul>
-<li><strong>Moving from v1alpha1 → v2alpha1 does <em>not</em>, by itself, fix the fan-out wall.</strong>
-  It only <em>unlocks the option</em> to select the protocol that does — <code>v2alpha1</code>
-  defaults to <code>Classic</code>, which carries the identical wall.</li>
-<li><strong>"Retire the classic protocol" and "remove the v1alpha1 API" are separately
-  <em>gated</em>, even though the roadmap binds their endpoints.</strong> Because <code>v2alpha1</code>
-  carries <em>both</em> protocols, the v1alpha1 API can be removed first — tenants move to
-  <code>v2alpha1: Classic</code> via <code>gag-migrate</code>, behaviour unchanged — while the classic
-  <em>protocol</em> lives on. The classic machinery is removed only later, at the Q74
-  v2beta1 graduation (v2beta1 is ScaleSet-only, so that hop strips the field and
-  ends classic). Same end, but the <strong>API</strong> removal is gated on <em>adoption</em> and the
-  <strong>protocol</strong> removal on <em>scale-set maturity</em> — different evidence, different risk,
-  so the memo treats them separately throughout. (This is also the two-step
-  migration safety valve of §6.2: change the API first, change the protocol second,
-  each reversible on its own.)</li>
+<li><strong>Moving from v1alpha1 → v2alpha1 does <em>not</em>, by itself, fix the fan-out wall.</strong> It only <em>unlocks the option</em> to select the protocol that does — <code>v2alpha1</code> defaults to <code>Classic</code>, which carries the identical wall.</li>
+<li><strong>"Retire the classic protocol" and "remove the v1alpha1 API" are separately <em>gated</em>, even though the roadmap binds their endpoints.</strong> Because <code>v2alpha1</code> carries <em>both</em> protocols, the v1alpha1 API can be removed first — tenants move to <code>v2alpha1: Classic</code> via <code>gag-migrate</code>, behaviour unchanged — while the classic <em>protocol</em> lives on.
+  The classic machinery is removed only later, at the Q74 v2beta1 graduation (v2beta1 is ScaleSet-only, so that hop strips the field and ends classic).
+  Same end, but the <strong>API</strong> removal is gated on <em>adoption</em> and the <strong>protocol</strong> removal on <em>scale-set maturity</em> — different evidence, different risk, so the memo treats them separately throughout.
+  (This is also the two-step migration safety valve of §6.2: change the API first, change the protocol second, each reversible on its own.)</li>
 </ul>
 <hr />
 <h2 id="2-does-classic-actually-work-per-workload-verdict">2. Does classic actually <em>work</em>? (per-workload verdict)<a class="headerlink" href="#2-does-classic-actually-work-per-workload-verdict" title="Permanent link">&para;</a></h2>
-<p>Grounded in the live dogfood series
-(<a href="../archive/gke-dogfood-turnup-findings/">gke-dogfood.md</a> re-routes #3–#8), the Q260 saga
-(<a href="../archive/q260-fanout-completion-reconciliation/">q260-fanout-completion-reconciliation.md</a>,
-<a href="../archive/q260-planid-dedup-refix/">q260-planid-dedup-refix.md</a>), and the lever spike
-(<a href="../q224-fanout-dispatch-lever-spike/">q224-fanout-dispatch-lever-spike.md</a>). The
-answer is <strong>not binary</strong> — it depends entirely on the concurrency class.</p>
+<p>Grounded in the live dogfood series (<a href="../archive/gke-dogfood-turnup-findings/">gke-dogfood.md</a> re-routes #3–#8), the Q260 saga (<a href="../archive/q260-fanout-completion-reconciliation/">q260-fanout-completion-reconciliation.md</a>, <a href="../archive/q260-planid-dedup-refix/">q260-planid-dedup-refix.md</a>), and the lever spike (<a href="../q224-fanout-dispatch-lever-spike/">q224-fanout-dispatch-lever-spike.md</a>).
+The answer is <strong>not binary</strong> — it depends entirely on the concurrency class.</p>
 <table>
 <thead>
 <tr>
@@ -2931,265 +2873,118 @@ answer is <strong>not binary</strong> — it depends entirely on the concurrency
 </tr>
 </tbody>
 </table>
-<p><strong>The counter-case is strong and must be stated plainly:</strong> classic is a <em>working</em>
-system for the individual and low/moderate-concurrency segment — which, per the
-go-to-market ICP (<a href="../go-to-market/">go-to-market.md</a> §3: platform teams on shared
-multi-tenant Kubernetes, compliance/egress-driven self-hosting), is a large and
-arguably <em>primary</em> real workload. Writing the whole thing off because it fails at
-reliable 7-way-concurrent-matrix throughput conflates "fails the hardest CI-matrix
-stress test" with "does not work."</p>
-<p><strong>But the ceiling is real and it is not a tuning artifact.</strong> Re-route #8 is the
-decisive datum: on a pristine namespace with every AGC-side seam fixed, a ~7-job
-burst still stranded 5 jobs forever. This is not "needs more fixes" — it is a wall
-(§4).</p>
+<p><strong>The counter-case is strong and must be stated plainly:</strong> classic is a <em>working</em> system for the individual and low/moderate-concurrency segment — which, per the go-to-market ICP (<a href="../go-to-market/">go-to-market.md</a> §3: platform teams on shared multi-tenant Kubernetes, compliance/egress-driven self-hosting), is a large and arguably <em>primary</em> real workload.
+Writing the whole thing off because it fails at reliable 7-way-concurrent-matrix throughput conflates "fails the hardest CI-matrix stress test" with "does not work."</p>
+<p><strong>But the ceiling is real and it is not a tuning artifact.</strong> Re-route #8 is the decisive datum: on a pristine namespace with every AGC-side seam fixed, a ~7-job burst still stranded 5 jobs forever.
+This is not "needs more fixes" — it is a wall (§4).</p>
 <hr />
 <h2 id="3-does-it-scale-does-it-perform">3. Does it <em>scale</em>? Does it <em>perform</em>?<a class="headerlink" href="#3-does-it-scale-does-it-perform" title="Permanent link">&para;</a></h2>
 <h3 id="31-scaling--the-rate-limit-budget-is-the-ceiling-that-grows-with-concurrency">3.1 Scaling — the rate-limit budget is the ceiling that grows with concurrency<a class="headerlink" href="#31-scaling--the-rate-limit-budget-is-the-ceiling-that-grows-with-concurrency" title="Permanent link">&para;</a></h3>
 <ul>
-<li>The GitHub installation budget is <strong>~15,000 req/hr</strong>; a classic long-poll session
-  costs <strong>~72 req/hr</strong> (~50 s holds), giving a practical <strong>~250-session</strong> ceiling
-  (~150 RunnerGroups at one baseline session each with headroom)
-  (<a href="../../design/03-api-contracts/#35-github-api-rate-limit-budget">03-api-contracts.md §3.5</a>;
-  <a href="../../design/appendix-e-capacity-planning/">appendix-e-capacity-planning.md</a>).</li>
-<li><strong>Classic's budget scales <em>with acquisition concurrency</em>:</strong> at burst the session
-  count climbs toward <code>sum(maxListeners)</code> across groups — the very knob you must
-  raise to chase throughput is the knob that consumes the rate-limit budget. This
-  is a genuine scaling coupling.</li>
-<li><strong>Scale-set decouples them:</strong> one session per group at <strong>all</strong> load levels
-  (~72 polls/hr), because concurrency is expressed as the batch size / capacity
-  header, not as a session count. The §3.5 rate-limit ceiling <strong>stops scaling with
-  acquisition concurrency</strong>
-  (<a href="../archive/q264-scale-set-protocol-phases/#improves">Q264 §3 "Improves"</a>). This is a real,
-  structural scaling win for scale-set, not a wash.</li>
+<li>The GitHub installation budget is <strong>~15,000 req/hr</strong>; a classic long-poll session costs <strong>~72 req/hr</strong> (~50 s holds), giving a practical <strong>~250-session</strong> ceiling (~150 RunnerGroups at one baseline session each with headroom) (<a href="../../design/03-api-contracts/#35-github-api-rate-limit-budget">03-api-contracts.md §3.5</a>; <a href="../../design/appendix-e-capacity-planning/">appendix-e-capacity-planning.md</a>).</li>
+<li><strong>Classic's budget scales <em>with acquisition concurrency</em>:</strong> at burst the session count climbs toward <code>sum(maxListeners)</code> across groups — the very knob you must raise to chase throughput is the knob that consumes the rate-limit budget.
+  This is a genuine scaling coupling.</li>
+<li><strong>Scale-set decouples them:</strong> one session per group at <strong>all</strong> load levels (~72 polls/hr), because concurrency is expressed as the batch size / capacity header, not as a session count.
+  The §3.5 rate-limit ceiling <strong>stops scaling with acquisition concurrency</strong> (<a href="../archive/q264-scale-set-protocol-phases/#improves">Q264 §3 "Improves"</a>).
+  This is a real, structural scaling win for scale-set, not a wash.</li>
 </ul>
 <h3 id="32-performance--density--the-story-cuts-both-ways-and-a-common-misread">3.2 Performance / density — the story cuts both ways, and a common misread<a class="headerlink" href="#32-performance--density--the-story-cuts-both-ways-and-a-common-misread" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>At rest, classic's density was a genuine GAG differentiator:</strong> a ~12 KiB
-  listener goroutine in one shared pod vs ARC's always-on listener pod (+ cluster
-  IP) per scale set
-  (<a href="../../design/appendix-d-alternatives-considered/">appendix-d-alternatives-considered.md</a> §D.3;
-  the earlier "~256 MiB .NET / ~4,000×" framing was retired by #781 — ARC's
-  scale-set listener is Go, and the ratio's denominator was never measured).</li>
-<li><strong>Correcting a tempting misread: scale-set does <em>not</em> serialize concurrency.</strong> It
-  is easy to conclude "one session per group ⇒ one job at a time." That is wrong.
-  The scale-set listener <strong>batch-acquires</strong> and provisions <strong>N workers in
-  parallel</strong>; concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code> advertised as
-  <code>X-ScaleSetMaxCapacity</code>, fully decoupled from the single session
-  (<a href="../archive/q264-scale-set-protocol-phases/#23-batch-acquisition--the-call-that-kills-the-fan-out">Q264 §2.3</a>,
-  live-confirmed §2b-1). One session ≠ one concurrent job.</li>
-<li><strong>Scale-set <em>improves</em> at-rest density</strong> — one session/group instead of classic's
-  reactive climb toward <code>maxListeners</code> sessions — while keeping the goroutine-listener
-  footprint (a goroutine in the shared AGC pod, not a per-scale-set listener pod)
-  (<a href="../archive/q264-scale-set-protocol-phases/#4-honest-cost-list-delta-vs-the-q260-4e-estimate">Q264 §4.7</a>,
-  §3 "Improves"). The "ARC's protocol, GAG's efficiency" pitch holds.</li>
-<li><strong>Overhead machinery classic carries that scale-set deletes by construction:</strong> the
-  single-use agent recycle (Q114: 2 REST calls + Secret rewrite + session re-create
-  per job), planID dedup (#512/Q260), the renew loop (Q247), completion fan-out
-  (Option A), and the multiplexer/self-heal ladder (Q152) — all gone under one
-  session + per-job JIT config
-  (<a href="../archive/q264-scale-set-protocol-phases/#3-delta-from-todays-classic-machinery">Q264 §3 "Discarded"/"Improves"</a>).</li>
+<li><strong>At rest, classic's density was a genuine GAG differentiator:</strong> a ~12 KiB listener goroutine in one shared pod vs ARC's always-on listener pod (+ cluster IP) per scale set (<a href="../../design/appendix-d-alternatives-considered/">appendix-d-alternatives-considered.md</a> §D.3; the earlier "~256 MiB .NET / ~4,000×" framing was retired by #781 — ARC's scale-set listener is Go, and the ratio's denominator was never measured).</li>
+<li><strong>Correcting a tempting misread: scale-set does <em>not</em> serialize concurrency.</strong> It is easy to conclude "one session per group ⇒ one job at a time."
+  That is wrong.
+  The scale-set listener <strong>batch-acquires</strong> and provisions <strong>N workers in parallel</strong>; concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code> advertised as <code>X-ScaleSetMaxCapacity</code>, fully decoupled from the single session (<a href="../archive/q264-scale-set-protocol-phases/#23-batch-acquisition--the-call-that-kills-the-fan-out">Q264 §2.3</a>, live-confirmed §2b-1).
+  One session ≠ one concurrent job.</li>
+<li><strong>Scale-set <em>improves</em> at-rest density</strong> — one session/group instead of classic's reactive climb toward <code>maxListeners</code> sessions — while keeping the goroutine-listener footprint (a goroutine in the shared AGC pod, not a per-scale-set listener pod) (<a href="../archive/q264-scale-set-protocol-phases/#4-honest-cost-list-delta-vs-the-q260-4e-estimate">Q264 §4.7</a>, §3 "Improves").
+  The "ARC's protocol, GAG's efficiency" pitch holds.</li>
+<li><strong>Overhead machinery classic carries that scale-set deletes by construction:</strong> the single-use agent recycle (Q114: 2 REST calls + Secret rewrite + session re-create per job), planID dedup (#512/Q260), the renew loop (Q247), completion fan-out (Option A), and the multiplexer/self-heal ladder (Q152) — all gone under one session + per-job JIT config (<a href="../archive/q264-scale-set-protocol-phases/#3-delta-from-todays-classic-machinery">Q264 §3 "Discarded"/"Improves"</a>).</li>
 </ul>
-<p><strong>Net:</strong> at rest, both are cheap and scale-set is <em>slightly</em> cheaper; at burst,
-classic's rate-limit budget and recycle churn grow with concurrency while
-scale-set's do not. Performance is <strong>not</strong> where classic is kneecapped — the kneecap
-is dispatch reliability (§4), not footprint.</p>
+<p><strong>Net:</strong> at rest, both are cheap and scale-set is <em>slightly</em> cheaper; at burst, classic's rate-limit budget and recycle churn grow with concurrency while scale-set's do not.
+Performance is <strong>not</strong> where classic is kneecapped — the kneecap is dispatch reliability (§4), not footprint.</p>
 <hr />
 <h2 id="4-is-it-kneecapped-by-the-protocol-the-crux--structural-ceiling-vs-remaining-bugs">4. Is it kneecapped by the protocol? (the crux — structural ceiling vs remaining bugs)<a class="headerlink" href="#4-is-it-kneecapped-by-the-protocol-the-crux--structural-ceiling-vs-remaining-bugs" title="Permanent link">&para;</a></h2>
-<p><strong>Yes — at high concurrency, structurally, and unfixable from the AGC side.</strong> This
-is the central finding and it must be distinguished carefully from the <em>bugs that
-have already been fixed</em>.</p>
+<p><strong>Yes — at high concurrency, structurally, and unfixable from the AGC side.</strong> This is the central finding and it must be distinguished carefully from the <em>bugs that have already been fixed</em>.</p>
 <p><strong>What was a fixable bug (all now fixed):</strong>
-- Completion accounting — losers silently abandoned → Option A winner-driven
-  <code>completejob</code> per delivery, <strong>live-confirmed GO</strong> (re-route #5: <code>completejob</code>
-  returns OK on a live sibling, jobs conclude green and survive the 15-min timeout;
-  <a href="../archive/q260-fanout-completion-reconciliation/#re-route-5-confirmed-2026-07-04--go">Q260 §5 re-route #5</a>).
-- planID dedup keyed correctly (#512), recycle 422 churn (Q259), slot-stranding
-  (Q266), token-400 ride-out (Q267), SSD capacity ceiling (Q248) — all resolved and
-  confirmed quiet in re-route #8.
-- The Q265 benchmark explicitly found <strong>no completion-tax throughput wall</strong>
-  (<a href="../archive/q260-fanout-completion-reconciliation/#7-q265--fan-out-throughput-benchmark-2026-07-05-tax-wall-or-tuning">Q260 §7</a>) —
-  Option A's accounting is <em>not</em> the bottleneck.</p>
-<p><strong>What is a structural ceiling (unfixable AGC-side):</strong> <em>fan-out distinct-delivery
-starvation.</em> Mechanism, pinned to code and live logs (re-route #8):</p>
+- Completion accounting — losers silently abandoned → Option A winner-driven <code>completejob</code> per delivery, <strong>live-confirmed GO</strong> (re-route #5: <code>completejob</code> returns OK on a live sibling, jobs conclude green and survive the 15-min timeout; <a href="../archive/q260-fanout-completion-reconciliation/#re-route-5-confirmed-2026-07-04--go">Q260 §5 re-route #5</a>).
+- planID dedup keyed correctly (#512), recycle 422 churn (Q259), slot-stranding (Q266), token-400 ride-out (Q267), SSD capacity ceiling (Q248) — all resolved and confirmed quiet in re-route #8.
+- The Q265 benchmark explicitly found <strong>no completion-tax throughput wall</strong> (<a href="../archive/q260-fanout-completion-reconciliation/#7-q265--fan-out-throughput-benchmark-2026-07-05-tax-wall-or-tuning">Q260 §7</a>) — Option A's accounting is <em>not</em> the bottleneck.</p>
+<p><strong>What is a structural ceiling (unfixable AGC-side):</strong> <em>fan-out distinct-delivery starvation.</em> Mechanism, pinned to code and live logs (re-route #8):</p>
 <ol>
-<li>GitHub fans <strong>one</strong> logical job's planID out as ~6 sibling deliveries; the AGC
-   correctly dedups them and releases each via Option A.</li>
-<li>The pool grows <strong>only</strong> on a <em>distinct</em>-planID win — <code>SpawnReplacement</code> runs only
-   <em>after</em> a listener wins past the dedup gate
-   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go:924</a>; a deduped loser
-   skips it entirely). So <strong>F duplicate deliveries of one job grow the pool by
-   exactly 1</strong>, not F.</li>
-<li>Fed duplicates of one job, the idle pool <strong>stalls at 3 online sessions ≪ 48</strong>, so
-   GitHub never sees enough <em>distinct</em> idle runners to place the <strong>5 other distinct
-   jobs</strong> — whose planIDs are therefore <strong>never delivered</strong> and wedge <code>in_progress</code>
-   indefinitely.</li>
+<li>GitHub fans <strong>one</strong> logical job's planID out as ~6 sibling deliveries; the AGC correctly dedups them and releases each via Option A.</li>
+<li>The pool grows <strong>only</strong> on a <em>distinct</em>-planID win — <code>SpawnReplacement</code> runs only <em>after</em> a listener wins past the dedup gate (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go:924</a>; a deduped loser skips it entirely).
+   So <strong>F duplicate deliveries of one job grow the pool by exactly 1</strong>, not F.</li>
+<li>Fed duplicates of one job, the idle pool <strong>stalls at 3 online sessions ≪ 48</strong>, so GitHub never sees enough <em>distinct</em> idle runners to place the <strong>5 other distinct jobs</strong> — whose planIDs are therefore <strong>never delivered</strong> and wedge <code>in_progress</code> indefinitely.</li>
 </ol>
-<p>The lever spike tested the two proposed AGC-side escape hatches against this and
-concluded: <strong>no reliable AGC-side lever.</strong> Unique/ephemeral names (H2) add zero
-distinct idle runners (a non-lever); a warm idle-<em>listener</em> baseline (H1) is at best
-a probabilistic green-<em>rate</em> stopgap whose efficacy is unconfirmed and whose
-favourable case <strong>converges on reimplementing the scale-set capacity model on the
-fan-out-prone protocol</strong> — strictly dominated by Option E
-(<a href="../q224-fanout-dispatch-lever-spike/">q224-fanout-dispatch-lever-spike.md</a>, verdict
-§ up-front). The binding constraint (whether GitHub <em>spreads</em> distinct jobs across a
-wide idle pool or <em>fans one out first</em>) is <strong>server-side and unknowable/unchangeable
-from the AGC</strong>.</p>
+<p>The lever spike tested the two proposed AGC-side escape hatches against this and concluded: <strong>no reliable AGC-side lever.</strong> Unique/ephemeral names (H2) add zero distinct idle runners (a non-lever); a warm idle-<em>listener</em> baseline (H1) is at best a probabilistic green-<em>rate</em> stopgap whose efficacy is unconfirmed and whose favourable case <strong>converges on reimplementing the scale-set capacity model on the fan-out-prone protocol</strong> — strictly dominated by Option E (<a href="../q224-fanout-dispatch-lever-spike/">q224-fanout-dispatch-lever-spike.md</a>, verdict § up-front).
+The binding constraint (whether GitHub <em>spreads</em> distinct jobs across a wide idle pool or <em>fans one out first</em>) is <strong>server-side and unknowable/unchangeable from the AGC</strong>.</p>
 <blockquote>
-<p><strong>Verdict:</strong> classic is <strong>structurally kneecapped at reliable high-burst
-concurrency</strong>, not merely buggy. The distinction matters for the timeline: you
-cannot engineer your way out of it on the classic protocol; the only structural
-fix is single-acquirer topology (Option E / scale-set). Below that concurrency
-line, the protocol is not kneecapped at all.</p>
+<p><strong>Verdict:</strong> classic is <strong>structurally kneecapped at reliable high-burst concurrency</strong>, not merely buggy.
+The distinction matters for the timeline: you cannot engineer your way out of it on the classic protocol; the only structural fix is single-acquirer topology (Option E / scale-set).
+Below that concurrency line, the protocol is not kneecapped at all.</p>
 </blockquote>
-<p><strong>Now confirmed from the other side (P4, 2026-07-05).</strong> The structural claim is no
-longer only theory: on the identical concurrent matrix that pinned classic at 2/7,
-the scale-set path concluded <strong>all 7</strong> distinct jobs (7/7, single acquirer, zero
-dedup) — the fan-out is gone <em>by construction</em>, exactly as §5a-U8 predicted. That is
-the strongest possible evidence both that classic's ceiling is real (the same test,
-same load, opposite outcome) and that Option E is the fix, not merely <em>a</em> fix.</p>
+<p><strong>Now confirmed from the other side (P4, 2026-07-05).</strong> The structural claim is no longer only theory: on the identical concurrent matrix that pinned classic at 2/7, the scale-set path concluded <strong>all 7</strong> distinct jobs (7/7, single acquirer, zero dedup) — the fan-out is gone <em>by construction</em>, exactly as §5a-U8 predicted.
+That is the strongest possible evidence both that classic's ceiling is real (the same test, same load, opposite outcome) and that Option E is the fix, not merely <em>a</em> fix.</p>
 <hr />
 <h2 id="5-was-scale-set-what-we-should-have-built-from-the-start-hindsight-fairly">5. Was scale-set "what we should have built from the start"? (hindsight, fairly)<a class="headerlink" href="#5-was-scale-set-what-we-should-have-built-from-the-start-hindsight-fairly" title="Permanent link">&para;</a></h2>
-<p><strong>No — building classic first was a defensible bet given what was knowable then.</strong>
-Resisting hindsight bias:</p>
+<p><strong>No — building classic first was a defensible bet given what was knowable then.</strong> Resisting hindsight bias:</p>
 <ul>
-<li><strong>The protocol was not available as a supported surface at design time.</strong> The
-  runner-scale-set protocol was undocumented-internal-to-ARC (no wire spec; the ARC
-  Go client had to be read at a pinned tag). GitHub only published the <strong>official
-  standalone <code>actions/scaleset</code> client</strong> (Public Preview, MIT) in 2026 — four
-  releases v0.1.0–v0.4.0, Feb–May 2026
-  (<a href="../archive/q264-scale-set-protocol-phases/#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation">Q264 §4, §5a-U6</a>).
-  Building on it <em>then</em> would have meant reverse-engineering a <strong>second</strong>
-  undocumented GitHub-internal protocol and betting the product on a moving,
-  pre-1.0-adjacent target.</li>
-<li><strong>The classic virtual-runner bet bought real, still-valid merits:</strong> the
-  goroutines-in-one-shared-pod at-rest density advantage over ARC's
-  pod-per-scale-set listeners, per-tenant egress isolation, multi-tenant
-  self-service, and zero idle compute (appendix-d §D.3–D.4). None of that was free
-  elsewhere.</li>
-<li><strong>The specific failure was not cleanly foreseeable from source.</strong> The topology
-  consequence (concurrency = acquirers) was arguably visible in principle, but the
-  precise <em>distinct-delivery starvation</em> behaviour only emerged under live
-  high-burst dogfood — source-reading alone would not have surfaced it (indeed the
-  whole Q260→Q224 saga is a sequence of live re-routes correcting source-level
-  assumptions).</li>
+<li><strong>The protocol was not available as a supported surface at design time.</strong> The runner-scale-set protocol was undocumented-internal-to-ARC (no wire spec; the ARC Go client had to be read at a pinned tag).
+  GitHub only published the <strong>official standalone <code>actions/scaleset</code> client</strong> (Public Preview, MIT) in 2026 — four releases v0.1.0–v0.4.0, Feb–May 2026 (<a href="../archive/q264-scale-set-protocol-phases/#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation">Q264 §4, §5a-U6</a>).
+  Building on it <em>then</em> would have meant reverse-engineering a <strong>second</strong> undocumented GitHub-internal protocol and betting the product on a moving, pre-1.0-adjacent target.</li>
+<li><strong>The classic virtual-runner bet bought real, still-valid merits:</strong> the goroutines-in-one-shared-pod at-rest density advantage over ARC's pod-per-scale-set listeners, per-tenant egress isolation, multi-tenant self-service, and zero idle compute (appendix-d §D.3–D.4).
+  None of that was free elsewhere.</li>
+<li><strong>The specific failure was not cleanly foreseeable from source.</strong> The topology consequence (concurrency = acquirers) was arguably visible in principle, but the precise <em>distinct-delivery starvation</em> behaviour only emerged under live high-burst dogfood — source-reading alone would not have surfaced it (indeed the whole Q260→Q224 saga is a sequence of live re-routes correcting source-level assumptions).</li>
 </ul>
-<p><strong>Fair conclusion:</strong> scale-set is "what we'd build today," not "what we obviously
-should have built then." The classic tier also paid for itself — the protocol
-knowledge, the egress/isolation/provisioner machinery, and the <code>scalesettest</code> fake
-all carry straight into Option E (Q264 §3 "Carried over intact"; §6 "P1/P2 are
-useful even if Option A wins").</p>
+<p><strong>Fair conclusion:</strong> scale-set is "what we'd build today," not "what we obviously should have built then."
+The classic tier also paid for itself — the protocol knowledge, the egress/isolation/provisioner machinery, and the <code>scalesettest</code> fake all carry straight into Option E (Q264 §3 "Carried over intact"; §6 "P1/P2 are useful even if Option A wins").</p>
 <hr />
 <h2 id="6-the-sunset-decision--separated-by-axis">6. The sunset decision — separated by axis<a class="headerlink" href="#6-the-sunset-decision--separated-by-axis" title="Permanent link">&para;</a></h2>
 <h3 id="61-what-the-existing-plan-already-commits-to">6.1 What the existing plan already commits to<a class="headerlink" href="#61-what-the-existing-plan-already-commits-to" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Protocol</strong> (<a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">Q264 §5a-U8</a>):
-  coexist behind <code>acquisitionProtocol</code> (default <code>Classic</code>) through P3–P4 → <strong>flip
-  default to <code>ScaleSet</code> at P5</strong> (with the positioning-doc rewrite) → classic
-  deprecated <strong>one minor release</strong> → classic machinery removed in an isolated PR
-  <strong>aligned with the Q74 v2beta1 graduation</strong> (v2beta1 is ScaleSet-only).</li>
-<li><strong>API</strong> (<a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a>):
-  v1alpha1 already <strong>deprecated but served</strong>; removed "once v2 adoption is
-  sufficient," announced as a <strong>named release with ≥1 release of notice</strong>; no action
-  forced until then.</li>
-<li><strong>The coupling:</strong> because ScaleSet is v2-exclusive, classic is v1alpha1's <em>only</em>
-  acquisition path, so classic-machinery removal <strong>is</strong> the end of v1alpha1's ability
-  to acquire jobs — the plan therefore sequences the classic-removal PR after
-  v1alpha1 is itself deprecated, announcing both together (Q264 §5a-U8 "Consequence").</li>
+<li><strong>Protocol</strong> (<a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">Q264 §5a-U8</a>): coexist behind <code>acquisitionProtocol</code> (default <code>Classic</code>) through P3–P4 → <strong>flip default to <code>ScaleSet</code> at P5</strong> (with the positioning-doc rewrite) → classic deprecated <strong>one minor release</strong> → classic machinery removed in an isolated PR <strong>aligned with the Q74 v2beta1 graduation</strong> (v2beta1 is ScaleSet-only).</li>
+<li><strong>API</strong> (<a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a>): v1alpha1 already <strong>deprecated but served</strong>; removed "once v2 adoption is sufficient," announced as a <strong>named release with ≥1 release of notice</strong>; no action forced until then.</li>
+<li><strong>The coupling:</strong> because ScaleSet is v2-exclusive, classic is v1alpha1's <em>only</em> acquisition path, so classic-machinery removal <strong>is</strong> the end of v1alpha1's ability to acquire jobs — the plan therefore sequences the classic-removal PR after v1alpha1 is itself deprecated, announcing both together (Q264 §5a-U8 "Consequence").</li>
 </ul>
 <blockquote>
-<p><strong>Design question this review raised, now resolved (2026-07-05):
-keep v2beta1 ScaleSet-only.</strong> The question was whether to <em>retain</em>
-<code>acquisitionProtocol</code> (and a <code>Classic</code> fallback) through v2beta1 and drop it only
-at v2 GA, rather than stripping it at graduation (Q264 §5a-U7/U8). The retain-hedge
-existed to preserve a rollback fallback — but that fallback protects <strong>v1/classic
-users who do not exist</strong> (§6.3), so it buys almost nothing while muddying the "one
-protocol, strictly better than ARC" story that drives adoption. Against that:
-<strong>P4 proved the protocol works live</strong> (7/7), <strong>GAG owns its own client</strong> (not
-hostage to upstream's Preview cadence — "Preview" is a label on GitHub's <em>library</em>,
-while the <em>wire protocol</em> is what ARC runs in production at scale), and a cleaner
-beta surface is easier to commit to and support. <strong>Decision: v2beta1 stays
-ScaleSet-only.</strong> The residual risk — GitHub drifts the protocol post-graduation
-with no classic escape — is real but bounded (own-client + ARC-in-prod + a code
-fix is always shippable), and is managed with a <strong>technical</strong> guardrail rather than
-the retain-hedge: <strong>do not graduate v2beta1 until the clean-green dogfood re-run
-plus a short stability soak of the scale-set path</strong> — bet the beta on evidence, not
-one run. Consequence for the backlog: <a href="../../STATUS/#Q272">Q272</a> (scale-set upstream
-maturity) is <em>not</em> a graduation blocker — it lifts the Preview caveat and triggers
-the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on
-GitHub's GA timeline.</p>
+<p><strong>Design question this review raised, now resolved (2026-07-05): keep v2beta1 ScaleSet-only.</strong> The question was whether to <em>retain</em> <code>acquisitionProtocol</code> (and a <code>Classic</code> fallback) through v2beta1 and drop it only at v2 GA, rather than stripping it at graduation (Q264 §5a-U7/U8).
+The retain-hedge existed to preserve a rollback fallback — but that fallback protects <strong>v1/classic users who do not exist</strong> (§6.3), so it buys almost nothing while muddying the "one protocol, strictly better than ARC" story that drives adoption.
+Against that: <strong>P4 proved the protocol works live</strong> (7/7), <strong>GAG owns its own client</strong> (not hostage to upstream's Preview cadence — "Preview" is a label on GitHub's <em>library</em>, while the <em>wire protocol</em> is what ARC runs in production at scale), and a cleaner beta surface is easier to commit to and support. <strong>Decision: v2beta1 stays ScaleSet-only.</strong> The residual risk — GitHub drifts the protocol post-graduation with no classic escape — is real but bounded (own-client + ARC-in-prod + a code fix is always shippable), and is managed with a <strong>technical</strong> guardrail rather than the retain-hedge: <strong>do not graduate v2beta1 until the clean-green dogfood re-run plus a short stability soak of the scale-set path</strong> — bet the beta on evidence, not one run.
+Consequence for the backlog: <a href="../../STATUS/#Q272">Q272</a> (scale-set upstream maturity) is <em>not</em> a graduation blocker — it lifts the Preview caveat and triggers the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on GitHub's GA timeline.</p>
 </blockquote>
 <h3 id="62-the-recommendation--v2-is-the-product-retire-v1-on-a-stability-schedule">6.2 The recommendation — v2 is the product; retire v1 on a stability schedule<a class="headerlink" href="#62-the-recommendation--v2-is-the-product-retire-v1-on-a-stability-schedule" title="Permanent link">&para;</a></h3>
-<p>An earlier draft of this memo recommended "hold both removals, keep classic as a
-safety valve, gate on an adoption signal." That rested on an assumption since
-corrected: <strong>there is no v1 adopter base to protect, and there won't be one</strong>
-(§6.3). Once that falls away, the safety-valve rationale collapses and the goal
-changes — from <em>protecting v1</em> to making <strong>v2 the only sensible on-ramp</strong> and using
-the v1→v2 handling as a forward-looking trust signal. What that signal is <em>for</em>
-matters: its audience is not v1 users (there are none) but a <strong>prospective v2
-adopter</strong> judging whether GAG is a safe multi-year bet — they read how the project
-treats its own deprecated version as a proxy for how it will treat <em>them</em> at the next
-version bump. Handled poorly the cost is not complaints (no one to complain) — it is
-the adoption failure the maintainer named: <strong>no adoption, or a new user landing on v1
-instead of v2.</strong></p>
+<p>An earlier draft of this memo recommended "hold both removals, keep classic as a safety valve, gate on an adoption signal."
+That rested on an assumption since corrected: <strong>there is no v1 adopter base to protect, and there won't be one</strong> (§6.3).
+Once that falls away, the safety-valve rationale collapses and the goal changes — from <em>protecting v1</em> to making <strong>v2 the only sensible on-ramp</strong> and using the v1→v2 handling as a forward-looking trust signal.
+What that signal is <em>for</em> matters: its audience is not v1 users (there are none) but a <strong>prospective v2 adopter</strong> judging whether GAG is a safe multi-year bet — they read how the project treats its own deprecated version as a proxy for how it will treat <em>them</em> at the next version bump.
+Handled poorly the cost is not complaints (no one to complain) — it is the adoption failure the maintainer named: <strong>no adoption, or a new user landing on v1 instead of v2.</strong></p>
 <ol>
-<li><strong>Make v2 the only front door now.</strong> Route README / getting-started / onboarding /
-   new-tenant templates entirely to v2, with a prominent "v1 is deprecated — start on
-   v2" banner on the v1 pages. This directly kills the "new user adopts v1" failure
-   mode and is cheap — it is <em>documentation and positioning</em>, not v1 runtime work.</li>
-<li><strong>Commit v1 removal to a stated schedule gated on v2 <em>stability</em> — not adopters.</strong>
-   Replace the open-ended "removed once v2 adoption is sufficient" (which reads as
-   indecision) with a <strong>named removal release tied to the v2beta1 graduation</strong>. Gating
-   on v2 reaching beta is honest — you should not force anyone onto an alpha — and is
-   <em>not</em> catering to imaginary users. The <strong>discipline</strong> (announced, scheduled,
-   documented, backed by a working <code>gag-migrate</code>) <em>is</em> the "safe bet, won't strand
-   you" signal, far more than the length of the window.</li>
-<li><strong>Reinvest the freed effort into the migration mechanics as a showcase, not the v1
-   runtime.</strong> <code>gag-migrate</code>, the migration guide, the deprecation notice, the
-   "what's preserved / what changes" doc — make these <em>exemplary</em>, because that is the
-   artifact a prospective adopter actually inspects. (This reframes the
-   adoption-signal item <a href="../../STATUS/#Q273">Q273</a> from "instrument who's using it" to
-   "polish the migration story" — a better use of effort when there is no one to
-   measure.)</li>
-<li><strong>Classic is terminal — no further investment.</strong> The eight re-routes were the last
-   classic spend; the residual ceiling is structural (§4). This is the "structural
-   ceiling → stop paying it down" disposition from
-   <a href="../../development/technical-debt/">technical-debt.md</a>.</li>
-<li><strong>v2beta1 stays ScaleSet-only</strong> (§6.1), with a <em>technical</em> graduation guardrail
-   (clean-green + a stability soak), not a user-migration one.</li>
-<li><strong>The real lever is v2 <em>maturation</em>, not v1 removal.</strong> "v2 is the front door" only
-   converts to adoption once v2 is beta-stable, so the priority is the <strong>v2beta1
-   graduation path</strong> — Q74 and its blockers (Q191/Q196/Q197/Q242/Q243; Q224 is now
-   addressed by the scale-set path) — not the v1 sunset. Retiring v1 is the
-   <em>consequence</em> of v2 being ready, not a goal to chase on its own.</li>
+<li><strong>Make v2 the only front door now.</strong> Route README / getting-started / onboarding / new-tenant templates entirely to v2, with a prominent "v1 is deprecated — start on v2" banner on the v1 pages.
+   This directly kills the "new user adopts v1" failure mode and is cheap — it is <em>documentation and positioning</em>, not v1 runtime work.</li>
+<li><strong>Commit v1 removal to a stated schedule gated on v2 <em>stability</em> — not adopters.</strong> Replace the open-ended "removed once v2 adoption is sufficient" (which reads as indecision) with a <strong>named removal release tied to the v2beta1 graduation</strong>.
+   Gating on v2 reaching beta is honest — you should not force anyone onto an alpha — and is <em>not</em> catering to imaginary users.
+   The <strong>discipline</strong> (announced, scheduled, documented, backed by a working <code>gag-migrate</code>) <em>is</em> the "safe bet, won't strand you" signal, far more than the length of the window.</li>
+<li><strong>Reinvest the freed effort into the migration mechanics as a showcase, not the v1 runtime.</strong> <code>gag-migrate</code>, the migration guide, the deprecation notice, the "what's preserved / what changes" doc — make these <em>exemplary</em>, because that is the artifact a prospective adopter actually inspects.
+   (This reframes the adoption-signal item <a href="../../STATUS/#Q273">Q273</a> from "instrument who's using it" to "polish the migration story" — a better use of effort when there is no one to measure.)</li>
+<li><strong>Classic is terminal — no further investment.</strong> The eight re-routes were the last classic spend; the residual ceiling is structural (§4).
+   This is the "structural ceiling → stop paying it down" disposition from <a href="../../development/technical-debt/">technical-debt.md</a>.</li>
+<li><strong>v2beta1 stays ScaleSet-only</strong> (§6.1), with a <em>technical</em> graduation guardrail (clean-green + a stability soak), not a user-migration one.</li>
+<li><strong>The real lever is v2 <em>maturation</em>, not v1 removal.</strong> "v2 is the front door" only converts to adoption once v2 is beta-stable, so the priority is the <strong>v2beta1 graduation path</strong> — Q74 and its blockers (Q191/Q196/Q197/Q242/Q243; Q224 is now addressed by the scale-set path) — not the v1 sunset.
+   Retiring v1 is the <em>consequence</em> of v2 being ready, not a goal to chase on its own.</li>
 </ol>
-<p><strong>The one risk to hold in view.</strong> Do not let "deprecate v1 loudly" run ahead of v2
-actually being ready to be the sole path — v2 is still alpha with open blockers. Route
-new users to v2 in the docs <em>now</em> (safe: it is the better shape), but keep the loud
-removal <em>commitment</em> pinned to v2beta1 readiness. And stay honest that GAG's weaker
-flank versus ARC is <em>maturity</em> (pre-1.0, a Public-Preview protocol dependency), not
-capability — which is precisely <em>why</em> the migration-discipline signal is worth the
-effort: it is how a young project earns "safe bet" trust before it has the track
-record to claim it.</p>
+<p><strong>The one risk to hold in view.</strong> Do not let "deprecate v1 loudly" run ahead of v2 actually being ready to be the sole path — v2 is still alpha with open blockers.
+Route new users to v2 in the docs <em>now</em> (safe: it is the better shape), but keep the loud removal <em>commitment</em> pinned to v2beta1 readiness.
+And stay honest that GAG's weaker flank versus ARC is <em>maturity</em> (pre-1.0, a Public-Preview protocol dependency), not capability — which is precisely <em>why</em> the migration-discipline signal is worth the effort: it is how a young project earns "safe bet" trust before it has the track record to claim it.</p>
 <h3 id="63-adoption-reality--the-fact-that-most-changes-the-risk-math">6.3 Adoption reality — the fact that most changes the risk math<a class="headerlink" href="#63-adoption-reality--the-fact-that-most-changes-the-risk-math" title="Permanent link">&para;</a></h3>
 <p>The go-to-market posture is <strong>pre-adoption dogfooding</strong>, and this is decision-load-bearing:</p>
 <ul>
-<li>A <code>v1.0.0</code> tag exists and <code>v1.1.0-rc.*</code> are cut, <strong>but</strong> the public site is <strong>not
-  launched</strong>, seed channels are <strong>not started</strong> ("gated on site + 1.0 install path"),
-  and there are <strong>no external deployers yet</strong> — the goal is still "first handful"
-  (<a href="../go-to-market/">go-to-market.md</a> §8 Phase 0–1). GAG is Apache-2.0,
-  <strong>non-commercial</strong>, deliberately donation-ready, revenue explicitly out of scope.</li>
-<li><strong>Implication (this is the load-bearing turn):</strong> the compat cost of retiring v1 is
-  ~zero — no external user base holds classic or v1alpha1 in production, and none is
-  expected to; new users should hop straight onto v2. That removes the "protect the v1
-  fallback" rationale <strong>entirely</strong> and <em>inverts</em> the risk. The danger is no longer "we
-  strand a v1 user" — it is "a <strong>new</strong> user onboards onto v1, or doesn't adopt at all
-  because the versioning story looks unsafe." So the disposition is not <em>hold</em>: it is
-  <strong>retire v1 cleanly on a stability-gated schedule, and make v2 the only marketed
-  on-ramp now</strong> (§6.2). Removal gates on <strong>v2 reaching beta</strong>, not an adoption count —
-  there is no adopter base to measure, and waiting on one would itself read as
-  indecision. The adoption signal (Q273) is therefore reframed from <em>"gate removal on
-  measuring adopters"</em> to <em>"confirm dogfood-only so we can commit the schedule, and
-  make the migration itself exemplary."</em></li>
+<li>A <code>v1.0.0</code> tag exists and <code>v1.1.0-rc.*</code> are cut, <strong>but</strong> the public site is <strong>not launched</strong>, seed channels are <strong>not started</strong> ("gated on site + 1.0 install path"), and there are <strong>no external deployers yet</strong> — the goal is still "first handful" (<a href="../go-to-market/">go-to-market.md</a> §8 Phase 0–1).
+  GAG is Apache-2.0, <strong>non-commercial</strong>, deliberately donation-ready, revenue explicitly out of scope.</li>
+<li><strong>Implication (this is the load-bearing turn):</strong> the compat cost of retiring v1 is ~zero — no external user base holds classic or v1alpha1 in production, and none is expected to; new users should hop straight onto v2.
+  That removes the "protect the v1 fallback" rationale <strong>entirely</strong> and <em>inverts</em> the risk.
+  The danger is no longer "we strand a v1 user" — it is "a <strong>new</strong> user onboards onto v1, or doesn't adopt at all because the versioning story looks unsafe."
+  So the disposition is not <em>hold</em>: it is <strong>retire v1 cleanly on a stability-gated schedule, and make v2 the only marketed on-ramp now</strong> (§6.2).
+  Removal gates on <strong>v2 reaching beta</strong>, not an adoption count — there is no adopter base to measure, and waiting on one would itself read as indecision.
+  The adoption signal (Q273) is therefore reframed from <em>"gate removal on measuring adopters"</em> to <em>"confirm dogfood-only so we can commit the schedule, and make the migration itself exemplary."</em></li>
 </ul>
 <h3 id="64-gating-evidence-what-must-be-true-before-each-acceleration-step">6.4 Gating evidence (what must be true before each acceleration step)<a class="headerlink" href="#64-gating-evidence-what-must-be-true-before-each-acceleration-step" title="Permanent link">&para;</a></h3>
 <table>
@@ -3225,95 +3020,47 @@ record to claim it.</p>
 <hr />
 <h2 id="7-security--positioning-flags">7. Security &amp; positioning flags<a class="headerlink" href="#7-security--positioning-flags" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>No secure-by-default regression in the migration.</strong> Egress isolation holds (all
-  new endpoints GitHub-hosted, both listener and worker traffic stay behind the
-  per-tenant proxy), workers still never see the App token, the JIT-credential surface
-  is unchanged, and the admission gate (Q59) <em>strengthens</em> under the capacity header
-  (<a href="../archive/q264-scale-set-protocol-phases/#4-honest-cost-list-delta-vs-the-q260-4e-estimate">Q264 §4 "Security check"</a>).
-  The default stays <code>Classic</code> (the more-conservative value) until validated — no
-  security property is relaxed to enable the flip.</li>
-<li><strong>Positioning identity shifts — and this is the adoption lever, not just hygiene.</strong>
-  The "thousands of goroutine-backed virtual runners" story retires; density-at-rest
-  <em>improves</em>. The rewrite should make the <strong>strictly-better-than-ARC</strong> claim for the
-  ICP, not hedge with situational trade-offs (the maintainer's point: "better in
-  certain circumstances" doesn't move anyone off ARC). Going ScaleSet-only <em>sharpens</em>
-  it — one protocol, no "why two?" — so the claim becomes: <strong>everything ARC's
-  scale-set model does, with one shared listener pod per tenant instead of an
-  always-on listener pod + cluster IP per scale set, plus per-tenant
-  egress isolation, self-service multi-tenancy, and zero-idle that ARC lacks
-  natively.</strong> Be honest about the weaker flank — GAG's <em>maturity</em> (pre-1.0, a
-  Public-Preview protocol dependency), not its capability. The <code>why-gag</code> / vs-ARC
-  pages must be rewritten <strong>in the same PR that flips the default</strong> (Q264 §4.7) —
-  flipping first would leave the public positioning contradicting the shipped
-  behaviour.</li>
-<li><strong>User-visible API regression to document, not hide:</strong> ScaleSet collapses
-  <code>runnerLabels</code> to a single <code>runs-on</code> label (the scale-set name) and raises the GHES
-  floor to 3.9 — real trade-offs the migration comms must state (Q264 §4.2/§4.5).</li>
+<li><strong>No secure-by-default regression in the migration.</strong> Egress isolation holds (all new endpoints GitHub-hosted, both listener and worker traffic stay behind the per-tenant proxy), workers still never see the App token, the JIT-credential surface is unchanged, and the admission gate (Q59) <em>strengthens</em> under the capacity header (<a href="../archive/q264-scale-set-protocol-phases/#4-honest-cost-list-delta-vs-the-q260-4e-estimate">Q264 §4 "Security check"</a>).
+  The default stays <code>Classic</code> (the more-conservative value) until validated — no security property is relaxed to enable the flip.</li>
+<li><strong>Positioning identity shifts — and this is the adoption lever, not just hygiene.</strong> The "thousands of goroutine-backed virtual runners" story retires; density-at-rest <em>improves</em>.
+  The rewrite should make the <strong>strictly-better-than-ARC</strong> claim for the ICP, not hedge with situational trade-offs (the maintainer's point: "better in certain circumstances" doesn't move anyone off ARC).
+  Going ScaleSet-only <em>sharpens</em> it — one protocol, no "why two?" — so the claim becomes: <strong>everything ARC's scale-set model does, with one shared listener pod per tenant instead of an always-on listener pod + cluster IP per scale set, plus per-tenant egress isolation, self-service multi-tenancy, and zero-idle that ARC lacks natively.</strong> Be honest about the weaker flank — GAG's <em>maturity</em> (pre-1.0, a Public-Preview protocol dependency), not its capability.
+  The <code>why-gag</code> / vs-ARC pages must be rewritten <strong>in the same PR that flips the default</strong> (Q264 §4.7) — flipping first would leave the public positioning contradicting the shipped behaviour.</li>
+<li><strong>User-visible API regression to document, not hide:</strong> ScaleSet collapses <code>runnerLabels</code> to a single <code>runs-on</code> label (the scale-set name) and raises the GHES floor to 3.9 — real trade-offs the migration comms must state (Q264 §4.2/§4.5).</li>
 </ul>
 <hr />
 <h2 id="8-follow-up-items">8. Follow-up items<a class="headerlink" href="#8-follow-up-items" title="Permanent link">&para;</a></h2>
 <p>The direction in §6.2 turns two of these into near-term work and demotes the third:</p>
 <ol>
-<li><strong>[Q273 — active] Make v2 the front door + an exemplary v1→v2 migration story
-   (the adoption trust signal).</strong> Route README / getting-started / onboarding /
-   new-tenant templates to v2; add "v1 deprecated — start on v2" banners; and polish
-   <code>gag-migrate</code> + the migration guide + the "what's preserved / what changes" doc to
-   showcase quality (the artifact a prospective <strong>v2</strong> adopter inspects). Reframed
-   from the earlier "instrument an adoption signal" — with no adopter base to measure,
-   the value is <em>confirm dogfood-only so the removal schedule can be committed</em> and
-   <em>make the migration itself the signal</em>. Partly gated on v2 being ready to be the
-   sole path (§6.2 risk); the docs-routing slice is doable now. Ties to
-   <a href="../go-to-market/">go-to-market.md</a> Phase 1.</li>
-<li><strong>[Q272 — Deferred / watch] Scale-set upstream maturity watch.</strong> Track
-   <code>actions/scaleset</code> reaching GA/v1.0 and the auto-assign contract
-   (<a href="https://github.com/actions/scaleset/issues/107">actions/scaleset#107</a>) getting
-   documented. Per §6.1 this is <strong>not</strong> a graduation or removal blocker — it lifts the
-   Public-Preview caveat and triggers the
-   <a href="../archive/q264-scale-set-protocol-phases/#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation">Q264 §5a-U6</a>
-   vendor-vs-own revisit.</li>
-<li><strong>[folded into the P5 positioning rewrite] Migration guide states <em>why v2/ScaleSet</em>,
-   not a Classic-vs-ScaleSet chooser.</strong> Classic is terminal (§6.2 item 4), so the
-   guide should route everyone to ScaleSet and explain the "no fan-out ceiling" reason
-   — <em>not</em> present the two protocols as a menu. Tracked in Q264 §4.7.</li>
+<li><strong>[Q273 — active] Make v2 the front door + an exemplary v1→v2 migration story (the adoption trust signal).</strong> Route README / getting-started / onboarding / new-tenant templates to v2; add "v1 deprecated — start on v2" banners; and polish <code>gag-migrate</code> + the migration guide + the "what's preserved / what changes" doc to showcase quality (the artifact a prospective <strong>v2</strong> adopter inspects).
+   Reframed from the earlier "instrument an adoption signal" — with no adopter base to measure, the value is <em>confirm dogfood-only so the removal schedule can be committed</em> and <em>make the migration itself the signal</em>.
+   Partly gated on v2 being ready to be the sole path (§6.2 risk); the docs-routing slice is doable now.
+   Ties to <a href="../go-to-market/">go-to-market.md</a> Phase 1.</li>
+<li><strong>[Q272 — Deferred / watch] Scale-set upstream maturity watch.</strong> Track <code>actions/scaleset</code> reaching GA/v1.0 and the auto-assign contract (<a href="https://github.com/actions/scaleset/issues/107">actions/scaleset#107</a>) getting documented.
+   Per §6.1 this is <strong>not</strong> a graduation or removal blocker — it lifts the Public-Preview caveat and triggers the <a href="../archive/q264-scale-set-protocol-phases/#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation">Q264 §5a-U6</a> vendor-vs-own revisit.</li>
+<li><strong>[folded into the P5 positioning rewrite] Migration guide states <em>why v2/ScaleSet</em>, not a Classic-vs-ScaleSet chooser.</strong> Classic is terminal (§6.2 item 4), so the guide should route everyone to ScaleSet and explain the "no fan-out ceiling" reason — <em>not</em> present the two protocols as a menu.
+   Tracked in Q264 §4.7.</li>
 </ol>
-<p><strong>Flagged, not actioned:</strong> (a) the §6.4 gate table + the §6.1 v2beta1-ScaleSet-only
-resolution should be folded into
-<a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">Q264 §5a-U8</a> by the Q264 owner
-(that plan is under active P3–P4 work in a parallel session); (b) no <code>CLAUDE.md</code> change
-and no new milestone — the retirement is already the Q264/Q74 structure, and the
-live-verify meta-lesson is already a CLAUDE.md rule.</p>
-<p><strong>Net thesis (revised).</strong> Not "hold and sequence" — <strong>v2/scale-set is the product.</strong>
-Make v2 the only front door now, treat classic as terminal, keep v2beta1 ScaleSet-only
-with a technical soak guardrail, retire v1 on a schedule gated on <strong>v2 reaching beta</strong>
-(not on adopters), and let migration discipline carry the "safe bet" signal. The one
-lever that actually converts the strategy to adoption is <strong>v2 maturation (v2beta1),
-not the v1 sunset.</strong></p>
+<p><strong>Flagged, not actioned:</strong> (a) the §6.4 gate table + the §6.1 v2beta1-ScaleSet-only resolution should be folded into <a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">Q264 §5a-U8</a> by the Q264 owner (that plan is under active P3–P4 work in a parallel session); (b) no <code>CLAUDE.md</code> change and no new milestone — the retirement is already the Q264/Q74 structure, and the live-verify meta-lesson is already a CLAUDE.md rule.</p>
+<p><strong>Net thesis (revised).</strong> Not "hold and sequence" — <strong>v2/scale-set is the product.</strong> Make v2 the only front door now, treat classic as terminal, keep v2beta1 ScaleSet-only with a technical soak guardrail, retire v1 on a schedule gated on <strong>v2 reaching beta</strong> (not on adopters), and let migration discipline carry the "safe bet" signal.
+The one lever that actually converts the strategy to adoption is <strong>v2 maturation (v2beta1), not the v1 sunset.</strong></p>
 <hr />
 <h2 id="9-answering-the-maintainers-questions-directly">9. Answering the maintainer's questions directly<a class="headerlink" href="#9-answering-the-maintainers-questions-directly" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Does v1 actually work?</strong> The <strong>classic protocol</strong> works for individual and
-low/moderate-concurrency workloads (a large real segment) and fails <em>reliably</em> only
-at high-burst concurrency. The <strong>v1alpha1 API</strong> works fine — it is just monolithic
-and superseded by the decomposed v2 shape.</p>
-<p><strong>Does it scale? Is it performant?</strong> It performs well (density was a real
-differentiator; scale-set improves it slightly). It <strong>scales sub-linearly on
-reliable concurrent-matrix throughput</strong> because of the fan-out wall, and its
-rate-limit budget grows with acquisition concurrency. Footprint is not the limit.</p>
-<p><strong>Is it kneecapped by the protocol problems?</strong> Yes — at high concurrency,
-<strong>structurally and unfixably</strong> from the AGC side. Not below that line.</p>
-<p><strong>Is v2/scale-set what we should have built from the start?</strong> It is what we'd build
-<em>today</em>. Building classic first was a defensible bet — the protocol wasn't a
-supported surface then, and classic's merits were real.</p>
-<p><strong>Can we sunset v1 faster?</strong> Yes — and we should, but the sharp move isn't "delete
-v1 fast," it's <strong>"make v2 the only front door now."</strong> With no v1 adopters to protect
-and P4 proving scale-set clears the ceiling classic can't, keeping classic alive as
-a fallback protects no one and muddies the ARC comparison. So: route every new user
-to v2 and deprecate v1 loudly today; treat classic as terminal; keep v2beta1
-ScaleSet-only behind a technical soak guardrail; and commit v1 removal to a schedule
-gated on <strong>v2 reaching beta</strong>, not on an adoption count. Handle the v1→v2 migration
-<em>impeccably</em> — that discipline is the "safe bet, won't strand you" signal a
-prospective v2 adopter is actually reading. The real work is <strong>maturing v2</strong>
-(v2beta1); retiring v1 is its consequence, not a separate race.</p>
+<p><strong>Does v1 actually work?</strong> The <strong>classic protocol</strong> works for individual and low/moderate-concurrency workloads (a large real segment) and fails <em>reliably</em> only at high-burst concurrency.
+The <strong>v1alpha1 API</strong> works fine — it is just monolithic and superseded by the decomposed v2 shape.</p>
+<p><strong>Does it scale?
+Is it performant?</strong> It performs well (density was a real differentiator; scale-set improves it slightly).
+It <strong>scales sub-linearly on reliable concurrent-matrix throughput</strong> because of the fan-out wall, and its rate-limit budget grows with acquisition concurrency.
+Footprint is not the limit.</p>
+<p><strong>Is it kneecapped by the protocol problems?</strong> Yes — at high concurrency, <strong>structurally and unfixably</strong> from the AGC side.
+Not below that line.</p>
+<p><strong>Is v2/scale-set what we should have built from the start?</strong> It is what we'd build <em>today</em>.
+Building classic first was a defensible bet — the protocol wasn't a supported surface then, and classic's merits were real.</p>
+<p><strong>Can we sunset v1 faster?</strong> Yes — and we should, but the sharp move isn't "delete v1 fast," it's <strong>"make v2 the only front door now."</strong> With no v1 adopters to protect and P4 proving scale-set clears the ceiling classic can't, keeping classic alive as a fallback protects no one and muddies the ARC comparison.
+So: route every new user to v2 and deprecate v1 loudly today; treat classic as terminal; keep v2beta1 ScaleSet-only behind a technical soak guardrail; and commit v1 removal to a schedule gated on <strong>v2 reaching beta</strong>, not on an adoption count.
+Handle the v1→v2 migration <em>impeccably</em> — that discipline is the "safe bet, won't strand you" signal a prospective v2 adopter is actually reading.
+The real work is <strong>maturing v2</strong> (v2beta1); retiring v1 is its consequence, not a separate race.</p>
 </blockquote>
 
 

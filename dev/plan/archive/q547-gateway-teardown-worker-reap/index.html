@@ -2681,18 +2681,11 @@
 
 
 <h1 id="q547--deleting-an-actionsgateway-orphans-its-in-flight-worker-pods">Q547 — Deleting an ActionsGateway orphans its in-flight worker pods<a class="headerlink" href="#q547--deleting-an-actionsgateway-orphans-its-in-flight-worker-pods" title="Permanent link">&para;</a></h1>
-<p>Deleting a v2 <code>ActionsGateway</code> removes the AGC that is the sole reaper of its
-tenant's worker pods, but nothing removes the pods. They keep their
-node-disruption-safety annotations, so consolidation and scale-down leave them
-alone and a billable node stays pinned. Observed on the GKE dogfood cluster
-2026-07-31, on the teardown <code>scripts/dogfood/e2e-stop.sh</code> performs.</p>
+<p>Deleting a v2 <code>ActionsGateway</code> removes the AGC that is the sole reaper of its tenant's worker pods, but nothing removes the pods.
+They keep their node-disruption-safety annotations, so consolidation and scale-down leave them alone and a billable node stays pinned.
+Observed on the GKE dogfood cluster 2026-07-31, on the teardown <code>scripts/dogfood/e2e-stop.sh</code> performs.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p><strong>Complete (2026-08-01).</strong> Both halves shipped with the behaviour promoted into
-<a href="../../../design/04-operational-flows/#411-tenant-teardown-and-child-reclamation">04-operational-flows.md §4.1.1</a>
-and <a href="../../../design/02-architecture/">02-architecture.md</a>; the operator-facing
-surface (the new reap reason, the two events, the <code>GatewayTerminating</code> condition,
-and the two runbooks) is in
-<a href="../../../operations/troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">troubleshooting.md</a>.
+<p><strong>Complete (2026-08-01).</strong> Both halves shipped with the behaviour promoted into <a href="../../../design/04-operational-flows/#411-tenant-teardown-and-child-reclamation">04-operational-flows.md §4.1.1</a> and <a href="../../../design/02-architecture/">02-architecture.md</a>; the operator-facing surface (the new reap reason, the two events, the <code>GatewayTerminating</code> condition, and the two runbooks) is in <a href="../../../operations/troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">troubleshooting.md</a>.
 No residual Queue row: §3.4's dead-AGC gap is an accepted trade-off, not deferred work.</p>
 <table>
 <thead>
@@ -2722,50 +2715,22 @@ No residual Queue row: §3.4's dead-AGC gap is an accepted trade-off, not deferr
 </table>
 <h2 id="1-what-was-measured">1. What was measured<a class="headerlink" href="#1-what-was-measured" title="Permanent link">&para;</a></h2>
 <p>All of this is read off the code, not inferred from the symptom.</p>
-<p><strong>Worker pods already carry an owner reference.</strong> Every worker pod and job Secret
-is stamped with a controller <code>OwnerReference</code> to its owning CR —
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/pod.go"><code>pod.go:265</code></a>, built by
-<code>Target.OwnerRef()</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/runnergroup_target.go"><code>runnergroup_target.go:41</code></a>
-for v1, the RunnerSet target for v2). So the Queue row's "add pod ownerRefs"
-option is already in place; it is the <em>owner</em> that survives, not the reference
-that is missing.</p>
-<p><strong>v1 is not affected.</strong> The v1 gateway's <code>reconcileDelete</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go"><code>actionsgateway_controller.go:374</code></a>)
-deletes the gateway's <code>RunnerGroup</code> CRs first and waits for them to be gone.
-RunnerGroups are the gateway's own children (<code>spec.runnerGroups</code>), so deleting
-them cascades to the worker pods through the owner reference, and the
-RunnerGroup's <code>agentpool-cleanup</code> finalizer orders the GitHub-side cleanup.</p>
-<p><strong>v2 is affected, and it is a regression from the v2 API decomposition.</strong> v2
-RunnerSets are standalone tenant-authored CRs that only <em>reference</em> the gateway
-via <code>spec.gatewayRef</code>. v2 teardown deliberately leaves them alone —
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>actionsgateway_v2_controller.go:828</code></a>:
-"RunnerSets reference the gateway but are not owned by it, so they are not
-deleted — they degrade to Ready=False/GatewayNotFound via their own watch."
-That is the right call for the RunnerSet (a tenant can recreate the gateway and
-resume), but it means the worker pods' owner outlives their reaper.</p>
-<p><strong>Nothing else reaps them.</strong> The GMC holds no <code>pods</code> RBAC at all — the only
-<code>kubebuilder:rbac</code> marker for pods in the repo is the AGC's
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/doc.go"><code>cmd/agc/internal/controller/doc.go:10</code></a>).</p>
-<p><strong>The bound is 12h, not "forever".</strong> The Queue row overstates this. The
-provisioner stamps <code>activeDeadlineSeconds</code> from <code>maxWorkerLifetime</code>, which
-defaults to 12h (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go:207</code></a>),
-and the kubelet enforces it with no controller involved (Q438). An orphaned
-worker is therefore pinned for up to 12h by default — long enough to be the
-observed problem, and genuinely unbounded only when the tenant sets
-<code>maxWorkerLifetime: 0s</code> or its own <code>activeDeadlineSeconds</code> on the template.</p>
-<p><strong>Namespace deletion is a different failure, already documented.</strong> Deleting the
-tenant namespace does <em>not</em> strand worker pods — the namespace controller
-deletes them itself. It deadlocks instead, on the <code>agentpool-cleanup</code>
-finalizers, because the AGC Deployment lives inside the namespace being swept;
-<a href="../../../operations/migration-v1-to-v2/#teardown-order-is-load-bearing-never-delete-the-namespace-first">migration-v1-to-v2.md § Teardown order is load-bearing</a>
-calls it structural and
-<a href="../../../operations/troubleshooting/#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers">troubleshooting.md</a>
-carries the recovery. Q585 is the open row for the e2e spec that trips it. Q547
-is specific to <em>delete the gateway, keep the namespace</em> — the documented
-<strong>correct</strong> teardown order, and exactly what <code>e2e-stop.sh</code> does.</p>
+<p><strong>Worker pods already carry an owner reference.</strong> Every worker pod and job Secret is stamped with a controller <code>OwnerReference</code> to its owning CR — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/pod.go"><code>pod.go:265</code></a>, built by <code>Target.OwnerRef()</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/runnergroup_target.go"><code>runnergroup_target.go:41</code></a> for v1, the RunnerSet target for v2).
+So the Queue row's "add pod ownerRefs" option is already in place; it is the <em>owner</em> that survives, not the reference that is missing.</p>
+<p><strong>v1 is not affected.</strong> The v1 gateway's <code>reconcileDelete</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go"><code>actionsgateway_controller.go:374</code></a>) deletes the gateway's <code>RunnerGroup</code> CRs first and waits for them to be gone.
+RunnerGroups are the gateway's own children (<code>spec.runnerGroups</code>), so deleting them cascades to the worker pods through the owner reference, and the RunnerGroup's <code>agentpool-cleanup</code> finalizer orders the GitHub-side cleanup.</p>
+<p><strong>v2 is affected, and it is a regression from the v2 API decomposition.</strong> v2 RunnerSets are standalone tenant-authored CRs that only <em>reference</em> the gateway via <code>spec.gatewayRef</code>. v2 teardown deliberately leaves them alone — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>actionsgateway_v2_controller.go:828</code></a>: "RunnerSets reference the gateway but are not owned by it, so they are not deleted — they degrade to Ready=False/GatewayNotFound via their own watch."
+That is the right call for the RunnerSet (a tenant can recreate the gateway and resume), but it means the worker pods' owner outlives their reaper.</p>
+<p><strong>Nothing else reaps them.</strong> The GMC holds no <code>pods</code> RBAC at all — the only <code>kubebuilder:rbac</code> marker for pods in the repo is the AGC's (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/doc.go"><code>cmd/agc/internal/controller/doc.go:10</code></a>).</p>
+<p><strong>The bound is 12h, not "forever".</strong> The Queue row overstates this.
+The provisioner stamps <code>activeDeadlineSeconds</code> from <code>maxWorkerLifetime</code>, which defaults to 12h (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go:207</code></a>), and the kubelet enforces it with no controller involved (Q438).
+An orphaned worker is therefore pinned for up to 12h by default — long enough to be the observed problem, and genuinely unbounded only when the tenant sets <code>maxWorkerLifetime: 0s</code> or its own <code>activeDeadlineSeconds</code> on the template.</p>
+<p><strong>Namespace deletion is a different failure, already documented.</strong> Deleting the tenant namespace does <em>not</em> strand worker pods — the namespace controller deletes them itself.
+It deadlocks instead, on the <code>agentpool-cleanup</code> finalizers, because the AGC Deployment lives inside the namespace being swept; <a href="../../../operations/migration-v1-to-v2/#teardown-order-is-load-bearing-never-delete-the-namespace-first">migration-v1-to-v2.md § Teardown order is load-bearing</a> calls it structural and <a href="../../../operations/troubleshooting/#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers">troubleshooting.md</a> carries the recovery.
+Q585 is the open row for the e2e spec that trips it.
+Q547 is specific to <em>delete the gateway, keep the namespace</em> — the documented <strong>correct</strong> teardown order, and exactly what <code>e2e-stop.sh</code> does.</p>
 <h2 id="2-the-ordering-finding">2. The ordering finding<a class="headerlink" href="#2-the-ordering-finding" title="Permanent link">&para;</a></h2>
-<p>The obvious cheap fix — have the AGC reap its workers from its SIGTERM handler —
-does not work, and the reason is worth recording so it is not re-proposed.</p>
+<p>The obvious cheap fix — have the AGC reap its workers from its SIGTERM handler — does not work, and the reason is worth recording so it is not re-proposed.</p>
 <p><code>reconcileDelete</code> deletes its children in this order:</p>
 <table>
 <thead>
@@ -2797,81 +2762,45 @@ does not work, and the reason is worth recording so it is not re-proposed.</p>
 </tr>
 </tbody>
 </table>
-<p>Steps 1–3 are a handful of API round trips apart — milliseconds — while a
-SIGTERM reap needs seconds of graceful shutdown. By the time the AGC could
-issue a delete, its <code>RoleBinding</code> is gone (authorization revoked) and its
-<code>ServiceAccount</code> is gone (its bound token no longer authenticates). The reap
-would <code>403</code>.</p>
-<p>Reordering does not rescue it either: the AGC needs both its RBAC <em>and</em> its pod
-alive, so any teardown that has started deleting children has already lost the
-race. The reap has to happen <strong>before</strong> the GMC deletes anything.</p>
+<p>Steps 1–3 are a handful of API round trips apart — milliseconds — while a SIGTERM reap needs seconds of graceful shutdown.
+By the time the AGC could issue a delete, its <code>RoleBinding</code> is gone (authorization revoked) and its <code>ServiceAccount</code> is gone (its bound token no longer authenticates).
+The reap would <code>403</code>.</p>
+<p>Reordering does not rescue it either: the AGC needs both its RBAC <em>and</em> its pod alive, so any teardown that has started deleting children has already lost the race.
+The reap has to happen <strong>before</strong> the GMC deletes anything.</p>
 <h2 id="3-design">3. Design<a class="headerlink" href="#3-design" title="Permanent link">&para;</a></h2>
 <p>Two halves, settled 2026-08-01.</p>
 <h3 id="31-agc--reap-on-deletiontimestamp">3.1 AGC — reap on <code>deletionTimestamp</code><a class="headerlink" href="#31-agc--reap-on-deletiontimestamp" title="Permanent link">&para;</a></h3>
-<p>The RunnerSet reconciler already watches <code>ActionsGateway</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go"><code>runnerset_controller.go:208</code></a>),
-so setting a deletion timestamp on the gateway already wakes every bound
-RunnerSet. On that signal the reconciler:</p>
+<p>The RunnerSet reconciler already watches <code>ActionsGateway</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go"><code>runnerset_controller.go:208</code></a>), so setting a deletion timestamp on the gateway already wakes every bound RunnerSet.
+On that signal the reconciler:</p>
 <ol>
-<li>stops both listener tiers (classic multiplexer and scale-set listener), so no
-   further job is acquired;</li>
-<li>reaps <strong>every</strong> worker pod carrying the set's <code>LabelRunnerSet</code>, unconditionally
-   — no TTL, no deadline — under a new <code>gateway_deleted</code> reap reason;</li>
-<li>zeroes <code>status.activeJobs</code> / <code>status.pendingJobs</code> and sets
-   <code>Ready=False</code> / <code>GatewayTerminating</code>.</li>
+<li>stops both listener tiers (classic multiplexer and scale-set listener), so no further job is acquired;</li>
+<li>reaps <strong>every</strong> worker pod carrying the set's <code>LabelRunnerSet</code>, unconditionally — no TTL, no deadline — under a new <code>gateway_deleted</code> reap reason;</li>
+<li>zeroes <code>status.activeJobs</code> / <code>status.pendingJobs</code> and sets <code>Ready=False</code> / <code>GatewayTerminating</code>.</li>
 </ol>
-<p>The trigger is a <strong>non-zero <code>deletionTimestamp</code> on a gateway that still exists</strong>,
-deliberately not a <code>NotFound</code>. <code>GatewayNotFound</code> keeps today's behaviour: an
-operator who deletes and immediately recreates a gateway must not have live
-workers reaped in the gap, and an AGC that restarts after teardown finished has
-no way to tell that gap from a real teardown.</p>
-<p>The check runs before reference resolution, not after, so a set whose template
-or proxy is also missing still reaps.</p>
-<p><strong>Why the counts are a sufficient gate.</strong> The shared reaper skips pods that
-already carry a <code>deletionTimestamp</code> before counting them
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go"><code>runner_shared.go:291</code></a>),
-so the counts fall to zero as soon as the deletes are <em>issued</em>. That is the
-right moment: once a pod has a deletion timestamp the kubelet finishes it with
-no controller involved, which is precisely the property Q547 is missing today.</p>
+<p>The trigger is a <strong>non-zero <code>deletionTimestamp</code> on a gateway that still exists</strong>, deliberately not a <code>NotFound</code>. <code>GatewayNotFound</code> keeps today's behaviour: an operator who deletes and immediately recreates a gateway must not have live workers reaped in the gap, and an AGC that restarts after teardown finished has no way to tell that gap from a real teardown.</p>
+<p>The check runs before reference resolution, not after, so a set whose template or proxy is also missing still reaps.</p>
+<p><strong>Why the counts are a sufficient gate.</strong> The shared reaper skips pods that already carry a <code>deletionTimestamp</code> before counting them (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go"><code>runner_shared.go:291</code></a>), so the counts fall to zero as soon as the deletes are <em>issued</em>.
+That is the right moment: once a pod has a deletion timestamp the kubelet finishes it with no controller involved, which is precisely the property Q547 is missing today.</p>
 <h3 id="32-gmc--gate-teardown-on-the-drain">3.2 GMC — gate teardown on the drain<a class="headerlink" href="#32-gmc--gate-teardown-on-the-drain" title="Permanent link">&para;</a></h3>
-<p><code>reconcileDelete</code> requeues <strong>before deleting any child</strong> while any RunnerSet in
-the gateway's namespace with <code>gatewayRef.name == ag.Name</code> reports
-<code>activeJobs + pendingJobs &gt; 0</code>. The GMC already holds <code>runnersets: get;list;watch</code>
-and already resolves this binding for the <code>RunnerSetsDegraded</code> rollup
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>evalRunnerSetHealth</code></a>),
-so the gate needs no new permission and no new watch.</p>
-<p>The deadline is derived from <code>ag.DeletionTimestamp</code> rather than held in memory,
-so it survives a GMC restart mid-teardown — the same stateless-deadline shape
-the reaper uses against <code>pod.CreationTimestamp</code>. On expiry the GMC emits a
-<code>WorkerDrainTimeout</code> Warning naming the sets that never drained and proceeds
-with teardown.</p>
-<p>Its value is <strong>90s</strong>, chosen against the caller rather than the healthy path —
-which resolves in seconds. Every e2e teardown deletes its gateway with
-<code>kubectl delete --timeout=2m</code>, and an operator following the documented teardown
-order does something similar; a wait that reaches the caller's own budget turns
-the bounded case into a <em>failed</em> delete rather than a slow one. The timeout only
-ever fires when no AGC is running to reap, and waiting longer in that case buys
-nothing.</p>
-<p>Neither binary gains RBAC. The AGC still holds its full tenant grant while it
-reaps, because the GMC has not deleted anything yet.</p>
+<p><code>reconcileDelete</code> requeues <strong>before deleting any child</strong> while any RunnerSet in the gateway's namespace with <code>gatewayRef.name == ag.Name</code> reports <code>activeJobs + pendingJobs &gt; 0</code>.
+The GMC already holds <code>runnersets: get;list;watch</code> and already resolves this binding for the <code>RunnerSetsDegraded</code> rollup (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>evalRunnerSetHealth</code></a>), so the gate needs no new permission and no new watch.</p>
+<p>The deadline is derived from <code>ag.DeletionTimestamp</code> rather than held in memory, so it survives a GMC restart mid-teardown — the same stateless-deadline shape the reaper uses against <code>pod.CreationTimestamp</code>.
+On expiry the GMC emits a <code>WorkerDrainTimeout</code> Warning naming the sets that never drained and proceeds with teardown.</p>
+<p>Its value is <strong>90s</strong>, chosen against the caller rather than the healthy path — which resolves in seconds.
+Every e2e teardown deletes its gateway with <code>kubectl delete --timeout=2m</code>, and an operator following the documented teardown order does something similar; a wait that reaches the caller's own budget turns the bounded case into a <em>failed</em> delete rather than a slow one.
+The timeout only ever fires when no AGC is running to reap, and waiting longer in that case buys nothing.</p>
+<p>Neither binary gains RBAC.
+The AGC still holds its full tenant grant while it reaps, because the GMC has not deleted anything yet.</p>
 <h3 id="33-in-flight-jobs-are-killed">3.3 In-flight jobs are killed<a class="headerlink" href="#33-in-flight-jobs-are-killed" title="Permanent link">&para;</a></h3>
-<p>Reaping is immediate: a worker running a job when the gateway is deleted is
-deleted with it. This matches the existing contract — draining is the operator's
-job, and <code>e2e-stop.sh</code> already drains before deleting, with <code>SKIP_E2E_DRAIN=1</code>
-to override knowingly (<a href="../../gke-dogfood/#f3-e2e-operations--on-demand">gke-dogfood.md § F3</a>).
+<p>Reaping is immediate: a worker running a job when the gateway is deleted is deleted with it.
+This matches the existing contract — draining is the operator's job, and <code>e2e-stop.sh</code> already drains before deleting, with <code>SKIP_E2E_DRAIN=1</code> to override knowingly (<a href="../../gke-dogfood/#f3-e2e-operations--on-demand">gke-dogfood.md § F3</a>).
 Deleting a gateway means tear down now.</p>
 <h3 id="34-accepted-residual-a-dead-agc">3.4 Accepted residual: a dead AGC<a class="headerlink" href="#34-accepted-residual-a-dead-agc" title="Permanent link">&para;</a></h3>
-<p>If the AGC is already crashed, scaled to zero, or was never healthy, nothing
-reaps and nothing updates the counts. The GMC waits out its deadline, emits the
-Warning, and tears down; the pods are orphaned exactly as they are today,
-bounded by the 12h <code>activeDeadlineSeconds</code>. This is strictly no worse than the
-current behaviour and is now legible in an event rather than silent.</p>
-<p>Closing that residual would require the GMC to delete pods itself, which means
-cluster-wide <code>pods: list;delete</code> for a controller whose <code>clusterroles: bind</code> is
-deliberately <code>resourceNames</code>-scoped to <code>agc-tenant-role</code> and
-<code>agc-clusterrunnertemplate-reader</code> and which holds no <code>roles: create</code> — i.e. it
-cannot grant itself anything today. That is a real posture change and is not
-taken here.</p>
+<p>If the AGC is already crashed, scaled to zero, or was never healthy, nothing reaps and nothing updates the counts.
+The GMC waits out its deadline, emits the Warning, and tears down; the pods are orphaned exactly as they are today, bounded by the 12h <code>activeDeadlineSeconds</code>.
+This is strictly no worse than the current behaviour and is now legible in an event rather than silent.</p>
+<p>Closing that residual would require the GMC to delete pods itself, which means cluster-wide <code>pods: list;delete</code> for a controller whose <code>clusterroles: bind</code> is deliberately <code>resourceNames</code>-scoped to <code>agc-tenant-role</code> and <code>agc-clusterrunnertemplate-reader</code> and which holds no <code>roles: create</code> — i.e. it cannot grant itself anything today.
+That is a real posture change and is not taken here.</p>
 <h2 id="4-alternatives-rejected">4. Alternatives rejected<a class="headerlink" href="#4-alternatives-rejected" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

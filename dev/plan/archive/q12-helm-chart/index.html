@@ -2665,24 +2665,13 @@
 
 <h1 id="q12--production-helm-chart-chartsactions-gateway">Q12 — Production Helm chart (<code>charts/actions-gateway/</code>)<a class="headerlink" href="#q12--production-helm-chart-chartsactions-gateway" title="Permanent link">&para;</a></h1>
 <p>← <a href="../../milestone-5/#1-packaging-helm-chart">Milestone 5 §1</a> | <a href="../../release-1.0/#c-packaging--supply-chain--gating--recommended">Release 1.0 §C</a> | <a href="../../../STATUS/">STATUS</a></p>
-<p><strong>Goal.</strong> Ship a Helm chart that an operator can <code>helm install</code> to deploy
-the Gateway Manager Controller (GMC) — its CRDs, RBAC, validating webhook,
-and admission policy — with every default at the secure posture already
-encoded in the <code>cmd/gmc/config/</code> kustomize bases. Helm was decided over
-Kustomize (<a href="../../milestone-5/#11-install-vehicle--decided-helm-chart">D-M5-1</a>).</p>
-<p><strong>Scope of this PR (slice 1 — the whole GMC core install).</strong> A
-lint-clean, offline-validated chart that renders the complete GMC control
-plane. Not a second distribution path — the <code>cmd/*/config/</code> kustomize
-bases stay the dev/CI source of truth (they back <code>make manifests</code> and the
-envtest/e2e tiers).</p>
+<p><strong>Goal.</strong> Ship a Helm chart that an operator can <code>helm install</code> to deploy the Gateway Manager Controller (GMC) — its CRDs, RBAC, validating webhook, and admission policy — with every default at the secure posture already encoded in the <code>cmd/gmc/config/</code> kustomize bases.
+Helm was decided over Kustomize (<a href="../../milestone-5/#11-install-vehicle--decided-helm-chart">D-M5-1</a>).</p>
+<p><strong>Scope of this PR (slice 1 — the whole GMC core install).</strong> A lint-clean, offline-validated chart that renders the complete GMC control plane.
+Not a second distribution path — the <code>cmd/*/config/</code> kustomize bases stay the dev/CI source of truth (they back <code>make manifests</code> and the envtest/e2e tiers).</p>
 <h2 id="what-the-chart-installs">What the chart installs<a class="headerlink" href="#what-the-chart-installs" title="Permanent link">&para;</a></h2>
-<p>The GMC is the only thing installed. <strong>AGC instances and proxy pools are
-provisioned by the GMC at runtime</strong> from each <code>ActionsGateway</code> CR — they
-are <em>not</em> chart resources. Verified against
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a>
-(<code>buildAGCDeployment</code>/<code>buildProxyDeployment</code>) and
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a> (<code>AGCImage</code>/<code>ProxyImage</code> injected into
-the reconciler), and the <code>docs/operations/tenant-onboarding.md</code> flow.</p>
+<p>The GMC is the only thing installed. <strong>AGC instances and proxy pools are provisioned by the GMC at runtime</strong> from each <code>ActionsGateway</code> CR — they are <em>not</em> chart resources.
+Verified against <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a> (<code>buildAGCDeployment</code>/<code>buildProxyDeployment</code>) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a> (<code>AGCImage</code>/<code>ProxyImage</code> injected into the reconciler), and the <code>docs/operations/tenant-onboarding.md</code> flow.</p>
 <p>Resources, sourced 1:1 from the kustomize bases:</p>
 <table>
 <thead>
@@ -2756,111 +2745,55 @@ the reconciler), and the <code>docs/operations/tenant-onboarding.md</code> flow.
 </table>
 <h2 id="two-helm-specific-gotchas-both-handled">Two Helm-specific gotchas (both handled)<a class="headerlink" href="#two-helm-specific-gotchas-both-handled" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>cert-manager is optional.</strong> <code>certManager.enabled=true</code> (default,
-   secure) emits the <code>Issuer</code>+<code>Certificate</code> and the
-   <code>cert-manager.io/inject-ca-from</code> annotation on the webhook. When
-   <code>false</code>, the chart generates a self-signed serving cert at render time
-   with Helm's <code>genCA</code>/<code>genSignedCert</code> and writes both the
-   <code>webhook-server-cert</code> Secret and the webhook <code>caBundle</code> directly — so
-   the webhook installs with no cert-manager present. The fallback is
-   pure-template (no Job/hook), which renders offline and is simpler than a
-   post-install hook; the trade-off is that the cert rotates on a
-   <code>helm upgrade</code> that does not reuse the existing Secret — noted in
-   <a href="../../../operations/upgrade/">upgrade.md</a>.</li>
-<li><strong>Helm never upgrades <code>crds/</code>.</strong> Both CRDs ship under
-   <code>templates/crds/</code> with <code>helm.sh/resource-policy: keep</code> (not the chart
-   root <code>crds/</code> dir), so day-2 <code>helm upgrade</code> carries CRD field changes
-   while <code>helm uninstall</code> still preserves them. Recorded in
-   <a href="../../../operations/upgrade/">upgrade.md</a>.</li>
+<li><strong>cert-manager is optional.</strong> <code>certManager.enabled=true</code> (default, secure) emits the <code>Issuer</code>+<code>Certificate</code> and the <code>cert-manager.io/inject-ca-from</code> annotation on the webhook.
+   When <code>false</code>, the chart generates a self-signed serving cert at render time with Helm's <code>genCA</code>/<code>genSignedCert</code> and writes both the <code>webhook-server-cert</code> Secret and the webhook <code>caBundle</code> directly — so the webhook installs with no cert-manager present.
+   The fallback is pure-template (no Job/hook), which renders offline and is simpler than a post-install hook; the trade-off is that the cert rotates on a <code>helm upgrade</code> that does not reuse the existing Secret — noted in <a href="../../../operations/upgrade/">upgrade.md</a>.</li>
+<li><strong>Helm never upgrades <code>crds/</code>.</strong> Both CRDs ship under <code>templates/crds/</code> with <code>helm.sh/resource-policy: keep</code> (not the chart root <code>crds/</code> dir), so day-2 <code>helm upgrade</code> carries CRD field changes while <code>helm uninstall</code> still preserves them.
+   Recorded in <a href="../../../operations/upgrade/">upgrade.md</a>.</li>
 </ol>
 <h2 id="secure-by-default-values">Secure-by-default values<a class="headerlink" href="#secure-by-default-values" title="Permanent link">&para;</a></h2>
-<p>Every templated default matches the kustomize posture; no security
-property is traded for convenience:</p>
+<p>Every templated default matches the kustomize posture; no security property is traded for convenience:</p>
 <ul>
-<li>Hardened pod/container <code>securityContext</code> (runAsNonRoot, RO root FS,
-  drop ALL caps, seccomp RuntimeDefault), resource limits, PDB,
-  <code>system-cluster-critical</code> PriorityClass, startup/liveness/readiness
-  probes — all carried verbatim, not re-defaulted.</li>
-<li>NetworkPolicies <strong>on by default</strong> (selecting the manager pod flips it to
-  default-deny ingress); metrics restricted to <code>metrics: enabled</code>
-  namespaces.</li>
+<li>Hardened pod/container <code>securityContext</code> (runAsNonRoot, RO root FS, drop ALL caps, seccomp RuntimeDefault), resource limits, PDB, <code>system-cluster-critical</code> PriorityClass, startup/liveness/readiness probes — all carried verbatim, not re-defaulted.</li>
+<li>NetworkPolicies <strong>on by default</strong> (selecting the manager pod flips it to default-deny ingress); metrics restricted to <code>metrics: enabled</code> namespaces.</li>
 <li><code>namespace-psa-guard</code> VAP binding ships <code>validationActions: [Deny]</code>.</li>
 <li>Leader election on, 2 replicas, HA defaults.</li>
-<li><strong>Image digest pinning is the secure default.</strong> The GMC rejects floating
-  <code>AGC_IMAGE</code>/<code>PROXY_IMAGE</code> tags unless <code>--allow-floating-image-tags</code> is
-  set (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a> <code>validateImageDigest</code>). The
-  chart does <strong>not</strong> pass that flag by default and leaves digests empty, so
-  an unconfigured install fails closed at GMC startup until the operator
-  pins <code>agc.image.digest</code>/<code>proxy.image.digest</code>. <code>values.yaml</code> documents
-  this prominently. <code>allowFloatingImageTags=true</code> is the documented dev-only
-  opt-out.</li>
+<li><strong>Image digest pinning is the secure default.</strong> The GMC rejects floating <code>AGC_IMAGE</code>/<code>PROXY_IMAGE</code> tags unless <code>--allow-floating-image-tags</code> is set (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a> <code>validateImageDigest</code>).
+  The chart does <strong>not</strong> pass that flag by default and leaves digests empty, so an unconfigured install fails closed at GMC startup until the operator pins <code>agc.image.digest</code>/<code>proxy.image.digest</code>. <code>values.yaml</code> documents this prominently. <code>allowFloatingImageTags=true</code> is the documented dev-only opt-out.</li>
 </ul>
 <h2 id="operator-facing-values-valuesyaml--readme-table">Operator-facing values (<code>values.yaml</code> + README table)<a class="headerlink" href="#operator-facing-values-valuesyaml--readme-table" title="Permanent link">&para;</a></h2>
-<p><code>gmc.image.*</code>, <code>agc.image.*</code>, <code>proxy.image.*</code> (repository/tag/digest),
-<code>leaderElection.enabled</code>, <code>metrics.enabled</code>, <code>metrics.serviceMonitor.enabled</code>,
-<code>securityProfile</code> (sample default), <code>certManager.enabled</code>,
-<code>allowFloatingImageTags</code>, <code>sampleGateway.create</code>, <code>networkPolicy.enabled</code>,
-<code>podDisruptionBudget.enabled</code>, <code>replicaCount</code>, <code>resources</code>. Each has a
-documented default and a <code>values.schema.json</code> entry where it constrains a
-shape an operator can get wrong.</p>
+<p><code>gmc.image.*</code>, <code>agc.image.*</code>, <code>proxy.image.*</code> (repository/tag/digest), <code>leaderElection.enabled</code>, <code>metrics.enabled</code>, <code>metrics.serviceMonitor.enabled</code>, <code>securityProfile</code> (sample default), <code>certManager.enabled</code>, <code>allowFloatingImageTags</code>, <code>sampleGateway.create</code>, <code>networkPolicy.enabled</code>, <code>podDisruptionBudget.enabled</code>, <code>replicaCount</code>, <code>resources</code>.
+Each has a documented default and a <code>values.schema.json</code> entry where it constrains a shape an operator can get wrong.</p>
 <h2 id="runnergroup-crd-drift-q73--note-only-not-fixed-here">RunnerGroup CRD drift (Q73 — note only, not fixed here)<a class="headerlink" href="#runnergroup-crd-drift-q73--note-only-not-fixed-here" title="Permanent link">&para;</a></h2>
-<p>The GMC's <code>crd/bases/…_runnergroups.yaml</code> (8041 lines) is <strong>stale</strong> vs the
-AGC authoritative <code>cmd/agc/config/crd/…_runnergroups.yaml</code> (8738 lines).
-The chart sources the <strong>AGC</strong> copy per the task. Reconciling the two bases
-(so <code>make manifests</code> keeps them in sync) is <strong><a href="../../../STATUS/">Q73</a></strong> and is
-out of scope here — this PR only consumes the authoritative copy.</p>
+<p>The GMC's <code>crd/bases/…_runnergroups.yaml</code> (8041 lines) is <strong>stale</strong> vs the AGC authoritative <code>cmd/agc/config/crd/…_runnergroups.yaml</code> (8738 lines).
+The chart sources the <strong>AGC</strong> copy per the task.
+Reconciling the two bases (so <code>make manifests</code> keeps them in sync) is <strong><a href="../../../STATUS/">Q73</a></strong> and is out of scope here — this PR only consumes the authoritative copy.</p>
 <h2 id="offline-validation-no-cluster">Offline validation (no cluster)<a class="headerlink" href="#offline-validation-no-cluster" title="Permanent link">&para;</a></h2>
 <ol>
 <li><code>helm lint charts/actions-gateway</code></li>
-<li><code>helm template charts/actions-gateway</code> — renders cleanly, both cert
-   modes (<code>--set certManager.enabled=false</code>), sample gateway on/off.</li>
-<li>Pipe rendered output through <code>kubeconform</code> (skip the two CRDs + the
-   cert-manager / monitoring.coreos.com CRs whose schemas are not in the
-   default store; <code>-skip</code> them with a note).</li>
+<li><code>helm template charts/actions-gateway</code> — renders cleanly, both cert modes (<code>--set certManager.enabled=false</code>), sample gateway on/off.</li>
+<li>Pipe rendered output through <code>kubeconform</code> (skip the two CRDs + the cert-manager / monitoring.coreos.com CRs whose schemas are not in the default store; <code>-skip</code> them with a note).</li>
 </ol>
 <h2 id="live-validation-track-a--2026-06-12">Live validation (track A) — 2026-06-12<a class="headerlink" href="#live-validation-track-a--2026-06-12" title="Permanent link">&para;</a></h2>
-<p>The chart's "working tenant from a single <code>helm install</code>" gate was
-proven live on a 3-node kind cluster with real GitHub App credentials,
-as part of the <a href="../../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">Milestone 4 live validation session</a>
-(full evidence there). Chart-specific observations:</p>
+<p>The chart's "working tenant from a single <code>helm install</code>" gate was proven live on a 3-node kind cluster with real GitHub App credentials, as part of the <a href="../../milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">Milestone 4 live validation session</a> (full evidence there).
+Chart-specific observations:</p>
 <ul>
-<li><code>helm install actions-gateway charts/actions-gateway -n gmc-system
-  --create-namespace</code> with <code>gmc.image.digest</code>, <code>agc.image.digest</code>, and
-  <code>proxy.image.digest</code> all set (local-registry digests) — i.e. the
-  <strong>secure digest-pinned default path</strong>, no <code>allowFloatingImageTags</code> —
-  rendered, installed, and rolled out 2/2 replicas in ~10 s. The GMC
-  accepted the digest-pinned <code>AGC_IMAGE</code>/<code>PROXY_IMAGE</code> without the
-  dev opt-out.</li>
-<li>Two <code>ActionsGateway</code> CRs applied against the chart-installed GMC each
-  produced a fully Ready tenant in under a minute, and a real
-  <code>workflow_dispatch</code> job ran to a green checkmark through the tenant
-  proxy (runs 27386891757 / 27395702908).</li>
-<li><code>helm uninstall</code> kept both CRDs in place, printing
-  <code>These resources were kept due to the resource policy:</code> — live
-  confirmation of the <code>helm.sh/resource-policy: keep</code> CRD sub-gate.</li>
-<li>cert-manager mode used: <code>certManager.enabled=true</code> (default). The
-  <code>certManager.enabled=false</code> fallback remains offline-validated only.</li>
-<li>One install-flow caveat: pointing tenants at a real GitHub org/repo
-  required the testing-gated <code>--allow-agc-extra-env</code> patch on the GMC
-  (no CR/chart field exists for the org URL) — tracked as Q116.</li>
+<li><code>helm install actions-gateway charts/actions-gateway -n gmc-system --create-namespace</code> with <code>gmc.image.digest</code>, <code>agc.image.digest</code>, and <code>proxy.image.digest</code> all set (local-registry digests) — i.e. the <strong>secure digest-pinned default path</strong>, no <code>allowFloatingImageTags</code> — rendered, installed, and rolled out 2/2 replicas in ~10 s.
+  The GMC accepted the digest-pinned <code>AGC_IMAGE</code>/<code>PROXY_IMAGE</code> without the dev opt-out.</li>
+<li>Two <code>ActionsGateway</code> CRs applied against the chart-installed GMC each produced a fully Ready tenant in under a minute, and a real <code>workflow_dispatch</code> job ran to a green checkmark through the tenant proxy (runs 27386891757 / 27395702908).</li>
+<li><code>helm uninstall</code> kept both CRDs in place, printing <code>These resources were kept due to the resource policy:</code> — live confirmation of the <code>helm.sh/resource-policy: keep</code> CRD sub-gate.</li>
+<li>cert-manager mode used: <code>certManager.enabled=true</code> (default).
+  The <code>certManager.enabled=false</code> fallback remains offline-validated only.</li>
+<li>One install-flow caveat: pointing tenants at a real GitHub org/repo required the testing-gated <code>--allow-agc-extra-env</code> patch on the GMC (no CR/chart field exists for the org URL) — tracked as Q116.</li>
 </ul>
-<p>With this, Q12's last open piece is closed; chart publishing remains
-tracked separately as Q98.</p>
-<p>A later <strong>production-posture re-validation</strong> on the current chart (digest-pinned
-<code>v1.1.0-rc.4</code> images, no dev opt-outs, the clean no-workaround tenant path) ran as
-<a href="../../milestone-5/#15-live-validation-q219--2026-06-28">M5 Q219</a> and surfaced + fixed
-an AGC egress-proxy trust bug that blocked runner registration on every proxied
-install.</p>
+<p>With this, Q12's last open piece is closed; chart publishing remains tracked separately as Q98.</p>
+<p>A later <strong>production-posture re-validation</strong> on the current chart (digest-pinned <code>v1.1.0-rc.4</code> images, no dev opt-outs, the clean no-workaround tenant path) ran as <a href="../../milestone-5/#15-live-validation-q219--2026-06-28">M5 Q219</a> and surfaced + fixed an AGC egress-proxy trust bug that blocked runner registration on every proxied install.</p>
 <h2 id="out-of-scope-documented-future-slices">Out of scope (documented future slices)<a class="headerlink" href="#out-of-scope-documented-future-slices" title="Permanent link">&para;</a></h2>
 <ul>
-<li>CI drift check that re-renders the chart and diffs against the kustomize
-  bases (M5 §7 risk row) — folds into <a href="../../../STATUS/">Q66</a> install-artifact
-  validation.</li>
+<li>CI drift check that re-renders the chart and diffs against the kustomize bases (M5 §7 risk row) — folds into <a href="../../../STATUS/">Q66</a> install-artifact validation.</li>
 <li><code>polaris</code> posture scan against the rendered output — <strong><a href="../../../STATUS/">Q14</a></strong>.</li>
-<li>Publishing the chart as an OCI artifact with digest-pinned images and
-  cosign signatures — <strong><a href="../../../STATUS/">Q28</a></strong>.</li>
-<li>Reconciling the RunnerGroup CRD drift at the kustomize-base layer —
-  <strong><a href="../../../STATUS/">Q73</a></strong>.</li>
+<li>Publishing the chart as an OCI artifact with digest-pinned images and cosign signatures — <strong><a href="../../../STATUS/">Q28</a></strong>.</li>
+<li>Reconciling the RunnerGroup CRD drift at the kustomize-base layer — <strong><a href="../../../STATUS/">Q73</a></strong>.</li>
 </ul>
 
 

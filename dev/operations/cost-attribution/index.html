@@ -2794,13 +2794,15 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer, Budget owner</p>
 </blockquote>
-<p><a href="../../design/appendix-f-cost-model/">Appendix F — Cost model</a> gives you a <em>model</em>: list-price rates, the per-job formula, and the <a href="../../design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">savings calculator</a> that estimates what you save over Actions Runner Controller (ARC). This page is the <em>measurement</em> counterpart — how to turn that model into <strong>real dollars per tenant</strong> from your live cluster using <a href="https://www.opencost.io/">OpenCost</a> or <a href="https://www.kubecost.com/">Kubecost</a> (Kubecost is built on OpenCost and shares its allocation engine and query surface).</p>
+<p><a href="../../design/appendix-f-cost-model/">Appendix F — Cost model</a> gives you a <em>model</em>: list-price rates, the per-job formula, and the <a href="../../design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">savings calculator</a> that estimates what you save over Actions Runner Controller (ARC).
+This page is the <em>measurement</em> counterpart — how to turn that model into <strong>real dollars per tenant</strong> from your live cluster using <a href="https://www.opencost.io/">OpenCost</a> or <a href="https://www.kubecost.com/">Kubecost</a> (Kubecost is built on OpenCost and shares its allocation engine and query surface).</p>
 <p>You get this nearly for free because GAG (GitHub Actions Gateway) already maps cleanly onto how these tools allocate cost:</p>
 <ul>
 <li><strong>Each tenant is a dedicated namespace.</strong> OpenCost/Kubecost aggregate cost by namespace natively, so <code>aggregate=namespace</code> <em>is</em> per-tenant cost with no extra wiring.</li>
 <li><strong>Every object GAG creates carries the Kubernetes recommended (<code>app.kubernetes.io/*</code>) labels.</strong> That lets you split a tenant's namespace cost into its worker / proxy / controller components without learning any project-specific keys.</li>
 </ul>
-<p>This page assumes OpenCost or Kubecost is already installed and scraping your cluster (their install docs cover that). It does not require any GAG-specific configuration.</p>
+<p>This page assumes OpenCost or Kubecost is already installed and scraping your cluster (their install docs cover that).
+It does not require any GAG-specific configuration.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2844,10 +2846,14 @@
 </tr>
 </tbody>
 </table>
-<p>The defining property — <strong>zero idle compute</strong> — is what makes the worker-pod line <em>track job volume</em>: there is no always-on runner pool to allocate, so between jobs the worker line drops to zero and only the proxy + AGC floor remains. That is the live, measured version of the idle-floor saving the calculator estimates. <a href="#how-zero-idle-compute-shows-up-in-the-reports">How zero-idle shows up</a> below shows what to look for.</p>
+<p>The defining property — <strong>zero idle compute</strong> — is what makes the worker-pod line <em>track job volume</em>: there is no always-on runner pool to allocate, so between jobs the worker line drops to zero and only the proxy + AGC floor remains.
+That is the live, measured version of the idle-floor saving the calculator estimates.
+<a href="#how-zero-idle-compute-shows-up-in-the-reports">How zero-idle shows up</a> below shows what to look for.</p>
 <hr />
 <h2 id="the-labels-and-namespaces-to-query">The labels and namespaces to query<a class="headerlink" href="#the-labels-and-namespaces-to-query" title="Permanent link">&para;</a></h2>
-<p>These are the labels GAG actually stamps (verified against the code in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apilabels/labels.go"><code>api/apilabels/labels.go</code></a> and the AGC/GMC builders). They are <strong>additive metadata</strong> — never build an allocation <em>filter you depend on for billing</em> around the controllers' functional selectors (<code>app:</code>, <code>actions-gateway/component: workload</code>); those exist for NetworkPolicy/Service wiring and may change. Use the <code>app.kubernetes.io/*</code> set below, which is the stable contract for tooling.</p>
+<p>These are the labels GAG actually stamps (verified against the code in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apilabels/labels.go"><code>api/apilabels/labels.go</code></a> and the AGC/GMC builders).
+They are <strong>additive metadata</strong> — never build an allocation <em>filter you depend on for billing</em> around the controllers' functional selectors (<code>app:</code>, <code>actions-gateway/component: workload</code>); those exist for NetworkPolicy/Service wiring and may change.
+Use the <code>app.kubernetes.io/*</code> set below, which is the stable contract for tooling.</p>
 <table>
 <thead>
 <tr>
@@ -2896,14 +2902,19 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Namespace = tenant.</strong> GAG places a tenant's worker pods, proxy pool, and AGC all in that tenant's namespace (the <code>ActionsGateway</code> CR's namespace). The namespace name is operator-chosen — GAG does not derive or rename it — so use whatever namespace your team assigned the tenant. There is no separate proxy or worker namespace to reconcile.</p>
-<p><strong>Per-RunnerGroup / per-RunnerSet drill-down.</strong> To split a tenant's worker cost by runner shape (e.g. <code>gpu-a100</code> vs <code>cpu-standard</code>), aggregate by <code>app.kubernetes.io/instance</code>, which carries the owning RunnerGroup/RunnerSet name. (GAG also sets project-specific <code>actions-gateway/runner-group</code> and <code>actions-gateway.com/runner-set</code> labels for <code>kubectl</code> selection — see <a href="../observability-metrics/#drilling-down-to-individual-runner-pods">observability.md</a> — but for cost queries prefer the recommended <code>instance</code> label.)</p>
+<p><strong>Namespace = tenant.</strong> GAG places a tenant's worker pods, proxy pool, and AGC all in that tenant's namespace (the <code>ActionsGateway</code> CR's namespace).
+The namespace name is operator-chosen — GAG does not derive or rename it — so use whatever namespace your team assigned the tenant.
+There is no separate proxy or worker namespace to reconcile.</p>
+<p><strong>Per-RunnerGroup / per-RunnerSet drill-down.</strong> To split a tenant's worker cost by runner shape (e.g. <code>gpu-a100</code> vs <code>cpu-standard</code>), aggregate by <code>app.kubernetes.io/instance</code>, which carries the owning RunnerGroup/RunnerSet name.
+(GAG also sets project-specific <code>actions-gateway/runner-group</code> and <code>actions-gateway.com/runner-set</code> labels for <code>kubectl</code> selection — see <a href="../observability-metrics/#drilling-down-to-individual-runner-pods">observability.md</a> — but for cost queries prefer the recommended <code>instance</code> label.)</p>
 <blockquote>
-<p><strong>Cardinality caution.</strong> Do not aggregate cost by a label whose value is per-job or per-run (there is none in the recommended set, but worker pods <em>also</em> carry per-job annotations like <code>actions-gateway.com/run-id</code>). Aggregating allocation by a unique-per-job key explodes the result set the same way it would explode Prometheus — see the <a href="../observability-metrics/#label-cardinality-warning">label cardinality warning</a>.</p>
+<p><strong>Cardinality caution.</strong> Do not aggregate cost by a label whose value is per-job or per-run (there is none in the recommended set, but worker pods <em>also</em> carry per-job annotations like <code>actions-gateway.com/run-id</code>).
+Aggregating allocation by a unique-per-job key explodes the result set the same way it would explode Prometheus — see the <a href="../observability-metrics/#label-cardinality-warning">label cardinality warning</a>.</p>
 </blockquote>
 <hr />
 <h2 id="opencost-allocation-queries">OpenCost allocation queries<a class="headerlink" href="#opencost-allocation-queries" title="Permanent link">&para;</a></h2>
-<p>OpenCost exposes an <a href="https://www.opencost.io/docs/integrations/api">Allocation API</a> and a Prometheus-friendly metrics surface. The exact filter syntax has evolved across releases — treat the queries below as the shape to adapt, and check your version's API docs for the precise parameter names.</p>
+<p>OpenCost exposes an <a href="https://www.opencost.io/docs/integrations/api">Allocation API</a> and a Prometheus-friendly metrics surface.
+The exact filter syntax has evolved across releases — treat the queries below as the shape to adapt, and check your version's API docs for the precise parameter names.</p>
 <p><strong>Per-tenant total</strong> (the headline number — one row per tenant namespace):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Last 7 days, one cost row per namespace = one row per tenant.</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://opencost:9003/allocation/compute&#39;</span><span class="w"> </span><span class="se">\</span>
@@ -2931,11 +2942,13 @@
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;aggregate=namespace&#39;</span>
 </code></pre></div>
 <blockquote>
-<p>OpenCost flattens label keys to a Prometheus-safe form in some filter contexts — <code>app.kubernetes.io/component</code> becomes <code>app_kubernetes_io_component</code>. Use the dotted form for <code>aggregate=label:…</code> and the underscored form inside <code>filter=label[…]</code> as your version's docs specify.</p>
+<p>OpenCost flattens label keys to a Prometheus-safe form in some filter contexts — <code>app.kubernetes.io/component</code> becomes <code>app_kubernetes_io_component</code>.
+Use the dotted form for <code>aggregate=label:…</code> and the underscored form inside <code>filter=label[…]</code> as your version's docs specify.</p>
 </blockquote>
 <hr />
 <h2 id="kubecost-allocation-queries">Kubecost allocation queries<a class="headerlink" href="#kubecost-allocation-queries" title="Permanent link">&para;</a></h2>
-<p>Kubecost's <a href="https://docs.kubecost.com/apis/apis-overview/api-allocation">Allocation API</a> takes the same shape. From the Kubecost UI, the equivalent is the <strong>Allocations</strong> report with <em>Aggregate by → Namespace</em> (or <em>→ Label</em> for the component split).</p>
+<p>Kubecost's <a href="https://docs.kubecost.com/apis/apis-overview/api-allocation">Allocation API</a> takes the same shape.
+From the Kubecost UI, the equivalent is the <strong>Allocations</strong> report with <em>Aggregate by → Namespace</em> (or <em>→ Label</em> for the component split).</p>
 <p><strong>Per-tenant total:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://kubecost:9090/model/allocation&#39;</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;window=7d&#39;</span><span class="w"> </span><span class="se">\</span>
@@ -2959,21 +2972,29 @@
 <h2 id="how-zero-idle-compute-shows-up-in-the-reports">How zero-idle-compute shows up in the reports<a class="headerlink" href="#how-zero-idle-compute-shows-up-in-the-reports" title="Permanent link">&para;</a></h2>
 <p>The single most useful thing an allocation report <em>proves</em> about GAG is the property the cost model claims: <strong>you pay for jobs, not for idle runners.</strong> Look for these signatures:</p>
 <ul>
-<li><strong>The <code>runner</code> component line tracks job volume, not the clock.</strong> Aggregate one tenant by <code>app.kubernetes.io/component</code> over a window that spans a quiet period (overnight, weekend). The <code>runner</code> cost collapses toward zero when no jobs run and rises with throughput — because there is no <code>minRunners</code>-style always-on pool to allocate. Contrast this with an ARC scale set running <code>minRunners: N &gt; 0</code>, whose runner pods accrue cost 24/7 in the same report (see <a href="../../design/appendix-f-cost-model/#f2-cost-comparison-this-system-vs-arc">Appendix F §F.2</a>).</li>
-<li><strong>The idle floor is just <code>proxy</code> + <code>controller</code>.</strong> A tenant that ran zero jobs in the window still shows a small, flat cost: its always-on egress proxy pool (<code>minReplicas</code>) and its single AGC pod. That floor is the per-tenant fixed overhead from <a href="../../design/appendix-f-cost-model/#f1-per-job-cost-breakdown">§F.1</a> — typically cents to low dollars per day, dominated by the proxy.</li>
-<li><strong>GPU spend is bursty and short-lived.</strong> Because a worker pod is deleted the instant its job completes (<code>completedPodTTL</code>), expensive GPU nodes appear in allocation only for the job's actual duration. A 30-minute GPU job is 30 minutes of GPU allocation, not a day of held capacity — the <a href="../../design/appendix-f-cost-model/#worker-pod-dominant-cost">§F.1 worker-pod formula</a> made measurable.</li>
+<li><strong>The <code>runner</code> component line tracks job volume, not the clock.</strong> Aggregate one tenant by <code>app.kubernetes.io/component</code> over a window that spans a quiet period (overnight, weekend).
+  The <code>runner</code> cost collapses toward zero when no jobs run and rises with throughput — because there is no <code>minRunners</code>-style always-on pool to allocate.
+  Contrast this with an ARC scale set running <code>minRunners: N &gt; 0</code>, whose runner pods accrue cost 24/7 in the same report (see <a href="../../design/appendix-f-cost-model/#f2-cost-comparison-this-system-vs-arc">Appendix F §F.2</a>).</li>
+<li><strong>The idle floor is just <code>proxy</code> + <code>controller</code>.</strong> A tenant that ran zero jobs in the window still shows a small, flat cost: its always-on egress proxy pool (<code>minReplicas</code>) and its single AGC pod.
+  That floor is the per-tenant fixed overhead from <a href="../../design/appendix-f-cost-model/#f1-per-job-cost-breakdown">§F.1</a> — typically cents to low dollars per day, dominated by the proxy.</li>
+<li><strong>GPU spend is bursty and short-lived.</strong> Because a worker pod is deleted the instant its job completes (<code>completedPodTTL</code>), expensive GPU nodes appear in allocation only for the job's actual duration.
+  A 30-minute GPU job is 30 minutes of GPU allocation, not a day of held capacity — the <a href="../../design/appendix-f-cost-model/#worker-pod-dominant-cost">§F.1 worker-pod formula</a> made measurable.</li>
 </ul>
 <blockquote>
-<p><strong>Allocation needs a node price book.</strong> OpenCost/Kubecost compute pod cost from the <em>node's</em> hourly rate × the pod's resource share. On a managed cloud they read real instance pricing automatically; on-prem or with committed-use/Spot discounts, configure a <a href="https://www.opencost.io/docs/configuration/">custom pricing model</a> so the per-tenant dollars reflect your contracted rates rather than list price — the same caveat Appendix F makes about its list-price figures.</p>
+<p><strong>Allocation needs a node price book.</strong> OpenCost/Kubecost compute pod cost from the <em>node's</em> hourly rate × the pod's resource share.
+On a managed cloud they read real instance pricing automatically; on-prem or with committed-use/Spot discounts, configure a <a href="https://www.opencost.io/docs/configuration/">custom pricing model</a> so the per-tenant dollars reflect your contracted rates rather than list price — the same caveat Appendix F makes about its list-price figures.</p>
 </blockquote>
 <hr />
 <h2 id="from-allocation-to-showback--chargeback">From allocation to showback / chargeback<a class="headerlink" href="#from-allocation-to-showback--chargeback" title="Permanent link">&para;</a></h2>
 <p>This live data is the input to the <strong>showback vs chargeback</strong> choice in <a href="../../design/appendix-f-cost-model/#f3-tenant-cost-allocation">Appendix F §F.3</a>:</p>
 <ul>
-<li><strong>Showback:</strong> point a Grafana panel (or the Kubecost UI) at the per-namespace allocation so each team sees its own real spend next to the <a href="../observability-dashboards/#tenant-dashboard">tenant dashboard</a> throughput metrics. No billing integration required.</li>
-<li><strong>Chargeback:</strong> export the per-namespace allocation on a schedule and feed it into your billing system, optionally applying a discount/overhead factor. The <code>app.kubernetes.io/instance</code> breakdown lets you bill by runner shape if a tenant runs both cheap CPU and expensive GPU groups.</li>
+<li><strong>Showback:</strong> point a Grafana panel (or the Kubecost UI) at the per-namespace allocation so each team sees its own real spend next to the <a href="../observability-dashboards/#tenant-dashboard">tenant dashboard</a> throughput metrics.
+  No billing integration required.</li>
+<li><strong>Chargeback:</strong> export the per-namespace allocation on a schedule and feed it into your billing system, optionally applying a discount/overhead factor.
+  The <code>app.kubernetes.io/instance</code> breakdown lets you bill by runner shape if a tenant runs both cheap CPU and expensive GPU groups.</li>
 </ul>
-<p>Cross-check the allocation against GAG's own metrics for a sanity test: <code>actions_gateway_job_duration_seconds</code> (per <code>namespace</code>, <code>runner_group</code>) × the runner shape's GPU/CPU node fraction should land in the same ballpark as the <code>runner</code>-component allocation for that tenant. A large divergence usually means oversized resource requests — the <a href="../../design/appendix-f-cost-model/#worker-resource-right-sizing">worker right-sizing lever</a> in Appendix F.</p>
+<p>Cross-check the allocation against GAG's own metrics for a sanity test: <code>actions_gateway_job_duration_seconds</code> (per <code>namespace</code>, <code>runner_group</code>) × the runner shape's GPU/CPU node fraction should land in the same ballpark as the <code>runner</code>-component allocation for that tenant.
+A large divergence usually means oversized resource requests — the <a href="../../design/appendix-f-cost-model/#worker-resource-right-sizing">worker right-sizing lever</a> in Appendix F.</p>
 <hr />
 <p>← Back to <a href="../">Operations overview</a> · related: <a href="../observability/">Observability</a>, <a href="../../design/appendix-f-cost-model/">Appendix F — Cost model</a></p>
 

@@ -2737,32 +2737,20 @@
 
 <h1 id="docs-quality-audit-q237-scoring-the-published-docset-against-the-six-goal-rubric">Docs quality audit (Q237): scoring the published docset against the six-goal rubric<a class="headerlink" href="#docs-quality-audit-q237-scoring-the-published-docset-against-the-six-goal-rubric" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: ✅ Done — audit complete (2026-06-30).</strong> Fan-out audit of the
-published <code>docs/</code> set against the six-goal quality rubric in
-<a href="../../../development/documentation-standards/#goals-what-good-looks-like">documentation-standards.md</a>.
-57 findings filed below. The audit <strong>produced</strong> this ranked list; the fixes
-are follow-on work tracked on the <a href="../../../STATUS/">STATUS Queue</a> (see
-<a href="#remediation">Remediation</a>). This is the recurring "docs-vs-code drift audit"
-that documentation-standards.md lists as the highest-value <em>Proposed</em> quality
-signal.</p>
+<p><strong>Status: ✅ Done — audit complete (2026-06-30).</strong> Fan-out audit of the published <code>docs/</code> set against the six-goal quality rubric in <a href="../../../development/documentation-standards/#goals-what-good-looks-like">documentation-standards.md</a>.
+57 findings filed below.
+The audit <strong>produced</strong> this ranked list; the fixes are follow-on work tracked on the <a href="../../../STATUS/">STATUS Queue</a> (see <a href="#remediation">Remediation</a>).
+This is the recurring "docs-vs-code drift audit" that documentation-standards.md lists as the highest-value <em>Proposed</em> quality signal.</p>
 </blockquote>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Score the human-facing documentation against all six quality goals — not just
-scannability — and produce a <strong>ranked, evidence-backed findings list</strong> an
-operator or maintainer can act on. The rubric, in leverage order: (1) correct &amp;
-current, (2) findable, (3) complete enough, (4) fit-for-purpose, (5) usable, (6)
-trustworthy in tone (no AI slop).</p>
+<p>Score the human-facing documentation against all six quality goals — not just scannability — and produce a <strong>ranked, evidence-backed findings list</strong> an operator or maintainer can act on.
+The rubric, in leverage order: (1) correct &amp; current, (2) findable, (3) complete enough, (4) fit-for-purpose, (5) usable, (6) trustworthy in tone (no AI slop).</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
-<p><strong>Audited — the published docset (~62 prose files + directory READMEs):</strong>
-<code>docs/*.md</code> (top-level), <code>docs/design/</code>, <code>docs/development/</code>, <code>docs/operations/</code>.</p>
+<p><strong>Audited — the published docset (~62 prose files + directory READMEs):</strong> <code>docs/*.md</code> (top-level), <code>docs/design/</code>, <code>docs/development/</code>, <code>docs/operations/</code>.</p>
 <p><strong>Excluded:</strong></p>
 <ul>
-<li><code>docs/plan/</code> and <code>docs/plan/archive/</code> (69 files) — internal working artifacts
-  with their own lint (<code>plan-index-check</code>, backlog rules), not held to the
-  published-docset rubric.</li>
-<li>Mechanical link/anchor rot — already covered by <code>make doc-links</code>; this audit
-  targets <em>semantic</em> findability (missing-but-needed links, orphans, nav gaps),
-  not broken hrefs.</li>
+<li><code>docs/plan/</code> and <code>docs/plan/archive/</code> (69 files) — internal working artifacts with their own lint (<code>plan-index-check</code>, backlog rules), not held to the published-docset rubric.</li>
+<li>Mechanical link/anchor rot — already covered by <code>make doc-links</code>; this audit targets <em>semantic</em> findability (missing-but-needed links, orphans, nav gaps), not broken hrefs.</li>
 </ul>
 <h2 id="headline-results">Headline results<a class="headerlink" href="#headline-results" title="Permanent link">&para;</a></h2>
 <table>
@@ -2814,62 +2802,40 @@ trustworthy in tone (no AI slop).</p>
 </tbody>
 </table>
 <p><strong>Totals:</strong> 57 findings — 20 high, 20 medium, 17 low.</p>
-<p>The signal is unambiguous: <strong>goal-1 correctness drift</strong>, not style. 17 of the 36
-goal-1 findings are high severity, and most break a copy-paste command or state a
-wrong default an operator would rely on. This is exactly what the per-change
-doc-update rule misses over time and why a periodic drift audit is the
-highest-value quality signal.</p>
+<p>The signal is unambiguous: <strong>goal-1 correctness drift</strong>, not style.
+17 of the 36 goal-1 findings are high severity, and most break a copy-paste command or state a wrong default an operator would rely on.
+This is exactly what the per-change doc-update rule misses over time and why a periodic drift audit is the highest-value quality signal.</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
-<p>Findings were produced by source-inspecting agents, so per the repo's
-verify-before-trusting rule they are unverified until exec-confirmed. A sample
-of <strong>~8 distinct high-severity goal-1 findings was verified directly against the
-code</strong> — CRD served version, <code>ActionsGatewaySpec</code> fields, worker/AGC
-ServiceAccount name constants, the GMC finalizer domain, proxy metrics port, the
-proxy CPU-limit default, <code>ResourceQuota</code> non-reconciliation, and the shipped CRD
-set. <strong>All confirmed; zero false positives in the sample.</strong> Remaining findings
-should still be re-confirmed at fix time (a few — e.g. the worker-image override
-mechanism, which appears mis-stated in more than one doc — are subtle and worth a
-careful check before editing).</p>
+<p>Findings were produced by source-inspecting agents, so per the repo's verify-before-trusting rule they are unverified until exec-confirmed.
+A sample of <strong>~8 distinct high-severity goal-1 findings was verified directly against the code</strong> — CRD served version, <code>ActionsGatewaySpec</code> fields, worker/AGC ServiceAccount name constants, the GMC finalizer domain, proxy metrics port, the proxy CPU-limit default, <code>ResourceQuota</code> non-reconciliation, and the shipped CRD set. <strong>All confirmed; zero false positives in the sample.</strong> Remaining findings should still be re-confirmed at fix time (a few — e.g. the worker-image override mechanism, which appears mis-stated in more than one doc — are subtle and worth a careful check before editing).</p>
 <h2 id="cross-cutting-themes">Cross-cutting themes<a class="headerlink" href="#cross-cutting-themes" title="Permanent link">&para;</a></h2>
 <p>These patterns recur across files and are the natural fix batches:</p>
 <ol>
-<li><strong>API-version / field-path drift in copy-paste YAML &amp; commands</strong> — v1alpha1
-   vs <code>/v1</code> vs v2 confusion; non-existent fields (<code>spec.worker.podTemplate</code>),
-   flags, ServiceAccount names, CRD groups. Files: <code>kata-dind-workloads.md</code>,
-   <code>air-gapped-install.md</code>, <code>velero-backup-restore.md</code>, <code>tenant-onboarding.md</code>,
-   <code>backup-restore.md</code>, <code>appendix-e-capacity-planning.md</code>.</li>
-<li><strong>Stale numeric defaults</strong> — <code>MaxListeners</code> (10→1), proxy CPU limit (100m→500m,
-   wrong in 3 docs), AGC grace period. Files: <code>03-api-contracts.md</code>,
-   <code>appendix-a-capacity-slos.md</code>, <code>observability.md</code>, <code>upgrade.md</code>.</li>
-<li><strong>Worker-image override mechanism mis-documented</strong> — a <code>--worker-image</code> flag
-   / <code>WORKER_IMAGE</code> env var that the GMC does not consume; needs one
-   source-of-truth correction. Files: <code>03-api-contracts.md</code>, <code>kind-iteration.md</code>.</li>
-<li><strong>Stale CI/test-gate counts</strong> — image counts (5 vs 6), <code>make check</code> gate list,
-   trivy/hadolint scope. Files: <code>testing.md</code>, <code>backpressure.md</code>, <code>kind-iteration.md</code>.</li>
-<li><strong>Metrics port confusion (8081 vs 8443)</strong> — Files: <code>observability.md</code>,
-   <code>troubleshooting.md</code>.</li>
-<li><strong>Acronym expansion &amp; minor tone</strong> (goal 6, mostly low) — DinD/PSP unexpanded,
-   a few promotional phrasings.</li>
+<li><strong>API-version / field-path drift in copy-paste YAML &amp; commands</strong> — v1alpha1 vs <code>/v1</code> vs v2 confusion; non-existent fields (<code>spec.worker.podTemplate</code>), flags, ServiceAccount names, CRD groups.
+   Files: <code>kata-dind-workloads.md</code>, <code>air-gapped-install.md</code>, <code>velero-backup-restore.md</code>, <code>tenant-onboarding.md</code>, <code>backup-restore.md</code>, <code>appendix-e-capacity-planning.md</code>.</li>
+<li><strong>Stale numeric defaults</strong> — <code>MaxListeners</code> (10→1), proxy CPU limit (100m→500m, wrong in 3 docs), AGC grace period.
+   Files: <code>03-api-contracts.md</code>, <code>appendix-a-capacity-slos.md</code>, <code>observability.md</code>, <code>upgrade.md</code>.</li>
+<li><strong>Worker-image override mechanism mis-documented</strong> — a <code>--worker-image</code> flag / <code>WORKER_IMAGE</code> env var that the GMC does not consume; needs one source-of-truth correction.
+   Files: <code>03-api-contracts.md</code>, <code>kind-iteration.md</code>.</li>
+<li><strong>Stale CI/test-gate counts</strong> — image counts (5 vs 6), <code>make check</code> gate list, trivy/hadolint scope.
+   Files: <code>testing.md</code>, <code>backpressure.md</code>, <code>kind-iteration.md</code>.</li>
+<li><strong>Metrics port confusion (8081 vs 8443)</strong> — Files: <code>observability.md</code>, <code>troubleshooting.md</code>.</li>
+<li><strong>Acronym expansion &amp; minor tone</strong> (goal 6, mostly low) — DinD/PSP unexpanded, a few promotional phrasings.</li>
 </ol>
 <h2 id="remediation">Remediation<a class="headerlink" href="#remediation" title="Permanent link">&para;</a></h2>
 <p>The fixes are follow-on work, split by leverage so each PR stays scoped:</p>
 <ul>
-<li><strong>Batch A (high) — operator copy-paste correctness:</strong> the 17 high goal-1
-  findings (broken <code>kubectl apply</code>/<code>patch</code>, wrong CRD group/version/fields/ports).
-  Top priority; an operator following these today fails. Themes 1–2, 5.</li>
-<li><strong>Batch B (medium) — stale defaults, counts &amp; internal drift:</strong> the 16 medium
-  goal-1 findings across design + development docs. Themes 2–4.</li>
-<li><strong>Batch C (low) — usability &amp; tone polish:</strong> the goal-5 (4) and goal-6 (10)
-  findings; low reader impact, cheap to sweep in one pass.</li>
+<li><strong>Batch A (high) — operator copy-paste correctness:</strong> the 17 high goal-1 findings (broken <code>kubectl apply</code>/<code>patch</code>, wrong CRD group/version/fields/ports).
+  Top priority; an operator following these today fails.
+  Themes 1–2, 5.</li>
+<li><strong>Batch B (medium) — stale defaults, counts &amp; internal drift:</strong> the 16 medium goal-1 findings across design + development docs.
+  Themes 2–4.</li>
+<li><strong>Batch C (low) — usability &amp; tone polish:</strong> the goal-5 (4) and goal-6 (10) findings; low reader impact, cheap to sweep in one pass.</li>
 </ul>
-<p>Each batch is independent per-file editing and could be dispatched in parallel
-(see <a href="../../../development/parallel-dispatch/">parallel-dispatch.md</a>), but every fix
-must re-confirm its finding against the code before editing.</p>
+<p>Each batch is independent per-file editing and could be dispatched in parallel (see <a href="../../../development/parallel-dispatch/">parallel-dispatch.md</a>), but every fix must re-confirm its finding against the code before editing.</p>
 <h2 id="full-findings">Full findings<a class="headerlink" href="#full-findings" title="Permanent link">&para;</a></h2>
-<p>Ranked by goal (leverage order), then severity. <code>Sev</code>: <strong>H</strong>igh / <strong>M</strong>edium /
-<strong>L</strong>ow. Evidence (line refs + the code symbol each goal-1 finding contradicts)
-is preserved in the audit run output; the <code>Issue</code>/<code>Fix</code> columns are abridged to
-fit.</p>
+<p>Ranked by goal (leverage order), then severity. <code>Sev</code>: <strong>H</strong>igh / <strong>M</strong>edium / <strong>L</strong>ow.
+Evidence (line refs + the code symbol each goal-1 finding contradicts) is preserved in the audit run output; the <code>Issue</code>/<code>Fix</code> columns are abridged to fit.</p>
 <h4 id="goal-1--correct--current-36">Goal 1 — Correct &amp; current (36)<a class="headerlink" href="#goal-1--correct--current-36" title="Permanent link">&para;</a></h4>
 <table>
 <thead>
@@ -3291,11 +3257,9 @@ fit.</p>
 </tbody>
 </table>
 <h2 id="how-it-was-run">How it was run<a class="headerlink" href="#how-it-was-run" title="Permanent link">&para;</a></h2>
-<p>A background fan-out workflow (<code>q237-docs-quality-audit</code>): 22 per-file finder
-agents scored prose files against the per-file goals (1, 5, 6) with correctness
-spot-checks against the code; 3 tree-level agents covered the cross-file goals
-(2 findable, 3 complete, 4 fit-for-purpose). 26 agents, ~2.4M tokens. Findings
-were deduped and ranked into this report.</p>
+<p>A background fan-out workflow (<code>q237-docs-quality-audit</code>): 22 per-file finder agents scored prose files against the per-file goals (1, 5, 6) with correctness spot-checks against the code; 3 tree-level agents covered the cross-file goals (2 findable, 3 complete, 4 fit-for-purpose).
+26 agents, ~2.4M tokens.
+Findings were deduped and ranked into this report.</p>
 
 
 

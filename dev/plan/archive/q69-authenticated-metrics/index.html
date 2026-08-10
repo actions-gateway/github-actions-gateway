@@ -2758,113 +2758,65 @@
 
 
 <h1 id="q69--authenticated-secure-serving-for-proxy--agc-metrics">Q69 — Authenticated secure-serving for proxy + AGC metrics<a class="headerlink" href="#q69--authenticated-secure-serving-for-proxy--agc-metrics" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ Done — uniform mTLS shipped for the AGC + proxy <code>/metrics</code> on <code>:8443</code>.
-<strong>Size:</strong> M
-<strong>Labels:</strong> <code>security</code> <code>infra</code>
-<strong>Queue row:</strong> Q69 (removed)</p>
+<p><strong>Status:</strong> ✅ Done — uniform mTLS shipped for the AGC + proxy <code>/metrics</code> on <code>:8443</code>. <strong>Size:</strong> M <strong>Labels:</strong> <code>security</code> <code>infra</code> <strong>Queue row:</strong> Q69 (removed)</p>
 <h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
 <ul>
-<li>GMC issues a per-tenant metrics CA + server cert + scraper client cert
-  (<code>cmd/gmc/internal/controller/metrics_cert.go</code>), stored in two Secrets
-  (<code>actions-gateway-metrics-tls</code> server bundle, <code>actions-gateway-metrics-client</code>
-  scraper bundle) reconciled by <code>ensureMetricsCerts</code> and GC'd via owner refs.</li>
-<li>AGC serves <code>/metrics</code> mTLS on <code>:8443</code> via controller-runtime <code>TLSOpts</code>
-  (<code>RequireAndVerifyClientCert</code> + client CA), no <code>FilterProvider</code>, no RBAC change
-  (<code>cmd/agc/metrics.go</code>).</li>
-<li>Proxy serves <code>/metrics</code> mTLS on a dedicated <code>:8443</code> listener; <code>/healthz</code> +
-  <code>/readyz</code> stay plaintext on <code>:8081</code> for kubelet probes (<code>cmd/proxy/proxy.go</code>).</li>
-<li>NetworkPolicy metrics-scrape ingress moved <code>:8081 → :8443</code>; the
-  <code>metrics=enabled</code> namespace gate remains as defense-in-depth.</li>
-<li>Tests: GMC cert-gen + mTLS handshake, proxy mTLS accept/reject/wrong-CA +
-  not-on-health-port, AGC options + handshake, builder volume/mount/port + Secret
-  builders, and a GMC integration assertion that both Secrets are reconciled.</li>
+<li>GMC issues a per-tenant metrics CA + server cert + scraper client cert (<code>cmd/gmc/internal/controller/metrics_cert.go</code>), stored in two Secrets (<code>actions-gateway-metrics-tls</code> server bundle, <code>actions-gateway-metrics-client</code> scraper bundle) reconciled by <code>ensureMetricsCerts</code> and GC'd via owner refs.</li>
+<li>AGC serves <code>/metrics</code> mTLS on <code>:8443</code> via controller-runtime <code>TLSOpts</code> (<code>RequireAndVerifyClientCert</code> + client CA), no <code>FilterProvider</code>, no RBAC change (<code>cmd/agc/metrics.go</code>).</li>
+<li>Proxy serves <code>/metrics</code> mTLS on a dedicated <code>:8443</code> listener; <code>/healthz</code> + <code>/readyz</code> stay plaintext on <code>:8081</code> for kubelet probes (<code>cmd/proxy/proxy.go</code>).</li>
+<li>NetworkPolicy metrics-scrape ingress moved <code>:8081 → :8443</code>; the <code>metrics=enabled</code> namespace gate remains as defense-in-depth.</li>
+<li>Tests: GMC cert-gen + mTLS handshake, proxy mTLS accept/reject/wrong-CA + not-on-health-port, AGC options + handshake, builder volume/mount/port + Secret builders, and a GMC integration assertion that both Secrets are reconciled.</li>
 </ul>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Make the per-tenant proxy and AGC <code>/metrics</code> endpoints serve over authenticated
-HTTPS, the way the GMC already does — closing the gap where they are
-unauthenticated plain HTTP gated only by the L-8 NetworkPolicy namespace
-selector.</p>
+<p>Make the per-tenant proxy and AGC <code>/metrics</code> endpoints serve over authenticated HTTPS, the way the GMC already does — closing the gap where they are unauthenticated plain HTTP gated only by the L-8 NetworkPolicy namespace selector.</p>
 <h2 id="decision-signed-off">Decision (signed off)<a class="headerlink" href="#decision-signed-off" title="Permanent link">&para;</a></h2>
-<p><strong>Uniform mTLS</strong> for both the AGC and the proxy: each serves <code>/metrics</code> over
-HTTPS and requires a client certificate verified against a per-tenant CA issued
-by the GMC. Rationale:</p>
+<p><strong>Uniform mTLS</strong> for both the AGC and the proxy: each serves <code>/metrics</code> over HTTPS and requires a client certificate verified against a per-tenant CA issued by the GMC.
+Rationale:</p>
 <ul>
-<li>The proxy is a deliberately minimal, stateless CONNECT tunneler with <strong>zero
-  Kubernetes dependencies</strong> (no ServiceAccount, no kube client, no kube-API
-  egress). The GMC's own auth mechanism — <code>TokenReview</code>/<code>SubjectAccessReview</code>
-  via <code>filters.WithAuthenticationAndAuthorization</code> — is made of kube-API calls,
-  so adopting it on the proxy would require granting the proxy kube-API
-  reachability + client-go + auth-delegator RBAC, <strong>regressing that isolation</strong>.
-  mTLS authenticates scrapers cryptographically with no kube-API dependency.</li>
-<li>Doing the AGC the same way (controller-runtime's metrics server accepts raw
-  <code>TLSOpts</code>, so <code>ClientAuth: RequireAndVerifyClientCert</code> + a client CA works
-  without a <code>FilterProvider</code>) keeps both per-tenant components on one mechanism
-  and avoids <strong>all</strong> RBAC changes: no per-tenant <code>ClusterRoleBinding</code> to
-  <code>system:auth-delegator</code>, no GMC RBAC expansion, no cluster-scoped objects to
-  garbage-collect.</li>
-<li>This reuses the GMC's existing per-tenant cert machinery (<code>generateProxyCert</code>
-  / <code>buildProxyCertSecret</code> in <code>cert.go</code>). The GMC itself keeps its kubebuilder
-  default (<code>TokenReview</code>) — coherent split: per-tenant components use the GMC's
-  per-tenant certs; the singleton GMC uses the cluster's SA-token auth.</li>
+<li>The proxy is a deliberately minimal, stateless CONNECT tunneler with <strong>zero Kubernetes dependencies</strong> (no ServiceAccount, no kube client, no kube-API egress).
+  The GMC's own auth mechanism — <code>TokenReview</code>/<code>SubjectAccessReview</code> via <code>filters.WithAuthenticationAndAuthorization</code> — is made of kube-API calls, so adopting it on the proxy would require granting the proxy kube-API reachability + client-go + auth-delegator RBAC, <strong>regressing that isolation</strong>. mTLS authenticates scrapers cryptographically with no kube-API dependency.</li>
+<li>Doing the AGC the same way (controller-runtime's metrics server accepts raw <code>TLSOpts</code>, so <code>ClientAuth: RequireAndVerifyClientCert</code> + a client CA works without a <code>FilterProvider</code>) keeps both per-tenant components on one mechanism and avoids <strong>all</strong> RBAC changes: no per-tenant <code>ClusterRoleBinding</code> to <code>system:auth-delegator</code>, no GMC RBAC expansion, no cluster-scoped objects to garbage-collect.</li>
+<li>This reuses the GMC's existing per-tenant cert machinery (<code>generateProxyCert</code> / <code>buildProxyCertSecret</code> in <code>cert.go</code>).
+  The GMC itself keeps its kubebuilder default (<code>TokenReview</code>) — coherent split: per-tenant components use the GMC's per-tenant certs; the singleton GMC uses the cluster's SA-token auth.</li>
 </ul>
-<p>One per-tenant <strong>metrics CA</strong> signs a <strong>server cert</strong> (SANs cover the proxy +
-AGC Service DNS names) and a <strong>scraper client cert</strong>. The AGC and proxy mount
-the server bundle (<code>ca.crt</code> + <code>tls.crt</code> + <code>tls.key</code>); the scraper client bundle
-is published in a Secret for the monitoring stack to consume.</p>
+<p>One per-tenant <strong>metrics CA</strong> signs a <strong>server cert</strong> (SANs cover the proxy + AGC Service DNS names) and a <strong>scraper client cert</strong>.
+The AGC and proxy mount the server bundle (<code>ca.crt</code> + <code>tls.crt</code> + <code>tls.key</code>); the scraper client bundle is published in a Secret for the monitoring stack to consume.</p>
 <h2 id="current-state-as-of-this-plan">Current state (as of this plan)<a class="headerlink" href="#current-state-as-of-this-plan" title="Permanent link">&para;</a></h2>
 <h3 id="agc">AGC<a class="headerlink" href="#agc" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>cmd/agc/main.go:70</code> — <code>metricsBindAddress = ":8081"</code>.</li>
 <li><code>cmd/agc/main.go:179</code> — <code>Metrics: metricsserver.Options{BindAddress: metricsBindAddress}</code>.
   No <code>SecureServing</code>, no <code>FilterProvider</code>, no cert → <strong>plain HTTP</strong>.</li>
-<li>AGC NetworkPolicy (<code>buildAGCNetworkPolicy</code>, <code>builder.go:275</code>) already allows
-  egress to the kube API (443 + 6443) and ingress on the metrics port only from
-  monitoring namespaces (<code>metrics=enabled</code>).</li>
-<li>AGC RBAC: <code>agc-tenant-role</code> ClusterRole (<code>config/agc-tenant-role/agc_tenant_role.yaml</code>),
-  bound per-tenant via a namespaced RoleBinding. <strong>No</strong> tokenreviews/subjectaccessreviews.</li>
+<li>AGC NetworkPolicy (<code>buildAGCNetworkPolicy</code>, <code>builder.go:275</code>) already allows egress to the kube API (443 + 6443) and ingress on the metrics port only from monitoring namespaces (<code>metrics=enabled</code>).</li>
+<li>AGC RBAC: <code>agc-tenant-role</code> ClusterRole (<code>config/agc-tenant-role/agc_tenant_role.yaml</code>), bound per-tenant via a namespaced RoleBinding. <strong>No</strong> tokenreviews/subjectaccessreviews.</li>
 </ul>
 <h3 id="proxy">Proxy<a class="headerlink" href="#proxy" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>cmd/proxy/proxy.go:140</code> — <code>mux.Handle("/metrics", promhttp.Handler())</code> on the
-  health listener (<code>:8081</code>), <strong>plain HTTP</strong>.</li>
-<li><code>cmd/proxy/proxy.go:40-43</code> — <code>TLSCertFile</code>/<code>TLSKeyFile</code> already exist but apply
-  only to the <strong>CONNECT</strong> listener (<code>:8080</code>); the health/metrics listener is
-  always plaintext (comment at proxy.go:41 makes this explicit).</li>
-<li>The proxy <strong>already has a GMC-issued self-signed TLS cert</strong> mounted at
-  <code>/etc/actions-gateway/proxy-tls/</code> (<code>generateProxyCert</code> in <code>cert.go</code>,
-  <code>buildProxyCertSecret</code> / <code>buildProxyDeployment</code>). The cert's SANs already cover
-  the proxy Service DNS names — it can serve the metrics port too.</li>
-<li>Proxy <code>go.mod</code> has <strong>no</strong> k8s deps; the Deployment sets no <code>ServiceAccountName</code>
-  (uses the namespace <code>default</code> SA).</li>
+<li><code>cmd/proxy/proxy.go:140</code> — <code>mux.Handle("/metrics", promhttp.Handler())</code> on the health listener (<code>:8081</code>), <strong>plain HTTP</strong>.</li>
+<li><code>cmd/proxy/proxy.go:40-43</code> — <code>TLSCertFile</code>/<code>TLSKeyFile</code> already exist but apply only to the <strong>CONNECT</strong> listener (<code>:8080</code>); the health/metrics listener is always plaintext (comment at proxy.go:41 makes this explicit).</li>
+<li>The proxy <strong>already has a GMC-issued self-signed TLS cert</strong> mounted at <code>/etc/actions-gateway/proxy-tls/</code> (<code>generateProxyCert</code> in <code>cert.go</code>, <code>buildProxyCertSecret</code> / <code>buildProxyDeployment</code>).
+  The cert's SANs already cover the proxy Service DNS names — it can serve the metrics port too.</li>
+<li>Proxy <code>go.mod</code> has <strong>no</strong> k8s deps; the Deployment sets no <code>ServiceAccountName</code> (uses the namespace <code>default</code> SA).</li>
 </ul>
 <h3 id="l-8-networkpolicy-gate-shared">L-8 NetworkPolicy gate (shared)<a class="headerlink" href="#l-8-networkpolicy-gate-shared" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>metricsScrapeIngressRule()</code> (<code>builder.go:144</code>) admits ingress to the metrics
-  port only from namespaces labeled <code>metrics=enabled</code>. Applied to both the proxy
-  NP and the AGC NP. This stays as defense-in-depth regardless of the auth work.</li>
+<li><code>metricsScrapeIngressRule()</code> (<code>builder.go:144</code>) admits ingress to the metrics port only from namespaces labeled <code>metrics=enabled</code>.
+  Applied to both the proxy NP and the AGC NP.
+  This stays as defense-in-depth regardless of the auth work.</li>
 </ul>
 <h3 id="gmc-reference-the-model-to-extend">GMC reference (the model to extend)<a class="headerlink" href="#gmc-reference-the-model-to-extend" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>cmd/gmc/cmd/main.go:127-156</code> — <code>metricsserver.Options{SecureServing: true,
-  FilterProvider: filters.WithAuthenticationAndAuthorization, ...}</code> + optional
-  cert-manager cert (<code>CertDir</code>); falls back to a controller-runtime self-signed
-  serving cert when no cert path is given.</li>
-<li><code>config/rbac/metrics_auth_role.yaml</code> — ClusterRole <code>metrics-auth-role</code>:
-  <code>create</code> on <code>tokenreviews</code> + <code>subjectaccessreviews</code> (the auth-delegator set).</li>
-<li><code>config/rbac/metrics_reader_role.yaml</code> — ClusterRole <code>metrics-reader</code>:
-  <code>get</code> on <code>nonResourceURLs: /metrics</code> (granted to the scraper SA).</li>
-<li><code>config/prometheus/monitor.yaml</code> — ServiceMonitor scrapes <code>scheme: https</code>,
-  <code>bearerTokenFile: .../serviceaccount/token</code>, <code>insecureSkipVerify: true</code> by
-  default (cert-manager TLS verification is an opt-in patch).</li>
+<li><code>cmd/gmc/cmd/main.go:127-156</code> — <code>metricsserver.Options{SecureServing: true, FilterProvider: filters.WithAuthenticationAndAuthorization, ...}</code> + optional cert-manager cert (<code>CertDir</code>); falls back to a controller-runtime self-signed serving cert when no cert path is given.</li>
+<li><code>config/rbac/metrics_auth_role.yaml</code> — ClusterRole <code>metrics-auth-role</code>: <code>create</code> on <code>tokenreviews</code> + <code>subjectaccessreviews</code> (the auth-delegator set).</li>
+<li><code>config/rbac/metrics_reader_role.yaml</code> — ClusterRole <code>metrics-reader</code>: <code>get</code> on <code>nonResourceURLs: /metrics</code> (granted to the scraper SA).</li>
+<li><code>config/prometheus/monitor.yaml</code> — ServiceMonitor scrapes <code>scheme: https</code>, <code>bearerTokenFile: .../serviceaccount/token</code>, <code>insecureSkipVerify: true</code> by default (cert-manager TLS verification is an opt-in patch).</li>
 <li>controller-runtime is <strong>v0.24.1</strong> in both modules.</li>
 </ul>
 <h2 id="port-topology">Port topology<a class="headerlink" href="#port-topology" title="Permanent link">&para;</a></h2>
 <p>A new dedicated mTLS metrics port <code>metricsPort = 8443</code> on <strong>both</strong> components.
-Rationale: the proxy's <code>:8081</code> listener serves the kubelet liveness/readiness
-probes (<code>/healthz</code>, <code>/readyz</code>); blanket-mTLS on that port would break probes
-(kubelet presents no client cert). A dedicated metrics port keeps probes plain
-on <code>:8081</code> and metrics fully mTLS-at-handshake on <code>:8443</code>. The AGC has no health
-probes today, so its metrics simply move <code>:8081 → :8443</code> for symmetry.</p>
+Rationale: the proxy's <code>:8081</code> listener serves the kubelet liveness/readiness probes (<code>/healthz</code>, <code>/readyz</code>); blanket-mTLS on that port would break probes (kubelet presents no client cert).
+A dedicated metrics port keeps probes plain on <code>:8081</code> and metrics fully mTLS-at-handshake on <code>:8443</code>.
+The AGC has no health probes today, so its metrics simply move <code>:8081 → :8443</code> for symmetry.</p>
 <table>
 <thead>
 <tr>
@@ -2893,97 +2845,61 @@ probes today, so its metrics simply move <code>:8081 → :8443</code> for symmet
 </table>
 <h2 id="plan--gmc-cert-issuance-cmdgmcinternalcontroller">Plan — GMC cert issuance (<code>cmd/gmc/internal/controller/</code>)<a class="headerlink" href="#plan--gmc-cert-issuance-cmdgmcinternalcontroller" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong><code>cert.go</code></strong> — add <code>generateMetricsCerts(ag)</code> returning
-   <code>(caPEM, serverCertPEM, serverKeyPEM, clientCertPEM, clientKeyPEM, error)</code>:</li>
+<li><strong><code>cert.go</code></strong> — add <code>generateMetricsCerts(ag)</code> returning <code>(caPEM, serverCertPEM, serverKeyPEM, clientCertPEM, clientKeyPEM, error)</code>:</li>
 <li>self-signed CA (RSA-2048, <code>IsCA</code>, <code>KeyUsageCertSign</code>);</li>
-<li>server leaf signed by the CA — SANs = proxy Service DNS names + AGC Service
-     DNS names; <code>ExtKeyUsageServerAuth</code>;</li>
-<li>client leaf signed by the CA — <code>CN=actions-gateway-metrics-scraper</code>;
-     <code>ExtKeyUsageClientAuth</code>.
-   The CA private key is <strong>not</strong> persisted; the whole bundle is regenerated on
-   expiry/absence, exactly like <code>generateProxyCert</code>.</li>
+<li>server leaf signed by the CA — SANs = proxy Service DNS names + AGC Service DNS names; <code>ExtKeyUsageServerAuth</code>;</li>
+<li>client leaf signed by the CA — <code>CN=actions-gateway-metrics-scraper</code>; <code>ExtKeyUsageClientAuth</code>.
+     The CA private key is <strong>not</strong> persisted; the whole bundle is regenerated on expiry/absence, exactly like <code>generateProxyCert</code>.</li>
 <li><strong><code>builder.go</code></strong> — two new Secrets:</li>
-<li><code>actions-gateway-metrics-tls</code> (<code>ca.crt</code> + <code>tls.crt</code> + <code>tls.key</code>, server
-     bundle) — mounted RO into AGC + proxy at <code>/etc/actions-gateway/metrics-tls/</code>.</li>
-<li><code>actions-gateway-metrics-client</code> (<code>ca.crt</code> + <code>tls.crt</code> + <code>tls.key</code>, scraper
-     bundle) — published for the monitoring stack; not mounted into our pods.</li>
-<li><strong><code>actionsgateway_controller.go</code></strong> — reconcile both Secrets alongside the
-   existing proxy-cert reconcile (idempotent: regenerate only on missing/expiring,
-   mirroring the proxy-cert path).</li>
+<li><code>actions-gateway-metrics-tls</code> (<code>ca.crt</code> + <code>tls.crt</code> + <code>tls.key</code>, server bundle) — mounted RO into AGC + proxy at <code>/etc/actions-gateway/metrics-tls/</code>.</li>
+<li><code>actions-gateway-metrics-client</code> (<code>ca.crt</code> + <code>tls.crt</code> + <code>tls.key</code>, scraper bundle) — published for the monitoring stack; not mounted into our pods.</li>
+<li><strong><code>actionsgateway_controller.go</code></strong> — reconcile both Secrets alongside the existing proxy-cert reconcile (idempotent: regenerate only on missing/expiring, mirroring the proxy-cert path).</li>
 </ol>
 <h2 id="plan--agc-cmdagcmaingo">Plan — AGC (<code>cmd/agc/main.go</code>)<a class="headerlink" href="#plan--agc-cmdagcmaingo" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Move the metrics bind address <code>:8081 → :8443</code>.</li>
-<li>Enable <code>SecureServing: true</code>, <code>CertDir: /etc/actions-gateway/metrics-tls</code>,
-  <code>CertName: tls.crt</code>, <code>KeyName: tls.key</code>, and a <code>TLSOpts</code> func setting
-  <code>ClientAuth = RequireAndVerifyClientCert</code> + <code>ClientCAs</code> loaded from
-  <code>metrics-tls/ca.crt</code>. <strong>No</strong> <code>FilterProvider</code> (no kube auth → no RBAC change).</li>
-<li>Follow the established proxy-cert pattern: secure when the cert files are
-  present (GMC always mounts them in production); plain fallback only when absent
-  (dev/test), logged loudly. Update the <code>metricsBindAddress</code> comment.</li>
+<li>Enable <code>SecureServing: true</code>, <code>CertDir: /etc/actions-gateway/metrics-tls</code>, <code>CertName: tls.crt</code>, <code>KeyName: tls.key</code>, and a <code>TLSOpts</code> func setting <code>ClientAuth = RequireAndVerifyClientCert</code> + <code>ClientCAs</code> loaded from <code>metrics-tls/ca.crt</code>. <strong>No</strong> <code>FilterProvider</code> (no kube auth → no RBAC change).</li>
+<li>Follow the established proxy-cert pattern: secure when the cert files are present (GMC always mounts them in production); plain fallback only when absent (dev/test), logged loudly.
+  Update the <code>metricsBindAddress</code> comment.</li>
 </ul>
 <h2 id="plan--proxy-cmdproxy">Plan — Proxy (<code>cmd/proxy/</code>)<a class="headerlink" href="#plan--proxy-cmdproxy" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Keep the health listener (<code>/healthz</code>, <code>/readyz</code>) plain on <code>:8081</code>; <strong>remove</strong>
-  <code>/metrics</code> from it.</li>
-<li>Add a third listener: <code>/metrics</code> over mTLS on <code>:8443</code>
-  (<code>tls.Config{Certificates: [server], ClientAuth: RequireAndVerifyClientCert,
-  ClientCAs: caPool, MinVersion: TLS1.2, NextProtos: ["http/1.1"]}</code>). New env
-  <code>PROXY_METRICS_*</code> for the cert/key/CA file paths (GMC sets them); when unset,
-  metrics fall back to plain on the health mux (dev/test), mirroring the existing
-  CONNECT-TLS gate.</li>
+<li>Keep the health listener (<code>/healthz</code>, <code>/readyz</code>) plain on <code>:8081</code>; <strong>remove</strong> <code>/metrics</code> from it.</li>
+<li>Add a third listener: <code>/metrics</code> over mTLS on <code>:8443</code> (<code>tls.Config{Certificates: [server], ClientAuth: RequireAndVerifyClientCert, ClientCAs: caPool, MinVersion: TLS1.2, NextProtos: ["http/1.1"]}</code>).
+  New env <code>PROXY_METRICS_*</code> for the cert/key/CA file paths (GMC sets them); when unset, metrics fall back to plain on the health mux (dev/test), mirroring the existing CONNECT-TLS gate.</li>
 </ul>
 <h2 id="plan--deployments--networkpolicy-buildergo">Plan — Deployments + NetworkPolicy (<code>builder.go</code>)<a class="headerlink" href="#plan--deployments--networkpolicy-buildergo" title="Permanent link">&para;</a></h2>
 <ul>
-<li>AGC Deployment: metrics <code>containerPort 8081 → 8443</code>; mount the
-  <code>actions-gateway-metrics-tls</code> Secret RO (mode <code>0o440</code> + <code>fsGroup 65532</code>, as the
-  existing cert mounts).</li>
+<li>AGC Deployment: metrics <code>containerPort 8081 → 8443</code>; mount the <code>actions-gateway-metrics-tls</code> Secret RO (mode <code>0o440</code> + <code>fsGroup 65532</code>, as the existing cert mounts).</li>
 <li>Proxy Deployment: add <code>containerPort 8443</code>; mount the same Secret RO.</li>
-<li><code>metricsScrapeIngressRule()</code>: gate <code>metricsPort (8443)</code> instead of <code>8081</code>
-  (one shared function → both AGC NP and proxy NP follow). <code>:8081</code> keeps no
-  pod-ingress rule (kubelet probes already rely on node-exemption today — no
-  change). The <code>metrics=enabled</code> namespace selector stays as defense-in-depth.</li>
+<li><code>metricsScrapeIngressRule()</code>: gate <code>metricsPort (8443)</code> instead of <code>8081</code> (one shared function → both AGC NP and proxy NP follow). <code>:8081</code> keeps no pod-ingress rule (kubelet probes already rely on node-exemption today — no change).
+  The <code>metrics=enabled</code> namespace selector stays as defense-in-depth.</li>
 </ul>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>GMC cert</strong> (<code>cert_test.go</code>): <code>generateMetricsCerts</code> produces a CA that
-  verifies both leaves; server cert has the expected SANs + <code>ServerAuth</code>; client
-  cert has <code>ClientAuth</code>.</li>
-<li><strong>Proxy</strong> (<code>proxy_test.go</code>): metrics listener rejects a no-client-cert request
-  (TLS handshake / 403) and a wrong-CA client cert; accepts a CA-signed client
-  cert (200, metrics body). Probes on <code>:8081</code> still answer plain.</li>
-<li><strong>AGC</strong>: unit test on the TLS-config builder (no-cert → handshake fail;
-  valid client cert → 200) — extracted into a testable helper so it doesn't need
-  a full manager.</li>
-<li><strong>e2e (deferred / cluster-only)</strong>: in-cluster scrape with the client bundle — folded
-  into the scrape-wiring follow-up (open question 3).</li>
+<li><strong>GMC cert</strong> (<code>cert_test.go</code>): <code>generateMetricsCerts</code> produces a CA that verifies both leaves; server cert has the expected SANs + <code>ServerAuth</code>; client cert has <code>ClientAuth</code>.</li>
+<li><strong>Proxy</strong> (<code>proxy_test.go</code>): metrics listener rejects a no-client-cert request (TLS handshake / 403) and a wrong-CA client cert; accepts a CA-signed client cert (200, metrics body).
+  Probes on <code>:8081</code> still answer plain.</li>
+<li><strong>AGC</strong>: unit test on the TLS-config builder (no-cert → handshake fail; valid client cert → 200) — extracted into a testable helper so it doesn't need a full manager.</li>
+<li><strong>e2e (deferred / cluster-only)</strong>: in-cluster scrape with the client bundle — folded into the scrape-wiring follow-up (open question 3).</li>
 </ul>
 <h2 id="docs-to-update">Docs to update<a class="headerlink" href="#docs-to-update" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>docs/design/05-security.md</code> — record the AGC/proxy metrics auth posture
-  (extend the M-5 / L-8 lineage; note the proxy isolation trade-off resolved).</li>
+<li><code>docs/design/05-security.md</code> — record the AGC/proxy metrics auth posture (extend the M-5 / L-8 lineage; note the proxy isolation trade-off resolved).</li>
 <li><code>docs/plan/security.md</code> — update the L-8 row / status-at-a-glance.</li>
 <li><code>docs/design/02-architecture.md</code> — metrics table / prose if endpoints change.</li>
 <li><code>docs/design/03-api-contracts.md</code> — any new flags/ports.</li>
-<li><code>docs/operations/troubleshooting.md</code> — runbook for 401 on metrics scrape
-  (missing token/cert, missing <code>metrics-reader</code>, missing <code>metrics=enabled</code> label).</li>
+<li><code>docs/operations/troubleshooting.md</code> — runbook for 401 on metrics scrape (missing token/cert, missing <code>metrics-reader</code>, missing <code>metrics=enabled</code> label).</li>
 <li><code>docs/STATUS.md</code> — remove Q69 when done (isolated commit).</li>
 </ul>
 <h2 id="open-questions--deferred">Open questions / deferred<a class="headerlink" href="#open-questions--deferred" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Scrape wiring</strong> — there is no per-tenant ServiceMonitor/PodMonitor or
-   metrics-port Service today (the proxy Service exposes only <code>:8080</code>; the AGC
-   has no Service). Q69 closes the <strong>serving</strong> side (endpoints now require a
-   client cert); wiring an actual scrape config — adding a metrics-port Service
-   for the proxy, an AGC metrics Service, and ServiceMonitors that present the
-   published scraper client bundle — is a follow-up that overlaps Q35
-   (observability) / Q51 (metrics reconciliation). The certs ship with the right
-   SANs so that wiring is drop-in. → file as a new Queue item.</li>
-<li><strong>Cert rotation</strong> — the bundle is regenerated on expiry, but pods read certs
-   at startup and won't hot-reload (same limitation as the existing proxy cert;
-   operators restart pods). Controller-runtime's metrics server <em>does</em> use a
-   certwatcher, so the AGC side may hot-reload; the proxy reads once. Acceptable
-   for v1, consistent with the proxy-CONNECT-cert behavior.</li>
+<li><strong>Scrape wiring</strong> — there is no per-tenant ServiceMonitor/PodMonitor or metrics-port Service today (the proxy Service exposes only <code>:8080</code>; the AGC has no Service).
+   Q69 closes the <strong>serving</strong> side (endpoints now require a client cert); wiring an actual scrape config — adding a metrics-port Service for the proxy, an AGC metrics Service, and ServiceMonitors that present the published scraper client bundle — is a follow-up that overlaps Q35 (observability) / Q51 (metrics reconciliation).
+   The certs ship with the right SANs so that wiring is drop-in. → file as a new Queue item.</li>
+<li><strong>Cert rotation</strong> — the bundle is regenerated on expiry, but pods read certs at startup and won't hot-reload (same limitation as the existing proxy cert; operators restart pods).
+   Controller-runtime's metrics server <em>does</em> use a certwatcher, so the AGC side may hot-reload; the proxy reads once.
+   Acceptable for v1, consistent with the proxy-CONNECT-cert behavior.</li>
 </ol>
 
 

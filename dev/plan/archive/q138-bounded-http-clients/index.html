@@ -2653,20 +2653,15 @@
 
 
 <h1 id="q138--bounded-by-default-http-clients">Q138 — Bounded-by-default HTTP clients<a class="headerlink" href="#q138--bounded-by-default-http-clients" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> Eliminate the <code>http.DefaultClient</code> (no-timeout) fallbacks in production
-HTTP clients so a slow/black-holed peer can no longer wedge a goroutine (the
-Q108/Q134 failure class), and gate new bare uses with a linter.</p>
-<p><strong>Approach:</strong> Add a small <code>httpx</code> helper that returns a bounded-by-default
-<code>*http.Client</code> (overall <code>Timeout</code> + transport <code>ResponseHeaderTimeout</code>). Retrofit
-every nil → <code>http.DefaultClient</code> fallback to use it. Keep the broker long-poll
-listener the explicit, documented exception (it needs no overall read deadline,
-only a <code>ResponseHeaderTimeout</code>). Add a <code>forbidigo</code> (+ <code>noctx</code>) golangci gate so
-new <code>http.DefaultClient</code> / <code>http.Get</code> / <code>http.Post</code> uses are rejected.</p>
+<p><strong>Goal:</strong> Eliminate the <code>http.DefaultClient</code> (no-timeout) fallbacks in production HTTP clients so a slow/black-holed peer can no longer wedge a goroutine (the Q108/Q134 failure class), and gate new bare uses with a linter.</p>
+<p><strong>Approach:</strong> Add a small <code>httpx</code> helper that returns a bounded-by-default <code>*http.Client</code> (overall <code>Timeout</code> + transport <code>ResponseHeaderTimeout</code>).
+Retrofit every nil → <code>http.DefaultClient</code> fallback to use it.
+Keep the broker long-poll listener the explicit, documented exception (it needs no overall read deadline, only a <code>ResponseHeaderTimeout</code>).
+Add a <code>forbidigo</code> (+ <code>noctx</code>) golangci gate so new <code>http.DefaultClient</code> / <code>http.Get</code> / <code>http.Post</code> uses are rejected.</p>
 <h2 id="package-placement">Package placement<a class="headerlink" href="#package-placement" title="Permanent link">&para;</a></h2>
-<p><code>githubapp/httpx</code> (a new package inside the existing <code>githubapp</code> module). Every
-module with a fallback site (<code>cmd/agc</code>, <code>cmd/gmc</code>, <code>cmd/probe</code>) already requires
-<code>githubapp</code> via a workspace <code>replace</code>, so there is <strong>zero</strong> new go.mod / go.work /
-vendor wiring — the lowest-risk placement. The helper is stdlib-only.</p>
+<p><code>githubapp/httpx</code> (a new package inside the existing <code>githubapp</code> module).
+Every module with a fallback site (<code>cmd/agc</code>, <code>cmd/gmc</code>, <code>cmd/probe</code>) already requires <code>githubapp</code> via a workspace <code>replace</code>, so there is <strong>zero</strong> new go.mod / go.work / vendor wiring — the lowest-risk placement.
+The helper is stdlib-only.</p>
 <h2 id="inventory-of-httpdefaultclient-fallbacks-the-8-prod-clients">Inventory of <code>http.DefaultClient</code> fallbacks (the ~8 prod clients)<a class="headerlink" href="#inventory-of-httpdefaultclient-fallbacks-the-8-prod-clients" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2719,18 +2714,12 @@ vendor wiring — the lowest-risk placement. The helper is stdlib-only.</p>
 </tr>
 </tbody>
 </table>
-<p>Also retrofit the two explicit prod clients that already carry a 60s timeout so
-they gain the transport <code>ResponseHeaderTimeout</code> too:
+<p>Also retrofit the two explicit prod clients that already carry a 60s timeout so they gain the transport <code>ResponseHeaderTimeout</code> too:
 - <code>cmd/agc/main.go</code> provisioner client → <code>httpx.NewClientWithTimeout(60s)</code>
 - <code>cmd/gmc/cmd/main.go</code> IP-range fetcher client → <code>httpx.NewClientWithTimeout(60s)</code></p>
 <h2 id="long-poll-exception">Long-poll exception<a class="headerlink" href="#long-poll-exception" title="Permanent link">&para;</a></h2>
-<p><code>broker.NewHTTPClient()</code> already sets a <code>ResponseHeaderTimeout</code> sized just above
-the broker's 50s long-poll hold and deliberately sets <strong>no</strong> overall <code>Timeout</code>
-(an overall deadline would sever a healthy long-poll). Change <code>Client.httpClient()</code>
-so the zero-value fallback returns a package-level <code>defaultBrokerClient =
-NewHTTPClient()</code> instead of <code>http.DefaultClient</code>, and document it as the one
-sanctioned exception. <code>brokertest.Server.HTTPClient()</code> keeps <code>http.DefaultClient</code>
-(talks to a local <code>httptest</code> server) with an inline <code>//nolint:forbidigo</code> + reason.</p>
+<p><code>broker.NewHTTPClient()</code> already sets a <code>ResponseHeaderTimeout</code> sized just above the broker's 50s long-poll hold and deliberately sets <strong>no</strong> overall <code>Timeout</code> (an overall deadline would sever a healthy long-poll).
+Change <code>Client.httpClient()</code> so the zero-value fallback returns a package-level <code>defaultBrokerClient = NewHTTPClient()</code> instead of <code>http.DefaultClient</code>, and document it as the one sanctioned exception. <code>brokertest.Server.HTTPClient()</code> keeps <code>http.DefaultClient</code> (talks to a local <code>httptest</code> server) with an inline <code>//nolint:forbidigo</code> + reason.</p>
 <h2 id="lint-gate-root-golangciyml">Lint gate (root <code>.golangci.yml</code>)<a class="headerlink" href="#lint-gate-root-golangciyml" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Enable <code>forbidigo</code>: forbid <code>^http\.DefaultClient$</code> and <code>^http\.(Get|Post|PostForm|Head)$</code>.</li>
@@ -2739,26 +2728,16 @@ sanctioned exception. <code>brokertest.Server.HTTPClient()</code> keeps <code>ht
 <li>The single non-test exception (<code>brokertest</code>) is annotated inline.</li>
 </ul>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
-<p><code>githubapp/httpx/httpx_test.go</code>: assert <code>NewClient()</code> sets a non-zero <code>Timeout</code>
-and a transport <code>ResponseHeaderTimeout</code>; assert a server that stalls past the
-response-header timeout makes the call fail (not hang); assert
-<code>NewClientWithTimeout</code> honours/normalises its argument.</p>
+<p><code>githubapp/httpx/httpx_test.go</code>: assert <code>NewClient()</code> sets a non-zero <code>Timeout</code> and a transport <code>ResponseHeaderTimeout</code>; assert a server that stalls past the response-header timeout makes the call fail (not hang); assert <code>NewClientWithTimeout</code> honours/normalises its argument.</p>
 <h2 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>docs/operations/troubleshooting.md</code>: added a "Reconcile or Token Mint Hangs
-  on a Slow GitHub Endpoint" section (sibling to the Q108 long-poll stall),
-  describing the new fail-fast behaviour and the long-poll exception. <strong>Done.</strong></li>
+<li><code>docs/operations/troubleshooting.md</code>: added a "Reconcile or Token Mint Hangs on a Slow GitHub Endpoint" section (sibling to the Q108 long-poll stall), describing the new fail-fast behaviour and the long-poll exception. <strong>Done.</strong></li>
 <li>Remove the Q138 Queue row (its own isolated commit).</li>
 </ul>
 <h2 id="outcome">Outcome<a class="headerlink" href="#outcome" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>lint</code>/<code>noctx</code>: noctx was evaluated and <strong>dropped</strong> — golangci-lint exposes no
-  noctx config, so it also fails <code>net.Listen</code> / <code>net.DialTimeout</code> / <code>os/exec.Command</code>
-  (the egress proxy's listeners, the e2e harness), all unrelated to the
-  no-read-timeout class. forbidigo alone precisely gates the HTTP entrypoints;
-  prod request construction already uses <code>http.NewRequestWithContext</code> throughout.</li>
-<li>Gate verified: a fresh <code>http.DefaultClient</code> / <code>http.Get</code> use is rejected by
-  <code>make lint</code>. <code>make check</code> green.</li>
+<li><code>lint</code>/<code>noctx</code>: noctx was evaluated and <strong>dropped</strong> — golangci-lint exposes no noctx config, so it also fails <code>net.Listen</code> / <code>net.DialTimeout</code> / <code>os/exec.Command</code> (the egress proxy's listeners, the e2e harness), all unrelated to the no-read-timeout class. forbidigo alone precisely gates the HTTP entrypoints; prod request construction already uses <code>http.NewRequestWithContext</code> throughout.</li>
+<li>Gate verified: a fresh <code>http.DefaultClient</code> / <code>http.Get</code> use is rejected by <code>make lint</code>. <code>make check</code> green.</li>
 </ul>
 
 

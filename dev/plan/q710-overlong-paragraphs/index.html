@@ -2699,12 +2699,10 @@
 
 <h1 id="q710-overlong-paragraphs-in-the-design-and-operations-docs">Q710: overlong paragraphs in the design and operations docs<a class="headerlink" href="#q710-overlong-paragraphs-in-the-design-and-operations-docs" title="Permanent link">&para;</a></h1>
 <p>Split the paragraphs that carry more than one idea, without losing a qualifier.
-<a href="../../development/documentation-standards/#write-for-scanning"><code>documentation-standards.md</code></a>
-asks for one idea per paragraph at roughly 4–5 lines, which is 60–70 words. The
-docset has paragraphs six and ten times that, and the worst of them are in the
-chapters a new reader is sent to first.</p>
-<p>Precision outranks the paragraph rule. Where a split would cost a condition, a
-bound, or a named exception, the paragraph stays long and the phase says so.</p>
+<a href="../../development/documentation-standards/#write-for-scanning"><code>documentation-standards.md</code></a> asks for one idea per paragraph at roughly 4–5 lines, which is 60–70 words.
+The docset has paragraphs six and ten times that, and the worst of them are in the chapters a new reader is sent to first.</p>
+<p>Precision outranks the paragraph rule.
+Where a split would cost a condition, a bound, or a named exception, the paragraph stays long and the phase says so.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2743,33 +2741,23 @@ bound, or a named exception, the paragraph stays long and the phase says so.</p>
 </tbody>
 </table>
 <h2 id="the-measurement-and-how-to-repeat-it">The measurement, and how to repeat it<a class="headerlink" href="#the-measurement-and-how-to-repeat-it" title="Permanent link">&para;</a></h2>
-<p>Taken 2026-08-06 against a real Markdown parser, not a line heuristic: <strong>154
-paragraphs of 140 words or more across 23 files</strong> under <code>docs/</code>, excluding
-<code>docs/plan/</code> and <code>docs/development/</code>.</p>
-<p>A blank-line heuristic gets this wrong, and quietly. A list whose items carry no
-blank line between them reads as one enormous paragraph: an early Python pass
-reported a 1,155-word paragraph at <code>operations/tenant-onboarding.md:28</code>, which is
-an indented continuation line glued to the eleven checklist items after it. It
-also reported 329 hits to the parser's 154. Anything built on "blank line to
-blank line" will name paragraphs that do not exist and miss the ones inside list
-items.</p>
-<p>Rebuild the probe over the repo's own parse layer, <code>devtools/docs/markdown</code>
-(goldmark + the MkDocs dialect), and walk it:</p>
+<p>Taken 2026-08-06 against a real Markdown parser, not a line heuristic: <strong>154 paragraphs of 140 words or more across 23 files</strong> under <code>docs/</code>, excluding <code>docs/plan/</code> and <code>docs/development/</code>.</p>
+<p>A blank-line heuristic gets this wrong, and quietly.
+A list whose items carry no blank line between them reads as one enormous paragraph: an early Python pass reported a 1,155-word paragraph at <code>operations/tenant-onboarding.md:28</code>, which is an indented continuation line glued to the eleven checklist items after it.
+It also reported 329 hits to the parser's 154.
+Anything built on "blank line to blank line" will name paragraphs that do not exist and miss the ones inside list items.</p>
+<p>Rebuild the probe over the repo's own parse layer, <code>devtools/docs/markdown</code> (goldmark + the MkDocs dialect), and walk it:</p>
 <ul>
-<li>Count <code>ast.KindParagraph</code> and <code>ast.KindTextBlock</code> nodes. That is the unit the
-  rule is about, and it is the unit a list item nests inside.</li>
-<li>Classify each hit by walking its ancestors: <code>list</code>, <code>quote</code>, <code>table</code>,
-  <code>admonition</code>, else <code>prose</code>. The four non-prose kinds are judged on their own
-  terms; a bullet is not a paragraph and forcing it apart is usually wrong.</li>
-<li>Count a code span as one token, and a link as its text only, so a dense
-  reference block is not scored as prose.</li>
-<li>Build from <code>devtools/</code> with <code>GOWORK=off</code>, since it sits outside the Go
-  workspace (<a href="../../development/go-workspaces/">go-workspaces.md</a>).</li>
+<li>Count <code>ast.KindParagraph</code> and <code>ast.KindTextBlock</code> nodes.
+  That is the unit the rule is about, and it is the unit a list item nests inside.</li>
+<li>Classify each hit by walking its ancestors: <code>list</code>, <code>quote</code>, <code>table</code>, <code>admonition</code>, else <code>prose</code>.
+  The four non-prose kinds are judged on their own terms; a bullet is not a paragraph and forcing it apart is usually wrong.</li>
+<li>Count a code span as one token, and a link as its text only, so a dense reference block is not scored as prose.</li>
+<li>Build from <code>devtools/</code> with <code>GOWORK=off</code>, since it sits outside the Go workspace (<a href="../../development/go-workspaces/">go-workspaces.md</a>).</li>
 </ul>
-<p>The probe is deliberately not shipped. Every <code>devtools/</code> program here is fronted
-by a <code>scripts/</code> wrapper with a README row and a gate, and Q710 is prose work, not
-gate work. Whether paragraph length is worth enforcing mechanically is a separate
-question, and one this plan does not answer.</p>
+<p>The probe is deliberately not shipped.
+Every <code>devtools/</code> program here is fronted by a <code>scripts/</code> wrapper with a README row and a gate, and Q710 is prose work, not gate work.
+Whether paragraph length is worth enforcing mechanically is a separate question, and one this plan does not answer.</p>
 <h3 id="distribution-at-the-140-word-threshold-before-phase-1">Distribution at the 140-word threshold, before Phase 1<a class="headerlink" href="#distribution-at-the-140-word-threshold-before-phase-1" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2825,166 +2813,102 @@ question, and one this plan does not answer.</p>
 </tr>
 </tbody>
 </table>
-<p>The Queue row's own per-file counts came from a different scan and do not match
-these. The row reads <code>05-security.md</code> at 16 and <code>02-architecture.md</code> at 6; the
-parser puts the security chapter at 21 across all kinds and the architecture
-chapter at 27, almost all of them list items. Both scans agree on which files are
-worst. Use the parser's numbers.</p>
+<p>The Queue row's own per-file counts came from a different scan and do not match these.
+The row reads <code>05-security.md</code> at 16 and <code>02-architecture.md</code> at 6; the parser puts the security chapter at 21 across all kinds and the architecture chapter at 27, almost all of them list items.
+Both scans agree on which files are worst.
+Use the parser's numbers.</p>
 <h2 id="how-a-paragraph-gets-split">How a paragraph gets split<a class="headerlink" href="#how-a-paragraph-gets-split" title="Permanent link">&para;</a></h2>
-<p>The change moves paragraph boundaries. It does not move meaning.</p>
+<p>The change moves paragraph boundaries.
+It does not move meaning.</p>
 <ul>
-<li><strong>Reach for a list before a split.</strong> "Three disruptions reach this flow, and
-  each is detected differently" wants three bullets, not three paragraphs. The
-  same applies to a run-in <code>(a)</code>/<code>(b)</code>/<code>(c)</code> enumeration and to a
-  "two properties" contrast.</li>
-<li><strong>Split at the bolded run-in heading.</strong> A paragraph already carrying
-  <code>**Explicit blast radius if compromised:**</code> mid-body has marked its own seam.</li>
-<li><strong>Keep a measurement with its claim.</strong> A number, a date, and the run that
-  produced it belong in one paragraph. Splitting a result away from what it
-  measured is how a figure ends up quoted without its conditions.</li>
-<li><strong>Repair a referent the split breaks.</strong> A paragraph opening "Both halves of
-  that…" needs naming once the antecedent is two paragraphs back.</li>
-<li><strong>Never open a new paragraph with a bare pronoun.</strong> A split turns a harmless
-  mid-paragraph "It is enabled…" into the first word a scanner reads. Name the
-  subject.</li>
-<li><strong>A bold run-in lead is a paragraph-scoped label, so splitting its block
-  silently shrinks what it covers.</strong> This docset uses the run-in where other docs
-  use <code>####</code>, and <code>07-test-plan.md</code> uses nothing else. After a split, the lead
-  governs one paragraph and the rest read as unlabelled. Give each new paragraph
-  its own run-in, promote the lead to a real heading, or leave the block whole —
-  but check, because no count shows this.</li>
-<li><strong>Match the file's own heading depth before promoting anything.</strong> <code>07-test-plan.md</code>
-  has no <code>###</code> at all, so a <code>####</code> under its <code>## 7.3</code> both skips a level and
-  invents a convention the page does not use.</li>
-<li><strong>Do not orphan a bare cross-reference.</strong> A lone "See [runbook] for X" left as
-  its own paragraph is the word count being served rather than the reader.</li>
+<li><strong>Reach for a list before a split.</strong> "Three disruptions reach this flow, and each is detected differently" wants three bullets, not three paragraphs.
+  The same applies to a run-in <code>(a)</code>/<code>(b)</code>/<code>(c)</code> enumeration and to a "two properties" contrast.</li>
+<li><strong>Split at the bolded run-in heading.</strong> A paragraph already carrying <code>**Explicit blast radius if compromised:**</code> mid-body has marked its own seam.</li>
+<li><strong>Keep a measurement with its claim.</strong> A number, a date, and the run that produced it belong in one paragraph.
+  Splitting a result away from what it measured is how a figure ends up quoted without its conditions.</li>
+<li><strong>Repair a referent the split breaks.</strong> A paragraph opening "Both halves of that…" needs naming once the antecedent is two paragraphs back.</li>
+<li><strong>Never open a new paragraph with a bare pronoun.</strong> A split turns a harmless mid-paragraph "It is enabled…" into the first word a scanner reads.
+  Name the subject.</li>
+<li><strong>A bold run-in lead is a paragraph-scoped label, so splitting its block silently shrinks what it covers.</strong> This docset uses the run-in where other docs use <code>####</code>, and <code>07-test-plan.md</code> uses nothing else.
+  After a split, the lead governs one paragraph and the rest read as unlabelled.
+  Give each new paragraph its own run-in, promote the lead to a real heading, or leave the block whole — but check, because no count shows this.</li>
+<li><strong>Match the file's own heading depth before promoting anything.</strong> <code>07-test-plan.md</code> has no <code>###</code> at all, so a <code>####</code> under its <code>## 7.3</code> both skips a level and invents a convention the page does not use.</li>
+<li><strong>Do not orphan a bare cross-reference.</strong> A lone "See [runbook] for X" left as its own paragraph is the word count being served rather than the reader.</li>
 </ul>
 <h2 id="how-the-split-is-verified">How the split is verified<a class="headerlink" href="#how-the-split-is-verified" title="Permanent link">&para;</a></h2>
-<p>Not by re-reading the diff, and not by the gates. <code>doc-links</code> resolves links and
-<code>em-dash-check</code> counts punctuation; neither reads prose, so a dropped qualifier
-or a mistyped bound passes every check in the repo.</p>
-<p>Reconcile the token multiset instead. Snapshot each file at <code>HEAD</code> before
-editing, then compare <code>collections.Counter</code> over whitespace-split tokens before
-and after. Every token the diff drops has to be justified one by one: a <code>;</code> that
-became a <code>.</code>, an <code>(a)</code> that became a <code>*</code>, an article dropped by a deliberate
-rewrite. A content word in that list is a lost qualifier.</p>
-<p>Phase 1 reconciled to +19 tokens across five files, every one accounted for, and
-to +64 more once the <code>####</code> subheadings landed, which the same check showed to be
-exactly the heading texts and nothing else. <code>01-executive-summary.md</code> finished on
-an <em>identical</em> multiset, which is what a pure paragraph break looks like and is
-the target for every file.</p>
+<p>Not by re-reading the diff, and not by the gates. <code>doc-links</code> resolves links and <code>em-dash-check</code> counts punctuation; neither reads prose, so a dropped qualifier or a mistyped bound passes every check in the repo.</p>
+<p>Reconcile the token multiset instead.
+Snapshot each file at <code>HEAD</code> before editing, then compare <code>collections.Counter</code> over whitespace-split tokens before and after.
+Every token the diff drops has to be justified one by one: a <code>;</code> that became a <code>.</code>, an <code>(a)</code> that became a <code>*</code>, an article dropped by a deliberate rewrite.
+A content word in that list is a lost qualifier.</p>
+<p>Phase 1 reconciled to +19 tokens across five files, every one accounted for, and to +64 more once the <code>####</code> subheadings landed, which the same check showed to be exactly the heading texts and nothing else. <code>01-executive-summary.md</code> finished on an <em>identical</em> multiset, which is what a pure paragraph break looks like and is the target for every file.</p>
 <p><strong>Reconciliation does not prove the split is correct.</strong> It catches a <em>deletion</em>.
-It is blind to words the edit <em>adds</em>, and that is where the one real defect in
-Phase 1 came from. A split moved the sentence "This lets a platform team express
-'GPU runners always get at least 5 slots…'" two paragraphs away from
-<code>priorityTiers</code>, and the reopened sentence read "Together these let a platform
-team express…". "These" then pointed at the two platform-owned settings named in
-the intervening paragraph, which are not what expresses 5/20/30. Nothing was
-dropped, so the multiset was clean and the gates were green.</p>
-<p>So the check has two halves, and the second one is manual: reconcile the tokens,
-then re-read every paragraph the split <em>reopened</em> and ask what its first pronoun
-now points at.</p>
-<p><strong>A non-zero token delta on a prose split is itself a warning.</strong> Every added word
-is connective text invented to hold a seam together, and inventing connective
-text is how a claim the source never made gets in. Where the delta will not go to
-zero, that is the signal the paragraph did not want splitting.</p>
+It is blind to words the edit <em>adds</em>, and that is where the one real defect in Phase 1 came from.
+A split moved the sentence "This lets a platform team express 'GPU runners always get at least 5 slots…'" two paragraphs away from <code>priorityTiers</code>, and the reopened sentence read "Together these let a platform team express…".
+"These" then pointed at the two platform-owned settings named in the intervening paragraph, which are not what expresses 5/20/30.
+Nothing was dropped, so the multiset was clean and the gates were green.</p>
+<p>So the check has two halves, and the second one is manual: reconcile the tokens, then re-read every paragraph the split <em>reopened</em> and ask what its first pronoun now points at.</p>
+<p><strong>A non-zero token delta on a prose split is itself a warning.</strong> Every added word is connective text invented to hold a seam together, and inventing connective text is how a claim the source never made gets in.
+Where the delta will not go to zero, that is the signal the paragraph did not want splitting.</p>
 <h2 id="phase-1-what-changed">Phase 1: what changed<a class="headerlink" href="#phase-1-what-changed" title="Permanent link">&para;</a></h2>
-<p>Three top-level prose paragraphs of 140 words or more remain in <code>01</code>–<code>08</code>, each
-left long on purpose. The corpus went from 154 such paragraphs to 127.</p>
-<p>Five files: <code>01-executive-summary.md</code>, <code>02-architecture.md</code>,
-<code>04-operational-flows.md</code>, <code>05-security.md</code>, <code>07-test-plan.md</code>.</p>
+<p>Three top-level prose paragraphs of 140 words or more remain in <code>01</code>–<code>08</code>, each left long on purpose.
+The corpus went from 154 such paragraphs to 127.</p>
+<p>Five files: <code>01-executive-summary.md</code>, <code>02-architecture.md</code>, <code>04-operational-flows.md</code>, <code>05-security.md</code>, <code>07-test-plan.md</code>.</p>
 <p>Three run-in enumerations became lists, because that is what they were:</p>
 <ul>
-<li>the three disruptions reaching the eviction flow
-  (<a href="../../design/04-operational-flows/#worker-pod-eviction-and-auto-retry"><code>04-operational-flows.md</code></a>)</li>
-<li>the GMC's blast radius and its four Secret-read compensating controls
-  (<a href="../../design/05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls"><code>05-security.md</code></a>)</li>
-<li>the three OR'd DNS peers
-  (<a href="../../design/05-security/#dns-exfiltration-side-channel-containment"><code>05-security.md</code></a>)</li>
+<li>the three disruptions reaching the eviction flow (<a href="../../design/04-operational-flows/#worker-pod-eviction-and-auto-retry"><code>04-operational-flows.md</code></a>)</li>
+<li>the GMC's blast radius and its four Secret-read compensating controls (<a href="../../design/05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls"><code>05-security.md</code></a>)</li>
+<li>the three OR'd DNS peers (<a href="../../design/05-security/#dns-exfiltration-side-channel-containment"><code>05-security.md</code></a>)</li>
 </ul>
-<p>One wording fix rode along, because the split exposed it. The sentence after the
-three-disruption enumeration read "on detecting either", left over from a
-two-disruption version of the list. It now reads "on detecting any of these".</p>
+<p>One wording fix rode along, because the split exposed it.
+The sentence after the three-disruption enumeration read "on detecting either", left over from a two-disruption version of the list.
+It now reads "on detecting any of these".</p>
 <h3 id="the-three-paragraphs-left-long">The three paragraphs left long<a class="headerlink" href="#the-three-paragraphs-left-long" title="Permanent link">&para;</a></h3>
-<p>Two more joined the <code>priorityTiers</code> paragraph once the bold-run-in problem
-surfaced, both in
-<a href="../../design/04-operational-flows/"><code>04-operational-flows.md</code></a>: the Q421
-drain-recovery block (278 words) and the Q628/Q676 abandoned-completion block
-(261 words). Each opens with a bold run-in lead governing the whole block, and
-each sits under a <code>###</code>/<code>####</code> where a further heading level would be <code>#####</code>.
-Splitting them left three and three paragraphs reading as unlabelled, so the
-splits were reverted. Same trade as below: precision and structure over the count.</p>
-<p>The <code>priorityTiers</code> paragraph in
-<a href="../../design/01-executive-summary/"><code>01-executive-summary.md</code></a> stays at 152
-words, unchanged from before this plan existed.</p>
-<p>It was split, and the split broke it. The paragraph runs
-field → tier behaviour → concurrency cap → who owns the guardrails → what a
-platform team can therefore express, and the closing sentence's "This" reaches
-back across all of it to <code>priorityTiers</code>. Moving the guardrail sentence into its
-own paragraph put a second candidate antecedent between the pronoun and its
-referent, and the reopened sentence then read as though the allowlist and the
-preemption policy were what express "5 slots, burst 20, cap 30". They are not.</p>
-<p>Two later attempts to keep the split and repair the referent both required
-inventing connective text that made claims the source does not
-("the two settings that keep this safe"). At 152 words, twelve over the line, the
-rule was not worth that. The paragraph is one idea — it just has a long chain of
-consequence, which is what the rule's exception is for.</p>
-<p>That is the shape to expect in Phase 3, where <code>appendix-h</code> reasons about API
-decomposition across versions. Everything else in these five chapters had a seam
-that cost nothing to cut.</p>
-<p>Two sections in <code>05-security.md</code> came out of the split as walls of short
-paragraphs rather than one long one, so they gained <code>####</code> subheadings: four
-under <a href="../../design/05-security/#supply-chain-compromise-of-the-worker-image">Supply-chain compromise of the worker
-image</a> (9
-paragraphs) and three under <a href="../../design/05-security/#cross-tenant-pod-preemption-via-priorityclass">Cross-tenant pod preemption via
-PriorityClass</a>
-(12). The first paragraph of each stays unheaded as the section lead: a <code>###</code>
-followed immediately by a <code>####</code> appears nowhere else in <code>docs/design/</code> or
-<code>docs/operations/</code>, and this change does not introduce the first one.</p>
+<p>Two more joined the <code>priorityTiers</code> paragraph once the bold-run-in problem surfaced, both in <a href="../../design/04-operational-flows/"><code>04-operational-flows.md</code></a>: the Q421 drain-recovery block (278 words) and the Q628/Q676 abandoned-completion block (261 words).
+Each opens with a bold run-in lead governing the whole block, and each sits under a <code>###</code>/<code>####</code> where a further heading level would be <code>#####</code>.
+Splitting them left three and three paragraphs reading as unlabelled, so the splits were reverted.
+Same trade as below: precision and structure over the count.</p>
+<p>The <code>priorityTiers</code> paragraph in <a href="../../design/01-executive-summary/"><code>01-executive-summary.md</code></a> stays at 152 words, unchanged from before this plan existed.</p>
+<p>It was split, and the split broke it.
+The paragraph runs field → tier behaviour → concurrency cap → who owns the guardrails → what a platform team can therefore express, and the closing sentence's "This" reaches back across all of it to <code>priorityTiers</code>.
+Moving the guardrail sentence into its own paragraph put a second candidate antecedent between the pronoun and its referent, and the reopened sentence then read as though the allowlist and the preemption policy were what express "5 slots, burst 20, cap 30".
+They are not.</p>
+<p>Two later attempts to keep the split and repair the referent both required inventing connective text that made claims the source does not ("the two settings that keep this safe").
+At 152 words, twelve over the line, the rule was not worth that.
+The paragraph is one idea — it just has a long chain of consequence, which is what the rule's exception is for.</p>
+<p>That is the shape to expect in Phase 3, where <code>appendix-h</code> reasons about API decomposition across versions.
+Everything else in these five chapters had a seam that cost nothing to cut.</p>
+<p>Two sections in <code>05-security.md</code> came out of the split as walls of short paragraphs rather than one long one, so they gained <code>####</code> subheadings: four under <a href="../../design/05-security/#supply-chain-compromise-of-the-worker-image">Supply-chain compromise of the worker image</a> (9 paragraphs) and three under <a href="../../design/05-security/#cross-tenant-pod-preemption-via-priorityclass">Cross-tenant pod preemption via PriorityClass</a> (12).
+The first paragraph of each stays unheaded as the section lead: a <code>###</code> followed immediately by a <code>####</code> appears nowhere else in <code>docs/design/</code> or <code>docs/operations/</code>, and this change does not introduce the first one.</p>
 <h3 id="what-the-first-pass-got-wrong">What the first pass got wrong<a class="headerlink" href="#what-the-first-pass-got-wrong" title="Permanent link">&para;</a></h3>
-<p>Recorded because the corrections are the useful part, and because a reviewer
-reading only the final diff cannot see them:</p>
+<p>Recorded because the corrections are the useful part, and because a reviewer reading only the final diff cannot see them:</p>
 <ul>
-<li><strong>The <code>priorityTiers</code> referent</strong>, above. The one defect that changed meaning,
-  and the only one where the answer was to revert rather than repair. The first
-  repair kept the split and rewrote around the seam; that is what introduced
-  "the two settings that keep this safe", a purpose the source never states.
-  Repairing damage from a split with more prose is how the second defect gets
-  written.</li>
-<li><strong>A broken contrast pair.</strong> <code>:8443</code> (mTLS) and <code>:8081</code> (plaintext probes) in
-  <code>02-architecture.md</code> explain each other, and the first split put the
-  <code>TokenReview</code> rationale between them. Regrouped by port instead, with the
-  kubelet-exemption sentence moved to sit directly after the NetworkPolicy rule
-  it is an exception to.</li>
-<li><strong>A pronoun opener.</strong> "It is enabled…" began a paragraph; now "Tracing is
-  enabled…".</li>
-<li><strong>An orphaned cross-reference.</strong> A 23-word <code>See [security-operations.md § …]</code>
-  had been split off purely to bring the paragraph above it under 140 words.</li>
-<li><strong>Bold run-in leads left governing only their first paragraph</strong>, at eight sites
-  across the five files. Three were bad enough to act on: <code>**The fake.**</code> in
-  <code>07-test-plan.md</code> went from labelling one paragraph to labelling one of seven,
-  and two blocks in <code>04-operational-flows.md</code> lost three each. The fake's
-  continuations gained run-in leads of their own, the file's existing idiom; the
-  other two were re-merged.</li>
-<li><strong>A count that measured the wrong thing.</strong> The first sweep for this reported 22
-  affected sites by finding every bold lead with an unbolded paragraph after it,
-  never checking whether <em>this change</em> produced the tail. Comparing tail length
-  before against after gives eight. Two <code>####</code> promotions had already been made on
-  the strength of the wrong number and were reverted.</li>
+<li><strong>The <code>priorityTiers</code> referent</strong>, above.
+  The one defect that changed meaning, and the only one where the answer was to revert rather than repair.
+  The first repair kept the split and rewrote around the seam; that is what introduced "the two settings that keep this safe", a purpose the source never states.
+  Repairing damage from a split with more prose is how the second defect gets written.</li>
+<li><strong>A broken contrast pair.</strong> <code>:8443</code> (mTLS) and <code>:8081</code> (plaintext probes) in <code>02-architecture.md</code> explain each other, and the first split put the <code>TokenReview</code> rationale between them.
+  Regrouped by port instead, with the kubelet-exemption sentence moved to sit directly after the NetworkPolicy rule it is an exception to.</li>
+<li><strong>A pronoun opener.</strong> "It is enabled…" began a paragraph; now "Tracing is enabled…".</li>
+<li><strong>An orphaned cross-reference.</strong> A 23-word <code>See [security-operations.md § …]</code> had been split off purely to bring the paragraph above it under 140 words.</li>
+<li><strong>Bold run-in leads left governing only their first paragraph</strong>, at eight sites across the five files.
+  Three were bad enough to act on: <code>**The fake.**</code> in <code>07-test-plan.md</code> went from labelling one paragraph to labelling one of seven, and two blocks in <code>04-operational-flows.md</code> lost three each.
+  The fake's continuations gained run-in leads of their own, the file's existing idiom; the other two were re-merged.</li>
+<li><strong>A count that measured the wrong thing.</strong> The first sweep for this reported 22 affected sites by finding every bold lead with an unbolded paragraph after it, never checking whether <em>this change</em> produced the tail.
+  Comparing tail length before against after gives eight.
+  Two <code>####</code> promotions had already been made on the strength of the wrong number and were reverted.</li>
 </ul>
 <h2 id="what-phase-2-inherits">What Phase 2 inherits<a class="headerlink" href="#what-phase-2-inherits" title="Permanent link">&para;</a></h2>
-<p><code>02-architecture.md</code> is the next target and it is a different shape: 25 of its 27
-hits are list items, the "component: description" bullets under §2.1 and §2.2,
-each 150–250 words. A bullet that long usually wants a nested sub-list or a short
-bullet followed by a paragraph, not a split down the middle. Judge each one
-against what the bullet is enumerating.</p>
+<p><code>02-architecture.md</code> is the next target and it is a different shape: 25 of its 27 hits are list items, the "component: description" bullets under §2.1 and §2.2, each 150–250 words.
+A bullet that long usually wants a nested sub-list or a short bullet followed by a paragraph, not a split down the middle.
+Judge each one against what the bullet is enumerating.</p>
 <h2 id="related-and-deliberately-not-absorbed">Related, and deliberately not absorbed<a class="headerlink" href="#related-and-deliberately-not-absorbed" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../STATUS/">Q650</a> covers em-dash density in the same files. Different
-  concern, different phase. A split that removes a dash because the sentence
-  ended does not count as progress on it.</li>
-<li>PR #1322 rewrote lead paragraphs in several of these files for answer-first
-  structure. Phase 1 is rebased onto it.</li>
+<li><a href="../../STATUS/">Q650</a> covers em-dash density in the same files.
+  Different concern, different phase.
+  A split that removes a dash because the sentence ended does not count as progress on it.</li>
+<li>PR #1322 rewrote lead paragraphs in several of these files for answer-first structure.
+  Phase 1 is rebased onto it.</li>
 </ul>
 
 

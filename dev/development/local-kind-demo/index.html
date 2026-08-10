@@ -2642,33 +2642,23 @@
 
 
 <h1 id="reproduce-the-local-kind-demo-from-source">Reproduce the local-kind demo (from source)<a class="headerlink" href="#reproduce-the-local-kind-demo-from-source" title="Permanent link">&para;</a></h1>
-<p>This is the from-source procedure behind the <a href="../../demo/">demo recording</a> — one
-real GitHub Actions job run through GitHub Actions Gateway (GAG) on a local
-<a href="https://kind.sigs.k8s.io/">kind</a> cluster, against <strong>real GitHub</strong>. It uses the
-repo's <code>make</code> targets and a local image registry, so run it from a checkout with
-the dev toolchain (<code>make doctor</code> checks it).</p>
+<p>This is the from-source procedure behind the <a href="../../demo/">demo recording</a> — one real GitHub Actions job run through GitHub Actions Gateway (GAG) on a local <a href="https://kind.sigs.k8s.io/">kind</a> cluster, against <strong>real GitHub</strong>.
+It uses the repo's <code>make</code> targets and a local image registry, so run it from a checkout with the dev toolchain (<code>make doctor</code> checks it).</p>
 <blockquote>
-<p>To <strong>install</strong> GAG the normal way (the released Helm chart with digest-pinned
-images), follow <a href="../../getting-started/">Getting Started</a> instead — this guide is
-for reproducing the demo end-to-end from a source build.</p>
+<p>To <strong>install</strong> GAG the normal way (the released Helm chart with digest-pinned images), follow <a href="../../getting-started/">Getting Started</a> instead — this guide is for reproducing the demo end-to-end from a source build.</p>
 </blockquote>
-<p>Two things this flow does that a released install would not, both flagged as
-backlog items:</p>
+<p>Two things this flow does that a released install would not, both flagged as backlog items:</p>
 <ul>
-<li>Installs the <strong>v2alpha1 CRDs</strong> alongside the v1 platform. A v1-only install
-  currently crash-loops the AGC (its v2 <code>RunnerSet</code> reconciler is registered
-  unconditionally and its informer cache never syncs) — see <code>Q261</code> in
-  <a href="../../STATUS/">docs/STATUS.md</a>.</li>
-<li>Adds a <strong><code>LimitRange</code></strong> so the requests-less AGC pod is admitted under the
-  namespace <code>ResourceQuota</code> — see <code>Q262</code>.</li>
+<li>Installs the <strong>v2alpha1 CRDs</strong> alongside the v1 platform.
+  A v1-only install currently crash-loops the AGC (its v2 <code>RunnerSet</code> reconciler is registered unconditionally and its informer cache never syncs) — see <code>Q261</code> in <a href="../../STATUS/">docs/STATUS.md</a>.</li>
+<li>Adds a <strong><code>LimitRange</code></strong> so the requests-less AGC pod is admitted under the namespace <code>ResourceQuota</code> — see <code>Q262</code>.</li>
 </ul>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://docs.docker.com/get-docker/">Docker</a>, <a href="https://kind.sigs.k8s.io/">kind</a>, and <a href="https://kubernetes.io/docs/tasks/tools/">kubectl</a> (<code>make doctor</code> checks your toolchain).</li>
 <li>The <a href="https://cli.github.com/">GitHub CLI</a> (<code>gh</code>), authenticated (<code>gh auth login</code>) with rights to dispatch workflows in your test repo.</li>
-<li>A <strong>GitHub App</strong> with runner control-plane permissions, and a repo (or org) that
-  App is installed on, containing a workflow that targets a self-hosted label. The
-  demo uses a one-line workflow:</li>
+<li>A <strong>GitHub App</strong> with runner control-plane permissions, and a repo (or org) that App is installed on, containing a workflow that targets a self-hosted label.
+  The demo uses a one-line workflow:</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># .github/workflows/test-job.yml</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Test self-hosted runner</span>
@@ -2679,8 +2669,7 @@ backlog items:</p>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echo &quot;job acquired by gateway runner&quot;</span>
 </code></pre></div>
-<p>See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>
-  for how to create the GitHub App credential Secret.</p>
+<p>See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a> for how to create the GitHub App credential Secret.</p>
 <h2 id="1-cluster-and-platform">1. Cluster and platform<a class="headerlink" href="#1-cluster-and-platform" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># 3-node kind cluster + a local image registry</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>e2e-cluster
@@ -2705,9 +2694,7 @@ backlog items:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>team-a
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>ns<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
-<p>Apply a platform-owned <code>ResourceQuota</code> and a <code>LimitRange</code> that supplies default
-container requests (so pods without explicit requests are admitted under the
-quota):</p>
+<p>Apply a platform-owned <code>ResourceQuota</code> and a <code>LimitRange</code> that supplies default container requests (so pods without explicit requests are admitted under the quota):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># tenant-quota.yaml</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
@@ -2732,9 +2719,7 @@ quota):</p>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$INSTALL_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>app.pem
 </code></pre></div>
-<p>Apply one <code>ActionsGateway</code> CR. <code>completedPodTTL: 0s</code> deletes each worker pod the
-moment its job finishes (the default retains terminal pods for 5 minutes so their
-logs stay inspectable):</p>
+<p>Apply one <code>ActionsGateway</code> CR. <code>completedPodTTL: 0s</code> deletes each worker pod the moment its job finishes (the default retains terminal pods for 5 minutes so their logs stay inspectable):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># actionsgateway.yaml</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
@@ -2758,7 +2743,8 @@ logs stay inspectable):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>actionsgateway.yaml
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Available<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>--timeout<span class="o">=</span>5m
 </code></pre></div>
-<p>The AGC registers runners with GitHub. Confirm they are online and idle:</p>
+<p>The AGC registers runners with GitHub.
+Confirm they are online and idle:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway,runnergroup<span class="w"> </span>-n<span class="w"> </span>team-a
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;your-org&gt;/&lt;your-repo&gt;/actions/runners<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--jq<span class="w"> </span><span class="s1">&#39;.runners[] | [.name, .status, (.busy|tostring)] | @tsv&#39;</span>
@@ -2770,8 +2756,8 @@ logs stay inspectable):</p>
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># In another: dispatch one job</span>
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>test-job.yml<span class="w"> </span>--repo<span class="w"> </span>&lt;your-org&gt;/&lt;your-repo&gt;<span class="w"> </span>--ref<span class="w"> </span>main
 </code></pre></div>
-<p>A <code>runner-…</code> pod appears, runs the job, and is deleted on completion. Confirm the
-run is green on GitHub:</p>
+<p>A <code>runner-…</code> pod appears, runs the job, and is deleted on completion.
+Confirm the run is green on GitHub:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--repo<span class="w"> </span>&lt;your-org&gt;/&lt;your-repo&gt;<span class="w"> </span>--workflow<span class="w"> </span>test-job.yml<span class="w"> </span>--limit<span class="w"> </span><span class="m">1</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--repo<span class="w"> </span>&lt;your-org&gt;/&lt;your-repo&gt;
 </code></pre></div>
@@ -2779,11 +2765,8 @@ run is green on GitHub:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>make<span class="w"> </span>e2e-clean<span class="w">      </span><span class="c1"># deletes the kind cluster and the local registry</span>
 </code></pre></div>
 <h2 id="the-recording">The recording<a class="headerlink" href="#the-recording" title="Permanent link">&para;</a></h2>
-<p>The animated recording embedded on the <a href="../../demo/">demo page</a> is a hand-authored
-<a href="https://asciinema.org/">asciinema</a> cast (v2) assembled from the real command
-outputs of a run of these steps, then rendered to a self-contained animated SVG.
-The cast and its generator live in <a href="../../assets/"><code>docs/assets/</code></a> — see
-<a href="../../assets/">docs/assets/README.md</a> for how to regenerate them.</p>
+<p>The animated recording embedded on the <a href="../../demo/">demo page</a> is a hand-authored <a href="https://asciinema.org/">asciinema</a> cast (v2) assembled from the real command outputs of a run of these steps, then rendered to a self-contained animated SVG.
+The cast and its generator live in <a href="../../assets/"><code>docs/assets/</code></a> — see <a href="../../assets/">docs/assets/README.md</a> for how to regenerate them.</p>
 
 
 

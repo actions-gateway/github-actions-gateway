@@ -2730,10 +2730,7 @@
 </div>
 <p class="gag-claims"><span>No idle workers.</span> <span>Disrupted jobs auto-retry.</span> <span>Enforceable quotas.</span></p>
 <p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for shared, multi-tenant clusters.</p>
-<p><a class="md-button md-button--primary" href="getting-started/">Get started</a>
-<a class="md-button" href="demo/">Watch the demo</a>
-<a class="md-button" href="why-gag/">Why GAG?</a>
-<a class="md-button" href="https://github.com/actions-gateway/github-actions-gateway">View on GitHub</a></p>
+<p><a class="md-button md-button--primary" href="getting-started/">Get started</a> <a class="md-button" href="demo/">Watch the demo</a> <a class="md-button" href="why-gag/">Why GAG?</a> <a class="md-button" href="https://github.com/actions-gateway/github-actions-gateway">View on GitHub</a></p>
 <p class="gag-reassure"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> Drop-in for your existing setup: jobs target the same runner labels, so nothing in your <code>.github/workflows</code> changes.</p>
 </div>
 <div class="gag-install">
@@ -2753,7 +2750,8 @@
 </div>
 <div class="gag-section-intro">
 <h2 id="what-gag-gives-you">What GAG gives you<a class="headerlink" href="#what-gag-gives-you" title="Permanent link">&para;</a></h2>
-<p>These ladder up one way: <strong>safe quotas and self-healing disruption make shared capacity usable</strong>, which is what lets you bin-pack expensive nodes and run on preemptible capacity. <a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">Estimate your savings vs ARC →</a> · <a href="features/">See every feature →</a></p>
+<p>These ladder up one way: <strong>safe quotas and self-healing disruption make shared capacity usable</strong>, which is what lets you bin-pack expensive nodes and run on preemptible capacity.
+<a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">Estimate your savings vs ARC →</a> · <a href="features/">See every feature →</a></p>
 </div>
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
@@ -2884,7 +2882,8 @@
 </div>
 <div class="gag-section-intro">
 <h2 id="who-gag-is-for">Who GAG is for<a class="headerlink" href="#who-gag-is-for" title="Permanent link">&para;</a></h2>
-<p>GAG targets a specific audience: teams that <strong>must</strong> self-host runners and run them for <strong>many tenants on one cluster</strong>. If that's you, here's the value per segment.</p>
+<p>GAG targets a specific audience: teams that <strong>must</strong> self-host runners and run them for <strong>many tenants on one cluster</strong>.
+If that's you, here's the value per segment.</p>
 </div>
 <div class="gag-pillars">
 <div class="grid cards">
@@ -2929,11 +2928,15 @@
 <li><strong>Managed Kubernetes is cheap, CI fits one cloud</strong> → a cluster per team isolates harder</li>
 <li><strong>One team owns the cluster and the runners</strong> → <a href="https://github.com/actions/actions-runner-controller">ARC</a>, whose protocol GAG is built on</li>
 </ul>
-<p>GAG is for big, expensive nodes that several teams must share, safely. <a href="alternatives/">Compare the options →</a></p>
+<p>GAG is for big, expensive nodes that several teams must share, safely.
+<a href="alternatives/">Compare the options →</a></p>
 </div>
 <div class="gag-section-intro">
 <h2 id="how-it-fits-together">How it fits together<a class="headerlink" href="#how-it-fits-together" title="Permanent link">&para;</a></h2>
-<p>A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its <code>ActionsGateway</code>. Jobs are acquired with the <strong>same single-acquirer runner-scale-set protocol ARC uses</strong>, through the same <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> client library, and it is the shipped default. So <code>runs-on</code> keeps working and the protocol is not the difference. What differs is that the acquisition decision lives in the control plane rather than in the runner pod, which is what lets a job be declined before it is claimed.</p>
+<p>A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its <code>ActionsGateway</code>.
+Jobs are acquired with the <strong>same single-acquirer runner-scale-set protocol ARC uses</strong>, through the same <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> client library, and it is the shipped default.
+So <code>runs-on</code> keeps working and the protocol is not the difference.
+What differs is that the acquisition decision lives in the control plane rather than in the runner pod, which is what lets a job be declined before it is claimed.</p>
 </div>
 <div class="gag-flow">
   <div class="gag-flow__node gag-flow__node--input">
@@ -2970,10 +2973,8 @@
 
 <p class="gag-flow__caption">Read the <a href="design/02-architecture/">architecture overview</a> for the full breakdown, jump to <a href="why-gag/">why GAG over ARC</a>, browse <a href="features/">every feature</a>, or see the <a href="roadmap/">public roadmap</a> for what's next.</p>
 <h2 id="what-a-tenant-actually-declares">What a tenant actually declares<a class="headerlink" href="#what-a-tenant-actually-declares" title="Permanent link">&para;</a></h2>
-<p>The whole object set for a proxied gateway with a GPU runner set (priority
-tiers) and a Linux runner set. Every resource is namespaced, none is
-cluster-scoped, and no <code>ResourceQuota</code> field appears anywhere: the quota is
-platform-owned and set on the namespace, so it is a cap the tenant cannot raise.</p>
+<p>The whole object set for a proxied gateway with a GPU runner set (priority tiers) and a Linux runner set.
+Every resource is namespaced, none is cluster-scoped, and no <code>ResourceQuota</code> field appears anywhere: the quota is platform-owned and set on the namespace, so it is a cap the tenant cannot raise.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span><span class="w">               </span><span class="c1"># (1)!</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3035,46 +3036,30 @@ platform-owned and set on the namespace, so it is a cap the tenant cannot raise.
 <a id="__codelineno-1-59" name="__codelineno-1-59" href="#__codelineno-1-59"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 </code></pre></div>
 <ol>
-<li>Optional. A standalone per-tenant egress proxy pool, Horizontal Pod Autoscaler
-    (HPA)-managed between these bounds; all GitHub traffic exits through it on
-    dedicated IPs. Drop it (and <code>defaultProxyRef</code>) for direct, still
-    <code>NetworkPolicy</code>-restricted egress, collapsing the minimum to three objects.</li>
+<li>Optional.
+    A standalone per-tenant egress proxy pool, Horizontal Pod Autoscaler (HPA)-managed between these bounds; all GitHub traffic exits through it on dedicated IPs.
+    Drop it (and <code>defaultProxyRef</code>) for direct, still <code>NetworkPolicy</code>-restricted egress, collapsing the minimum to three objects.</li>
 <li>A reusable pod shape referenced by both <code>RunnerSet</code>s below via <code>templateRef</code>.
-    Define it once; a cluster-scoped <code>ClusterRunnerTemplate</code> shares one shape
-    across every namespace. The Pod Security Admission (PSA) level is a <strong>namespace
-    label</strong> in v2, not a CR field. All gateways in a namespace share one level.</li>
-<li><code>credentials.githubApp.name</code> references a <code>Secret</code> in this namespace holding
-    the GitHub App <code>appId</code>, <code>installationId</code>, and <code>privateKey</code>. The GMC watches the
-    reference name, not the Secret contents. See
-    <a href="getting-started/#rotating-github-app-credentials">credential rotation</a>.
-    <code>WorkloadIdentity</code> is the opt-in no-PEM credential member.</li>
-<li>Both runner sets reference the <strong>same</strong> <code>RunnerTemplate</code>. There is no
-    <code>ResourceQuota</code> field on any of these CRs. The single quota every runner set
-    shares is <strong>platform-owned</strong>, set on the namespace by the platform admin, so it
-    is a real cap the tenant cannot raise. Priority tiers decide who wins when it
-    is contended.</li>
-<li>Exactly one label per runner set: it is the set's scale-set name at GitHub and
-    its single <code>runs-on</code> match target (<code>runs-on: gpu</code>), unique across the sets
-    under one gateway. A single-name <code>runs-on</code> carries over from ARC unchanged; a
-    workflow targeting an array needs one edit per target, covered in
-    <a href="operations/migration-from-arc/">migrating from ARC</a>.</li>
-<li>The first 5 GPU pods get the higher-priority <code>PriorityClass</code>; the next tier
-    bursts opportunistically; the final threshold caps total concurrency. The
-    <code>priorityClassName</code> values must be on the platform's allowlist (a watched
-    <code>PriorityClassAllowlist</code> CR, grown without a GMC restart; the
-    <code>--allowed-priority-classes</code> flag remains the fail-safe baseline), and whether a tier preempts is set on the
-    platform-owned <code>PriorityClass</code> object, so a tenant cannot name a class that
-    evicts other tenants' pods.</li>
+    Define it once; a cluster-scoped <code>ClusterRunnerTemplate</code> shares one shape across every namespace.
+    The Pod Security Admission (PSA) level is a <strong>namespace label</strong> in v2, not a CR field.
+    All gateways in a namespace share one level.</li>
+<li><code>credentials.githubApp.name</code> references a <code>Secret</code> in this namespace holding the GitHub App <code>appId</code>, <code>installationId</code>, and <code>privateKey</code>.
+    The GMC watches the reference name, not the Secret contents.
+    See <a href="getting-started/#rotating-github-app-credentials">credential rotation</a>. <code>WorkloadIdentity</code> is the opt-in no-PEM credential member.</li>
+<li>Both runner sets reference the <strong>same</strong> <code>RunnerTemplate</code>.
+    There is no <code>ResourceQuota</code> field on any of these CRs.
+    The single quota every runner set shares is <strong>platform-owned</strong>, set on the namespace by the platform admin, so it is a real cap the tenant cannot raise.
+    Priority tiers decide who wins when it is contended.</li>
+<li>Exactly one label per runner set: it is the set's scale-set name at GitHub and its single <code>runs-on</code> match target (<code>runs-on: gpu</code>), unique across the sets under one gateway.
+    A single-name <code>runs-on</code> carries over from ARC unchanged; a workflow targeting an array needs one edit per target, covered in <a href="operations/migration-from-arc/">migrating from ARC</a>.</li>
+<li>The first 5 GPU pods get the higher-priority <code>PriorityClass</code>; the next tier bursts opportunistically; the final threshold caps total concurrency.
+    The <code>priorityClassName</code> values must be on the platform's allowlist (a watched <code>PriorityClassAllowlist</code> CR, grown without a GMC restart; the <code>--allowed-priority-classes</code> flag remains the fail-safe baseline), and whether a tier preempts is set on the platform-owned <code>PriorityClass</code> object, so a tenant cannot name a class that evicts other tenants' pods.</li>
 </ol>
-<p>The legacy single-CR <code>v1alpha1</code> shape, which expresses this whole gateway in one
-<code>ActionsGateway</code> CR, is still fully served but
-<strong><a href="operations/v1alpha1-deprecation/">deprecated, and removed at <code>v2.0.0</code></a></strong>; see the
-<a href="getting-started/#legacy-the-v1alpha1-api-deprecated">getting-started walkthrough</a>
-for it and the <a href="operations/migration-v1-to-v2/">v1 → v2 migration guide</a> to move
-across without changing how your jobs are acquired.</p>
-<p>Ready to try it? Follow the <a href="getting-started/">getting-started guide</a>. Already
-running ARC? The <a href="operations/migration-from-arc/">Migrating from ARC guide</a> maps
-every concept above onto GAG and walks one runner group across with zero downtime.</p>
+<p>The legacy single-CR <code>v1alpha1</code> shape, which expresses this whole gateway in one <code>ActionsGateway</code> CR, is still fully served but <strong><a href="operations/v1alpha1-deprecation/">deprecated, and removed at <code>v2.0.0</code></a></strong>; see the <a href="getting-started/#legacy-the-v1alpha1-api-deprecated">getting-started walkthrough</a> for it and the <a href="operations/migration-v1-to-v2/">v1 → v2 migration guide</a> to move across without changing how your jobs are acquired.</p>
+<p>Ready to try it?
+Follow the <a href="getting-started/">getting-started guide</a>.
+Already running ARC?
+The <a href="operations/migration-from-arc/">Migrating from ARC guide</a> maps every concept above onto GAG and walks one runner group across with zero downtime.</p>
 
 
 

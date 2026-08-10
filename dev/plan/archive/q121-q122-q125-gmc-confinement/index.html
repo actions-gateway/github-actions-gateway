@@ -2642,82 +2642,47 @@
 
 
 <h1 id="q121--q122--q125--gmc-rbac-confinement--fail-closed-teardown">Q121 / Q122 / Q125 — GMC RBAC confinement + fail-closed teardown<a class="headerlink" href="#q121--q122--q125--gmc-rbac-confinement--fail-closed-teardown" title="Permanent link">&para;</a></h1>
-<p>Three <code>1.0-gate</code> findings from <a href="../../security-audit-2026-06/">security-audit-2026-06</a>,
-sharing the GMC RBAC + reconcile/teardown surface. Implemented together.</p>
+<p>Three <code>1.0-gate</code> findings from <a href="../../security-audit-2026-06/">security-audit-2026-06</a>, sharing the GMC RBAC + reconcile/teardown surface.
+Implemented together.</p>
 <h2 id="q121--gmc-secret-rbac-cluster-wide-vs-name-scoped-claim">Q121 — GMC Secret RBAC: cluster-wide vs. name-scoped claim<a class="headerlink" href="#q121--gmc-secret-rbac-cluster-wide-vs-name-scoped-claim" title="Permanent link">&para;</a></h2>
-<p><code>role.yaml</code> grants <code>secrets: get/list/create/update/watch</code> cluster-wide.
-<code>05-security.md</code> claimed "no cluster-wide Secret read", metadata-only list,
-"<code>get</code> on specific names only" — all false.</p>
+<p><code>role.yaml</code> grants <code>secrets: get/list/create/update/watch</code> cluster-wide. <code>05-security.md</code> claimed "no cluster-wide Secret read", metadata-only list, "<code>get</code> on specific names only" — all false.</p>
 <p><strong>What is tightenable, what is not:</strong></p>
 <ul>
-<li><strong>Writes</strong> (<code>create</code>/<code>update</code>) go through admission, so a
-  <code>ValidatingAdmissionPolicy</code> <em>can</em> confine them to tenant-marked
-  namespaces. → enforced by the new <code>gmc-tenant-resource-guard</code> VAP.</li>
-<li><strong>Reads</strong> (<code>get</code>/<code>list</code>/<code>watch</code>) do <strong>not</strong> go through admission — VAP
-  never sees read verbs. RBAC <code>resourceNames</code> cannot scope <code>list</code>/<code>watch</code>,
-  and tenant Secret names are dynamic so it cannot scope <code>get</code> either. The
-  metadata informer additionally needs cluster-wide <code>list</code>/<code>watch</code> because
-  the GMC discovers tenant namespaces at runtime. <strong>Full read-confinement
-  is therefore not achievable via VAP/RBAC alone.</strong></li>
+<li><strong>Writes</strong> (<code>create</code>/<code>update</code>) go through admission, so a <code>ValidatingAdmissionPolicy</code> <em>can</em> confine them to tenant-marked namespaces. → enforced by the new <code>gmc-tenant-resource-guard</code> VAP.</li>
+<li><strong>Reads</strong> (<code>get</code>/<code>list</code>/<code>watch</code>) do <strong>not</strong> go through admission — VAP never sees read verbs.
+  RBAC <code>resourceNames</code> cannot scope <code>list</code>/<code>watch</code>, and tenant Secret names are dynamic so it cannot scope <code>get</code> either.
+  The metadata informer additionally needs cluster-wide <code>list</code>/<code>watch</code> because the GMC discovers tenant namespaces at runtime. <strong>Full read-confinement is therefore not achievable via VAP/RBAC alone.</strong></li>
 </ul>
-<p><strong>Resolution (claim == reality):</strong> tighten writes via the VAP; correct
-<code>05-security.md</code> to state the honest read scope (cluster-wide get + metadata
-list/watch) and the compensating controls: metadata-only informer (no
-<code>.data</code> cached), uncached direct <code>get</code> of only the named credential Secret
-in the CR namespace, the write-confinement VAP, and the Q29 detective audit
-policy. No more "no cluster-wide read" / "specific names only" claims.</p>
+<p><strong>Resolution (claim == reality):</strong> tighten writes via the VAP; correct <code>05-security.md</code> to state the honest read scope (cluster-wide get + metadata list/watch) and the compensating controls: metadata-only informer (no <code>.data</code> cached), uncached direct <code>get</code> of only the named credential Secret in the CR namespace, the write-confinement VAP, and the Q29 detective audit policy.
+No more "no cluster-wide read" / "specific names only" claims.</p>
 <h2 id="q122--gmc-workload-writes-cluster-wide-vs-cr-namespace-claim">Q122 — GMC workload writes: cluster-wide vs. CR-namespace claim<a class="headerlink" href="#q122--gmc-workload-writes-cluster-wide-vs-cr-namespace-claim" title="Permanent link">&para;</a></h2>
-<p>deployments / rolebindings / roles / networkpolicies / services /
-serviceaccounts / HPAs / PDBs / runnergroups — all writes, all namespaces.
-These are all <code>CREATE</code>/<code>UPDATE</code>/<code>DELETE</code>, i.e. fully admission-gated, so the
-same VAP confines <strong>all of them</strong> to tenant-marked namespaces. Full
-tightening; no doc-downgrade needed. (resourcequotas already dropped by Q130.)</p>
+<p>deployments / rolebindings / roles / networkpolicies / services / serviceaccounts / HPAs / PDBs / runnergroups — all writes, all namespaces.
+These are all <code>CREATE</code>/<code>UPDATE</code>/<code>DELETE</code>, i.e. fully admission-gated, so the same VAP confines <strong>all of them</strong> to tenant-marked namespaces.
+Full tightening; no doc-downgrade needed.
+(resourcequotas already dropped by Q130.)</p>
 <h2 id="shared-mechanism--one-new-vap">Shared mechanism — one new VAP<a class="headerlink" href="#shared-mechanism--one-new-vap" title="Permanent link">&para;</a></h2>
-<p><code>cmd/gmc/config/admission-policy/tenant-resource-guard.yaml</code> (sibling to
-<code>namespace-psa-guard.yaml</code>; kept out of the namePrefix kustomize tree, same
-as the PSA guard). Confines the GMC SA's <code>CREATE</code>/<code>UPDATE</code>/<code>DELETE</code> of the
-provisioning kinds above to namespaces whose <code>namespaceObject.metadata.labels</code>
-carry the existing marker <code>actions-gateway.github.com/tenant=true</code> — the
-same marker the PSA guard already keys on (reused, not reinvented). A
-separate policy (not folded into the PSA guard) because VAP <code>validations</code>
-apply to <em>every</em> matched resource and the PSA guard's label/annotation rules
-are namespace-UPDATE-specific.</p>
-<p>Why it doesn't break normal ops: every GMC write targets <code>ag.Namespace</code>,
-which must already carry the marker (the PSA guard denies the GMC even the
-step-0 namespace patch otherwise). In envtest the reconciler runs as the
-admin user, not the GMC SA, so the policy is inert for the provisioning
-tests; the VAP tests use an impersonated GMC SA client.</p>
-<p>Shipped by the Helm chart (<code>templates/tenant-resource-guard.yaml</code>, gated by
-the existing <code>admissionPolicy.enabled</code>) and applied by <code>make deploy</code>.</p>
+<p><code>cmd/gmc/config/admission-policy/tenant-resource-guard.yaml</code> (sibling to <code>namespace-psa-guard.yaml</code>; kept out of the namePrefix kustomize tree, same as the PSA guard).
+Confines the GMC SA's <code>CREATE</code>/<code>UPDATE</code>/<code>DELETE</code> of the provisioning kinds above to namespaces whose <code>namespaceObject.metadata.labels</code> carry the existing marker <code>actions-gateway.github.com/tenant=true</code> — the same marker the PSA guard already keys on (reused, not reinvented).
+A separate policy (not folded into the PSA guard) because VAP <code>validations</code> apply to <em>every</em> matched resource and the PSA guard's label/annotation rules are namespace-UPDATE-specific.</p>
+<p>Why it doesn't break normal ops: every GMC write targets <code>ag.Namespace</code>, which must already carry the marker (the PSA guard denies the GMC even the step-0 namespace patch otherwise).
+In envtest the reconciler runs as the admin user, not the GMC SA, so the policy is inert for the provisioning tests; the VAP tests use an impersonated GMC SA client.</p>
+<p>Shipped by the Helm chart (<code>templates/tenant-resource-guard.yaml</code>, gated by the existing <code>admissionPolicy.enabled</code>) and applied by <code>make deploy</code>.</p>
 <h2 id="q125--teardown-fail-open">Q125 — teardown fail-open<a class="headerlink" href="#q125--teardown-fail-open" title="Permanent link">&para;</a></h2>
-<p><code>deleteIfExists</code> swallowed non-NotFound delete errors and <code>reconcileDelete</code>
-removed the finalizer unconditionally → a transient API failure orphaned a
-live credentialed AGC Deployment + RoleBinding with no retry.</p>
-<p><strong>Fix:</strong> <code>deleteIfExists</code> returns its error (NotFound → nil = success).
-<code>reconcileDelete</code> collects errors across all deletes; if any are non-nil it
-emits a <code>TeardownIncomplete</code> Warning event and returns the joined error to
-requeue <strong>without removing the finalizer</strong>. The finalizer is removed only
-once every delete is confirmed gone. Idempotent: repeated passes re-list
-RunnerGroups (gone → skip) and re-issue deletes (NotFound → success), so it
-converges.</p>
+<p><code>deleteIfExists</code> swallowed non-NotFound delete errors and <code>reconcileDelete</code> removed the finalizer unconditionally → a transient API failure orphaned a live credentialed AGC Deployment + RoleBinding with no retry.</p>
+<p><strong>Fix:</strong> <code>deleteIfExists</code> returns its error (NotFound → nil = success). <code>reconcileDelete</code> collects errors across all deletes; if any are non-nil it emits a <code>TeardownIncomplete</code> Warning event and returns the joined error to requeue <strong>without removing the finalizer</strong>.
+The finalizer is removed only once every delete is confirmed gone.
+Idempotent: repeated passes re-list RunnerGroups (gone → skip) and re-issue deletes (NotFound → success), so it converges.</p>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Q121/Q122: <code>tenant_resource_guard_test.go</code> (integration) — load the real
-  shipped VAP, impersonate the GMC SA, assert writes denied in an unmarked
-  namespace and allowed in a marked one, across Secret + a representative
-  workload kind; admin not subject.</li>
-<li>Q125: controller unit tests (<code>fake</code> + <code>interceptor.Funcs</code> forcing a
-  Delete error) — finalizer retained + error returned on failed delete;
-  finalizer removed on clean teardown.</li>
+<li>Q121/Q122: <code>tenant_resource_guard_test.go</code> (integration) — load the real shipped VAP, impersonate the GMC SA, assert writes denied in an unmarked namespace and allowed in a marked one, across Secret + a representative workload kind; admin not subject.</li>
+<li>Q125: controller unit tests (<code>fake</code> + <code>interceptor.Funcs</code> forcing a Delete error) — finalizer retained + error returned on failed delete; finalizer removed on clean teardown.</li>
 </ul>
 <h2 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>05-security.md</code> — rewrite the GMC-privilege-escalation + credential-leak
-  rows so claim == reality (strike-throughs replaced by accurate prose).</li>
+<li><code>05-security.md</code> — rewrite the GMC-privilege-escalation + credential-leak rows so claim == reality (strike-throughs replaced by accurate prose).</li>
 <li><code>02-architecture.md</code> — fix the "writes limited to CR namespaces" claim.</li>
 <li><code>security-operations.md</code> — document the second VAP an operator should see.</li>
-<li><code>troubleshooting.md</code> — Q125: stuck teardown symptom (finalizer retained,
-  requeue, <code>TeardownIncomplete</code> event).</li>
+<li><code>troubleshooting.md</code> — Q125: stuck teardown symptom (finalizer retained, requeue, <code>TeardownIncomplete</code> event).</li>
 <li>mark Q121/Q122/Q125 resolved in <code>security-audit-2026-06.md</code>.</li>
 <li>delete Q121/Q122/Q125 rows from <code>STATUS.md</code> (isolated commit).</li>
 </ul>

@@ -2692,92 +2692,50 @@
 
 
 <h1 id="q95--worker-pod-lifecycle-cleanup-of-completed-and-stuck-pods">Q95 — Worker pod lifecycle: cleanup of completed and stuck pods<a class="headerlink" href="#q95--worker-pod-lifecycle-cleanup-of-completed-and-stuck-pods" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> Worker pods must never accumulate: completed pods are deleted after a
-bounded retention window, stuck-Pending pods are reaped after a deadline (freeing
-their concurrency-ceiling slot), and tenant/CR deletion garbage-collects all
-worker pods via OwnerReferences.</p>
-<p><strong>Bug being fixed:</strong> the provisioner creates worker pods with no OwnerReference
-and no deadline, and the post-job cleanup path deletes only the per-pod job
-Secret — never the pod. Completed pods accumulate indefinitely (the design docs
-wrongly claimed they were garbage-collected), and a stuck-Pending pod (image
-pull failure, unschedulable) holds a ceiling slot forever because
-<code>activePodCount</code> counts Pending pods and <code>waitForCompletion</code> never returns.</p>
+<p><strong>Goal:</strong> Worker pods must never accumulate: completed pods are deleted after a bounded retention window, stuck-Pending pods are reaped after a deadline (freeing their concurrency-ceiling slot), and tenant/CR deletion garbage-collects all worker pods via OwnerReferences.</p>
+<p><strong>Bug being fixed:</strong> the provisioner creates worker pods with no OwnerReference and no deadline, and the post-job cleanup path deletes only the per-pod job Secret — never the pod.
+Completed pods accumulate indefinitely (the design docs wrongly claimed they were garbage-collected), and a stuck-Pending pod (image pull failure, unschedulable) holds a ceiling slot forever because <code>activePodCount</code> counts Pending pods and <code>waitForCompletion</code> never returns.</p>
 <h2 id="design-decisions">Design decisions<a class="headerlink" href="#design-decisions" title="Permanent link">&para;</a></h2>
 <h3 id="1-ownerreference--runnergroup-pod--job-secret">1. OwnerReference → RunnerGroup (pod + job Secret)<a class="headerlink" href="#1-ownerreference--runnergroup-pod--job-secret" title="Permanent link">&para;</a></h3>
-<p>Both the worker pod and its job-payload Secret get a controller OwnerReference
-to the owning RunnerGroup (same namespace, so a namespaced ownerRef is legal).
-Deleting the RunnerGroup — directly, via <code>ActionsGateway</code> teardown, or via
-namespace deletion — lets the Kubernetes GC controller cascade-delete every
-worker pod and staged Secret, including ones orphaned by an AGC crash.</p>
-<p><code>blockOwnerDeletion</code> is left unset: the RunnerGroup already has a finalizer for
-agent deregistration, and setting it would require the <code>finalizers</code> permission
-under the <code>OwnerReferencesPermissionEnforcement</code> admission plugin.</p>
+<p>Both the worker pod and its job-payload Secret get a controller OwnerReference to the owning RunnerGroup (same namespace, so a namespaced ownerRef is legal).
+Deleting the RunnerGroup — directly, via <code>ActionsGateway</code> teardown, or via namespace deletion — lets the Kubernetes GC controller cascade-delete every worker pod and staged Secret, including ones orphaned by an AGC crash.</p>
+<p><code>blockOwnerDeletion</code> is left unset: the RunnerGroup already has a finalizer for agent deregistration, and setting it would require the <code>finalizers</code> permission under the <code>OwnerReferencesPermissionEnforcement</code> admission plugin.</p>
 <h3 id="2-completed-pod-ttl--speccompletedpodttl-default-5m">2. Completed-pod TTL — <code>spec.completedPodTTL</code> (default 5m)<a class="headerlink" href="#2-completed-pod-ttl--speccompletedpodttl-default-5m" title="Permanent link">&para;</a></h3>
-<p>New optional <code>RunnerGroup</code> field <code>completedPodTTL</code> (<code>metav1.Duration</code>):
-how long a worker pod in a terminal phase (Succeeded/Failed/Unknown) is
-retained before the AGC deletes it.</p>
+<p>New optional <code>RunnerGroup</code> field <code>completedPodTTL</code> (<code>metav1.Duration</code>): how long a worker pod in a terminal phase (Succeeded/Failed/Unknown) is retained before the AGC deletes it.</p>
 <ul>
-<li><strong>Default (field omitted): 5m.</strong> A short retention window so an operator can
-  <code>kubectl logs</code>/<code>describe</code> a just-failed pod (job logs stream to GitHub, but a
-  pod that crashes before the runner starts leaves its only evidence in the pod),
-  while keeping accumulation bounded at (job rate × TTL). Terminal pods consume
-  no compute and no ResourceQuota.</li>
-<li><strong><code>0s</code> = delete immediately on completion</strong>: the provision goroutine deletes
-  the pod in its cleanup step, right after recording phase/duration/eviction.</li>
+<li><strong>Default (field omitted): 5m.</strong> A short retention window so an operator can <code>kubectl logs</code>/<code>describe</code> a just-failed pod (job logs stream to GitHub, but a pod that crashes before the runner starts leaves its only evidence in the pod), while keeping accumulation bounded at (job rate × TTL).
+  Terminal pods consume no compute and no ResourceQuota.</li>
+<li><strong><code>0s</code> = delete immediately on completion</strong>: the provision goroutine deletes the pod in its cleanup step, right after recording phase/duration/eviction.</li>
 <li>CEL: must be ≥ <code>0s</code> (rejects negative durations).</li>
 </ul>
-<p>Enforcement is reconcile-driven (see §4), so it also covers pods orphaned by an
-AGC restart — the goroutine-side delete is only the <code>0s</code> fast path.</p>
+<p>Enforcement is reconcile-driven (see §4), so it also covers pods orphaned by an AGC restart — the goroutine-side delete is only the <code>0s</code> fast path.</p>
 <h3 id="3-stuck-pending-deadline--specpendingpoddeadline-default-10m">3. Stuck-Pending deadline — <code>spec.pendingPodDeadline</code> (default 10m)<a class="headerlink" href="#3-stuck-pending-deadline--specpendingpoddeadline-default-10m" title="Permanent link">&para;</a></h3>
-<p>New optional <code>RunnerGroup</code> field <code>pendingPodDeadline</code> (<code>metav1.Duration</code>): the
-maximum time a worker pod may remain Pending (measured from creation) before
-the AGC deletes it. Deletion resolves the waiting session goroutine (the
-<code>InformerPodWaiter</code> treats pod deletion as completion), which releases the
-listener and the ceiling slot; the job Secret is deleted by that goroutine's
-normal cleanup path.</p>
+<p>New optional <code>RunnerGroup</code> field <code>pendingPodDeadline</code> (<code>metav1.Duration</code>): the maximum time a worker pod may remain Pending (measured from creation) before the AGC deletes it.
+Deletion resolves the waiting session goroutine (the <code>InformerPodWaiter</code> treats pod deletion as completion), which releases the listener and the ceiling slot; the job Secret is deleted by that goroutine's normal cleanup path.</p>
 <ul>
-<li><strong>Default (field omitted): 10m</strong> — generous for image pulls, far below
-  "forever". Clusters with slow autoscaling (e.g. GPU node provisioning) should
-  raise it.</li>
-<li>CEL: must be ≥ <code>1s</code> (a 0 deadline would reap every pod at admission age 0;
-  there is deliberately no way to disable the deadline — an unbounded Pending
-  pod is a capacity leak, so the guard is secure/robust by default).</li>
-<li><code>pod.spec.activeDeadlineSeconds</code> is <strong>not</strong> usable here: it is enforced by
-  the kubelet, and an unscheduled Pending pod has no kubelet.</li>
+<li><strong>Default (field omitted): 10m</strong> — generous for image pulls, far below "forever".
+  Clusters with slow autoscaling (e.g.
+  GPU node provisioning) should raise it.</li>
+<li>CEL: must be ≥ <code>1s</code> (a 0 deadline would reap every pod at admission age 0; there is deliberately no way to disable the deadline — an unbounded Pending pod is a capacity leak, so the guard is secure/robust by default).</li>
+<li><code>pod.spec.activeDeadlineSeconds</code> is <strong>not</strong> usable here: it is enforced by the kubelet, and an unscheduled Pending pod has no kubelet.</li>
 </ul>
-<p>Each reap emits a Warning Event (<code>WorkerPodStuckPending</code>) on the RunnerGroup
-and increments the new counter metric.</p>
+<p>Each reap emits a Warning Event (<code>WorkerPodStuckPending</code>) on the RunnerGroup and increments the new counter metric.</p>
 <h3 id="4-enforcement-reaper-in-the-runnergroup-reconciler">4. Enforcement: reaper in the RunnerGroup reconciler<a class="headerlink" href="#4-enforcement-reaper-in-the-runnergroup-reconciler" title="Permanent link">&para;</a></h3>
-<p>A <code>reapWorkerPods</code> step runs early in <code>Reconcile</code> (before the GitHub token
-fetch, so reaping keeps working during GitHub outages). It lists the group's
-worker pods from the shared informer cache (label
-<code>actions-gateway/runner-group</code>), deletes any terminal pod older than the TTL
-and any Pending pod older than the deadline, and returns the time until the
-next pod becomes due, which the reconciler propagates as <code>RequeueAfter</code>.</p>
-<p>Why the reconciler and not the provision goroutine: the goroutine dies with the
-AGC process, so it can never be the mechanism of record — a reconcile-driven
-reaper is restart-safe and also covers pods whose goroutine is gone. The
-existing Pod watch already re-triggers reconcile on phase transitions; the
-<code>RequeueAfter</code> covers the purely time-based expiries in between.</p>
-<p>Terminal-pod age is measured from the latest container <code>terminated.finishedAt</code>
-(set by the kubelet), falling back to the pod CreationTimestamp when absent.</p>
+<p>A <code>reapWorkerPods</code> step runs early in <code>Reconcile</code> (before the GitHub token fetch, so reaping keeps working during GitHub outages).
+It lists the group's worker pods from the shared informer cache (label <code>actions-gateway/runner-group</code>), deletes any terminal pod older than the TTL and any Pending pod older than the deadline, and returns the time until the next pod becomes due, which the reconciler propagates as <code>RequeueAfter</code>.</p>
+<p>Why the reconciler and not the provision goroutine: the goroutine dies with the AGC process, so it can never be the mechanism of record — a reconcile-driven reaper is restart-safe and also covers pods whose goroutine is gone.
+The existing Pod watch already re-triggers reconcile on phase transitions; the <code>RequeueAfter</code> covers the purely time-based expiries in between.</p>
+<p>Terminal-pod age is measured from the latest container <code>terminated.finishedAt</code> (set by the kubelet), falling back to the pod CreationTimestamp when absent.</p>
 <h3 id="5-metric">5. Metric<a class="headerlink" href="#5-metric" title="Permanent link">&para;</a></h3>
-<p><code>actions_gateway_worker_pods_reaped_total{namespace, runner_group, reason}</code>
-with <code>reason</code> ∈ <code>completed_ttl</code> | <code>pending_deadline</code>. Goroutine-side immediate
-deletes (TTL <code>0s</code>) are not counted — the metric tracks reaper interventions an
-operator may want to alert on (especially <code>pending_deadline</code>).</p>
+<p><code>actions_gateway_worker_pods_reaped_total{namespace, runner_group, reason}</code> with <code>reason</code> ∈ <code>completed_ttl</code> | <code>pending_deadline</code>.
+Goroutine-side immediate deletes (TTL <code>0s</code>) are not counted — the metric tracks reaper interventions an operator may want to alert on (especially <code>pending_deadline</code>).</p>
 <h3 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Stuck-Running pods</strong>: a Running pod is bounded by GitHub's job-level
-  timeout and the job-lock renewal contract (lock lapse → GitHub cancels →
-  runner exits). No AGC-side deadline is added for Running pods.</li>
-<li><strong>Reaping pods of deleted RunnerGroups</strong>: covered by ownerRef GC. Pods
-  created by pre-Q95 AGC versions whose RunnerGroup was deleted have neither an
-  ownerRef nor a reconcile trigger; the upgrade note tells operators to clean
-  these up once by label.</li>
-<li><strong>RunnerGroup spec updates not reaching cached multiplexer job-handler
-  closures</strong> (e.g. <code>workerImage</code> changes need an AGC restart) — pre-existing
-  behaviour, flagged separately if confirmed.</li>
+<li><strong>Stuck-Running pods</strong>: a Running pod is bounded by GitHub's job-level timeout and the job-lock renewal contract (lock lapse → GitHub cancels → runner exits).
+  No AGC-side deadline is added for Running pods.</li>
+<li><strong>Reaping pods of deleted RunnerGroups</strong>: covered by ownerRef GC.
+  Pods created by pre-Q95 AGC versions whose RunnerGroup was deleted have neither an ownerRef nor a reconcile trigger; the upgrade note tells operators to clean these up once by label.</li>
+<li><strong>RunnerGroup spec updates not reaching cached multiplexer job-handler closures</strong> (e.g. <code>workerImage</code> changes need an AGC restart) — pre-existing behaviour, flagged separately if confirmed.</li>
 </ul>
 <h2 id="test-plan">Test plan<a class="headerlink" href="#test-plan" title="Permanent link">&para;</a></h2>
 <table>
@@ -2802,19 +2760,14 @@ operator may want to alert on (especially <code>pending_deadline</code>).</p>
 </tr>
 </tbody>
 </table>
-<p>envtest cannot prove the ownerRef cascade (no kube-controller-manager / GC
-controller in envtest), hence the ownerRef assertion at cluster-only.</p>
+<p>envtest cannot prove the ownerRef cascade (no kube-controller-manager / GC controller in envtest), hence the ownerRef assertion at cluster-only.</p>
 <h2 id="doc-updates">Doc updates<a class="headerlink" href="#doc-updates" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>docs/design/02-architecture.md</code> — fix the false "AGC garbage-collects the
-  pod" claim (§2.2 job-completion path), the Pod-watch prose, metrics table.</li>
+<li><code>docs/design/02-architecture.md</code> — fix the false "AGC garbage-collects the pod" claim (§2.2 job-completion path), the Pod-watch prose, metrics table.</li>
 <li><code>docs/design/03-api-contracts.md</code> — the two new fields.</li>
-<li><code>docs/design/04-operational-flows.md</code> — fix step 11 "Reclaim" prose; add a
-  stuck-Pending failure flow.</li>
+<li><code>docs/design/04-operational-flows.md</code> — fix step 11 "Reclaim" prose; add a stuck-Pending failure flow.</li>
 <li><code>docs/design/07-test-plan.md</code> — integration/e2e criteria for cleanup.</li>
-<li><code>docs/operations/troubleshooting.md</code> — runbook: worker pod stuck Pending /
-  reaped (symptom: Warning event + metric), CEL rejection of bad durations,
-  one-time cleanup of pre-Q95 accumulated pods.</li>
+<li><code>docs/operations/troubleshooting.md</code> — runbook: worker pod stuck Pending / reaped (symptom: Warning event + metric), CEL rejection of bad durations, one-time cleanup of pre-Q95 accumulated pods.</li>
 <li><code>docs/operations/tenant-onboarding.md</code> — document the two knobs + defaults.</li>
 <li><code>docs/operations/observability.md</code> — new metric + event.</li>
 <li><code>docs/operations/upgrade.md</code> — one-time cleanup note for pre-existing pods.</li>

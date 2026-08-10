@@ -2682,11 +2682,16 @@
 
 <h1 id="kubernetes-best-practices-audit">Kubernetes Best-Practices Audit<a class="headerlink" href="#kubernetes-best-practices-audit" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Archived 2026-07-06.</strong> Every finding shipped (A–G) or folded into a test plan (H). Two durable conclusions were promoted out of this audit before archival so they survive as living design/security knowledge: the A6 <code>CreateOrPatch</code>-vs-Server-Side-Apply rationale → <a href="../../../design/02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">02-architecture.md</a>, and the HTTP/2 Rapid-Reset mitigation → <a href="../../../design/05-security/">05-security.md</a>. Residuals: D7 (conversion-webhook scaffolding) tracked as Q74; H2 (live-GitHub rerun-on-eviction e2e) as Q396. This doc is kept for the rationale.</p>
+<p><strong>Archived 2026-07-06.</strong> Every finding shipped (A–G) or folded into a test plan (H).
+Two durable conclusions were promoted out of this audit before archival so they survive as living design/security knowledge: the A6 <code>CreateOrPatch</code>-vs-Server-Side-Apply rationale → <a href="../../../design/02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">02-architecture.md</a>, and the HTTP/2 Rapid-Reset mitigation → <a href="../../../design/05-security/">05-security.md</a>.
+Residuals: D7 (conversion-webhook scaffolding) tracked as Q74; H2 (live-GitHub rerun-on-eviction e2e) as Q396.
+This doc is kept for the rationale.</p>
 </blockquote>
-<p>Findings from a project-wide Kubernetes best-practices audit performed 2026-05-30. Items are grouped by theme.</p>
+<p>Findings from a project-wide Kubernetes best-practices audit performed 2026-05-30.
+Items are grouped by theme.</p>
 <p><strong>Severity legend:</strong> 🔴 high · 🟡 medium · 🟢 low.</p>
-<p><strong>Verified-good (not flagged here):</strong> GMC/AGC/proxy manager pods all set <code>runAsNonRoot</code> + RO rootfs + drop ALL + seccomp <code>RuntimeDefault</code>; NetworkPolicies are well-split (workload / proxy / AGC / k8s-API with documented kube-proxy DNAT notes); Secret cache <code>DisableFor</code> discipline + <code>WatchesMetadata</code> for credentials; finalizers + owner references for GC; HTTP/2 disabled on metrics/webhook (Rapid Reset CVE); admission webhook rejects privileged containers and cross-namespace SecretRef. These baseline properties are documented durably in <a href="../../../design/05-security/">05-security.md §5</a> (the HTTP/2 Rapid Reset mitigation was promoted there from this audit); the list here is the point-in-time snapshot the audit verified.</p>
+<p><strong>Verified-good (not flagged here):</strong> GMC/AGC/proxy manager pods all set <code>runAsNonRoot</code> + RO rootfs + drop ALL + seccomp <code>RuntimeDefault</code>; NetworkPolicies are well-split (workload / proxy / AGC / k8s-API with documented kube-proxy DNAT notes); Secret cache <code>DisableFor</code> discipline + <code>WatchesMetadata</code> for credentials; finalizers + owner references for GC; HTTP/2 disabled on metrics/webhook (Rapid Reset CVE); admission webhook rejects privileged containers and cross-namespace SecretRef.
+These baseline properties are documented durably in <a href="../../../design/05-security/">05-security.md §5</a> (the HTTP/2 Rapid Reset mitigation was promoted there from this audit); the list here is the point-in-time snapshot the audit verified.</p>
 <hr />
 <h2 id="a-controller-correctness-">A. Controller correctness 🔴<a class="headerlink" href="#a-controller-correctness-" title="Permanent link">&para;</a></h2>
 <p>High-priority controller-runtime patterns whose absence causes silent staleness, lost events, or excessive API load.</p>
@@ -2768,7 +2773,8 @@
 </table>
 <h3 id="a6-design-note-createorpatch-vs-server-side-apply">A6 design note: <code>CreateOrPatch</code> vs Server-Side Apply<a class="headerlink" href="#a6-design-note-createorpatch-vs-server-side-apply" title="Permanent link">&para;</a></h3>
 <blockquote>
-<p><strong>Promoted to the durable design layer.</strong> The rationale for why the GMC's <code>apply*</code> helpers use <code>controllerutil.CreateOrPatch</code> rather than Server-Side Apply — and why <code>applyNamespacePSA</code> keeps SSA — now lives in <a href="../../../design/02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">02-architecture.md § Design choice: reconciler writes use <code>CreateOrPatch</code>, not Server-Side Apply</a>. Moved out of this closed audit so it survives archival; the finding row above records the fix that landed.</p>
+<p><strong>Promoted to the durable design layer.</strong> The rationale for why the GMC's <code>apply*</code> helpers use <code>controllerutil.CreateOrPatch</code> rather than Server-Side Apply — and why <code>applyNamespacePSA</code> keeps SSA — now lives in <a href="../../../design/02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">02-architecture.md § Design choice: reconciler writes use <code>CreateOrPatch</code>, not Server-Side Apply</a>.
+Moved out of this closed audit so it survives archival; the finding row above records the fix that landed.</p>
 </blockquote>
 <h2 id="b-rbac--cluster-wide-privilege-">B. RBAC &amp; cluster-wide privilege 🔴<a class="headerlink" href="#b-rbac--cluster-wide-privilege-" title="Permanent link">&para;</a></h2>
 <p>Privilege-escalation primitives on a compromised GMC pod.</p>
@@ -2814,7 +2820,9 @@
 </tbody>
 </table>
 <h2 id="c-worker--proxy-pod-security-defaults-">C. Worker / proxy pod security defaults ✅<a class="headerlink" href="#c-worker--proxy-pod-security-defaults-" title="Permanent link">&para;</a></h2>
-<p>The operator-created pods (worker pods from AGC, proxy pods from GMC) are the highest-blast-radius surface. PSA <code>baseline</code> (the project default) does <strong>not</strong> enforce <code>runAsNonRoot</code> or seccomp. Proxy pods (GMC <code>buildProxyDeployment</code>) already ship a full hardened <code>SecurityContext</code> + resources, so the findings below cover <strong>worker pods only</strong>; all are fixed.</p>
+<p>The operator-created pods (worker pods from AGC, proxy pods from GMC) are the highest-blast-radius surface.
+PSA <code>baseline</code> (the project default) does <strong>not</strong> enforce <code>runAsNonRoot</code> or seccomp.
+Proxy pods (GMC <code>buildProxyDeployment</code>) already ship a full hardened <code>SecurityContext</code> + resources, so the findings below cover <strong>worker pods only</strong>; all are fixed.</p>
 <table>
 <thead>
 <tr>
@@ -2921,7 +2929,8 @@
 </tbody>
 </table>
 <h2 id="e-manifest-defaults--ha-">E. Manifest defaults &amp; HA ✅<a class="headerlink" href="#e-manifest-defaults--ha-" title="Permanent link">&para;</a></h2>
-<p>The shipped kustomize bases were not HA-by-default and disabled several integrations behind comments. Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for E3/E4 was decided with sign-off (see notes).</p>
+<p>The shipped kustomize bases were not HA-by-default and disabled several integrations behind comments.
+Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for E3/E4 was decided with sign-off (see notes).</p>
 <table>
 <thead>
 <tr>

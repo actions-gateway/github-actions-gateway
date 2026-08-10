@@ -2699,45 +2699,29 @@
 
 <h1 id="m4-cross-namespace-egressproxy-sharing-q166">M4: cross-namespace <code>EgressProxy</code> sharing (Q166)<a class="headerlink" href="#m4-cross-namespace-egressproxy-sharing-q166" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: in progress.</strong> Scope decided 2026-08-08: the full milestone, both the
-gateway control-plane path and the worker path. Design context is
-<a href="../../../design/appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharing">appendix H §H.9</a>;
-this doc records what §H.9 left unspecified and what was measured to settle it.</p>
+<p><strong>Status: in progress.</strong> Scope decided 2026-08-08: the full milestone, both the gateway control-plane path and the worker path.
+Design context is <a href="../../../design/appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharing">appendix H §H.9</a>; this doc records what §H.9 left unspecified and what was measured to settle it.</p>
 </blockquote>
 <h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
-<p><code>EgressProxy.spec.sharing.allowedNamespaces</code> is served by <code>v2alpha1</code> and
-<code>v2beta1</code> and read by nothing. Measured 2026-08-08 at <code>1e6cbdea</code>: the field
-appears in <code>api/v2alpha1/shared_types.go</code>, <code>api/v2beta1/shared_types.go</code>, the two
-generated deepcopy files, and no other non-vendored Go file. Zero enforcement
-sites.</p>
-<p><code>v2beta1</code> shipped in <code>v1.3.0</code>, so the field is already inside a beta contract and
-removing it would be breaking. It has to be implemented, and implemented before
-1.4.0 hardens it further.</p>
+<p><code>EgressProxy.spec.sharing.allowedNamespaces</code> is served by <code>v2alpha1</code> and <code>v2beta1</code> and read by nothing.
+Measured 2026-08-08 at <code>1e6cbdea</code>: the field appears in <code>api/v2alpha1/shared_types.go</code>, <code>api/v2beta1/shared_types.go</code>, the two generated deepcopy files, and no other non-vendored Go file.
+Zero enforcement sites.</p>
+<p><code>v2beta1</code> shipped in <code>v1.3.0</code>, so the field is already inside a beta contract and removing it would be breaking.
+It has to be implemented, and implemented before 1.4.0 hardens it further.</p>
 <h2 id="what-h9-did-not-account-for">What §H.9 did not account for<a class="headerlink" href="#what-h9-did-not-account-for" title="Permanent link">&para;</a></h2>
 <p>Two findings from reading the code, both of which change the shape of the work.</p>
 <h3 id="cross-namespace-references-are-not-expressible">Cross-namespace references are not expressible<a class="headerlink" href="#cross-namespace-references-are-not-expressible" title="Permanent link">&para;</a></h3>
-<p>No reference type carries a namespace. <code>ObjectRef</code> and <code>LocalObjectRef</code> are
-name-only, and both resolution sites resolve in the referrer's own namespace:
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>actionsgateway_v2_controller.go:221</code></a>
-for <code>defaultProxyRef</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_target.go"><code>runnerset_target.go:476</code></a>
-for <code>proxyRef</code>.</p>
-<p>So <code>allowedNamespaces</code> cannot gate anything today: there is no reference for it to
-refuse. M4 builds the path and the consent check together. A consent check alone
-would gate a reference nobody can write.</p>
-<p>The corollary is that the secure default holds by construction rather than by
-argument: with no namespace on the reference, and with the proxy's ingress
-NetworkPolicy peer carrying a bare <code>PodSelector</code> (which means the policy's own
-namespace, per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go:546</code></a>),
-a cross-namespace consumer is refused at both the API and the network layer.
-Every change below has to preserve that for an absent or empty
-<code>allowedNamespaces</code>.</p>
+<p>No reference type carries a namespace. <code>ObjectRef</code> and <code>LocalObjectRef</code> are name-only, and both resolution sites resolve in the referrer's own namespace: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>actionsgateway_v2_controller.go:221</code></a> for <code>defaultProxyRef</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_target.go"><code>runnerset_target.go:476</code></a> for <code>proxyRef</code>.</p>
+<p>So <code>allowedNamespaces</code> cannot gate anything today: there is no reference for it to refuse.
+M4 builds the path and the consent check together.
+A consent check alone would gate a reference nobody can write.</p>
+<p>The corollary is that the secure default holds by construction rather than by argument: with no namespace on the reference, and with the proxy's ingress NetworkPolicy peer carrying a bare <code>PodSelector</code> (which means the policy's own namespace, per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go:546</code></a>), a cross-namespace consumer is refused at both the API and the network layer.
+Every change below has to preserve that for an absent or empty <code>allowedNamespaces</code>.</p>
 <h3 id="the-agc-cannot-read-a-remote-egressproxy">The AGC cannot read a remote <code>EgressProxy</code><a class="headerlink" href="#the-agc-cannot-read-a-remote-egressproxy" title="Permanent link">&para;</a></h3>
-<p>This is the finding that decides the architecture. The AGC's cache is pinned to
-its own tenant namespace so that it needs only the per-tenant <code>Role</code> the GMC
-creates, rather than a <code>ClusterRole</code>. See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go"><code>cmd/agc/main.go:284-292</code></a>,
-deliberate and documented in place. <code>RunnerSet.spec.proxyRef</code> is resolved by the
-AGC. So the worker path cannot be built by teaching the AGC to read across
-namespaces without either widening its RBAC or adding a projection mechanism.</p>
+<p>This is the finding that decides the architecture.
+The AGC's cache is pinned to its own tenant namespace so that it needs only the per-tenant <code>Role</code> the GMC creates, rather than a <code>ClusterRole</code>.
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go"><code>cmd/agc/main.go:284-292</code></a>, deliberate and documented in place. <code>RunnerSet.spec.proxyRef</code> is resolved by the AGC.
+So the worker path cannot be built by teaching the AGC to read across namespaces without either widening its RBAC or adding a projection mechanism.</p>
 <p>Three ways out, and why one wins:</p>
 <table>
 <thead>
@@ -2761,23 +2745,17 @@ namespaces without either widening its RBAC or adding a projection mechanism.</p
 </tr>
 </tbody>
 </table>
-<p>The GMC is cluster-scoped and already owns every piece: <code>defaultProxyRef</code>
-resolution, proxy CA generation, the AGC's CA mount, the AGC NetworkPolicy, and
-the proxy NetworkPolicy.</p>
-<p>§H.9 already requires the GMC to write the proxy CA as a ConfigMap into each
-granted consumer namespace. That ConfigMap is made load-bearing for one more
-thing: <strong>its existence is the grant</strong>, and its data carries the proxy's Service
-DNS name and port. The AGC then reads everything it needs from its own namespace
-with no cross-namespace read, no cache change, no RBAC widening. Revoking a grant
-deletes the ConfigMap, and the AGC fails closed.</p>
-<p>This is not a new mechanism. It is the mechanism §H.9 already mandates, carrying
-the grant decision alongside the trust material that decision authorises.</p>
+<p>The GMC is cluster-scoped and already owns every piece: <code>defaultProxyRef</code> resolution, proxy CA generation, the AGC's CA mount, the AGC NetworkPolicy, and the proxy NetworkPolicy.</p>
+<p>§H.9 already requires the GMC to write the proxy CA as a ConfigMap into each granted consumer namespace.
+That ConfigMap is made load-bearing for one more thing: <strong>its existence is the grant</strong>, and its data carries the proxy's Service DNS name and port.
+The AGC then reads everything it needs from its own namespace with no cross-namespace read, no cache change, no RBAC widening.
+Revoking a grant deletes the ConfigMap, and the AGC fails closed.</p>
+<p>This is not a new mechanism.
+It is the mechanism §H.9 already mandates, carrying the grant decision alongside the trust material that decision authorises.</p>
 <h2 id="api-shape">API shape<a class="headerlink" href="#api-shape" title="Permanent link">&para;</a></h2>
 <h3 id="why-the-namespace-cannot-go-on-objectref">Why the namespace cannot go on <code>ObjectRef</code><a class="headerlink" href="#why-the-namespace-cannot-go-on-objectref" title="Permanent link">&para;</a></h3>
-<p><code>ObjectRef</code> backs <code>gatewayRef</code>, <code>templateRef</code>, <code>proxyRef</code>, and
-<code>defaultTemplateRef</code>. A <code>Namespace</code> field on it would make all four
-cross-namespace at once, a security regression on three references that have no
-consent handshake behind them.</p>
+<p><code>ObjectRef</code> backs <code>gatewayRef</code>, <code>templateRef</code>, <code>proxyRef</code>, and <code>defaultTemplateRef</code>.
+A <code>Namespace</code> field on it would make all four cross-namespace at once, a security regression on three references that have no consent handshake behind them.</p>
 <p>So the proxy references get their own type:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProxyObjectRef</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nx">Name</span><span class="w">      </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;name&quot;`</span>
@@ -2785,74 +2763,49 @@ consent handshake behind them.</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="p">}</span>
 </code></pre></div>
 <p>used by <code>RunnerSetSpec.ProxyRef</code> and <code>ActionsGatewaySpec.DefaultProxyRef</code>.</p>
-<p>Empty <code>namespace</code> means the referrer's own namespace, which is exactly today's
-behaviour, so every existing manifest keeps its meaning.</p>
+<p>Empty <code>namespace</code> means the referrer's own namespace, which is exactly today's behaviour, so every existing manifest keeps its meaning.</p>
 <h3 id="the-one-schema-subtraction-flagged-for-review">The one schema subtraction, flagged for review<a class="headerlink" href="#the-one-schema-subtraction-flagged-for-review" title="Permanent link">&para;</a></h3>
-<p>For <code>defaultProxyRef</code> the change is purely additive: <code>LocalObjectRef</code> carried
-<code>name</code> alone, and the new type adds <code>namespace</code>.</p>
-<p>For <code>proxyRef</code> it also <strong>removes</strong> the optional <code>kind</code> property, which
-<code>ObjectRef</code> contributed. This is a subtraction from a served beta version and is
-called out rather than assumed:</p>
+<p>For <code>defaultProxyRef</code> the change is purely additive: <code>LocalObjectRef</code> carried <code>name</code> alone, and the new type adds <code>namespace</code>.</p>
+<p>For <code>proxyRef</code> it also <strong>removes</strong> the optional <code>kind</code> property, which <code>ObjectRef</code> contributed.
+This is a subtraction from a served beta version and is called out rather than assumed:</p>
 <ul>
-<li><code>kind</code>'s enum admits only <code>RunnerTemplate</code> and <code>ClusterRunnerTemplate</code>, neither
-  of which names a proxy, so no manifest can set it meaningfully.</li>
-<li>Nothing reads it on <code>proxyRef</code>; the field's own godoc says it is load-bearing
-  only on <code>templateRef</code>.</li>
-<li>Structural-schema pruning drops an undeclared property silently rather than
-  rejecting the apply, so a stale manifest that sets it keeps applying.</li>
+<li><code>kind</code>'s enum admits only <code>RunnerTemplate</code> and <code>ClusterRunnerTemplate</code>, neither of which names a proxy, so no manifest can set it meaningfully.</li>
+<li>Nothing reads it on <code>proxyRef</code>; the field's own godoc says it is load-bearing only on <code>templateRef</code>.</li>
+<li>Structural-schema pruning drops an undeclared property silently rather than rejecting the apply, so a stale manifest that sets it keeps applying.</li>
 </ul>
-<p>Behaviour is therefore identical before and after. The alternative, carrying a
-nonsense <code>kind</code> on <code>proxyRef</code> into the <code>v2</code> GA contract to avoid touching a
-property nothing can use, costs more than it protects.</p>
+<p>Behaviour is therefore identical before and after.
+The alternative, carrying a nonsense <code>kind</code> on <code>proxyRef</code> into the <code>v2</code> GA contract to avoid touching a property nothing can use, costs more than it protects.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>API.</strong> <code>ProxyObjectRef</code> in both version packages; <code>ProxyShareNotGranted</code>
-   reason in <code>api/apiconditions</code> re-exported from both; deepcopy, CRD, chart CRD
-   and API-reference regeneration. Conversion is free: it is a JSON round-trip
-   and both versions carry the same shape.</li>
-<li><strong>Consent check.</strong> Both resolution sites. Absent or empty
-   <code>allowedNamespaces</code> denies. Fail closed with <code>ProxyShareNotGranted</code>.</li>
-<li><strong>CA distribution.</strong> GMC writes the CA ConfigMap into granted consumer
-   namespaces, and deletes it when the grant is revoked.</li>
-<li><strong>Dual-side NetworkPolicy.</strong> Provider ingress gains granted namespaces;
-   consumer egress gains the remote proxy. The granted-namespace ingress peer
-   must carry <code>NamespaceSelector</code> and <code>PodSelector</code> in <strong>one</strong> peer struct: two
-   entries in the <code>From</code> list is an OR, which would admit any pod in the granted
-   namespace and any workload pod anywhere.</li>
-<li><strong>Watches.</strong> Cross-namespace mappers so a grant change re-reconciles remote
-   consumers.</li>
+<li><strong>API.</strong> <code>ProxyObjectRef</code> in both version packages; <code>ProxyShareNotGranted</code> reason in <code>api/apiconditions</code> re-exported from both; deepcopy, CRD, chart CRD and API-reference regeneration.
+   Conversion is free: it is a JSON round-trip and both versions carry the same shape.</li>
+<li><strong>Consent check.</strong> Both resolution sites.
+   Absent or empty <code>allowedNamespaces</code> denies.
+   Fail closed with <code>ProxyShareNotGranted</code>.</li>
+<li><strong>CA distribution.</strong> GMC writes the CA ConfigMap into granted consumer namespaces, and deletes it when the grant is revoked.</li>
+<li><strong>Dual-side NetworkPolicy.</strong> Provider ingress gains granted namespaces; consumer egress gains the remote proxy.
+   The granted-namespace ingress peer must carry <code>NamespaceSelector</code> and <code>PodSelector</code> in <strong>one</strong> peer struct: two entries in the <code>From</code> list is an OR, which would admit any pod in the granted namespace and any workload pod anywhere.</li>
+<li><strong>Watches.</strong> Cross-namespace mappers so a grant change re-reconciles remote consumers.</li>
 </ol>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
-<p>envtest, in both existing integration suites, because the denial is a controller
-decision observable against a real apiserver. The causation claim, that the
-consent check is what denies, is settled by deleting the check and requiring the
-denial assertion to go red, per
-<a href="../../../development/testing/#verify-a-causation-claim-by-deleting-the-mechanism">testing.md</a>.</p>
+<p>envtest, in both existing integration suites, because the denial is a controller decision observable against a real apiserver.
+The causation claim, that the consent check is what denies, is settled by deleting the check and requiring the denial assertion to go red, per <a href="../../../development/testing/#verify-a-causation-claim-by-deleting-the-mechanism">testing.md</a>.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p>Recorded as work lands. Nothing here is written ahead of the evidence.</p>
+<p>Recorded as work lands.
+Nothing here is written ahead of the evidence.</p>
 <ul>
-<li>2026-08-08: scope decided (full M4, both paths); architecture decided
-  (GMC-mediated projection); API shape decided (<code>ProxyObjectRef</code>).</li>
-<li>2026-08-08: API landed. <code>ProxyObjectRef</code> in both version packages,
-  <code>ProxyShareNotGranted</code> in <code>apiconditions</code> and both re-exports, <code>LocalObjectRef</code>
-  retired as unused. <code>make v2-api-sync-check</code> green; CRDs, chart CRDs, deepcopy and
-  <code>docs/reference/api.md</code> regenerated.</li>
-<li>2026-08-08: enforcement landed. Consent check on both resolution sites, CA
-  projection with prune-on-revoke, dual-side NetworkPolicy, cross-namespace watch
-  mappers. The proxy's GitHub-host allowlist now also spans granted remote referrers,
-  which same-namespace assembly had missed.</li>
-<li>2026-08-08: one defect found and fixed during the build. The GMC's ConfigMap
-  informer is pinned to a single name in its own namespace, so the cached
-  label-selected List that drives the prune would have returned nothing and a
-  withdrawn grant would never have had its projection deleted. The consumer treats
-  that projection as the grant, so revocation would have been silent. Reads now go
-  through the uncached <code>APIReader</code>, and the RBAC takes <code>list</code> without <code>watch</code>.</li>
-<li>2026-08-08: causation settled per testing.md. Replacing <code>proxyShareGranted</code>'s body
-  with <code>return true</code> turns <code>TestProxyShareGranted_DeniesWithoutExplicitConsent</code> and
-  <code>TestProxyShareGranted_MatchesWholeNamespaceOnly</code> red; restoring it returns them to
-  green. The NetworkPolicy and projection tests stay green under that edit, correctly
-  because they are built from <code>allowedNamespaces</code> directly and are a second, independent
-  guard rather than the same one twice.</li>
+<li>2026-08-08: scope decided (full M4, both paths); architecture decided (GMC-mediated projection); API shape decided (<code>ProxyObjectRef</code>).</li>
+<li>2026-08-08: API landed. <code>ProxyObjectRef</code> in both version packages, <code>ProxyShareNotGranted</code> in <code>apiconditions</code> and both re-exports, <code>LocalObjectRef</code> retired as unused. <code>make v2-api-sync-check</code> green; CRDs, chart CRDs, deepcopy and <code>docs/reference/api.md</code> regenerated.</li>
+<li>2026-08-08: enforcement landed.
+  Consent check on both resolution sites, CA projection with prune-on-revoke, dual-side NetworkPolicy, cross-namespace watch mappers.
+  The proxy's GitHub-host allowlist now also spans granted remote referrers, which same-namespace assembly had missed.</li>
+<li>2026-08-08: one defect found and fixed during the build.
+  The GMC's ConfigMap informer is pinned to a single name in its own namespace, so the cached label-selected List that drives the prune would have returned nothing and a withdrawn grant would never have had its projection deleted.
+  The consumer treats that projection as the grant, so revocation would have been silent.
+  Reads now go through the uncached <code>APIReader</code>, and the RBAC takes <code>list</code> without <code>watch</code>.</li>
+<li>2026-08-08: causation settled per testing.md.
+  Replacing <code>proxyShareGranted</code>'s body with <code>return true</code> turns <code>TestProxyShareGranted_DeniesWithoutExplicitConsent</code> and <code>TestProxyShareGranted_MatchesWholeNamespaceOnly</code> red; restoring it returns them to green.
+  The NetworkPolicy and projection tests stay green under that edit, correctly because they are built from <code>allowedNamespaces</code> directly and are a second, independent guard rather than the same one twice.</li>
 </ul>
 
 

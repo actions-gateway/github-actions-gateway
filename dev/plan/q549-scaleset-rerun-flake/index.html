@@ -2631,19 +2631,14 @@
 
 
 <h1 id="q549--the-drained-scale-set-workers-re-run-never-fires-two-modes">Q549 — the drained scale-set worker's re-run never fires: two modes<a class="headerlink" href="#q549--the-drained-scale-set-workers-re-run-never-fires-two-modes" title="Permanent link">&para;</a></h1>
-<p><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>)
-deletes a running scale-set worker and waits 90 s for the AGC to re-run its
-disrupted run under the chart role. Two distinct failure modes now sit behind
-that one timeout. This file exists so the next occurrence is classified before
-anything is changed.</p>
-<p><strong>Status:</strong> watching. Mode A is diagnosed and mitigated (PR #1120). Mode B has
-been seen twice — 2026-08-01 and 2026-08-04 — and is <strong>undiagnosed</strong>; no
-mechanism is asserted below. <a href="../../STATUS/#Q549">Q549</a> stays in
-<a href="../../STATUS/#flake-watch">Flake watch</a> rather than escalating: the documented
-revive trigger is recurrence on <code>main</code>, and both mode-B sightings were on PR
-branches. Each resets the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">soak clock</a> —
-count green runs from <strong>2026-08-04</strong>, not from the fix.</p>
+<p><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>) deletes a running scale-set worker and waits 90 s for the AGC to re-run its disrupted run under the chart role.
+Two distinct failure modes now sit behind that one timeout.
+This file exists so the next occurrence is classified before anything is changed.</p>
+<p><strong>Status:</strong> watching.
+Mode A is diagnosed and mitigated (PR #1120).
+Mode B has been seen twice — 2026-08-01 and 2026-08-04 — and is <strong>undiagnosed</strong>; no mechanism is asserted below.
+<a href="../../STATUS/#Q549">Q549</a> stays in <a href="../../STATUS/#flake-watch">Flake watch</a> rather than escalating: the documented revive trigger is recurrence on <code>main</code>, and both mode-B sightings were on PR branches.
+Each resets the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">soak clock</a> — count green runs from <strong>2026-08-04</strong>, not from the fix.</p>
 <h2 id="the-two-modes">The two modes<a class="headerlink" href="#the-two-modes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2666,15 +2661,11 @@ count green runs from <strong>2026-08-04</strong>, not from the fix.</p>
 </tr>
 </tbody>
 </table>
-<p>The spec's own failure text names two candidate causes for the <code>Fail()</code> branch —
-a chart role missing a verb, or a regressed deletion-mark discriminator. Neither
-is established for the 2026-08-01 sighting; both remain open alongside anything
-else.</p>
+<p>The spec's own failure text names two candidate causes for the <code>Fail()</code> branch — a chart role missing a verb, or a regressed deletion-mark discriminator.
+Neither is established for the 2026-08-01 sighting; both remain open alongside anything else.</p>
 <h2 id="mode-b-what-run-30724186342-shows">Mode B: what run 30724186342 shows<a class="headerlink" href="#mode-b-what-run-30724186342-shows" title="Permanent link">&para;</a></h2>
-<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30724186342">30724186342</a>
-attempt 1, job <code>e2e / e2e</code>, branch <code>claude/q547-537615</code> (PR #1140, an unrelated
-change — v2 gateway-teardown worker reap), 2026-08-02 00:01–00:03 UTC. Attempt 2
-passed with no code change.</p>
+<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30724186342">30724186342</a> attempt 1, job <code>e2e / e2e</code>, branch <code>claude/q547-537615</code> (PR #1140, an unrelated change — v2 gateway-teardown worker reap), 2026-08-02 00:01–00:03 UTC.
+Attempt 2 passed with no code change.</p>
 <p>Timeline of attempt 1, from the job log:</p>
 <table>
 <thead>
@@ -2712,40 +2703,23 @@ passed with no code change.</p>
 </table>
 <p>Measured, in the order the log gives it:</p>
 <ul>
-<li><strong>The AGC was not replaced.</strong> The pin held, there is no <code>Q549 re-staging</code>
-  entry, and the AGC pod (<code>ssrec-agc-b8d7d6678-vkmmb</code>) has no previous
-  container (<code>previous terminated container "agc" … not found</code>) — it never
-  restarted either.</li>
-<li><strong>The claim annotation was never observed on the pod.</strong> The field sampler
-  recorded <code>Running/2026-08-02T00:01:53Z/ -&gt; Failed/2026-08-02T00:01:53Z/</code>, with
-  the <code>actions-gateway.com/eviction-handled-at</code> field empty in both states. In
-  the passing attempt 2 the same sampler recorded
-  <code>… -&gt; Failed/2026-08-02T00:17:58Z/2026-08-02T00:17:29Z</code> — claim present. That
-  contrast is the sharpest signal the two logs carry. The sampler is
-  diagnostics, not evidence: it bounds what was <em>observed</em> in ~2.2 s, never what
-  happened.</li>
-<li><strong>No <code>EvictionRerunFailed</code> event</strong> in the namespace events dump.
-  <code>rerunUntilAccepted</code> records that on every terminal failure, so no re-run
-  reached a terminal refusal — the same discriminator that ruled out
-  "attempted and refused" for mode A.</li>
-<li><strong>The AGC logged nothing after 00:01:24Z</strong>, through the dump taken at
-  00:02:57Z — at debug verbosity, and with no truncation (93 lines against
-  <code>kubectl logs --tail=2000</code>). The re-run wait ran entirely inside that silence.</li>
+<li><strong>The AGC was not replaced.</strong> The pin held, there is no <code>Q549 re-staging</code> entry, and the AGC pod (<code>ssrec-agc-b8d7d6678-vkmmb</code>) has no previous container (<code>previous terminated container "agc" … not found</code>) — it never restarted either.</li>
+<li><strong>The claim annotation was never observed on the pod.</strong> The field sampler recorded <code>Running/2026-08-02T00:01:53Z/ -&gt; Failed/2026-08-02T00:01:53Z/</code>, with the <code>actions-gateway.com/eviction-handled-at</code> field empty in both states.
+  In the passing attempt 2 the same sampler recorded <code>… -&gt; Failed/2026-08-02T00:17:58Z/2026-08-02T00:17:29Z</code> — claim present.
+  That contrast is the sharpest signal the two logs carry.
+  The sampler is diagnostics, not evidence: it bounds what was <em>observed</em> in ~2.2 s, never what happened.</li>
+<li><strong>No <code>EvictionRerunFailed</code> event</strong> in the namespace events dump. <code>rerunUntilAccepted</code> records that on every terminal failure, so no re-run reached a terminal refusal — the same discriminator that ruled out "attempted and refused" for mode A.</li>
+<li><strong>The AGC logged nothing after 00:01:24Z</strong>, through the dump taken at 00:02:57Z — at debug verbosity, and with no truncation (93 lines against <code>kubectl logs --tail=2000</code>).
+  The re-run wait ran entirely inside that silence.</li>
 </ul>
-<p>Not evidence, and worth stating so it isn't mistaken for some later:
-attempt 2's log contains no <code>ScaleSetListenerStartFailed</code> at all, but it also
-contains no diagnostics dump — that only runs on failure. The two attempts are
-<strong>not comparable</strong> on any signal that comes from the dump.</p>
+<p>Not evidence, and worth stating so it isn't mistaken for some later: attempt 2's log contains no <code>ScaleSetListenerStartFailed</code> at all, but it also contains no diagnostics dump — that only runs on failure.
+The two attempts are <strong>not comparable</strong> on any signal that comes from the dump.</p>
 <h2 id="mode-b-again-what-run-30864634442-shows">Mode B again: what run 30864634442 shows<a class="headerlink" href="#mode-b-again-what-run-30864634442-shows" title="Permanent link">&para;</a></h2>
-<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30864634442">30864634442</a>
-attempt 1, job <strong><code>e2e-calico / e2e</code></strong>, branch <code>claude/happy-lederberg-c8a92c</code>
-(PR #1217, an unrelated change — the Q648 egress-probe scoring), 2026-08-04
-00:14–00:17 UTC. Attempt 2 passed with no code change.</p>
-<p><strong>This is the first mode-B sighting on the Calico leg</strong>; 2026-08-01 was
-<code>e2e / e2e</code> (kindnet). The mode does not belong to one CNI.</p>
-<p>Mode B on both discriminators: the pin is unchanged (the spec's failure text
-takes the "and the AGC that observed the disruption is still running" branch)
-and the log contains zero <code>Q549 re-staging</code> entries.</p>
+<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30864634442">30864634442</a> attempt 1, job <strong><code>e2e-calico / e2e</code></strong>, branch <code>claude/happy-lederberg-c8a92c</code> (PR #1217, an unrelated change — the Q648 egress-probe scoring), 2026-08-04 00:14–00:17 UTC.
+Attempt 2 passed with no code change.</p>
+<p><strong>This is the first mode-B sighting on the Calico leg</strong>; 2026-08-01 was <code>e2e / e2e</code> (kindnet).
+The mode does not belong to one CNI.</p>
+<p>Mode B on both discriminators: the pin is unchanged (the spec's failure text takes the "and the AGC that observed the disruption is still running" branch) and the log contains zero <code>Q549 re-staging</code> entries.</p>
 <table>
 <thead>
 <tr>
@@ -2786,54 +2760,31 @@ and the log contains zero <code>Q549 re-staging</code> entries.</p>
 </table>
 <p>Measured:</p>
 <ul>
-<li><strong>The claim annotation was never observed</strong>, the same contrast the 2026-08-01
-  run showed: the sampler recorded
-  <code>Running/2026-08-04T00:15:38Z/ -&gt; Failed/2026-08-04T00:15:38Z/</code>, with
-  <code>actions-gateway.com/eviction-handled-at</code> empty in both states.</li>
-<li><strong>The observation window was ~11.3 s</strong> (00:15:08.98 → 00:15:20.24), against
-  ~2.2 s on 2026-08-01 — about 5× wider, and the claim still never appeared.
-  This weakens "the pod vanished before the claim could land" as the whole
-  story, without ruling it out.</li>
+<li><strong>The claim annotation was never observed</strong>, the same contrast the 2026-08-01 run showed: the sampler recorded <code>Running/2026-08-04T00:15:38Z/ -&gt; Failed/2026-08-04T00:15:38Z/</code>, with <code>actions-gateway.com/eviction-handled-at</code> empty in both states.</li>
+<li><strong>The observation window was ~11.3 s</strong> (00:15:08.98 → 00:15:20.24), against ~2.2 s on 2026-08-01 — about 5× wider, and the claim still never appeared.
+  This weakens "the pod vanished before the claim could land" as the whole story, without ruling it out.</li>
 <li><strong>The AGC logged nothing after 00:15:16Z</strong>, through the failure at 00:16:52.6.
   As on 2026-08-01, the entire re-run wait ran inside that silence.</li>
-<li><strong>The RunnerSet reconcile was erroring across the disruption window</strong>, not
-  converged — <a href="#what-to-capture-on-the-next-occurrence">capture item 4</a> below.</li>
+<li><strong>The RunnerSet reconcile was erroring across the disruption window</strong>, not converged — <a href="#what-to-capture-on-the-next-occurrence">capture item 4</a> below.</li>
 </ul>
-<p><strong>The listener error is by design, and is not a signal.</strong> Open question 2 below
-guessed it "may well be routine in this e2e"; it is. <code>scaleSetRecoveryManifest</code>
-sets <code>githubURL: https://ghes.invalid/ssrecorg</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>),
-deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN —
-that failure is the precondition the spec needs. So a reconcile erroring on the
-scale-set listener is the normal state of this tenant and cannot distinguish a
-failing run from a passing one. What remains open is whether the recovery scan
-is <em>reachable</em> while that is happening.</p>
+<p><strong>The listener error is by design, and is not a signal.</strong> Open question 2 below guessed it "may well be routine in this e2e"; it is. <code>scaleSetRecoveryManifest</code> sets <code>githubURL: https://ghes.invalid/ssrecorg</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
+So a reconcile erroring on the scale-set listener is the normal state of this tenant and cannot distinguish a failing run from a passing one.
+What remains open is whether the recovery scan is <em>reachable</em> while that is happening.</p>
 <h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
 <p>None of these is answered; each names what would answer it.</p>
 <ol>
-<li><strong>Did the claim ever land?</strong> The pod is gone by 00:01:25, so it cannot be
-   read back after the fact — the sampler's ~2.2 s is the only window there
-   ever was. The passing run stamped the claim inside a window of the same
-   width, so "too slow to claim before the pod vanished" and "never scanned"
-   both fit what was captured, and nothing here separates them.</li>
-<li><strong>Is the recovery scan reachable while the RunnerSet reconcile is failing on
-   the scale-set listener?</strong> Unchecked — neither the code path nor a repro has
-   been looked at. The listener error itself is settled: it is deliberate
-   (<code>ghes.invalid</code>, see the 2026-08-04 section), so it is the tenant's normal
-   state and discriminates nothing. Whether the scan survives it is still open.</li>
-<li><strong>Is the AGC's silence after 00:01:24Z the reconcile loop going quiet, or
-   something broader?</strong> Unknown from the dump alone.</li>
+<li><strong>Did the claim ever land?</strong> The pod is gone by 00:01:25, so it cannot be read back after the fact — the sampler's ~2.2 s is the only window there ever was.
+   The passing run stamped the claim inside a window of the same width, so "too slow to claim before the pod vanished" and "never scanned" both fit what was captured, and nothing here separates them.</li>
+<li><strong>Is the recovery scan reachable while the RunnerSet reconcile is failing on the scale-set listener?</strong> Unchecked — neither the code path nor a repro has been looked at.
+   The listener error itself is settled: it is deliberate (<code>ghes.invalid</code>, see the 2026-08-04 section), so it is the tenant's normal state and discriminates nothing.
+   Whether the scan survives it is still open.</li>
+<li><strong>Is the AGC's silence after 00:01:24Z the reconcile loop going quiet, or something broader?</strong> Unknown from the dump alone.</li>
 </ol>
 <h2 id="what-to-capture-on-the-next-occurrence">What to capture on the next occurrence<a class="headerlink" href="#what-to-capture-on-the-next-occurrence" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Whether the failure is mode A or mode B — read the pin and the presence of a
-  <code>Q549 re-staging</code> entry first, before anything else.</li>
-<li>The AGC log <strong>for the full wait window</strong>, not just up to the failure dump:
-  whether the recovery scan runs at all during those 90 s is the fork the
-  triage above cannot pass.</li>
-<li>The claim annotation's fate: the sampler sequence, plus whether the AGC
-  emitted any claim attempt (<code>could not claim scale-set worker disruption</code> is
-  the refusal line).</li>
+<li>Whether the failure is mode A or mode B — read the pin and the presence of a <code>Q549 re-staging</code> entry first, before anything else.</li>
+<li>The AGC log <strong>for the full wait window</strong>, not just up to the failure dump: whether the recovery scan runs at all during those 90 s is the fork the triage above cannot pass.</li>
+<li>The claim annotation's fate: the sampler sequence, plus whether the AGC emitted any claim attempt (<code>could not claim scale-set worker disruption</code> is the refusal line).</li>
 <li>The RunnerSet reconcile's state across the window — erroring, or converged.</li>
 </ul>
 

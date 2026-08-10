@@ -2681,22 +2681,21 @@
 
 
 <h1 id="networkpolicy-port-matching-under-kube-proxy-destination-nat-dnat">NetworkPolicy port matching under kube-proxy Destination NAT (DNAT)<a class="headerlink" href="#networkpolicy-port-matching-under-kube-proxy-destination-nat-dnat" title="Permanent link">&para;</a></h1>
-<p>This doc is the canonical writeup of the kube-proxy DNAT vs. NetworkPolicy-port-match trap that the AGC apiserver egress rule has to work around. Cited from <a href="../../design/network-architecture/"><code>docs/design/network-architecture.md</code></a>, <a href="../../operations/troubleshooting/"><code>docs/operations/troubleshooting.md</code></a>, <a href="../kind-iteration/"><code>kind-iteration.md</code></a>, and the code at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>cmd/gmc/internal/controller/shared_networkpolicy.go</code></a> (<code>agcAPIServerEgressRule</code>, where the rule lists both <code>443</code> and <code>6443</code>).</p>
-<p><strong>Status:</strong> the recommended fix below landed; the AGC NP now lists both ports. The reproduction and analysis are preserved here because (1) the next reader tempted to "tidy up" the duplicate ports needs to find this, and (2) the same post-DNAT pattern recurs for ingress rules and for any Service whose backend port differs from the Service port — the worked example is the fastest way to recognise it.</p>
+<p>This doc is the canonical writeup of the kube-proxy DNAT vs. NetworkPolicy-port-match trap that the AGC apiserver egress rule has to work around.
+Cited from <a href="../../design/network-architecture/"><code>docs/design/network-architecture.md</code></a>, <a href="../../operations/troubleshooting/"><code>docs/operations/troubleshooting.md</code></a>, <a href="../kind-iteration/"><code>kind-iteration.md</code></a>, and the code at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>cmd/gmc/internal/controller/shared_networkpolicy.go</code></a> (<code>agcAPIServerEgressRule</code>, where the rule lists both <code>443</code> and <code>6443</code>).</p>
+<p><strong>Status:</strong> the recommended fix below landed; the AGC NP now lists both ports.
+The reproduction and analysis are preserved here because (1) the next reader tempted to "tidy up" the duplicate ports needs to find this, and (2) the same post-DNAT pattern recurs for ingress rules and for any Service whose backend port differs from the Service port — the worked example is the fastest way to recognise it.</p>
 <h2 id="tldr">TL;DR<a class="headerlink" href="#tldr" title="Permanent link">&para;</a></h2>
-<p>When the AGC connects to <code>kubernetes.default.svc</code> (Service ClusterIP <code>10.96.0.1:443</code>), kube-proxy DNATs the destination to the apiserver's host endpoint <code>&lt;node-ip&gt;:6443</code> <em>before</em> kindnet's <code>kube-network-policies</code> controller evaluates the packet. A NetworkPolicy that allows only port <code>443</code> sees post-DNAT port <code>6443</code> and drops the packet.</p>
+<p>When the AGC connects to <code>kubernetes.default.svc</code> (Service ClusterIP <code>10.96.0.1:443</code>), kube-proxy DNATs the destination to the apiserver's host endpoint <code>&lt;node-ip&gt;:6443</code> <em>before</em> kindnet's <code>kube-network-policies</code> controller evaluates the packet.
+A NetworkPolicy that allows only port <code>443</code> sees post-DNAT port <code>6443</code> and drops the packet.</p>
 <p>This is the <strong>port axis</strong> analogue of the <code>ipBlock: &lt;ClusterIP&gt;/32</code> trap PR #59 fixed for the proxy: NetworkPolicy port and IP matches are both evaluated against the post-DNAT 5-tuple, not the pre-DNAT one.</p>
 <ul>
-<li>Failure reproduces with <strong>only the AGC NP</strong> applying (workload label
-  stripped). NP additivity is innocent.</li>
-<li>Adding port <code>6443</code> to the AGC NP's apiserver egress rule fixes it — <em>with
-  both labels still applied</em>.</li>
+<li>Failure reproduces with <strong>only the AGC NP</strong> applying (workload label stripped).
+  NP additivity is innocent.</li>
+<li>Adding port <code>6443</code> to the AGC NP's apiserver egress rule fixes it — <em>with both labels still applied</em>.</li>
 </ul>
 <h2 id="reproduction">Reproduction<a class="headerlink" href="#reproduction" title="Permanent link">&para;</a></h2>
-<p>Fresh kind cluster (v0.31.0, <code>kindest/node:v1.35.0</code>,
-<code>kindest/kindnetd:v20251212-v0.29.0-alpha-105-g20ccfc88</code>), one namespace
-<code>repro</code>, two NetworkPolicies copying the exact shape of <code>buildAGCNetworkPolicy</code>
-and <code>buildWorkloadNetworkPolicy</code> at HEAD (commit <code>15c8c10</code>, before PR #62).
+<p>Fresh kind cluster (v0.31.0, <code>kindest/node:v1.35.0</code>, <code>kindest/kindnetd:v20251212-v0.29.0-alpha-105-g20ccfc88</code>), one namespace <code>repro</code>, two NetworkPolicies copying the exact shape of <code>buildAGCNetworkPolicy</code> and <code>buildWorkloadNetworkPolicy</code> at HEAD (commit <code>15c8c10</code>, before PR #62).
 One debug pod (<code>alpine:3.20</code>) labelled with <strong>both</strong> labels:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>app=actions-gateway-controller,actions-gateway/component=workload
 </code></pre></div>
@@ -2733,14 +2732,9 @@ One debug pod (<code>alpine:3.20</code>) labelled with <strong>both</strong> lab
 </tr>
 </tbody>
 </table>
-<p>The second row is the key finding: with <strong>only</strong> the AGC NP applying — i.e.
-the exact configuration PR #62 makes permanent — the 443 connection still
-fails. Whatever PR #59 observers thought they were testing when they reported
-"removing the workload NP restored access" was either confounded by a race or
-measured a different code path.</p>
-<p>The fourth row confirms that NP additivity is fully functional in this
-kindnet/kube-network-policies version: the workload NP's port-8080 rule is
-honoured for the AGC pod even though the AGC NP knows nothing about it.</p>
+<p>The second row is the key finding: with <strong>only</strong> the AGC NP applying — i.e. the exact configuration PR #62 makes permanent — the 443 connection still fails.
+Whatever PR #59 observers thought they were testing when they reported "removing the workload NP restored access" was either confounded by a race or measured a different code path.</p>
+<p>The fourth row confirms that NP additivity is fully functional in this kindnet/kube-network-policies version: the workload NP's port-8080 rule is honoured for the AGC pod even though the AGC NP knows nothing about it.</p>
 <h3 id="kube-network-policies-verdict-log-kindnet--v4">kube-network-policies verdict log (kindnet <code>-v=4</code>)<a class="headerlink" href="#kube-network-policies-verdict-log-kindnet--v4" title="Permanent link">&para;</a></h3>
 <p>With both labels applied and the original (port 443 only) AGC NP:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>controller.go:567] &quot;Evaluating packet&quot; srcPod=&quot;repro/dbg-both&quot; dstPod=&quot;none&quot; packet=&lt;
@@ -2751,58 +2745,36 @@ honoured for the AGC pod even though the AGC NP knows nothing about it.</p>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>controller.go:597] &quot;Egress NetworkPolicies&quot; id=1 npolicies=2 allowed=false
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>controller.go:493] &quot;Finished syncing packet&quot; id=1 duration=&quot;936.461µs&quot; verdict=&quot;drop&quot;
 </code></pre></div>
-<p>With <em>only</em> the AGC NP applying (workload label stripped) — same destination,
-same verdict:</p>
+<p>With <em>only</em> the AGC NP applying (workload label stripped) — same destination, same verdict:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>[12] 10.244.2.2:43185 172.18.0.3:6443 TCP
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>&quot;Pod is not allowed to connect to port&quot; pod=&quot;repro/dbg-both&quot; port=6443
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>&quot;Egress NetworkPolicies&quot; id=12 npolicies=1 allowed=false
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>verdict=&quot;drop&quot;
 </code></pre></div>
-<p>The crucial line is the packet tuple: <code>… 172.18.0.3:6443</code>. The destination the
-policy evaluator sees has already been DNAT-rewritten from <code>10.96.0.1:443</code> to
-the apiserver host endpoint.</p>
+<p>The crucial line is the packet tuple: <code>… 172.18.0.3:6443</code>.
+The destination the policy evaluator sees has already been DNAT-rewritten from <code>10.96.0.1:443</code> to the apiserver host endpoint.</p>
 <h3 id="why-post-dnat-the-nftables-hook-priorities">Why post-DNAT? The nftables hook priorities<a class="headerlink" href="#why-post-dnat-the-nftables-hook-priorities" title="Permanent link">&para;</a></h3>
 <p><code>kindnet-network-policies</code> registers two filter chains:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>chain postrouting { type filter hook postrouting priority srcnat - 5; ... ip saddr @podips-v4 queue flags bypass to 101 }
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>chain prerouting  { type filter hook prerouting  priority dstnat + 5; ... ip saddr @podips-v4 queue flags bypass to 101 }
 </code></pre></div>
-<p>Priorities <code>srcnat - 5</code> (= 95) and <code>dstnat + 5</code> (= -95) place both hooks
-<strong>after</strong> the corresponding NAT chains. Packets enrolled in <code>@podips-v4</code> (any
-pod that is the subject of at least one NetworkPolicy) get NFQUEUE'd to
-userspace queue 101, where the kube-network-policies controller decides
-accept/drop based on the packet's <em>current</em> (post-DNAT) 5-tuple.</p>
-<p>This is the same class of failure as the <code>ipBlock: &lt;ClusterIP&gt;/32</code> rule
-PR #59 fixed for the proxy and which is already documented in
-<a href="../kind-iteration/"><code>kind-iteration.md</code></a> § "NetworkPolicy enforces after
-kube-proxy DNAT". The proxy case fixed the <strong>IP</strong> mismatch by switching
-to a PodSelector; the apiserver case has the analogous <strong>port</strong> mismatch
-and the fix is symmetric.</p>
+<p>Priorities <code>srcnat - 5</code> (= 95) and <code>dstnat + 5</code> (= -95) place both hooks <strong>after</strong> the corresponding NAT chains.
+Packets enrolled in <code>@podips-v4</code> (any pod that is the subject of at least one NetworkPolicy) get NFQUEUE'd to userspace queue 101, where the kube-network-policies controller decides accept/drop based on the packet's <em>current</em> (post-DNAT) 5-tuple.</p>
+<p>This is the same class of failure as the <code>ipBlock: &lt;ClusterIP&gt;/32</code> rule PR #59 fixed for the proxy and which is already documented in <a href="../kind-iteration/"><code>kind-iteration.md</code></a> § "NetworkPolicy enforces after kube-proxy DNAT".
+The proxy case fixed the <strong>IP</strong> mismatch by switching to a PodSelector; the apiserver case has the analogous <strong>port</strong> mismatch and the fix is symmetric.</p>
 <h3 id="why-does-this-happen-in-kind-but-presumably-not-in-prod">Why does this happen in kind but presumably not in prod?<a class="headerlink" href="#why-does-this-happen-in-kind-but-presumably-not-in-prod" title="Permanent link">&para;</a></h3>
-<p>In kind, the <code>kubernetes</code> Service points to the apiserver running on the
-control-plane node at port <code>6443</code>:</p>
+<p>In kind, the <code>kubernetes</code> Service points to the apiserver running on the control-plane node at port <code>6443</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpointslice<span class="w"> </span>-n<span class="w"> </span>default
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>NAME         ADDRESSTYPE   PORTS   ENDPOINTS    AGE
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubernetes   IPv4          6443    172.18.0.3   59m
 </code></pre></div>
-<p>So the Service does port translation: <code>ClusterIP:443 → node-ip:6443</code>. In most
-managed Kubernetes (GKE, EKS, AKS), the kubernetes Service's backend port is
-<code>443</code> (the apiserver front-end LB or HAProxy listens on <code>443</code> directly), so
-post-DNAT dport is <code>443</code>, and an NP rule on <code>443</code> matches. <strong>The AGC NP works
-in production by accident</strong> — production happens to be the configuration the
-rule was written for; kind isn't.</p>
-<p>Other major NetworkPolicy implementations have the same constraint when the
-apiserver Endpoints expose a different port: every reference NP example for
-"allow access to kube-apiserver" either uses <code>port: 6443</code> explicitly, omits
-the port restriction, or selects by Endpoints address. e.g. the
-<a href="https://github.com/openshift/cluster-kube-apiserver-operator/pull/2029">cluster-kube-apiserver-operator policy</a>
-uses <code>port: 6443</code>.</p>
+<p>So the Service does port translation: <code>ClusterIP:443 → node-ip:6443</code>.
+In most managed Kubernetes (GKE, EKS, AKS), the kubernetes Service's backend port is <code>443</code> (the apiserver front-end LB or HAProxy listens on <code>443</code> directly), so post-DNAT dport is <code>443</code>, and an NP rule on <code>443</code> matches. <strong>The AGC NP works in production by accident</strong> — production happens to be the configuration the rule was written for; kind isn't.</p>
+<p>Other major NetworkPolicy implementations have the same constraint when the apiserver Endpoints expose a different port: every reference NP example for "allow access to kube-apiserver" either uses <code>port: 6443</code> explicitly, omits the port restriction, or selects by Endpoints address. e.g. the <a href="https://github.com/openshift/cluster-kube-apiserver-operator/pull/2029">cluster-kube-apiserver-operator policy</a> uses <code>port: 6443</code>.</p>
 <h2 id="the-fix">The fix<a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h2>
-<p>The minimal, environment-agnostic change is to ensure the AGC's apiserver
-egress rule matches both the in-Service port (<code>443</code>, for production where the
-Service does no port translation) and the kind-style host port (<code>6443</code>, for
-kind clusters and any cluster where the apiserver Endpoints listen on
-<code>6443</code>). The shipped rule in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>cmd/gmc/internal/controller/shared_networkpolicy.go</code></a> <code>agcAPIServerEgressRule</code> does this:</p>
+<p>The minimal, environment-agnostic change is to ensure the AGC's apiserver egress rule matches both the in-Service port (<code>443</code>, for production where the Service does no port translation) and the kind-style host port (<code>6443</code>, for kind clusters and any cluster where the apiserver Endpoints listen on <code>6443</code>).
+The shipped rule in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>cmd/gmc/internal/controller/shared_networkpolicy.go</code></a> <code>agcAPIServerEgressRule</code> does this:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="nx">Ports</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">networkingv1</span><span class="p">.</span><span class="nx">NetworkPolicyPort</span><span class="p">{</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">        </span><span class="p">{</span><span class="nx">Port</span><span class="p">:</span><span class="w"> </span><span class="nx">ptr</span><span class="p">(</span><span class="nx">intstr</span><span class="p">.</span><span class="nx">FromInt32</span><span class="p">(</span><span class="mi">443</span><span class="p">))},</span>
@@ -2810,47 +2782,26 @@ kind clusters and any cluster where the apiserver Endpoints listen on
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="p">},</span>
 <a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="p">},</span>
 </code></pre></div>
-<p>The alternative — omitting the port restriction on the apiserver rule entirely
-— is simpler but trades off precision: anything reachable on any port via the
-AGC pod identity would be allowed. Listing both ports keeps the rule precise
-(only apiserver-style ports) while working in both topologies.</p>
-<p>The fix is symmetric with how PR #59 handled the proxy <code>ipBlock</code> → PodSelector
-case: align the rule with the <strong>post-DNAT</strong> shape of the packet, not the
-pre-DNAT one. The code comment on the rule calls out the reason explicitly so
-the next reader (in particular: the next person tempted to "tidy up" the
-duplicate ports) doesn't strip <code>6443</code> thinking it's redundant.</p>
+<p>The alternative — omitting the port restriction on the apiserver rule entirely — is simpler but trades off precision: anything reachable on any port via the AGC pod identity would be allowed.
+Listing both ports keeps the rule precise (only apiserver-style ports) while working in both topologies.</p>
+<p>The fix is symmetric with how PR #59 handled the proxy <code>ipBlock</code> → PodSelector case: align the rule with the <strong>post-DNAT</strong> shape of the packet, not the pre-DNAT one.
+The code comment on the rule calls out the reason explicitly so the next reader (in particular: the next person tempted to "tidy up" the duplicate ports) doesn't strip <code>6443</code> thinking it's redundant.</p>
 <p>A regression unit test in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder_test.go"><code>builder_test.go</code></a> asserts both ports appear in the apiserver egress rule, and the integration test in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/network_policy_test.go"><code>network_policy_test.go</code></a> covers the same property end-to-end against envtest.</p>
 <p>The cluster-only e2e spec <code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/provisioning_test.go"><code>cmd/gmc/test/e2e/provisioning_test.go</code></a> is the live-cluster guard: a single label-matched debug pod doing <code>nc -zv 10.96.0.1 443</code> would have caught both PR #59's proxy <code>ipBlock</code> bug and the AGC <code>port: 443</code> bug from one spec, locally, in seconds.</p>
 <h2 id="why-this-isnt-an-upstream-bug">Why this isn't an upstream bug<a class="headerlink" href="#why-this-isnt-an-upstream-bug" title="Permanent link">&para;</a></h2>
-<p>This is documented expected behaviour of every well-known NetworkPolicy
-implementation, not a bug. Cilium, Calico, kube-router, and
-kube-network-policies all evaluate post-DNAT for ingress/egress port rules
-because the alternative (recovering the pre-DNAT 5-tuple via conntrack at
-policy eval time) is expensive and ambiguous in the presence of policy
-chaining. The upstream
-<a href="https://github.com/kubernetes-sigs/kube-network-policies"><code>kubernetes-sigs/kube-network-policies</code> README</a>
-makes no claim of pre-DNAT evaluation; the
-<a href="https://kindnet.es/docs/user/network-policies/">kindnet NP docs</a> link to it
-unchanged.</p>
-<p>Reference NetworkPolicy examples for "allow access to kube-apiserver"
-consistently use <code>port: 6443</code> explicitly, omit the port restriction, or
-select by Endpoints address — e.g. the
-<a href="https://github.com/openshift/cluster-kube-apiserver-operator/pull/2029">cluster-kube-apiserver-operator policy</a>
-uses <code>port: 6443</code>.</p>
+<p>This is documented expected behaviour of every well-known NetworkPolicy implementation, not a bug.
+Cilium, Calico, kube-router, and kube-network-policies all evaluate post-DNAT for ingress/egress port rules because the alternative (recovering the pre-DNAT 5-tuple via conntrack at policy eval time) is expensive and ambiguous in the presence of policy chaining.
+The upstream <a href="https://github.com/kubernetes-sigs/kube-network-policies"><code>kubernetes-sigs/kube-network-policies</code> README</a> makes no claim of pre-DNAT evaluation; the <a href="https://kindnet.es/docs/user/network-policies/">kindnet NP docs</a> link to it unchanged.</p>
+<p>Reference NetworkPolicy examples for "allow access to kube-apiserver" consistently use <code>port: 6443</code> explicitly, omit the port restriction, or select by Endpoints address — e.g. the <a href="https://github.com/openshift/cluster-kube-apiserver-operator/pull/2029">cluster-kube-apiserver-operator policy</a> uses <code>port: 6443</code>.</p>
 <h2 id="generalising-the-pattern">Generalising the pattern<a class="headerlink" href="#generalising-the-pattern" title="Permanent link">&para;</a></h2>
-<p>The same trap applies to any NetworkPolicy rule whose port-restriction is
-written against a Service ClusterIP rather than the backend pod or host
-port. If a future rule allows egress through a Service whose backend port
-differs from the Service port, either:</p>
+<p>The same trap applies to any NetworkPolicy rule whose port-restriction is written against a Service ClusterIP rather than the backend pod or host port.
+If a future rule allows egress through a Service whose backend port differs from the Service port, either:</p>
 <ul>
 <li>list <strong>both</strong> the Service port and the backend port, or</li>
 <li>omit the port restriction on that rule, or</li>
-<li>replace the rule's peer/port with a PodSelector that matches the backend
-  pods directly (this is what PR #59 did for the proxy <code>ipBlock</code> case).</li>
+<li>replace the rule's peer/port with a PodSelector that matches the backend pods directly (this is what PR #59 did for the proxy <code>ipBlock</code> case).</li>
 </ul>
-<p>The same caveat applies on the ingress side: an ingress rule whose port
-matches the Service port can drop traffic if the backend pod listens on a
-different port.</p>
+<p>The same caveat applies on the ingress side: an ingress rule whose port matches the Service port can drop traffic if the backend pod listens on a different port.</p>
 
 
 

@@ -2660,17 +2660,13 @@
 
 <h1 id="air-gapped--private-registry-install-q187">Air-gapped / private-registry install (Q187)<a class="headerlink" href="#air-gapped--private-registry-install-q187" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Status: ✅ Done — chart image-pull-secret support + air-gapped install guide
-shipped. Q187 removed from the Queue.</p>
+<p>Status: ✅ Done — chart image-pull-secret support + air-gapped install guide shipped.
+Q187 removed from the Queue.</p>
 </blockquote>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Make GAG installable on egress-restricted / air-gapped clusters that cannot pull
-from GHCR, by letting an operator relocate every image to a private mirror and
-authenticate the pulls — without weakening the secure-by-default posture
-(digest pinning stays mandatory).</p>
+<p>Make GAG installable on egress-restricted / air-gapped clusters that cannot pull from GHCR, by letting an operator relocate every image to a private mirror and authenticate the pulls — without weakening the secure-by-default posture (digest pinning stays mandatory).</p>
 <h2 id="background--what-must-be-relocated">Background — what must be relocated<a class="headerlink" href="#background--what-must-be-relocated" title="Permanent link">&para;</a></h2>
-<p>GAG references <strong>four</strong> first-/third-party images, only one of which the chart
-runs directly:</p>
+<p>GAG references <strong>four</strong> first-/third-party images, only one of which the chart runs directly:</p>
 <table>
 <thead>
 <tr>
@@ -2707,56 +2703,41 @@ runs directly:</p>
 </tr>
 </tbody>
 </table>
-<p>Per-image <code>repository</code> overrides already exist in <code>values.yaml</code> (and
-<code>values.schema.json</code> requires <code>repository</code>); the registry is therefore <em>already</em>
-relocatable per image. The gaps Q187 closes:</p>
+<p>Per-image <code>repository</code> overrides already exist in <code>values.yaml</code> (and <code>values.schema.json</code> requires <code>repository</code>); the registry is therefore <em>already</em> relocatable per image.
+The gaps Q187 closes:</p>
 <ol>
-<li>No way to attach an image-pull Secret for a private registry that requires
-   authentication.</li>
-<li>No documented procedure for mirroring the images (with digests) + the OCI
-   Helm chart, wiring the overrides, and verifying.</li>
+<li>No way to attach an image-pull Secret for a private registry that requires authentication.</li>
+<li>No documented procedure for mirroring the images (with digests) + the OCI Helm chart, wiring the overrides, and verifying.</li>
 </ol>
 <h2 id="why-chart--docs-no-go-change">Why chart + docs (no Go change)<a class="headerlink" href="#why-chart--docs-no-go-change" title="Permanent link">&para;</a></h2>
-<p>AGC, proxy, and worker pods are <strong>provisioned at runtime</strong>, not by the chart, so
-the chart cannot stamp <code>imagePullSecrets</code> onto them. Kubernetes' canonical
-air-gapped mechanism covers them with <strong>zero code</strong>: an <code>imagePullSecrets</code>
-reference on the <em>ServiceAccount</em> is auto-injected into every pod that uses it.
+<p>AGC, proxy, and worker pods are <strong>provisioned at runtime</strong>, not by the chart, so the chart cannot stamp <code>imagePullSecrets</code> onto them.
+Kubernetes' canonical air-gapped mechanism covers them with <strong>zero code</strong>: an <code>imagePullSecrets</code> reference on the <em>ServiceAccount</em> is auto-injected into every pod that uses it.
 The relevant SAs all live in the tenant namespace:</p>
 <ul>
 <li>AGC pods → SA <code>&lt;gateway&gt;</code> (the per-gateway AGC SA the GMC creates).</li>
 <li>Worker pods → SA <code>&lt;gateway&gt;-worker</code> (the worker SA the GMC creates).</li>
 <li>Proxy pods → the namespace <code>default</code> SA (the proxy pod spec sets no SA).</li>
 </ul>
-<p>The GMC reconciles the AGC/worker SAs with <code>controllerutil.CreateOrPatch</code>, whose
-mutate closure only sets <code>Labels</code> + the owner reference
-(<code>applyServiceAccount</code> in <code>actionsgateway_v2_controller.go</code>) — it never touches
-<code>imagePullSecrets</code>, so an operator-added pull-secret reference <strong>survives
-reconciliation</strong>. The <code>default</code> SA is never touched by the GMC at all.</p>
-<p>So the chart only needs to wire <code>imagePullSecrets</code> for its own workload (the GMC
-Deployment); the runtime workloads are covered by the documented SA-attach
-pattern.</p>
+<p>The GMC reconciles the AGC/worker SAs with <code>controllerutil.CreateOrPatch</code>, whose mutate closure only sets <code>Labels</code> + the owner reference (<code>applyServiceAccount</code> in <code>actionsgateway_v2_controller.go</code>) — it never touches <code>imagePullSecrets</code>, so an operator-added pull-secret reference <strong>survives reconciliation</strong>.
+The <code>default</code> SA is never touched by the GMC at all.</p>
+<p>So the chart only needs to wire <code>imagePullSecrets</code> for its own workload (the GMC Deployment); the runtime workloads are covered by the documented SA-attach pattern.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="chart">Chart<a class="headerlink" href="#chart" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Add top-level <code>imagePullSecrets: []</code> value (list of <code>{name: &lt;secret&gt;}</code>),
-  applied to the GMC Deployment pod spec. Empty default (no behavior change).</li>
+<li>Add top-level <code>imagePullSecrets: []</code> value (list of <code>{name: &lt;secret&gt;}</code>), applied to the GMC Deployment pod spec.
+  Empty default (no behavior change).</li>
 <li>Add it to <code>values.schema.json</code> and the chart README values table.</li>
-<li>Keep digest pinning intact — <code>imagePullSecrets</code> is orthogonal to the
-  digest-required <code>gmcImage</code>/<code>image</code> helpers; no change there.</li>
-<li>Per-image registry overrides: already present; clarify the <code>values.yaml</code>
-  comment that <code>repository</code> is the private-mirror relocation knob.</li>
+<li>Keep digest pinning intact — <code>imagePullSecrets</code> is orthogonal to the digest-required <code>gmcImage</code>/<code>image</code> helpers; no change there.</li>
+<li>Per-image registry overrides: already present; clarify the <code>values.yaml</code> comment that <code>repository</code> is the private-mirror relocation knob.</li>
 </ul>
 <h3 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h3>
 <ul>
 <li>New <code>docs/operations/air-gapped-install.md</code> (Platform-engineer audience):</li>
-<li>Mirror/relocate the four images <strong>preserving digests</strong> (<code>cosign copy</code> /
-     <code>crane copy</code> / <code>skopeo</code>).</li>
+<li>Mirror/relocate the four images <strong>preserving digests</strong> (<code>cosign copy</code> / <code>crane copy</code> / <code>skopeo</code>).</li>
 <li>Relocate the OCI Helm chart(s) (<code>helm pull</code> / <code>oras cp</code>).</li>
-<li>Create the <code>dockerconfigjson</code> pull Secret <strong>securely</strong> — from a file
-     (<code>kubectl create secret docker-registry … --from-file</code>), never registry
-     creds committed to <code>values.yaml</code>. Created in <code>gmc-system</code> + each tenant ns.</li>
-<li><code>helm install</code> with per-image <code>repository</code>/<code>digest</code> overrides +
-     <code>imagePullSecrets</code>.</li>
+<li>Create the <code>dockerconfigjson</code> pull Secret <strong>securely</strong> — from a file (<code>kubectl create secret docker-registry … --from-file</code>), never registry creds committed to <code>values.yaml</code>.
+     Created in <code>gmc-system</code> + each tenant ns.</li>
+<li><code>helm install</code> with per-image <code>repository</code>/<code>digest</code> overrides + <code>imagePullSecrets</code>.</li>
 <li>SA-attach the pull Secret for AGC / worker / proxy in each tenant ns.</li>
 <li>Set the worker image override to the mirrored ref.</li>
 <li>Verify.</li>
@@ -2764,8 +2745,7 @@ pattern.</p>
 </ul>
 <h2 id="acceptance">Acceptance<a class="headerlink" href="#acceptance" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Chart supports private-registry overrides + pull secrets for all images;
-  digest pinning preserved. <code>helm lint</code>/<code>template</code> green; <code>make check</code> green.</li>
+<li>Chart supports private-registry overrides + pull secrets for all images; digest pinning preserved. <code>helm lint</code>/<code>template</code> green; <code>make check</code> green.</li>
 <li>Air-gapped doc with the secure pull-secret pattern.</li>
 </ul>
 

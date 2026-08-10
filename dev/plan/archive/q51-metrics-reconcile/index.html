@@ -2609,11 +2609,9 @@
 
 
 <h1 id="q51--reconcile-documented-vs-emitted-prometheus-metrics">Q51 — Reconcile documented vs emitted Prometheus metrics<a class="headerlink" href="#q51--reconcile-documented-vs-emitted-prometheus-metrics" title="Permanent link">&para;</a></h1>
-<p>Bring the operator-facing metrics docs into line with the metrics the code actually
-registers. The six-layer docs audit (Layer 3) found six documented metric names that
-the docs reference but the code does not register, so operators are pointed at
-telemetry they cannot scrape. This task makes a per-metric decision — implement,
-re-point, or mark <code>(planned)</code> — and applies it in code and docs.</p>
+<p>Bring the operator-facing metrics docs into line with the metrics the code actually registers.
+The six-layer docs audit (Layer 3) found six documented metric names that the docs reference but the code does not register, so operators are pointed at telemetry they cannot scrape.
+This task makes a per-metric decision — implement, re-point, or mark <code>(planned)</code> — and applies it in code and docs.</p>
 <h2 id="per-metric-decisions">Per-metric decisions<a class="headerlink" href="#per-metric-decisions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2658,20 +2656,13 @@ re-point, or mark <code>(planned)</code> — and applies it in code and docs.</p
 </table>
 <h2 id="implementation-notes">Implementation notes<a class="headerlink" href="#implementation-notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>pod_creation_latency_seconds</strong> measures pod creation → the runner container
-  starting (the earliest non-zero container <code>StartedAt</code>), which includes scheduling
-  and image pull — the dominant, SLO-relevant cost. Observed inside the
-  <code>InformerPodWaiter</code> at terminal resolution, deduped via the existing
-  resolve-once-per-pod path. Buckets span 0.5s–300s to bracket the p95 ≤ 15s /
-  p99 ≤ 60s SLO.</li>
-<li><strong>GMC metrics</strong> live in a new <code>cmd/gmc/internal/controller/metrics.go</code>, registered
-  with the controller-runtime <code>metrics.Registry</code> so they appear on the same <code>/metrics</code>
-  endpoint as the built-in controller-runtime metrics.</li>
+<li><strong>pod_creation_latency_seconds</strong> measures pod creation → the runner container starting (the earliest non-zero container <code>StartedAt</code>), which includes scheduling and image pull — the dominant, SLO-relevant cost.
+  Observed inside the <code>InformerPodWaiter</code> at terminal resolution, deduped via the existing resolve-once-per-pod path.
+  Buckets span 0.5s–300s to bracket the p95 ≤ 15s / p99 ≤ 60s SLO.</li>
+<li><strong>GMC metrics</strong> live in a new <code>cmd/gmc/internal/controller/metrics.go</code>, registered with the controller-runtime <code>metrics.Registry</code> so they appear on the same <code>/metrics</code> endpoint as the built-in controller-runtime metrics.</li>
 </ul>
 <h2 id="docs-touched">Docs touched<a class="headerlink" href="#docs-touched" title="Permanent link">&para;</a></h2>
-<p><code>docs/operations/observability.md</code>, <code>runbook.md</code>, <code>troubleshooting.md</code>, <code>upgrade.md</code>,
-<code>docs/design/02-architecture.md</code>, <code>appendix-a-capacity-slos.md</code>, <code>plan/milestone-5.md</code>,
-and <code>plan/docs-six-layer-audit.md</code> (mark the Layer 3 finding resolved).</p>
+<p><code>docs/operations/observability.md</code>, <code>runbook.md</code>, <code>troubleshooting.md</code>, <code>upgrade.md</code>, <code>docs/design/02-architecture.md</code>, <code>appendix-a-capacity-slos.md</code>, <code>plan/milestone-5.md</code>, and <code>plan/docs-six-layer-audit.md</code> (mark the Layer 3 finding resolved).</p>
 
 
 

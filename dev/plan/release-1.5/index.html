@@ -2660,131 +2660,67 @@
 
 <h1 id="release-15-milestone-definition">Release 1.5 Milestone Definition<a class="headerlink" href="#release-15-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already
-scoped and its gating rows are fixed; 1.5 is where work identified after that
-line lands. Four gating Queue rows so far, labelled <code>1.5-gate</code>:
-<a href="../../STATUS/#Q712">Q712</a>, <a href="../../STATUS/#Q713">Q713</a>, and
-<a href="../../STATUS/#Q726">Q726</a>, admitted 2026-08-09 from the candidate list below,
-plus <a href="../../STATUS/#Q715">Q715</a>, admitted the same day off an external date.</p>
+<p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
+Four gating Queue rows so far, labelled <code>1.5-gate</code>: <a href="../../STATUS/#Q712">Q712</a>, <a href="../../STATUS/#Q713">Q713</a>, and <a href="../../STATUS/#Q726">Q726</a>, admitted 2026-08-09 from the candidate list below, plus <a href="../../STATUS/#Q715">Q715</a>, admitted the same day off an external date.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
-<p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both are
-defects in capabilities the project already claims, not new features. That is
-what makes them release-gating: shipping another minor while either is open
-means shipping a claim the product does not honour.</p>
-<p>Q726 is the same shape read from the other side. It is the one
-<a href="../arc-parity/">ARC parity</a> gap that breaks the zero-edit migration claim the
-front door makes, so it gates for the same reason: the claim is published and
-the product does not honour it for a <code>runs-on</code> array.</p>
+<p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both are defects in capabilities the project already claims, not new features.
+That is what makes them release-gating: shipping another minor while either is open means shipping a claim the product does not honour.</p>
+<p>Q726 is the same shape read from the other side.
+It is the one <a href="../arc-parity/">ARC parity</a> gap that breaks the zero-edit migration claim the front door makes, so it gates for the same reason: the claim is published and the product does not honour it for a <code>runs-on</code> array.</p>
 <h3 id="q712--the-runner-group-binding-is-declared-and-never-wired">Q712 — the runner-group binding is declared and never wired<a class="headerlink" href="#q712--the-runner-group-binding-is-declared-and-never-wired" title="Permanent link">&para;</a></h3>
-<p><code>RunnerGroupName</code> exists on the scale-set listener config
-(<code>cmd/agc/internal/scalesetlistener/listener.go:372</code>) and is resolved when
-non-empty (<code>:690</code>), but the sole production construction site in
-<code>cmd/agc/internal/controller/runnerset_scaleset.go</code> never sets it. Every scale
-set therefore registers into the installation's default runner group.</p>
-<p>The GitHub runner group is the <strong>forge-side authorization point</strong> for which
-repositories may target which runners. With every tenant's scale set in one
-group, a repository outside a tenant can name that scale set in <code>runs-on</code> and
-route work into the tenant's namespace, quota, and egress IP. GAG's pod-level
-isolation is unaffected; what is unbounded is <em>who can cause a job to run there</em>.</p>
-<p>Scope note, to be settled in the work rather than assumed: exploitability
-depends on the default group's repository-access configuration at GitHub, which
-GAG does not manage today. The row covers wiring the field, deciding whether the
-gateway should also assert group membership, and documenting what the platform
-admin still owns at GitHub.</p>
-<p>This is also the one place ARC is ahead on GAG's own core claim: its
-<code>gha-runner-scale-set</code> chart exposes <code>runnerGroup</code> as a first-class value.</p>
+<p><code>RunnerGroupName</code> exists on the scale-set listener config (<code>cmd/agc/internal/scalesetlistener/listener.go:372</code>) and is resolved when non-empty (<code>:690</code>), but the sole production construction site in <code>cmd/agc/internal/controller/runnerset_scaleset.go</code> never sets it.
+Every scale set therefore registers into the installation's default runner group.</p>
+<p>The GitHub runner group is the <strong>forge-side authorization point</strong> for which repositories may target which runners.
+With every tenant's scale set in one group, a repository outside a tenant can name that scale set in <code>runs-on</code> and route work into the tenant's namespace, quota, and egress IP.
+GAG's pod-level isolation is unaffected; what is unbounded is <em>who can cause a job to run there</em>.</p>
+<p>Scope note, to be settled in the work rather than assumed: exploitability depends on the default group's repository-access configuration at GitHub, which GAG does not manage today.
+The row covers wiring the field, deciding whether the gateway should also assert group membership, and documenting what the platform admin still owns at GitHub.</p>
+<p>This is also the one place ARC is ahead on GAG's own core claim: its <code>gha-runner-scale-set</code> chart exposes <code>runnerGroup</code> as a first-class value.</p>
 <h3 id="q713--the-shipped-tier-emits-no-duration-or-latency-series">Q713 — the shipped tier emits no duration or latency series<a class="headerlink" href="#q713--the-shipped-tier-emits-no-duration-or-latency-series" title="Permanent link">&para;</a></h3>
-<p><code>waitForCompletion</code> and the pod waiter run only inside <code>provision()</code>
-(<code>cmd/agc/internal/provisioner/provisioner.go:557</code> and <code>:583</code>).
-<code>ProvisionScaleSetWorker</code> registers neither, and <code>v2beta1</code> is ScaleSet-only, so
-the tier every new tenant runs emits both series empty.</p>
-<p>The blast radius is entirely downstream and none of it is caveated (unlike
-<code>jobs_admission_rejected_total</code>, which <em>is</em> documented as classic-only): two
-Appendix A SLOs, a severity-critical alert, four recording rules, both shipped
-Grafana dashboards, the runbook, and the cost-attribution guide all read blank.</p>
-<p>The failure mode is worst-case for a pre-adoption project. The first external
-operator to apply the shipped <code>PrometheusRule</code> sees a product that looks broken,
-and <a href="../go-to-market/">go-to-market</a> §8 records that first impressions from cold
-traffic are one-shot.</p>
-<p>It also gates positioning work: every latency, utilization, or cost claim in the
-comparison material is unmeasurable until this lands, so no number-bearing claim
-should ship ahead of it.</p>
+<p><code>waitForCompletion</code> and the pod waiter run only inside <code>provision()</code> (<code>cmd/agc/internal/provisioner/provisioner.go:557</code> and <code>:583</code>). <code>ProvisionScaleSetWorker</code> registers neither, and <code>v2beta1</code> is ScaleSet-only, so the tier every new tenant runs emits both series empty.</p>
+<p>The blast radius is entirely downstream and none of it is caveated (unlike <code>jobs_admission_rejected_total</code>, which <em>is</em> documented as classic-only): two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.</p>
+<p>The failure mode is worst-case for a pre-adoption project.
+The first external operator to apply the shipped <code>PrometheusRule</code> sees a product that looks broken, and <a href="../go-to-market/">go-to-market</a> §8 records that first impressions from cold traffic are one-shot.</p>
+<p>It also gates positioning work: every latency, utilization, or cost claim in the comparison material is unmeasurable until this lands, so no number-bearing claim should ship ahead of it.</p>
 <h3 id="q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only">Q715 — the runner version reported to GitHub is a constant, and the too-old warning is classic-only<a class="headerlink" href="#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only" title="Permanent link">&para;</a></h3>
 <p>Two halves, and only together do they leave the shipped tier blind.</p>
-<p>The version sent at session creation is <code>BrokerConfig.RunnerVersion</code>, the pinned
-default the project ships (<code>cmd/agc/internal/agentpool/pool.go:467</code>, reached from
-<code>runner_shared.go:555</code>). It is the same value whatever <code>spec.workerImage</code> holds,
-so a tenant running an older runner image reports the newer number GAG was built
-against. The pod's <code>app.kubernetes.io/version</code> label <em>is</em> derived from the image
-ref (<code>provisioner/pod.go:47</code>), which makes the two disagree without either being
-consulted for admission.</p>
-<p>The signal that would otherwise catch it, <code>RunnerVersionTooOld</code>, is produced in
-the classic listener goroutine only. That is structural rather than an oversight:
-the scale-set protocol carries no runner version at session creation, so the
-condition cannot occur on the tier <code>v2beta1</code> exposes
-(<a href="../v2-api-gap-analysis/#agc">gap analysis</a>). The consequence is still that no
-tier both knows the real version and can warn about it.</p>
-<p><strong>What makes it gate rather than wait:</strong> GitHub raises the enforced minimum
-runner version on GHEC on 2026-09-25. On that date a tenant whose worker image
-is behind starts failing at GitHub, and GAG has told nobody, on the tier every
-new tenant runs. This is the only gating row here with a date it does not
-control, which is why it was admitted without going through the candidate list.</p>
+<p>The version sent at session creation is <code>BrokerConfig.RunnerVersion</code>, the pinned default the project ships (<code>cmd/agc/internal/agentpool/pool.go:467</code>, reached from <code>runner_shared.go:555</code>).
+It is the same value whatever <code>spec.workerImage</code> holds, so a tenant running an older runner image reports the newer number GAG was built against.
+The pod's <code>app.kubernetes.io/version</code> label <em>is</em> derived from the image ref (<code>provisioner/pod.go:47</code>), which makes the two disagree without either being consulted for admission.</p>
+<p>The signal that would otherwise catch it, <code>RunnerVersionTooOld</code>, is produced in the classic listener goroutine only.
+That is structural rather than an oversight: the scale-set protocol carries no runner version at session creation, so the condition cannot occur on the tier <code>v2beta1</code> exposes (<a href="../v2-api-gap-analysis/#agc">gap analysis</a>).
+The consequence is still that no tier both knows the real version and can warn about it.</p>
+<p><strong>What makes it gate rather than wait:</strong> GitHub raises the enforced minimum runner version on GHEC on 2026-09-25.
+On that date a tenant whose worker image is behind starts failing at GitHub, and GAG has told nobody, on the tier every new tenant runs.
+This is the only gating row here with a date it does not control, which is why it was admitted without going through the candidate list.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>
-<li><strong>Fold the scale-up token bucket into the advertised capacity.</strong> The bucket is
-  waited on at <code>provisioner.go:532</code> and <code>:793</code>, after the claim, with the job
-  holding its GitHub lock, which the CRD godoc states outright
-  (<code>api/v2beta1/runnerset_types.go:394-400</code>). Expressing free tokens as a fourth
-  <code>min()</code> rung in <code>AdvertiseCapacity</code> would make the anti-stampede claim
-  structurally honest.</li>
-<li><strong>Gate intake on workers that schedule but never start.</strong> <code>podUnschedulable()</code>
-  keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it
-  binds to a node, never starts, and each claim spends a JIT record and a lock
-  until <code>pendingPodDeadline</code>.</li>
-<li><strong>Assert a worker pod cannot reach the cloud metadata server.</strong> Three docs
-  advise denying <code>169.254.169.254/32</code>, Q226 measured HTTP 200 from inside a Kata
-  guest, and no test names the address.
-<em>(Multi-label runner sets were held here too, and were accepted on 2026-08-09:
-the row is <a href="../../STATUS/#Q726">Q726</a>, now labelled <code>1.5-gate</code>, and the gap
-inventory it belongs to is <a href="../arc-parity/">arc-parity.md</a>.)</em></li>
+<li><strong>Fold the scale-up token bucket into the advertised capacity.</strong> The bucket is waited on at <code>provisioner.go:532</code> and <code>:793</code>, after the claim, with the job holding its GitHub lock, which the CRD godoc states outright (<code>api/v2beta1/runnerset_types.go:394-400</code>).
+  Expressing free tokens as a fourth <code>min()</code> rung in <code>AdvertiseCapacity</code> would make the anti-stampede claim structurally honest.</li>
+<li><strong>Gate intake on workers that schedule but never start.</strong> <code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds to a node, never starts, and each claim spends a JIT record and a lock until <code>pendingPodDeadline</code>.</li>
+<li><strong>Assert a worker pod cannot reach the cloud metadata server.</strong> Three docs advise denying <code>169.254.169.254/32</code>, Q226 measured HTTP 200 from inside a Kata guest, and no test names the address. <em>(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is <a href="../../STATUS/#Q726">Q726</a>, now labelled <code>1.5-gate</code>, and the gap inventory it belongs to is <a href="../arc-parity/">arc-parity.md</a>.)</em></li>
 </ul>
 <h2 id="in-scope-reconcile-the-marketing-surfaces">In scope: reconcile the marketing surfaces<a class="headerlink" href="#in-scope-reconcile-the-marketing-surfaces" title="Permanent link">&para;</a></h2>
-<p>1.5 carries the marketing-claim work identified by the 2026-08-06 competitive
-review. It touches no shipped artifact, so individual corrections can land
-continuously as docs PRs, but the release does not tag until the reconciliation
-has been done and its verdict recorded here.</p>
+<p>1.5 carries the marketing-claim work identified by the 2026-08-06 competitive review.
+It touches no shipped artifact, so individual corrections can land continuously as docs PRs, but the release does not tag until the reconciliation has been done and its verdict recorded here.</p>
 <p>Three bodies of work, in dependency order:</p>
 <ol>
-<li><strong>Corrections.</strong> Claims that are wrong or stale today. The largest are the
-   ARC-side cells of the <code>why-gag.md</code> comparison table: 11 of them assert a gap
-   with no ARC version and no measurement date, and two went false at datable
-   upstream releases (0.13.1 fixed quota-blocked pod creation; 0.14.0 added
-   multi-label scale sets, which GAG does not have). Also the listener-footprint
-   wording, which is substantively right but uses "cluster IP" to mean a pod IP,
-   inviting a reader to check <code>Service</code> objects and conclude the table is wrong.</li>
-<li><strong>Under-claims.</strong> Nine capabilities shipped and appear only in
-   <code>features.md</code>. The largest are no-PEM workload identity (the GitHub App
-   private key never enters the cluster), the live-validated per-tenant egress
-   IP result, and the durability programme whose motivating incident was five
-   worker pods running 16 hours on 82 spot node-hours.</li>
-<li><strong>Structure.</strong> Q713 blocks any number-bearing claim, since the shipped tier
-   emits no latency or duration series to measure. Q712 blocks publishing
-   tenant-isolation marketing, because the runner-group binding it would be
-   claiming is unwired.</li>
+<li><strong>Corrections.</strong> Claims that are wrong or stale today.
+   The largest are the ARC-side cells of the <code>why-gag.md</code> comparison table: 11 of them assert a gap with no ARC version and no measurement date, and two went false at datable upstream releases (0.13.1 fixed quota-blocked pod creation; 0.14.0 added multi-label scale sets, which GAG does not have).
+   Also the listener-footprint wording, which is substantively right but uses "cluster IP" to mean a pod IP, inviting a reader to check <code>Service</code> objects and conclude the table is wrong.</li>
+<li><strong>Under-claims.</strong> Nine capabilities shipped and appear only in <code>features.md</code>.
+   The largest are no-PEM workload identity (the GitHub App private key never enters the cluster), the live-validated per-tenant egress IP result, and the durability programme whose motivating incident was five worker pods running 16 hours on 82 spot node-hours.</li>
+<li><strong>Structure.</strong> Q713 blocks any number-bearing claim, since the shipped tier emits no latency or duration series to measure.
+   Q712 blocks publishing tenant-isolation marketing, because the runner-group binding it would be claiming is unwired.</li>
 </ol>
-<p>The recurring form of this is now <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>,
-which asks the same three questions before every tag. 1.5 is the first release
-to run it, and the backlog it produced is the reason the step exists.</p>
+<p>The recurring form of this is now <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>, which asks the same three questions before every tag.
+1.5 is the first release to run it, and the backlog it produced is the reason the step exists.</p>
 <h2 id="open-question-for-scoping">Open question for scoping<a class="headerlink" href="#open-question-for-scoping" title="Permanent link">&para;</a></h2>
-<p>Whether the comparison table keeps its verdict-table shape at all. The 2026-08-06
-review traced the 11 undated cells to the format: a green-check/red-X table needs
-a definite cell in every row, and the working notes it was built from had marked
-most competitor-side facts as unverified. The format had nowhere to put "we
-believe this but have not checked it", so unverified became a red X. Patching
-cells does not fix that; either every competitor-side cell carries a version and
-a date, or the page stops rendering competitor claims as verdicts.</p>
+<p>Whether the comparison table keeps its verdict-table shape at all.
+The 2026-08-06 review traced the 11 undated cells to the format: a green-check/red-X table needs a definite cell in every row, and the working notes it was built from had marked most competitor-side facts as unverified.
+The format had nowhere to put "we believe this but have not checked it", so unverified became a red X. Patching cells does not fix that; either every competitor-side cell carries a version and a date, or the page stops rendering competitor claims as verdicts.</p>
 
 
 

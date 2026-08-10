@@ -3075,28 +3075,18 @@
 
 
 <h1 id="gke-dogfood-runbook">GKE Dogfood Runbook<a class="headerlink" href="#gke-dogfood-runbook" title="Permanent link">&para;</a></h1>
-<p>On-demand GKE cluster for dogfooding GAG's own CI. The cluster costs $0 at
-rest (zero nodes), roughly $0.07/hr when idling with the system node only, and
-adds ≈$0.04/hr per spot worker node while jobs are running.</p>
+<p>On-demand GKE cluster for dogfooding GAG's own CI.
+The cluster costs $0 at rest (zero nodes), roughly $0.07/hr when idling with the system node only, and adds ≈$0.04/hr per spot worker node while jobs are running.</p>
 <blockquote>
-<p><strong>Status: Complete (2026-07-07).</strong> The dogfood plan's deliverables have all
-landed and are live-validated: turn-up (2026-07-01), per-job-green, and
-concurrent-matrix-green on the ScaleSet default (Q224 closed via <a href="../../STATUS/#Q264">Q264</a>
-P4, #545), plus the v2beta1 dogfood path (Q231, #573). The turn-up findings that
-gated it are all resolved — session recovery (Q247: renew by RunnerRequestID,
-bounded RenewJob, job-scoped renewal token, and Q254 worker teardown on definitive
-lock loss), release-asset diagnosis (Q246), agent-recycle under burst (Q259), and
-the dup-acquisition wedge (Q260). No open Queue rows remain. This doc stays in
-place as the living operational runbook — the sections below are the
-turn-up/start/stop/teardown reference, not open work. The chronological turn-up
-history and per-finding root-cause write-ups live in
-<a href="../archive/gke-dogfood-turnup-findings/">archive/gke-dogfood-turnup-findings.md</a>.</p>
-<p><strong>Updated 2026-07-25 (Q399).</strong> The main CI tenant moved from the deprecated
-Classic protocol to a single-label ScaleSet, the last Q264 P5 residual. Classic
-orphaned 81% of the jobs it acquired on this tenant (85 acquired, 16 worker pods).
-An existing pre-Q399 tenant needs its <code>ci</code> RunnerSet <strong>recreated</strong>, not patched:
-see the migration note in Part B7. The runner label changed from <code>gag-ci</code> to
-<code>gag-ci-scaleset</code>.</p>
+<p><strong>Status: Complete (2026-07-07).</strong> The dogfood plan's deliverables have all landed and are live-validated: turn-up (2026-07-01), per-job-green, and concurrent-matrix-green on the ScaleSet default (Q224 closed via <a href="../../STATUS/#Q264">Q264</a> P4, #545), plus the v2beta1 dogfood path (Q231, #573).
+The turn-up findings that gated it are all resolved — session recovery (Q247: renew by RunnerRequestID, bounded RenewJob, job-scoped renewal token, and Q254 worker teardown on definitive lock loss), release-asset diagnosis (Q246), agent-recycle under burst (Q259), and the dup-acquisition wedge (Q260).
+No open Queue rows remain.
+This doc stays in place as the living operational runbook — the sections below are the turn-up/start/stop/teardown reference, not open work.
+The chronological turn-up history and per-finding root-cause write-ups live in <a href="../archive/gke-dogfood-turnup-findings/">archive/gke-dogfood-turnup-findings.md</a>.</p>
+<p><strong>Updated 2026-07-25 (Q399).</strong> The main CI tenant moved from the deprecated Classic protocol to a single-label ScaleSet, the last Q264 P5 residual.
+Classic orphaned 81% of the jobs it acquired on this tenant (85 acquired, 16 worker pods).
+An existing pre-Q399 tenant needs its <code>ci</code> RunnerSet <strong>recreated</strong>, not patched: see the migration note in Part B7.
+The runner label changed from <code>gag-ci</code> to <code>gag-ci-scaleset</code>.</p>
 </blockquote>
 <p><strong>What runs where after setup</strong></p>
 <table>
@@ -3126,11 +3116,10 @@ see the migration note in Part B7. The runner label changed from <code>gag-ci</c
 </tbody>
 </table>
 <p>The <code>changes</code> (paths-filter) jobs are intentionally kept on <code>ubuntu-latest</code>.
-They are the gatekeepers for every downstream job: if they queue behind a
-down cluster, CI appears broken.</p>
+They are the gatekeepers for every downstream job: if they queue behind a down cluster, CI appears broken.</p>
 <h2 id="variables">Variables<a class="headerlink" href="#variables" title="Permanent link">&para;</a></h2>
-<p>Fill these in once before running any command. Put them in your shell
-profile or paste them at the start of each terminal session.</p>
+<p>Fill these in once before running any command.
+Put them in your shell profile or paste them at the start of each terminal session.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">CLUSTER</span><span class="o">=</span>gag-dogfood
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">ZONE</span><span class="o">=</span>us-east1-b<span class="w">                   </span><span class="c1"># moved from us-central1-b 2026-06-30 (region-wide e2-standard-2 stockout)</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nv">PROJECT</span><span class="o">=</span>actions-gateway-dogfood<span class="w">   </span><span class="c1"># must be globally unique; append 4 digits if needed</span>
@@ -3139,19 +3128,14 @@ profile or paste them at the start of each terminal session.</p>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nv">INSTALLATION_ID</span><span class="o">=</span><span class="m">135739122</span><span class="w">         </span><span class="c1"># actions-gateway org install (re-derive via Part C1)</span>
 </code></pre></div>
 <blockquote>
-<p><strong>Zone choice:</strong> <code>ZONE</code> moved from <code>us-central1-b</code> to <code>us-east1-b</code> on
-2026-06-30 after <code>us-central1</code> went region-wide <code>ZONE_RESOURCE_POOL_EXHAUSTED</code>
-for <code>e2-standard-2</code>. GCP exposes no capacity API — there is no way to query a
-zone's free capacity ahead of time, so pick a zone empirically: if cluster or
-node-pool creation fails with a stockout error, try another zone/region.</p>
+<p><strong>Zone choice:</strong> <code>ZONE</code> moved from <code>us-central1-b</code> to <code>us-east1-b</code> on 2026-06-30 after <code>us-central1</code> went region-wide <code>ZONE_RESOURCE_POOL_EXHAUSTED</code> for <code>e2-standard-2</code>.
+GCP exposes no capacity API — there is no way to query a zone's free capacity ahead of time, so pick a zone empirically: if cluster or node-pool creation fails with a stockout error, try another zone/region.</p>
 </blockquote>
 <hr />
 <blockquote>
-<p><strong>Shortcut:</strong> Parts A3–B8 (cluster, node pools, GAG install, tenant) are
-automated by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> —
-idempotent and safe to re-run with some of the work already done. Complete
-A1–A2 first (project + billing + APIs), export the Variables block, then run
-the script. The manual steps below document what it does, step by step.</p>
+<p><strong>Shortcut:</strong> Parts A3–B8 (cluster, node pools, GAG install, tenant) are automated by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> — idempotent and safe to re-run with some of the work already done.
+Complete A1–A2 first (project + billing + APIs), export the Variables block, then run the script.
+The manual steps below document what it does, step by step.</p>
 </blockquote>
 <h2 id="part-a--one-time-gcp-setup">Part A — One-time GCP setup<a class="headerlink" href="#part-a--one-time-gcp-setup" title="Permanent link">&para;</a></h2>
 <h3 id="a1-install-gcloud-cli--authenticate">A1. Install gcloud CLI + authenticate<a class="headerlink" href="#a1-install-gcloud-cli--authenticate" title="Permanent link">&para;</a></h3>
@@ -3165,10 +3149,7 @@ the script. The manual steps below document what it does, step by step.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>create<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span><span class="w"> </span>--name<span class="o">=</span><span class="s2">&quot;GAG Dogfood&quot;</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>gcloud<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>project<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span>
 </code></pre></div>
-<p>Link billing in the console — the CLI requires a billing account ID which is
-hard to look up:
-https://console.cloud.google.com/billing → My Projects → select <code>$PROJECT</code> →
-Change billing → pick your billing account.</p>
+<p>Link billing in the console — the CLI requires a billing account ID which is hard to look up: https://console.cloud.google.com/billing → My Projects → select <code>$PROJECT</code> → Change billing → pick your billing account.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Enable required APIs (run after billing is linked)</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>gcloud<span class="w"> </span>services<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>container.googleapis.com<span class="w"> </span>compute.googleapis.com
 </code></pre></div>
@@ -3192,10 +3173,7 @@ Change billing → pick your billing account.</p>
 <a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">  </span>--no-enable-basic-auth<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span>--no-issue-client-certificate
 </code></pre></div>
-<p>An existing cluster created without Workload Identity gets it retrofitted with
-<code>gcloud container clusters update "$CLUSTER" --zone="$ZONE"
---workload-pool="${PROJECT}.svc.id.goog"</code> (control-plane update; existing node
-pools keep <code>GCE_METADATA</code> until updated, so running workloads are unaffected).</p>
+<p>An existing cluster created without Workload Identity gets it retrofitted with <code>gcloud container clusters update "$CLUSTER" --zone="$ZONE" --workload-pool="${PROJECT}.svc.id.goog"</code> (control-plane update; existing node pools keep <code>GCE_METADATA</code> until updated, so running workloads are unaffected).</p>
 <h3 id="a4-add-spot-worker-node-pool">A4. Add spot worker node pool<a class="headerlink" href="#a4-add-spot-worker-node-pool" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Spot e2-standard-4 (4 vCPU / 16 GiB), autoscaling 0→8.</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Taint keeps GMC/AGC/proxy off worker nodes; worker pods tolerate it (see Part B).</span>
@@ -3221,18 +3199,12 @@ pools keep <code>GCE_METADATA</code> until updated, so running workloads are una
 <a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">  </span>--disk-size<span class="o">=</span>100GB
 </code></pre></div>
 <h3 id="a4b-add-non-preemptible-worker-pool-benchmarks">A4b. Add non-preemptible worker pool (benchmarks)<a class="headerlink" href="#a4b-add-non-preemptible-worker-pool-benchmarks" title="Permanent link">&para;</a></h3>
-<p>The spot pool above is right for routine CI — cheap, and a preemption just
-re-runs a job. It is the wrong shape for a <strong>benchmark</strong>. Q260 chased a
-job-starvation signal that turned out to be spot preemption mid-burst (nodes
-dropping 3→1), not anything in GAG; the run only became readable once it was
-pinned to a non-preemptible pool, where every node stayed Ready across all 58
-monitor samples and the phantom starvation did not recur (see
-<a href="../archive/gke-dogfood-turnup-findings/">gke-dogfood-turnup-findings.md</a>).
+<p>The spot pool above is right for routine CI — cheap, and a preemption just re-runs a job.
+It is the wrong shape for a <strong>benchmark</strong>.
+Q260 chased a job-starvation signal that turned out to be spot preemption mid-burst (nodes dropping 3→1), not anything in GAG; the run only became readable once it was pinned to a non-preemptible pool, where every node stayed Ready across all 58 monitor samples and the phantom starvation did not recur (see <a href="../archive/gke-dogfood-turnup-findings/">gke-dogfood-turnup-findings.md</a>).
 Q264's protocol benchmarks used the same pool for the same reason.</p>
-<p>This pool existed on the live cluster for months as a hand-made resource,
-recorded only in those plan docs — so a cluster rebuilt from <code>setup.sh</code> came
-back spot-only and silently reintroduced the Q260 measurement hazard. It is now
-part of the scripted bootstrap.</p>
+<p>This pool existed on the live cluster for months as a hand-made resource, recorded only in those plan docs — so a cluster rebuilt from <code>setup.sh</code> came back spot-only and silently reintroduced the Q260 measurement hazard.
+It is now part of the scripted bootstrap.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># On-demand (non-preemptible) e2-standard-4, fixed size, starts at 0.</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Deliberately NOT autoscaled: a benchmark wants a fixed, known node count so the</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># capacity under test is constant, not something the autoscaler moves mid-run.</span>
@@ -3257,17 +3229,11 @@ part of the scripted bootstrap.</p>
 <h2 id="part-b--one-time-gag-installation">Part B — One-time GAG installation<a class="headerlink" href="#part-b--one-time-gag-installation" title="Permanent link">&para;</a></h2>
 <h3 id="b1-run-preflight">B1. Run preflight<a class="headerlink" href="#b1-run-preflight" title="Permanent link">&para;</a></h3>
 <p>GKE's Dataplane V2 (Cilium) passes the NetworkPolicy enforcement check.
-GKE also ships the Kubernetes Metrics Server by default (required for the
-proxy pool's HPA).</p>
+GKE also ships the Kubernetes Metrics Server by default (required for the proxy pool's HPA).</p>
 <blockquote>
-<p><strong>NodeLocal DNSCache on Dataplane V2 (Q229).</strong> If the cluster runs NodeLocal
-DNSCache, Dataplane V2 redirects cluster-DNS traffic to the per-node
-<code>node-local-dns</code> pod, and the tenant egress <code>NetworkPolicy</code> must allow that
-backend or the AGC crash-loops on its first GitHub token fetch
-(<code>lookup api.github.com: i/o timeout</code>). GAG's DNS egress rule includes the
-<code>node-local-dns</code> peer as of Q229; use a build that has it. Diagnosis and the
-verification command are in
-<a href="../../operations/troubleshooting/#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">Troubleshooting → DNS Times Out Under the Egress NetworkPolicy</a>.</p>
+<p><strong>NodeLocal DNSCache on Dataplane V2 (Q229).</strong> If the cluster runs NodeLocal DNSCache, Dataplane V2 redirects cluster-DNS traffic to the per-node <code>node-local-dns</code> pod, and the tenant egress <code>NetworkPolicy</code> must allow that backend or the AGC crash-loops on its first GitHub token fetch (<code>lookup api.github.com: i/o timeout</code>).
+GAG's DNS egress rule includes the <code>node-local-dns</code> peer as of Q229; use a build that has it.
+Diagnosis and the verification command are in <a href="../../operations/troubleshooting/#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">Troubleshooting → DNS Times Out Under the Egress NetworkPolicy</a>.</p>
 </blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>validate-cluster
 </code></pre></div>
@@ -3322,26 +3288,13 @@ verification command are in
 <a id="__codelineno-9-48" name="__codelineno-9-48" href="#__codelineno-9-48"></a><span class="s">EOF</span>
 </code></pre></div>
 <h3 id="b3-install-the-v2-crds-and-the-gag-chart">B3. Install the v2 CRDs and the GAG chart<a class="headerlink" href="#b3-install-the-v2-crds-and-the-gag-chart" title="Permanent link">&para;</a></h3>
-<p>The v2 CRDs ship in a separate, opt-in chart (<code>actions-gateway-crds-v2</code>). The GMC
-runs its v2 controllers unconditionally, so the CRDs must be installed — and
-<strong>at the same release as the GMC image</strong>, because the v2 <em>alpha</em> schema drifts
-between releases (e.g. <code>ActionsGateway.spec.githubAppRef</code> in <code>v1.1.0-rc.2</code> became
-the <code>spec.credentials</code> discriminated union in <code>v1.1.0-rc.3</code>); a mismatch makes
-every reconcile fail validation. A stale CRD that still exposes <code>githubAppRef</code>
-silently drops the credential — the GMC reads an empty App ref and provisions the
-AGC for workload-identity (Vault) instead, and the AGC crash-loops on
-<code>read appId: … no such file or directory</code>. Always apply this chart in lockstep
-with the GMC image.</p>
-<p>Since Q74 graduated each v2 CRD to two served versions (v2beta1 + v2alpha1), the
-rendered chart exceeds Helm's 1 MiB release-Secret limit, so <code>helm install</code>/<code>upgrade</code>
-can no longer store the release and fails outright. The supported install≡upgrade
-path is <strong>apply-render</strong>: <code>helm template</code> the chart, then <code>kubectl apply --server-side</code>
-(Q276). Dogfood uses the <strong>from-source render</strong> variant — it git-archives the local
-chart at <code>$GAG_IMAGE_TAG</code> to exercise pre-release code, so it cannot depend on the
-signed release asset (which exists only for <code>v*</code> tags). Because <code>$GAG_IMAGE_TAG</code> is
-a git ref, the archived chart is guaranteed to match the control-plane image built
-from that same ref. <code>scripts/dogfood/setup.sh</code> does this automatically; the manual
-equivalent for the pinned ref:</p>
+<p>The v2 CRDs ship in a separate, opt-in chart (<code>actions-gateway-crds-v2</code>).
+The GMC runs its v2 controllers unconditionally, so the CRDs must be installed — and <strong>at the same release as the GMC image</strong>, because the v2 <em>alpha</em> schema drifts between releases (e.g. <code>ActionsGateway.spec.githubAppRef</code> in <code>v1.1.0-rc.2</code> became the <code>spec.credentials</code> discriminated union in <code>v1.1.0-rc.3</code>); a mismatch makes every reconcile fail validation.
+A stale CRD that still exposes <code>githubAppRef</code> silently drops the credential — the GMC reads an empty App ref and provisions the AGC for workload-identity (Vault) instead, and the AGC crash-loops on <code>read appId: … no such file or directory</code>.
+Always apply this chart in lockstep with the GMC image.</p>
+<p>Since Q74 graduated each v2 CRD to two served versions (v2beta1 + v2alpha1), the rendered chart exceeds Helm's 1 MiB release-Secret limit, so <code>helm install</code>/<code>upgrade</code> can no longer store the release and fails outright.
+The supported install≡upgrade path is <strong>apply-render</strong>: <code>helm template</code> the chart, then <code>kubectl apply --server-side</code> (Q276).
+Dogfood uses the <strong>from-source render</strong> variant — it git-archives the local chart at <code>$GAG_IMAGE_TAG</code> to exercise pre-release code, so it cannot depend on the signed release asset (which exists only for <code>v*</code> tags). Because <code>$GAG_IMAGE_TAG</code> is a git ref, the archived chart is guaranteed to match the control-plane image built from that same ref. <code>scripts/dogfood/setup.sh</code> does this automatically; the manual equivalent for the pinned ref:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>git<span class="w"> </span>archive<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$GAG_IMAGE_TAG</span><span class="s2">&quot;</span><span class="w"> </span>charts/actions-gateway-crds-v2<span class="w"> </span><span class="p">|</span><span class="w"> </span>tar<span class="w"> </span>-x<span class="w"> </span>-C<span class="w"> </span>tmp/
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># --namespace gmc-system resolves each CRD&#39;s conversion-webhook clientConfig to the</span>
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># GMC&#39;s webhook-service; --force-conflicts takes field ownership on a re-apply.</span>
@@ -3357,89 +3310,48 @@ equivalent for the pinned ref:</p>
 <a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>--timeout<span class="o">=</span>3m
 </code></pre></div>
 <blockquote>
-<p><strong>GKE PriorityClass admission:</strong> the GMC runs with
-<code>priorityClassName: system-cluster-critical</code>, which GKE permits only in a
-namespace carrying a matching scoped <code>ResourceQuota</code> — without one the GMC pods
-fail with <code>insufficient quota to match these scopes</code>. The chart ships that
-permit-only quota (<code>gmc-critical-pods</code>) by default
-(<code>systemCriticalPriorityQuota.enabled=true</code>), so no manual <code>kubectl apply</code> is
-needed here. See <a href="../../operations/install/#gke-and-other-restricted-priorityclass-clusters">install.md</a>.</p>
+<p><strong>GKE PriorityClass admission:</strong> the GMC runs with <code>priorityClassName: system-cluster-critical</code>, which GKE permits only in a namespace carrying a matching scoped <code>ResourceQuota</code> — without one the GMC pods fail with <code>insufficient quota to match these scopes</code>.
+The chart ships that permit-only quota (<code>gmc-critical-pods</code>) by default (<code>systemCriticalPriorityQuota.enabled=true</code>), so no manual <code>kubectl apply</code> is needed here.
+See <a href="../../operations/install/#gke-and-other-restricted-priorityclass-clusters">install.md</a>.</p>
 </blockquote>
 <h4 id="wire-the-webhook-ca-into-the-crd-conversion-cabundle-q279">Wire the webhook CA into the CRD conversion <code>caBundle</code> (Q279)<a class="headerlink" href="#wire-the-webhook-ca-into-the-crd-conversion-cabundle-q279" title="Permanent link">&para;</a></h4>
-<p>Since Q74 the v2 kinds are stored at <code>v2beta1</code> and served at <code>v2alpha1</code> through the
-GMC-hosted conversion webhook. The apiserver calls that webhook over TLS and only
-trusts it if each CRD's <code>spec.conversion.webhook.clientConfig.caBundle</code> carries the
-CA that signed the GMC's serving cert. Dogfood is <strong>self-signed</strong> (no cert-manager),
-and the CRD chart renders an empty <code>caBundle</code> when <code>conversion.certManager.enabled=false</code>
-and <code>conversion.caBundle</code> is unset — so <strong>without this step every CR <code>apply</code> (and its
-conversion read-back) fails the TLS handshake</strong> with <code>x509: certificate signed by
-unknown authority</code>.</p>
-<p>The chart mints that CA once and stores it in the <code>webhook-server-cert</code> Secret in
-<code>gmc-system</code> (reused across renders via Helm <code>lookup</code>, so it is stable on re-runs).
-The Secret's <code>data["ca.crt"]</code> is already <code>base64(PEM)</code> — exactly the encoding a CRD
-<code>caBundle</code> wants — so it passes straight through:</p>
+<p>Since Q74 the v2 kinds are stored at <code>v2beta1</code> and served at <code>v2alpha1</code> through the GMC-hosted conversion webhook.
+The apiserver calls that webhook over TLS and only trusts it if each CRD's <code>spec.conversion.webhook.clientConfig.caBundle</code> carries the CA that signed the GMC's serving cert.
+Dogfood is <strong>self-signed</strong> (no cert-manager), and the CRD chart renders an empty <code>caBundle</code> when <code>conversion.certManager.enabled=false</code> and <code>conversion.caBundle</code> is unset — so <strong>without this step every CR <code>apply</code> (and its conversion read-back) fails the TLS handshake</strong> with <code>x509: certificate signed by unknown authority</code>.</p>
+<p>The chart mints that CA once and stores it in the <code>webhook-server-cert</code> Secret in <code>gmc-system</code> (reused across renders via Helm <code>lookup</code>, so it is stable on re-runs).
+The Secret's <code>data["ca.crt"]</code> is already <code>base64(PEM)</code> — exactly the encoding a CRD <code>caBundle</code> wants — so it passes straight through:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nv">CA</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>webhook-server-cert<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.ca\.crt}&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">for</span><span class="w"> </span>crd<span class="w"> </span><span class="k">in</span><span class="w"> </span>actionsgateways<span class="w"> </span>runnersets<span class="w"> </span>runnertemplates<span class="w"> </span>egressproxies<span class="w"> </span>clusterrunnertemplates<span class="p">;</span><span class="w"> </span><span class="k">do</span>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>crd<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">crd</span><span class="si">}</span><span class="s2">.actions-gateway.com&quot;</span><span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span>-p<span class="w"> </span><span class="s2">&quot;{\&quot;spec\&quot;:{\&quot;conversion\&quot;:{\&quot;webhook\&quot;:{\&quot;clientConfig\&quot;:{\&quot;caBundle\&quot;:\&quot;</span><span class="si">${</span><span class="nv">CA</span><span class="si">}</span><span class="s2">\&quot;}}}}}&quot;</span>
 <a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="k">done</span>
 </code></pre></div>
-<p><strong>Why patch instead of <code>--set conversion.caBundle=…</code> at CRD-render time?</strong> The CA only
-exists after the GMC install creates its Secret, but the CRDs must be installed
-<em>before</em> the GMC so it detects the v2 kinds at startup and enables its v2 controllers +
-conversion webhook (Q228 — installing the CRDs later needs a GMC restart). Reversing
-that order to obtain the CA first would break the detection. So <code>scripts/dogfood/setup.sh</code>
-keeps the order <strong>install CRDs (empty <code>caBundle</code>) → install GMC (mints the Secret) →
-<code>patch_crd_cabundle</code></strong>, and the patch runs before the first CR is applied. A JSON merge
-patch sets only the <code>caBundle</code> leaf, leaving the chart-rendered <code>clientConfig.service</code>
-block intact; a later server-side re-apply of the CRD chart never renders <code>caBundle</code>, so
-it cannot strip this leaf (a different field manager owns it). <code>setup.sh</code> does all of
-this automatically.</p>
-<p><strong>Image-tag transition (pre- vs post-Q74).</strong> <code>install_crds</code> pins the CRDs to
-<code>GAG_IMAGE_TAG</code>. The conversion webhook itself landed in Q74 (PR #557), so a
-<strong>pre-Q74</strong> GMC build (e.g. the old <code>v1.1.0-rc.6</code> default) ships <strong>single-version</strong>
-CRDs with conversion <code>strategy: None</code> and no webhook clientConfig — there is nothing
-to wire, and patching a webhook clientConfig onto them would be rejected (<code>should not
-be set when strategy is not Webhook</code>). <code>patch_crd_cabundle</code> therefore reads each CRD's
-<code>spec.conversion.strategy</code> and only patches the ones set to <code>Webhook</code>, cleanly skipping
-the rest. So on a pre-Q74 build the caBundle wiring is a no-op; on a <strong>post-Q74</strong> build
-whose multi-version CRDs route CR conversion through <code>/convert</code>, the same step activates
-automatically with no further change.</p>
-<p><strong>Live-validated post-Q74 (Q281, 2026-07-07).</strong> <code>GAG_IMAGE_TAG</code> is now pinned to a
-post-Q74 <code>main</code> SHA (<code>4567097…</code>) whose control-plane image was built + pushed by hand
-(see <a href="#tracking-post-q74-pre-release-builds">Tracking post-Q74 pre-release builds</a>),
-so the full <strong>apply → convert → read-back round-trip is live on dogfood</strong>. Confirmed
-end-to-end on <code>gag-dogfood</code>: with the post-Q74 GMC serving <code>/convert</code>, <code>ActionsGateway</code>,
-<code>RunnerTemplate</code>, and <code>RunnerSet</code> all apply at <code>v2alpha1</code> and read back at <strong>both</strong>
-<code>v2beta1</code> (storage) and <code>v2alpha1</code> (served through the TLS-verified conversion webhook)
-with <strong>no <code>/convert</code> 404 and no <code>x509</code> error</strong> — exercising Q279's <code>caBundle</code> wiring for
-real. (Before the bump the cluster was in the exact dormant state Q279 anticipated:
-post-Q74 CRDs at <code>strategy: Webhook</code> but a pre-Q74 rc.6 GMC with no <code>/convert</code> handler,
-so <code>kubectl get actionsgateways</code> failed <code>conversion webhook … the server could not find
-the requested resource</code>.)</p>
+<p><strong>Why patch instead of <code>--set conversion.caBundle=…</code> at CRD-render time?</strong> The CA only exists after the GMC install creates its Secret, but the CRDs must be installed <em>before</em> the GMC so it detects the v2 kinds at startup and enables its v2 controllers + conversion webhook (Q228 — installing the CRDs later needs a GMC restart).
+Reversing that order to obtain the CA first would break the detection.
+So <code>scripts/dogfood/setup.sh</code> keeps the order <strong>install CRDs (empty <code>caBundle</code>) → install GMC (mints the Secret) → <code>patch_crd_cabundle</code></strong>, and the patch runs before the first CR is applied.
+A JSON merge patch sets only the <code>caBundle</code> leaf, leaving the chart-rendered <code>clientConfig.service</code> block intact; a later server-side re-apply of the CRD chart never renders <code>caBundle</code>, so it cannot strip this leaf (a different field manager owns it). <code>setup.sh</code> does all of this automatically.</p>
+<p><strong>Image-tag transition (pre- vs post-Q74).</strong> <code>install_crds</code> pins the CRDs to <code>GAG_IMAGE_TAG</code>.
+The conversion webhook itself landed in Q74 (PR #557), so a <strong>pre-Q74</strong> GMC build (e.g. the old <code>v1.1.0-rc.6</code> default) ships <strong>single-version</strong> CRDs with conversion <code>strategy: None</code> and no webhook clientConfig — there is nothing to wire, and patching a webhook clientConfig onto them would be rejected (<code>should not be set when strategy is not Webhook</code>). <code>patch_crd_cabundle</code> therefore reads each CRD's <code>spec.conversion.strategy</code> and only patches the ones set to <code>Webhook</code>, cleanly skipping the rest.
+So on a pre-Q74 build the caBundle wiring is a no-op; on a <strong>post-Q74</strong> build whose multi-version CRDs route CR conversion through <code>/convert</code>, the same step activates automatically with no further change.</p>
+<p><strong>Live-validated post-Q74 (Q281, 2026-07-07).</strong> <code>GAG_IMAGE_TAG</code> is now pinned to a post-Q74 <code>main</code> SHA (<code>4567097…</code>) whose control-plane image was built + pushed by hand (see <a href="#tracking-post-q74-pre-release-builds">Tracking post-Q74 pre-release builds</a>), so the full <strong>apply → convert → read-back round-trip is live on dogfood</strong>.
+Confirmed end-to-end on <code>gag-dogfood</code>: with the post-Q74 GMC serving <code>/convert</code>, <code>ActionsGateway</code>, <code>RunnerTemplate</code>, and <code>RunnerSet</code> all apply at <code>v2alpha1</code> and read back at <strong>both</strong> <code>v2beta1</code> (storage) and <code>v2alpha1</code> (served through the TLS-verified conversion webhook) with <strong>no <code>/convert</code> 404 and no <code>x509</code> error</strong> — exercising Q279's <code>caBundle</code> wiring for real.
+(Before the bump the cluster was in the exact dormant state Q279 anticipated: post-Q74 CRDs at <code>strategy: Webhook</code> but a pre-Q74 rc.6 GMC with no <code>/convert</code> handler, so <code>kubectl get actionsgateways</code> failed <code>conversion webhook … the server could not find the requested resource</code>.)</p>
 <blockquote>
-<p><strong>Security — keep the webhook TLS-verified.</strong> An empty <code>caBundle</code> can tempt a
-<code>caBundle</code>-less or <code>insecureSkipTLSVerify: true</code> shortcut to "just make CRs apply."
-Do <strong>not</strong>: that lets any pod impersonating the webhook Service intercept every CR
-conversion. Wiring the real CA is the secure-by-default fix.</p>
+<p><strong>Security — keep the webhook TLS-verified.</strong> An empty <code>caBundle</code> can tempt a <code>caBundle</code>-less or <code>insecureSkipTLSVerify: true</code> shortcut to "just make CRs apply."
+Do <strong>not</strong>: that lets any pod impersonating the webhook Service intercept every CR conversion.
+Wiring the real CA is the secure-by-default fix.</p>
 </blockquote>
 <h4 id="tracking-post-q74-pre-release-builds">Tracking post-Q74 pre-release builds<a class="headerlink" href="#tracking-post-q74-pre-release-builds" title="Permanent link">&para;</a></h4>
-<p>Dogfood deliberately runs <strong>pre-release</strong> control-plane code so new behaviour (like
-the Q74 conversion webhook) can be exercised end-to-end <em>before</em> a release is cut. It
-must therefore be able to pin an arbitrary post-Q74 point, <strong>not</strong> wait for a <code>v*</code>
-release. The single <code>GAG_IMAGE_TAG</code> variable makes this safe by construction: it is a
-<strong>git ref</strong> (SHA, branch, or tag) used two ways that must agree —</p>
+<p>Dogfood deliberately runs <strong>pre-release</strong> control-plane code so new behaviour (like the Q74 conversion webhook) can be exercised end-to-end <em>before</em> a release is cut.
+It must therefore be able to pin an arbitrary post-Q74 point, <strong>not</strong> wait for a <code>v*</code> release.
+The single <code>GAG_IMAGE_TAG</code> variable makes this safe by construction: it is a <strong>git ref</strong> (SHA, branch, or tag) used two ways that must agree —</p>
 <ol>
-<li>as the published control-plane image tag under
-   <code>ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:&lt;ref&gt;</code> (the images the chart pulls), and</li>
-<li>as the git object <code>install_crds</code> runs <code>git archive &lt;ref&gt; charts/actions-gateway-crds-v2</code>
-   against (the v2 CRD chart, whose alpha schema drifts between refs).</li>
+<li>as the published control-plane image tag under <code>ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:&lt;ref&gt;</code> (the images the chart pulls), and</li>
+<li>as the git object <code>install_crds</code> runs <code>git archive &lt;ref&gt; charts/actions-gateway-crds-v2</code> against (the v2 CRD chart, whose alpha schema drifts between refs).</li>
 </ol>
-<p>Because both come from the <strong>same ref</strong>, the running image and the installed CRDs can
-never disagree on the v2 schema. The publish pipeline builds images only on <code>v*</code> tags,
-so for a non-release ref you build and push the four control-plane images by hand once,
-then set <code>GAG_IMAGE_TAG</code> to that ref. GKE nodes are amd64, so a single-arch build is
-enough for dogfood:</p>
+<p>Because both come from the <strong>same ref</strong>, the running image and the installed CRDs can never disagree on the v2 schema.
+The publish pipeline builds images only on <code>v*</code> tags, so for a non-release ref you build and push the four control-plane images by hand once, then set <code>GAG_IMAGE_TAG</code> to that ref.
+GKE nodes are amd64, so a single-arch build is enough for dogfood:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nv">SHA</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>git<span class="w"> </span>rev-parse<span class="w"> </span>origin/main<span class="k">)</span><span class="s2">&quot;</span><span class="w">          </span><span class="c1"># any post-Q74 ref that carries the v2 CRD chart</span>
 <a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>gh<span class="w"> </span>auth<span class="w"> </span>token<span class="w"> </span><span class="p">|</span><span class="w"> </span>docker<span class="w"> </span>login<span class="w"> </span>ghcr.io<span class="w"> </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>gh<span class="w"> </span>api<span class="w"> </span>user<span class="w"> </span>--jq<span class="w"> </span>.login<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>--password-stdin
 <a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nv">GIT_SHA</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$SHA</span><span class="s2">&quot;</span><span class="w"> </span>docker<span class="w"> </span>buildx<span class="w"> </span>bake<span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>wrapper<span class="w"> </span><span class="se">\</span>
@@ -3450,24 +3362,14 @@ enough for dogfood:</p>
 <a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span>--set<span class="w"> </span><span class="s2">&quot;wrapper.tags=ghcr.io/actions-gateway/wrapper:</span><span class="nv">$SHA</span><span class="s2">&quot;</span>
 <a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="nv">GAG_IMAGE_TAG</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$SHA</span><span class="s2">&quot;</span><span class="w"> </span>scripts/dogfood/setup.sh<span class="w">   </span><span class="c1"># (with the other Variables exported)</span>
 </code></pre></div>
-<p>The <code>{gmc,agc,proxy,wrapper}</code> packages already exist and are <strong>public</strong>, so a new tag
-inherits that visibility — no GHCR visibility flip is needed (a brand-new package would
-default to private and <code>ImagePullBackOff</code>; flip it to public in the GHCR UI). Pushing to
-<code>ghcr.io/actions-gateway</code> needs the <code>write:packages</code> scope (<code>gh auth refresh -s
-write:packages</code> if your token lacks it). This is a dev/dogfood convenience only —
-<strong>production always pins release digests</strong>, never a floating SHA tag.</p>
+<p>The <code>{gmc,agc,proxy,wrapper}</code> packages already exist and are <strong>public</strong>, so a new tag inherits that visibility — no GHCR visibility flip is needed (a brand-new package would default to private and <code>ImagePullBackOff</code>; flip it to public in the GHCR UI).
+Pushing to <code>ghcr.io/actions-gateway</code> needs the <code>write:packages</code> scope (<code>gh auth refresh -s write:packages</code> if your token lacks it).
+This is a dev/dogfood convenience only — <strong>production always pins release digests</strong>, never a floating SHA tag.</p>
 <blockquote>
-<p><strong>Move the default forward in the same change.</strong> <code>setup.sh</code> is idempotent and
-advertised as safe to re-run, which is what makes a stale <code>GAG_IMAGE_TAG</code>
-default sharp: a re-run with no explicit tag reinstalls the <em>default</em> ref and
-takes the CRDs with it, silently <strong>downgrading</strong> a cluster running anything
-newer. The default sat at a 2026-07-07 ref while the cluster ran 2026-07-24 and
-then 2026-07-31 code, so a defaults run in that window would have withdrawn the
-capacity-gate rung and re-blocked Q472's re-validation. Nothing detects it —
-the install path has no notion of "older than what is deployed" — so when you pin
-a newer ref by hand, update the default in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> and the pins above
-together. Read what is actually running before re-running:</p>
+<p><strong>Move the default forward in the same change.</strong> <code>setup.sh</code> is idempotent and advertised as safe to re-run, which is what makes a stale <code>GAG_IMAGE_TAG</code> default sharp: a re-run with no explicit tag reinstalls the <em>default</em> ref and takes the CRDs with it, silently <strong>downgrading</strong> a cluster running anything newer.
+The default sat at a 2026-07-07 ref while the cluster ran 2026-07-24 and then 2026-07-31 code, so a defaults run in that window would have withdrawn the capacity-gate rung and re-blocked Q472's re-validation.
+Nothing detects it — the install path has no notion of "older than what is deployed" — so when you pin a newer ref by hand, update the default in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> and the pins above together.
+Read what is actually running before re-running:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.template.spec.containers[*].image}&#39;</span>
 </code></pre></div>
@@ -3512,18 +3414,12 @@ together. Read what is actually running before re-running:</p>
 <a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="s">EOF</span>
 </code></pre></div>
 <h3 id="b6b-deploy-athens-in-cluster-go-module-cache">B6b. Deploy Athens in-cluster Go module cache<a class="headerlink" href="#b6b-deploy-athens-in-cluster-go-module-cache" title="Permanent link">&para;</a></h3>
-<p><code>vendor-check</code> and <code>tidy-check</code> re-fetch Go modules from <code>proxy.golang.org</code> on
-a cold cache. GKE Dataplane V2's managed Cilium lacks the <code>CiliumNetworkPolicy</code>
-CRD, so the <code>CiliumFQDN</code> egress mode is unusable here; a CIDR allowlist for
-Google-fronted hosts like <code>proxy.golang.org</code> would be a footgun (it opens all
-of Google's frontend). Athens sidesteps both constraints: it runs in-cluster
-with free egress and serves cached modules to workers over a plain HTTP port
-that does not need a CNI FQDN backend.</p>
-<p>Athens is not covered by the workload <code>NetworkPolicy</code> (<code>actions-gateway/component: workload</code>
-label). Workers reach it via an additive <code>NetworkPolicy</code> that opens port 3000
-from workload pods to Athens pods. The Service is named <code>go-module-proxy</code>
-(not <code>athens</code>) to avoid Kubernetes injecting <code>ATHENS_PORT=tcp://...</code> into
-pods in the namespace — Athens misreads that as its listen address.</p>
+<p><code>vendor-check</code> and <code>tidy-check</code> re-fetch Go modules from <code>proxy.golang.org</code> on a cold cache.
+GKE Dataplane V2's managed Cilium lacks the <code>CiliumNetworkPolicy</code> CRD, so the <code>CiliumFQDN</code> egress mode is unusable here; a CIDR allowlist for Google-fronted hosts like <code>proxy.golang.org</code> would be a footgun (it opens all of Google's frontend).
+Athens sidesteps both constraints: it runs in-cluster with free egress and serves cached modules to workers over a plain HTTP port that does not need a CNI FQDN backend.</p>
+<p>Athens is not covered by the workload <code>NetworkPolicy</code> (<code>actions-gateway/component: workload</code> label).
+Workers reach it via an additive <code>NetworkPolicy</code> that opens port 3000 from workload pods to Athens pods.
+The Service is named <code>go-module-proxy</code> (not <code>athens</code>) to avoid Kubernetes injecting <code>ATHENS_PORT=tcp://...</code> into pods in the namespace — Athens misreads that as its listen address.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>deploy/athens
 <a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/athens<span class="w"> </span>-n<span class="w"> </span>gag-dogfood<span class="w"> </span>--timeout<span class="o">=</span>120s
 </code></pre></div>
@@ -3531,31 +3427,20 @@ pods in the namespace — Athens misreads that as its listen address.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gag-dogfood<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>athens
 <a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gag-dogfood<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>athens<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
 </code></pre></div>
-<p>Athens pre-warms lazily — the first <code>vendor-check</code>/<code>tidy-check</code> run is slower
-while modules download; subsequent runs are cache hits from the storage volume.</p>
-<p>The default render above uses an <strong>ephemeral</strong> <code>emptyDir</code> cache ($0 at rest); the
-cache goes cold on every scale-to-zero idle cycle. For a cache that survives idle
-cycles, render <code>deploy/athens/overlays/persistent</code> (or set <code>ATHENS_PERSISTENT=1</code>
-for <code>scripts/dogfood/setup.sh</code>) — a PVC-backed disk that bills continuously while
-it exists. Trade-off and tear-down: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/athens/README.md"><code>deploy/athens/README.md</code></a>.</p>
+<p>Athens pre-warms lazily — the first <code>vendor-check</code>/<code>tidy-check</code> run is slower while modules download; subsequent runs are cache hits from the storage volume.</p>
+<p>The default render above uses an <strong>ephemeral</strong> <code>emptyDir</code> cache ($0 at rest); the cache goes cold on every scale-to-zero idle cycle.
+For a cache that survives idle cycles, render <code>deploy/athens/overlays/persistent</code> (or set <code>ATHENS_PERSISTENT=1</code> for <code>scripts/dogfood/setup.sh</code>) — a PVC-backed disk that bills continuously while it exists.
+Trade-off and tear-down: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/athens/README.md"><code>deploy/athens/README.md</code></a>.</p>
 <blockquote>
-<p><strong>Why plain HTTP (no TLS)?</strong> Athens serves public Go module zips; there is
-nothing confidential in transit. Integrity is upheld by the Go toolchain's
-<code>go.sum</code> verification — every module downloaded from Athens is checked against
-the committed <code>go.sum</code> regardless of <code>GONOSUMDB</code>, so a tampered response is
-caught before it reaches the build. Adding TLS would require cert management
-(cert-manager or a self-signed CA wired into every worker image) for no
-meaningful security gain in this single-tenant cluster. Revisit if Athens is
-extended to a shared multi-tenant cluster or used to serve private modules.</p>
+<p><strong>Why plain HTTP (no TLS)?</strong> Athens serves public Go module zips; there is nothing confidential in transit.
+Integrity is upheld by the Go toolchain's <code>go.sum</code> verification — every module downloaded from Athens is checked against the committed <code>go.sum</code> regardless of <code>GONOSUMDB</code>, so a tampered response is caught before it reaches the build.
+Adding TLS would require cert management (cert-manager or a self-signed CA wired into every worker image) for no meaningful security gain in this single-tenant cluster.
+Revisit if Athens is extended to a shared multi-tenant cluster or used to serve private modules.</p>
 </blockquote>
 <h3 id="b7-create-the-v2-tenant-objects">B7. Create the v2 tenant objects<a class="headerlink" href="#b7-create-the-v2-tenant-objects" title="Permanent link">&para;</a></h3>
-<p>The v2 API decomposes the v1 monolithic <code>ActionsGateway</code> into <code>ActionsGateway</code>
-(gateway + credentials), <code>RunnerTemplate</code> (worker pod shape), and <code>RunnerSet</code>
-(runner group). This is the minimal <strong>direct-egress</strong> form — no <code>EgressProxy</code>,
-so workers egress directly to GitHub, still behind the default-deny egress
-NetworkPolicy (DNS + GitHub CIDR), just without a per-tenant egress IP. Attach
-an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on the gateway to add per-tenant
-egress IP attribution.</p>
+<p>The v2 API decomposes the v1 monolithic <code>ActionsGateway</code> into <code>ActionsGateway</code> (gateway + credentials), <code>RunnerTemplate</code> (worker pod shape), and <code>RunnerSet</code> (runner group).
+This is the minimal <strong>direct-egress</strong> form — no <code>EgressProxy</code>, so workers egress directly to GitHub, still behind the default-deny egress NetworkPolicy (DNS + GitHub CIDR), just without a per-tenant egress IP.
+Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on the gateway to add per-tenant egress IP attribution.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39;</span>
 <a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="s">apiVersion: actions-gateway.com/v2alpha1</span>
 <a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="s">kind: ActionsGateway</span>
@@ -3637,43 +3522,21 @@ egress IP attribution.</p>
 <a id="__codelineno-20-79" name="__codelineno-20-79" href="#__codelineno-20-79"></a><span class="s">EOF</span>
 </code></pre></div>
 <blockquote>
-<p><strong>Migrating a pre-Q399 Classic CI tenant (one-time).</strong> <code>spec.acquisitionProtocol</code>
-is <strong>immutable</strong>, so a <code>ci</code> RunnerSet created before Q399 cannot be patched or
-re-<code>apply</code>ed onto ScaleSet; the write is rejected. Delete and recreate it:
-<code>kubectl delete runnerset ci -n gag-dogfood</code>, then re-run <code>apply_cr</code> (or
-<code>scripts/dogfood/setup.sh</code>). Recreating also clears the
-<code>conversion.actions-gateway.com/acquisition-protocol: Classic</code> annotation the
-conversion webhook stamped on the stored v2beta1 object, which <code>kubectl apply</code>
-does <strong>not</strong> strip and which would otherwise keep the AGC on Classic. The label
-changes at the same time (<code>gag-ci</code> to <code>gag-ci-scaleset</code>), so this is also a fresh
-scale-set object with an empty message queue. That matters: reconnecting to a
-label used by a previous scale set replays its old unacked <code>JobAssigned</code>
-messages. Leftover
-classic <code>ci-N</code> runner records under the old <code>gag-ci</code> label are inert once nothing
-routes to it; delete them from the repo's runner list if they clutter.</p>
-<p><strong>Why (Q399).</strong> Classic calls <code>AcquireJob</code>, which flips the job to <code>in_progress</code>
-at GitHub and stamps the runner name, <em>before</em> it decides whether to provision a
-worker. Every job it then declines to provision is orphaned at GitHub with zero
-steps until the 10-minute lock-lapse or 15-minute unstarted-job timeout kills it.
-Measured on this tenant 2026-07-25: <strong>85 jobs acquired, 16 worker pods, 69
-orphaned (81%)</strong>. The ScaleSet listener is single-acquirer and cannot produce that
-shape (Q264 P4: 7/7 vs Classic's 2/7).</p>
-<p><strong>v2 prerequisites:</strong> Kubernetes ≥ 1.31 (the <code>RunnerSet</code> field-selector
-scoping, KEP-4358) and the <code>actions-gateway-crds-v2</code> chart from B3. The
-<code>spec.credentials</code> discriminated-union shape is the <code>v1.1.0-rc.3</code> schema
-(<code>rc.2</code> used a flat <code>spec.githubAppRef</code>) — if you pin a different
-<code>$GAG_IMAGE_TAG</code>, match the CRD chart to that release and use its credential
-shape.</p>
-<p><strong>Build-capable worker image (Q239).</strong> The bare upstream <code>actions-runner</code> has
-no build toolchain, so this repo's <code>make</code>-based jobs fail
-<code>make: command not found</code> on it. Build a build-capable image (adds
-<code>build-essential</code> etc. on top of the pinned upstream runner —
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a>)
-with <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>,
-then export <code>DOGFOOD_RUNNER_IMAGE=ghcr.io/actions-gateway/dogfood-runner:&lt;tag&gt;</code>
-before running <code>scripts/dogfood/setup.sh</code> — it pins the <code>RunnerTemplate</code>
-<code>workerImage</code> and the AGC still injects the Q235 wrapper on top. Validation
-history: <a href="../archive/gke-dogfood-turnup-findings/">archived findings</a>.</p>
+<p><strong>Migrating a pre-Q399 Classic CI tenant (one-time).</strong> <code>spec.acquisitionProtocol</code> is <strong>immutable</strong>, so a <code>ci</code> RunnerSet created before Q399 cannot be patched or re-<code>apply</code>ed onto ScaleSet; the write is rejected.
+Delete and recreate it: <code>kubectl delete runnerset ci -n gag-dogfood</code>, then re-run <code>apply_cr</code> (or <code>scripts/dogfood/setup.sh</code>).
+Recreating also clears the <code>conversion.actions-gateway.com/acquisition-protocol: Classic</code> annotation the conversion webhook stamped on the stored v2beta1 object, which <code>kubectl apply</code> does <strong>not</strong> strip and which would otherwise keep the AGC on Classic.
+The label changes at the same time (<code>gag-ci</code> to <code>gag-ci-scaleset</code>), so this is also a fresh scale-set object with an empty message queue.
+That matters: reconnecting to a label used by a previous scale set replays its old unacked <code>JobAssigned</code> messages.
+Leftover classic <code>ci-N</code> runner records under the old <code>gag-ci</code> label are inert once nothing routes to it; delete them from the repo's runner list if they clutter.</p>
+<p><strong>Why (Q399).</strong> Classic calls <code>AcquireJob</code>, which flips the job to <code>in_progress</code> at GitHub and stamps the runner name, <em>before</em> it decides whether to provision a worker.
+Every job it then declines to provision is orphaned at GitHub with zero steps until the 10-minute lock-lapse or 15-minute unstarted-job timeout kills it.
+Measured on this tenant 2026-07-25: <strong>85 jobs acquired, 16 worker pods, 69 orphaned (81%)</strong>.
+The ScaleSet listener is single-acquirer and cannot produce that shape (Q264 P4: 7/7 vs Classic's 2/7).</p>
+<p><strong>v2 prerequisites:</strong> Kubernetes ≥ 1.31 (the <code>RunnerSet</code> field-selector scoping, KEP-4358) and the <code>actions-gateway-crds-v2</code> chart from B3.
+The <code>spec.credentials</code> discriminated-union shape is the <code>v1.1.0-rc.3</code> schema (<code>rc.2</code> used a flat <code>spec.githubAppRef</code>) — if you pin a different <code>$GAG_IMAGE_TAG</code>, match the CRD chart to that release and use its credential shape.</p>
+<p><strong>Build-capable worker image (Q239).</strong> The bare upstream <code>actions-runner</code> has no build toolchain, so this repo's <code>make</code>-based jobs fail <code>make: command not found</code> on it.
+Build a build-capable image (adds <code>build-essential</code> etc. on top of the pinned upstream runner — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a>) with <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>, then export <code>DOGFOOD_RUNNER_IMAGE=ghcr.io/actions-gateway/dogfood-runner:&lt;tag&gt;</code> before running <code>scripts/dogfood/setup.sh</code> — it pins the <code>RunnerTemplate</code> <code>workerImage</code> and the AGC still injects the Q235 wrapper on top.
+Validation history: <a href="../archive/gke-dogfood-turnup-findings/">archived findings</a>.</p>
 </blockquote>
 <h3 id="b8-validate">B8. Validate<a class="headerlink" href="#b8-validate" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Gateway Ready=True; RunnerSet shows its template + egress mode (Direct).</span>
@@ -3685,81 +3548,52 @@ history: <a href="../archive/gke-dogfood-turnup-findings/">archived findings</a>
 <a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">  </span>--jq<span class="w"> </span><span class="s1">&#39;.runners[] | {name, status, labels: [.labels[].name]}&#39;</span>
 </code></pre></div>
 <blockquote>
-<p><strong>Turn-up went green — validation history archived.</strong> The <code>v1.1.0-rc.6</code>
-turn-up, the eight classic-protocol fan-out re-routes that isolated the Q224
-distinct-delivery starvation, the Q264 P4 ScaleSet clean-green close-out (7/7),
-and the root-cause write-ups for Q246/Q247/Q254/Q259/Q260/Q265/Q266/Q267 are
-recorded in
-<a href="../archive/gke-dogfood-turnup-findings/">archive/gke-dogfood-turnup-findings.md</a>.
-All are resolved; the status summary at the top of this doc reflects current
-state.</p>
+<p><strong>Turn-up went green — validation history archived.</strong> The <code>v1.1.0-rc.6</code> turn-up, the eight classic-protocol fan-out re-routes that isolated the Q224 distinct-delivery starvation, the Q264 P4 ScaleSet clean-green close-out (7/7), and the root-cause write-ups for Q246/Q247/Q254/Q259/Q260/Q265/Q266/Q267 are recorded in <a href="../archive/gke-dogfood-turnup-findings/">archive/gke-dogfood-turnup-findings.md</a>.
+All are resolved; the status summary at the top of this doc reflects current state.</p>
 </blockquote>
 <hr />
 <h2 id="part-c--one-time-github-setup">Part C — One-time GitHub setup<a class="headerlink" href="#part-c--one-time-github-setup" title="Permanent link">&para;</a></h2>
 <h3 id="c1-confirm-app-installation--get-installation-id">C1. Confirm App installation + get installation ID<a class="headerlink" href="#c1-confirm-app-installation--get-installation-id" title="Permanent link">&para;</a></h3>
 <p>Ensure <code>actions-gateway-test</code> is installed on the org:
-- GitHub.com → <code>actions-gateway</code> org → Settings → GitHub Apps →
-  <code>actions-gateway-test</code> → Configure
-- Confirm repository access is "All repositories" (or that
-  <code>actions-gateway/github-actions-gateway</code> is explicitly listed)</p>
-<p>Get the installation ID. The <code>/user/installations</code> endpoint requires a
-GitHub-App-authorized token (the <code>gh</code> CLI's token returns HTTP 403), so use
-the org-scoped endpoint instead — it works for an org owner:</p>
+- GitHub.com → <code>actions-gateway</code> org → Settings → GitHub Apps → <code>actions-gateway-test</code> → Configure
+- Confirm repository access is "All repositories" (or that <code>actions-gateway/github-actions-gateway</code> is explicitly listed)</p>
+<p>Get the installation ID.
+The <code>/user/installations</code> endpoint requires a GitHub-App-authorized token (the <code>gh</code> CLI's token returns HTTP 403), so use the org-scoped endpoint instead — it works for an org owner:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>gh<span class="w"> </span>api<span class="w"> </span>/orgs/actions-gateway/installations<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span>--jq<span class="w"> </span><span class="s1">&#39;.installations[] | select(.app_id == 3752347) | {id, account: .account.login}&#39;</span>
 </code></pre></div>
-<p>Set <code>INSTALLATION_ID</code> to the <code>id</code> value and re-run the secret creation in
-B5 if you had a placeholder. As of this writing the install is <code>135739122</code>.</p>
+<p>Set <code>INSTALLATION_ID</code> to the <code>id</code> value and re-run the secret creation in B5 if you had a placeholder.
+As of this writing the install is <code>135739122</code>.</p>
 <h3 id="c2-workflow-changes">C2. Workflow changes<a class="headerlink" href="#c2-workflow-changes" title="Permanent link">&para;</a></h3>
-<p>The migrated jobs route to GAG only under an <strong>explicit opt-in</strong>, so a dogfood
-turn-up never drags every concurrent push, PR, or Dependabot run onto the
-cluster. Two paths coexist:</p>
+<p>The migrated jobs route to GAG only under an <strong>explicit opt-in</strong>, so a dogfood turn-up never drags every concurrent push, PR, or Dependabot run onto the cluster.
+Two paths coexist:</p>
 <ul>
-<li><strong>Opt-in dispatch (default day-to-day turn-up)</strong> — a <code>workflow_dispatch</code>
-  trigger with a boolean <code>target_gag</code> input (default <code>false</code>). GAG runs only
-  when a run is <em>manually</em> dispatched with <code>target_gag=true</code>. This is the
-  scoped path for validation bursts (Q224/Q264 P4; see PR #541 for the
-  contention this replaced).</li>
-<li><strong>Global variable (milestone end-state only)</strong> — flipping <code>vars.GAG_RUNNER</code>
-  still routes <em>all</em> production CI to GAG. This remains the Q224 end goal
-  ("route all production CI to GAG") and is intentionally left in place.</li>
+<li><strong>Opt-in dispatch (default day-to-day turn-up)</strong> — a <code>workflow_dispatch</code> trigger with a boolean <code>target_gag</code> input (default <code>false</code>).
+  GAG runs only when a run is <em>manually</em> dispatched with <code>target_gag=true</code>.
+  This is the scoped path for validation bursts (Q224/Q264 P4; see PR #541 for the contention this replaced).</li>
+<li><strong>Global variable (milestone end-state only)</strong> — flipping <code>vars.GAG_RUNNER</code> still routes <em>all</em> production CI to GAG.
+  This remains the Q224 end goal ("route all production CI to GAG") and is intentionally left in place.</li>
 </ul>
-<p>Both are folded into one <code>runs-on</code> expression, applied to these jobs (leave all
-<code>changes</code> jobs on <code>ubuntu-latest</code>):</p>
-<p><strong><code>.github/workflows/unit-test.yml</code></strong> — jobs <code>lint</code>, <code>shellcheck</code>,
-<code>vendor-check</code>, <code>tidy-check</code>, <code>unit-test</code>, <code>coverage</code>.
-<strong><code>.github/workflows/integration-test.yml</code></strong> — job <code>integration-test</code>:</p>
+<p>Both are folded into one <code>runs-on</code> expression, applied to these jobs (leave all <code>changes</code> jobs on <code>ubuntu-latest</code>):</p>
+<p><strong><code>.github/workflows/unit-test.yml</code></strong> — jobs <code>lint</code>, <code>shellcheck</code>, <code>vendor-check</code>, <code>tidy-check</code>, <code>unit-test</code>, <code>coverage</code>. <strong><code>.github/workflows/integration-test.yml</code></strong> — job <code>integration-test</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ (github.event_name == &#39;workflow_dispatch&#39; &amp;&amp; inputs.target_gag) &amp;&amp; fromJSON(vars.GAG_RUNNER || &#39;&quot;ubuntu-latest&quot;&#39;) || &#39;ubuntu-latest&#39; }}</span>
 </code></pre></div>
 <ul>
-<li>On <strong>push / pull_request</strong> (or a dispatch with <code>target_gag</code> unset/false):
-  <code>github.event_name == 'workflow_dispatch' &amp;&amp; inputs.target_gag</code> is <code>false</code>,
-  so the whole <code>&amp;&amp; … ||</code> expression short-circuits to the trailing
-  <code>'ubuntu-latest'</code> — GitHub-hosted, exactly as before. <code>vars.GAG_RUNNER</code> is
-  never consulted, so flipping it no longer affects these events.</li>
-<li>On a <strong>dispatch with <code>target_gag=true</code></strong>: the expression evaluates
-  <code>fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"')</code>, giving the string
-  <code>"gag-ci-scaleset"</code> (routes to GAG) when the variable is set, or
-  <code>ubuntu-latest</code> when it is not. Since Q399 this is a single JSON <em>string</em>, not
-  an array: the runner set is ScaleSet-protocol and matches exactly one label,
-  its own scale-set name. It must stay identical to <code>spec.runnerLabels[0]</code> in
-  B7. A mismatch leaves dispatched jobs queued at GitHub forever, unmatched.</li>
+<li>On <strong>push / pull_request</strong> (or a dispatch with <code>target_gag</code> unset/false): <code>github.event_name == 'workflow_dispatch' &amp;&amp; inputs.target_gag</code> is <code>false</code>, so the whole <code>&amp;&amp; … ||</code> expression short-circuits to the trailing <code>'ubuntu-latest'</code> — GitHub-hosted, exactly as before. <code>vars.GAG_RUNNER</code> is never consulted, so flipping it no longer affects these events.</li>
+<li>On a <strong>dispatch with <code>target_gag=true</code></strong>: the expression evaluates <code>fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"')</code>, giving the string <code>"gag-ci-scaleset"</code> (routes to GAG) when the variable is set, or <code>ubuntu-latest</code> when it is not.
+  Since Q399 this is a single JSON <em>string</em>, not an array: the runner set is ScaleSet-protocol and matches exactly one label, its own scale-set name.
+  It must stay identical to <code>spec.runnerLabels[0]</code> in B7.
+  A mismatch leaves dispatched jobs queued at GitHub forever, unmatched.</li>
 </ul>
-<p>The gate jobs' <code>if</code> conditions also add <code>|| github.event_name ==
-'workflow_dispatch'</code> so a manual dispatch still creates the migrated jobs even
-when the paths-filter finds no matching diff, and each dispatch run gets its own
-<code>concurrency</code> group (run id appended) so it never queues behind an in-flight
-push run on the same ref.</p>
+<p>The gate jobs' <code>if</code> conditions also add <code>|| github.event_name == 'workflow_dispatch'</code> so a manual dispatch still creates the migrated jobs even when the paths-filter finds no matching diff, and each dispatch run gets its own <code>concurrency</code> group (run id appended) so it never queues behind an in-flight push run on the same ref.</p>
 <h3 id="c3-set-default-variable-cluster-off">C3. Set default variable (cluster off)<a class="headerlink" href="#c3-set-default-variable-cluster-off" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>gh<span class="w"> </span>variable<span class="w"> </span><span class="nb">set</span><span class="w"> </span>GAG_RUNNER<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span>--body<span class="w"> </span><span class="s1">&#39;&quot;ubuntu-latest&quot;&#39;</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span>--repo<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$REPO</span><span class="s2">&quot;</span>
 </code></pre></div>
-<p>Commit and push the workflow changes. Ordinary push/PR CI stays on
-GitHub-hosted runners regardless of this variable — under the opt-in model the
-variable is consulted only by a <code>workflow_dispatch</code> run with <code>target_gag=true</code>
-(Part D). Keeping it at <code>"ubuntu-latest"</code> also makes such a dispatch a safe
-no-op when the cluster is off.</p>
+<p>Commit and push the workflow changes.
+Ordinary push/PR CI stays on GitHub-hosted runners regardless of this variable — under the opt-in model the variable is consulted only by a <code>workflow_dispatch</code> run with <code>target_gag=true</code> (Part D).
+Keeping it at <code>"ubuntu-latest"</code> also makes such a dispatch a safe no-op when the cluster is off.</p>
 <hr />
 <h2 id="part-d--daily-operations">Part D — Daily operations<a class="headerlink" href="#part-d--daily-operations" title="Permanent link">&para;</a></h2>
 <h3 id="start-dogfooding">Start dogfooding<a class="headerlink" href="#start-dogfooding" title="Permanent link">&para;</a></h3>
@@ -3786,22 +3620,12 @@ no-op when the cluster is off.</p>
 <a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>unit-test.yml<span class="w"> </span>-f<span class="w"> </span><span class="nv">target_gag</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span>--repo<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$REPO</span><span class="s2">&quot;</span>
 <a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>integration-test.yml<span class="w"> </span>-f<span class="w"> </span><span class="nv">target_gag</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span>--repo<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$REPO</span><span class="s2">&quot;</span>
 </code></pre></div>
-<p>To route <strong>all</strong> production CI to GAG (the Q224 milestone end-state, not a
-day-to-day turn-up), see "Route all CI to GAG" below.</p>
-<p>The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner/Dockerfile">dogfood runner image</a> omits <code>go</code>
-on purpose, relying on each job's <code>setup-go</code> step to supply it — a job that
-shells out to <code>go</code> without declaring that step fails <code>go: command not found</code>
-on every <code>target_gag=true</code> dispatch while passing on <code>ubuntu-latest</code>, which
-preinstalls Go. The <code>shellcheck</code> job had exactly this mismatch (Q482, fixed by
-adding the step); read a deterministic single-job red like that as a job/image
-mismatch, not a GAG defect or a flake.</p>
+<p>To route <strong>all</strong> production CI to GAG (the Q224 milestone end-state, not a day-to-day turn-up), see "Route all CI to GAG" below.</p>
+<p>The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner/Dockerfile">dogfood runner image</a> omits <code>go</code> on purpose, relying on each job's <code>setup-go</code> step to supply it — a job that shells out to <code>go</code> without declaring that step fails <code>go: command not found</code> on every <code>target_gag=true</code> dispatch while passing on <code>ubuntu-latest</code>, which preinstalls Go.
+The <code>shellcheck</code> job had exactly this mismatch (Q482, fixed by adding the step); read a deterministic single-job red like that as a job/image mismatch, not a GAG defect or a flake.</p>
 <h3 id="sampling-agc-metrics-during-a-measurement-run">Sampling AGC metrics during a measurement run<a class="headerlink" href="#sampling-agc-metrics-during-a-measurement-run" title="Permanent link">&para;</a></h3>
-<p>The AGC serves <code>/metrics</code> on <strong>8443 behind mTLS</strong> (per-gateway self-signed PKI;
-see <code>generateMetricsCertsV2</code>). Scraping it ad hoc needs the scraper's client
-leaf from the <code>&lt;gateway&gt;-agc-metrics-client</code> Secret and a hostname that matches
-the server cert's Service SANs — <code>curl -k</code> is not enough (the server still
-demands a client cert) and <code>localhost</code> fails SAN verification, so pin the
-Service name to the forwarded port with <code>--resolve</code>:</p>
+<p>The AGC serves <code>/metrics</code> on <strong>8443 behind mTLS</strong> (per-gateway self-signed PKI; see <code>generateMetricsCertsV2</code>).
+Scraping it ad hoc needs the scraper's client leaf from the <code>&lt;gateway&gt;-agc-metrics-client</code> Secret and a hostname that matches the server cert's Service SANs — <code>curl -k</code> is not enough (the server still demands a client cert) and <code>localhost</code> fails SAN verification, so pin the Service name to the forwarded port with <code>--resolve</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>dogfood-agc-metrics-client<span class="w"> </span>-n<span class="w"> </span>gag-dogfood<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data}&#39;</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="w">  </span><span class="c1"># -&gt; extract ca.crt / tls.crt / tls.key (base64) to tmp/certs/</span>
 <a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/dogfood-agc<span class="w"> </span>-n<span class="w"> </span>gag-dogfood<span class="w"> </span><span class="m">18443</span>:8443<span class="w"> </span><span class="p">&amp;</span>
@@ -3809,36 +3633,23 @@ Service name to the forwarded port with <code>--resolve</code>:</p>
 <a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="w">  </span>--cacert<span class="w"> </span>tmp/certs/ca.crt<span class="w"> </span>--cert<span class="w"> </span>tmp/certs/tls.crt<span class="w"> </span>--key<span class="w"> </span>tmp/certs/tls.key<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">  </span>https://dogfood-agc.gag-dogfood.svc:18443/metrics
 </code></pre></div>
-<p>Used by the §9e/§9f (Q469/Q462) and §9h (Q513) capacity-gate measurements in
-<a href="../capacity-aware-intake/">capacity-aware-intake.md</a>; since Q514,
-<code>worker_pods_reaped_total</code> stamps <code>runner_set</code> on scale-set reaps alongside
-<code>runner_group</code>, so one <code>runner_set</code> filter covers it and the <code>scaleset_*</code> gauges.</p>
+<p>Used by the §9e/§9f (Q469/Q462) and §9h (Q513) capacity-gate measurements in <a href="../capacity-aware-intake/">capacity-aware-intake.md</a>; since Q514, <code>worker_pods_reaped_total</code> stamps <code>runner_set</code> on scale-set reaps alongside <code>runner_group</code>, so one <code>runner_set</code> filter covers it and the <code>scaleset_*</code> gauges.</p>
 <h3 id="stop-dogfooding">Stop dogfooding<a class="headerlink" href="#stop-dogfooding" title="Permanent link">&para;</a></h3>
-<p>Opt-in dispatches are one-shot, so there is no standing CI route to revert —
-only the end-state global routing below needs the <code>GAG_RUNNER</code> reset.</p>
+<p>Opt-in dispatches are one-shot, so there is no standing CI route to revert — only the end-state global routing below needs the <code>GAG_RUNNER</code> reset.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nb">export</span><span class="w"> </span>PROJECT<span class="w"> </span>CLUSTER<span class="w"> </span>ZONE<span class="w"> </span>REPO<span class="w">   </span><span class="c1"># from the Variables section</span>
 <a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>scripts/dogfood/stop.sh
 </code></pre></div>
-<p>The script resets <code>GAG_RUNNER</code>, <strong>waits for in-flight worker pods to drain</strong>,
-and only then scales the system pool to 0. Worker nodes autoscale to 0 on their
-own within ~10 min after that.</p>
+<p>The script resets <code>GAG_RUNNER</code>, <strong>waits for in-flight worker pods to drain</strong>, and only then scales the system pool to 0.
+Worker nodes autoscale to 0 on their own within ~10 min after that.</p>
 <h4 id="why-the-drain-wait-is-not-optional-q434">Why the drain wait is not optional (Q434)<a class="headerlink" href="#why-the-drain-wait-is-not-optional-q434" title="Permanent link">&para;</a></h4>
-<p>The system pool carries the tenant AGCs, and <strong>an AGC is the only thing that
-reaps its worker pods.</strong> Scaling that pool to 0 with a job in flight evicts the
-AGC with nowhere to reschedule, so:</p>
+<p>The system pool carries the tenant AGCs, and <strong>an AGC is the only thing that reaps its worker pods.</strong> Scaling that pool to 0 with a job in flight evicts the AGC with nowhere to reschedule, so:</p>
 <ul>
-<li>its worker pods keep running on the <code>workers</code> pool, with no controller left
-  to delete them;</li>
-<li>the pods carry <code>cluster-autoscaler.kubernetes.io/safe-to-evict: "false"</code>
-  (deliberately — see <a href="../../operations/observability-metrics/">observability-metrics.md</a>,
-  a worker mid-job has no replacement), so the autoscaler will not reclaim
-  their nodes either;</li>
-<li>the nodes bill until a human notices. One incident stranded 82 spot
-  node-hours this way.</li>
+<li>its worker pods keep running on the <code>workers</code> pool, with no controller left to delete them;</li>
+<li>the pods carry <code>cluster-autoscaler.kubernetes.io/safe-to-evict: "false"</code> (deliberately — see <a href="../../operations/observability-metrics/">observability-metrics.md</a>, a worker mid-job has no replacement), so the autoscaler will not reclaim their nodes either;</li>
+<li>the nodes bill until a human notices.
+  One incident stranded 82 spot node-hours this way.</li>
 </ul>
-<p>Resetting <code>GAG_RUNNER</code> first stops <em>new</em> dispatches routing at the cluster, but
-dispatches already queued at GitHub are still assigned to the scale set — which
-is exactly why the wait exists rather than a "looks idle to me" glance.</p>
+<p>Resetting <code>GAG_RUNNER</code> first stops <em>new</em> dispatches routing at the cluster, but dispatches already queued at GitHub are still assigned to the scale set — which is exactly why the wait exists rather than a "looks idle to me" glance.</p>
 <p>Knobs, all optional:</p>
 <table>
 <thead>
@@ -3866,27 +3677,15 @@ is exactly why the wait exists rather than a "looks idle to me" glance.</p>
 </tr>
 </tbody>
 </table>
-<p>The drain is <strong>cluster-wide on purpose.</strong> The resize evicts <em>every</em> tenant's
-AGC, so it has to see every tenant's workers; scoping it to one namespace would
-scale down under another tenant's live jobs and re-open the incident above.
-(<code>e2e-stop.sh</code> does scope its drain, because it deletes one gateway and touches
-no other tenant.)</p>
-<p>A drain that does not finish inside <code>DRAIN_TIMEOUT</code> <strong>fails the stop and leaves
-the pool up</strong> — two <code>e2-standard-2</code> nodes cost far less than stranded worker
-nodes, and keeping the AGC alive is what lets it finish reaping.</p>
+<p>The drain is <strong>cluster-wide on purpose.</strong> The resize evicts <em>every</em> tenant's AGC, so it has to see every tenant's workers; scoping it to one namespace would scale down under another tenant's live jobs and re-open the incident above.
+(<code>e2e-stop.sh</code> does scope its drain, because it deletes one gateway and touches no other tenant.)</p>
+<p>A drain that does not finish inside <code>DRAIN_TIMEOUT</code> <strong>fails the stop and leaves the pool up</strong> — two <code>e2-standard-2</code> nodes cost far less than stranded worker nodes, and keeping the AGC alive is what lets it finish reaping.</p>
 <h4 id="reading-a-timed-out-drain">Reading a timed-out drain<a class="headerlink" href="#reading-a-timed-out-drain" title="Permanent link">&para;</a></h4>
 <p>The error answers two questions, because they take opposite remedies.</p>
-<p><strong>Why is each pod still in flight?</strong> Every in-flight pod is listed with its
-scheduling and container-waiting reasons, then with its latest warning event.
-<code>Pending</code> alone does not distinguish a pod waiting on a node coming up from one
-that will never start; the event does — <code>FailedScheduling</code> names the resource
-the pod cannot get, and <code>FailedMount</code> names the <code>job-payload</code> secret that does
-not exist. Without it a pod pinned on a missing secret reads as a bare
-<code>ContainerCreating</code>.</p>
-<p><strong>Was the drain moving at all?</strong> The stop compares the pods in flight at the
-first and last polls. Pod <em>turnover</em> is the signal, not the count: a tenant at
-its <code>maxWorkers</code> ceiling admits a pod for every one it reaps, so a drain working
-through a backlog and a livelocked one both hold the count flat.</p>
+<p><strong>Why is each pod still in flight?</strong> Every in-flight pod is listed with its scheduling and container-waiting reasons, then with its latest warning event. <code>Pending</code> alone does not distinguish a pod waiting on a node coming up from one that will never start; the event does — <code>FailedScheduling</code> names the resource the pod cannot get, and <code>FailedMount</code> names the <code>job-payload</code> secret that does not exist.
+Without it a pod pinned on a missing secret reads as a bare <code>ContainerCreating</code>.</p>
+<p><strong>Was the drain moving at all?</strong> The stop compares the pods in flight at the first and last polls.
+Pod <em>turnover</em> is the signal, not the count: a tenant at its <code>maxWorkers</code> ceiling admits a pod for every one it reaps, so a drain working through a backlog and a livelocked one both hold the count flat.</p>
 <table>
 <thead>
 <tr>
@@ -3908,41 +3707,27 @@ through a backlog and a livelocked one both hold the count flat.</p>
 </tr>
 </tbody>
 </table>
-<p>A pod stuck on <code>FailedMount</code> or <code>FailedScheduling</code> holds one of its tenant's
-concurrency slots until it is deleted, which is what stops the rest of the queue
-from draining.</p>
-<p>Bouncing the AGC (<code>scripts/dogfood/ops.sh agc-bounce [ci|e2e]</code>) is <strong>not</strong> a
-remedy here. It is a real rolling restart on a GMC carrying the Q552 fix, but
-this drain counts worker pods and a restart deletes none of them; the reaper
-that clears a stuck pod already runs on the live AGC, on deadlines measured from
-the pod, so a fresh one reaps no sooner. Delete the pods instead.</p>
-<p>Since <code>v1.3.0</code> a listener holding assignments GitHub has dropped gives them up on
-its own, roughly two to three minutes after the last one goes (Q553) — so a drain
-that used to livelock behind re-provisioned phantom workers now converges without
-a hand-deleted gateway. Two caveats: the give-up needs GitHub to be holding
-<strong>zero</strong> assignments for the set, so a tenant still running real work keeps its
-dangling ones until it idles; and it is per-process, so bouncing the AGC mid-drain
-restarts the clock. Watch it land on
-<code>actions_gateway_scaleset_jobs_abandoned_total</code> and the AGC's <code>giving up on
-assigned jobs</code> log line.</p>
-<p><code>SKIP_DRAIN=1</code> is the deliberate override — reach for it when the AGC is already
-down, since an AGC that cannot reap will never let the drain finish.</p>
+<p>A pod stuck on <code>FailedMount</code> or <code>FailedScheduling</code> holds one of its tenant's concurrency slots until it is deleted, which is what stops the rest of the queue from draining.</p>
+<p>Bouncing the AGC (<code>scripts/dogfood/ops.sh agc-bounce [ci|e2e]</code>) is <strong>not</strong> a remedy here.
+It is a real rolling restart on a GMC carrying the Q552 fix, but this drain counts worker pods and a restart deletes none of them; the reaper that clears a stuck pod already runs on the live AGC, on deadlines measured from the pod, so a fresh one reaps no sooner.
+Delete the pods instead.</p>
+<p>Since <code>v1.3.0</code> a listener holding assignments GitHub has dropped gives them up on its own, roughly two to three minutes after the last one goes (Q553) — so a drain that used to livelock behind re-provisioned phantom workers now converges without a hand-deleted gateway.
+Two caveats: the give-up needs GitHub to be holding <strong>zero</strong> assignments for the set, so a tenant still running real work keeps its dangling ones until it idles; and it is per-process, so bouncing the AGC mid-drain restarts the clock.
+Watch it land on <code>actions_gateway_scaleset_jobs_abandoned_total</code> and the AGC's <code>giving up on assigned jobs</code> log line.</p>
+<p><code>SKIP_DRAIN=1</code> is the deliberate override — reach for it when the AGC is already down, since an AGC that cannot reap will never let the drain finish.</p>
 <h3 id="route-all-ci-to-gag-milestone-end-state">Route all CI to GAG (milestone end-state)<a class="headerlink" href="#route-all-ci-to-gag-milestone-end-state" title="Permanent link">&para;</a></h3>
-<p>The opt-in dispatch above is the day-to-day validation path. The Q224 end goal
-— routing <em>every</em> push/PR run to GAG — is a deliberate, separate step because it
-reintroduces the whole-CI contention the opt-in model exists to avoid. It is
-<strong>not</strong> a <code>GAG_RUNNER</code> flip: under the opt-in expression the variable is ignored
-on push/PR events. Reaching the end-state means editing the migrated jobs'
-<code>runs-on</code> back to the unconditional form:</p>
+<p>The opt-in dispatch above is the day-to-day validation path.
+The Q224 end goal — routing <em>every</em> push/PR run to GAG — is a deliberate, separate step because it reintroduces the whole-CI contention the opt-in model exists to avoid.
+It is <strong>not</strong> a <code>GAG_RUNNER</code> flip: under the opt-in expression the variable is ignored on push/PR events.
+Reaching the end-state means editing the migrated jobs' <code>runs-on</code> back to the unconditional form:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ fromJSON(vars.GAG_RUNNER || &#39;&quot;ubuntu-latest&quot;&#39;) }}</span>
 </code></pre></div>
-<p>with <code>GAG_RUNNER</code> set to <code>"gag-ci-scaleset"</code>. Defer this until
-the milestone criteria in Q224/Q264 are met (P4-green, scale-set maturity,
-adoption signal).</p>
+<p>with <code>GAG_RUNNER</code> set to <code>"gag-ci-scaleset"</code>.
+Defer this until the milestone criteria in Q224/Q264 are met (P4-green, scale-set maturity, adoption signal).</p>
 <hr />
 <h2 id="part-e--teardown">Part E — Teardown<a class="headerlink" href="#part-e--teardown" title="Permanent link">&para;</a></h2>
-<p>There are two levels of teardown. Pick deliberately — they are not the same
-operation with different urgency.</p>
+<p>There are two levels of teardown.
+Pick deliberately — they are not the same operation with different urgency.</p>
 <table>
 <thead>
 <tr>
@@ -3984,119 +3769,61 @@ operation with different urgency.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Deleting is not a cost optimisation.</strong> The cluster is a zonal Standard
-cluster, one of which is free per billing account, so at 0 nodes it already
-bills nothing — <code>stop.sh</code> captures the entire saving (see
-<a href="#cost-reference">Cost reference</a>). Delete because you want the environment
-<em>gone</em> or <em>rebuilt</em>, not because you want the bill lower.</p>
+<p><strong>Deleting is not a cost optimisation.</strong> The cluster is a zonal Standard cluster, one of which is free per billing account, so at 0 nodes it already bills nothing — <code>stop.sh</code> captures the entire saving (see <a href="#cost-reference">Cost reference</a>).
+Delete because you want the environment <em>gone</em> or <em>rebuilt</em>, not because you want the bill lower.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nb">export</span><span class="w"> </span>PROJECT<span class="w"> </span>CLUSTER<span class="w"> </span>ZONE<span class="w"> </span>REPO<span class="w">   </span><span class="c1"># from the Variables section</span>
 <a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>scripts/dogfood/delete.sh
 </code></pre></div>
-<p>The script routes CI off the cluster (resetting <code>GAG_RUNNER</code> and
-<code>GAG_E2E_RUNNER</code>) <strong>before</strong> deleting, so no dispatched job can aim at a
-cluster that is mid-deletion; deletes the cluster; prunes the now-dead
-kubeconfig context so a later <code>kubectl</code> fails loudly instead of timing out
-against a cluster that no longer exists; and reports any disk or reserved
-address that outlived the cluster, since those keep billing. It quotes the live
-node and in-flight worker-pod counts back at you in the confirmation, so
-deleting a cluster that is actually busy is a decision rather than an accident.
-Unlike <code>stop.sh</code> it does not wait for the drain — deleting the cluster takes the
-worker nodes with it, so there is nothing left to strand.</p>
-<p><code>ASSUME_YES=1</code> skips the prompt for automation. A missing cluster is a no-op,
-so the script is safe to re-run.</p>
-<p><strong>What survives, and therefore makes recreate possible:</strong> the GCP project,
-billing link, enabled APIs, quota, the GitHub App and its installation, and the
-App private key in the local Keychain. <strong>What does not:</strong> the GAG control-plane
-install, every tenant namespace and CR, the cert-manager CA and all certs
-minted from it, the per-tenant metrics PKI, the in-cluster GitHub App secret,
-and every node pool. Recreate rebuilds these; it does not restore them.</p>
+<p>The script routes CI off the cluster (resetting <code>GAG_RUNNER</code> and <code>GAG_E2E_RUNNER</code>) <strong>before</strong> deleting, so no dispatched job can aim at a cluster that is mid-deletion; deletes the cluster; prunes the now-dead kubeconfig context so a later <code>kubectl</code> fails loudly instead of timing out against a cluster that no longer exists; and reports any disk or reserved address that outlived the cluster, since those keep billing.
+It quotes the live node and in-flight worker-pod counts back at you in the confirmation, so deleting a cluster that is actually busy is a decision rather than an accident.
+Unlike <code>stop.sh</code> it does not wait for the drain — deleting the cluster takes the worker nodes with it, so there is nothing left to strand.</p>
+<p><code>ASSUME_YES=1</code> skips the prompt for automation.
+A missing cluster is a no-op, so the script is safe to re-run.</p>
+<p><strong>What survives, and therefore makes recreate possible:</strong> the GCP project, billing link, enabled APIs, quota, the GitHub App and its installation, and the App private key in the local Keychain. <strong>What does not:</strong> the GAG control-plane install, every tenant namespace and CR, the cert-manager CA and all certs minted from it, the per-tenant metrics PKI, the in-cluster GitHub App secret, and every node pool.
+Recreate rebuilds these; it does not restore them.</p>
 <h3 id="recreate-is-proven-end-to-end-q380">Recreate is proven end-to-end (Q380)<a class="headerlink" href="#recreate-is-proven-end-to-end-q380" title="Permanent link">&para;</a></h3>
 <blockquote>
-<p><strong>Validated 2026-07-25.</strong> The cluster was rebuilt from nothing — empty
-project, no cluster, no node pools — by running <code>setup.sh</code> and then
-<code>e2e-setup.sh</code> straight through. Both completed successfully. One real gap
-was found and fixed on the way; everything else worked unchanged.</p>
+<p><strong>Validated 2026-07-25.</strong> The cluster was rebuilt from nothing — empty project, no cluster, no node pools — by running <code>setup.sh</code> and then <code>e2e-setup.sh</code> straight through.
+Both completed successfully.
+One real gap was found and fixed on the way; everything else worked unchanged.</p>
 </blockquote>
-<p><code>delete.sh</code> was already proven by the 2026-07-20 deletion: occupancy probes read
-the cluster correctly (0 nodes, 0 worker pods), the runner labels were reset to
-<code>ubuntu-latest</code> <em>before</em> the delete, the kubeconfig context was pruned, and the
-orphan sweep confirmed no disks or reserved addresses survived.</p>
+<p><code>delete.sh</code> was already proven by the 2026-07-20 deletion: occupancy probes read the cluster correctly (0 nodes, 0 worker pods), the runner labels were reset to <code>ubuntu-latest</code> <em>before</em> the delete, the kubeconfig context was pruned, and the orphan sweep confirmed no disks or reserved addresses survived.</p>
 <p><code>setup.sh</code> is now proven too, with one correction:</p>
 <ul>
-<li><strong>The cluster create was missing Workload Identity (fixed).</strong>
-  <code>create_cluster</code> did not pass <code>--workload-pool</code>, even though Part A3 above
-  documents it as a hard prerequisite of the Part F e2e pool, whose
-  <code>--workload-metadata=GKE_METADATA</code> is rejected with a 400 without it. Every
-  previous run took the "already exists — skipping create" branch against a
-  cluster that had had Workload Identity retrofitted by hand, so the gap was
-  invisible. It is a create-time property, which is what makes it nasty:
-  omitting it is not observable until <code>e2e-setup.sh</code> runs much later, and is
-  then repairable only by a separate control-plane update. The flag is now in
-  the script; the rebuilt cluster reports <code>workloadIdentityConfig.workloadPool
-  = actions-gateway-dogfood.svc.id.goog</code>, and the Part F <code>e2e</code> pool created
-  cleanly against it — the direct proof that the fix is both necessary and
-  sufficient.</li>
-<li><strong><code>workers-od</code> created cleanly.</strong> The pool this section previously called the
-  most likely thing to break did not break: its first-ever scripted creation
-  produced exactly the intended shape (<code>e2-standard-4</code>, <code>pd-standard</code> 100 GB,
-  no autoscaling, starts at 0, taint <code>dedicated=workers:NoSchedule</code>,
-  non-preemptible).</li>
-<li><strong>The App secret round-trip worked with the secret absent.</strong> <code>create_secret</code>
-  applies the Keychain-read key through <code>kubectl create --dry-run=client |
-  kubectl apply</code>, which upserts identically whether or not the Secret already
-  exists, so the absent case needed no change.</li>
+<li><strong>The cluster create was missing Workload Identity (fixed).</strong> <code>create_cluster</code> did not pass <code>--workload-pool</code>, even though Part A3 above documents it as a hard prerequisite of the Part F e2e pool, whose <code>--workload-metadata=GKE_METADATA</code> is rejected with a 400 without it.
+  Every previous run took the "already exists — skipping create" branch against a cluster that had had Workload Identity retrofitted by hand, so the gap was invisible.
+  It is a create-time property, which is what makes it nasty: omitting it is not observable until <code>e2e-setup.sh</code> runs much later, and is then repairable only by a separate control-plane update.
+  The flag is now in the script; the rebuilt cluster reports <code>workloadIdentityConfig.workloadPool = actions-gateway-dogfood.svc.id.goog</code>, and the Part F <code>e2e</code> pool created cleanly against it — the direct proof that the fix is both necessary and sufficient.</li>
+<li><strong><code>workers-od</code> created cleanly.</strong> The pool this section previously called the most likely thing to break did not break: its first-ever scripted creation produced exactly the intended shape (<code>e2-standard-4</code>, <code>pd-standard</code> 100 GB, no autoscaling, starts at 0, taint <code>dedicated=workers:NoSchedule</code>, non-preemptible).</li>
+<li><strong>The App secret round-trip worked with the secret absent.</strong> <code>create_secret</code> applies the Keychain-read key through <code>kubectl create --dry-run=client | kubectl apply</code>, which upserts identically whether or not the Secret already exists, so the absent case needed no change.</li>
 </ul>
-<p><strong>One artifact to expect on a from-zero run:</strong> the preflight
-(<code>validate-cluster.sh</code>) reported <code>metrics-server: metrics.k8s.io API is not
-Available</code>. That is a race, not a real gap — GKE's metrics-server addon is still
-starting while <code>setup.sh</code> reaches preflight, and it was measured <code>Available</code>
-about two minutes into the cluster's life. The check is a WARN, so the bootstrap
-proceeded correctly, but it is a false negative and a run with <code>VALIDATE_STRICT=1</code>
-would have failed the from-zero path on it.</p>
-<p>The preflight now retries that check within a bounded budget instead of looking
-once (<a href="../../STATUS/#Q397">Q397</a>): 150 s for a registered-but-not-yet-<code>Available</code>
-<code>metrics.k8s.io</code> APIService, and a 15 s grace for the APIService to appear at all
-before it concludes metrics-server is absent (so a cluster genuinely without it
-still warns promptly). The retry is unit-tested against faked probes in
-<code>scripts/e2e/validate-cluster-test.sh</code>; the from-zero timing itself is only
-observable on a real recreate, so <strong>the next dogfood recreate is where this gets
-confirmed</strong> — expect a <code>[WAIT]</code> line followed by <code>PASS</code>, not a WARN.</p>
-<p>To go further and remove the project itself (irreversible, and it takes the
-GCP-side App wiring with it):</p>
+<p><strong>One artifact to expect on a from-zero run:</strong> the preflight (<code>validate-cluster.sh</code>) reported <code>metrics-server: metrics.k8s.io API is not Available</code>.
+That is a race, not a real gap — GKE's metrics-server addon is still starting while <code>setup.sh</code> reaches preflight, and it was measured <code>Available</code> about two minutes into the cluster's life.
+The check is a WARN, so the bootstrap proceeded correctly, but it is a false negative and a run with <code>VALIDATE_STRICT=1</code> would have failed the from-zero path on it.</p>
+<p>The preflight now retries that check within a bounded budget instead of looking once (<a href="../../STATUS/#Q397">Q397</a>): 150 s for a registered-but-not-yet-<code>Available</code> <code>metrics.k8s.io</code> APIService, and a 15 s grace for the APIService to appear at all before it concludes metrics-server is absent (so a cluster genuinely without it still warns promptly).
+The retry is unit-tested against faked probes in <code>scripts/e2e/validate-cluster-test.sh</code>; the from-zero timing itself is only observable on a real recreate, so <strong>the next dogfood recreate is where this gets confirmed</strong> — expect a <code>[WAIT]</code> line followed by <code>PASS</code>, not a WARN.</p>
+<p>To go further and remove the project itself (irreversible, and it takes the GCP-side App wiring with it):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>delete<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PROJECT</span><span class="s2">&quot;</span>
 </code></pre></div>
 <hr />
 <h2 id="part-f--e2e-on-gke-kata-containers">Part F — E2e on GKE (Kata Containers)<a class="headerlink" href="#part-f--e2e-on-gke-kata-containers" title="Permanent link">&para;</a></h2>
-<p>The e2e suite runs <code>kind create cluster</code> inside the runner pod, which requires
-a Docker daemon (Docker-in-Docker). The clean solution is
-<a href="https://katacontainers.io/">Kata Containers</a>: each pod gets its own
-lightweight microVM with a real Linux kernel (backed by KVM). Inside the
-microVM, Docker runs normally — no user-namespace tricks, no kernel feature
-gaps — so kind works exactly as it does on a GitHub-hosted runner.</p>
-<p>The security profile stays <strong><code>baseline</code></strong>: the pod itself does not need
-<code>privileged: true</code> because the Kata microVM is the isolation boundary. If
-anything escapes from within kind, it hits the microVM's kernel, not the GKE
-node.</p>
-<p><strong>What GKE provides:</strong> Standard clusters support nested VMs via
-<code>--enable-nested-virtualization</code> on a node pool, which exposes <code>/dev/kvm</code> on
-the node. Kata uses <code>/dev/kvm</code> to spin up microVMs.
+<p>The e2e suite runs <code>kind create cluster</code> inside the runner pod, which requires a Docker daemon (Docker-in-Docker).
+The clean solution is <a href="https://katacontainers.io/">Kata Containers</a>: each pod gets its own lightweight microVM with a real Linux kernel (backed by KVM).
+Inside the microVM, Docker runs normally — no user-namespace tricks, no kernel feature gaps — so kind works exactly as it does on a GitHub-hosted runner.</p>
+<p>The security profile stays <strong><code>baseline</code></strong>: the pod itself does not need <code>privileged: true</code> because the Kata microVM is the isolation boundary.
+If anything escapes from within kind, it hits the microVM's kernel, not the GKE node.</p>
+<p><strong>What GKE provides:</strong> Standard clusters support nested VMs via <code>--enable-nested-virtualization</code> on a node pool, which exposes <code>/dev/kvm</code> on the node.
+Kata uses <code>/dev/kvm</code> to spin up microVMs.
 <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/nested-virtualization">Official GKE docs.</a></p>
-<p><strong>Machine type note:</strong> nested virtualization is required (Kata needs <code>/dev/kvm</code>)
-and GCP supports it on a specific list, which the API names when it rejects a
-create:</p>
+<p><strong>Machine type note:</strong> nested virtualization is required (Kata needs <code>/dev/kvm</code>) and GCP supports it on a specific list, which the API names when it rejects a create:</p>
 <blockquote>
 <p>A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3 and M4</p>
 </blockquote>
-<p><strong>The AMD families are not on it</strong> — <code>C2D</code> and <code>N2D</code> are both rejected, as is E2
-(used in Parts A–B). An earlier revision of this note claimed <code>n2/n2d/c2/c2d</code>;
-that was wrong, and cost a pool re-create when <code>c2d-standard-8</code> was refused
-outright. The e2e pool uses <code>n2-standard-8</code> (8 vCPU: the measured runner peak is
-~5 vCPU — Q248, which is why the original <code>n2-standard-4</code> was outgrown).</p>
-<p><strong>The quota that actually binds is <code>CPUS_ALL_REGIONS</code>, not any family quota.</strong>
-Two <code>v1.3.0-rc.5</code> validation runs died on <code>FailedScaleUp: GCE quota exceeded</code>
-while <code>C2_CPUS</code>, <code>N2_CPUS</code> and regional <code>CPUS</code> all sat near zero. The constraint
-is a <strong>global, project-wide</strong> CPU limit that defaults to <strong>32</strong>, which this
-cluster saturates exactly at full stretch:</p>
+<p><strong>The AMD families are not on it</strong> — <code>C2D</code> and <code>N2D</code> are both rejected, as is E2 (used in Parts A–B).
+An earlier revision of this note claimed <code>n2/n2d/c2/c2d</code>; that was wrong, and cost a pool re-create when <code>c2d-standard-8</code> was refused outright.
+The e2e pool uses <code>n2-standard-8</code> (8 vCPU: the measured runner peak is ~5 vCPU — Q248, which is why the original <code>n2-standard-4</code> was outgrown).</p>
+<p><strong>The quota that actually binds is <code>CPUS_ALL_REGIONS</code>, not any family quota.</strong> Two <code>v1.3.0-rc.5</code> validation runs died on <code>FailedScaleUp: GCE quota exceeded</code> while <code>C2_CPUS</code>, <code>N2_CPUS</code> and regional <code>CPUS</code> all sat near zero.
+The constraint is a <strong>global, project-wide</strong> CPU limit that defaults to <strong>32</strong>, which this cluster saturates exactly at full stretch:</p>
 <table>
 <thead>
 <tr>
@@ -4133,148 +3860,63 @@ cluster saturates exactly at full stretch:</p>
 </tr>
 </tbody>
 </table>
-<p>With <code>workers</code> at 7 nodes the project sits at 4 + 28 = 32/32, and the e2e pool's
-scale-up is refused for want of 8. <strong>The gate can therefore starve itself</strong>: its
-deploy phase routes CI to GAG, scaling <code>workers</code> out of the same global budget
-the e2e leg then needs. Raised to <strong>64</strong> on 2026-08-03 (approved immediately),
-covering the 52 ceiling plus headroom for spot replacement and GKE surge.</p>
-<p><strong>Read the API's error, not the autoscaler's event.</strong> <code>FailedScaleUp</code> never names
-the quota. <code>gcloud container clusters resize</code> returns a 429 whose body does:
-<code>resource "CPUS_ALL_REGIONS": request requires '8.0' and is short '8.0'</code>. Chasing
-the family quotas instead cost this release two runs and three wrong diagnoses.</p>
-<p><strong>Why N2 and not C2.</strong> Separate from the above: the regional <code>C2_CPUS</code> default is
-8, one node of this shape, and a request to raise it was <strong>denied</strong> on
-2026-07-31 — while an identical 8→16 ask for <code>IN_USE_ADDRESSES</code> was approved 33
-minutes earlier, so the size of the ask was not the discriminator. <code>N2_CPUS</code>
-defaults to 200 and n2 is this pool's original family, so it is already proven
-here. Note this alone would not have fixed anything; the global limit was the
-real blocker.</p>
+<p>With <code>workers</code> at 7 nodes the project sits at 4 + 28 = 32/32, and the e2e pool's scale-up is refused for want of 8. <strong>The gate can therefore starve itself</strong>: its deploy phase routes CI to GAG, scaling <code>workers</code> out of the same global budget the e2e leg then needs.
+Raised to <strong>64</strong> on 2026-08-03 (approved immediately), covering the 52 ceiling plus headroom for spot replacement and GKE surge.</p>
+<p><strong>Read the API's error, not the autoscaler's event.</strong> <code>FailedScaleUp</code> never names the quota. <code>gcloud container clusters resize</code> returns a 429 whose body does: <code>resource "CPUS_ALL_REGIONS": request requires '8.0' and is short '8.0'</code>.
+Chasing the family quotas instead cost this release two runs and three wrong diagnoses.</p>
+<p><strong>Why N2 and not C2.</strong> Separate from the above: the regional <code>C2_CPUS</code> default is 8, one node of this shape, and a request to raise it was <strong>denied</strong> on 2026-07-31 — while an identical 8→16 ask for <code>IN_USE_ADDRESSES</code> was approved 33 minutes earlier, so the size of the ask was not the discriminator. <code>N2_CPUS</code> defaults to 200 and n2 is this pool's original family, so it is already proven here.
+Note this alone would not have fixed anything; the global limit was the real blocker.</p>
 <h3 id="f1-run-the-one-time-setup-script">F1. Run the one-time setup script<a class="headerlink" href="#f1-run-the-one-time-setup-script" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nb">export</span><span class="w"> </span>CLUSTER<span class="w"> </span>ZONE<span class="w"> </span>APP_ID<span class="w"> </span>INSTALLATION_ID<span class="w">   </span><span class="c1"># from the Variables section</span>
 <a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>scripts/dogfood/e2e-setup.sh
 </code></pre></div>
 <p>This script owns the <strong>cluster infra</strong> the kustomize overlays can't express:
-1. Creates the <code>e2e</code> node pool (n2-standard-8 spot, nested virt, <code>--workload-metadata=GKE_METADATA</code> — requires cluster-level <code>--workload-pool</code>, see Part A — autoscaling 0→2, taint <code>dedicated=e2e:NoSchedule</code>). The pool's node labels carry <strong>both</strong> <code>gag.dev/kata-ci=true</code> (installer scope) and <code>katacontainers.io/kata-runtime=true</code> — the latter pre-baked because the cluster autoscaler simulates scale-from-zero against configured labels only (Q286)
-2. Installs the Kata DaemonSet, scoped to e2e pool nodes only via <code>gag.dev/kata-ci</code> and tolerating the pool taint (the chart ships no tolerations — Q286). The system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes <code>katacontainers.io/kata-runtime=true</code> after install
+1. Creates the <code>e2e</code> node pool (n2-standard-8 spot, nested virt, <code>--workload-metadata=GKE_METADATA</code> — requires cluster-level <code>--workload-pool</code>, see Part A — autoscaling 0→2, taint <code>dedicated=e2e:NoSchedule</code>).
+   The pool's node labels carry <strong>both</strong> <code>gag.dev/kata-ci=true</code> (installer scope) and <code>katacontainers.io/kata-runtime=true</code> — the latter pre-baked because the cluster autoscaler simulates scale-from-zero against configured labels only (Q286)
+2. Installs the Kata DaemonSet, scoped to e2e pool nodes only via <code>gag.dev/kata-ci</code> and tolerating the pool taint (the chart ships no tolerations — Q286).
+   The system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes <code>katacontainers.io/kata-runtime=true</code> after install
 3. Creates the <code>kata</code> RuntimeClass alias (over the chart-owned <code>kata-qemu</code> handler) with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
 4. Creates the <code>gag-dogfood-e2e</code> namespace (v2 marker <code>actions-gateway.com/tenant=managed</code>) and the GitHub App Secret</p>
-<p>The <strong>tenant objects</strong> (ResourceQuota, <code>ActionsGateway</code>, <code>ClusterRunnerTemplate</code>,
-<code>RunnerSet</code>, egress policy, and the namespace's security-profile gates) are owned by
-the worker-isolation overlays under
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>deploy/dogfood-e2e/</code></a> and applied on demand by
-<code>e2e-start.sh</code> (<code>E2E_VARIANT=kata|dind</code>, default <code>kata</code> since the Q286 flip;
-<code>dind</code> is the explicit opt-in fallback). They are authored
-<strong>directly at <code>actions-gateway.com/v2beta1</code></strong> (Q231) — the graduated served+storage
-front-door shape (Q273), deliberately unlike <code>scripts/dogfood/setup.sh</code> (main
-dogfood), which authors at v2alpha1 to exercise the conversion webhook.</p>
-<p>In both variants the DinD native sidecar runs <code>dockerd</code> on <code>tcp://localhost:2375</code>
-(no TLS — pod-internal only) and the <code>runner</code> container sets
-<code>DOCKER_HOST=tcp://localhost:2375</code>. Because all containers in a pod share a network
-namespace, kind's API server is reachable at <code>localhost:&lt;apiserver-port&gt;</code> from the
-runner.</p>
+<p>The <strong>tenant objects</strong> (ResourceQuota, <code>ActionsGateway</code>, <code>ClusterRunnerTemplate</code>, <code>RunnerSet</code>, egress policy, and the namespace's security-profile gates) are owned by the worker-isolation overlays under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>deploy/dogfood-e2e/</code></a> and applied on demand by <code>e2e-start.sh</code> (<code>E2E_VARIANT=kata|dind</code>, default <code>kata</code> since the Q286 flip; <code>dind</code> is the explicit opt-in fallback).
+They are authored <strong>directly at <code>actions-gateway.com/v2beta1</code></strong> (Q231) — the graduated served+storage front-door shape (Q273), deliberately unlike <code>scripts/dogfood/setup.sh</code> (main dogfood), which authors at v2alpha1 to exercise the conversion webhook.</p>
+<p>In both variants the DinD native sidecar runs <code>dockerd</code> on <code>tcp://localhost:2375</code> (no TLS — pod-internal only) and the <code>runner</code> container sets <code>DOCKER_HOST=tcp://localhost:2375</code>.
+Because all containers in a pod share a network namespace, kind's API server is reachable at <code>localhost:&lt;apiserver-port&gt;</code> from the runner.</p>
 <blockquote>
-<p><strong>The default variant is <code>kata</code></strong> (unprivileged kind-in-Kata) — live-validated
-green on GAG 2026-07-17 (<a href="../archive/kata-on-gke/">Q286</a>; the AC#5 run plus the
-seven live-found fixes are in
-<a href="../archive/kata-on-gke/#what-the-live-session-found-2026-07-16">what the live session found</a>).
-<code>dind</code> (privileged DinD, clean-green since 2026-07-07) stays available as the
-explicit opt-in fallback for environments without nested virtualization.</p>
+<p><strong>The default variant is <code>kata</code></strong> (unprivileged kind-in-Kata) — live-validated green on GAG 2026-07-17 (<a href="../archive/kata-on-gke/">Q286</a>; the AC#5 run plus the seven live-found fixes are in <a href="../archive/kata-on-gke/#what-the-live-session-found-2026-07-16">what the live session found</a>). <code>dind</code> (privileged DinD, clean-green since 2026-07-07) stays available as the explicit opt-in fallback for environments without nested virtualization.</p>
 </blockquote>
 <h3 id="f2-workflow-change--already-wired">F2. Workflow change — already wired<a class="headerlink" href="#f2-workflow-change--already-wired" title="Permanent link">&para;</a></h3>
-<p><code>.github/workflows/e2e-reusable.yml</code> routes to GAG through two mechanisms with
-one precedence line:</p>
+<p><code>.github/workflows/e2e-reusable.yml</code> routes to GAG through two mechanisms with one precedence line:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ fromJSON(inputs.runner || vars.GAG_E2E_RUNNER || &#39;&quot;ubuntu-latest&quot;&#39;) }}</span>
 </code></pre></div>
 <ul>
-<li><strong>Run-scoped (the default path):</strong> dispatch one run with the <code>runner</code> input —
-  <code>gh workflow run e2e-test.yml --ref main -f runner='"gag-ci-e2e"'</code> — and only
-  that run lands on GAG. This is what <code>validate-release.sh</code> does; there is no
-  window in which anyone else's PR or merge can be caught.</li>
-<li><strong>Repo-wide window (explicit opt-in):</strong> <code>E2E_ROUTE_VAR=1 e2e-start.sh</code> sets
-  <code>vars.GAG_E2E_RUNNER</code>, routing <strong>every</strong> e2e job — concurrent sessions'
-  included — until <code>e2e-stop.sh</code> resets it. A job caught mid-window wedged main
-  CI when the teardown deleted the AGC under it (2026-07-31), which is why this
-  stopped being the default.</li>
+<li><strong>Run-scoped (the default path):</strong> dispatch one run with the <code>runner</code> input — <code>gh workflow run e2e-test.yml --ref main -f runner='"gag-ci-e2e"'</code> — and only that run lands on GAG.
+  This is what <code>validate-release.sh</code> does; there is no window in which anyone else's PR or merge can be caught.</li>
+<li><strong>Repo-wide window (explicit opt-in):</strong> <code>E2E_ROUTE_VAR=1 e2e-start.sh</code> sets <code>vars.GAG_E2E_RUNNER</code>, routing <strong>every</strong> e2e job — concurrent sessions' included — until <code>e2e-stop.sh</code> resets it.
+  A job caught mid-window wedged main CI when the teardown deleted the AGC under it (2026-07-31), which is why this stopped being the default.</li>
 </ul>
-<p>Both <code>e2e-test.yml</code> (kindnet) and <code>e2e-calico.yml</code> (Calico) call this reusable
-workflow, so the one line covers both CNI variants. Because the RunnerSet is
-ScaleSet (single-label), both the input and the variable are a single JSON
-<strong>string</strong> (<code>"gag-ci-e2e"</code>), not the old Classic multi-label array. CI is
-unaffected until you route.</p>
+<p>Both <code>e2e-test.yml</code> (kindnet) and <code>e2e-calico.yml</code> (Calico) call this reusable workflow, so the one line covers both CNI variants.
+Because the RunnerSet is ScaleSet (single-label), both the input and the variable are a single JSON <strong>string</strong> (<code>"gag-ci-e2e"</code>), not the old Classic multi-label array.
+CI is unaffected until you route.</p>
 <h3 id="f3-e2e-operations--on-demand">F3. E2e operations — on-demand<a class="headerlink" href="#f3-e2e-operations--on-demand" title="Permanent link">&para;</a></h3>
-<p>The e2e tenant's AGC is <strong>on-demand</strong> (Q231), not always-on: its standing
-~500m-CPU AGC pod competes with the CI AGC + GMC + Athens on the
-<code>e2-standard-2</code> system pool (leaving the CI AGC <code>Pending</code>/<code>Insufficient cpu</code>),
-and the <code>SSD_TOTAL_GB=500</code> quota bounds the workers pool. So rather than keep it
-running, <code>e2e-start.sh</code> applies the tenant to spin the AGC up per e2e session and
-<code>e2e-stop.sh</code> deletes the <code>ActionsGateway</code> to tear it back down (the namespace,
-Secret, quota, template, and RunnerSet are inert without the gateway and kept).
-Before the delete, <code>e2e-stop.sh</code> <strong>drains</strong>: it waits for jobs still queued on
-the <code>gag-ci-e2e</code> scale set and for in-flight e2e worker pods, and on timeout
-fails <em>without</em> deleting — the AGC is the only thing that can serve a queued job
-or reap a worker pod, and deleting it under either strands them (2026-07-31: an
-orphaned worker pod's do-not-disrupt annotations pinned a billable node, and a
-stranded queued run wedged main's e2e concurrency group).
-<code>SKIP_E2E_DRAIN=1</code> overrides knowingly.</p>
-<p>The worker half of that is now fixed in the product rather than only in the
-script (Q547): the AGC reaps its worker pods when it observes the gateway's
-<code>deletionTimestamp</code>, and the GMC holds teardown open until it has. So a delete
-under in-flight workers no longer strands a node — it <em>kills those jobs</em>, which
-is why the script still drains first. The queued-job half is unchanged and
-remains the drain's own reason: nothing reaps a run that was never acquired.
-The e2e <strong>node</strong> pool is already on-demand independently (autoscales 0→2 on job
-arrival, back to 0 ~10 min after drain).</p>
-<p>A single <code>e2-standard-2</code> system node no longer leaves ~500m free for the
-on-demand AGC (DaemonSet/kube-dns growth), so it stays <code>Pending</code> and the start
-script's Ready wait times out (Q335).</p>
-<p>The same ceiling applies to the <strong>always-on</strong> tenants, not just the on-demand
-e2e one: measured on a live node, <code>e2-standard-2</code> offers <strong>1930m allocatable</strong>
-against a <strong>~1080m kube-system baseline</strong>, leaving room for exactly <em>one</em> of the
-two 500m tenant AGCs (<code>dogfood-agc</code>, <code>dogfoodss-agc</code>). At 1 node the two race
-for the node and the loser stays <code>Pending</code> indefinitely — and because
-<code>dogfood/start.sh</code> waits on <code>instance=dogfood</code> specifically, a <code>dogfoodss</code> win
-times the wait out and fails the caller (this is what blocked
-<code>validate-release.sh</code> before it ever reached the e2e leg). Rather than pin a
-count that a third tenant would silently outgrow (Q357), <code>dogfood/start.sh</code>
-<strong>derives</strong> the size from the deployed always-on <code>ActionsGateway</code> CRs via
-<code>scripts/dogfood/lib/pool.sh</code>: one node per always-on tenant AGC, floored at
-the live-validated <strong>2</strong> (the on-demand e2e tenant's namespace is excluded —
-its AGC packs into the non-first nodes' larger headroom, validated with all
-three AGCs on 2 nodes). One-node-per-AGC is deliberately conservative; a spare
-node during the running window is cheaper than a <code>Pending</code> AGC. <code>SYSTEM_NODES</code>
-pins the size explicitly instead (a pin below the derived need warns).
-<code>scripts/dogfood/pool-test.sh</code> (in <code>make check</code> via <code>make scripts-test</code>)
-asserts the sizing against stubs.</p>
-<p>The e2e leg triggers the matrix with <code>gh workflow run</code> (a <code>workflow_dispatch</code>
-carrying the run-scoped <code>runner</code> input above). The dispatched run enters the
-workflow's per-ref concurrency group, which holds <strong>one pending slot</strong> — a run
-dispatched into a busy group parks there, and the next push to main cancels it,
-aborting the gate after the scale-up, deploy, and e2e AGC were already paid for
-(the rerun-era analog was observed 2026-07-20, after PR #709: <code>gh run rerun</code>
-refuses an in-flight run outright). <code>validate-release.sh</code> therefore <em>settles the
-lane</em> in <code>main()</code> before the trap arms and before anything billable: it waits
-out an in-flight run for up to <code>E2E_WAIT_TIMEOUT</code> (default 1800s) and otherwise
-fails there, where failure is free. The dispatch also resolves the <strong>new</strong> run's
-id (by watching the newest <code>workflow_dispatch</code> run change from a pre-dispatch
-baseline — <code>gh workflow run</code> prints no id) and fails rather than watching a
-stale run.
-<code>scripts/dogfood/validate-release-test.sh</code> (in <code>make check</code> via <code>make scripts-test</code>)
-asserts these paths against stubs.</p>
-<p>The same fail-early rule covers local tools (Q356): the CRD smoke is the gate's
-<em>last</em> leg, so its <code>cosign</code> dependency (<code>.build/cosign</code>, <code>make cosign</code>; <code>COSIGN=</code>
-to override) used to be checked ~25 minutes in — aborting after a full node
-scale-up + deploy + e2e cycle. <code>main()</code> now preflights it alongside the
-<code>require_cmd</code> checks, before the confirmation prompt and anything billable;
-<code>crd_smoke</code> only consumes the resolved <code>COSIGN_BIN</code>. The test script asserts the
-preflight's paths too.</p>
-<p><code>e2e-start.sh</code> scales the system pool up for the e2e window
-(<code>E2E_SYSTEM_NODES</code>, default <code>2</code>, never below the derived running size — a
-smaller resize would evict a tenant AGC), and <code>e2e-stop.sh</code> restores the
-running size afterwards (derived the same way as <code>dogfood/start.sh</code>, so the two
-agree by construction; <code>SYSTEM_POOL_AT_REST_NODES</code> pins it instead);
-<code>dogfood/stop.sh</code> later takes the pool to 0 for the zero-cost-at-rest state.
-All resizes pin <code>--project</code> and <code>--zone</code> and are idempotent, so re-running any
-of these scripts is safe.</p>
+<p>The e2e tenant's AGC is <strong>on-demand</strong> (Q231), not always-on: its standing ~500m-CPU AGC pod competes with the CI AGC + GMC + Athens on the <code>e2-standard-2</code> system pool (leaving the CI AGC <code>Pending</code>/<code>Insufficient cpu</code>), and the <code>SSD_TOTAL_GB=500</code> quota bounds the workers pool.
+So rather than keep it running, <code>e2e-start.sh</code> applies the tenant to spin the AGC up per e2e session and <code>e2e-stop.sh</code> deletes the <code>ActionsGateway</code> to tear it back down (the namespace, Secret, quota, template, and RunnerSet are inert without the gateway and kept).
+Before the delete, <code>e2e-stop.sh</code> <strong>drains</strong>: it waits for jobs still queued on the <code>gag-ci-e2e</code> scale set and for in-flight e2e worker pods, and on timeout fails <em>without</em> deleting — the AGC is the only thing that can serve a queued job or reap a worker pod, and deleting it under either strands them (2026-07-31: an orphaned worker pod's do-not-disrupt annotations pinned a billable node, and a stranded queued run wedged main's e2e concurrency group). <code>SKIP_E2E_DRAIN=1</code> overrides knowingly.</p>
+<p>The worker half of that is now fixed in the product rather than only in the script (Q547): the AGC reaps its worker pods when it observes the gateway's <code>deletionTimestamp</code>, and the GMC holds teardown open until it has.
+So a delete under in-flight workers no longer strands a node — it <em>kills those jobs</em>, which is why the script still drains first.
+The queued-job half is unchanged and remains the drain's own reason: nothing reaps a run that was never acquired.
+The e2e <strong>node</strong> pool is already on-demand independently (autoscales 0→2 on job arrival, back to 0 ~10 min after drain).</p>
+<p>A single <code>e2-standard-2</code> system node no longer leaves ~500m free for the on-demand AGC (DaemonSet/kube-dns growth), so it stays <code>Pending</code> and the start script's Ready wait times out (Q335).</p>
+<p>The same ceiling applies to the <strong>always-on</strong> tenants, not just the on-demand e2e one: measured on a live node, <code>e2-standard-2</code> offers <strong>1930m allocatable</strong> against a <strong>~1080m kube-system baseline</strong>, leaving room for exactly <em>one</em> of the two 500m tenant AGCs (<code>dogfood-agc</code>, <code>dogfoodss-agc</code>).
+At 1 node the two race for the node and the loser stays <code>Pending</code> indefinitely — and because <code>dogfood/start.sh</code> waits on <code>instance=dogfood</code> specifically, a <code>dogfoodss</code> win times the wait out and fails the caller (this is what blocked <code>validate-release.sh</code> before it ever reached the e2e leg).
+Rather than pin a count that a third tenant would silently outgrow (Q357), <code>dogfood/start.sh</code> <strong>derives</strong> the size from the deployed always-on <code>ActionsGateway</code> CRs via <code>scripts/dogfood/lib/pool.sh</code>: one node per always-on tenant AGC, floored at the live-validated <strong>2</strong> (the on-demand e2e tenant's namespace is excluded — its AGC packs into the non-first nodes' larger headroom, validated with all three AGCs on 2 nodes).
+One-node-per-AGC is deliberately conservative; a spare node during the running window is cheaper than a <code>Pending</code> AGC. <code>SYSTEM_NODES</code> pins the size explicitly instead (a pin below the derived need warns). <code>scripts/dogfood/pool-test.sh</code> (in <code>make check</code> via <code>make scripts-test</code>) asserts the sizing against stubs.</p>
+<p>The e2e leg triggers the matrix with <code>gh workflow run</code> (a <code>workflow_dispatch</code> carrying the run-scoped <code>runner</code> input above).
+The dispatched run enters the workflow's per-ref concurrency group, which holds <strong>one pending slot</strong> — a run dispatched into a busy group parks there, and the next push to main cancels it, aborting the gate after the scale-up, deploy, and e2e AGC were already paid for (the rerun-era analog was observed 2026-07-20, after PR #709: <code>gh run rerun</code> refuses an in-flight run outright). <code>validate-release.sh</code> therefore <em>settles the lane</em> in <code>main()</code> before the trap arms and before anything billable: it waits out an in-flight run for up to <code>E2E_WAIT_TIMEOUT</code> (default 1800s) and otherwise fails there, where failure is free.
+The dispatch also resolves the <strong>new</strong> run's id (by watching the newest <code>workflow_dispatch</code> run change from a pre-dispatch baseline — <code>gh workflow run</code> prints no id) and fails rather than watching a stale run. <code>scripts/dogfood/validate-release-test.sh</code> (in <code>make check</code> via <code>make scripts-test</code>) asserts these paths against stubs.</p>
+<p>The same fail-early rule covers local tools (Q356): the CRD smoke is the gate's <em>last</em> leg, so its <code>cosign</code> dependency (<code>.build/cosign</code>, <code>make cosign</code>; <code>COSIGN=</code> to override) used to be checked ~25 minutes in — aborting after a full node scale-up + deploy + e2e cycle. <code>main()</code> now preflights it alongside the <code>require_cmd</code> checks, before the confirmation prompt and anything billable; <code>crd_smoke</code> only consumes the resolved <code>COSIGN_BIN</code>.
+The test script asserts the preflight's paths too.</p>
+<p><code>e2e-start.sh</code> scales the system pool up for the e2e window (<code>E2E_SYSTEM_NODES</code>, default <code>2</code>, never below the derived running size — a smaller resize would evict a tenant AGC), and <code>e2e-stop.sh</code> restores the running size afterwards (derived the same way as <code>dogfood/start.sh</code>, so the two agree by construction; <code>SYSTEM_POOL_AT_REST_NODES</code> pins it instead); <code>dogfood/stop.sh</code> later takes the pool to 0 for the zero-cost-at-rest state.
+All resizes pin <code>--project</code> and <code>--zone</code> and are idempotent, so re-running any of these scripts is safe.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nb">export</span><span class="w"> </span>PROJECT<span class="w"> </span>CLUSTER<span class="w"> </span>ZONE<span class="w"> </span>REPO<span class="w">   </span><span class="c1"># from the Variables section</span>
 <a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>
 <a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="c1"># Enable (requires the system pool up via dogfood/start.sh first): scales the</span>
@@ -4286,21 +3928,12 @@ of these scripts is safe.</p>
 <a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="c1"># restores the system pool to the derived running size.</span>
 <a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a>scripts/dogfood/e2e-stop.sh
 </code></pre></div>
-<p>The e2e pool toggles independently from the CI pool — you can run only one
-or both at the same time.</p>
+<p>The e2e pool toggles independently from the CI pool — you can run only one or both at the same time.</p>
 <blockquote>
-<p><strong>Migrating a pre-existing Classic e2e tenant (one-time).</strong> If the tenant's
-RunnerSet was previously authored at <code>v2alpha1</code> with <code>acquisitionProtocol:
-Classic</code>, the conversion webhook stamped a
-<code>conversion.actions-gateway.com/acquisition-protocol: Classic</code> annotation on the
-stored v2beta1 object. <code>kubectl apply</code> of the new v2beta1 ScaleSet spec does <strong>not</strong>
-strip that webhook-added annotation, so the AGC keeps running Classic (it reads the
-RunnerSet through the v2beta1→v2alpha1 conversion, which restores <code>Classic</code> from the
-annotation). Recreate the RunnerSet once so it comes back v2beta1-native (annotation
-defaults to <code>ScaleSet</code>): <code>kubectl delete runnerset ci-e2e -n gag-dogfood-e2e</code> then
-<code>kubectl apply -k deploy/dogfood-e2e/overlays/dind</code>. A tenant created fresh by
-<code>e2e-setup.sh</code> (authored at v2beta1 directly) never carries the annotation. Verified
-live 2026-07-07 (Q231).</p>
+<p><strong>Migrating a pre-existing Classic e2e tenant (one-time).</strong> If the tenant's RunnerSet was previously authored at <code>v2alpha1</code> with <code>acquisitionProtocol: Classic</code>, the conversion webhook stamped a <code>conversion.actions-gateway.com/acquisition-protocol: Classic</code> annotation on the stored v2beta1 object. <code>kubectl apply</code> of the new v2beta1 ScaleSet spec does <strong>not</strong> strip that webhook-added annotation, so the AGC keeps running Classic (it reads the RunnerSet through the v2beta1→v2alpha1 conversion, which restores <code>Classic</code> from the annotation).
+Recreate the RunnerSet once so it comes back v2beta1-native (annotation defaults to <code>ScaleSet</code>): <code>kubectl delete runnerset ci-e2e -n gag-dogfood-e2e</code> then <code>kubectl apply -k deploy/dogfood-e2e/overlays/dind</code>.
+A tenant created fresh by <code>e2e-setup.sh</code> (authored at v2beta1 directly) never carries the annotation.
+Verified live 2026-07-07 (Q231).</p>
 </blockquote>
 <hr />
 <h2 id="alternatives-considered-for-e2e-dind">Alternatives considered for e2e DinD<a class="headerlink" href="#alternatives-considered-for-e2e-dind" title="Permanent link">&para;</a></h2>
@@ -4348,17 +3981,9 @@ live 2026-07-07 (Q231).</p>
 </table>
 <hr />
 <h2 id="recurring-maintenance--debug-ops">Recurring maintenance + debug ops<a class="headerlink" href="#recurring-maintenance--debug-ops" title="Permanent link">&para;</a></h2>
-<p>Between turn-up and teardown, a handful of maintenance and debug operations
-recur: rescaling a node pool by hand, reinstalling <code>kata-deploy</code> after a version
-bump, bouncing a wedged AGC, launching a throwaway pod on the e2e pool to bisect
-worker-shape problems, and confirming <code>/dev/kvm</code> on the e2e nodes. These are
-folded into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/ops.sh"><code>scripts/dogfood/ops.sh</code></a> as named
-subcommands so they aren't re-typed ad hoc (Q342). Each pins <code>--project</code>/<code>--zone</code>
-on every gcloud call and verifies the resolved kubectl context before any
-mutating kubectl call — the same target-safety layer the lifecycle scripts use —
-so they need no per-command <code>PROD_GUARD_OVERRIDE</code> (the hook doesn't parse a
-<code>bash scripts/…</code> invocation; see
-<a href="../../development/kind-iteration/#verify-the-resolved-target-before-any-mutating-command">kind-iteration.md</a>).
+<p>Between turn-up and teardown, a handful of maintenance and debug operations recur: rescaling a node pool by hand, reinstalling <code>kata-deploy</code> after a version bump, bouncing a wedged AGC, launching a throwaway pod on the e2e pool to bisect worker-shape problems, and confirming <code>/dev/kvm</code> on the e2e nodes.
+These are folded into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/ops.sh"><code>scripts/dogfood/ops.sh</code></a> as named subcommands so they aren't re-typed ad hoc (Q342).
+Each pins <code>--project</code>/<code>--zone</code> on every gcloud call and verifies the resolved kubectl context before any mutating kubectl call — the same target-safety layer the lifecycle scripts use — so they need no per-command <code>PROD_GUARD_OVERRIDE</code> (the hook doesn't parse a <code>bash scripts/…</code> invocation; see <a href="../../development/kind-iteration/#verify-the-resolved-target-before-any-mutating-command">kind-iteration.md</a>).
 All subcommands are idempotent and safe to re-run.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nb">export</span><span class="w"> </span>PROJECT<span class="w"> </span>CLUSTER<span class="w"> </span>ZONE<span class="w">   </span><span class="c1"># from the Variables section</span>
 <a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>
@@ -4368,11 +3993,7 @@ All subcommands are idempotent and safe to re-run.</p>
 <a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a>scripts/dogfood/ops.sh<span class="w"> </span>debug-pod<span class="w"> </span><span class="o">[</span>--kata<span class="o">]</span><span class="w">         </span><span class="c1"># interactive shell pod on the e2e pool (bisecting)</span>
 <a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a>scripts/dogfood/ops.sh<span class="w"> </span>kvm-check<span class="w"> </span><span class="o">[</span>&lt;node&gt;<span class="o">]</span><span class="w">         </span><span class="c1"># verify /dev/kvm on the e2e node(s)</span>
 </code></pre></div>
-<p><code>kata-install</code> reuses exactly the install logic <code>e2e-setup.sh</code> runs (both source
-<code>scripts/dogfood/lib/kata.sh</code>), so it re-applies the DaemonSet + RuntimeClass
-without re-running the full billable one-time setup. <code>debug-pod</code>/<code>kvm-check</code>
-target the <code>e2e</code> pool, which autoscales from 0 — scale a node up first
-(<code>ops.sh pool-scale e2e 1</code>) or run them during an in-flight e2e session.</p>
+<p><code>kata-install</code> reuses exactly the install logic <code>e2e-setup.sh</code> runs (both source <code>scripts/dogfood/lib/kata.sh</code>), so it re-applies the DaemonSet + RuntimeClass without re-running the full billable one-time setup. <code>debug-pod</code>/<code>kvm-check</code> target the <code>e2e</code> pool, which autoscales from 0 — scale a node up first (<code>ops.sh pool-scale e2e 1</code>) or run them during an in-flight e2e session.</p>
 <h2 id="operations-quick-reference">Operations quick-reference<a class="headerlink" href="#operations-quick-reference" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -4416,10 +4037,9 @@ target the <code>e2e</code> pool, which autoscales from 0 — scale a node up fi
 </tr>
 </tbody>
 </table>
-<p>All scripts read <code>PROJECT</code>, <code>CLUSTER</code>, <code>ZONE</code>, <code>REPO</code> (and <code>APP_ID</code>,
-<code>INSTALLATION_ID</code> for the setup scripts) from the environment. Export the
-Variables block once per shell session. (<code>ops.sh</code> needs only <code>PROJECT</code>,
-<code>CLUSTER</code>, <code>ZONE</code>.)</p>
+<p>All scripts read <code>PROJECT</code>, <code>CLUSTER</code>, <code>ZONE</code>, <code>REPO</code> (and <code>APP_ID</code>, <code>INSTALLATION_ID</code> for the setup scripts) from the environment.
+Export the Variables block once per shell session.
+(<code>ops.sh</code> needs only <code>PROJECT</code>, <code>CLUSTER</code>, <code>ZONE</code>.)</p>
 <hr />
 <h2 id="cost-reference">Cost reference<a class="headerlink" href="#cost-reference" title="Permanent link">&para;</a></h2>
 <table>
@@ -4464,8 +4084,7 @@ Variables block once per shell session. (<code>ops.sh</code> needs only <code>PR
 </tbody>
 </table>
 <p>A typical dogfood session (scale up, run a few PRs, scale down): under $0.50.</p>
-<p><strong>E2e cost per PR</strong> (kindnet + Calico in parallel, ~10 min each):
-2 nodes × $0.058/hr × 10 min ≈ <strong>$0.019</strong>.</p>
+<p><strong>E2e cost per PR</strong> (kindnet + Calico in parallel, ~10 min each): 2 nodes × $0.058/hr × 10 min ≈ <strong>$0.019</strong>.</p>
 
 
 
