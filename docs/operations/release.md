@@ -380,6 +380,8 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 
 > **The docs site publishes this release too (Q238).** A **stable** `vX.Y.Z` tag also triggers [`pages.yml`](../../.github/workflows/pages.yml), which deploys the release's docs as a new version on [actions-gateway.com](https://actions-gateway.com) and moves the `stable` alias + the site's default root redirect to it — so the public docs default to this release, with the unreleased `main` docs kept behind an opt-in `dev` version.
 > Prerelease tags (`0.x`, `-rc`/`-alpha`/`-beta`) do **not** deploy the site.
+> Because each version builds from **its own tag**, the version pins in this tree are what the release publishes as its landing page, and they still name the previous release.
+> [Step 7](#the-bump-on-main-does-not-reach-the-published-release) republishes them.
 > The versioned-docs model, and the one-time `mike` seeding of releases cut before it landed, are documented in [website.md § Versioned deploy](../development/website.md#versioned-deploy-mike).
 
 ### 3. Verify the publish
@@ -785,6 +787,46 @@ A page that yields *no* pin at all is a failure rather than a pass, so a pin tha
 
 Landing the bump is a normal PR; the gate is part of `make check` and of the `doc-links` CI workflow, so a stale pin reddens every subsequent PR until it is fixed.
 This step exists because `v1.3.0` shipped without it: `README.md`, `docs/index.md`, and `install.md` were fixed by hand while `upgrade.md` and `gitops.md` kept pointing at `1.2.0`, and `install.md`'s own patch-line hint still read `1.2.z` (Q638).
+
+#### The bump on `main` does not reach the published release
+
+Landing it on `main` fixes `make check` and the `dev` docs, and **nothing else**.
+The site builds each version from its tag ([step 2](#2-tag-and-push)), so `/X.Y.Z/` is frozen at what the tag's tree said, which is the *previous* release's pins.
+So are `stable` and the root redirect a visitor lands on.
+The gate cannot catch this: it reads the working tree, not the published site.
+
+The two facts are stated separately above and were never reconciled.
+Three of the four releases cut since `1.0.0` published the previous version's install command as their landing page.
+Measured on the live site 2026-08-10: `/1.1.0/` and `/1.2.0/` both advertise `--version 1.0.0`, and `/1.4.0/` advertised `1.3.0` together with the `v1.3.0` CRD manifest URL, as did `stable` and the root redirect, for the three hours until it was reported. `v1.3.0` is correct only because Q638's hand-fix happened to land before that tag.
+
+Nor can the bump simply move ahead of the tag: [`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh) compares each pin for **equality** with the newest stable tag, so a pin naming the release about to be cut fails exactly as loudly as one naming the release before it, reddening `make check` and `doc-links` for every PR in the window.
+The `GAG_RELEASE_TAG` override is a gate-testing hook, set nowhere in CI.
+
+So the bump lands twice, and the release's own docs are republished from the second copy:
+
+```bash
+git switch -c release-X.Y vX.Y.Z
+git cherry-pick <the pin-bump commit from main>
+./scripts/docs/check-release-pins.sh    # must be green on this branch
+git push -u origin release-X.Y
+```
+
+```bash
+gh workflow run pages --ref main \
+  -f version=X.Y.Z -f alias=stable -f set_default=true -f docs_ref=release-X.Y
+```
+
+`release-X.Y` is the tag plus the pin bump and nothing else — verify with `git diff --stat vX.Y.Z..release-X.Y` before pushing, because anything else on it publishes as documentation of a release that never shipped it.
+Keep the branch: it is the backport line [patch releases](#patch-releases-and-backports) already want, and `GAG_DOCS_SOURCE_REF` points the published version's source links at it.
+
+For a backport patch to an older line, drop `-f alias=stable -f set_default=true`.
+Those belong to the highest release, and a dispatch applies them verbatim rather than checking ([pages.yml](../../.github/workflows/pages.yml)).
+
+Then confirm the published page, not the branch:
+
+```bash
+curl -sS https://actions-gateway.com/X.Y.Z/ | grep -o -- '--version [0-9.]*' | head -1
+```
 
 ### 8. Hand off to operators
 

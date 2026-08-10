@@ -209,6 +209,17 @@ jobs:
               exit 1
             fi
 
+            # `fetch-depth: 0` fetches this ref's history and every tag, but no
+            # other branch, so a branch `docs_ref` is not a local ref and the
+            # checkout below dies with `invalid reference`. Every earlier seed
+            # named a tag and never hit it; the post-tag pin republish
+            # (release.md step 7) names the `release-X.Y` branch, so fetch it
+            # into a private ref. A ref the remote cannot resolve (a bare SHA)
+            # leaves DOCS_REF alone, since the full local history already has it.
+            if git fetch --no-tags origin "+${DOCS_REF}:refs/gag/docs-ref"; then
+              DOCS_REF="refs/gag/docs-ref"
+            fi
+
             git checkout "${DOCS_REF}" -- docs mkdocs.yml
             git checkout HEAD -- docs/CNAME
 
