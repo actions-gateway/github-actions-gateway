@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">Read the release notes.</a>
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -2849,6 +2849,38 @@
 <td>🔲</td>
 <td>S</td>
 <td>Sets <code>REPO=owner/repo</code> but never scopes <code>RELEASE_PROGRESS_FILE</code>/<code>RELEASE_STATUS_FILE</code>, so <code>progress_run</code> writes the defaults. Measured 2026-08-09: <code>make check</code> during the rc.2 gate injected 3 <code>owner/repo</code>/<code>42</code> events, breaking the Q630 stall check.</td>
+</tr>
+<tr>
+<td><a id="Q781"></a>Q781</td>
+<td><a href="../operations/release/#writing-the-curated-notes">Automate the release scope-filter residue reconciliation</a></td>
+<td><code>debt</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>release.md calls the scope allow-list a guess needing a manual residue read. On v1.4.0 it kept 15 of 58 <code>feat</code>/<code>fix</code> and dropped Q166 (scopeless <code>feat:</code>) and Q554 (<code>feat(deploy)</code>), two of three headline features. Emit the residue path-classified.</td>
+</tr>
+<tr>
+<td><a id="Q780"></a>Q780</td>
+<td><a href="../operations/release/#writing-the-curated-notes">Enumerate Kubernetes Event reasons mechanically for the release notes</a></td>
+<td><code>debt</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>No <code>api-surface-since.sh</code> counterpart for Event reasons. A v1.4.0 regex matching only <code>Event(obj, type, reason)</code> missed the <code>recordEvent(type, reason, action)</code> shape and returned a false no-change, caught by a positive control. Needs a self-test.</td>
+</tr>
+<tr>
+<td><a id="Q778"></a>Q778</td>
+<td><a href="../development/testing/#the-launch-record">Document the pr-sentinel watcher launch form the stop hook requires</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The stop hook reads the watcher task output file, so <code>&gt; tmp/x.log</code> leaves it at <code>EXIT=0</code> with no terminal marker, and a foreground launch is not recorded. Measured 2026-08-09: repeated blocks on merged PRs, an upstream issue drafted then withdrawn.</td>
+</tr>
+<tr>
+<td><a id="Q779"></a>Q779</td>
+<td><a href="../operations/release/#validate-the-release-candidate-on-dogfood">A safe cluster-at-rest check for the release teardown</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>describe --format=value(currentNodeCount)</code> omits the field at zero, so empty reads as at-rest and a broken probe is indistinguishable. Hit 2026-08-09 just after a DNS outage. Use the unfiltered instance list plus an explicit probe-exit check.</td>
 </tr>
 <tr>
 <td><a id="Q706"></a>Q706</td>
