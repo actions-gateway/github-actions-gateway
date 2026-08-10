@@ -48,6 +48,12 @@ last gaps an outside operator hits.
   Runner Controller (ARC). That is the one gap breaking the otherwise zero-edit
   migration, so it gates the 1.5 release.
 
+- **[Detect the runner version a tenant's worker image ships](operations/tenant-onboarding.md)** <!-- q:Q715 -->
+  The version GAG reports to GitHub is the pinned default, whatever
+  `spec.workerImage` holds, and the too-old warning fires on the classic tier
+  only. GitHub raises its enforced minimum on 2026-09-25, so a stale image fails
+  with no prior signal. Gating the 1.5 release.
+
 - **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 -->
   [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted*
   CI only: the micro-VM bounds the guest kernel, the runner's egress stays

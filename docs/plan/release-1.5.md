@@ -2,9 +2,10 @@
 
 > **Status: scope opening 2026-08-06.** [Release 1.4](release-1.4.md) is already
 > scoped and its gating rows are fixed; 1.5 is where work identified after that
-> line lands. Three gating Queue rows so far, labelled `1.5-gate`:
+> line lands. Four gating Queue rows so far, labelled `1.5-gate`:
 > [Q712](../STATUS.md#Q712), [Q713](../STATUS.md#Q713), and
-> [Q726](../STATUS.md#Q726), admitted 2026-08-09 from the candidate list below.
+> [Q726](../STATUS.md#Q726), admitted 2026-08-09 from the candidate list below,
+> plus [Q715](../STATUS.md#Q715), admitted the same day off an external date.
 
 ## Why these gate a release rather than riding along
 
@@ -61,6 +62,31 @@ traffic are one-shot.
 It also gates positioning work: every latency, utilization, or cost claim in the
 comparison material is unmeasurable until this lands, so no number-bearing claim
 should ship ahead of it.
+
+### Q715 — the runner version reported to GitHub is a constant, and the too-old warning is classic-only
+
+Two halves, and only together do they leave the shipped tier blind.
+
+The version sent at session creation is `BrokerConfig.RunnerVersion`, the pinned
+default the project ships (`cmd/agc/internal/agentpool/pool.go:467`, reached from
+`runner_shared.go:555`). It is the same value whatever `spec.workerImage` holds,
+so a tenant running an older runner image reports the newer number GAG was built
+against. The pod's `app.kubernetes.io/version` label *is* derived from the image
+ref (`provisioner/pod.go:47`), which makes the two disagree without either being
+consulted for admission.
+
+The signal that would otherwise catch it, `RunnerVersionTooOld`, is produced in
+the classic listener goroutine only. That is structural rather than an oversight:
+the scale-set protocol carries no runner version at session creation, so the
+condition cannot occur on the tier `v2beta1` exposes
+([gap analysis](v2-api-gap-analysis.md#agc)). The consequence is still that no
+tier both knows the real version and can warn about it.
+
+**What makes it gate rather than wait:** GitHub raises the enforced minimum
+runner version on GHEC on 2026-09-25. On that date a tenant whose worker image
+is behind starts failing at GitHub, and GAG has told nobody, on the tier every
+new tenant runs. This is the only gating row here with a date it does not
+control, which is why it was admitted without going through the candidate list.
 
 ## Candidates not yet accepted
 

@@ -26,7 +26,7 @@ API surface, and the contract cannot be walked back.
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
 | 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
-| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity cleared by Q417/Q443/Q446 (2026-07-26); reopened in August by the classic-only abandoned-run recovery and re-closed by Q766 in the same release, so 1.4 ships it on both tiers |
+| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity **not cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26) and Q766 closed the abandoned-run asymmetry inside 1.4, but [Q713](../STATUS.md#Q713) is open, so the duration and latency series are still classic-only. See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../STATUS.md#Q413)) |
 
 ## Why this is gated on a soak, not a date
@@ -133,6 +133,8 @@ prevent.
 |---|---|---|
 | Eviction recovery (detect an evicted worker, rerun the job, per-run retry budget) | ✅ **Both tiers.** Q417 ported it: the scale-set assignment's run identity is stamped on the worker pod, the owning reconciler detects `PodFailed`/`Evicted` and claims the pod set-once before calling `rerun-failed-jobs`, and the Q106 per-run budget is shared across tiers. | Cleared. Design: [04-operational-flows.md § On the scale-set tier](../design/04-operational-flows.md#on-the-scale-set-tier-q417). Plan: [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md). |
 | Pre-claim quota gate (refuse work the namespace `ResourceQuota` cannot place, rather than claim it and stall) | ✅ **Both tiers.** Q443 ported it: the ladder `Provisioner.Admit` walks per delivered job is also expressed as an integer (`AdvertiseCapacity`), and the scale-set tier advertises `min(ceiling, own in-flight pods + quota headroom)` as `X-ScaleSetMaxCapacity` — so a quota-blocked job is never assigned at all. | Cleared. Design: [04-operational-flows.md § The ladder as an integer](../design/04-operational-flows.md#the-ladder-as-an-integer-scale-set-tier-q443). Plan: [capacity-aware-intake.md §9a](capacity-aware-intake.md#9a-the-shipped-quota-rung-was-classic-only-q443). |
+| Abandoned-run force-cancel and automatic re-run (a worker removed before it ran) | ✅ **Both tiers.** Q683 and Q691 shipped classic-only inside 1.4 and Q766 ported both in the same release, before any tag published the asymmetry. The scale-set detection reads the run identity from the worker pod's annotations where classic reads it from the payload it holds, which is what the `tier` label on `abandoned_run_force_cancels_total` splits. | Cleared. Design: [04-operational-flows.md § On the scale-set tier](../design/04-operational-flows.md#on-the-scale-set-tier-q766). Plan: [release-1.4.md](release-1.4.md). |
+| Job duration and pod-creation latency (`job_duration_seconds`, `pod_creation_latency_seconds`) | ❌ **Classic only.** `JobDuration` is observed inside `provision()` (`provisioner.go:610`) and `PodCreationLatency` inside the pod waiter, and `ProvisionScaleSetWorker` reaches neither. Unlike the counters below there is no scale-set analog to substitute, so two Appendix A SLOs, a critical alert, four recording rules and panels on both shipped dashboards read blank on the default tier. | **Open — gates the removal.** [Q713](../STATUS.md#Q713), labelled `1.5-gate`. Reasoning: [release-1.5.md § Q713](release-1.5.md#q713--the-shipped-tier-emits-no-duration-or-latency-series). |
 | Poll-error rate observability (`message_poll_errors_total`) | ✅ **Both tiers.** Q446 closed the counter half: `handlePollError` increments the same `actions_gateway_message_poll_errors_total{namespace, reason}` series the classic listener writes, under the same reason vocabulary (`rate_limited`, `timeout`, `other`), with the 401/403 and 404/410 heal branches counting nothing exactly as classic does — so an existing dashboard or alert keeps its meaning. The conditions (`Degraded`/`Unauthorized`, `RateLimited` after a sustained episode) stay as the state half. | Cleared. Metric: [observability-metrics.md](../operations/observability-metrics.md). |
 
 ### What this audit checked, and found already covered
@@ -187,6 +189,21 @@ provision-time worker lifetime cap.
 
 Any further capability found to be classic-only before the cut joins this table and
 gates the same removal.
+
+**Two joined it after the audit, which is the rule working rather than failing.**
+The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped
+classic-only, Q766 ported them, and no tag ever published the asymmetry. Q713 is
+open, so the table's verdict is **not** currently cleared: the duration and latency
+series are the one capability with no scale-set analog and no port. Read the table,
+not this section's history, for the state of the gate.
+
+The audit's method has a known blind spot both instances share. It walked the tier
+seams once, in July, and a capability added to `provision()` afterwards is
+classic-only from birth without anything re-walking them. Q683, Q691 and Q713 all
+arrived that way. Until [Q774](../STATUS.md#Q774) gates scope statements
+mechanically, adding a row here is a manual step in the change that creates the
+asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where
+that obligation is written down.
 
 ## Phase 4 — docs and the cut
 
