@@ -1,12 +1,8 @@
 # Self-hosted webfonts
 
-These woff2 files back the docs site's "GitHub-native" type pairing. They are
-served from our own origin so the site makes **no third-party font requests** —
-Material's Google Fonts loader is disabled via `theme.font: false` in
-[`mkdocs.yml`](../../../mkdocs.yml), and the `@font-face` + `--md-text-font`/
-`--md-code-font` wiring lives in
-[`docs/stylesheets/extra.css`](../../stylesheets/extra.css). Background:
-[`docs/development/website.md`](../../development/website.md) § Fonts.
+These woff2 files back the docs site's "GitHub-native" type pairing.
+They are served from our own origin so the site makes **no third-party font requests** — Material's Google Fonts loader is disabled via `theme.font: false` in [`mkdocs.yml`](../../../mkdocs.yml), and the `@font-face` + `--md-text-font`/ `--md-code-font` wiring lives in [`docs/stylesheets/extra.css`](../../stylesheets/extra.css).
+Background: [`docs/development/website.md`](../../development/website.md) § Fonts.
 
 | File | Family / role | Weight | Source |
 |---|---|---|---|
@@ -20,22 +16,17 @@ Material's Google Fonts loader is disabled via `theme.font: false` in
 
 ## Licensing
 
-Both families are licensed under the **SIL Open Font License 1.1**, which permits
-bundling and redistributing them with software (commercially too), provided the
-fonts aren't sold on their own and each family's copyright notice + license text
-travel with them. Each family keeps its **own** license file — copy the matching
-one wherever these fonts go:
+Both families are licensed under the **SIL Open Font License 1.1**, which permits bundling and redistributing them with software (commercially too), provided the fonts aren't sold on their own and each family's copyright notice + license text travel with them.
+Each family keeps its **own** license file — copy the matching one wherever these fonts go:
 
-- **IBM Plex Sans** — Copyright 2019 IBM Corp. No Reserved Font Name (IBM chose
-  not to reserve "Plex", so the name may be used freely, subsets included).
+- **IBM Plex Sans** — Copyright 2019 IBM Corp. No Reserved Font Name (IBM chose not to reserve "Plex", so the name may be used freely, subsets included).
   License: [`IBMPlexSans-OFL.txt`](IBMPlexSans-OFL.txt).
-- **Monaspace** (Neon, Argon) — Copyright © 2023 GitHub, with Reserved Font Name
-  "Monaspace". Shipped here unmodified. License: [`Monaspace-OFL.txt`](Monaspace-OFL.txt).
+- **Monaspace** (Neon, Argon) — Copyright © 2023 GitHub, with Reserved Font Name "Monaspace".
+  Shipped here unmodified.
+  License: [`Monaspace-OFL.txt`](Monaspace-OFL.txt).
 
-Each `.woff2` also embeds its own copyright + license in its `name`-table
-metadata, so the notice travels with the binary even on its own. The wider repo
-is Apache-2.0; these font files are governed by the OFL license files here, not
-by the repo license.
+Each `.woff2` also embeds its own copyright + license in its `name`-table metadata, so the notice travels with the binary even on its own.
+The wider repo is Apache-2.0; these font files are governed by the OFL license files here, not by the repo license.
 
 ## Updating
 

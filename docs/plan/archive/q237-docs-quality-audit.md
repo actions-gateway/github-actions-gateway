@@ -1,35 +1,23 @@
 # Docs quality audit (Q237): scoring the published docset against the six-goal rubric
 
-> **Status: ✅ Done — audit complete (2026-06-30).** Fan-out audit of the
-> published `docs/` set against the six-goal quality rubric in
-> [documentation-standards.md](../../development/documentation-standards.md#goals-what-good-looks-like).
-> 57 findings filed below. The audit **produced** this ranked list; the fixes
-> are follow-on work tracked on the [STATUS Queue](../../STATUS.md) (see
-> [Remediation](#remediation)). This is the recurring "docs-vs-code drift audit"
-> that documentation-standards.md lists as the highest-value *Proposed* quality
-> signal.
+> **Status: ✅ Done — audit complete (2026-06-30).** Fan-out audit of the published `docs/` set against the six-goal quality rubric in [documentation-standards.md](../../development/documentation-standards.md#goals-what-good-looks-like).
+> 57 findings filed below.
+> The audit **produced** this ranked list; the fixes are follow-on work tracked on the [STATUS Queue](../../STATUS.md) (see [Remediation](#remediation)).
+> This is the recurring "docs-vs-code drift audit" that documentation-standards.md lists as the highest-value *Proposed* quality signal.
 
 ## Goal
 
-Score the human-facing documentation against all six quality goals — not just
-scannability — and produce a **ranked, evidence-backed findings list** an
-operator or maintainer can act on. The rubric, in leverage order: (1) correct &
-current, (2) findable, (3) complete enough, (4) fit-for-purpose, (5) usable, (6)
-trustworthy in tone (no AI slop).
+Score the human-facing documentation against all six quality goals — not just scannability — and produce a **ranked, evidence-backed findings list** an operator or maintainer can act on.
+The rubric, in leverage order: (1) correct & current, (2) findable, (3) complete enough, (4) fit-for-purpose, (5) usable, (6) trustworthy in tone (no AI slop).
 
 ## Scope
 
-**Audited — the published docset (~62 prose files + directory READMEs):**
-`docs/*.md` (top-level), `docs/design/`, `docs/development/`, `docs/operations/`.
+**Audited — the published docset (~62 prose files + directory READMEs):** `docs/*.md` (top-level), `docs/design/`, `docs/development/`, `docs/operations/`.
 
 **Excluded:**
 
-- `docs/plan/` and `docs/plan/archive/` (69 files) — internal working artifacts
-  with their own lint (`plan-index-check`, backlog rules), not held to the
-  published-docset rubric.
-- Mechanical link/anchor rot — already covered by `make doc-links`; this audit
-  targets *semantic* findability (missing-but-needed links, orphans, nav gaps),
-  not broken hrefs.
+- `docs/plan/` and `docs/plan/archive/` (69 files) — internal working artifacts with their own lint (`plan-index-check`, backlog rules), not held to the published-docset rubric.
+- Mechanical link/anchor rot — already covered by `make doc-links`; this audit targets *semantic* findability (missing-but-needed links, orphans, nav gaps), not broken hrefs.
 
 ## Headline results
 
@@ -44,69 +32,47 @@ trustworthy in tone (no AI slop).
 
 **Totals:** 57 findings — 20 high, 20 medium, 17 low.
 
-The signal is unambiguous: **goal-1 correctness drift**, not style. 17 of the 36
-goal-1 findings are high severity, and most break a copy-paste command or state a
-wrong default an operator would rely on. This is exactly what the per-change
-doc-update rule misses over time and why a periodic drift audit is the
-highest-value quality signal.
+The signal is unambiguous: **goal-1 correctness drift**, not style.
+17 of the 36 goal-1 findings are high severity, and most break a copy-paste command or state a wrong default an operator would rely on.
+This is exactly what the per-change doc-update rule misses over time and why a periodic drift audit is the highest-value quality signal.
 
 ## Verification
 
-Findings were produced by source-inspecting agents, so per the repo's
-verify-before-trusting rule they are unverified until exec-confirmed. A sample
-of **~8 distinct high-severity goal-1 findings was verified directly against the
-code** — CRD served version, `ActionsGatewaySpec` fields, worker/AGC
-ServiceAccount name constants, the GMC finalizer domain, proxy metrics port, the
-proxy CPU-limit default, `ResourceQuota` non-reconciliation, and the shipped CRD
-set. **All confirmed; zero false positives in the sample.** Remaining findings
-should still be re-confirmed at fix time (a few — e.g. the worker-image override
-mechanism, which appears mis-stated in more than one doc — are subtle and worth a
-careful check before editing).
+Findings were produced by source-inspecting agents, so per the repo's verify-before-trusting rule they are unverified until exec-confirmed.
+A sample of **~8 distinct high-severity goal-1 findings was verified directly against the code** — CRD served version, `ActionsGatewaySpec` fields, worker/AGC ServiceAccount name constants, the GMC finalizer domain, proxy metrics port, the proxy CPU-limit default, `ResourceQuota` non-reconciliation, and the shipped CRD set. **All confirmed; zero false positives in the sample.** Remaining findings should still be re-confirmed at fix time (a few — e.g. the worker-image override mechanism, which appears mis-stated in more than one doc — are subtle and worth a careful check before editing).
 
 ## Cross-cutting themes
 
 These patterns recur across files and are the natural fix batches:
 
-1. **API-version / field-path drift in copy-paste YAML & commands** — v1alpha1
-   vs `/v1` vs v2 confusion; non-existent fields (`spec.worker.podTemplate`),
-   flags, ServiceAccount names, CRD groups. Files: `kata-dind-workloads.md`,
-   `air-gapped-install.md`, `velero-backup-restore.md`, `tenant-onboarding.md`,
-   `backup-restore.md`, `appendix-e-capacity-planning.md`.
-2. **Stale numeric defaults** — `MaxListeners` (10→1), proxy CPU limit (100m→500m,
-   wrong in 3 docs), AGC grace period. Files: `03-api-contracts.md`,
-   `appendix-a-capacity-slos.md`, `observability.md`, `upgrade.md`.
-3. **Worker-image override mechanism mis-documented** — a `--worker-image` flag
-   / `WORKER_IMAGE` env var that the GMC does not consume; needs one
-   source-of-truth correction. Files: `03-api-contracts.md`, `kind-iteration.md`.
-4. **Stale CI/test-gate counts** — image counts (5 vs 6), `make check` gate list,
-   trivy/hadolint scope. Files: `testing.md`, `backpressure.md`, `kind-iteration.md`.
-5. **Metrics port confusion (8081 vs 8443)** — Files: `observability.md`,
-   `troubleshooting.md`.
-6. **Acronym expansion & minor tone** (goal 6, mostly low) — DinD/PSP unexpanded,
-   a few promotional phrasings.
+1. **API-version / field-path drift in copy-paste YAML & commands** — v1alpha1 vs `/v1` vs v2 confusion; non-existent fields (`spec.worker.podTemplate`), flags, ServiceAccount names, CRD groups.
+   Files: `kata-dind-workloads.md`, `air-gapped-install.md`, `velero-backup-restore.md`, `tenant-onboarding.md`, `backup-restore.md`, `appendix-e-capacity-planning.md`.
+2. **Stale numeric defaults** — `MaxListeners` (10→1), proxy CPU limit (100m→500m, wrong in 3 docs), AGC grace period.
+   Files: `03-api-contracts.md`, `appendix-a-capacity-slos.md`, `observability.md`, `upgrade.md`.
+3. **Worker-image override mechanism mis-documented** — a `--worker-image` flag / `WORKER_IMAGE` env var that the GMC does not consume; needs one source-of-truth correction.
+   Files: `03-api-contracts.md`, `kind-iteration.md`.
+4. **Stale CI/test-gate counts** — image counts (5 vs 6), `make check` gate list, trivy/hadolint scope.
+   Files: `testing.md`, `backpressure.md`, `kind-iteration.md`.
+5. **Metrics port confusion (8081 vs 8443)** — Files: `observability.md`, `troubleshooting.md`.
+6. **Acronym expansion & minor tone** (goal 6, mostly low) — DinD/PSP unexpanded, a few promotional phrasings.
 
 ## Remediation
 
 The fixes are follow-on work, split by leverage so each PR stays scoped:
 
-- **Batch A (high) — operator copy-paste correctness:** the 17 high goal-1
-  findings (broken `kubectl apply`/`patch`, wrong CRD group/version/fields/ports).
-  Top priority; an operator following these today fails. Themes 1–2, 5.
-- **Batch B (medium) — stale defaults, counts & internal drift:** the 16 medium
-  goal-1 findings across design + development docs. Themes 2–4.
-- **Batch C (low) — usability & tone polish:** the goal-5 (4) and goal-6 (10)
-  findings; low reader impact, cheap to sweep in one pass.
+- **Batch A (high) — operator copy-paste correctness:** the 17 high goal-1 findings (broken `kubectl apply`/`patch`, wrong CRD group/version/fields/ports).
+  Top priority; an operator following these today fails.
+  Themes 1–2, 5.
+- **Batch B (medium) — stale defaults, counts & internal drift:** the 16 medium goal-1 findings across design + development docs.
+  Themes 2–4.
+- **Batch C (low) — usability & tone polish:** the goal-5 (4) and goal-6 (10) findings; low reader impact, cheap to sweep in one pass.
 
-Each batch is independent per-file editing and could be dispatched in parallel
-(see [parallel-dispatch.md](../../development/parallel-dispatch.md)), but every fix
-must re-confirm its finding against the code before editing.
+Each batch is independent per-file editing and could be dispatched in parallel (see [parallel-dispatch.md](../../development/parallel-dispatch.md)), but every fix must re-confirm its finding against the code before editing.
 
 ## Full findings
 
-Ranked by goal (leverage order), then severity. `Sev`: **H**igh / **M**edium /
-**L**ow. Evidence (line refs + the code symbol each goal-1 finding contradicts)
-is preserved in the audit run output; the `Issue`/`Fix` columns are abridged to
-fit.
+Ranked by goal (leverage order), then severity. `Sev`: **H**igh / **M**edium / **L**ow.
+Evidence (line refs + the code symbol each goal-1 finding contradicts) is preserved in the audit run output; the `Issue`/`Fix` columns are abridged to fit.
 
 #### Goal 1 — Correct & current (36)
 
@@ -197,8 +163,6 @@ fit.
 
 ## How it was run
 
-A background fan-out workflow (`q237-docs-quality-audit`): 22 per-file finder
-agents scored prose files against the per-file goals (1, 5, 6) with correctness
-spot-checks against the code; 3 tree-level agents covered the cross-file goals
-(2 findable, 3 complete, 4 fit-for-purpose). 26 agents, ~2.4M tokens. Findings
-were deduped and ranked into this report.
+A background fan-out workflow (`q237-docs-quality-audit`): 22 per-file finder agents scored prose files against the per-file goals (1, 5, 6) with correctness spot-checks against the code; 3 tree-level agents covered the cross-file goals (2 findable, 3 complete, 4 fit-for-purpose).
+26 agents, ~2.4M tokens.
+Findings were deduped and ranked into this report.

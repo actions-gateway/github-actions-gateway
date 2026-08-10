@@ -21,11 +21,14 @@
 
 ## Overview
 
-**Goal:** Produce a deployable Actions Gateway Controller (AGC) binary under `cmd/agc/` that reconciles `RunnerGroup` Custom Resources into adaptive listener goroutine pools. At rest the AGC maintains exactly one long-polling goroutine per RunnerGroup; additional goroutines spawn on demand as jobs arrive and wind down once the queue drains. No actual worker pods are created in this milestone — job acquisition is confirmed and handed off to a stub that records the acquisition, allowing the full goroutine lifecycle and token management machinery to be exercised without the Kubernetes pod-provisioning complexity of Milestone 3.
+**Goal:** Produce a deployable Actions Gateway Controller (AGC) binary under `cmd/agc/` that reconciles `RunnerGroup` Custom Resources into adaptive listener goroutine pools.
+At rest the AGC maintains exactly one long-polling goroutine per RunnerGroup; additional goroutines spawn on demand as jobs arrive and wind down once the queue drains.
+No actual worker pods are created in this milestone — job acquisition is confirmed and handed off to a stub that records the acquisition, allowing the full goroutine lifecycle and token management machinery to be exercised without the Kubernetes pod-provisioning complexity of Milestone 3.
 
 **Duration:** Days 5–10
 
-**Foundation:** All packages from Milestone 1 (`broker`, `githubapp`) are consumed unchanged. The AGC is a new `cmd/agc/` module added to the workspace.
+**Foundation:** All packages from Milestone 1 (`broker`, `githubapp`) are consumed unchanged.
+The AGC is a new `cmd/agc/` module added to the workspace.
 
 **Definition of Done:**
 
@@ -72,9 +75,13 @@ use (
 
 ### 1.2 Kubebuilder bootstrapping
 
-Scaffold the AGC operator using `kubebuilder init` and `kubebuilder create api` inside `cmd/agc/`. This produces the standard controller-runtime layout. Keep the generated files but replace the reconciler stub with the implementation below. The CRD manifest is generated from struct markers and committed under `cmd/agc/config/crd/`.
+Scaffold the AGC operator using `kubebuilder init` and `kubebuilder create api` inside `cmd/agc/`.
+This produces the standard controller-runtime layout.
+Keep the generated files but replace the reconciler stub with the implementation below.
+The CRD manifest is generated from struct markers and committed under `cmd/agc/config/crd/`.
 
-Required tools: `kubebuilder` (v3.x), `controller-gen`. Pin their versions in a `Makefile` target so the manifests are reproducible.
+Required tools: `kubebuilder` (v3.x), `controller-gen`.
+Pin their versions in a `Makefile` target so the manifests are reproducible.
 
 ### 1.3 Directory layout
 
@@ -132,7 +139,8 @@ No additional GitHub App or crypto dependencies are needed — those are in the 
 
 ### 2.1 Type definition (`api/v1alpha1/runnergroup_types.go`)
 
-The full Go struct and kubebuilder markers are specified in [§3.1 of the API contracts](../design/03-api-contracts.md). Key field summary:
+The full Go struct and kubebuilder markers are specified in [§3.1 of the API contracts](../design/03-api-contracts.md).
+Key field summary:
 
 | Field | Default | Notes |
 |---|---|---|
@@ -159,11 +167,14 @@ The status subresource exposes `ActiveSessions`, `ObservedGeneration`, and a `Co
 
 ### 2.2 Scheme registration
 
-Register both `RunnerGroup` and the scheme in `api/v1alpha1/groupversion_info.go`. Add the scheme to the manager in `main.go` alongside `client-go`'s core v1 scheme (needed for Secret CRUD in Milestone 2).
+Register both `RunnerGroup` and the scheme in `api/v1alpha1/groupversion_info.go`.
+Add the scheme to the manager in `main.go` alongside `client-go`'s core v1 scheme (needed for Secret CRUD in Milestone 2).
 
 ### 2.3 CRD generation and validation
 
-Run `make generate manifests` (backed by `controller-gen`) to produce the CRD YAML from the type markers. Commit the generated files. The `Makefile` must be runnable without network access after the initial `go mod download`.
+Run `make generate manifests` (backed by `controller-gen`) to produce the CRD YAML from the type markers.
+Commit the generated files.
+The `Makefile` must be runnable without network access after the initial `go mod download`.
 
 ---
 
@@ -171,7 +182,8 @@ Run `make generate manifests` (backed by `controller-gen`) to produce the CRD YA
 
 ### 3.1 `internal/token` — Token Manager
 
-The Token Manager holds the current installation access token in a `sync.RWMutex`-protected struct shared across all session goroutines. It must never block readers during a refresh.
+The Token Manager holds the current installation access token in a `sync.RWMutex`-protected struct shared across all session goroutines.
+It must never block readers during a refresh.
 
 ```go
 // Manager holds a thread-safe, proactively refreshed installation access token.
@@ -195,8 +207,12 @@ func (m *Manager) Start(ctx context.Context)
 
 **Implementation notes:**
 
-- The refresh goroutine wakes at `expiresAt - 5min`. On wake it calls `provider.TokenWithExpiry`, acquires the write lock long enough to swap `current`, then releases it. Readers calling `Token()` hold the read lock for the duration of their call — because the lock is held only for the pointer swap (not the HTTP round-trip), readers are never blocked waiting for a network call.
-- On refresh failure: retry with exponential backoff (5s → 60s cap). Emit `actions_gateway_token_refresh_errors_total`. If the old token expires before refresh succeeds, `Token()` returns an error wrapping "token expired" so caller goroutines can surface the degraded condition on their RunnerGroup.
+- The refresh goroutine wakes at `expiresAt - 5min`.
+  On wake it calls `provider.TokenWithExpiry`, acquires the write lock long enough to swap `current`, then releases it.
+  Readers calling `Token()` hold the read lock for the duration of their call — because the lock is held only for the pointer swap (not the HTTP round-trip), readers are never blocked waiting for a network call.
+- On refresh failure: retry with exponential backoff (5s → 60s cap).
+  Emit `actions_gateway_token_refresh_errors_total`.
+  If the old token expires before refresh succeeds, `Token()` returns an error wrapping "token expired" so caller goroutines can surface the degraded condition on their RunnerGroup.
 - The `Clock` interface (`Now() time.Time`, `After(d time.Duration) <-chan time.Time`) is injected; tests use a fake clock to advance time without sleeping.
 
 **`manager_test.go` — what to cover:**
@@ -211,16 +227,21 @@ func (m *Manager) Start(ctx context.Context)
 
 ### 3.2 `internal/agentpool` — Agent Pool Manager
 
-Each RunnerGroup requires up to `maxListeners` pre-registered runner agents, one per concurrent goroutine. The pool manager creates agent registrations at RunnerGroup provisioning time and persists credentials in Kubernetes Secrets so they survive AGC restarts.
+Each RunnerGroup requires up to `maxListeners` pre-registered runner agents, one per concurrent goroutine.
+The pool manager creates agent registrations at RunnerGroup provisioning time and persists credentials in Kubernetes Secrets so they survive AGC restarts.
 
 #### 3.2.1 Runner registration
 
 Registering a runner agent requires two GitHub API calls:
 
-1. **Registration token:** `POST /orgs/{org}/actions/runners/registration-token` (or the repo-scoped equivalent) using the installation access token. Returns a short-lived `token` string.
-2. **Runner registration:** `POST {broker_url}agent` with `{"name": "<agent-name>", "version": "<runner-version>", "labels": [...], "groupName": "<runner-group>"}` and `Authorization: Bearer <registration-token>`. GitHub responds with the agent's numeric `id` and its OAuth credentials (`clientId`, `authorizationUrl`, and an RSA public key). The private key is generated locally; the public key is registered with GitHub.
+1. **Registration token:** `POST /orgs/{org}/actions/runners/registration-token` (or the repo-scoped equivalent) using the installation access token.
+   Returns a short-lived `token` string.
+2. **Runner registration:** `POST {broker_url}agent` with `{"name": "<agent-name>", "version": "<runner-version>", "labels": [...], "groupName": "<runner-group>"}` and `Authorization: Bearer <registration-token>`.
+   GitHub responds with the agent's numeric `id` and its OAuth credentials (`clientId`, `authorizationUrl`, and an RSA public key).
+   The private key is generated locally; the public key is registered with GitHub.
 
-**Note:** The exact registration endpoint and payload are not yet confirmed. This is Investigation Task A for Milestone 2 (§4.A below).
+**Note:** The exact registration endpoint and payload are not yet confirmed.
+This is Investigation Task A for Milestone 2 (§4.A below).
 
 #### 3.2.2 Agent Secret schema
 
@@ -309,13 +330,17 @@ func (p *Pool) DeleteAll(ctx context.Context, token string) error
 
 #### 3.3.1 `goroutine.go` — single listener goroutine
 
-One listener goroutine corresponds to one claimed agent from the pool. Its lifecycle:
+One listener goroutine corresponds to one claimed agent from the pool.
+Its lifecycle:
 
-1. Claim an agent from the pool. If no agent is available, backoff 1s and retry up to 3 times before returning an error (pool exhausted — log and wait for a release).
+1. Claim an agent from the pool.
+   If no agent is available, backoff 1s and retry up to 3 times before returning an error (pool exhausted — log and wait for a release).
 2. Fetch a token from the Token Manager.
-3. Call `BrokerClient.CreateSession` with the agent's credentials (OAuth flow via `githubapp.FetchRunnerOAuthToken`). On `VersionTooOldError`, set the `RunnerVersionTooOld` condition on the RunnerGroup and exit without retrying.
+3. Call `BrokerClient.CreateSession` with the agent's credentials (OAuth flow via `githubapp.FetchRunnerOAuthToken`).
+   On `VersionTooOldError`, set the `RunnerVersionTooOld` condition on the RunnerGroup and exit without retrying.
 4. Enter the `GetMessage` loop:
-   - On `nil` (202): increment the consecutive-empty counter. If counter ≥ 50 **and** this goroutine is not the last listener for its RunnerGroup, call `DeleteSession` and exit (idle shutdown).
+   - On `nil` (202): increment the consecutive-empty counter.
+     If counter ≥ 50 **and** this goroutine is not the last listener for its RunnerGroup, call `DeleteSession` and exit (idle shutdown).
    - On `RateLimitError`: sleep for the indicated `RetryAfter` duration (or exponential backoff if none), increment the poll-error counter, and loop.
    - On other errors: apply the two-tier backoff (≤5 errors: 15–30s jitter; >5 errors: 30–60s jitter) and loop.
    - On a `RunnerJobRequest` message: reset the counter, call `AcquireJob`, and hand off.
@@ -361,7 +386,8 @@ func Run(ctx context.Context, cfg Config) error
 
 #### 3.3.2 `multiplexer.go` — per-RunnerGroup goroutine pool
 
-The Multiplexer is the per-RunnerGroup component that the reconciler manages. It owns the set of running listener goroutines and enforces the `maxListeners` ceiling.
+The Multiplexer is the per-RunnerGroup component that the reconciler manages.
+It owns the set of running listener goroutines and enforces the `maxListeners` ceiling.
 
 ```go
 // Multiplexer manages the adaptive pool of listener goroutines for one RunnerGroup.
@@ -396,7 +422,8 @@ func (m *Multiplexer) Stop()
 
 **Invariants enforced by the Multiplexer:**
 
-- At least one listener goroutine is always running per RunnerGroup (the permanent baseline). If the baseline goroutine exits unexpectedly (recoverable error), the Multiplexer restarts it after a brief backoff (1s → 30s cap).
+- At least one listener goroutine is always running per RunnerGroup (the permanent baseline).
+  If the baseline goroutine exits unexpectedly (recoverable error), the Multiplexer restarts it after a brief backoff (1s → 30s cap).
 - `activeCount ≤ maxListeners` at all times. `SpawnReplacement` is a no-op when the ceiling is reached.
 - On `Stop()`, every goroutine that holds an open session issues `DeleteSession` before the Multiplexer returns — this is the graceful shutdown requirement.
 
@@ -415,7 +442,8 @@ func (m *Multiplexer) Stop()
 
 ### 3.4 `internal/listener` — RenewJob goroutine
 
-Each acquired job spawns a separate `renewjob` goroutine that is a sibling of the listener goroutine, not a child. It must not block the listener from looping.
+Each acquired job spawns a separate `renewjob` goroutine that is a sibling of the listener goroutine, not a child.
+It must not block the listener from looping.
 
 ```go
 // StartRenewLoop starts the per-job renewal goroutine and returns a function
@@ -431,7 +459,8 @@ func StartRenewLoop(
 
 **Implementation notes:**
 
-- Tick every 60 seconds. On `RenewJob` failure: log the error, emit `actions_gateway_renewjob_errors_total`, and continue (the lock grants ~10 minutes; one missed renewal is not fatal).
+- Tick every 60 seconds.
+  On `RenewJob` failure: log the error, emit `actions_gateway_renewjob_errors_total`, and continue (the lock grants ~10 minutes; one missed renewal is not fatal).
 - On context cancellation (from `stop()`): exit cleanly without a final `RenewJob` call.
 - `goleak.VerifyNone` must pass after `stop()` is called.
 
@@ -446,26 +475,33 @@ func StartRenewLoop(
 
 ### 3.5 `internal/controller/runnergroup_controller.go` — Reconciler
 
-The reconciler is the controller-runtime entry point. It watches `RunnerGroup` objects and drives the Multiplexer and Agent Pool to match the desired spec.
+The reconciler is the controller-runtime entry point.
+It watches `RunnerGroup` objects and drives the Multiplexer and Agent Pool to match the desired spec.
 
 **Reconcile logic (idempotent):**
 
-1. Fetch the `RunnerGroup` object. If not found, return (object was deleted before finalizer processing).
-2. If the `RunnerGroup` has a deletion timestamp:
-   a. Call `multiplexer.Stop()` for this RunnerGroup (if running).
-   b. Call `pool.DeleteAll()` to deregister agents and delete Secrets.
-   c. Remove the finalizer and update the object. Return.
-3. Ensure the finalizer `actions-gateway.github.com/agentpool-cleanup` is set. Patch and requeue if just added.
-4. Call `pool.EnsureAgents(maxListeners, token)`. Requeue with backoff on error.
+1. Fetch the `RunnerGroup` object.
+   If not found, return (object was deleted before finalizer processing).
+2. If the `RunnerGroup` has a deletion timestamp: a.
+   Call `multiplexer.Stop()` for this RunnerGroup (if running). b.
+   Call `pool.DeleteAll()` to deregister agents and delete Secrets. c.
+   Remove the finalizer and update the object.
+   Return.
+3. Ensure the finalizer `actions-gateway.github.com/agentpool-cleanup` is set.
+   Patch and requeue if just added.
+4. Call `pool.EnsureAgents(maxListeners, token)`.
+   Requeue with backoff on error.
 5. If no Multiplexer exists for this RunnerGroup, create one and call `multiplexer.Start()`.
 6. Call `multiplexer.SetMaxListeners(spec.maxListeners)`.
 7. Update `RunnerGroupStatus.ActiveSessions` from `multiplexer.ActiveCount()`.
 8. Set the `Ready` condition based on whether at least one listener is running.
 9. Update status subresource and return.
 
-**Condition updates from listener goroutines** are submitted via a channel that the reconciler drains on each reconcile cycle. This avoids goroutines calling `client.Status().Update()` directly, which would require them to handle conflicts.
+**Condition updates from listener goroutines** are submitted via a channel that the reconciler drains on each reconcile cycle.
+This avoids goroutines calling `client.Status().Update()` directly, which would require them to handle conflicts.
 
-**Multiplexer registry:** The reconciler holds a `map[types.NamespacedName]*listener.Multiplexer` protected by a `sync.Mutex`. This is in-process state that is rebuilt from Kubernetes Secrets (via `pool.LoadAgents`) on AGC restart.
+**Multiplexer registry:** The reconciler holds a `map[types.NamespacedName]*listener.Multiplexer` protected by a `sync.Mutex`.
+This is in-process state that is rebuilt from Kubernetes Secrets (via `pool.LoadAgents`) on AGC restart.
 
 **`runnergroup_controller_test.go` — what to cover (using `controller-runtime/pkg/client/fake`):**
 
@@ -486,7 +522,10 @@ The reconciler is the controller-runtime entry point. It watches `RunnerGroup` o
 
 ### 4.A — Runner Agent Registration API
 
-**Context:** Milestone 1 used a runner pre-registered manually via GitHub's `config.sh`. The AGC must register agents programmatically when a RunnerGroup is created. The GitHub API endpoint and payload for programmatic runner registration in the v2 broker flow are not yet confirmed. The probe's `runner_auth.go` handles the OAuth exchange for an already-registered runner, but does not implement registration itself.
+**Context:** Milestone 1 used a runner pre-registered manually via GitHub's `config.sh`.
+The AGC must register agents programmatically when a RunnerGroup is created.
+The GitHub API endpoint and payload for programmatic runner registration in the v2 broker flow are not yet confirmed.
+The probe's `runner_auth.go` handles the OAuth exchange for an already-registered runner, but does not implement registration itself.
 
 **How to investigate:**
 
@@ -506,7 +545,8 @@ The reconciler is the controller-runtime entry point. It watches `RunnerGroup` o
 
 ### 4.B — Live Egress IP Variance Test (deferred from Milestone 1)
 
-**Context:** Milestone 1 scaffolded `TestEgressIPVariance_Live` in `broker/egress_ip_test.go` but left it with a `TODO(investigation-b)` because the full broker protocol was not wired into a test-callable form at the time. Now that `NewInstallationTokenProvider` and `BrokerClient` are both fully integrated via the AGC, the live test can be run without duplicating `cmd/probe/main.go`.
+**Context:** Milestone 1 scaffolded `TestEgressIPVariance_Live` in `broker/egress_ip_test.go` but left it with a `TODO(investigation-b)` because the full broker protocol was not wired into a test-callable form at the time.
+Now that `NewInstallationTokenProvider` and `BrokerClient` are both fully integrated via the AGC, the live test can be run without duplicating `cmd/probe/main.go`.
 
 **How to run:**
 
@@ -525,7 +565,9 @@ The reconciler is the controller-runtime entry point. It watches `RunnerGroup` o
 
 ## 5. Job Handler Stub (Milestone 2 Placeholder for Pod Provisioner)
 
-The listener goroutine calls `JobHandlerFunc` after a successful `AcquireJob`. In Milestone 3, this becomes the real pod provisioner. In Milestone 2, inject a stub that:
+The listener goroutine calls `JobHandlerFunc` after a successful `AcquireJob`.
+In Milestone 3, this becomes the real pod provisioner.
+In Milestone 2, inject a stub that:
 
 1. Logs the `planID` and payload length at INFO level.
 2. Increments `actions_gateway_jobs_acquired_total`.
@@ -533,13 +575,16 @@ The listener goroutine calls `JobHandlerFunc` after a successful `AcquireJob`. I
 
 This ensures the goroutine lifecycle, RenewJob loop, and session-reuse path are all exercised in tests without any Kubernetes pod-creation dependency.
 
-The `maxWorkers` field is parsed and stored during reconciliation but the ceiling enforcement logic is **not yet implemented** in Milestone 2. Add a `TODO(milestone-3): enforce maxWorkers ceiling in pod provisioner` comment in the reconciler at the point where pod creation will eventually be gated.
+The `maxWorkers` field is parsed and stored during reconciliation but the ceiling enforcement logic is **not yet implemented** in Milestone 2.
+Add a `TODO(milestone-3): enforce maxWorkers ceiling in pod provisioner` comment in the reconciler at the point where pod creation will eventually be gated.
 
 ---
 
 ## 6. Metrics
 
-Emit the following Prometheus metrics from the AGC in Milestone 2. Use `controller-runtime`'s metrics server (default `:8080/metrics`). All metrics are declared in `internal/listener/metrics.go` and registered in `main.go`.
+Emit the following Prometheus metrics from the AGC in Milestone 2.
+Use `controller-runtime`'s metrics server (default `:8080/metrics`).
+All metrics are declared in `internal/listener/metrics.go` and registered in `main.go`.
 
 | Metric | Type | Labels | Where emitted |
 |---|---|---|---|
@@ -559,7 +604,10 @@ The `controller-runtime` framework emits reconcile latency and queue depth autom
 
 ### 7.1 Unit Tests (`go test -race ./...` from repo root)
 
-All unit tests must run without network access. Use `httptest.NewServer` for any HTTP interaction. All tests must pass under `-race`. Tests are spread across the packages described in §3 above; this section consolidates the full list.
+All unit tests must run without network access.
+Use `httptest.NewServer` for any HTTP interaction.
+All tests must pass under `-race`.
+Tests are spread across the packages described in §3 above; this section consolidates the full list.
 
 **Token Manager** — see §3.1 test table.
 
@@ -593,9 +641,12 @@ All unit tests must run without network access. Use `httptest.NewServer` for any
 
 ### 7.2 Integration Tests (envtest)
 
-Run against a local `envtest` API server from `controller-runtime`. No real GitHub calls. A shared `httptest` stub broker replays canned responses.
+Run against a local `envtest` API server from `controller-runtime`.
+No real GitHub calls.
+A shared `httptest` stub broker replays canned responses.
 
-**Setup:** Install both the `RunnerGroup` CRD schema into `envtest`. Wire the stub broker to serve:
+**Setup:** Install both the `RunnerGroup` CRD schema into `envtest`.
+Wire the stub broker to serve:
 - `POST .../session` → 200 with a valid session response
 - `GET .../message?sessionId=...` → 202 (no job) by default; configurable per-test to return a job message
 - `POST .../acquirejob` → 200 with a stub job payload
@@ -614,7 +665,8 @@ Run against a local `envtest` API server from `controller-runtime`. No real GitH
 
 ### 7.3 Manual kind Cluster Verification
 
-After integration tests pass, deploy the AGC to a local `kind` cluster with real GitHub credentials and a test RunnerGroup. Verify:
+After integration tests pass, deploy the AGC to a local `kind` cluster with real GitHub credentials and a test RunnerGroup.
+Verify:
 
 1. `kubectl get runnergroup -o yaml` shows `Ready: true` and `activeSessions: 1`.
 2. Queue a workflow job; verify it is acquired (check AGC logs for `"job acquired"`) and the `actions_gateway_jobs_acquired_total` counter increments via `kubectl port-forward`.
@@ -657,11 +709,14 @@ After integration tests pass, deploy the AGC to a local `kind` cluster with real
 
 ## 10. Deferred to Later Milestones
 
-- **Worker pod creation and Secret staging** — Milestone 3. The `JobHandlerFunc` stub in M2 records the acquisition but creates no Kubernetes resources.
-- **`maxWorkers` and `priorityTiers` enforcement** — Milestone 3. The ceiling logic belongs in the pod provisioner.
+- **Worker pod creation and Secret staging** — Milestone 3.
+  The `JobHandlerFunc` stub in M2 records the acquisition but creates no Kubernetes resources.
+- **`maxWorkers` and `priorityTiers` enforcement** — Milestone 3.
+  The ceiling logic belongs in the pod provisioner.
 - **Named Pipe handoff** — Milestone 3.
 - **`ActionsGateway` CRD and GMC** — Milestone 4.
-- **Egress proxy pool** — Milestone 4. AGC in M2 makes direct outbound calls (suitable for testing in a kind cluster with direct internet access).
+- **Egress proxy pool** — Milestone 4.
+  AGC in M2 makes direct outbound calls (suitable for testing in a kind cluster with direct internet access).
 - **`HTTP_PROXY`/`HTTPS_PROXY` env var injection** — Milestone 4 (GMC injects them into the AGC Deployment).
 - **Admission webhook for reserved namespaces** — Milestone 4 (part of GMC).
 - **`spec.proxy.managedNetworkPolicy` IP range reconciler** — Milestone 4.
@@ -673,8 +728,7 @@ After integration tests pass, deploy the AGC to a local `kind` cluster with real
 
 ### 11.A — Runner Agent Registration API
 
-**Source:** `github.com/actions/runner` open-source repository,
-`src/Runner.Common/RunnerDotcomServer.cs` and `src/Sdk/DTWebApi/WebApi/Runner.cs`.
+**Source:** `github.com/actions/runner` open-source repository, `src/Runner.Common/RunnerDotcomServer.cs` and `src/Sdk/DTWebApi/WebApi/Runner.cs`.
 
 **Registration flow (confirmed from source):**
 
@@ -718,30 +772,23 @@ After integration tests pass, deploy the AGC to a local `kind` cluster with real
    Authorization: Bearer {installationAccessToken}
    ```
 
-**Implementation:** `GithubRegistrar` in `cmd/agc/internal/agentpool/github_registrar.go` implements
-this flow. `StubRegistrar` remains wired in `main.go` until validated against live GitHub credentials.
+**Implementation:** `GithubRegistrar` in `cmd/agc/internal/agentpool/github_registrar.go` implements this flow. `StubRegistrar` remains wired in `main.go` until validated against live GitHub credentials.
 
-**TODO(investigation-a):** Confirm exact request/response schema against a live `config.sh --debug`
-capture before replacing `StubRegistrar` in production `main.go`. The schema above is sourced from
-the open-source runner code and may differ for enterprise GitHub instances or future runner versions.
+**TODO(investigation-a):** Confirm exact request/response schema against a live `config.sh --debug` capture before replacing `StubRegistrar` in production `main.go`.
+The schema above is sourced from the open-source runner code and may differ for enterprise GitHub instances or future runner versions.
 
 ---
 
 ### 11.B — Live Egress IP Variance (deferred completion from Milestone 1)
 
-**Finding:** The GitHub Actions v2 broker is stateless with respect to the client IP address. Sessions
-are identified by `sessionId` (a GUID), not by IP or TCP connection. Every API call
-(CreateSession, GetMessage, AcquireJob, RenewJob, DeleteSession) carries a Bearer token and the
-session ID in the URL — there is no server-side session affinity by IP.
+**Finding:** The GitHub Actions v2 broker is stateless with respect to the client IP address.
+Sessions are identified by `sessionId` (a GUID), not by IP or TCP connection.
+Every API call (CreateSession, GetMessage, AcquireJob, RenewJob, DeleteSession) carries a Bearer token and the session ID in the URL — there is no server-side session affinity by IP.
 
 **Evidence:**
-- `TestCONNECTProxy_TunnelsHTTPS` (unit test) confirms that the CONNECT-proxy infrastructure
-  correctly tunnels TLS without termination; two proxy instances alternate across four requests
-  without errors.
-- `TestEgressIPVariance_Live` (integration test, skipped unless `GITHUB_*` env vars are set)
-  runs the full broker protocol sequence (CreateSession → GetMessage → DeleteSession) with each
-  outbound connection routed through an alternating pair of CONNECT proxies. Run manually with
-  real GitHub credentials to confirm on live endpoints:
+- `TestCONNECTProxy_TunnelsHTTPS` (unit test) confirms that the CONNECT-proxy infrastructure correctly tunnels TLS without termination; two proxy instances alternate across four requests without errors.
+- `TestEgressIPVariance_Live` (integration test, skipped unless `GITHUB_*` env vars are set) runs the full broker protocol sequence (CreateSession → GetMessage → DeleteSession) with each outbound connection routed through an alternating pair of CONNECT proxies.
+  Run manually with real GitHub credentials to confirm on live endpoints:
   ```
   GITHUB_APP_ID=... GITHUB_APP_PRIVATE_KEY=... GITHUB_APP_INSTALLATION_ID=... \
   GITHUB_BROKER_URL=... GITHUB_RUNNER_VERSION=... GITHUB_AGENT_ID=... \
@@ -749,5 +796,5 @@ session ID in the URL — there is no server-side session affinity by IP.
   ```
 - See also `docs/plan/milestone-1.md §8.B` for the original M1 finding (stateless broker design).
 
-**Conclusion:** No proxy affinity is required. The Milestone 4 egress proxy pool can use round-robin
-or any stateless load-balancing strategy across proxy pods without risk of session disruption.
+**Conclusion:** No proxy affinity is required.
+The Milestone 4 egress proxy pool can use round-robin or any stateless load-balancing strategy across proxy pods without risk of session disruption.

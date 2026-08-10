@@ -1,79 +1,47 @@
 # actions-gateway Helm chart
 
-Installs the **Gateway Manager Controller (GMC)** — the operator that
-provisions isolated per-tenant gateways from `ActionsGateway` custom resources.
-This chart deploys the GMC and its cluster prerequisites only. Per-tenant
-Actions Gateway Controller (AGC) instances and egress proxy pools are
-**provisioned by the GMC at runtime** from each `ActionsGateway` CR; they are
-not chart resources.
+Installs the **Gateway Manager Controller (GMC)** — the operator that provisions isolated per-tenant gateways from `ActionsGateway` custom resources.
+This chart deploys the GMC and its cluster prerequisites only.
+Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are **provisioned by the GMC at runtime** from each `ActionsGateway` CR; they are not chart resources.
 
-> This chart is the **sole** install path (Q142) — there is no kustomize
-> overlay. The plain-YAML files under `cmd/gmc/config/` and `cmd/agc/config/`
-> are the controller-gen codegen + envtest substrate (they back `make manifests`
-> and envtest) and the single-source inputs to this chart's CRD/RBAC generators;
-> they are not an install vehicle. Helm was chosen over a Kustomize overlay for
-> versioned releases and a real day-2 `helm upgrade`/`rollback` lifecycle
-> (decision D-M5-1).
+> This chart is the **sole** install path (Q142) — there is no kustomize overlay.
+> The plain-YAML files under `cmd/gmc/config/` and `cmd/agc/config/` are the controller-gen codegen + envtest substrate (they back `make manifests` and envtest) and the single-source inputs to this chart's CRD/RBAC generators; they are not an install vehicle.
+> Helm was chosen over a Kustomize overlay for versioned releases and a real day-2 `helm upgrade`/`rollback` lifecycle (decision D-M5-1).
 
 ## What it installs
 
-- The two tenant CRDs — `ActionsGateway` and `RunnerGroup` — under
-  `templates/crds/` with `helm.sh/resource-policy: keep` so `helm upgrade`
-  carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and
-  `helm uninstall` preserves tenant objects.
-- The `PriorityClassAllowlist` CRD, uniquely, under the chart-root **`crds/`**
-  dir: the chart also renders a `PriorityClassAllowlist` CR (the
-  `priorityclass-allowlist-guard` policy's param). Helm resolves REST mappings
-  for the entire manifest before applying any of it, so a CR whose CRD is a
-  template in the same release fails the install with `no matches for kind`.
+- The two tenant CRDs — `ActionsGateway` and `RunnerGroup` — under `templates/crds/` with `helm.sh/resource-policy: keep` so `helm upgrade` carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and `helm uninstall` preserves tenant objects.
+- The `PriorityClassAllowlist` CRD, uniquely, under the chart-root **`crds/`** dir: the chart also renders a `PriorityClassAllowlist` CR (the `priorityclass-allowlist-guard` policy's param).
+  Helm resolves REST mappings for the entire manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install with `no matches for kind`.
   Only `crds/` is installed ahead of that resolution.
 
-  The cost lands on **upgrades**: Helm skips `crds/` there entirely. So applying
-  the chart's CRDs is a standard pre-upgrade step for this chart, run every time
-  rather than conditionally:
+  The cost lands on **upgrades**: Helm skips `crds/` there entirely.
+  So applying the chart's CRDs is a standard pre-upgrade step for this chart, run every time rather than conditionally:
 
   ```sh
   helm show crds <chart> --version <version> | kubectl apply -f -
   ```
 
-  It is idempotent, and reads the CRDs from the exact chart version you are
-  upgrading to — so it covers any future schema change without anyone having to
-  remember a release note. The chart preflights the CRD's presence and fails with
-  that command if it is skipped. Fresh installs are unaffected; Helm applies
-  `crds/` for you.
+  It is idempotent, and reads the CRDs from the exact chart version you are upgrading to — so it covers any future schema change without anyone having to remember a release note.
+  The chart preflights the CRD's presence and fails with that command if it is skipped.
+  Fresh installs are unaffected; Helm applies `crds/` for you.
 
-  **All CRD files here are generated** from the authoritative controller-gen
-  sources (`cmd/*/config/crd`, `api/config/crd`) by `make chart-crds` — do not
-  hand-edit them; a CI drift gate (`make chart-crds-check`) fails if they fall
-  out of sync. See [code-generation.md](../../docs/development/code-generation.md).
-- The GMC `Deployment` (HA: 2 replicas + leader election + PDB), `ServiceAccount`,
-  cluster/namespaced RBAC, and the `agc-tenant-role` ClusterRole. The manager
-  ClusterRole's **rules are generated** from the controller-gen output of the
-  GMC's `+kubebuilder:rbac` markers (`cmd/gmc/config/rbac/role.yaml`) into
-  `files/manager-role-rules.yaml` by `make chart-rbac`; a CI drift gate
-  (`make chart-rbac-check`) fails if they fall out of sync. Do not hand-edit them.
-- The validating webhook (`ValidatingWebhookConfiguration` + Service) and its
-  serving cert (cert-manager or self-signed — see below).
-- Three ValidatingAdmissionPolicies: `namespace-psa-guard` (the namespace
-  PSA-label patch) and `tenant-resource-guard` (create/update/delete of
-  Deployments, Secrets, RoleBindings, NetworkPolicies, etc.) confine the GMC's
-  cluster-wide write grants to marked tenant namespaces;
-  `priorityclass-allowlist-guard` backstops the PriorityClass allowlist on
-  direct `runnergroups` writes that bypass the GMC webhooks. Its parameter is the
-  cluster-scoped `PriorityClassAllowlist` CR rendered from
-  `allowedPriorityClasses`, which the GMC also watches — a CRD rather than a
-  ConfigMap because a core-type `paramKind` is destroyed by a kube-apiserver
-  defect on `helm uninstall` (Q444/Q492).
-- NetworkPolicies (default-deny ingress + metrics/webhook allows) and the
-  metrics Service / optional ServiceMonitor.
+  **All CRD files here are generated** from the authoritative controller-gen sources (`cmd/*/config/crd`, `api/config/crd`) by `make chart-crds` — do not hand-edit them; a CI drift gate (`make chart-crds-check`) fails if they fall out of sync.
+  See [code-generation.md](../../docs/development/code-generation.md).
+- The GMC `Deployment` (HA: 2 replicas + leader election + PDB), `ServiceAccount`, cluster/namespaced RBAC, and the `agc-tenant-role` ClusterRole.
+  The manager ClusterRole's **rules are generated** from the controller-gen output of the GMC's `+kubebuilder:rbac` markers (`cmd/gmc/config/rbac/role.yaml`) into `files/manager-role-rules.yaml` by `make chart-rbac`; a CI drift gate (`make chart-rbac-check`) fails if they fall out of sync.
+  Do not hand-edit them.
+- The validating webhook (`ValidatingWebhookConfiguration` + Service) and its serving cert (cert-manager or self-signed — see below).
+- Three ValidatingAdmissionPolicies: `namespace-psa-guard` (the namespace PSA-label patch) and `tenant-resource-guard` (create/update/delete of Deployments, Secrets, RoleBindings, NetworkPolicies, etc.) confine the GMC's cluster-wide write grants to marked tenant namespaces; `priorityclass-allowlist-guard` backstops the PriorityClass allowlist on direct `runnergroups` writes that bypass the GMC webhooks.
+  Its parameter is the cluster-scoped `PriorityClassAllowlist` CR rendered from `allowedPriorityClasses`, which the GMC also watches — a CRD rather than a ConfigMap because a core-type `paramKind` is destroyed by a kube-apiserver defect on `helm uninstall` (Q444/Q492).
+- NetworkPolicies (default-deny ingress + metrics/webhook allows) and the metrics Service / optional ServiceMonitor.
 
 ## Prerequisites
 
 - Kubernetes **>= 1.30** (GA `ValidatingAdmissionPolicy`).
-- A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the egress/ingress
-  controls to take effect. `kindnet` does not enforce egress.
-- **cert-manager** *if* `certManager.enabled=true` (the default). Not required
-  when you set `certManager.enabled=false`.
+- A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the egress/ingress controls to take effect. `kindnet` does not enforce egress.
+- **cert-manager** *if* `certManager.enabled=true` (the default).
+  Not required when you set `certManager.enabled=false`.
 - **Image digests** for the GMC, AGC, proxy, and worker-wrapper images (see below).
 
 ## Install
@@ -87,20 +55,12 @@ helm install gag charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Digest pinning is enforced for all four images at **render time** — this is the
-secure default. The chart **fails to render** with
-`<image>.image must be pinned by digest …` (naming `gmc`, `agc`, `proxy`, or
-`wrapper`) when any of the four digests is empty, so no image can silently fall
-back to a mutable `:latest` tag. Failing at render catches all four up front
-rather than letting an unpinned `AGC_IMAGE`/`PROXY_IMAGE`/`WRAPPER_IMAGE` surface
-later as a GMC crash-loop (the GMC does *also* re-check those three at startup as
-a second layer). The worker-wrapper (Q235) is on by default — the chart always
-sets `WRAPPER_IMAGE`, so `wrapper.image.digest` is required like the rest.
+Digest pinning is enforced for all four images at **render time** — this is the secure default.
+The chart **fails to render** with `<image>.image must be pinned by digest …` (naming `gmc`, `agc`, `proxy`, or `wrapper`) when any of the four digests is empty, so no image can silently fall back to a mutable `:latest` tag.
+Failing at render catches all four up front rather than letting an unpinned `AGC_IMAGE`/`PROXY_IMAGE`/`WRAPPER_IMAGE` surface later as a GMC crash-loop (the GMC does *also* re-check those three at startup as a second layer).
+The worker-wrapper (Q235) is on by default — the chart always sets `WRAPPER_IMAGE`, so `wrapper.image.digest` is required like the rest.
 
-Pin `gmc.image.digest`, `agc.image.digest`, `proxy.image.digest`, and
-`wrapper.image.digest` before installing, or pass
-`--set allowFloatingImageTags=true` — the one explicit opt-out covering both
-layers — for **dev/test only**.
+Pin `gmc.image.digest`, `agc.image.digest`, `proxy.image.digest`, and `wrapper.image.digest` before installing, or pass `--set allowFloatingImageTags=true` — the one explicit opt-out covering both layers — for **dev/test only**.
 
 ### Without cert-manager
 
@@ -114,9 +74,7 @@ helm install gag charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-The chart generates a self-signed webhook serving cert and wires the webhook
-`caBundle` itself. **Trade-off:** the cert rotates on a `helm upgrade` that
-cannot reuse the existing Secret — see [upgrade](../../docs/operations/upgrade.md).
+The chart generates a self-signed webhook serving cert and wires the webhook `caBundle` itself. **Trade-off:** the cert rotates on a `helm upgrade` that cannot reuse the existing Secret — see [upgrade](../../docs/operations/upgrade.md).
 
 ## Upgrade
 
@@ -124,15 +82,9 @@ cannot reuse the existing Secret — see [upgrade](../../docs/operations/upgrade
 helm upgrade gag charts/actions-gateway --namespace gmc-system --reset-then-reuse-values
 ```
 
-CRDs ship as templates, so field changes are applied on upgrade — except the
-`PriorityClassAllowlist` CRD, which ships in `crds/` and needs
-`helm show crds <chart> | kubectl apply -f -` first (see *What it installs*).
-Setting the removed `priorityClassAllowlist.configMapName` now fails the render
-with migration instructions. The
-`namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; if
-you are upgrading a cluster whose tenant namespaces are not yet labeled
-`actions-gateway.github.com/tenant=true`, label them first (or temporarily set
-both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
+CRDs ship as templates, so field changes are applied on upgrade — except the `PriorityClassAllowlist` CRD, which ships in `crds/` and needs `helm show crds <chart> | kubectl apply -f -` first (see *What it installs*).
+Setting the removed `priorityClassAllowlist.configMapName` now fails the render with migration instructions.
+The `namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; if you are upgrading a cluster whose tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them first (or temporarily set both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 
 ## Values
 
@@ -173,13 +125,11 @@ both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `sampleGateway.gitHubAppSecretName` | `github-app-v1` | GitHub App Secret name referenced by the sample CR. |
 | `sampleGateway.gitHubURL` | `https://github.com/my-org` | GitHub org/enterprise/repo URL the sample CR's runners register against. |
 
-A `values.schema.json` validates these at install/lint time (image digest
-format, security-profile enum, pull-policy enum, etc.).
+A `values.schema.json` validates these at install/lint time (image digest format, security-profile enum, pull-policy enum, etc.).
 
 ## Offline validation
 
-Rendering requires all four image digests (`gmc`/`agc`/`proxy`/`wrapper`, see
-above); any well-formed digest works for offline validation:
+Rendering requires all four image digests (`gmc`/`agc`/`proxy`/`wrapper`, see above); any well-formed digest works for offline validation:
 
 ```sh
 DIGEST=sha256:1111111111111111111111111111111111111111111111111111111111111111
@@ -191,5 +141,4 @@ helm template gag charts/actions-gateway --namespace gmc-system $PINS | \
     -skip CustomResourceDefinition,ActionsGateway,RunnerGroup,Certificate,Issuer,ServiceMonitor
 ```
 
-The `-skip` list covers the CRDs and the CRs whose schemas (cert-manager,
-Prometheus Operator) are not in kubeconform's default store.
+The `-skip` list covers the CRDs and the CRs whose schemas (cert-manager, Prometheus Operator) are not in kubeconform's default store.

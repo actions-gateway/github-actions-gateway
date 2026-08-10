@@ -1,10 +1,8 @@
 # Q51 — Reconcile documented vs emitted Prometheus metrics
 
-Bring the operator-facing metrics docs into line with the metrics the code actually
-registers. The six-layer docs audit (Layer 3) found six documented metric names that
-the docs reference but the code does not register, so operators are pointed at
-telemetry they cannot scrape. This task makes a per-metric decision — implement,
-re-point, or mark `(planned)` — and applies it in code and docs.
+Bring the operator-facing metrics docs into line with the metrics the code actually registers.
+The six-layer docs audit (Layer 3) found six documented metric names that the docs reference but the code does not register, so operators are pointed at telemetry they cannot scrape.
+This task makes a per-metric decision — implement, re-point, or mark `(planned)` — and applies it in code and docs.
 
 ## Per-metric decisions
 
@@ -19,18 +17,11 @@ re-point, or mark `(planned)` — and applies it in code and docs.
 
 ## Implementation notes
 
-- **pod_creation_latency_seconds** measures pod creation → the runner container
-  starting (the earliest non-zero container `StartedAt`), which includes scheduling
-  and image pull — the dominant, SLO-relevant cost. Observed inside the
-  `InformerPodWaiter` at terminal resolution, deduped via the existing
-  resolve-once-per-pod path. Buckets span 0.5s–300s to bracket the p95 ≤ 15s /
-  p99 ≤ 60s SLO.
-- **GMC metrics** live in a new `cmd/gmc/internal/controller/metrics.go`, registered
-  with the controller-runtime `metrics.Registry` so they appear on the same `/metrics`
-  endpoint as the built-in controller-runtime metrics.
+- **pod_creation_latency_seconds** measures pod creation → the runner container starting (the earliest non-zero container `StartedAt`), which includes scheduling and image pull — the dominant, SLO-relevant cost.
+  Observed inside the `InformerPodWaiter` at terminal resolution, deduped via the existing resolve-once-per-pod path.
+  Buckets span 0.5s–300s to bracket the p95 ≤ 15s / p99 ≤ 60s SLO.
+- **GMC metrics** live in a new `cmd/gmc/internal/controller/metrics.go`, registered with the controller-runtime `metrics.Registry` so they appear on the same `/metrics` endpoint as the built-in controller-runtime metrics.
 
 ## Docs touched
 
-`docs/operations/observability.md`, `runbook.md`, `troubleshooting.md`, `upgrade.md`,
-`docs/design/02-architecture.md`, `appendix-a-capacity-slos.md`, `plan/milestone-5.md`,
-and `plan/docs-six-layer-audit.md` (mark the Layer 3 finding resolved).
+`docs/operations/observability.md`, `runbook.md`, `troubleshooting.md`, `upgrade.md`, `docs/design/02-architecture.md`, `appendix-a-capacity-slos.md`, `plan/milestone-5.md`, and `plan/docs-six-layer-audit.md` (mark the Layer 3 finding resolved).

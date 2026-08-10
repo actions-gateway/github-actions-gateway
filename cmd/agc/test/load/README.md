@@ -1,15 +1,8 @@
 # AGC load-test harness (Q13)
 
-An in-process load test that pins the design's headline capacity claim:
-**thousands of virtual runner sessions multiplexed as goroutines inside one
-AGC**, each costing **one runner re-registration per job** (the single-use JIT
-lifecycle, [Q114](../../../../docs/STATUS.md)).
+An in-process load test that pins the design's headline capacity claim: **thousands of virtual runner sessions multiplexed as goroutines inside one AGC**, each costing **one runner re-registration per job** (the single-use JIT lifecycle, [Q114](../../../../docs/STATUS.md)).
 
-It drives the AGC's real listener-multiplexing core — the same
-`listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client`
-wiring that `RunnerGroupReconciler` builds in production — against an in-process
-broker stub, a controller-runtime fake client for agent Secrets, and an
-in-memory registrar. **No cluster and no GitHub credentials are required.**
+It drives the AGC's real listener-multiplexing core — the same `listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client` wiring that `RunnerGroupReconciler` builds in production — against an in-process broker stub, a controller-runtime fake client for agent Secrets, and an in-memory registrar. **No cluster and no GitHub credentials are required.**
 
 ## Run it
 
@@ -18,15 +11,12 @@ make load-test-quick   # 10 tenants × 100 listeners = 1,000 sessions, ~1 min
 make load-test-full    # same scale, realistic job hold, writes results/latest.md
 ```
 
-Both wrap a single `go test -tags load -run TestAGCLoad ./test/load/...` in
-`cmd/agc`, under the desktop-safety throttle prefix (a no-op on CI). A run holds
-~1,000 goroutines; the throttle keeps a GUI dev machine responsive
-([Q92](../../../../docs/STATUS.md)).
+Both wrap a single `go test -tags load -run TestAGCLoad ./test/load/...` in `cmd/agc`, under the desktop-safety throttle prefix (a no-op on CI).
+A run holds ~1,000 goroutines; the throttle keeps a GUI dev machine responsive ([Q92](../../../../docs/STATUS.md)).
 
 ### Tuning
 
-Every knob is an environment variable, so the same target scales up on a bigger
-host without code edits:
+Every knob is an environment variable, so the same target scales up on a bigger host without code edits:
 
 | Env var | Default | Meaning |
 |---|---|---|
@@ -58,11 +48,9 @@ go test -tags load -run TestAGCLoad -json ./test/load/... | go-junit-report > lo
 
 ## What it measures, and how to read it
 
-A virtual runner session **is** a listener goroutine. Each goroutine long-polls
-the broker; on a job it acquires, holds it for `LOAD_JOB_DURATION`, then — because
-single-use JIT runners are spent on acquisition — re-registers its agent and
-opens a fresh session before polling again. The driver keeps every session
-saturated so the pool ramps to `LISTENERS_PER_TENANT` and holds there.
+A virtual runner session **is** a listener goroutine.
+Each goroutine long-polls the broker; on a job it acquires, holds it for `LOAD_JOB_DURATION`, then — because single-use JIT runners are spent on acquisition — re-registers its agent and opens a fresh session before polling again.
+The driver keeps every session saturated so the pool ramps to `LISTENERS_PER_TENANT` and holds there.
 
 | Metric | Reading |
 |---|---|
@@ -73,48 +61,29 @@ saturated so the pool ramps to `LISTENERS_PER_TENANT` and holds there.
 | **peak goroutines / memory** | `runtime.NumGoroutine` and `MemStats` at peak; memory/session = peak heap-inuse ÷ avg sessions. |
 | **leaked goroutines** | live goroutines minus baseline after teardown. SLO: ≤ 16 — catches a multiplexer/listener goroutine leak. |
 
-The sample under [`results/sample-run.md`](results/sample-run.md) is a real run:
-1,000 sessions held on an 8-core laptop at ~115 KiB heap/session, ~490 jobs/s,
-1.0 re-registration/job, zero leak.
+The sample under [`results/sample-run.md`](results/sample-run.md) is a real run: 1,000 sessions held on an 8-core laptop at ~115 KiB heap/session, ~490 jobs/s, 1.0 re-registration/job, zero leak.
 
 ## What it does **not** measure (fidelity boundaries)
 
-This tier isolates the AGC's *own* scaling. It deliberately does not stand up a
-cluster, so it cannot speak to anything downstream of the AGC process. Read
-absolute throughput and latency with these caveats; the **sustained-sessions**,
-**re-registration-per-job**, and **no-leak** results are the faithful ones.
+This tier isolates the AGC's *own* scaling.
+It deliberately does not stand up a cluster, so it cannot speak to anything downstream of the AGC process.
+Read absolute throughput and latency with these caveats; the **sustained-sessions**, **re-registration-per-job**, and **no-leak** results are the faithful ones.
 
-- **No real apiserver / GitHub round-trips.** Agent Secrets go through a fake
-  client and registration through an in-memory registrar, so the *latency* of a
-  recycle is bounded by the fake client's in-process lock, not by real apiserver
-  or GitHub-API round-trips. The faithful figure to carry forward is the
-  re-registration **rate** (≈ throughput, since it is 1:1), for apiserver and
-  GitHub-API capacity planning — not the recycle latency.
-- **Peak goroutines/memory include the in-process broker stub.** Both the broker
-  client *and* server run in this one process, so the absolute goroutine count is
-  roughly double a real AGC (which talks to a remote broker). The
-  per-session **trend** is what matters, not the absolute peak. The
-  goroutine-leak check closes the stub first, so it measures only AGC goroutines.
-- **No worker pods, CNI, image pulls, or cross-tenant network isolation.** Those
-  need the cluster-only kind e2e and the M5 staging run — see
-  [docs/plan/milestone-5.md §2.6](../../../../docs/plan/milestone-5.md).
+- **No real apiserver / GitHub round-trips.** Agent Secrets go through a fake client and registration through an in-memory registrar, so the *latency* of a recycle is bounded by the fake client's in-process lock, not by real apiserver or GitHub-API round-trips.
+  The faithful figure to carry forward is the re-registration **rate** (≈ throughput, since it is 1:1), for apiserver and GitHub-API capacity planning — not the recycle latency.
+- **Peak goroutines/memory include the in-process broker stub.** Both the broker client *and* server run in this one process, so the absolute goroutine count is roughly double a real AGC (which talks to a remote broker).
+  The per-session **trend** is what matters, not the absolute peak.
+  The goroutine-leak check closes the stub first, so it measures only AGC goroutines.
+- **No worker pods, CNI, image pulls, or cross-tenant network isolation.** Those need the cluster-only kind e2e and the M5 staging run — see [docs/plan/milestone-5.md §2.6](../../../../docs/plan/milestone-5.md).
 - **Proxy HPA under burst** is a real-cluster behaviour, out of scope here.
 
 ## Isolating AGC-only per-session memory (Q181)
 
-The peak-memory figure above is a deliberate **upper bound**: both the broker
-client and server run in this one process, so each session's heap also carries
-the stub's server-side per-connection buffers and per-session maps. That is fine
-for a trend, but it cannot back a precise efficiency multiple versus
-pod-per-runner controllers.
+The peak-memory figure above is a deliberate **upper bound**: both the broker client and server run in this one process, so each session's heap also carries the stub's server-side per-connection buffers and per-session maps.
+That is fine for a trend, but it cannot back a precise efficiency multiple versus pod-per-runner controllers.
 
-`TestAGCPerSessionMemory` (`mem_test.go`) isolates the AGC's *own* per-session
-footprint without any broker stub. It replaces the `httptest.Server` with
-`memTransport` — an in-process `http.RoundTripper` that answers the OAuth,
-CreateSession, and GetMessage calls with canned responses and **no server,
-socket, or per-session server-side state**. `GET …/message` parks the caller on
-its request context, so every started listener rests in exactly one goroutine
-blocked in its long-poll — the steady idle-session state.
+`TestAGCPerSessionMemory` (`mem_test.go`) isolates the AGC's *own* per-session footprint without any broker stub.
+It replaces the `httptest.Server` with `memTransport` — an in-process `http.RoundTripper` that answers the OAuth, CreateSession, and GetMessage calls with canned responses and **no server, socket, or per-session server-side state**. `GET …/message` parks the caller on its request context, so every started listener rests in exactly one goroutine blocked in its long-poll — the steady idle-session state.
 
 ```bash
 make mem-profile   # 1,000 parked sessions; prints bytes/session, no broker stub
@@ -123,33 +92,20 @@ make mem-profile   # 1,000 parked sessions; prints bytes/session, no broker stub
 It reports a three-point heap+stack differential:
 
 - **mBase** — shared infra only (transport, `http.Client`, registrar).
-- **mAgents** — N pooled agents + N empty `Multiplexer`s, no goroutines. The
-  `mAgents−mBase` bucket also holds the fake k8s client's retained agent
-  Secrets — an apiserver-side cost in production, so it is **held out** of the
-  headline figure.
-- **mFull** — all N listener goroutines started and parked. `mFull−mAgents` is
-  the marginal AGC cost of one more concurrent session: the goroutine stack, its
-  `broker.Client`, and its live session state — and nothing from the broker
-  server side.
+- **mAgents** — N pooled agents + N empty `Multiplexer`s, no goroutines.
+  The `mAgents−mBase` bucket also holds the fake k8s client's retained agent Secrets — an apiserver-side cost in production, so it is **held out** of the headline figure.
+- **mFull** — all N listener goroutines started and parked. `mFull−mAgents` is the marginal AGC cost of one more concurrent session: the goroutine stack, its `broker.Client`, and its live session state — and nothing from the broker server side.
 
-A representative run holds 1,000 sessions at **~12 KiB/session** (≈ 8 KiB
-goroutine stack + ≈ 4 KiB heap), well under the ~60 KiB design estimate. Set
-`MEM_HEAP_PROFILE=mem.pprof` to also dump a pprof heap profile for
-`go tool pprof` inspection. This figure is published, with the density-multiple
-derivation, in
-[appendix-a-capacity-slos.md](../../../../docs/design/appendix-a-capacity-slos.md).
+A representative run holds 1,000 sessions at **~12 KiB/session** (≈ 8 KiB goroutine stack + ≈ 4 KiB heap), well under the ~60 KiB design estimate.
+Set `MEM_HEAP_PROFILE=mem.pprof` to also dump a pprof heap profile for `go tool pprof` inspection.
+This figure is published, with the density-multiple derivation, in [appendix-a-capacity-slos.md](../../../../docs/design/appendix-a-capacity-slos.md).
 
-> **Boundary.** This isolates the AGC session *structures*. It excludes the
-> per-connection HTTP transport buffers an active long-poll holds in production
-> (a real but bounded additional cost) — which is why the published density
-> multiple keeps the conservative ~60 KiB design figure rather than the ~12 KiB
-> floor.
+> **Boundary.** This isolates the AGC session *structures*.
+> It excludes the per-connection HTTP transport buffers an active long-poll holds in production (a real but bounded additional cost) — which is why the published density multiple keeps the conservative ~60 KiB design figure rather than the ~12 KiB floor.
 
 ## Design
 
-See [docs/plan/milestone-5.md §2](../../../../docs/plan/milestone-5.md) for the
-rationale (why an in-process Go load test is the tier that observes the claim,
-and why the harness lives here rather than in a kind e2e).
+See [docs/plan/milestone-5.md §2](../../../../docs/plan/milestone-5.md) for the rationale (why an in-process Go load test is the tier that observes the claim, and why the harness lives here rather than in a kind e2e).
 
 ## Files
 

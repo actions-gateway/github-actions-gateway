@@ -1,31 +1,18 @@
 # In-runner image builds: choosing a build approach and security profile
 
-**Audience:** Platform engineer, Tenant operator. **Goal:** pick an
-image-build approach (`docker build` and friends) that builds container
-images *inside* a GitHub Actions Gateway (GAG) worker pod while staying
-inside the strictest Pod Security Admission (PSA) profile that still works.
+**Audience:** Platform engineer, Tenant operator. **Goal:** pick an image-build approach (`docker build` and friends) that builds container images *inside* a GitHub Actions Gateway (GAG) worker pod while staying inside the strictest Pod Security Admission (PSA) profile that still works.
 
-Building container images is the single most common heavyweight runner
-workload, and it collides head-on with pod-security hardening: the classic
-recipe — Docker-in-Docker (DinD) with a privileged container — requires the
-cluster's least-restrictive posture. It is almost never the approach you
-actually need. Rootless build tooling builds the same images under
-`baseline` (and sometimes `restricted`) PSA, with no privileged container
-and no host-kernel exposure.
+Building container images is the single most common heavyweight runner workload, and it collides head-on with pod-security hardening: the classic recipe — Docker-in-Docker (DinD) with a privileged container — requires the cluster's least-restrictive posture.
+It is almost never the approach you actually need.
+Rootless build tooling builds the same images under `baseline` (and sometimes `restricted`) PSA, with no privileged container and no host-kernel exposure.
 
-This page maps each build approach to the GAG `securityProfile` it
-requires, the configuration it needs, and its caveats, then gives a
-decision table. The profiles themselves — what each one admits, how the
-`privileged` opt-in is gated, and the floor invariants that apply at every
-profile — are defined in
-[Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in);
-read that first if the three profile names are unfamiliar.
+This page maps each build approach to the GAG `securityProfile` it requires, the configuration it needs, and its caveats, then gives a decision table.
+The profiles themselves — what each one admits, how the `privileged` opt-in is gated, and the floor invariants that apply at every profile — are defined in [Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in); read that first if the three profile names are unfamiliar.
 
 ## How the security profiles constrain a build
 
-`ActionsGateway.spec.securityProfile` stamps a PSA `enforce` level on the
-tenant namespace. Three values exist, ranked least-to-most restrictive as
-`privileged → baseline → restricted`:
+`ActionsGateway.spec.securityProfile` stamps a PSA `enforce` level on the tenant namespace.
+Three values exist, ranked least-to-most restrictive as `privileged → baseline → restricted`:
 
 | Profile | What it admits | Relevance to builds |
 |---|---|---|
@@ -35,191 +22,99 @@ tenant namespace. Three values exist, ranked least-to-most restrictive as
 
 Two GAG behaviours shape what a build pod may do:
 
-- **Floor invariants apply at every profile.** Regardless of
-  `securityProfile`, the AGC overwrites every worker pod with
-  `hostPID/hostNetwork/hostIPC: false` and projects no Kubernetes API
-  token. None of these block image builds, but they mean a build tool can
-  never reach for host namespaces as an escape hatch. See
-  [Security § Floor invariants](../design/05-security.md#floor-invariants-apply-at-every-profile).
-- **Secure-by-default SecurityContext gap-fills, and the tenant can opt
-  out.** Under `baseline` the AGC stamps `runAsNonRoot: true` +
-  `runAsUser: 1001` by default. A build tool that must run as root in its
-  container (Kaniko, a Sysbox-backed daemon) sets `runAsNonRoot: false`
-  **explicitly in its own `PodTemplate`** — an explicit value always wins
-  over the gap-fill, so this needs **no** profile escalation. See
-  [Security § Secure-by-default pod SecurityContext](../design/05-security.md#secure-by-default-pod-securitycontext-and-resources).
+- **Floor invariants apply at every profile.** Regardless of `securityProfile`, the AGC overwrites every worker pod with `hostPID/hostNetwork/hostIPC: false` and projects no Kubernetes API token.
+  None of these block image builds, but they mean a build tool can never reach for host namespaces as an escape hatch.
+  See [Security § Floor invariants](../design/05-security.md#floor-invariants-apply-at-every-profile).
+- **Secure-by-default SecurityContext gap-fills, and the tenant can opt out.** Under `baseline` the AGC stamps `runAsNonRoot: true` + `runAsUser: 1001` by default.
+  A build tool that must run as root in its container (Kaniko, a Sysbox-backed daemon) sets `runAsNonRoot: false` **explicitly in its own `PodTemplate`** — an explicit value always wins over the gap-fill, so this needs **no** profile escalation.
+  See [Security § Secure-by-default pod SecurityContext](../design/05-security.md#secure-by-default-pod-securitycontext-and-resources).
 
 ## Approach 1 — BuildKit (rootless)
 
-`buildkitd` in rootless mode (`docker buildx` against a rootless BuildKit
-instance, or the `moby/buildkit:*-rootless` image as a sidecar/standalone
-pod) builds images entirely in user space — no daemon socket, no
-privileged container.
+`buildkitd` in rootless mode (`docker buildx` against a rootless BuildKit instance, or the `moby/buildkit:*-rootless` image as a sidecar/standalone pod) builds images entirely in user space — no daemon socket, no privileged container.
 
-- **Recommended profile:** `baseline`. Rootless BuildKit relies on
-  unprivileged user namespaces and, on many kernels, needs a relaxed
-  seccomp/AppArmor profile for the syscalls it uses to set up those
-  namespaces. `baseline` permits `seccompProfile: Unconfined` and the
-  `unconfined` AppArmor annotation; `restricted` forbids both.
-- **`restricted`?** Best-effort only. On a recent-enough kernel where the
-  default seccomp profile (`RuntimeDefault`) already permits the needed
-  unshare syscalls and BuildKit runs fully as non-root, it *can* meet
-  `restricted` — but this is kernel- and version-dependent, so treat
-  `baseline` as the safe target and validate `restricted` on your own
-  nodes before relying on it.
-- **What it can do:** full `Dockerfile` feature set, build cache,
-  multi-stage builds, multi-arch via QEMU/emulation, registry push.
-- **What it can't do:** anything requiring a real privileged daemon (it
-  doesn't need one). Some host-bind-mount build features are unavailable
-  in rootless mode.
-- **Config notes:** run `buildkitd` as a non-root user; do **not** set
-  `securityContext.privileged`. Registry credentials are read from a
-  mounted `~/.docker/config.json` (or a BuildKit secret), never from an
-  environment variable — see [Registry authentication](#registry-authentication-for-all-approaches).
+- **Recommended profile:** `baseline`.
+  Rootless BuildKit relies on unprivileged user namespaces and, on many kernels, needs a relaxed seccomp/AppArmor profile for the syscalls it uses to set up those namespaces. `baseline` permits `seccompProfile: Unconfined` and the `unconfined` AppArmor annotation; `restricted` forbids both.
+- **`restricted`?** Best-effort only.
+  On a recent-enough kernel where the default seccomp profile (`RuntimeDefault`) already permits the needed unshare syscalls and BuildKit runs fully as non-root, it *can* meet `restricted` — but this is kernel- and version-dependent, so treat `baseline` as the safe target and validate `restricted` on your own nodes before relying on it.
+- **What it can do:** full `Dockerfile` feature set, build cache, multi-stage builds, multi-arch via QEMU/emulation, registry push.
+- **What it can't do:** anything requiring a real privileged daemon (it doesn't need one).
+  Some host-bind-mount build features are unavailable in rootless mode.
+- **Config notes:** run `buildkitd` as a non-root user; do **not** set `securityContext.privileged`.
+  Registry credentials are read from a mounted `~/.docker/config.json` (or a BuildKit secret), never from an environment variable — see [Registry authentication](#registry-authentication-for-all-approaches).
 
 ## Approach 2 — Kaniko
 
-Kaniko (`gcr.io/kaniko-project/executor`) builds from a `Dockerfile`
-without a daemon and **without privileged mode**, executing each build
-step inside its own container and snapshotting the filesystem.
+Kaniko (`gcr.io/kaniko-project/executor`) builds from a `Dockerfile` without a daemon and **without privileged mode**, executing each build step inside its own container and snapshotting the filesystem.
 
-- **Recommended profile:** `baseline`. Kaniko extracts the base image and
-  executes `RUN` steps against the container's own root filesystem, so it
-  conventionally runs as root (uid 0) in its container. Under `baseline`,
-  set `runAsNonRoot: false` explicitly in the worker `PodTemplate` (the
-  gap-filled default is `runAsNonRoot: true`); no privileged container and
-  no profile escalation are required.
-- **`restricted`?** Possible with care: Kaniko can run as a non-root user,
-  but you must ensure every path it writes is owned by that user (the
-  filesystem it manipulates is the container root), which is fragile for
-  arbitrary base images. Prefer `baseline` unless a compliance mandate
-  forces `restricted` and you control the `Dockerfile`.
-- **Caveat — it is not a sandbox.** Kaniko runs `RUN` commands directly in
-  the build container with that container's privileges. A malicious
-  `Dockerfile` executes with whatever the pod is allowed to do — PSA
-  (and, if you need it, a sandbox runtime) is the boundary, not Kaniko
-  itself. Do not treat Kaniko as isolation for untrusted build inputs.
-- **Caching:** Kaniko caches layers in a registry repo (`--cache=true
-  --cache-repo=<registry>/cache`) or a mounted cache volume — not in a
-  local daemon. Plan a cache registry path and its credentials.
-- **Registry auth:** via a mounted `config.json`; see
-  [Registry authentication](#registry-authentication-for-all-approaches).
+- **Recommended profile:** `baseline`.
+  Kaniko extracts the base image and executes `RUN` steps against the container's own root filesystem, so it conventionally runs as root (uid 0) in its container.
+  Under `baseline`, set `runAsNonRoot: false` explicitly in the worker `PodTemplate` (the gap-filled default is `runAsNonRoot: true`); no privileged container and no profile escalation are required.
+- **`restricted`?** Possible with care: Kaniko can run as a non-root user, but you must ensure every path it writes is owned by that user (the filesystem it manipulates is the container root), which is fragile for arbitrary base images.
+  Prefer `baseline` unless a compliance mandate forces `restricted` and you control the `Dockerfile`.
+- **Caveat — it is not a sandbox.** Kaniko runs `RUN` commands directly in the build container with that container's privileges.
+  A malicious `Dockerfile` executes with whatever the pod is allowed to do — PSA (and, if you need it, a sandbox runtime) is the boundary, not Kaniko itself.
+  Do not treat Kaniko as isolation for untrusted build inputs.
+- **Caching:** Kaniko caches layers in a registry repo (`--cache=true --cache-repo=<registry>/cache`) or a mounted cache volume — not in a local daemon.
+  Plan a cache registry path and its credentials.
+- **Registry auth:** via a mounted `config.json`; see [Registry authentication](#registry-authentication-for-all-approaches).
 
 ## Approach 3 — Sysbox (unprivileged DinD via a RuntimeClass)
 
-[Sysbox](https://github.com/nestybox/sysbox) is a container *runtime* that
-lets a container run a full inner Docker daemon (or systemd) **without**
-the privileged flag, by virtualizing `procfs`/`sysfs` and using the Linux
-user-namespace. It is selected per-pod with a `RuntimeClass`.
+[Sysbox](https://github.com/nestybox/sysbox) is a container *runtime* that lets a container run a full inner Docker daemon (or systemd) **without** the privileged flag, by virtualizing `procfs`/`sysfs` and using the Linux user-namespace.
+It is selected per-pod with a `RuntimeClass`.
 
-- **Recommended profile:** `baseline`. A Sysbox-backed pod runs an inner
-  daemon as root *inside* the container (mapped to an unprivileged range on
-  the host), so it needs root-in-container — which `baseline` permits and
-  `restricted` (with its `runAsNonRoot` requirement) does not. It needs
-  **no** `privileged: true` container, so it stays out of the
-  `privileged` profile entirely. This is Sysbox's whole value proposition:
-  "real" DinD at `baseline` rather than `privileged`.
+- **Recommended profile:** `baseline`.
+  A Sysbox-backed pod runs an inner daemon as root *inside* the container (mapped to an unprivileged range on the host), so it needs root-in-container — which `baseline` permits and `restricted` (with its `runAsNonRoot` requirement) does not.
+  It needs **no** `privileged: true` container, so it stays out of the `privileged` profile entirely.
+  This is Sysbox's whole value proposition: "real" DinD at `baseline` rather than `privileged`.
 - **RuntimeClass × profile interplay:**
-  - A platform admin must install the Sysbox runtime on nodes and create
-    the `RuntimeClass` (e.g. `sysbox-runc`) cluster-wide. The GMC never
-    installs runtime handlers or `RuntimeClass` objects — that is a
-    cluster-admin operation, the same model as the gVisor/Kata sandbox
-    runtimes in [Appendix B](../design/appendix-b-worker-isolation.md).
-  - The tenant references it in the worker `PodTemplate`:
-    `spec.runtimeClassName: sysbox-runc`. The AGC honours a
-    tenant-set `runtimeClassName` and applies no override that strips it.
-  - Sysbox is itself an isolation boundary (user-namespace + filesystem
-    virtualization), so it is the recommended way to run DinD-style
-    workloads when you cannot adopt rootless BuildKit/Kaniko and want to
-    avoid the `privileged` profile.
-- **Config notes:** set `runtimeClassName`, run the inner daemon as root
-  in-container (`runAsNonRoot: false` in the `PodTemplate`), and **do
-  not** set `privileged: true`.
+  - A platform admin must install the Sysbox runtime on nodes and create the `RuntimeClass` (e.g. `sysbox-runc`) cluster-wide.
+    The GMC never installs runtime handlers or `RuntimeClass` objects — that is a cluster-admin operation, the same model as the gVisor/Kata sandbox runtimes in [Appendix B](../design/appendix-b-worker-isolation.md).
+  - The tenant references it in the worker `PodTemplate`: `spec.runtimeClassName: sysbox-runc`.
+    The AGC honours a tenant-set `runtimeClassName` and applies no override that strips it.
+  - Sysbox is itself an isolation boundary (user-namespace + filesystem virtualization), so it is the recommended way to run DinD-style workloads when you cannot adopt rootless BuildKit/Kaniko and want to avoid the `privileged` profile.
+- **Config notes:** set `runtimeClassName`, run the inner daemon as root in-container (`runAsNonRoot: false` in the `PodTemplate`), and **do not** set `privileged: true`.
 
 ## Approach 4 — Plain privileged DinD (avoid where possible)
 
-The classic recipe — a `docker:dind` sidecar or a runner container with
-`securityContext.privileged: true` — runs an inner Docker daemon with full
-host-kernel access.
+The classic recipe — a `docker:dind` sidecar or a runner container with `securityContext.privileged: true` — runs an inner Docker daemon with full host-kernel access.
 
-- **Required profile:** `privileged`, and nothing less. Under `baseline`
-  and `restricted` the GMC validating webhook rejects any
-  `privileged: true` worker container outright, and PSA would reject the
-  pod even if the webhook were bypassed (PSA is the backstop on both
-  paths). The `privileged` profile is the *only* one that admits it. See
-  [Security § Privileged worker containers](../design/05-security.md#privileged-worker-containers-are-admitted-only-under-the-privileged-profile).
-- **`privileged` is gated twice.** Selecting it is necessary but not
-  sufficient: the namespace must also be labelled
-  `actions-gateway.github.com/privileged-profile: allowed` by a platform
-  administrator (a tenant cannot self-grant it), and an update that lowers
-  rank into `privileged` needs the
-  `actions-gateway.github.com/allow-profile-downgrade` annotation. See
-  [Privileged eligibility is a platform decision](../design/05-security.md#privileged-eligibility-is-a-platform-decision)
-  and the
-  [tenant-onboarding privileged checklist](tenant-onboarding.md).
-- **The security trade-off.** A privileged container is effectively root on
-  the node's kernel: a container escape escapes to the *host*, breaking the
-  cross-tenant isolation the per-tenant model promises. Container-escape
-  risk is High by design — admission imposes no restrictions.
-- **Steer away from it.** BuildKit-rootless or Kaniko cover the vast
-  majority of `docker build` needs at `baseline` with no privileged
-  container; Sysbox covers the cases that genuinely need an inner daemon.
+- **Required profile:** `privileged`, and nothing less.
+  Under `baseline` and `restricted` the GMC validating webhook rejects any `privileged: true` worker container outright, and PSA would reject the pod even if the webhook were bypassed (PSA is the backstop on both paths).
+  The `privileged` profile is the *only* one that admits it.
+  See [Security § Privileged worker containers](../design/05-security.md#privileged-worker-containers-are-admitted-only-under-the-privileged-profile).
+- **`privileged` is gated twice.** Selecting it is necessary but not sufficient: the namespace must also be labelled `actions-gateway.github.com/privileged-profile: allowed` by a platform administrator (a tenant cannot self-grant it), and an update that lowers rank into `privileged` needs the `actions-gateway.github.com/allow-profile-downgrade` annotation.
+  See [Privileged eligibility is a platform decision](../design/05-security.md#privileged-eligibility-is-a-platform-decision) and the [tenant-onboarding privileged checklist](tenant-onboarding.md).
+- **The security trade-off.** A privileged container is effectively root on the node's kernel: a container escape escapes to the *host*, breaking the cross-tenant isolation the per-tenant model promises.
+  Container-escape risk is High by design — admission imposes no restrictions.
+- **Steer away from it.** BuildKit-rootless or Kaniko cover the vast majority of `docker build` needs at `baseline` with no privileged container; Sysbox covers the cases that genuinely need an inner daemon.
   Reach for plain privileged DinD only when none of those fit.
-- **If you must, add a sandbox runtime.** Pair `privileged` with
-  `runtimeClassName: kata-containers` (or `gvisor`) so the privileged
-  workload escapes only into a microVM/sandbox kernel, not the host. This
-  pattern is documented in
-  [Security § Pairing privileged with a sandbox runtime](../design/05-security.md#pairing-privileged-with-a-sandbox-runtime)
-  and the runtime trade-offs in
-  [Appendix B](../design/appendix-b-worker-isolation.md).
+- **If you must, add a sandbox runtime.** Pair `privileged` with `runtimeClassName: kata-containers` (or `gvisor`) so the privileged workload escapes only into a microVM/sandbox kernel, not the host.
+  This pattern is documented in [Security § Pairing privileged with a sandbox runtime](../design/05-security.md#pairing-privileged-with-a-sandbox-runtime) and the runtime trade-offs in [Appendix B](../design/appendix-b-worker-isolation.md).
 
 ## Approach 5 — Kata Containers (micro-VM DinD, no privileged container)
 
-When a workload genuinely needs an inner Docker daemon (`docker:dind`,
-nested containers, `kind`) and you want a real machine boundary around it,
-[Kata Containers](https://katacontainers.io/) runs the whole pod inside a
-per-pod Kernel-based Virtual Machine (KVM) micro-VM, selected with a
-`RuntimeClass`. Like Sysbox it needs **no** `privileged: true` container —
-and the isolation is a guest kernel, not a shared one, which is why it is
-the right fit for GAG's untrusted-PR threat model.
+When a workload genuinely needs an inner Docker daemon (`docker:dind`, nested containers, `kind`) and you want a real machine boundary around it, [Kata Containers](https://katacontainers.io/) runs the whole pod inside a per-pod Kernel-based Virtual Machine (KVM) micro-VM, selected with a `RuntimeClass`.
+Like Sysbox it needs **no** `privileged: true` container — and the isolation is a guest kernel, not a shared one, which is why it is the right fit for GAG's untrusted-PR threat model.
 
 - **Recommended profile:** `privileged` namespace label, unprivileged pod.
-  The pod sets `runtimeClassName: kata-qemu` and runs `dockerd` as a
-  normal daemon inside the guest VM — no privileged flag, no host socket
-  mount; a container escape lands in a throwaway guest kernel, not on the
-  node. The daemon does still need capability adds (`SYS_ADMIN`,
-  `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`, `NET_RAW`) that exceed the PSS
-  **baseline** allowlist, and PSA cannot see the VM boundary — so the
-  namespace needs the platform-granted `privileged` profile, with the pod
-  shape pinned by a platform-owned `ClusterRunnerTemplate` (details in
-  [Kata DinD / image-build workloads](kata-dind-workloads.md#why-this-matters-for-gag)).
-- **Node prerequisite:** the runtime needs `/dev/kvm`, which on a managed
-  cloud means a **nested-virtualization** node pool on a supporting machine
-  family (on Google Cloud: N1/N2/N2D/C2/C2D, **not** E2 or the GPU
-  families; **not** GKE Autopilot). Bare metal needs no nested virt.
-- **Setup is cluster-admin:** install the Kata runtime (DaemonSet) on the
-  eligible nodes and create the `kata-qemu` `RuntimeClass`; GAG's
-  controllers never install runtime handlers, they only honour a
-  tenant-set `runtimeClassName`.
-- **Full how-to:** node prerequisites, the DaemonSet + `RuntimeClass`
-  install, the worker `podTemplate` field, and the security rationale are
-  in [Kata DinD / image-build workloads](kata-dind-workloads.md). Prefer
-  this over Approach 4 whenever the daemon is genuinely required.
+  The pod sets `runtimeClassName: kata-qemu` and runs `dockerd` as a normal daemon inside the guest VM — no privileged flag, no host socket mount; a container escape lands in a throwaway guest kernel, not on the node.
+  The daemon does still need capability adds (`SYS_ADMIN`, `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`, `NET_RAW`) that exceed the PSS **baseline** allowlist, and PSA cannot see the VM boundary — so the namespace needs the platform-granted `privileged` profile, with the pod shape pinned by a platform-owned `ClusterRunnerTemplate` (details in [Kata DinD / image-build workloads](kata-dind-workloads.md#why-this-matters-for-gag)).
+- **Node prerequisite:** the runtime needs `/dev/kvm`, which on a managed cloud means a **nested-virtualization** node pool on a supporting machine family (on Google Cloud: N1/N2/N2D/C2/C2D, **not** E2 or the GPU families; **not** GKE Autopilot).
+  Bare metal needs no nested virt.
+- **Setup is cluster-admin:** install the Kata runtime (DaemonSet) on the eligible nodes and create the `kata-qemu` `RuntimeClass`; GAG's controllers never install runtime handlers, they only honour a tenant-set `runtimeClassName`.
+- **Full how-to:** node prerequisites, the DaemonSet + `RuntimeClass` install, the worker `podTemplate` field, and the security rationale are in [Kata DinD / image-build workloads](kata-dind-workloads.md).
+  Prefer this over Approach 4 whenever the daemon is genuinely required.
 
 ## Sidecar containers must be native sidecars (Q249)
 
-Several approaches above run the build engine as a **sidecar container** — a
-`docker:dind` daemon (Approach 4), a `moby/buildkit:*-rootless` sidecar
-(Approach 1), or any long-running helper alongside the runner container. How
-you declare that sidecar decides whether the worker pod can ever finish.
+Several approaches above run the build engine as a **sidecar container** — a `docker:dind` daemon (Approach 4), a `moby/buildkit:*-rootless` sidecar (Approach 1), or any long-running helper alongside the runner container.
+How you declare that sidecar decides whether the worker pod can ever finish.
 
-A Kubernetes pod terminates only once **every** regular `spec.containers[]`
-entry has exited. A build sidecar such as `dockerd` runs forever, so if you
-declare it as a **regular container** the pod never reaches `Completed` after
-the runner container exits — it lingers, and the AGC keeps counting the
-runner slot against the `RunnerSet`'s `maxWorkers`. Under a concurrent matrix
-the pool strands (the same failure class as a pod stuck Pending). **Declare
-long-running build sidecars as native sidecars instead:**
+A Kubernetes pod terminates only once **every** regular `spec.containers[]` entry has exited.
+A build sidecar such as `dockerd` runs forever, so if you declare it as a **regular container** the pod never reaches `Completed` after the runner container exits — it lingers, and the AGC keeps counting the runner slot against the `RunnerSet`'s `maxWorkers`.
+Under a concurrent matrix the pool strands (the same failure class as a pod stuck Pending). **Declare long-running build sidecars as native sidecars instead:**
 
 ```yaml
 spec:
@@ -239,22 +134,12 @@ spec:
           image: my-runner:latest
 ```
 
-**How GAG surfaces a misconfiguration.** When a `RunnerTemplate` /
-`ClusterRunnerTemplate` carries a regular (non-native) sidecar, GAG warns —
-it never blocks:
+**How GAG surfaces a misconfiguration.** When a `RunnerTemplate` / `ClusterRunnerTemplate` carries a regular (non-native) sidecar, GAG warns — it never blocks:
 
-- **At `kubectl apply`** the validating webhook prints a non-blocking
-  `Warning:` naming the sidecar (the template is still created).
-- **On the `RunnerSet`** the advisory `PossibleReapBlockingSidecar=True`
-  condition is set (it does **not** gate `Ready`), and the
-  `actions_gateway_reap_blocking_sidecar_templates` gauge rises — see
-  [observability](observability-metrics.md#full-metrics-reference).
+- **At `kubectl apply`** the validating webhook prints a non-blocking `Warning:` naming the sidecar (the template is still created).
+- **On the `RunnerSet`** the advisory `PossibleReapBlockingSidecar=True` condition is set (it does **not** gate `Ready`), and the `actions_gateway_reap_blocking_sidecar_templates` gauge rises — see [observability](observability-metrics.md#full-metrics-reference).
 
-**Opt-out for sidecars you know exit cleanly.** If a sidecar genuinely
-terminates on its own when the job ends (so it never blocks reaping), silence
-all three outlets for it by naming it in the template's annotation — a
-comma-separated list, not a blanket boolean, so a newly added, unacknowledged
-sidecar still warns:
+**Opt-out for sidecars you know exit cleanly.** If a sidecar genuinely terminates on its own when the job ends (so it never blocks reaping), silence all three outlets for it by naming it in the template's annotation — a comma-separated list, not a blanket boolean, so a newly added, unacknowledged sidecar still warns:
 
 ```yaml
 metadata:
@@ -262,9 +147,7 @@ metadata:
     actions-gateway.com/self-exiting-sidecars: "metrics-agent,log-shipper"
 ```
 
-Prefer converting to a native sidecar over acknowledging: the acknowledgment
-asserts an exit behaviour you must keep true, whereas a native sidecar makes
-Kubernetes enforce clean teardown for you.
+Prefer converting to a native sidecar over acknowledging: the acknowledgment asserts an exit behaviour you must keep true, whereas a native sidecar makes Kubernetes enforce clean teardown for you.
 
 ## Decision table
 
@@ -282,34 +165,21 @@ Pick the topmost row that matches your build need.
 
 ## Registry authentication for all approaches
 
-Every approach needs registry credentials to pull base images and push the
-result. Mount them as a file, never an environment variable:
+Every approach needs registry credentials to pull base images and push the result.
+Mount them as a file, never an environment variable:
 
-- Mount a Docker `config.json` (e.g. from a Kubernetes Secret of type
-  `kubernetes.io/dockerconfigjson`) into the build container and point the
-  tool at it (`DOCKER_CONFIG` directory, BuildKit secret, or Kaniko's
-  default `~/.docker/config.json`). Passing a token through an environment
-  variable leaks it into process listings, logs, and child processes — see
-  the secrets-handling guidance in
-  [Security operations](security-operations.md).
-- Prefer short-lived, scoped registry tokens over long-lived credentials,
-  and scope each tenant's pull/push permissions to the registry paths that
-  tenant owns.
+- Mount a Docker `config.json` (e.g. from a Kubernetes Secret of type `kubernetes.io/dockerconfigjson`) into the build container and point the tool at it (`DOCKER_CONFIG` directory, BuildKit secret, or Kaniko's default `~/.docker/config.json`).
+  Passing a token through an environment variable leaks it into process listings, logs, and child processes — see the secrets-handling guidance in [Security operations](security-operations.md).
+- Prefer short-lived, scoped registry tokens over long-lived credentials, and scope each tenant's pull/push permissions to the registry paths that tenant owns.
 
 For pulling the *worker image itself* from a private registry (e.g.
-Harbor) with digest pinning, see
-[Tenant onboarding](tenant-onboarding.md) and
-[Security § Supply-chain](../design/05-security.md).
+Harbor) with digest pinning, see [Tenant onboarding](tenant-onboarding.md) and [Security § Supply-chain](../design/05-security.md).
 
 ## Mixing build and non-build workloads
 
-PSA enforcement is namespace-scoped: every pod in a tenant namespace is
-evaluated against the same profile. A tenant that needs both a hardened
-default and a privileged (or Sysbox) build lane deploys **two
-`ActionsGateway` CRs in two namespaces** — for example a `baseline`
-gateway for tests and a separate build gateway — and routes jobs with
-`runs-on:` labels. The reasoning is in
-[Security § Mixing privileged and non-privileged workloads](../design/05-security.md#mixing-privileged-and-non-privileged-workloads).
+PSA enforcement is namespace-scoped: every pod in a tenant namespace is evaluated against the same profile.
+A tenant that needs both a hardened default and a privileged (or Sysbox) build lane deploys **two `ActionsGateway` CRs in two namespaces** — for example a `baseline` gateway for tests and a separate build gateway — and routes jobs with `runs-on:` labels.
+The reasoning is in [Security § Mixing privileged and non-privileged workloads](../design/05-security.md#mixing-privileged-and-non-privileged-workloads).
 
 ## Related
 

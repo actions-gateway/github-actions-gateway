@@ -1,6 +1,8 @@
 # scripts/
 
-Developer and CI helper scripts, grouped by **blast radius** — which gate consumes the script. Nothing lives at the top level, so "which gate cares about this?" has to be answered when a script is added rather than defaulting to a catch-all. Every CI path filter that names a script is a plain prefix glob over one of these directories, and [`ci/check-path-filters.sh`](ci/check-path-filters.sh) holds them to it (Q571).
+Developer and CI helper scripts, grouped by **blast radius** — which gate consumes the script.
+Nothing lives at the top level, so "which gate cares about this?" has to be answered when a script is added rather than defaulting to a catch-all.
+Every CI path filter that names a script is a plain prefix glob over one of these directories, and [`ci/check-path-filters.sh`](ci/check-path-filters.sh) holds them to it (Q571).
 
 | Directory | Holds | Gated by |
 |---|---|---|
@@ -18,15 +20,22 @@ Developer and CI helper scripts, grouped by **blast radius** — which gate cons
 | [`lib/`](#lib--sourced-helpers-no-entry-points) | sourced helpers, no entry points | every group |
 | [`updatecli/`](#updatecli--version-pin-resolvers) | version-pin resolvers for `updatecli.yml` | `updatecli.yml` |
 
-A `*-test.sh` sits beside its subject, so it inherits its subject's gate: [`docs/source-links-hook-test.sh`](docs/source-links-hook-test.sh) belongs to the docs site and cannot trigger e2e. It is usually named in its subject's row rather than given one of its own, since what it asserts is a property of the subject.
+A `*-test.sh` sits beside its subject, so it inherits its subject's gate: [`docs/source-links-hook-test.sh`](docs/source-links-hook-test.sh) belongs to the docs site and cannot trigger e2e.
+It is usually named in its subject's row rather than given one of its own, since what it asserts is a property of the subject.
 
-Every script here must appear somewhere on this page, in its own row or named in the row of the script it belongs to, and [`docs/check-script-docs.sh`](docs/check-script-docs.sh) fails when one does not (Q688). An entry earns its place by saying which gate runs the script and what would go wrong without it; repeating the filename tells a reader nothing `ls` would not.
+Every script here must appear somewhere on this page, in its own row or named in the row of the script it belongs to, and [`docs/check-script-docs.sh`](docs/check-script-docs.sh) fails when one does not (Q688).
+An entry earns its place by saying which gate runs the script and what would go wrong without it; repeating the filename tells a reader nothing `ls` would not.
 
-All scripts follow the [repo bash conventions](../docs/development/bash-style.md): `set -euo pipefail`, `local` for function variables, `[[ ]]` conditionals, quoted expansions, `trap` cleanup for background processes — see the doc for the full list. Whatever more than one gate shares is sourced from [`lib/`](#lib--sourced-helpers-no-entry-points). Every script here is linted by `make shellcheck` ([ci/shellcheck-scripts.sh](ci/shellcheck-scripts.sh)) as soon as the file exists — tracked or not — so opting a scratch script out means gitignoring it (write it under the gitignored `tmp/` at the repo root), not merely leaving it untracked. The same holds for the doc-link, conflict-marker and plan-ref gates, which share that file selection via `git_candidates` (Q619).
+All scripts follow the [repo bash conventions](../docs/development/bash-style.md): `set -euo pipefail`, `local` for function variables, `[[ ]]` conditionals, quoted expansions, `trap` cleanup for background processes — see the doc for the full list.
+Whatever more than one gate shares is sourced from [`lib/`](#lib--sourced-helpers-no-entry-points).
+Every script here is linted by `make shellcheck` ([ci/shellcheck-scripts.sh](ci/shellcheck-scripts.sh)) as soon as the file exists — tracked or not — so opting a scratch script out means gitignoring it (write it under the gitignored `tmp/` at the repo root), not merely leaving it untracked.
+The same holds for the doc-link, conflict-marker and plan-ref gates, which share that file selection via `git_candidates` (Q619).
 
 The root `Makefile` keeps recipes as thin target→script wiring so the logic is shellcheck-covered; parameters are env-overridable and documented in each script's header.
 
-A gate whose logic outgrows shell moves its core to Go in [`devtools/`](../devtools/), the first-party tooling module, keeping the script here as the entry point so the gate map stays in one place. Packages there mirror these directories — `devtools/ci/pathfilters/` backs [`ci/check-path-filters.sh`](ci/check-path-filters.sh). The module is deliberately outside `go.work`; the reasoning and the wiring a new one needs are in [go-workspaces.md](../docs/development/go-workspaces.md#first-party-go-tooling-stays-outside-the-workspace).
+A gate whose logic outgrows shell moves its core to Go in [`devtools/`](../devtools/), the first-party tooling module, keeping the script here as the entry point so the gate map stays in one place.
+Packages there mirror these directories — `devtools/ci/pathfilters/` backs [`ci/check-path-filters.sh`](ci/check-path-filters.sh).
+The module is deliberately outside `go.work`; the reasoning and the wiring a new one needs are in [go-workspaces.md](../docs/development/go-workspaces.md#first-party-go-tooling-stays-outside-the-workspace).
 
 ## `ci/` — repo-hygiene gates
 
@@ -83,7 +92,8 @@ A gate whose logic outgrows shell moves its core to Go in [`devtools/`](../devto
 
 ## `fetch/` — the download / retry family
 
-Three entry points by what they retry — an arbitrary command, a `curl`, a `docker pull` — plus the two pre-pull cachers built on the last. Every heavy tier calls at least one, which is why `scripts/fetch/**` appears in the e2e, security-scan, manifest-validate and autoscaler-drift filters.
+Three entry points by what they retry — an arbitrary command, a `curl`, a `docker pull` — plus the two pre-pull cachers built on the last.
+Every heavy tier calls at least one, which is why `scripts/fetch/**` appears in the e2e, security-scan, manifest-validate and autoscaler-drift filters.
 
 | Script | Purpose |
 |---|---|
@@ -191,9 +201,13 @@ Nothing in CI gates on this group; it is tooling for an interactive dev session.
 
 ## `dogfood/` — GKE dogfood tenant tooling
 
-These drive a live, billable GKE cluster, so no gate ever executes one: they are run by hand or by the release gate. What CI does run is their assertions: eleven `*-test.sh` here run under `make scripts-test`, and so under `make check`, against stubbed `gcloud`/`kubectl`/`gh`. That is deliberate, because every failure mode below is silent and costs money in one direction or the other. The only CI reference to the group's files is `dockerfile-lint.yml`, over [runner/Dockerfile](dogfood/runner/Dockerfile).
+These drive a live, billable GKE cluster, so no gate ever executes one: they are run by hand or by the release gate.
+What CI does run is their assertions: eleven `*-test.sh` here run under `make scripts-test`, and so under `make check`, against stubbed `gcloud`/`kubectl`/`gh`.
+That is deliberate, because every failure mode below is silent and costs money in one direction or the other.
+The only CI reference to the group's files is `dockerfile-lint.yml`, over [runner/Dockerfile](dogfood/runner/Dockerfile).
 
-The shared helpers sit in a nested [`lib/`](dogfood/lib/) rather than the tree-wide [`lib/`](#lib--sourced-helpers-no-entry-points) because every one of them reads or writes dogfood cluster state. The three tests covering a `lib/` helper sit at the group root rather than beside their subject, since a sourced helper's behaviour is only reachable through a caller.
+The shared helpers sit in a nested [`lib/`](dogfood/lib/) rather than the tree-wide [`lib/`](#lib--sourced-helpers-no-entry-points) because every one of them reads or writes dogfood cluster state.
+The three tests covering a `lib/` helper sit at the group root rather than beside their subject, since a sourced helper's behaviour is only reachable through a caller.
 
 | Script | Purpose |
 |---|---|
@@ -218,7 +232,9 @@ The shared helpers sit in a nested [`lib/`](dogfood/lib/) rather than the tree-w
 
 ## `lib/` — sourced helpers, no entry points
 
-Sourced across the tree, never executed, and never a gate of their own. Callers set `REPO_ROOT` and have `set -euo pipefail` active before sourcing. A helper only one group calls belongs in that group instead, which is why the dogfood cluster-state helpers live in [`dogfood/lib/`](#dogfood--gke-dogfood-tenant-tooling).
+Sourced across the tree, never executed, and never a gate of their own.
+Callers set `REPO_ROOT` and have `set -euo pipefail` active before sourcing.
+A helper only one group calls belongs in that group instead, which is why the dogfood cluster-state helpers live in [`dogfood/lib/`](#dogfood--gke-dogfood-tenant-tooling).
 
 | Script | Purpose |
 |---|---|
@@ -229,7 +245,9 @@ Sourced across the tree, never executed, and never a gate of their own. Callers 
 
 ## `updatecli/` — version-pin resolvers
 
-Shell sources for the manifests under [`updatecli.d/`](../updatecli.d/), each printing one value with no trailing newline so updatecli uses it verbatim. They cover the pins Dependabot cannot track: a version and its checksum held in a workflow env var or a script rather than in a package manifest. Bumping the *tested* Kubernetes version is reviewed, so these open a PR and never auto-merge.
+Shell sources for the manifests under [`updatecli.d/`](../updatecli.d/), each printing one value with no trailing newline so updatecli uses it verbatim.
+They cover the pins Dependabot cannot track: a version and its checksum held in a workflow env var or a script rather than in a package manifest.
+Bumping the *tested* Kubernetes version is reviewed, so these open a PR and never auto-merge.
 
 | Script | Purpose |
 |---|---|
@@ -241,6 +259,11 @@ Shell sources for the manifests under [`updatecli.d/`](../updatecli.d/), each pr
 
 ## Per-clone setup
 
-The tracked git hooks live in [`.githooks/`](../.githooks/). Install them with `make hooks` (or [dev/setup.sh](dev/setup.sh), which does it for you); the pre-commit hook runs a sub-second gate (gofmt on staged Go files, plus `docs/lint-backlog.sh --staged` when `docs/STATUS.md` is staged — format rules and the isolated-commit requirement, as the index sees it). Bypass a single commit with `git commit --no-verify`. The commit-level half of that isolation rule, which an `--amend` can slip past the index check, is [check-status-isolation.sh](docs/check-status-isolation.sh).
+The tracked git hooks live in [`.githooks/`](../.githooks/).
+Install them with `make hooks` (or [dev/setup.sh](dev/setup.sh), which does it for you); the pre-commit hook runs a sub-second gate (gofmt on staged Go files, plus `docs/lint-backlog.sh --staged` when `docs/STATUS.md` is staged — format rules and the isolated-commit requirement, as the index sees it).
+Bypass a single commit with `git commit --no-verify`.
+The commit-level half of that isolation rule, which an `--amend` can slip past the index check, is [check-status-isolation.sh](docs/check-status-isolation.sh).
 
-The `docs/STATUS.md` merge driver is the other per-clone `git config`: `make merge-driver` (also run by [dev/setup.sh](dev/setup.sh)). The committed half is the `merge=backlog` line in [`.gitattributes`](../.gitattributes); git refuses to let a tracked file supply the driver's command, so the config is opt-in per clone and the attribute is a no-op without it. A clone that installed the driver before Q571 has the old `scripts/git-merge-status.sh` path in its config and must re-run `make merge-driver`.
+The `docs/STATUS.md` merge driver is the other per-clone `git config`: `make merge-driver` (also run by [dev/setup.sh](dev/setup.sh)).
+The committed half is the `merge=backlog` line in [`.gitattributes`](../.gitattributes); git refuses to let a tracked file supply the driver's command, so the config is opt-in per clone and the attribute is a no-op without it.
+A clone that installed the driver before Q571 has the old `scripts/git-merge-status.sh` path in its config and must re-run `make merge-driver`.

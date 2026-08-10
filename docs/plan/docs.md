@@ -2,7 +2,8 @@
 
 ## Status at a glance
 
-Last refreshed 2026-08-01. All Phase 1, Phase 2, and Phase 3 items shipped except the Grafana dashboards half of 3.2 ([Q568](../STATUS.md#Q568)).
+Last refreshed 2026-08-01.
+All Phase 1, Phase 2, and Phase 3 items shipped except the Grafana dashboards half of 3.2 ([Q568](../STATUS.md#Q568)).
 
 | # | Item | File | Status |
 |---|---|---|---|
@@ -28,13 +29,17 @@ Last refreshed 2026-08-01. All Phase 1, Phase 2, and Phase 3 items shipped excep
 
 ### Open work
 
-1. **3.2** — Alerting/dashboards reference. Deferred until a real Prometheus setup exists (💤 in STATUS.md queue).
+1. **3.2** — Alerting/dashboards reference.
+   Deferred until a real Prometheus setup exists (💤 in STATUS.md queue).
 
 ---
 
 ## Current state
 
-The design doc suite (16 files) covers architecture, API contracts, security, testing, and implementation planning well. Critical gaps are in production operations: there is no troubleshooting guide, no production runbook, and no upgrade/disaster recovery procedures. Several existing docs have incomplete failure-path coverage and lack worked examples. A handful of cross-reference and API contract inconsistencies need to be resolved before the system goes into production use.
+The design doc suite (16 files) covers architecture, API contracts, security, testing, and implementation planning well.
+Critical gaps are in production operations: there is no troubleshooting guide, no production runbook, and no upgrade/disaster recovery procedures.
+Several existing docs have incomplete failure-path coverage and lack worked examples.
+A handful of cross-reference and API contract inconsistencies need to be resolved before the system goes into production use.
 
 ---
 
@@ -55,7 +60,8 @@ Understanding who reads what determines scope and priority.
 
 ## Phase 1 — Fill critical operational gaps
 
-These are blocking for production readiness. None of this content exists anywhere.
+These are blocking for production readiness.
+None of this content exists anywhere.
 
 ### 1.1 Troubleshooting guide — `docs/operations/troubleshooting.md`
 
@@ -94,7 +100,8 @@ Reference `docs/operations/observability.md` and `docs/design/appendix-a-capacit
 
 Audience: platform engineer.
 
-The upgrade strategy is described in `docs/design/02-architecture.md §2.6` but only as intent. This doc translates that into steps:
+The upgrade strategy is described in `docs/design/02-architecture.md §2.6` but only as intent.
+This doc translates that into steps:
 
 - Pre-upgrade validation checklist
 - Step-by-step: GMC upgrade (CRD migration, operator rollout)
@@ -112,14 +119,17 @@ These are not blocking but reduce clarity and correctness of what already exists
 
 ### 2.1 Fix the `maxEvictionRetries` inconsistency
 
-`docs/design/02-architecture.md §2.2` describes `maxEvictionRetries` per RunnerGroup. `docs/design/03-api-contracts.md §3.1` RunnerGroupSpec does not include this field. One of these is wrong. Resolve it:
+`docs/design/02-architecture.md §2.2` describes `maxEvictionRetries` per RunnerGroup. `docs/design/03-api-contracts.md §3.1` RunnerGroupSpec does not include this field.
+One of these is wrong.
+Resolve it:
 
 - If the field exists in code: add it to the CRD spec in §3.1 with type, default, and semantics.
 - If it doesn't exist yet: remove the reference from §2.2 or mark it as planned.
 
 ### 2.2 Add failure paths to `docs/design/04-operational-flows.md`
 
-The two sequence diagrams cover only the happy path. Add a third diagram or annotated variants covering:
+The two sequence diagrams cover only the happy path.
+Add a third diagram or annotated variants covering:
 
 - Provisioning failure (GMC cannot create RBAC → condition set, retry behavior)
 - Job acquisition failure (broker returns error → session loop behavior)
@@ -128,7 +138,8 @@ The two sequence diagrams cover only the happy path. Add a third diagram or anno
 
 ### 2.3 Add worked examples to `docs/design/appendix-e-capacity-planning.md`
 
-The decision tree and formulas are good but abstract. Add two or three concrete scenarios:
+The decision tree and formulas are good but abstract.
+Add two or three concrete scenarios:
 
 - "Team with 3 RunnerGroups, 20 concurrent GPU jobs at peak" — what to set for `maxListeners`, `maxWorkers`, `namespaceQuota`, and when to shard
 - "CPU-only team, 100 jobs/day, bursty (10 concurrent max)" — minimal configuration
@@ -136,7 +147,8 @@ The decision tree and formulas are good but abstract. Add two or three concrete 
 
 ### 2.4 Expand `docs/operations/observability.md`
 
-Current state is a one-page metrics list. Add:
+Current state is a one-page metrics list.
+Add:
 
 - **Alert rules** — recommended Prometheus alerting rules for the key metrics (threshold, `for` duration, severity)
 - **Symptom → metric mapping** — "jobs are slow": check `pod_creation_latency_seconds`; "jobs randomly cancelled": check `renewjob_errors_total`; etc.
@@ -145,25 +157,30 @@ Current state is a one-page metrics list. Add:
 
 ### 2.5 Add credential rotation to `docs/getting-started.md`
 
-Currently the getting-started doc only covers initial setup. Add a section: "Rotating GitHub App credentials" — update the Secret in-place and describe what the AGC does (detects Secret change, refreshes token on next interval vs. requires restart).
+Currently the getting-started doc only covers initial setup.
+Add a section: "Rotating GitHub App credentials" — update the Secret in-place and describe what the AGC does (detects Secret change, refreshes token on next interval vs. requires restart).
 
 ### 2.6 Note the `DefaultWorkerImage` constant in `docs/design/03-api-contracts.md`
 
-§3.1 mentions it is a compile-time constant but gives no way to discover or override it. Add: the name of the constant, where it is defined, and how to override it (build flag or env var, whichever applies).
+§3.1 mentions it is a compile-time constant but gives no way to discover or override it.
+Add: the name of the constant, where it is defined, and how to override it (build flag or env var, whichever applies).
 
 ### 2.7 Fix the HPA silent-failure note in `docs/design/03-api-contracts.md`
 
-Add a callout in ProxyConfig: if `resources.requests.cpu` is unset or zero, the HPA cannot compute utilization and will silently stop scaling. This is the most dangerous misconfiguration and currently undocumented.
+Add a callout in ProxyConfig: if `resources.requests.cpu` is unset or zero, the HPA cannot compute utilization and will silently stop scaling.
+This is the most dangerous misconfiguration and currently undocumented.
 
 ### 2.8 Add a reading-path guide to `docs/design/README.md`
 
-Below the TOC, add: "Reading paths by role" — four bullet points mapping architect / operator / security engineer / developer to the recommended reading order for their concerns. Also add Appendices A–E to the main TOC (currently only B and D appear there).
+Below the TOC, add: "Reading paths by role" — four bullet points mapping architect / operator / security engineer / developer to the recommended reading order for their concerns.
+Also add Appendices A–E to the main TOC (currently only B and D appear there).
 
 ---
 
 ## Phase 3 — New reference material
 
-These expand coverage for production and compliance use. Lower urgency but high value once the system is in active use.
+These expand coverage for production and compliance use.
+Lower urgency but high value once the system is in active use.
 
 ### 3.1 Network architecture — `docs/design/network-architecture.md`
 

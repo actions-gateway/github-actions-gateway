@@ -1,9 +1,7 @@
 # actions-gateway-crds-v2
 
-Opt-in CustomResourceDefinitions for the v2 (`actions-gateway.com`) API. Each kind is
-served at two versions: **`v2beta1`** (the graduated, ScaleSet-only storage/hub
-version) and **`v2alpha1`** (still served for coexistence and the `gag-migrate`
-on-ramp).
+Opt-in CustomResourceDefinitions for the v2 (`actions-gateway.com`) API.
+Each kind is served at two versions: **`v2beta1`** (the graduated, ScaleSet-only storage/hub version) and **`v2alpha1`** (still served for coexistence and the `gag-migrate` on-ramp).
 
 | Kind | Scope | Short |
 |---|---|---|
@@ -15,15 +13,11 @@ on-ramp).
 
 ## Why a separate chart
 
-The v2 `RunnerTemplate` / `ClusterRunnerTemplate` CRDs each embed a full
-`PodTemplateSpec` and — served at both `v2beta1` and `v2alpha1` — are ~1.1 MB apiece.
-Helm stores a chart's entire release (rendered manifest **plus** a copy of the chart
-source) gzipped in a single Secret with a hard **1 MiB** limit; adding these to the
-main `actions-gateway` chart pushed it over. Shipping the v2 CRDs as their own chart
-makes v2 **opt-in** and keeps the main release small.
+The v2 `RunnerTemplate` / `ClusterRunnerTemplate` CRDs each embed a full `PodTemplateSpec` and — served at both `v2beta1` and `v2alpha1` — are ~1.1 MB apiece.
+Helm stores a chart's entire release (rendered manifest **plus** a copy of the chart source) gzipped in a single Secret with a hard **1 MiB** limit; adding these to the main `actions-gateway` chart pushed it over.
+Shipping the v2 CRDs as their own chart makes v2 **opt-in** and keeps the main release small.
 
-The rendered chart (~2.5 MB) is itself over the 1 MiB Secret limit — its release would
-store at ~1.1 MiB — so this chart is **applied from its render, not `helm install`ed**.
+The rendered chart (~2.5 MB) is itself over the 1 MiB Secret limit — its release would store at ~1.1 MiB — so this chart is **applied from its render, not `helm install`ed**.
 This is the supported, deliberate install *and* upgrade path, not a stopgap:
 
 ```sh
@@ -31,17 +25,14 @@ helm template actions-gateway-crds-v2 <chart-or-oci-ref> --namespace gmc-system 
   | kubectl apply --server-side -f -
 ```
 
-`--server-side` also avoids kubectl's 256 KB client-side apply ceiling. Re-run the
-same command to carry CRD field changes on upgrade. (The templates carry
-`helm.sh/resource-policy: keep` for operators who front this chart with a GitOps tool
-that manages a real Helm release; the `kubectl apply` path above does not create one.)
+`--server-side` also avoids kubectl's 256 KB client-side apply ceiling.
+Re-run the same command to carry CRD field changes on upgrade.
+(The templates carry `helm.sh/resource-policy: keep` for operators who front this chart with a GitOps tool that manages a real Helm release; the `kubectl apply` path above does not create one.)
 
 ## Conversion webhook
 
-Because each kind is multi-version (`v2beta1` storage/hub + `v2alpha1` spoke), every
-CRD carries a `spec.conversion` that routes the apiserver to a **conversion webhook
-hosted by the GMC** (`/convert` on the main chart's `webhook-service`). This chart
-therefore depends on the main `actions-gateway` chart and, by default, cert-manager:
+Because each kind is multi-version (`v2beta1` storage/hub + `v2alpha1` spoke), every CRD carries a `spec.conversion` that routes the apiserver to a **conversion webhook hosted by the GMC** (`/convert` on the main chart's `webhook-service`).
+This chart therefore depends on the main `actions-gateway` chart and, by default, cert-manager:
 
 | Value | Default | Purpose |
 |---|---|---|
@@ -54,18 +45,14 @@ therefore depends on the main `actions-gateway` chart and, by default, cert-mana
 
 ## Install
 
-**No helm, default `gmc-system` namespace.** Every release attaches a pre-rendered,
-cosign-signed `actions-gateway-crds-v2.yaml`; apply it straight from the release URL:
+**No helm, default `gmc-system` namespace.** Every release attaches a pre-rendered, cosign-signed `actions-gateway-crds-v2.yaml`; apply it straight from the release URL:
 
 ```bash
 kubectl apply --server-side -f \
   https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
 ```
 
-**Custom GMC namespace (or a GitOps render).** The release asset bakes in `gmc-system`
-for the conversion `clientConfig`; if the GMC runs elsewhere, render for its namespace
-(so the `clientConfig` resolves) and apply server-side — see
-[Why a separate chart](#why-a-separate-chart) for why not `helm install`:
+**Custom GMC namespace (or a GitOps render).** The release asset bakes in `gmc-system` for the conversion `clientConfig`; if the GMC runs elsewhere, render for its namespace (so the `clientConfig` resolves) and apply server-side — see [Why a separate chart](#why-a-separate-chart) for why not `helm install`:
 
 ```bash
 helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
@@ -73,12 +60,9 @@ helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actio
   | kubectl apply --server-side -f -
 ```
 
-The CRDs install and validate on Kubernetes ≥ 1.30. The `RunnerSet`
-`spec.gatewayRef.name` selectable field (KEP-4358) is declared on **`v2alpha1`** (the
-version the AGC field-selects during coexistence) and is queryable only on ≥ 1.31;
-the declaration is inert on 1.30.
+The CRDs install and validate on Kubernetes ≥ 1.30.
+The `RunnerSet` `spec.gatewayRef.name` selectable field (KEP-4358) is declared on **`v2alpha1`** (the version the AGC field-selects during coexistence) and is queryable only on ≥ 1.31; the declaration is inert on 1.30.
 
-> **Requires the GMC.** A `v2beta1`/`v2alpha1` create or read is converted through the
-> GMC's `/convert` webhook, so apply v2 objects only once the GMC is `Ready`. Once
-> `v1alpha1` is removed, the v2 CRDs are expected to fold back into the main chart.
+> **Requires the GMC.** A `v2beta1`/`v2alpha1` create or read is converted through the GMC's `/convert` webhook, so apply v2 objects only once the GMC is `Ready`.
+> Once `v1alpha1` is removed, the v2 CRDs are expected to fold back into the main chart.
 > Generated by `scripts/manifest/sync-chart-crds.sh` — do not hand-edit the templates.

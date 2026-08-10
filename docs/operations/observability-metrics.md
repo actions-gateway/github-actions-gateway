@@ -2,7 +2,9 @@
 
 > **Audience:** Platform engineer, Tenant operator
 
-Part of the [Observability](observability.md) guide. To scrape these metrics, see [Accessing metrics (scraping setup)](observability-metrics-access.md); to alert on them, see [Alerting & SLOs](observability-alerting.md). For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
+Part of the [Observability](observability.md) guide.
+To scrape these metrics, see [Accessing metrics (scraping setup)](observability-metrics-access.md); to alert on them, see [Alerting & SLOs](observability-alerting.md).
+For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
 
 ## Full Metrics Reference
 
@@ -58,108 +60,54 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 | `actions_gateway_agc_autoscaling_unavailable` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `AGCAutoscalingUnavailable=True` (Q360, §E.11): the gateway opted into managed AGC right-sizing (`agcAutoscaling`) but it cannot be satisfied — the `VerticalPodAutoscaler` CRDs are not installed (`VPACRDNotInstalled`) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped `agcResources` sizing and `Ready` is unaffected; the opt-in is simply inert until the blocker clears. `0` when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via `kubectl describe` (Q390). v2 only, emitted only on a v2 install (Q321). |
 | `actions_gateway_build_info` | Gauge | `component`, `version` | Constant `1` per running control-plane binary, following the Prometheus `*_build_info` convention (Q318). Emitted by the GMC, AGC, and proxy — `component` is `gmc`/`agc`/`proxy` and `version` is the build tag stamped into the binary (`dev` for un-stamped local builds). Not load-bearing for alerting; join it into other series to correlate the running version during an incident (worker pods carry `app.kubernetes.io/version`, but the control plane otherwise does not expose its version in metrics). |
 
-> **Reading the eviction metrics across tiers and causes.** Both `eviction_retries_total`
-> and `eviction_retries_exhausted_total` are emitted on **both** acquisition tiers, split
-> by the `tier` label (Q417), and for the **four** recovered disruptions, split by the
-> `cause` label (Q497, Q502, Q691). Detection differs across every combination — an
-> inline pod wait on classic, the owning reconciler's recovery pass on scale-set; a
-> `PodFailed`/`Evicted` phase for an eviction, a `DisruptionTarget` condition for a
-> preemption, the pod's `deletionTimestamp` at terminal publish for an external deletion,
-> a force-cancelled run plus a later worker placement for an abandonment — but they
-> share one budget, keyed by workflow run alone, so `maxEvictionRetries` caps re-runs
-> per run across the whole set rather than once per combination.
+> **Reading the eviction metrics across tiers and causes.** Both `eviction_retries_total` and `eviction_retries_exhausted_total` are emitted on **both** acquisition tiers, split by the `tier` label (Q417), and for the **four** recovered disruptions, split by the `cause` label (Q497, Q502, Q691).
+> Detection differs across every combination — an inline pod wait on classic, the owning reconciler's recovery pass on scale-set; a `PodFailed`/`Evicted` phase for an eviction, a `DisruptionTarget` condition for a preemption, the pod's `deletionTimestamp` at terminal publish for an external deletion, a force-cancelled run plus a later worker placement for an abandonment — but they share one budget, keyed by workflow run alone, so `maxEvictionRetries` caps re-runs per run across the whole set rather than once per combination.
 >
-> **The `cause` split is a diagnosis, not decoration.** A climbing `cause="eviction"`
-> rate means node pressure: memory or disk exhaustion on the nodes, and the fix is
-> capacity or worker sizing. A climbing `cause="preemption"` rate means a `priorityTiers`
-> floor is displacing more opportunistic work than the tenant sized for, and the fix is
-> tier thresholds or where the work is placed. A climbing `cause="deletion"` rate means
-> something outside the gateway is deleting live workers — node drains from upgrades or
-> autoscaler consolidation, a descheduler, or hand-run deletes — and the fix is finding
-> the deleter. A climbing `cause="abandoned"` rate means workers are not being placed at
-> all before `pendingPodDeadline` reaps them (Q691), and the fix is whatever is blocking
-> scheduling: cluster capacity, an unpullable image, or constraints no node satisfies.
+> **The `cause` split is a diagnosis, not decoration.** A climbing `cause="eviction"` rate means node pressure: memory or disk exhaustion on the nodes, and the fix is capacity or worker sizing.
+> A climbing `cause="preemption"` rate means a `priorityTiers` floor is displacing more opportunistic work than the tenant sized for, and the fix is tier thresholds or where the work is placed.
+> A climbing `cause="deletion"` rate means something outside the gateway is deleting live workers — node drains from upgrades or autoscaler consolidation, a descheduler, or hand-run deletes — and the fix is finding the deleter.
+> A climbing `cause="abandoned"` rate means workers are not being placed at all before `pendingPodDeadline` reaps them (Q691), and the fix is whatever is blocking scheduling: cluster capacity, an unpullable image, or constraints no node satisfies.
 > Reading one as another sends an operator hunting in entirely the wrong place.
 >
-> A flat zero on `tier="scaleset"` while workers are visibly being disrupted means the
-> recovery is not firing, not that nothing happened. Check
-> `kubectl get pods --field-selector=status.phase=Failed` for `Evicted` pods, then
-> `actions_gateway_eviction_recovery_identity_unknown_total` and the
-> [runbook](troubleshooting.md#evicted-scale-set-jobs-are-not-re-run-automatically).
-> For preemption specifically, see
-> [A Preempted Worker's Job Is Not Re-Run](troubleshooting.md#a-preempted-workers-job-is-not-re-run)
-> — its scale-set path has a time limit the eviction path does not.
+> A flat zero on `tier="scaleset"` while workers are visibly being disrupted means the recovery is not firing, not that nothing happened.
+> Check `kubectl get pods --field-selector=status.phase=Failed` for `Evicted` pods, then `actions_gateway_eviction_recovery_identity_unknown_total` and the [runbook](troubleshooting.md#evicted-scale-set-jobs-are-not-re-run-automatically).
+> For preemption specifically, see [A Preempted Worker's Job Is Not Re-Run](troubleshooting.md#a-preempted-workers-job-is-not-re-run) — its scale-set path has a time limit the eviction path does not.
 
-> **Proxy conditions on a v2 deploy.** On a v2 install (the opt-in
-> `actions-gateway-crds-v2` CRDs), the GMC also counts v2 `ActionsGateway`s in
-> `managed_gateways` and reflects each `EgressProxy`'s proxy conditions in
-> `proxy_quota_pressure`, `proxy_quota_exceeded`, and `egress_rules_stale` — the
-> EgressProxy reconciler sets those conditions with the same semantics as the v1
-> `ActionsGateway` (a namespace-`ResourceQuota`-bounded, HPA-scaled pool whose default
-> CIDR-mode `NetworkPolicy` is refreshed from the shared GitHub IP-range cache) (Q320).
-> The v1 and v2 series share one metric family; the `name` label distinguishes them by
-> object — both kinds carry the same `namespace`/`name` labels, so nothing about the v1
-> series changes. The worker-capacity gauges below take the other route, and the note on
-> them says why.
+> **Proxy conditions on a v2 deploy.** On a v2 install (the opt-in `actions-gateway-crds-v2` CRDs), the GMC also counts v2 `ActionsGateway`s in `managed_gateways` and reflects each `EgressProxy`'s proxy conditions in `proxy_quota_pressure`, `proxy_quota_exceeded`, and `egress_rules_stale` — the EgressProxy reconciler sets those conditions with the same semantics as the v1 `ActionsGateway` (a namespace-`ResourceQuota`-bounded, HPA-scaled pool whose default CIDR-mode `NetworkPolicy` is refreshed from the shared GitHub IP-range cache) (Q320).
+> The v1 and v2 series share one metric family; the `name` label distinguishes them by object — both kinds carry the same `namespace`/`name` labels, so nothing about the v1 series changes.
+> The worker-capacity gauges below take the other route, and the note on them says why.
 >
-> `github_egress_incomplete` is the exception among the proxy gauges: its condition
-> exists only on the `EgressProxy` — v1 has no twin — so the family is emitted only on
-> a v2 install (Q537).
+> `github_egress_incomplete` is the exception among the proxy gauges: its condition exists only on the `EgressProxy` — v1 has no twin — so the family is emitted only on a v2 install (Q537).
 >
-> **Worker-capacity conditions on v2 `RunnerSet`s.** The `WorkerQuotaPressure`,
-> `WorkerQuotaExceeded`, and `WorkersUnschedulable` conditions are also set on a v2
-> `RunnerSet` (Q303) with the same semantics as the v1 `RunnerGroup`, so a stalled
-> set surfaces the capacity blocker in `.status.conditions` instead of only a rising
-> `pendingJobs` with `Ready=True`. Each has its own gauge — the
-> `actions_gateway_runnerset_*` triplet above (Q319) — so a `RunnerSet` is alertable
-> without scraping CRD conditions through kube-state-metrics.
+> **Worker-capacity conditions on v2 `RunnerSet`s.** The `WorkerQuotaPressure`, `WorkerQuotaExceeded`, and `WorkersUnschedulable` conditions are also set on a v2 `RunnerSet` (Q303) with the same semantics as the v1 `RunnerGroup`, so a stalled set surfaces the capacity blocker in `.status.conditions` instead of only a rising `pendingJobs` with `Ready=True`.
+> Each has its own gauge — the `actions_gateway_runnerset_*` triplet above (Q319) — so a `RunnerSet` is alertable without scraping CRD conditions through kube-state-metrics.
 >
-> **`WorkerCapacityDeclined` is gauged too, and differs in two ways** (Q643). It carries a
-> `reason` label, because the value alone cannot separate a live decline from the latched
-> `AwaitingProbe` state, and those call for different actions — one has stuck pods to
-> inspect, the other has none and means intake is throttled to one probe job per
-> `pendingPodDeadline` window. And it is emitted only for a set whose gate is on, because
-> the reconciler *removes* the condition for an ungated set rather than publishing it
-> `False`; the family follows the condition, so absence means "no gate here". The
-> per-consequence series stay as they are: `jobs_admission_rejected_total{reason="capacity"}`
-> counts jobs the classic tier left queued and `scaleset_capacity_withheld{reason="capacity"}`
-> counts slots the scale-set tier withheld. Those answer "how much did the gate cost this
-> tenant"; this gauge answers "is the gate closed right now, and on what evidence".
+> **`WorkerCapacityDeclined` is gauged too, and differs in two ways** (Q643).
+> It carries a `reason` label, because the value alone cannot separate a live decline from the latched `AwaitingProbe` state, and those call for different actions — one has stuck pods to inspect, the other has none and means intake is throttled to one probe job per `pendingPodDeadline` window.
+> And it is emitted only for a set whose gate is on, because the reconciler *removes* the condition for an ungated set rather than publishing it `False`; the family follows the condition, so absence means "no gate here".
+> The per-consequence series stay as they are: `jobs_admission_rejected_total{reason="capacity"}` counts jobs the classic tier left queued and `scaleset_capacity_withheld{reason="capacity"}` counts slots the scale-set tier withheld.
+> Those answer "how much did the gate cost this tenant"; this gauge answers "is the gate closed right now, and on what evidence".
 >
-> **Why separate families instead of a `runner_set` label on the v1 gauges.** Unlike the
-> proxy conditions above, the two objects do not share a label set: the v1 series key on
-> `runner_group`, which a `RunnerSet` has none of. Folding both into one family would
-> leave every set at `runner_group=""`, which silently breaks the
-> `sum by (namespace, runner_group)` groupings the v1 series promise — every set would
-> collapse into a single unnamed bucket — and would add an always-empty `runner_set`
-> label to every existing v1 series. Separate names cost existing queries nothing, and a
-> v2 dashboard selects on `runner_set` directly rather than filtering `{runner_set!=""}`
-> on every query. The v1 families are unchanged and stay `RunnerGroup`-only.
+> **Why separate families instead of a `runner_set` label on the v1 gauges.** Unlike the proxy conditions above, the two objects do not share a label set: the v1 series key on `runner_group`, which a `RunnerSet` has none of.
+> Folding both into one family would leave every set at `runner_group=""`, which silently breaks the `sum by (namespace, runner_group)` groupings the v1 series promise — every set would collapse into a single unnamed bucket — and would add an always-empty `runner_set` label to every existing v1 series.
+> Separate names cost existing queries nothing, and a v2 dashboard selects on `runner_set` directly rather than filtering `{runner_set!=""}` on every query.
+> The v1 families are unchanged and stay `RunnerGroup`-only.
 
-> **`RunnerSetsDegraded` on a v2 `ActionsGateway`.** The v2 `ActionsGateway` carries a
-> `RunnerSetsDegraded` condition (Q304) — the child-health rollup counterpart of the v1
-> `RunnerGroupsDegraded` above. It is `True` when one or more of the `RunnerSet`s bound
-> to the gateway (`spec.gatewayRef`) are impaired — not serving jobs: a non-transient
-> `Ready=False` (a reference did not resolve or a provisioning step failed) **or** any
-> abnormal-is-True impairing condition — `Degraded` (revoked/invalid credentials, pushed
-> by the listener independently of `Ready`, Q330), `CredentialUnavailable`,
-> `RunnerVersionTooOld`, or `WorkersUnschedulable`. The advisory conditions (`RateLimited`,
-> the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`,
-> `JobProvisionStalled`) are excluded so the rollup does not flap on normal load. The condition message names the impaired sets and their
-> tripped signals, giving the operator a single pane without inspecting each child.
-> Advisory — like the v1 rollup it does **not** gate `Ready`, since the gateway's own
-> AGC control plane can be healthy while a tenant's set is impaired. It is exported as the `actions_gateway_runnersets_degraded`
-> gauge (Q321), alongside `actions_gateway_agc_available`,
-> `actions_gateway_egress_unattributed`, and `actions_gateway_agc_autoscaling_unavailable`
-> for the gateway's `AGCAvailable`, `EgressUnattributed`, and `AGCAutoscalingUnavailable`
-> conditions — the v2 twins of the v1 `ActionsGateway` condition gauges. Every v2
-> gateway condition thus has a metric twin, so the advisory `agcAutoscaling` opt-in
-> (Q360/Q390) is alertable rather than only visible via `kubectl describe`. All are
-> emitted only on a v2 install and labelled per gateway (`namespace`, `name`).
+> **`RunnerSetsDegraded` on a v2 `ActionsGateway`.** The v2 `ActionsGateway` carries a `RunnerSetsDegraded` condition (Q304) — the child-health rollup counterpart of the v1 `RunnerGroupsDegraded` above.
+> It is `True` when one or more of the `RunnerSet`s bound to the gateway (`spec.gatewayRef`) are impaired — not serving jobs: a non-transient `Ready=False` (a reference did not resolve or a provisioning step failed) **or** any abnormal-is-True impairing condition — `Degraded` (revoked/invalid credentials, pushed by the listener independently of `Ready`, Q330), `CredentialUnavailable`, `RunnerVersionTooOld`, or `WorkersUnschedulable`.
+> The advisory conditions (`RateLimited`, the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`, `JobProvisionStalled`) are excluded so the rollup does not flap on normal load.
+> The condition message names the impaired sets and their tripped signals, giving the operator a single pane without inspecting each child.
+> Advisory — like the v1 rollup it does **not** gate `Ready`, since the gateway's own AGC control plane can be healthy while a tenant's set is impaired.
+> It is exported as the `actions_gateway_runnersets_degraded` gauge (Q321), alongside `actions_gateway_agc_available`, `actions_gateway_egress_unattributed`, and `actions_gateway_agc_autoscaling_unavailable` for the gateway's `AGCAvailable`, `EgressUnattributed`, and `AGCAutoscalingUnavailable` conditions — the v2 twins of the v1 `ActionsGateway` condition gauges.
+> Every v2 gateway condition thus has a metric twin, so the advisory `agcAutoscaling` opt-in (Q360/Q390) is alertable rather than only visible via `kubectl describe`.
+> All are emitted only on a v2 install and labelled per gateway (`namespace`, `name`).
 
 ### Scale-set acquisition tier (Q264)
 
-These series are emitted **only** by a `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A `Classic` (deprecated) `RunnerSet` never touches them, so they read zero on a Classic-only deployment; the classic `actions_gateway_jobs_*` series above are what a Classic set emits. All are labelled per `RunnerSet` (`namespace`, `runner_set`). During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.
+These series are emitted **only** by a `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool.
+A `Classic` (deprecated) `RunnerSet` never touches them, so they read zero on a Classic-only deployment; the classic `actions_gateway_jobs_*` series above are what a Classic set emits.
+All are labelled per `RunnerSet` (`namespace`, `runner_set`).
+During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
@@ -172,41 +120,22 @@ These series are emitted **only** by a `RunnerSet` with `spec.acquisitionProtoco
 | `actions_gateway_scaleset_advertised_capacity` | Gauge | `namespace`, `runner_set` | The `X-ScaleSetMaxCapacity` most recently advertised for the set: the total jobs GitHub may keep assigned to it at once. This is the scale-set tier's whole admission decision — the minimum of the declared worker ceiling, live namespace-`ResourceQuota` headroom (Q443), and — when the set opts in — its capacity gate (Q405). A value below the set's `maxWorkers` means a rung is binding; **`0` means GitHub will assign nothing at all** until it recovers. Dropped when the `RunnerSet` is deleted, so a stale series does not outlive the set. |
 | `actions_gateway_scaleset_capacity_withheld` | Gauge | `namespace`, `runner_set`, `reason` | Slots the named rung removed from the declared ceiling on that same poll — `advertised_capacity` plus the sum of these equals the ceiling. `reason="quota"` is namespace-`ResourceQuota` headroom; `reason="capacity"` is the opt-in capacity gate, which bounds the total at the set's own in-flight workers while the cluster cannot place another (Q405) — plus one probe slot per `pendingPodDeadline` window while the gate is latched (`AwaitingProbe`, Q512), so under a sustained decline expect this series to *hold* near the ceiling across reap cycles rather than sawtooth back to `0`. Every evaluated rung publishes a value each poll, **including an explicit `0`**, so a series never sits frozen at its last non-zero reading — the capacity rung publishes its zero even with the gate `Off`, because the gate is per-set spec rather than a rung the AGC skips. Nothing is published for a rung an operator has turned off AGC-wide (`AGC_QUOTA_ADMISSION=false`). |
 
-> **Why gauges and not a rejection counter.** On the classic tier a declined job is a
-> delivered job, counted by `actions_gateway_jobs_admission_rejected_total{reason}`.
-> On the scale-set tier the equivalent job is never assigned in the first place, so
-> there is nothing to count — which is why that counter reads a flat zero here, and why
-> these two gauges are its counterpart. Pair them with the set's
-> `WorkerQuotaPressure`/`WorkerQuotaExceeded` conditions, which name the binding
-> resource in their message.
+> **Why gauges and not a rejection counter.** On the classic tier a declined job is a delivered job, counted by `actions_gateway_jobs_admission_rejected_total{reason}`.
+> On the scale-set tier the equivalent job is never assigned in the first place, so there is nothing to count — which is why that counter reads a flat zero here, and why these two gauges are its counterpart.
+> Pair them with the set's `WorkerQuotaPressure`/`WorkerQuotaExceeded` conditions, which name the binding resource in their message.
 
 ### Worker usage / right-sizing metrics (Q359)
 
-The AGC samples worker pod CPU/memory usage from the `metrics.k8s.io` API
-(metrics-server) every 15s (`WORKER_USAGE_SAMPLE_INTERVAL` on the AGC
-Deployment; `0`/`off` disables) and folds each finished pod's peak into these
-series. One worker pod runs exactly one job, so a per-pod peak is a **per-job
-peak**. Emitted for v2 `RunnerSet` workers only, labelled per RunnerSet and
-container (bounded cardinality: one series per RunnerSet × container name).
-These are the input to the [worker right-sizing recipe](worker-rightsizing.md);
-without metrics-server they stay empty and `…_poll_errors_total` counts instead.
+The AGC samples worker pod CPU/memory usage from the `metrics.k8s.io` API (metrics-server) every 15s (`WORKER_USAGE_SAMPLE_INTERVAL` on the AGC Deployment; `0`/`off` disables) and folds each finished pod's peak into these series.
+One worker pod runs exactly one job, so a per-pod peak is a **per-job peak**.
+Emitted for v2 `RunnerSet` workers only, labelled per RunnerSet and container (bounded cardinality: one series per RunnerSet × container name).
+These are the input to the [worker right-sizing recipe](worker-rightsizing.md); without metrics-server they stay empty and `…_poll_errors_total` counts instead.
 
-The same sampled history also drives two status surfaces on the v2 `RunnerSet`
-(Q359 Phase 2): `status.sizingRecommendation` (per-container recommended
-`requests`/`limits` with observed p95/max, sample count, and window) and the
-advisory `SizingDrift` condition — `True` when, after ≥20 sampled jobs, the
-template's ask is ≥2× the recommendation (waste) or a memory limit is below the
-observed per-job peak (OOM risk). Advisory only; never gates `Ready`. A set
-that opts into a sizing profile (`spec.sizing.profile`) additionally reports
-`status.sizingProfileState` (`Active`/`AwaitingSamples`), and `SizingDrift`
-reads `False/SizingProfileActive` while the profile actuates. A set on the
-`Throughput` profile also carries the advisory `SizingProfileOverridden`
-condition — `True` when a worker pod the profile built *without* a CPU limit was
-admitted *with* one (a `LimitRange` cpu default, a mutating webhook, a policy
-engine), which cancels the profile while rejecting nothing
-([detail](worker-rightsizing.md#when-something-re-injects-the-cpu-limit-throughput-removes)).
-See the
-[right-sizing recipe](worker-rightsizing.md#step-0--read-the-built-in-recommendation-first).
+The same sampled history also drives two status surfaces on the v2 `RunnerSet` (Q359 Phase 2): `status.sizingRecommendation` (per-container recommended `requests`/`limits` with observed p95/max, sample count, and window) and the advisory `SizingDrift` condition — `True` when, after ≥20 sampled jobs, the template's ask is ≥2× the recommendation (waste) or a memory limit is below the observed per-job peak (OOM risk).
+Advisory only; never gates `Ready`.
+A set that opts into a sizing profile (`spec.sizing.profile`) additionally reports `status.sizingProfileState` (`Active`/`AwaitingSamples`), and `SizingDrift` reads `False/SizingProfileActive` while the profile actuates.
+A set on the `Throughput` profile also carries the advisory `SizingProfileOverridden` condition — `True` when a worker pod the profile built *without* a CPU limit was admitted *with* one (a `LimitRange` cpu default, a mutating webhook, a policy engine), which cancels the profile while rejecting nothing ([detail](worker-rightsizing.md#when-something-re-injects-the-cpu-limit-throughput-removes)).
+See the [right-sizing recipe](worker-rightsizing.md#step-0--read-the-built-in-recommendation-first).
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
@@ -220,18 +149,11 @@ See the
 
 ### Proxy metrics
 
-The per-tenant egress proxy exposes its own metrics on `:8443` over **mutual
-TLS** — the same posture as the AGC (see [Scraping per-tenant AGC and proxy
-metrics (mTLS)](observability-metrics-access.md#scraping-per-tenant-agc-and-proxy-metrics-mtls)), and
-restricted by the L-8 NetworkPolicy (see [security.md L-8](../plan/security.md)).
-The proxy's `:8081` port serves only the plaintext health probes (`/healthz`,
-`/readyz`), not metrics. Each proxy is a separate scrape target; these metrics
-carry no intrinsic `namespace` label. The GMC-generated per-tenant proxy
-`ServiceMonitor` stamps one via a relabeling (`namespace` ← the scrape target's
-namespace, which is the tenant's namespace), so the tenant Grafana dashboard's
-proxy panels filter by `$namespace` for per-tenant attribution. If you scrape the
-proxy with a hand-written scrape config instead of the generated `ServiceMonitor`,
-add the equivalent relabeling to get the `namespace` label.
+The per-tenant egress proxy exposes its own metrics on `:8443` over **mutual TLS** — the same posture as the AGC (see [Scraping per-tenant AGC and proxy metrics (mTLS)](observability-metrics-access.md#scraping-per-tenant-agc-and-proxy-metrics-mtls)), and restricted by the L-8 NetworkPolicy (see [security.md L-8](../plan/security.md)).
+The proxy's `:8081` port serves only the plaintext health probes (`/healthz`, `/readyz`), not metrics.
+Each proxy is a separate scrape target; these metrics carry no intrinsic `namespace` label.
+The GMC-generated per-tenant proxy `ServiceMonitor` stamps one via a relabeling (`namespace` ← the scrape target's namespace, which is the tenant's namespace), so the tenant Grafana dashboard's proxy panels filter by `$namespace` for per-tenant attribution.
+If you scrape the proxy with a hand-written scrape config instead of the generated `ServiceMonitor`, add the equivalent relabeling to get the `namespace` label.
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
@@ -241,20 +163,17 @@ add the equivalent relabeling to get the `namespace` label.
 | `actions_gateway_proxy_connect_denied_total` | Counter | `namespace`¹ | CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike `…_dial_errors_total` (which also counts transient dial failures to *allowed* hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see [security-operations.md § Threat → signal map](security-operations.md#threat--signal-map). |
 | `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | `namespace`¹ | Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap). |
 
-¹ Not exposed by the proxy itself — added by the per-tenant `ServiceMonitor`
-relabeling described above. Absent if you scrape without that relabeling.
+¹ Not exposed by the proxy itself — added by the per-tenant `ServiceMonitor` relabeling described above.
+Absent if you scrape without that relabeling.
 
-For abuse/compromise detection built on these metrics (slowloris,
-eviction-retry loops, credential-harvesting), see
-[security-operations.md](security-operations.md).
+For abuse/compromise detection built on these metrics (slowloris, eviction-retry loops, credential-harvesting), see [security-operations.md](security-operations.md).
 
 ---
 
 ## CRD Status Fields (kubectl columns)
 
-`kubectl get runnergroup` and `kubectl get runnerset` print a subset of each CR's
-`.status` as additional columns. These give an at-a-glance view of live job state
-without opening Grafana:
+`kubectl get runnergroup` and `kubectl get runnerset` print a subset of each CR's `.status` as additional columns.
+These give an at-a-glance view of live job state without opening Grafana:
 
 | Column | Field | RunnerGroup | RunnerSet | Description |
 | --- | --- | --- | --- | --- |
@@ -264,11 +183,9 @@ without opening Grafana:
 | `READY` | `.status.conditions[Ready].status` | ✓ | ✓ | `True` when at least one listener goroutine is running. |
 | `EGRESS` | `.status.proxyMode` | — | ✓ | `Proxied` or `Direct`. |
 
-> **Note:** `ACTIVEJOBS` and `PENDINGJOBS` are pod-phase counts derived at reconcile
-> time. They reflect a snapshot of the last reconcile cycle (re-triggered on every
-> pod phase-change event) — not a real-time counter. A pod that was just reaped in
-> the same reconcile cycle appears in `PENDINGJOBS` until the pod-deletion event
-> triggers the next reconcile (typically sub-second).
+> **Note:** `ACTIVEJOBS` and `PENDINGJOBS` are pod-phase counts derived at reconcile time.
+> They reflect a snapshot of the last reconcile cycle (re-triggered on every pod phase-change event) — not a real-time counter.
+> A pod that was just reaped in the same reconcile cycle appears in `PENDINGJOBS` until the pod-deletion event triggers the next reconcile (typically sub-second).
 
 ### Drilling down to individual runner pods
 
@@ -284,8 +201,7 @@ kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<name>
 
 Add `-o wide` for node placement or `-w` to watch phase transitions live.
 
-**Correlating a pod with its GitHub Actions job:** the AGC stamps these
-annotations on every worker pod at creation time:
+**Correlating a pod with its GitHub Actions job:** the AGC stamps these annotations on every worker pod at creation time:
 
 | Annotation | Example | Notes |
 | --- | --- | --- |
@@ -294,13 +210,9 @@ annotations on every worker pod at creation time:
 | `actions-gateway.com/job-name` | `build` | Job name as defined in the workflow YAML |
 | `actions-gateway.com/workflow` | `CI` | Workflow name. Classic only — the scale-set protocol delivers no workflow name |
 
-On the scale-set tier these are more than diagnostics: `run-id` and `repository`
-are the **only** record of which workflow run a worker was serving, because that
-tier provisions fire-and-forget with no in-process job state. Eviction recovery
-reads them back off the pod to name the run to re-run (Q417), so a worker missing
-them cannot be recovered automatically — that case is counted by
-`actions_gateway_eviction_recovery_identity_unknown_total`. Do not remove or
-overwrite them.
+On the scale-set tier these are more than diagnostics: `run-id` and `repository` are the **only** record of which workflow run a worker was serving, because that tier provisions fire-and-forget with no in-process job state.
+Eviction recovery reads them back off the pod to name the run to re-run (Q417), so a worker missing them cannot be recovered automatically — that case is counted by `actions_gateway_eviction_recovery_identity_unknown_total`.
+Do not remove or overwrite them.
 
 Scale-set worker pods additionally carry:
 
@@ -311,18 +223,12 @@ Scale-set worker pods additionally carry:
 | `actions-gateway.com/job-completed-at` (annotation) | `2026-07-26T12:00:00Z` | When GitHub reported the pod's job terminal. Gives a still-Running worker a reap deadline (Q420) |
 | `actions-gateway.com/eviction-handled-at` (annotation) | `2026-07-26T12:04:00Z` | When the AGC adjudicated this pod's eviction. Its presence is what makes automatic recovery at-most-once per evicted pod across reconciles, restarts, and replicas (Q417) |
 
-All four are controller-set: never set them by hand. Editing or removing
-`runner-name` in particular makes the pod's runner record uncollectable, which is
-what leaves stale registrations behind — see
-[Scale-Set Job Stranded by a Stale Runner Record](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409).
+All four are controller-set: never set them by hand.
+Editing or removing `runner-name` in particular makes the pod's runner record uncollectable, which is what leaves stale registrations behind — see [Scale-Set Job Stranded by a Stale Runner Record](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409).
 
-Worker pods on **either** tier gain one more annotation at end of life:
-`actions-gateway.com/deletion-reason`, stamped with the reap reason (e.g.
-`completed_ttl`, `pending_deadline`) immediately before the AGC's reaper deletes the
-pod (Q502). It marks the deletion as the AGC's own, which is what excludes reaper
-cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
-Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery
-for that pod.
+Worker pods on **either** tier gain one more annotation at end of life: `actions-gateway.com/deletion-reason`, stamped with the reap reason (e.g. `completed_ttl`, `pending_deadline`) immediately before the AGC's reaper deletes the pod (Q502).
+It marks the deletion as the AGC's own, which is what excludes reaper cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
+Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery for that pod.
 
 To see them in a table:
 
@@ -337,26 +243,14 @@ Or inspect a single pod in full:
 kubectl describe pod <pod-name> -n <namespace>
 ```
 
-The annotations are absent if the job's identity did not reach the AGC: on the
-classic tier, an AcquireJob payload without the corresponding `system.github.*`
-variables (older GitHub runners or stub/test jobs); on the scale-set tier, an
-assignment message without `ownerName`/`repositoryName`/`workflowRunId`.
+The annotations are absent if the job's identity did not reach the AGC: on the classic tier, an AcquireJob payload without the corresponding `system.github.*` variables (older GitHub runners or stub/test jobs); on the scale-set tier, an assignment message without `ownerName`/`repositoryName`/`workflowRunId`.
 
 ### Selecting GAG objects with the recommended labels
 
-Every object GAG creates — AGC/proxy/worker pods, Deployments, Services,
-NetworkPolicies, ServiceAccounts, RBAC, Secrets, PDBs, HPAs, and the per-tenant CRs
-— carries the Kubernetes [recommended (`app.kubernetes.io/*`) labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/),
-so Lens / k9s / Argo CD grouping, Prometheus relabel rules, and OpenCost/Kubecost
-cost attribution work without learning the project-specific keys. They are
-**additive metadata** — the functional selectors the controllers rely on (`app:`,
-`actions-gateway/component: workload`, the per-gateway/runner-set identity labels)
-are untouched, so never build a controller's pod selector on the `app.kubernetes.io/*`
-labels.
+Every object GAG creates — AGC/proxy/worker pods, Deployments, Services, NetworkPolicies, ServiceAccounts, RBAC, Secrets, PDBs, HPAs, and the per-tenant CRs — carries the Kubernetes [recommended (`app.kubernetes.io/*`) labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/), so Lens / k9s / Argo CD grouping, Prometheus relabel rules, and OpenCost/Kubecost cost attribution work without learning the project-specific keys.
+They are **additive metadata** — the functional selectors the controllers rely on (`app:`, `actions-gateway/component: workload`, the per-gateway/runner-set identity labels) are untouched, so never build a controller's pod selector on the `app.kubernetes.io/*` labels.
 
-> For live per-tenant **cost** attribution with OpenCost/Kubecost — mapping these
-> labels and the per-tenant namespaces to allocation queries — see
-> [Live per-tenant cost attribution](cost-attribution.md).
+> For live per-tenant **cost** attribution with OpenCost/Kubecost — mapping these labels and the per-tenant namespaces to allocation queries — see [Live per-tenant cost attribution](cost-attribution.md).
 
 | Label | Values |
 | --- | --- |
@@ -378,7 +272,8 @@ kubectl get all -n <namespace> \
 
 ### Node-disruption-safety annotations
 
-A worker pod runs exactly one CI job and has no replica or controller behind it: evict it mid-job and the job is stranded with no replacement. So the AGC also stamps every worker pod with the markers the common node autoscalers and the descheduler honor to leave a running pod alone:
+A worker pod runs exactly one CI job and has no replica or controller behind it: evict it mid-job and the job is stranded with no replacement.
+So the AGC also stamps every worker pod with the markers the common node autoscalers and the descheduler honor to leave a running pod alone:
 
 | Annotation | Value | Honored by |
 | --- | --- | --- |
@@ -388,25 +283,28 @@ A worker pod runs exactly one CI job and has no replica or controller behind it:
 
 These markers ride on the worker pod itself, so they are removed the moment the pod is torn down on job completion (immediately when `completedPodTTL: 0s`, otherwise by the reaper once the TTL elapses) — they never pin a node for a pod that is no longer running.
 
-**Overriding.** The markers are gap-fill defaults: set any of these keys in the runner's `podTemplate.metadata.annotations` and your explicit value wins. For example, a job you know is safe to interrupt can opt back into eviction with `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`. Only these three keys are honored from the template; other `podTemplate` annotations are not copied onto worker pods. Prefer a [PodDisruptionBudget](https://kubernetes.io/docs/tasks/run-application/configure-pdb/) if you need finer voluntary-disruption control.
+**Overriding.** The markers are gap-fill defaults: set any of these keys in the runner's `podTemplate.metadata.annotations` and your explicit value wins.
+For example, a job you know is safe to interrupt can opt back into eviction with `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`.
+Only these three keys are honored from the template; other `podTemplate` annotations are not copied onto worker pods.
+Prefer a [PodDisruptionBudget](https://kubernetes.io/docs/tasks/run-application/configure-pdb/) if you need finer voluntary-disruption control.
 
 ---
 
 ## Label Cardinality Warning
 
-Metric labels are scoped to `namespace` and `runner_group`. To avoid label cardinality explosion:
+Metric labels are scoped to `namespace` and `runner_group`.
+To avoid label cardinality explosion:
 
-- **Do not use dynamically generated `runner_group` names** (e.g. names incorporating PR numbers or commit SHAs). Each unique combination of `namespace` + `runner_group` creates a distinct time series; thousands of unique names will cause memory pressure in Prometheus.
-- **Stable, human-meaningful names** like `gpu-2x`, `cpu-standard`, `gpu-a100` are correct. These are configured in the `ActionsGateway` spec and should not change after initial setup.
+- **Do not use dynamically generated `runner_group` names** (e.g. names incorporating PR numbers or commit SHAs).
+  Each unique combination of `namespace` + `runner_group` creates a distinct time series; thousands of unique names will cause memory pressure in Prometheus.
+- **Stable, human-meaningful names** like `gpu-2x`, `cpu-standard`, `gpu-a100` are correct.
+  These are configured in the `ActionsGateway` spec and should not change after initial setup.
 - If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerGroup names.
 
 ## Breaking observability changes (Q417)
 
-Q417 ported eviction recovery to the scale-set acquisition tier and added a `tier`
-label to the two eviction counters so the two tiers' recoveries are distinguishable.
-Q497 extended recovery to scheduler preemption and added a `cause` label, on those two
-counters and on the identity counter, for the same reason — the two disruptions demand
-different operator responses:
+Q417 ported eviction recovery to the scale-set acquisition tier and added a `tier` label to the two eviction counters so the two tiers' recoveries are distinguishable.
+Q497 extended recovery to scheduler preemption and added a `cause` label, on those two counters and on the identity counter, for the same reason — the two disruptions demand different operator responses:
 
 | Metric | Labels before | After Q417 | After Q497 |
 | --- | --- | --- | --- |
@@ -414,41 +312,30 @@ different operator responses:
 | `actions_gateway_eviction_retries_exhausted_total` | `namespace`, `runner_group` | + `tier` | + `cause` |
 | `actions_gateway_eviction_recovery_identity_unknown_total` | `namespace`, `runner_group` | — | + `cause` |
 
-Q766 then ported the abandoned-run force-cancel and its capacity-gated re-run to the
-scale-set tier, adding the same `tier` label to that pair for the same reason:
+Q766 then ported the abandoned-run force-cancel and its capacity-gated re-run to the scale-set tier, adding the same `tier` label to that pair for the same reason:
 
 | Metric | Labels before | After Q766 |
 | --- | --- | --- |
 | `actions_gateway_abandoned_run_force_cancels_total` | `namespace`, `runner_group`, `outcome` | + `tier` |
 | `actions_gateway_abandoned_run_rerun_waits_total` | `namespace`, `runner_group`, `outcome` | + `tier` |
 
-**What breaks.** Only queries that match the full label set exactly, or that render
-one series per metric and now render more. Aggregations are unaffected: `sum(...)`,
-`increase(...) > 0`, and `sum by (namespace, runner_group) (...)` keep working
-unchanged, which covers the shipped dashboards and alert rules. Add `tier` or `cause`
-to a `by (...)` clause where you want the split.
+**What breaks.** Only queries that match the full label set exactly, or that render one series per metric and now render more.
+Aggregations are unaffected: `sum(...)`, `increase(...) > 0`, and `sum by (namespace, runner_group) (...)` keep working unchanged, which covers the shipped dashboards and alert rules.
+Add `tier` or `cause` to a `by (...)` clause where you want the split.
 
-**One reading does change meaning even though no query breaks.** Before Q497,
-`actions_gateway_eviction_retries_total` counted node-pressure evictions only, so a
-dashboard titled "evictions" was accurate. It now also counts preemptions, which are a
-routine consequence of running a `priorityTiers` floor rather than a sign of node
-trouble. An alert that pages on this counter rising should filter to
-`{cause="eviction"}` unless it genuinely wants both.
+**One reading does change meaning even though no query breaks.** Before Q497, `actions_gateway_eviction_retries_total` counted node-pressure evictions only, so a dashboard titled "evictions" was accurate.
+It now also counts preemptions, which are a routine consequence of running a `priorityTiers` floor rather than a sign of node trouble.
+An alert that pages on this counter rising should filter to `{cause="eviction"}` unless it genuinely wants both.
 
-**Continuity.** Every counter keeps its name, so history is preserved; series
-recorded before the upgrade simply carry no `tier` label.
+**Continuity.** Every counter keeps its name, so history is preserved; series recorded before the upgrade simply carry no `tier` label.
 
-**Q766 also changes what a zero means.** Before it, an abandoned worker on a
-`ScaleSet` set produced no `abandoned_run_*` series at all, so a flat zero was the
-tier's normal state rather than the absence of abandonments. Those series now populate
-on both tiers, and a `ScaleSet` set that starts reporting them is not a regression.
+**Q766 also changes what a zero means.** Before it, an abandoned worker on a `ScaleSet` set produced no `abandoned_run_*` series at all, so a flat zero was the tier's normal state rather than the absence of abandonments.
+Those series now populate on both tiers, and a `ScaleSet` set that starts reporting them is not a regression.
 
 ## Breaking observability changes (Q205)
 
-The Q205 naming audit aligned metric and span/attribute names to the Prometheus and
-OpenTelemetry conventions before the v2beta1 freeze. These are **breaking** for any
-dashboard, alert, recording rule, or trace query that references the old names —
-update them when you adopt a release that includes Q205.
+The Q205 naming audit aligned metric and span/attribute names to the Prometheus and OpenTelemetry conventions before the v2beta1 freeze.
+These are **breaking** for any dashboard, alert, recording rule, or trace query that references the old names — update them when you adopt a release that includes Q205.
 
 **Metric renames**
 
@@ -456,15 +343,10 @@ update them when you adopt a release that includes Q205.
 | --- | --- |
 | `actions_gateway_renewjob_errors_total` | `actions_gateway_renew_job_errors_total` |
 
-All other metric names were audited and kept: every counter already ends in `_total`,
-every histogram already carries the `_seconds` base unit, and the gauge names are
-already conventional. (`pod_creation_latency_seconds` was considered for a
-`…_duration_seconds` rename but kept — `latency` is a recognised Prometheus term and
-the rename's blast radius across dashboards and recording-rule names outweighed the
-stylistic gain.)
+All other metric names were audited and kept: every counter already ends in `_total`, every histogram already carries the `_seconds` base unit, and the gauge names are already conventional.
+(`pod_creation_latency_seconds` was considered for a `…_duration_seconds` rename but kept — `latency` is a recognised Prometheus term and the rename's blast radius across dashboards and recording-rule names outweighed the stylistic gain.)
 
-**Span attribute renames** (the span names themselves — `RunnerGroup.Reconcile`,
-`Provisioner.provision`, and the child spans — are unchanged):
+**Span attribute renames** (the span names themselves — `RunnerGroup.Reconcile`, `Provisioner.provision`, and the child spans — are unchanged):
 
 | Old | New |
 | --- | --- |

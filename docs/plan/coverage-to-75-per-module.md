@@ -1,6 +1,7 @@
 # Per-module unit-test coverage → ≥75%
 
-**Status: ✅ Done (Q255, 2026-07-01).** Every Go module now measures ≥75% hand-written unit-test coverage: api 100%, broker 82.1%, cmd/agc 75.1%, cmd/gmc 75.0%, cmd/probe 81.0%, cmd/proxy 76.7%, cmd/worker 81.2%, githubapp 84.2%. Delivered via an agent Workflow (see [Execution](#execution--single-agent-workflow)); `probe.run()` was extracted behind an injected token provider + `getenv` (`runProbe`) to make the session orchestration unit-testable, and `parseProbeConfig` was extracted earlier for the same reason.
+**Status: ✅ Done (Q255, 2026-07-01).** Every Go module now measures ≥75% hand-written unit-test coverage: api 100%, broker 82.1%, cmd/agc 75.1%, cmd/gmc 75.0%, cmd/probe 81.0%, cmd/proxy 76.7%, cmd/worker 81.2%, githubapp 84.2%.
+Delivered via an agent Workflow (see [Execution](#execution--single-agent-workflow)); `probe.run()` was extracted behind an injected token provider + `getenv` (`runProbe`) to make the session orchestration unit-testable, and `parseProbeConfig` was extracted earlier for the same reason.
 
 ---
 
@@ -8,7 +9,10 @@
 
 **Goal:** bring every Go module's hand-written unit-test coverage to **≥75%**, as measured by [`scripts/go/coverage.sh`](../../scripts/go/coverage.sh) (generated DeepCopy/scheme boilerplate and test-helper packages already excluded).
 
-**Why now:** the coverage gate is a [no-regression ratchet, not an absolute target](../development/testing.md#coverage-measurement-and-the-ratchet) — deliberately, to avoid manufacturing low-value tests. So this plan is *not* about chasing a number for its own sake. It is about closing the specific gaps where the untested code carries real production risk, and doing so lands every module at ≥75% as a side effect. Where a gap is a genuinely-thin entrypoint whose logic is already factored into tested helpers, we leave it uncovered by design and say so.
+**Why now:** the coverage gate is a [no-regression ratchet, not an absolute target](../development/testing.md#coverage-measurement-and-the-ratchet) — deliberately, to avoid manufacturing low-value tests.
+So this plan is *not* about chasing a number for its own sake.
+It is about closing the specific gaps where the untested code carries real production risk, and doing so lands every module at ≥75% as a side effect.
+Where a gap is a genuinely-thin entrypoint whose logic is already factored into tested helpers, we leave it uncovered by design and say so.
 
 **Baseline (2026-06-30), from `make cover`:**
 
@@ -29,7 +33,8 @@
 
 ## Entrypoint thinness audit
 
-Skipping an entrypoint is only acceptable when it is *thin* — its non-trivial logic already lives in separately-tested helpers, so there is little hidden-bug surface to miss. Audit result:
+Skipping an entrypoint is only acceptable when it is *thin* — its non-trivial logic already lives in separately-tested helpers, so there is little hidden-bug surface to miss.
+Audit result:
 
 | Entrypoint | Size / cover | Verdict |
 |---|---|---|
@@ -39,15 +44,21 @@ Skipping an entrypoint is only acceptable when it is *thin* — its non-trivial 
 | `probe.main()` | ~7 lines | **Thin ✓** |
 | `probe.run()` | **320 lines @ 0%** | **NOT thin ✗** — embeds ~60 lines of env/config parsing with a dozen error branches, plus token-mint + broker-session orchestration, all untested. Real hidden-bug surface. **Needs refactor** (see Workstream E) |
 
-Exactly one entrypoint fails the test: `probe.run()`. Everywhere else the risky logic is already extracted, so the remaining work is test-only.
+Exactly one entrypoint fails the test: `probe.run()`.
+Everywhere else the risky logic is already extracted, so the remaining work is test-only.
 
 ---
 
 ## Execution — single agent Workflow
 
-This lands as **one branch → one PR**, produced by a single agent Workflow rather than one-PR-per-module. The workstreams below are the fan-out units.
+This lands as **one branch → one PR**, produced by a single agent Workflow rather than one-PR-per-module.
+The workstreams below are the fan-out units.
 
-**Why a Workflow (and why one PR).** The compute hazard on a GUI dev machine is *running* tests, not writing them. So the agents **author only — they never run tests**; a single validation stage runs `make cover` + `make check` once, at the end. That makes this the cheapest possible option on local compute: exactly **one** throttled test run total, versus one per module with separate PRs or chips. The machine-wide `serialize_heavy_build` flock and `local-throttle.sh` (`utility` QoS, cores−2) keep even that run desktop-safe. The files each workstream touches are disjoint, so parallel authoring into the shared worktree is conflict-free.
+**Why a Workflow (and why one PR).** The compute hazard on a GUI dev machine is *running* tests, not writing them.
+So the agents **author only — they never run tests**; a single validation stage runs `make cover` + `make check` once, at the end.
+That makes this the cheapest possible option on local compute: exactly **one** throttled test run total, versus one per module with separate PRs or chips.
+The machine-wide `serialize_heavy_build` flock and `local-throttle.sh` (`utility` QoS, cores−2) keep even that run desktop-safe.
+The files each workstream touches are disjoint, so parallel authoring into the shared worktree is conflict-free.
 
 **Shape (pipeline with one barrier):**
 
@@ -71,7 +82,8 @@ Repair:   on failure → fix agents → re-validate
 3. `make cover-update` — the raised `coverage-baseline.txt` floors, isolated commit.
 4. `docs/STATUS.md` (delete the Q255 row) — isolated commit, per the high-contention rule.
 
-**Blind-authoring risk.** Agents write tests without executing them, so compile errors or wrong assertions surface only at the validation stage. The validate→repair loop absorbs that; the cost is agent tokens, not local compute (the machine stays quiet until the single final run).
+**Blind-authoring risk.** Agents write tests without executing them, so compile errors or wrong assertions surface only at the validation stage.
+The validate→repair loop absorbs that; the cost is agent tokens, not local compute (the machine stays quiet until the single final run).
 
 ---
 
@@ -81,13 +93,15 @@ Ordered by ROI (cheapest, highest-certainty first).
 
 ### A — `api` → ~100% (test-only, one PR)
 
-The whole `api/v2alpha1/` package has no test file; only `apilabels` is covered. After excluding generated code, the only uncovered hand-written funcs are:
+The whole `api/v2alpha1/` package has no test file; only `apilabels` is covered.
+After excluding generated code, the only uncovered hand-written funcs are:
 
 - `(*ActionsGatewaySpec).GitHubAppSecretName()` — nil-`GitHubApp` vs set branch
 - `EffectiveSecurityProfile(profile)` — empty→`SecurityProfileBaseline` vs passthrough
 - 4× `init()` (SchemeBuilder registration) — run on package load, so merely *having* a test in the package counts them covered
 
-**Add `api/v2alpha1/types_test.go`:** table tests for both helpers + a scheme-registration smoke test (`AddToScheme` into a fresh `runtime.Scheme`, assert no error). Clears the module on its own.
+**Add `api/v2alpha1/types_test.go`:** table tests for both helpers + a scheme-registration smoke test (`AddToScheme` into a fresh `runtime.Scheme`, assert no error).
+Clears the module on its own.
 
 Optionally fold a one-case buffer test into whichever module sits on the tolerance edge (`cmd/agc`) here or in Workstream B.
 
@@ -103,13 +117,16 @@ Three already-extracted parsers in `cmd/gmc/cmd/main.go` are untested at 0%:
 - `parseAllowedEgressCIDRs(raw)` — including the malformed-CIDR error branch
 - `mustEnv(name)` — set vs unset
 
-Add `cmd/gmc/cmd/main_test.go` (or extend the existing test) with table tests. No code change.
+Add `cmd/gmc/cmd/main_test.go` (or extend the existing test) with table tests.
+No code change.
 
 ### D — `cmd/gmc` controller/webhook/metrics (test-only, part of the gmc PR)
 
-The bulk of the +8.7pp. All pure logic, unit-testable without a cluster:
+The bulk of the +8.7pp.
+All pure logic, unit-testable without a cluster:
 
-- **v2 webhook validators** (`internal/webhook/v2alpha1`, package at 26.8%): `egressproxy_webhook` `validateEgressDestinations` + `ValidateCreate/Update/Delete`; `runnertemplate_webhook` `ValidateCreate/Update/Delete` (both types) + `logRejection`. All 0%.
+- **v2 webhook validators** (`internal/webhook/v2alpha1`, package at 26.8%): `egressproxy_webhook` `validateEgressDestinations` + `ValidateCreate/Update/Delete`; `runnertemplate_webhook` `ValidateCreate/Update/Delete` (both types) + `logRejection`.
+  All 0%.
 - **Builder helpers**: `builder.go` `workerLabels`, `buildWorkerServiceAccount`, `securityProfileOrDefault`; `egressproxy_builder.go` `proxyAllowlistEnv`, `proxyHostSuffix`; `actionsgateway_v2_builder.go` `agcResources`.
 - **Metrics collectors** (`metrics.go`, all 0%): `NewMetrics` + each collector's `Describe`/`Collect`, driven by `prometheus/testutil`.
 - **Migrate**: `internal/migrate/render.go` `renderWarningsComment`; `migrate.go` `runnerGroupName`/`labelSafe` partials.
@@ -118,11 +135,13 @@ The bulk of the +8.7pp. All pure logic, unit-testable without a cluster:
 
 ### E — `cmd/probe` → ≥75% (the one refactor, **two commits**)
 
-**E1 — refactor only, behavior-preserving** (its own commit). Extract from `run()`:
+**E1 — refactor only, behavior-preserving** (its own commit).
+Extract from `run()`:
 - `parseProbeConfig(getenv func(string) string) (probeConfig, error)` — the ~60-line env/config block (app ID/installation ID parsing, PEM load, broker URL/v2 selection, pool ID) with all its error branches.
 - keep the `investigate*`/`probeAcknowledge` broker calls at package scope (they already are).
 
-`run()` shrinks to thin orchestration (mint token → open session → dispatch investigations). **Existing tests stay green and unchanged** — that is the safety proof. No new tests in this commit.
+`run()` shrinks to thin orchestration (mint token → open session → dispatch investigations). **Existing tests stay green and unchanged** — that is the safety proof.
+No new tests in this commit.
 
 **E2 — tests only.** Unit-test:
 - `parseProbeConfig` branches (missing var, unparseable int, bad PEM, v2-URL override, pool-ID default/override).

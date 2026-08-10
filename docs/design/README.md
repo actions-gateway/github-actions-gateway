@@ -9,13 +9,15 @@ The gateway is a **four-tier system** for running GitHub Actions self-hosted run
 | 3 | [Egress Proxy Pool](02-architecture.md#23-tier-3--egress-proxy-pool) | Namespace | Stateless HTTPS CONNECT proxy pool; isolated egress IPs per tenant |
 | 4 | [Ephemeral Worker Pod](02-architecture.md#24-tier-4--ephemeral-worker-pod) | Namespace | Single-use pod that executes exactly one workflow job |
 
-This section is the full system design, split into focused, cross-referenced documents. For a quick orientation, start with [01-executive-summary.md](01-executive-summary.md), then follow the reading path for your role.
+This section is the full system design, split into focused, cross-referenced documents.
+For a quick orientation, start with [01-executive-summary.md](01-executive-summary.md), then follow the reading path for your role.
 
 ---
 
 ## Reading Paths by Role
 
-**Architect**: reviewing the overall design: start with [01-executive-summary.md](01-executive-summary.md), then [02-architecture.md](02-architecture.md), then [03-api-contracts.md](03-api-contracts.md). Read [04-operational-flows.md](04-operational-flows.md) and [05-security.md](05-security.md) for depth.
+**Architect**: reviewing the overall design: start with [01-executive-summary.md](01-executive-summary.md), then [02-architecture.md](02-architecture.md), then [03-api-contracts.md](03-api-contracts.md).
+Read [04-operational-flows.md](04-operational-flows.md) and [05-security.md](05-security.md) for depth.
 
 **Platform engineer**: deploying or operating the system: read [Getting Started](../getting-started.md) first, then [02-architecture.md §2.1](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) (GMC), [Appendix A](appendix-a-capacity-slos.md) (SLOs), [Observability](../operations/observability.md), [Runbook](../operations/runbook.md), and [Upgrade & Rollback](../operations/upgrade.md).
 

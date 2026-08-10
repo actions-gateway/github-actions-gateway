@@ -1,6 +1,7 @@
 # Bash style
 
-Conventions for every shell script in this repo — `scripts/`, `.githooks/`, and (where practical) inline `run:` blocks in `.github/workflows/`. Every tracked script under `scripts/` is linted against these by `make shellcheck`, which is part of `make check` (see [testing.md § The shellcheck gate](testing.md#the-shellcheck-gate)).
+Conventions for every shell script in this repo — `scripts/`, `.githooks/`, and (where practical) inline `run:` blocks in `.github/workflows/`.
+Every tracked script under `scripts/` is linted against these by `make shellcheck`, which is part of `make check` (see [testing.md § The shellcheck gate](testing.md#the-shellcheck-gate)).
 
 ## Rules
 
@@ -15,18 +16,25 @@ Conventions for every shell script in this repo — `scripts/`, `.githooks/`, an
 
 ## A loop must be able to stop itself
 
-An unbounded loop can only be ended from outside, and that external kill is the problem: it gets issued as a `pkill -f <pattern>`, the pattern matches every parallel worktree, and it carries no record of whose run it is hitting ([testing.md § Stopping a run](testing.md#stopping-a-run-name-the-target-never-the-program)). Give the loop its own stop condition and the kill is never needed.
+An unbounded loop can only be ended from outside, and that external kill is the problem: it gets issued as a `pkill -f <pattern>`, the pattern matches every parallel worktree, and it carries no record of whose run it is hitting ([testing.md § Stopping a run](testing.md#stopping-a-run-name-the-target-never-the-program)).
+Give the loop its own stop condition and the kill is never needed.
 
 - A **bounded iteration count** when the work is countable: `for i in $(seq 1 40)`.
-- A **stop-file the loop polls** when it is not: `while [[ ! -f "${stop_file}" ]]`. Touching the file ends the run through the normal exit path, so the cleanup `trap` still runs.
+- A **stop-file the loop polls** when it is not: `while [[ ! -f "${stop_file}" ]]`.
+  Touching the file ends the run through the normal exit path, so the cleanup `trap` still runs.
 
-**Do not reach for `timeout`.** It ships with GNU coreutils and is absent from a stock macOS, where neither `timeout` nor `gtimeout` is on `PATH`. A script that depends on it runs unbounded on a dev Mac while looking correct. That is the same silent-absence trap that broke Q690's load harness, which backgrounded its generators with `setsid`: also absent on macOS, so all three died instantly and 40 samples passed against an idle machine, reading as strong evidence of no flake. `timeout` is also still a kill, just one on a timer, so the signal can skip the cleanup `trap` that a self-terminating loop unwinds through.
+**Do not reach for `timeout`.** It ships with GNU coreutils and is absent from a stock macOS, where neither `timeout` nor `gtimeout` is on `PATH`.
+A script that depends on it runs unbounded on a dev Mac while looking correct.
+That is the same silent-absence trap that broke Q690's load harness, which backgrounded its generators with `setsid`: also absent on macOS, so all three died instantly and 40 samples passed against an idle machine, reading as strong evidence of no flake. `timeout` is also still a kill, just one on a timer, so the signal can skip the cleanup `trap` that a self-terminating loop unwinds through.
 
-This applies hardest to throwaway harnesses under the gitignored `tmp/`. Being a throwaway is exactly why such a script gets none of the review a tracked one does, and it is where every unbounded loop in this repo's history has actually come from.
+This applies hardest to throwaway harnesses under the gitignored `tmp/`.
+Being a throwaway is exactly why such a script gets none of the review a tracked one does, and it is where every unbounded loop in this repo's history has actually come from.
 
 ## `set -e` stops at a command substitution
 
-`set -euo pipefail` does not cover `x="$(build_fixture)"`. Inside the substitution a failing command neither aborts nor propagates, and the assignment takes the status of the builder's *last* command, so a fixture that broke on its third step reports success. Measured on bash 5.3, with a builder whose first two steps fail:
+`set -euo pipefail` does not cover `x="$(build_fixture)"`.
+Inside the substitution a failing command neither aborts nor propagates, and the assignment takes the status of the builder's *last* command, so a fixture that broke on its third step reports success.
+Measured on bash 5.3, with a builder whose first two steps fail:
 
 | Form | Exit status | Steps run after the first failure |
 |---|---|---|
@@ -39,57 +47,84 @@ This applies hardest to throwaway harnesses under the gitignored `tmp/`. Being a
 | `shopt -s inherit_errexit` then `local repo="$(build)"` | **0** | 0 |
 | `build` called directly, no substitution | 1 | 0 |
 
-`shopt -s inherit_errexit` is the remedy to reach for: one line at the top of the file covers every *plain* substitution in it, where the other two working forms have to be repeated per call site. It is required in every executable script under `scripts/`, and [`make errexit-prologue-check`](../../scripts/ci/check-errexit-prologue.sh) enforces that. Sourced `lib/` files are exempt and must not declare it: they run under the caller's shell options, a caller's shopt already covers the functions they define, and declaring it in a sourced file would switch the option on for every caller instead.
+`shopt -s inherit_errexit` is the remedy to reach for: one line at the top of the file covers every *plain* substitution in it, where the other two working forms have to be repeated per call site.
+It is required in every executable script under `scripts/`, and [`make errexit-prologue-check`](../../scripts/ci/check-errexit-prologue.sh) enforces that.
+Sourced `lib/` files are exempt and must not declare it: they run under the caller's shell options, a caller's shopt already covers the functions they define, and declaring it in a sourced file would switch the option on for every caller instead.
 
-**It does not cover a declaration builtin.** The last-but-one row above is the trap: `local`, `declare`, `export` and `readonly` return their *own* status, which replaces the substitution's, so `local repo="$(build)"` stays exit 0 even with the shopt set. The shopt still stops the builder at its first failure, which makes this the worst of the three states: a value truncated *and* a clean exit. Split the declaration from the assignment, which is the one form that reports:
+**It does not cover a declaration builtin.** The last-but-one row above is the trap: `local`, `declare`, `export` and `readonly` return their *own* status, which replaces the substitution's, so `local repo="$(build)"` stays exit 0 even with the shopt set.
+The shopt still stops the builder at its first failure, which makes this the worst of the three states: a value truncated *and* a clean exit.
+Split the declaration from the assignment, which is the one form that reports:
 
 ```bash
 local repo
 repo="$(build)"
 ```
 
-shellcheck's SC2155 already rejects the combined form, and `make shellcheck` runs in the same `make check`, so this half of the class is closed by a gate that predates the rule. The prologue gate deliberately leaves it alone rather than half-duplicating it.
+shellcheck's SC2155 already rejects the combined form, and `make shellcheck` runs in the same `make check`, so this half of the class is closed by a gate that predates the rule.
+The prologue gate deliberately leaves it alone rather than half-duplicating it.
 
 ### The Claude Code hooks swallow the shopt's own failure
 
-`inherit_errexit` arrived in bash 4.4, and stock macOS still ships 3.2 at `/bin/bash`. There the `shopt` itself fails, and `set -e` turns that into a non-zero exit before the script does anything. For the three `PreToolUse` hooks in [`scripts/agent/`](../../scripts/agent/) that breaks a contract that outranks this one: a hook must never block a tool call, on any bash it happens to run under. They alone carry the tolerant form, and the gate rejects it everywhere else:
+`inherit_errexit` arrived in bash 4.4, and stock macOS still ships 3.2 at `/bin/bash`.
+There the `shopt` itself fails, and `set -e` turns that into a non-zero exit before the script does anything.
+For the three `PreToolUse` hooks in [`scripts/agent/`](../../scripts/agent/) that breaks a contract that outranks this one: a hook must never block a tool call, on any bash it happens to run under.
+They alone carry the tolerant form, and the gate rejects it everywhere else:
 
 ```bash
 set -euo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 ```
 
-On bash 4.4+ this is identical to the strict line; on 3.2 it gives up the coverage rather than the hook. Only `claude-piped-gate-hook-test.sh` exercised this, because it is the one suite that strips `PATH` (to simulate a missing Go toolchain) and so is the only one that reaches the system bash at all.
+On bash 4.4+ this is identical to the strict line; on 3.2 it gives up the coverage rather than the hook.
+Only `claude-piped-gate-hook-test.sh` exercised this, because it is the one suite that strips `PATH` (to simulate a missing Go toolchain) and so is the only one that reaches the system bash at all.
 
-What this costs when it goes unnoticed is a misattributed failure, not just a late one. A fixture builder that keeps running after its setup broke turns one root failure into a cascade of downstream errors, and the last line in the log belongs to the *subject* rather than the fixture. In Q703, `release-delta-test`'s fixture repository lost a commit object partway through `build_repo`; the suite ran seven more failing `git commit` calls and ended on `release-delta: 'HEAD' is not a commit-ish in this repo`, which reads as a defect in the report under test. With `inherit_errexit` the same injected fault stops at the first `git` fatal and exits 128, git's own status, naming the fixture as the thing that broke.
+What this costs when it goes unnoticed is a misattributed failure, not just a late one.
+A fixture builder that keeps running after its setup broke turns one root failure into a cascade of downstream errors, and the last line in the log belongs to the *subject* rather than the fixture.
+In Q703, `release-delta-test`'s fixture repository lost a commit object partway through `build_repo`; the suite ran seven more failing `git commit` calls and ended on `release-delta: 'HEAD' is not a commit-ish in this repo`, which reads as a defect in the report under test.
+With `inherit_errexit` the same injected fault stops at the first `git` fatal and exits 128, git's own status, naming the fixture as the thing that broke.
 
-The hole was in 12 of 59 `scripts/**/*-test.sh` suites when it was found, including [`check-v2-api-sync-test.sh`](../../scripts/go/check-v2-api-sync-test.sh), whose own flake (Q596) was undiagnosable for the same reason: a failure that is not distinguished from a legitimate verdict. All 12 carry the shopt now.
+The hole was in 12 of 59 `scripts/**/*-test.sh` suites when it was found, including [`check-v2-api-sync-test.sh`](../../scripts/go/check-v2-api-sync-test.sh), whose own flake (Q596) was undiagnosable for the same reason: a failure that is not distinguished from a legitimate verdict.
+All 12 carry the shopt now.
 
-The gates were left behind by that pass, and Q733 closed them: 154 more scripts, of which 75 had at least one substitution running an in-script function, the shape that actually swallows a failure. The worst was [`go-lint.sh`](../../scripts/go/go-lint.sh), whose `scoped_module_dirs` feeds the lint scope. With a fault injected into it the gate announced a full sweep, linted 1 module instead of 11, swallowed four `command not found` 127s and exited 0; with the shopt the same fault exits 127 at the first one. Q670 is the same hole reached without an injected fault, and its fix addressed the scope computation rather than the swallowing.
+The gates were left behind by that pass, and Q733 closed them: 154 more scripts, of which 75 had at least one substitution running an in-script function, the shape that actually swallows a failure.
+The worst was [`go-lint.sh`](../../scripts/go/go-lint.sh), whose `scoped_module_dirs` feeds the lint scope.
+With a fault injected into it the gate announced a full sweep, linted 1 module instead of 11, swallowed four `command not found` 127s and exited 0; with the shopt the same fault exits 127 at the first one.
+Q670 is the same hole reached without an injected fault, and its fix addressed the scope computation rather than the swallowing.
 
-Adding the shopt is a behaviour change, which is the point: it turns a silent pass into a failure. It found one, in `windowserver_reports` in [`validate-throttle.sh`](../../scripts/agent/validate-throttle.sh), which counted with `[[ -e "$f" ]] && (( count++ ))`. Post-increment evaluates to the *old* value, so the first match returns 1, and as the last command in an `&&` list that aborts the function. The count was right only because errexit could not reach it.
+Adding the shopt is a behaviour change, which is the point: it turns a silent pass into a failure.
+It found one, in `windowserver_reports` in [`validate-throttle.sh`](../../scripts/agent/validate-throttle.sh), which counted with `[[ -e "$f" ]] && (( count++ ))`.
+Post-increment evaluates to the *old* value, so the first match returns 1, and as the last command in an `&&` list that aborts the function.
+The count was right only because errexit could not reach it.
 
 ## Shared helpers and Makefile wiring
 
-Before writing a new helper function, check [`scripts/lib/common.sh`](../../scripts/lib/common.sh) — `require_cmd`, `workspace_modules`, and the throttle setup already live there. The root `Makefile` keeps recipes as thin target→script wiring so the logic stays shellcheck-covered; see [`scripts/README.md`](../../scripts/README.md) for the script inventory and parameter conventions.
+Before writing a new helper function, check [`scripts/lib/common.sh`](../../scripts/lib/common.sh) — `require_cmd`, `workspace_modules`, and the throttle setup already live there.
+The root `Makefile` keeps recipes as thin target→script wiring so the logic stays shellcheck-covered; see [`scripts/README.md`](../../scripts/README.md) for the script inventory and parameter conventions.
 
-**A new script goes in a `scripts/<group>/` directory, never at the top level.** The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in [`scripts/README.md`](../../scripts/README.md) and the rule is explained in [testing.md § `scripts/` is grouped by blast radius](testing.md#scripts-is-grouped-by-blast-radius). Put a `*-test.sh` beside its subject.
+**A new script goes in a `scripts/<group>/` directory, never at the top level.** The groups name the gate that consumes the script, which is what lets every CI path filter be a prefix glob rather than an enumeration; the map is in [`scripts/README.md`](../../scripts/README.md) and the rule is explained in [testing.md § `scripts/` is grouped by blast radius](testing.md#scripts-is-grouped-by-blast-radius).
+Put a `*-test.sh` beside its subject.
 
 ## When not to write the script in shell
 
-A script that sequences `kubectl`/`helm`/`gcloud` calls belongs here however long it gets. A script that parses a structured format into fields and reasons over them wants a real parser and a test suite, and belongs in `devtools/` as a Go program with a thin `scripts/` entry point. The criterion is parsing density, not length; it, its corroborating signals, and what the rewrite costs are in [technical-debt.md § A shell gate becomes a Go devtool on parsing density, not length](technical-debt.md#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length).
+A script that sequences `kubectl`/`helm`/`gcloud` calls belongs here however long it gets.
+A script that parses a structured format into fields and reasons over them wants a real parser and a test suite, and belongs in `devtools/` as a Go program with a thin `scripts/` entry point.
+The criterion is parsing density, not length; it, its corroborating signals, and what the rewrite costs are in [technical-debt.md § A shell gate becomes a Go devtool on parsing density, not length](technical-debt.md#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length).
 
-**A Claude Code `PreToolUse` hook is not an exception**, however much its must-never-block contract makes it feel like one: a hook that scans the Bash command string is parsing shell grammar, and fail-open survives the move to Go via the build seam that section documents. Read it before hand-rolling quote state, heredoc bodies, or command position in `case`.
+**A Claude Code `PreToolUse` hook is not an exception**, however much its must-never-block contract makes it feel like one: a hook that scans the Bash command string is parsing shell grammar, and fail-open survives the move to Go via the build seam that section documents.
+Read it before hand-rolling quote state, heredoc bodies, or command position in `case`.
 
 ## Accepted shellcheck findings
 
-A finding that is accepted rather than fixed carries a targeted `# shellcheck disable=SCxxxx` directive with a justifying comment immediately above the line (example: the dynamic-name `read`/`export` in [`scripts/dev/probe-investigations-cd.sh`](../../scripts/dev/probe-investigations-cd.sh)). Everything else is fixed to match the rules above.
+A finding that is accepted rather than fixed carries a targeted `# shellcheck disable=SCxxxx` directive with a justifying comment immediately above the line (example: the dynamic-name `read`/`export` in [`scripts/dev/probe-investigations-cd.sh`](../../scripts/dev/probe-investigations-cd.sh)).
+Everything else is fixed to match the rules above.
 
 ### SC2329 on a `trap`-invoked cleanup function
 
-shellcheck 0.11 reports `SC2329 (info): This function is never invoked` for a function reached only through `trap`, but **only when the script's final statement is an unconditional `exit`**. The same script ending in an ordinary command is clean, and a conditional `exit` inside an `if` does not trigger it either — so most scripts here never see it, and the ones that do look identical to the ones that do not.
+shellcheck 0.11 reports `SC2329 (info): This function is never invoked` for a function reached only through `trap`, but **only when the script's final statement is an unconditional `exit`**.
+The same script ending in an ordinary command is clean, and a conditional `exit` inside an `if` does not trigger it either — so most scripts here never see it, and the ones that do look identical to the ones that do not.
 
-It is a false positive: the function *is* invoked, by the `EXIT` trap. Keep the `exit` if the script needs a meaningful status, and disable the check where the function is defined:
+It is a false positive: the function *is* invoked, by the `EXIT` trap.
+Keep the `exit` if the script needs a meaningful status, and disable the check where the function is defined:
 
 ```bash
 # shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses
@@ -100,4 +135,5 @@ cleanup() {
 trap cleanup EXIT
 ```
 
-Do not delete the trailing `exit` or restructure the cleanup to silence it — the exit status is the useful thing and the warning is the wrong one. Live example: [`scripts/e2e/vap-param-informer-check.sh`](../../scripts/e2e/vap-param-informer-check.sh).
+Do not delete the trailing `exit` or restructure the cleanup to silence it — the exit status is the useful thing and the warning is the wrong one.
+Live example: [`scripts/e2e/vap-param-informer-check.sh`](../../scripts/e2e/vap-param-informer-check.sh).

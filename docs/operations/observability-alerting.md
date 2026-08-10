@@ -2,9 +2,14 @@
 
 > **Audience:** Platform engineer
 
-Part of the [Observability](observability.md) guide. The metrics referenced below are catalogued in the [Metrics reference](observability-metrics.md); to scrape them, see [Accessing metrics](observability-metrics-access.md). For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
+Part of the [Observability](observability.md) guide.
+The metrics referenced below are catalogued in the [Metrics reference](observability-metrics.md); to scrape them, see [Accessing metrics](observability-metrics-access.md).
+For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
 
-> **The duration and latency series are classic-only, so the rules built on them are silent on the default tier.** `actions_gateway_pod_creation_latency_seconds` and `actions_gateway_job_duration_seconds` are observed only on the classic acquisition path. On a `ScaleSet` set, the default since P5, both are absent, so `ActionsGatewayPodCreationLatencyP99`, `ActionsGatewayPodCreationLatencyP95` and the four `actions_gateway:*` recording rules below never fire and their panels read blank. Treat that silence as a missing signal rather than a healthy one. Tracked by Q713; scope is catalogued in the [Metrics reference](observability-metrics.md).
+> **The duration and latency series are classic-only, so the rules built on them are silent on the default tier.** `actions_gateway_pod_creation_latency_seconds` and `actions_gateway_job_duration_seconds` are observed only on the classic acquisition path.
+> On a `ScaleSet` set, the default since P5, both are absent, so `ActionsGatewayPodCreationLatencyP99`, `ActionsGatewayPodCreationLatencyP95` and the four `actions_gateway:*` recording rules below never fire and their panels read blank.
+> Treat that silence as a missing signal rather than a healthy one.
+> Tracked by Q713; scope is catalogued in the [Metrics reference](observability-metrics.md).
 
 ## Symptom → Metric Mapping
 
@@ -36,17 +41,14 @@ Part of the [Observability](observability.md) guide. The metrics referenced belo
 
 ## Recommended Alert Rules
 
-> **Apply as code.** These rules — and the [SLO recording rules](#slo-recording-rules) below — ship as a directly-appliable `PrometheusRule` at [`deploy/monitoring/prometheusrule.yaml`](../../deploy/monitoring/prometheusrule.yaml). `kubectl apply` it into a namespace your Prometheus selects rules from instead of copying the YAML below by hand (see [`deploy/monitoring/README.md`](../../deploy/monitoring/README.md)). The blocks here are the same rules, reproduced for reference.
+> **Apply as code.** These rules — and the [SLO recording rules](#slo-recording-rules) below — ship as a directly-appliable `PrometheusRule` at [`deploy/monitoring/prometheusrule.yaml`](../../deploy/monitoring/prometheusrule.yaml). `kubectl apply` it into a namespace your Prometheus selects rules from instead of copying the YAML below by hand (see [`deploy/monitoring/README.md`](../../deploy/monitoring/README.md)).
+> The blocks here are the same rules, reproduced for reference.
 
-The following Prometheus alerting rules map to the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md). Adjust thresholds to match your environment.
+The following Prometheus alerting rules map to the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md).
+Adjust thresholds to match your environment.
 
-> **The three worker-capacity alerts fire for both owners.** Each `or`s the v1
-> `RunnerGroup` gauge with its `actions_gateway_runnerset_*` v2 twin (Q319), because the
-> two are separate metric families keyed on `runner_group` and `runner_set` respectively
-> — an alert naming only the v1 family never fires on a v2-only deploy. Their summaries
-> print `{{ $labels.runner_group }}{{ $labels.runner_set }}` for the same reason: a given
-> series carries exactly one of the two, so concatenating names the owner without needing
-> a separate rule per kind.
+> **The three worker-capacity alerts fire for both owners.** Each `or`s the v1 `RunnerGroup` gauge with its `actions_gateway_runnerset_*` v2 twin (Q319), because the two are separate metric families keyed on `runner_group` and `runner_set` respectively — an alert naming only the v1 family never fires on a v2-only deploy.
+> Their summaries print `{{ $labels.runner_group }}{{ $labels.runner_set }}` for the same reason: a given series carries exactly one of the two, so concatenating names the owner without needing a separate rule per kind.
 
 ```yaml
 groups:
@@ -333,7 +335,8 @@ groups:
 
 ## SLO Recording Rules
 
-These recording rules pre-compute the metrics needed for burn-rate alerting against the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md). Apply them alongside the alert rules above.
+These recording rules pre-compute the metrics needed for burn-rate alerting against the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md).
+Apply them alongside the alert rules above.
 
 ```yaml
 groups:

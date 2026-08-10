@@ -1,22 +1,12 @@
 # v2 GA graduation plan (`v2beta1` → `v2`)
 
-The last rung of the graduation ladder defined in
-[v2-api.md § API maturity & graduation](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2),
-and the release that executes the three coupled removals announced by
-[release-1.3.md](release-1.3.md).
+The last rung of the graduation ladder defined in [v2-api.md § API maturity & graduation](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), and the release that executes the three coupled removals announced by [release-1.3.md](release-1.3.md).
 
-This plan starts **after `v1.3.0` ships**. It is deliberately unhurried: General
-Availability (GA) signs a permanent backward-compatibility contract on a five-kind
-API surface, and the contract cannot be walked back.
+This plan starts **after `v1.3.0` ships**.
+It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.
 
-> **Status: parked — no active work, every phase carried by a Deferred trigger.**
-> Phases 1, 2 and 4 wait on [Q413](../STATUS.md#Q413) (**Event:** `v1.3.0`
-> ships, starting the Phase 1 soak); Phase 3's coupled removals wait on
-> [Q273](../STATUS.md#Q273) and [Q264](../STATUS.md#Q264); the Phase 2 alias
-> decision is [Q452](../STATUS.md#Q452). The `✅` on this plan's
-> [Progress](../STATUS.md#progress) row means *no open Queue row remains*, not
-> that the graduation has happened — deferred residuals
-> [don't count](../development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count).
+> **Status: parked — no active work, every phase carried by a Deferred trigger.** Phases 1, 2 and 4 wait on [Q413](../STATUS.md#Q413) (**Event:** `v1.3.0` ships, starting the Phase 1 soak); Phase 3's coupled removals wait on [Q273](../STATUS.md#Q273) and [Q264](../STATUS.md#Q264); the Phase 2 alias decision is [Q452](../STATUS.md#Q452).
+> The `✅` on this plan's [Progress](../STATUS.md#progress) row means *no open Queue row remains*, not that the graduation has happened — deferred residuals [don't count](../development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count).
 > The phase table below is the real state.
 
 ## Status at a glance
@@ -31,8 +21,7 @@ API surface, and the contract cannot be walked back.
 
 ## Why this is gated on a soak, not a date
 
-The graduation ladder in [v2-api.md](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2)
-sets the contract at each level:
+The graduation ladder in [v2-api.md](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2) sets the contract at each level:
 
 | Level | Contract |
 |---|---|
@@ -40,30 +29,23 @@ sets the contract at each level:
 | `v2beta1` | won't be removed; changes carry a migration path; production-relyable |
 | `v2` (GA) | backward-compatible, effectively frozen |
 
-The jump that matters is beta to GA. Beta still permits a shape fix *with* a
-migration path; GA does not. So the question this plan answers is not "has enough
-time passed" but "do we have evidence the shape is right." Cutting GA early converts
-every remaining design mistake into a permanent one.
+The jump that matters is beta to GA.
+Beta still permits a shape fix *with* a migration path; GA does not.
+So the question this plan answers is not "has enough time passed" but "do we have evidence the shape is right."
+Cutting GA early converts every remaining design mistake into a permanent one.
 
 ## Phase 1 — the soak (what "well validated" means)
 
-GA is blocked until **all** of the following hold. These are the evidence bar, and
-none of them is a calendar check.
+GA is blocked until **all** of the following hold.
+These are the evidence bar, and none of them is a calendar check.
 
-1. **No incompatible `v2beta1` shape change has been needed** across at least two
-   minor releases of real use. A field addition is fine. A field whose meaning,
-   type, or defaulting had to change is a soak reset, because it is exactly the class
-   of change GA forbids.
-2. **Every kind has carried real traffic.** All five kinds exercised on the dogfood
-   cluster, not just the two the CI path happens to use. An unexercised kind is an
-   unvalidated kind.
-3. **The conversion webhook has round-tripped every served version under real
-   objects**, not only envtest fixtures, including objects created before the
-   `v2beta1` graduation.
-4. **The v2 GA Definition of Done in
-   [v2-api.md](v2-api.md#definition-of-done-v2-ga) audits clean.** That list predates
-   this plan and is authoritative; Phase 0 records the audit below rather than
-   restating the criteria.
+1. **No incompatible `v2beta1` shape change has been needed** across at least two minor releases of real use.
+   A field addition is fine.
+   A field whose meaning, type, or defaulting had to change is a soak reset, because it is exactly the class of change GA forbids.
+2. **Every kind has carried real traffic.** All five kinds exercised on the dogfood cluster, not just the two the CI path happens to use.
+   An unexercised kind is an unvalidated kind.
+3. **The conversion webhook has round-tripped every served version under real objects**, not only envtest fixtures, including objects created before the `v2beta1` graduation.
+4. **The v2 GA Definition of Done in [v2-api.md](v2-api.md#definition-of-done-v2-ga) audits clean.** That list predates this plan and is authoritative; Phase 0 records the audit below rather than restating the criteria.
 
 ### Definition of Done audit (as of this change)
 
@@ -79,55 +61,38 @@ none of them is a calendar check.
 
 ## Phase 2 — the graduation hop
 
-Mechanically identical to the `v2alpha1` → `v2beta1` hop, which is the useful part:
-the machinery already exists and does not need redesigning. Per
-[v2-api.md](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), each hop is:
+Mechanically identical to the `v2alpha1` → `v2beta1` hop, which is the useful part: the machinery already exists and does not need redesigning.
+Per [v2-api.md](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2), each hop is:
 
-1. Add the `v2` version to each of the five kinds and mark it
-   `+kubebuilder:storageversion`.
-2. Extend the existing `Hub`/`Convertible` conversion webhook to round-trip the new
-   served set. The hub moves to `v2`.
+1. Add the `v2` version to each of the five kinds and mark it `+kubebuilder:storageversion`.
+2. Extend the existing `Hub`/`Convertible` conversion webhook to round-trip the new served set.
+   The hub moves to `v2`.
 3. Storage-migrate stored objects, then drop the superseded served version.
 
-Two project-specific constraints carry over from the last hop and should be read
-before starting: shared version-neutral code lives in `api/apiconditions` with
-one-line re-exports per version, and `check-v2-api-sync.sh` gates every shared v2
-file. Getting this wrong is the most likely way to break the hop.
+Two project-specific constraints carry over from the last hop and should be read before starting: shared version-neutral code lives in `api/apiconditions` with one-line re-exports per version, and `check-v2-api-sync.sh` gates every shared v2 file.
+Getting this wrong is the most likely way to break the hop.
 
-**One shape decision the hop must make: does `v2` define `CiliumFQDN`/`CalicoFQDN`?**
-The two deprecated `EgressProxy.spec.egressPolicyMode` aliases cannot be removed at
-`v2.0.0` — they are members of the served beta version `v2beta1`, so their floor is
-`v3.0.0` ([Q428](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn)).
-That leaves a live choice for `v2`: omit them (a clean GA surface, but the hub moves
-to `v2` and a `v2beta1` object naming an alias then needs a lossless carrier, since
-the conversion deliberately rides the values across verbatim rather than collapsing
-them to `FQDN`) or carry them deprecated (trivially lossless, but GA is effectively
-frozen and would be born owning two aliases). Either way the removal release is
-unchanged. Decide it here, not at the tag: [Q452](../STATUS.md#Q452).
+**One shape decision the hop must make: does `v2` define `CiliumFQDN`/`CalicoFQDN`?** The two deprecated `EgressProxy.spec.egressPolicyMode` aliases cannot be removed at `v2.0.0` — they are members of the served beta version `v2beta1`, so their floor is `v3.0.0` ([Q428](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn)).
+That leaves a live choice for `v2`: omit them (a clean GA surface, but the hub moves to `v2` and a `v2beta1` object naming an alias then needs a lossless carrier, since the conversion deliberately rides the values across verbatim rather than collapsing them to `FQDN`) or carry them deprecated (trivially lossless, but GA is effectively frozen and would be born owning two aliases).
+Either way the removal release is unchanged.
+Decide it here, not at the tag: [Q452](../STATUS.md#Q452).
 
 ## Phase 3 — the coupled removals
 
-`v2.0.0` executes all three removals announced by
-[release-1.3.md](release-1.3.md):
+`v2.0.0` executes all three removals announced by [release-1.3.md](release-1.3.md):
 
 - `v1alpha1` (the `actions-gateway.github.com` group) — [Q273](../STATUS.md#Q273)
 - `v2alpha1` — this plan
-- classic acquisition machinery and the transitional `acquisitionProtocol` /
-  `maxListeners` fields — [Q264](../STATUS.md#Q264)
+- classic acquisition machinery and the transitional `acquisitionProtocol` / `maxListeners` fields — [Q264](../STATUS.md#Q264)
 
-They are one bundle because `v2beta1` is already ScaleSet-only: classic acquisition
-exists solely to serve `v1alpha1` and `v2alpha1` objects, so removing those versions
-removes classic's only consumer. Sequencing within the release still matters, since
-the Q147 dual-read window closes exactly when `v1alpha1` is removed. Order:
-storage-migrate first, drop served versions second, then strip the dual-read arms
-from the `ValidatingAdmissionPolicy` objects and the validating webhook.
+They are one bundle because `v2beta1` is already ScaleSet-only: classic acquisition exists solely to serve `v1alpha1` and `v2alpha1` objects, so removing those versions removes classic's only consumer.
+Sequencing within the release still matters, since the Q147 dual-read window closes exactly when `v1alpha1` is removed.
+Order: storage-migrate first, drop served versions second, then strip the dual-read arms from the `ValidatingAdmissionPolicy` objects and the validating webhook.
 
 ### Capability parity is a precondition of the removal
 
-Removing classic must not delete a capability along with it. Dropping a served API
-version is a contract change operators can plan for; silently losing a behaviour
-they rely on is not, and it is exactly what the deprecation policy exists to
-prevent.
+Removing classic must not delete a capability along with it.
+Dropping a served API version is a contract change operators can plan for; silently losing a behaviour they rely on is not, and it is exactly what the deprecation policy exists to prevent.
 
 | Capability | State | Gate |
 |---|---|---|
@@ -139,89 +104,50 @@ prevent.
 
 ### What this audit checked, and found already covered
 
-Recorded so the cut does not re-derive it. Method: walk the tier seams — the
-`ScaleSet` early return in `runnerset_controller.go`, `provision()` versus
-`ProvisionScaleSetWorker`, and the `listener/` versus `scalesetlistener/`
-packages — then cross-check every capability the README, roadmap, and why-gag
-present as a property of the system.
+Recorded so the cut does not re-derive it.
+Method: walk the tier seams — the `ScaleSet` early return in `runnerset_controller.go`, `provision()` versus `ProvisionScaleSetWorker`, and the `listener/` versus `scalesetlistener/` packages — then cross-check every capability the README, roadmap, and why-gag present as a property of the system.
 
-**Confirmed on both tiers** (wired before the protocol route, or ported):
-worker-capacity conditions `WorkerQuotaPressure`/`WorkerQuotaExceeded`/
-`WorkersUnschedulable` (Q303, explicitly "identical to the classic path"), the
-opt-in scale-up rate limit `spec.scaleUp`, the measured sizing recommendation and
-`SizingDrift` condition (Q359), the worker-pod reaper including
-`orphaned_running` (Q420), and eviction recovery (Q417).
+**Confirmed on both tiers** (wired before the protocol route, or ported): worker-capacity conditions `WorkerQuotaPressure`/`WorkerQuotaExceeded`/ `WorkersUnschedulable` (Q303, explicitly "identical to the classic path"), the opt-in scale-up rate limit `spec.scaleUp`, the measured sizing recommendation and `SizingDrift` condition (Q359), the worker-pod reaper including `orphaned_running` (Q420), and eviction recovery (Q417).
 
-**Correctly absent from the scale-set tier** — artifacts of the many-acquirers
-and JIT-agent models that `ScaleSet` removes by construction, so they should
-disappear *with* classic rather than be ported:
-`jobs_duplicate_delivery_total`, `abandoned_delivery_completions_total`,
-`fanout_loser_recycle_deferred_total`, `agent_recycles_total`,
-`agent_recycle_errors_total`, `broker_token_propagation_retries_total`, and
-`broker_session_leaks_total`. Each measures a race or a repair that only exists
-because many sessions acquire against one pool.
+**Correctly absent from the scale-set tier** — artifacts of the many-acquirers and JIT-agent models that `ScaleSet` removes by construction, so they should disappear *with* classic rather than be ported: `jobs_duplicate_delivery_total`, `abandoned_delivery_completions_total`, `fanout_loser_recycle_deferred_total`, `agent_recycles_total`, `agent_recycle_errors_total`, `broker_token_propagation_retries_total`, and `broker_session_leaks_total`.
+Each measures a race or a repair that only exists because many sessions acquire against one pool.
 
-**Alerting already has its analog:** `job_acquisition_errors_total` is
-classic-only, but [observability-alerting.md](../operations/observability-alerting.md)
-ships `actions_gateway:scaleset_provision_success_rate:rate5m` alongside the
-classic `job_acquisition_success_rate`, so the shipped rules do not go silent at
-the cut. `active_sessions` is likewise classic-only with
-`scaleset_jobs_assigned_total` as the documented substitute.
+**Alerting already has its analog:** `job_acquisition_errors_total` is classic-only, but [observability-alerting.md](../operations/observability-alerting.md) ships `actions_gateway:scaleset_provision_success_rate:rate5m` alongside the classic `job_acquisition_success_rate`, so the shipped rules do not go silent at the cut. `active_sessions` is likewise classic-only with `scaleset_jobs_assigned_total` as the documented substitute.
 
-Both were genuine gates, not nice-to-haves: eviction recovery and the pre-claim quota
-gate are headline capabilities in [01-executive-summary.md](../design/01-executive-summary.md),
-[README.md](../../README.md), and [why-gag.md](../why-gag.md), all of which describe
-them as properties of the system rather than of one acquisition tier. Removing classic
-before Q417 and Q443 landed would have made those claims false at the same moment the
-only tier that satisfied them disappeared. With both ports in, the claims survive the cut.
+Both were genuine gates, not nice-to-haves: eviction recovery and the pre-claim quota gate are headline capabilities in [01-executive-summary.md](../design/01-executive-summary.md), [README.md](../../README.md), and [why-gag.md](../why-gag.md), all of which describe them as properties of the system rather than of one acquisition tier.
+Removing classic before Q417 and Q443 landed would have made those claims false at the same moment the only tier that satisfied them disappeared.
+With both ports in, the claims survive the cut.
 
-The two were found the same way and a day apart, which is the reusable lesson: a
-capability wired into a call site the default tier never reaches reads as shipped from
-every angle except the one that matters — the tier tenants actually run. A claim about
-what GAG does is not verified until it names the acquisition tier it was verified on.
+The two were found the same way and a day apart, which is the reusable lesson: a capability wired into a call site the default tier never reaches reads as shipped from every angle except the one that matters — the tier tenants actually run.
+A claim about what GAG does is not verified until it names the acquisition tier it was verified on.
 
-One residual is worth knowing about but does not gate the removal, because classic
-shares it: a worker pod force-deleted with no grace period (or lost with its node)
-leaves no `Failed`/`Evicted` object and no chance for the runner to report, so neither
-tier recovers it. Q435 measured the adjacent orphan-reclaim question and
-[Q438](archive/q438-worker-lifetime-deadline.md) closed its residual with a
-provision-time worker lifetime cap.
+One residual is worth knowing about but does not gate the removal, because classic shares it: a worker pod force-deleted with no grace period (or lost with its node) leaves no `Failed`/`Evicted` object and no chance for the runner to report, so neither tier recovers it.
+Q435 measured the adjacent orphan-reclaim question and [Q438](archive/q438-worker-lifetime-deadline.md) closed its residual with a provision-time worker lifetime cap.
 
-Any further capability found to be classic-only before the cut joins this table and
-gates the same removal.
+Any further capability found to be classic-only before the cut joins this table and gates the same removal.
 
-**Two joined it after the audit, which is the rule working rather than failing.**
-The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped
-classic-only, Q766 ported them, and no tag ever published the asymmetry. Q713 is
-open, so the table's verdict is **not** currently cleared: the duration and latency
-series are the one capability with no scale-set analog and no port. Read the table,
-not this section's history, for the state of the gate.
+**Two joined it after the audit, which is the rule working rather than failing.** The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped classic-only, Q766 ported them, and no tag ever published the asymmetry.
+Q713 is open, so the table's verdict is **not** currently cleared: the duration and latency series are the one capability with no scale-set analog and no port.
+Read the table, not this section's history, for the state of the gate.
 
-The audit's method has a known blind spot both instances share. It walked the tier
-seams once, in July, and a capability added to `provision()` afterwards is
-classic-only from birth without anything re-walking them. Q683, Q691 and Q713 all
-arrived that way. Until [Q774](../STATUS.md#Q774) gates scope statements
-mechanically, adding a row here is a manual step in the change that creates the
-asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where
-that obligation is written down.
+The audit's method has a known blind spot both instances share.
+It walked the tier seams once, in July, and a capability added to `provision()` afterwards is classic-only from birth without anything re-walking them.
+Q683, Q691 and Q713 all arrived that way.
+Until [Q774](../STATUS.md#Q774) gates scope statements mechanically, adding a row here is a manual step in the change that creates the asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where that obligation is written down.
 
 ## Phase 4 — docs and the cut
 
 Operator-facing surface that must be current before the tag:
 
-- [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md) — becomes a
-  historical record rather than an active notice.
-- [migration-v1-to-v2.md](../operations/migration-v1-to-v2.md) — the pre-upgrade
-  migration becomes mandatory rather than at-your-convenience.
+- [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md) — becomes a historical record rather than an active notice.
+- [migration-v1-to-v2.md](../operations/migration-v1-to-v2.md) — the pre-upgrade migration becomes mandatory rather than at-your-convenience.
 - [upgrade.md](../operations/upgrade.md) — the upgrade-past-removal path.
 - [roadmap.md](../roadmap.md) — the graduation line stops being forward-looking.
 
 ## Guardrails
 
-- **A soak reset is not a failure.** If Phase 1 surfaces a shape problem, fixing it
-  in beta with a migration path is the system working. Shipping GA over a known
-  shape problem to hold a date is the failure.
-- **Deprecation is not removal.** `v2alpha1` stays fully served between `v1.3.0` and
-  `v2.0.0`. Nothing is forced on any operator before the major tag.
-- **`v2.0.0` is the only breaking release.** Everything between it and `v1.3.0` stays
-  backward-compatible, so operators get exactly one migration event.
+- **A soak reset is not a failure.** If Phase 1 surfaces a shape problem, fixing it in beta with a migration path is the system working.
+  Shipping GA over a known shape problem to hold a date is the failure.
+- **Deprecation is not removal.** `v2alpha1` stays fully served between `v1.3.0` and `v2.0.0`.
+  Nothing is forced on any operator before the major tag.
+- **`v2.0.0` is the only breaking release.** Everything between it and `v1.3.0` stays backward-compatible, so operators get exactly one migration event.

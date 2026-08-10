@@ -2,12 +2,17 @@
 
 **Status (2026-07-20):** ✅ Complete — every mapped upstream fix shipped in an installed plugin release (workspace-guard 1.7.1, branch-guard 1.4.0, prod-guard 2.4.0, foreground-guard 0.2.0), each retirement verified per the ground rules below, and all mapped `CLAUDE.md` rules retired (Q348).
 
-Q340 (PR #683) trimmed `CLAUDE.md`'s Hooks and Testing sections to must-act-on rules plus pointers. Several surviving rules exist only to route around gaps in the guard plugins; upstream asks for those gaps were filed 2026-07-18. As each ships, the mapped rule below can be deleted or shrunk further. Piecemeal retirement is fine — take whichever rows have landed.
+Q340 (PR #683) trimmed `CLAUDE.md`'s Hooks and Testing sections to must-act-on rules plus pointers.
+Several surviving rules exist only to route around gaps in the guard plugins; upstream asks for those gaps were filed 2026-07-18.
+As each ships, the mapped rule below can be deleted or shrunk further.
+Piecemeal retirement is fine — take whichever rows have landed.
 
 Two ground rules for the retirement session:
 
-- A fix counts as landed only when it ships **in a released plugin version that is actually installed** — marketplace installs don't auto-update. Refresh with `claude plugin marketplace update`, then `claude plugin update <plugin>@<marketplace>`, and confirm with `claude plugin list`.
-- **Verify before deleting:** reproduce the previously-prompting command once with the updated plugin (a heredoc'd Bash call, a `$(git rev-parse …)` git chain, …) and confirm no prompt/block. Treat the upstream issue's "closed" state as unverified until exercised.
+- A fix counts as landed only when it ships **in a released plugin version that is actually installed** — marketplace installs don't auto-update.
+  Refresh with `claude plugin marketplace update`, then `claude plugin update <plugin>@<marketplace>`, and confirm with `claude plugin list`.
+- **Verify before deleting:** reproduce the previously-prompting command once with the updated plugin (a heredoc'd Bash call, a `$(git rev-parse …)` git chain, …) and confirm no prompt/block.
+  Treat the upstream issue's "closed" state as unverified until exercised.
 
 ## The map
 

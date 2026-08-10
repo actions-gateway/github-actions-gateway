@@ -2,9 +2,11 @@
 
 > **Audience:** Platform engineer, Tenant operator
 
-Part of the [Observability](observability.md) guide. The panels below query the [Metrics reference](observability-metrics.md) and the [SLO recording rules](observability-alerting.md#slo-recording-rules); the scrape wiring they depend on is in [Accessing metrics](observability-metrics-access.md).
+Part of the [Observability](observability.md) guide.
+The panels below query the [Metrics reference](observability-metrics.md) and the [SLO recording rules](observability-alerting.md#slo-recording-rules); the scrape wiring they depend on is in [Accessing metrics](observability-metrics-access.md).
 
-> **Import as code.** Two reference dashboards ship under [`deploy/monitoring/`](../../deploy/monitoring/README.md) — import them into Grafana (**Dashboards → New → Import**) or provision them, rather than rebuilding the panels by hand. They split along the scrape boundary each reads from; the layouts below document what each contains.
+> **Import as code.** Two reference dashboards ship under [`deploy/monitoring/`](../../deploy/monitoring/README.md) — import them into Grafana (**Dashboards → New → Import**) or provision them, rather than rebuilding the panels by hand.
+> They split along the scrape boundary each reads from; the layouts below document what each contains.
 
 | Dashboard | Source scrape | Audience |
 | --- | --- | --- |
@@ -19,7 +21,8 @@ The split mirrors how the metrics are exposed (see [Accessing metrics](observabi
 
 ![The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows.](../assets/grafana-dashboard-tenant.png)
 
-Filtered by the `$namespace`, `$runner_group`, and `$runner_set` template variables. Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as data sources where applicable.
+Filtered by the `$namespace`, `$runner_group`, and `$runner_set` template variables.
+Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as data sources where applicable.
 
 **Row 1 — Gateway Health (per namespace)**
 
@@ -32,7 +35,8 @@ Filtered by the `$namespace`, `$runner_group`, and `$runner_set` template variab
 
 **Row 2 — Pod Creation Latency SLO**
 
-> Every panel in this row is **classic acquisition only** (Q713). `pod_creation_latency_seconds` is not observed on the scale-set path, so on a `ScaleSet` set, the default tier since P5, all three read blank rather than green. A blank SLO gauge here is a missing series, not a met target.
+> Every panel in this row is **classic acquisition only** (Q713). `pod_creation_latency_seconds` is not observed on the scale-set path, so on a `ScaleSet` set, the default tier since P5, all three read blank rather than green.
+> A blank SLO gauge here is a missing series, not a met target.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -54,7 +58,9 @@ Filtered by the `$namespace`, `$runner_group`, and `$runner_set` template variab
 
 **Row 4 — Scale-set Acquisition Tier (per runner_set)**
 
-The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits `actions_gateway_active_sessions` or `jobs_acquired_total`, so its throughput and health are only visible here. Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable does not filter these — the `$runner_set` variable does.
+The default acquisition protocol (Q264).
+These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits `actions_gateway_active_sessions` or `jobs_acquired_total`, so its throughput and health are only visible here.
+Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable does not filter these — the `$runner_set` variable does.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -74,23 +80,14 @@ The default acquisition protocol (Q264). These panels are the scale-set analog o
 | Worker capacity declined | `max by (reason) (actions_gateway_runnerset_worker_capacity_declined)` | Stat (1 = orange), reason shown beside the value |
 | Agent recycle errors | `rate(actions_gateway_agent_recycle_errors_total[5m])` | Time series |
 
-> The first three capacity panels union the v1 `RunnerGroup` family with its
-> `actions_gateway_runnerset_*` v2 twin (Q319). The two families key on different
-> labels — `runner_group` and `runner_set` — so `or` unions rather than overlaps them,
-> and a panel that named only the v1 family would read a flat `0` on a v2-only deploy.
-> To break either out per owner, replace `max(...)` with
-> `max by (namespace, runner_set) (actions_gateway_runnerset_...)`.
+> The first three capacity panels union the v1 `RunnerGroup` family with its `actions_gateway_runnerset_*` v2 twin (Q319).
+> The two families key on different labels — `runner_group` and `runner_set` — so `or` unions rather than overlaps them, and a panel that named only the v1 family would read a flat `0` on a v2-only deploy.
+> To break either out per owner, replace `max(...)` with `max by (namespace, runner_set) (actions_gateway_runnerset_...)`.
 
-> **Worker capacity declined has no v1 twin, and `No data` is a normal reading**
-> (Q643, Q658). The [gauge](observability-metrics.md) is emitted only for a
-> `RunnerSet` that set `spec.capacityGate.mode`, so an empty panel means no set
-> opted in, not that the query is broken. It groups by `reason` rather than
-> reducing to a bare `0`/`1` because the value alone cannot separate a live decline
-> from the latched `AwaitingProbe` state, and those call for different actions;
-> exactly one series exists per gated set, so `max by (reason)` cannot double-count.
-> The `1` is orange rather than red on purpose: a latched gate is
-> [throttling intake, not failing](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs),
-> and it can sit `True` indefinitely on an idle set whose shape stays unplaceable.
+> **Worker capacity declined has no v1 twin, and `No data` is a normal reading** (Q643, Q658).
+> The [gauge](observability-metrics.md) is emitted only for a `RunnerSet` that set `spec.capacityGate.mode`, so an empty panel means no set opted in, not that the query is broken.
+> It groups by `reason` rather than reducing to a bare `0`/`1` because the value alone cannot separate a live decline from the latched `AwaitingProbe` state, and those call for different actions; exactly one series exists per gated set, so `max by (reason)` cannot double-count.
+> The `1` is orange rather than red on purpose: a latched gate is [throttling intake, not failing](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs), and it can sit `True` indefinitely on an idle set whose shape stays unplaceable.
 
 **Row 6 — Egress Proxy (per tenant)**
 
@@ -170,9 +167,12 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 
 The dashboards ship with these template variables already wired:
 
-- `$namespace` — `label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)` — filters to a single tenant (both dashboards). The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no `active_sessions`, so keying the variable on that alone would leave the dashboard blank.
-- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The `runner_set`-labelled panels are not filtered by it; `$runner_set` is their variable.
-- `$runner_set` — `label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)` — filters to a specific `RunnerSet` on the scale-set and v2 capacity panels (tenant dashboard). It reads its label values from the Q319 capacity gauges rather than the `scaleset_*` series on purpose: those gauges are emitted for **every** `RunnerSet`, while `scaleset_*` exists only for `ScaleSet`-protocol sets, so keying on the latter would hide a `Classic` set from the dropdown entirely.
+- `$namespace` — `label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)` — filters to a single tenant (both dashboards).
+  The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no `active_sessions`, so keying the variable on that alone would leave the dashboard blank.
+- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard).
+  The `runner_set`-labelled panels are not filtered by it; `$runner_set` is their variable.
+- `$runner_set` — `label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)` — filters to a specific `RunnerSet` on the scale-set and v2 capacity panels (tenant dashboard).
+  It reads its label values from the Q319 capacity gauges rather than the `scaleset_*` series on purpose: those gauges are emitted for **every** `RunnerSet`, while `scaleset_*` exists only for `ScaleSet`-protocol sets, so keying on the latter would hide a `Classic` set from the dropdown entirely.
 
 ---
 

@@ -1,6 +1,7 @@
 # docs/development/
 
-Developer workflow references. Read the relevant doc before starting a task in that area.
+Developer workflow references.
+Read the relevant doc before starting a task in that area.
 
 | Doc | When to read |
 |---|---|

@@ -1,12 +1,17 @@
 # Kubernetes Best-Practices Audit
 
-> **Archived 2026-07-06.** Every finding shipped (A–G) or folded into a test plan (H). Two durable conclusions were promoted out of this audit before archival so they survive as living design/security knowledge: the A6 `CreateOrPatch`-vs-Server-Side-Apply rationale → [02-architecture.md](../../design/02-architecture.md#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply), and the HTTP/2 Rapid-Reset mitigation → [05-security.md](../../design/05-security.md). Residuals: D7 (conversion-webhook scaffolding) tracked as Q74; H2 (live-GitHub rerun-on-eviction e2e) as Q396. This doc is kept for the rationale.
+> **Archived 2026-07-06.** Every finding shipped (A–G) or folded into a test plan (H).
+> Two durable conclusions were promoted out of this audit before archival so they survive as living design/security knowledge: the A6 `CreateOrPatch`-vs-Server-Side-Apply rationale → [02-architecture.md](../../design/02-architecture.md#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply), and the HTTP/2 Rapid-Reset mitigation → [05-security.md](../../design/05-security.md).
+> Residuals: D7 (conversion-webhook scaffolding) tracked as Q74; H2 (live-GitHub rerun-on-eviction e2e) as Q396.
+> This doc is kept for the rationale.
 
-Findings from a project-wide Kubernetes best-practices audit performed 2026-05-30. Items are grouped by theme.
+Findings from a project-wide Kubernetes best-practices audit performed 2026-05-30.
+Items are grouped by theme.
 
 **Severity legend:** 🔴 high · 🟡 medium · 🟢 low.
 
-**Verified-good (not flagged here):** GMC/AGC/proxy manager pods all set `runAsNonRoot` + RO rootfs + drop ALL + seccomp `RuntimeDefault`; NetworkPolicies are well-split (workload / proxy / AGC / k8s-API with documented kube-proxy DNAT notes); Secret cache `DisableFor` discipline + `WatchesMetadata` for credentials; finalizers + owner references for GC; HTTP/2 disabled on metrics/webhook (Rapid Reset CVE); admission webhook rejects privileged containers and cross-namespace SecretRef. These baseline properties are documented durably in [05-security.md §5](../../design/05-security.md) (the HTTP/2 Rapid Reset mitigation was promoted there from this audit); the list here is the point-in-time snapshot the audit verified.
+**Verified-good (not flagged here):** GMC/AGC/proxy manager pods all set `runAsNonRoot` + RO rootfs + drop ALL + seccomp `RuntimeDefault`; NetworkPolicies are well-split (workload / proxy / AGC / k8s-API with documented kube-proxy DNAT notes); Secret cache `DisableFor` discipline + `WatchesMetadata` for credentials; finalizers + owner references for GC; HTTP/2 disabled on metrics/webhook (Rapid Reset CVE); admission webhook rejects privileged containers and cross-namespace SecretRef.
+These baseline properties are documented durably in [05-security.md §5](../../design/05-security.md) (the HTTP/2 Rapid Reset mitigation was promoted there from this audit); the list here is the point-in-time snapshot the audit verified.
 
 ---
 
@@ -28,7 +33,8 @@ High-priority controller-runtime patterns whose absence causes silent staleness,
 
 ### A6 design note: `CreateOrPatch` vs Server-Side Apply
 
-> **Promoted to the durable design layer.** The rationale for why the GMC's `apply*` helpers use `controllerutil.CreateOrPatch` rather than Server-Side Apply — and why `applyNamespacePSA` keeps SSA — now lives in [02-architecture.md § Design choice: reconciler writes use `CreateOrPatch`, not Server-Side Apply](../../design/02-architecture.md#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply). Moved out of this closed audit so it survives archival; the finding row above records the fix that landed.
+> **Promoted to the durable design layer.** The rationale for why the GMC's `apply*` helpers use `controllerutil.CreateOrPatch` rather than Server-Side Apply — and why `applyNamespacePSA` keeps SSA — now lives in [02-architecture.md § Design choice: reconciler writes use `CreateOrPatch`, not Server-Side Apply](../../design/02-architecture.md#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply).
+> Moved out of this closed audit so it survives archival; the finding row above records the fix that landed.
 
 ## B. RBAC & cluster-wide privilege 🔴
 
@@ -43,7 +49,9 @@ Privilege-escalation primitives on a compromised GMC pod.
 
 ## C. Worker / proxy pod security defaults ✅
 
-The operator-created pods (worker pods from AGC, proxy pods from GMC) are the highest-blast-radius surface. PSA `baseline` (the project default) does **not** enforce `runAsNonRoot` or seccomp. Proxy pods (GMC `buildProxyDeployment`) already ship a full hardened `SecurityContext` + resources, so the findings below cover **worker pods only**; all are fixed.
+The operator-created pods (worker pods from AGC, proxy pods from GMC) are the highest-blast-radius surface.
+PSA `baseline` (the project default) does **not** enforce `runAsNonRoot` or seccomp.
+Proxy pods (GMC `buildProxyDeployment`) already ship a full hardened `SecurityContext` + resources, so the findings below cover **worker pods only**; all are fixed.
 
 | # | Sev | Finding | Location | Fix |
 |---|---|---|---|---|
@@ -68,7 +76,8 @@ Mostly cosmetic + future-proofing; no security implications except D5. **D1–D6
 
 ## E. Manifest defaults & HA ✅
 
-The shipped kustomize bases were not HA-by-default and disabled several integrations behind comments. Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for E3/E4 was decided with sign-off (see notes).
+The shipped kustomize bases were not HA-by-default and disabled several integrations behind comments.
+Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for E3/E4 was decided with sign-off (see notes).
 
 | # | Sev | Finding | Location | Resolution |
 |---|---|---|---|---|
