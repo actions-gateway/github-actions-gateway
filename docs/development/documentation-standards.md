@@ -309,6 +309,14 @@ Six mdreflow bugs surfaced while adopting this, all fixed upstream: [#14](https:
 Between them they took this tree from roughly two thirds converted to 99.81%, and stopped callouts being destroyed.
 The last was fixed structurally rather than by another narrowing: deriving no-break spans from a goldmark parse means linkify is modeled by the parser instead of mirrored by hand, which is what let a code span ending in a URL stop skipping its paragraph.
 
+The 25 lines that still do not reflow fall into three classes, and all three are settled, so a later session need not re-diagnose them.
+Thirteen sit three or more containers deep, which mdreflow declines by design ([#1](https://github.com/jbeda/mdreflow/issues/1)).
+That one is written off rather than merely unfixed: raising the depth cap locally corrupted structure, moving content out of its list item into a sibling blockquote, so a human deciding where the breaks go is the right default at that depth.
+Two are a paragraph in [website.md](website.md) that documents `[label]: target` syntax, where skipping is the correct answer and no exclusion is warranted, since excluding the file would stop reflowing its other 658 lines.
+The remaining ten are a `[label]:` shape inside an inline code span arming the link-reference-definition zone, filed upstream as [#37](https://github.com/jbeda/mdreflow/issues/37).
+Six of those ten are in a neighboring bullet holding no bracket at all.
+Do not patch around it here: the one-line fix breaks fuzz idempotency, which is why [#36](https://github.com/jbeda/mdreflow/pull/36) was withdrawn.
+
 Two lessons worth keeping.
 A narrowing this repo proposed was wrong in a way a 2.8M-execution fuzz run did not catch: it armed only at paren depth zero, so a link destination opened inside an outer prose paren escaped it and was corrupted.
 A large execution count over a corpus that never contained the shape is weaker evidence than one deliberately constructed case.
