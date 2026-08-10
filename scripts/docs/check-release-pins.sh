@@ -34,6 +34,13 @@
 set -euo pipefail
 shopt -s inherit_errexit
 
+# The library is resolved from this script's own location, not from the git root
+# below: the root is whatever tree the gate is pointed at, which the test suite
+# scopes to a throwaway repo that has no scripts/lib/.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
+
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # Every page that tells a reader which version to install. A new one belongs
@@ -71,30 +78,12 @@ for f in "${pin_files[@]}"; do
     fi
 done
 
-# The highest stable vX.Y.Z tag. Prerelease tags (-rc.N, -alpha, -beta) and 0.x
-# are excluded: neither is a release an operator installs.
-stable_tags() {
-    awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && !/^v0\./' | sort -V | tail -1
-}
+# The highest stable vX.Y.Z tag, and where it was read from — resolve_release_tag
+# in scripts/lib/common.sh, shared with check-roadmap.sh so both gates mean the
+# same thing by "the current release".
+IFS=$'\t' read -r release_tag tag_source < <(resolve_release_tag "$repo_root") || true
 
-release_tag="${GAG_RELEASE_TAG:-}"
-tag_source="\$GAG_RELEASE_TAG"
-if [[ -z "$release_tag" ]]; then
-    release_tag="$(git -C "$repo_root" tag --list 'v*' | stable_tags)"
-    tag_source="local tags"
-fi
-if [[ -z "$release_tag" ]]; then
-    # A shallow CI checkout carries no tags. Read them off the remote rather than
-    # concluding there is no release — an unfetched tag list and a tagless repo
-    # look identical locally.
-    # No `origin`, or no network, is "cannot tell" rather than an error here —
-    # the skip below reports it.
-    release_tag="$({ git -C "$repo_root" ls-remote --tags --refs origin 'v*' 2>/dev/null || true; } |
-        awk -F/ '{ print $NF }' | stable_tags)"
-    tag_source="origin remote"
-fi
-
-if [[ -z "$release_tag" ]]; then
+if [[ -z "${release_tag:-}" ]]; then
     printf 'check-release-pins: SKIP — no stable vX.Y.Z tag locally or on origin, so there is\n'
     printf '                    no released version to pin (expected on a fresh fork). Nothing\n'
     printf '                    was checked. Set GAG_RELEASE_TAG to check against a version.\n'

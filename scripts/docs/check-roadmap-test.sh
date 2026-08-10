@@ -380,6 +380,111 @@ expect "a deleted row contributes no gate" 1 \
 expect "STATUS.md lost its Labels column" 2 \
     "$(roadmap "$NEAR" -- "$EXPL")" "$WORKDIR/no-labels.md" 'no "Labels" column'
 
+# --- rules 9-11: the marketing badges ----------------------------------------
+#
+# Both badges exist to expire. The cases that earn the rules are therefore the
+# ones where a badge must be REMOVED — a chip left behind by two releases, a
+# tier badge whose row shipped — because those are the states a page reaches by
+# doing nothing, and the states a reader cannot tell from a correct page.
+
+RM_CLEAN="$(roadmap "$NEAR" -- "$EXPL")"
+ST_CLEAN="$(status "Q1" "Q2")"
+
+# badge_expect NAME RC FEATURES_FILE RELEASE_TAG [SUBSTRING] — as expect, but
+# the features page is the subject and the release is pinned, so a real tag
+# arriving in the repo cannot flip an assertion.
+badge_expect() {
+    local name="$1" want_rc="$2" ft="$3" tag="$4" needle="${5:-}"
+    local out rc=0
+    out="$(GAG_RELEASE_TAG="$tag" "$CHECK" "$RM_CLEAN" "$ST_CLEAN" "$ft" 2>&1)" || rc=$?
+    if (( rc != want_rc )); then
+        printf 'FAIL %-34s rc=%d, want %d\n' "$name" "$rc" "$want_rc"
+        printf '%s\n' "$out" | awk '{ print "       " $0 }'
+        fails=$((fails + 1))
+        return
+    fi
+    if [[ -n "$needle" ]] && ! grep -qF -- "$needle" <<<"$out"; then
+        printf 'FAIL %-34s missing %q in output\n' "$name" "$needle"
+        printf '%s\n' "$out" | awk '{ print "       " $0 }'
+        fails=$((fails + 1))
+        return
+    fi
+    printf 'ok   %-34s rc=%d\n' "$name" "$rc"
+}
+
+TIER='<span class="gag-tier-badge">partly classic-only</span>'
+
+badge_expect "tier badge, live row and ops link" 0 \
+    "$(features tier-ok "- **[A capability](operations/runbook.md)** $TIER <!-- tier:Q1 -->: one clause.")" \
+    v1.5.0
+
+# The parity case: the row is gone, so the port shipped and the badge is a lie.
+badge_expect "tier badge whose row shipped" 1 \
+    "$(features tier-shipped "- **[A capability](operations/runbook.md)** $TIER <!-- tier:Q9 -->: one clause.")" \
+    v1.5.0 'the port shipped'
+
+badge_expect "tier badge with no annotation" 1 \
+    "$(features tier-bare "- **[A capability](operations/runbook.md)** $TIER: one clause.")" \
+    v1.5.0 'no <!-- tier:QN --> annotation'
+
+# A tier claim an operator cannot read about anywhere is marketing alone.
+badge_expect "tier badge with no ops link" 1 \
+    "$(features tier-noops "- **[A capability](plan/thing.md)** $TIER <!-- tier:Q1 -->: one clause.")" \
+    v1.5.0 'links no operations/ page'
+
+new_chip() { printf '<span class="gag-new-badge">new in %s</span>' "$1"; }
+
+badge_expect "new chip naming the current release" 0 \
+    "$(features chip-now "- **[A capability](operations/runbook.md)** $(new_chip 1.5): one clause.")" \
+    v1.5.0
+
+# Written during development, before the release it names is tagged.
+badge_expect "new chip ahead of every tag" 0 \
+    "$(features chip-ahead "- **[A capability](operations/runbook.md)** $(new_chip 1.6): one clause.")" \
+    v1.5.0
+
+badge_expect "new chip one release behind" 0 \
+    "$(features chip-one "- **[A capability](operations/runbook.md)** $(new_chip 1.5): one clause.")" \
+    v1.6.0
+
+badge_expect "new chip two releases behind" 1 \
+    "$(features chip-two "- **[A capability](operations/runbook.md)** $(new_chip 1.5): one clause.")" \
+    v1.7.0 'is still marked new in 1.5'
+
+# A major bump is exactly when a capability stops being the new thing, and the
+# minors of a retired major cannot be counted against the current one.
+badge_expect "new chip from a previous major" 1 \
+    "$(features chip-major "- **[A capability](operations/runbook.md)** $(new_chip 1.9): one clause.")" \
+    v2.0.0 'is still marked new in 1.9'
+
+# shellcheck disable=SC2016 # the needle quotes the finding's own backticks
+badge_expect "new chip with an unreadable label" 1 \
+    "$(features chip-junk '- **[A capability](operations/runbook.md)** <span class="gag-new-badge">shiny</span>: one clause.')" \
+    v1.5.0 'The one form is `new in X.Y`'
+
+# No release to be behind: rule 9 cannot run, and says so rather than passing
+# quietly. The label-shape half still holds, since it needs no outside fact.
+badge_expect "an unreadable release skips rule 9" 0 \
+    "$(features chip-noversion "- **[A capability](operations/runbook.md)** $(new_chip 1.0): one clause.")" \
+    nonesuch 'chips are unchecked'
+
+# A badge the bullet rules never reach fails as silently as a rule that stopped
+# matching, so it is reported where it sits.
+{
+    printf '# Features\n\nIntro prose, not a bullet.\n\n## Job intake\n\n'
+    printf -- '- **[A capability](operations/runbook.md)**: one clause.\n\n'
+    printf 'A paragraph wearing %s for no reason.\n' "$TIER"
+} >"$WORKDIR/features-stray.md"
+badge_expect "a badge outside a bullet" 1 "$WORKDIR/features-stray.md" v1.5.0 'outside a bullet'
+
+# The page's lead-in is where badges are explained, so a badge above the first
+# section heading is prose about the badge rather than an instance of it.
+{
+    printf '# Features\n\nTwo badges appear below: %s marks a tier gap.\n\n## Job intake\n\n' "$TIER"
+    printf -- '- **[A capability](operations/runbook.md)**: one clause.\n'
+} >"$WORKDIR/features-legend.md"
+badge_expect "a badge in the page lead-in" 0 "$WORKDIR/features-legend.md" v1.5.0
+
 if (( fails )); then
     printf '\ncheck-roadmap-test: %d assertion(s) failed\n' "$fails" >&2
     exit 1

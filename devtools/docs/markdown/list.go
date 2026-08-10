@@ -20,6 +20,15 @@ type ListItem struct {
 	// Comments holds the item's HTML comments verbatim, in source order. A
 	// comment inside a code fence is code, so it is not one of these.
 	Comments []string
+	// Raw is the item's verbatim source, continuation lines included. Inline
+	// HTML is the reason it exists: Text drops tags the way a browser does, so
+	// a gate reading a `<span class="…">label</span>` badge — which pairs a
+	// class with the text between the tags — cannot get both from Text alone.
+	// Prefer Text or Comments where they answer the question; a raw slice is
+	// the last resort, not the first.
+	Raw string
+	// Destinations holds the item's link targets in source order, verbatim.
+	Destinations []string
 	// HasLink reports whether the item contains a link.
 	HasLink bool
 	// Line is the 1-based source line the item starts on.
@@ -60,6 +69,7 @@ func (d *Document) listItem(n *ast.ListItem) ListItem {
 		switch v := c.(type) {
 		case *ast.Link:
 			item.HasLink = true
+			item.Destinations = append(item.Destinations, string(v.Destination))
 		case *ast.RawHTML:
 			for i := 0; i < v.Segments.Len(); i++ {
 				collect(v.Segments.At(i))
@@ -71,7 +81,47 @@ func (d *Document) listItem(n *ast.ListItem) ListItem {
 		}
 		return ast.WalkContinue, nil
 	})
+	if start, stop := d.rawRange(n); start >= 0 {
+		item.Raw = string(d.Source[start:stop])
+	}
 	return item
+}
+
+// rawRange returns the byte range a node's own text occupies in Source, or
+// (-1, -1) for a node with no text at all. Inline nodes carry their offsets in
+// different fields from block nodes, so both are walked; the outer bounds of
+// what is found are the item, since Markdown nests but does not interleave.
+func (d *Document) rawRange(n ast.Node) (start, stop int) {
+	start, stop = -1, -1
+	consider := func(seg text.Segment) {
+		if start < 0 || seg.Start < start {
+			start = seg.Start
+		}
+		if seg.Stop > stop {
+			stop = seg.Stop
+		}
+	}
+	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if c.Type() == ast.TypeBlock {
+			lines := c.Lines()
+			for i := 0; i < lines.Len(); i++ {
+				consider(lines.At(i))
+			}
+		}
+		switch v := c.(type) {
+		case *ast.Text:
+			consider(v.Segment)
+		case *ast.RawHTML:
+			for i := 0; i < v.Segments.Len(); i++ {
+				consider(v.Segments.At(i))
+			}
+		}
+		return ast.WalkContinue, nil
+	})
+	return start, stop
 }
 
 // leadStrong returns the text of a strong-emphasis run opening the item's first

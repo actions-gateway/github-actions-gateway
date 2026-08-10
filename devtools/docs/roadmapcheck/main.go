@@ -40,6 +40,12 @@
 //  7. Every row labelled `X.Y-gate` is named by a roadmap bullet.
 //  8. A bullet that writes a release version into its prose names a row
 //     labelled with that gate.
+//  9. A `gag-new-badge` chip reads `new in X.Y` and names a release no more
+//     than -max-chip-age behind the current one.
+//  10. A `gag-tier-badge` badge carries a `<!-- tier:QN -->` annotation naming a
+//     live row, and its bullet links an `operations/` page.
+//  11. Both of those badges sit on a bullet below the page's first section
+//     heading, where rules 9 and 10 can reach them.
 //
 // Rules 7 and 8 reconcile the one promise this page makes with a date attached.
 // A release gate lives in STATUS.md as an `X.Y-gate` label, meaning the row
@@ -58,6 +64,11 @@
 // which point this rule finds nothing left to check — which is the intended end
 // state rather than a blind spot, because rule 7 never depended on it.
 //
+// Rules 9-11 are the marketing badges, and badges.go carries their reasoning.
+// They belong here rather than in a gate of their own because they ask the same
+// question rules 2 and 7 ask — does this page's claim still agree with the
+// backlog — of a different rendering of it.
+//
 // A hand-typed version means a gating verb followed by a numbered release:
 // "Gating the 1.5 release", "so it gates the 1.5 release". Naming a version
 // without one is context rather than a commitment, and is deliberately not a
@@ -67,7 +78,13 @@
 //
 // Usage:
 //
-//	roadmapcheck <roadmap.md> <STATUS.md> <features.md>
+//	roadmapcheck [-release X.Y] [-max-chip-age N] \
+//	    <roadmap.md> <STATUS.md> <features.md> [page.md…]
+//
+// Trailing pages are scanned for badges only — the other marketing surfaces,
+// which carry no roadmap bullets and no capability index. -release is the
+// current release, and rule 9 is skipped (loudly) without one, since a fresh
+// fork has no tag to be behind.
 //
 // Exits 1 on any finding, and 2 when either page's format drifted far enough
 // that the gate would otherwise pass by checking nothing.
@@ -75,6 +92,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -101,23 +119,47 @@ const (
 	// what would change, and the gate it waits on. At extraction the five worst
 	// ran 74-123 words by explaining the whole approach inline.
 	maxRoadmapWords = 60
+
+	// How many releases a `new in X.Y` chip may trail the current release. One
+	// keeps the chip through the release it names and the one after it, so the
+	// pull request that declares it never has to schedule its own removal, and
+	// a capability stops being advertised as new two releases on.
+	defaultMaxChipAge = 1
 )
 
+// config is one invocation: which pages to read and what "the current release"
+// means for this run.
+type config struct {
+	roadmap, status, features string
+	// badgeOnly names the marketing surfaces carrying no roadmap bullets and no
+	// capability index, so only rules 9-11 apply to them.
+	badgeOnly  []string
+	release    string
+	maxChipAge int
+}
+
 func main() {
-	args := os.Args[1:]
-	if len(args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: roadmapcheck <roadmap.md> <STATUS.md> <features.md>")
+	cfg := config{}
+	flag.StringVar(&cfg.release, "release", "", "current release, as X.Y or a vX.Y.Z tag")
+	flag.IntVar(&cfg.maxChipAge, "max-chip-age", defaultMaxChipAge, "releases a `new in X.Y` chip may trail the current release")
+	flag.Parse()
+	args := flag.Args()
+	if len(args) < 3 {
+		fmt.Fprintln(os.Stderr, "usage: roadmapcheck [-release X.Y] [-max-chip-age N] <roadmap.md> <STATUS.md> <features.md> [page.md…]")
 		os.Exit(2)
 	}
+	cfg.roadmap, cfg.status, cfg.features, cfg.badgeOnly = args[0], args[1], args[2], args[3:]
 	out := bufio.NewWriter(os.Stderr)
-	code := run(args[0], args[1], args[2], out, os.Stdout)
+	code := run(cfg, out, os.Stdout)
 	_ = out.Flush()
 	os.Exit(code)
 }
 
-func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writer) int {
+func run(cfg config, findings, summary io.Writer) int {
+	roadmapPath, statusPath, featuresPath := cfg.roadmap, cfg.status, cfg.features
 	docs := map[string]*markdown.Document{}
-	for _, p := range []string{roadmapPath, statusPath, featuresPath} {
+	paths := append([]string{roadmapPath, statusPath, featuresPath}, cfg.badgeOnly...)
+	for _, p := range paths {
 		src, err := os.ReadFile(p)
 		if err != nil {
 			_, _ = fmt.Fprintf(findings, "check-roadmap: file not found: %s\n", p)
@@ -167,6 +209,23 @@ func run(roadmapPath, statusPath, featuresPath string, findings, summary io.Writ
 			c.report(featuresName, b.line, fmt.Sprintf(
 				"%q is %d words (max %d). Move the detail into the linked doc.", b.label, b.words, maxFeatureWords))
 		}
+	}
+
+	current, ok := parseRelease(cfg.release)
+	if !ok {
+		// Loud, because rule 9 is the one rule that cannot run without an
+		// outside fact, and a quiet skip reads exactly like a clean pass.
+		_, _ = fmt.Fprintf(summary, "check-roadmap: no current release given, so `new in X.Y` chips are unchecked (rule 9)\n")
+	}
+	for _, p := range paths {
+		if p == statusPath {
+			continue
+		}
+		if ok {
+			c.checkBadges(base(p), docs[p], &current, cfg.maxChipAge)
+			continue
+		}
+		c.checkBadges(base(p), docs[p], nil, cfg.maxChipAge)
 	}
 
 	if c.failed {
@@ -432,23 +491,39 @@ func roadmapBullets(doc *markdown.Document) []bullet {
 }
 
 // featureBullets returns the top-level bullets of docs/features.md, which are
-// the capability index itself: everything from the first section heading on.
-// The page's lead-in prose and its version-selector tip sit above that.
+// the capability index itself.
 func featureBullets(doc *markdown.Document) []bullet {
-	first := 1 << 30
-	for _, h := range doc.Headings() {
-		if h.Level == 2 {
-			first = h.Line
-			break
-		}
-	}
 	var out []bullet
+	for _, item := range bulletsBelowFirstSection(doc) {
+		out = append(out, newBullet(doc, item))
+	}
+	return out
+}
+
+// bulletsBelowFirstSection returns a page's top-level list items from its first
+// section heading on. A page's lead-in prose sits above that — on features.md
+// the version-selector tip and the badge legend, which names badges rather than
+// applying them.
+func bulletsBelowFirstSection(doc *markdown.Document) []markdown.ListItem {
+	first := firstSectionLine(doc)
+	var out []markdown.ListItem
 	for _, item := range doc.TopLevelListItems() {
 		if item.Line > first {
-			out = append(out, newBullet(doc, item))
+			out = append(out, item)
 		}
 	}
 	return out
+}
+
+// firstSectionLine reports the line of a page's first level-2 heading, or a
+// line past the end when it has none.
+func firstSectionLine(doc *markdown.Document) int {
+	for _, h := range doc.Headings() {
+		if h.Level == 2 {
+			return h.Line
+		}
+	}
+	return 1 << 30
 }
 
 var (
