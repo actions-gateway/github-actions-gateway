@@ -2744,6 +2744,13 @@ last gaps an outside operator hits.</p>
   migration, so it gates the 1.5 release.</p>
 </li>
 <li>
+<p><strong><a href="../operations/tenant-onboarding/">Detect the runner version a tenant's worker image ships</a></strong> <!-- q:Q715 -->
+  The version GAG reports to GitHub is the pinned default, whatever
+  <code>spec.workerImage</code> holds, and the too-old warning fires on the classic tier
+  only. GitHub raises its enforced minimum on 2026-09-25, so a stale image fails
+  with no prior signal. Gating the 1.5 release.</p>
+</li>
+<li>
 <p><strong><a href="../plan/q408-untrusted-pr-egress/">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 -->
   <a href="../operations/kata-dind-workloads/">Kata workers</a> are validated for <em>trusted</em>
   CI only: the micro-VM bounds the guest kernel, the runner's egress stays

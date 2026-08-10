@@ -3165,7 +3165,7 @@
 <tr>
 <td><a id="Q715"></a>Q715</td>
 <td><a href="../operations/tenant-onboarding/">Detect the runner version a tenant's worker image actually ships</a></td>
-<td><code>bug</code> <code>security</code></td>
+<td><code>bug</code> <code>security</code> <code>1.5-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td><code>agent.version</code> reports the global <code>GITHUB_RUNNER_VERSION</code> whatever <code>spec.workerImage</code> is, and <code>RunnerVersionTooOld</code> fires classic-only, so GitHub's enforced-minimum bump (GHEC 2026-09-25) lands on the shipped tier with no signal.</td>

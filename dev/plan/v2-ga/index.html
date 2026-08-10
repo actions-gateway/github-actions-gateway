@@ -2749,7 +2749,7 @@ The phase table below is the real state.</p>
 <td>3</td>
 <td>Storage migration, then drop <code>v2alpha1</code>, <code>v1alpha1</code>, and classic</td>
 <td>M</td>
-<td>❌ Open (<a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a>); capability parity cleared by Q417/Q443/Q446 (2026-07-26); reopened in August by the classic-only abandoned-run recovery and re-closed by Q766 in the same release, so 1.4 ships it on both tiers</td>
+<td>❌ Open (<a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a>); capability parity <strong>not cleared</strong>: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26) and Q766 closed the abandoned-run asymmetry inside 1.4, but <a href="../../STATUS/#Q713">Q713</a> is open, so the duration and latency series are still classic-only. See the <a href="#capability-parity-is-a-precondition-of-the-removal">parity table</a></td>
 </tr>
 <tr>
 <td>4</td>
@@ -2911,6 +2911,16 @@ prevent.</p>
 <td>Cleared. Design: <a href="../../design/04-operational-flows/#the-ladder-as-an-integer-scale-set-tier-q443">04-operational-flows.md § The ladder as an integer</a>. Plan: <a href="../capacity-aware-intake/#9a-the-shipped-quota-rung-was-classic-only-q443">capacity-aware-intake.md §9a</a>.</td>
 </tr>
 <tr>
+<td>Abandoned-run force-cancel and automatic re-run (a worker removed before it ran)</td>
+<td>✅ <strong>Both tiers.</strong> Q683 and Q691 shipped classic-only inside 1.4 and Q766 ported both in the same release, before any tag published the asymmetry. The scale-set detection reads the run identity from the worker pod's annotations where classic reads it from the payload it holds, which is what the <code>tier</code> label on <code>abandoned_run_force_cancels_total</code> splits.</td>
+<td>Cleared. Design: <a href="../../design/04-operational-flows/#on-the-scale-set-tier-q766">04-operational-flows.md § On the scale-set tier</a>. Plan: <a href="../release-1.4/">release-1.4.md</a>.</td>
+</tr>
+<tr>
+<td>Job duration and pod-creation latency (<code>job_duration_seconds</code>, <code>pod_creation_latency_seconds</code>)</td>
+<td>❌ <strong>Classic only.</strong> <code>JobDuration</code> is observed inside <code>provision()</code> (<code>provisioner.go:610</code>) and <code>PodCreationLatency</code> inside the pod waiter, and <code>ProvisionScaleSetWorker</code> reaches neither. Unlike the counters below there is no scale-set analog to substitute, so two Appendix A SLOs, a critical alert, four recording rules and panels on both shipped dashboards read blank on the default tier.</td>
+<td><strong>Open — gates the removal.</strong> <a href="../../STATUS/#Q713">Q713</a>, labelled <code>1.5-gate</code>. Reasoning: <a href="../release-1.5/#q713--the-shipped-tier-emits-no-duration-or-latency-series">release-1.5.md § Q713</a>.</td>
+</tr>
+<tr>
 <td>Poll-error rate observability (<code>message_poll_errors_total</code>)</td>
 <td>✅ <strong>Both tiers.</strong> Q446 closed the counter half: <code>handlePollError</code> increments the same <code>actions_gateway_message_poll_errors_total{namespace, reason}</code> series the classic listener writes, under the same reason vocabulary (<code>rate_limited</code>, <code>timeout</code>, <code>other</code>), with the 401/403 and 404/410 heal branches counting nothing exactly as classic does — so an existing dashboard or alert keeps its meaning. The conditions (<code>Degraded</code>/<code>Unauthorized</code>, <code>RateLimited</code> after a sustained episode) stay as the state half.</td>
 <td>Cleared. Metric: <a href="../../operations/observability-metrics/">observability-metrics.md</a>.</td>
@@ -2961,6 +2971,19 @@ tier recovers it. Q435 measured the adjacent orphan-reclaim question and
 provision-time worker lifetime cap.</p>
 <p>Any further capability found to be classic-only before the cut joins this table and
 gates the same removal.</p>
+<p><strong>Two joined it after the audit, which is the rule working rather than failing.</strong>
+The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped
+classic-only, Q766 ported them, and no tag ever published the asymmetry. Q713 is
+open, so the table's verdict is <strong>not</strong> currently cleared: the duration and latency
+series are the one capability with no scale-set analog and no port. Read the table,
+not this section's history, for the state of the gate.</p>
+<p>The audit's method has a known blind spot both instances share. It walked the tier
+seams once, in July, and a capability added to <code>provision()</code> afterwards is
+classic-only from birth without anything re-walking them. Q683, Q691 and Q713 all
+arrived that way. Until <a href="../../STATUS/#Q774">Q774</a> gates scope statements
+mechanically, adding a row here is a manual step in the change that creates the
+asymmetry, and the <a href="../../development/doc-update-matrix/">doc-update matrix</a> is where
+that obligation is written down.</p>
 <h2 id="phase-4--docs-and-the-cut">Phase 4 — docs and the cut<a class="headerlink" href="#phase-4--docs-and-the-cut" title="Permanent link">&para;</a></h2>
 <p>Operator-facing surface that must be current before the tag:</p>
 <ul>

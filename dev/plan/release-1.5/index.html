@@ -2589,6 +2589,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q715 — the runner version reported to GitHub is a constant, and the too-old warning is classic-only
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2651,9 +2662,10 @@
 <blockquote>
 <p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already
 scoped and its gating rows are fixed; 1.5 is where work identified after that
-line lands. Three gating Queue rows so far, labelled <code>1.5-gate</code>:
+line lands. Four gating Queue rows so far, labelled <code>1.5-gate</code>:
 <a href="../../STATUS/#Q712">Q712</a>, <a href="../../STATUS/#Q713">Q713</a>, and
-<a href="../../STATUS/#Q726">Q726</a>, admitted 2026-08-09 from the candidate list below.</p>
+<a href="../../STATUS/#Q726">Q726</a>, admitted 2026-08-09 from the candidate list below,
+plus <a href="../../STATUS/#Q715">Q715</a>, admitted the same day off an external date.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
 <p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both are
@@ -2698,6 +2710,26 @@ traffic are one-shot.</p>
 <p>It also gates positioning work: every latency, utilization, or cost claim in the
 comparison material is unmeasurable until this lands, so no number-bearing claim
 should ship ahead of it.</p>
+<h3 id="q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only">Q715 — the runner version reported to GitHub is a constant, and the too-old warning is classic-only<a class="headerlink" href="#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only" title="Permanent link">&para;</a></h3>
+<p>Two halves, and only together do they leave the shipped tier blind.</p>
+<p>The version sent at session creation is <code>BrokerConfig.RunnerVersion</code>, the pinned
+default the project ships (<code>cmd/agc/internal/agentpool/pool.go:467</code>, reached from
+<code>runner_shared.go:555</code>). It is the same value whatever <code>spec.workerImage</code> holds,
+so a tenant running an older runner image reports the newer number GAG was built
+against. The pod's <code>app.kubernetes.io/version</code> label <em>is</em> derived from the image
+ref (<code>provisioner/pod.go:47</code>), which makes the two disagree without either being
+consulted for admission.</p>
+<p>The signal that would otherwise catch it, <code>RunnerVersionTooOld</code>, is produced in
+the classic listener goroutine only. That is structural rather than an oversight:
+the scale-set protocol carries no runner version at session creation, so the
+condition cannot occur on the tier <code>v2beta1</code> exposes
+(<a href="../v2-api-gap-analysis/#agc">gap analysis</a>). The consequence is still that no
+tier both knows the real version and can warn about it.</p>
+<p><strong>What makes it gate rather than wait:</strong> GitHub raises the enforced minimum
+runner version on GHEC on 2026-09-25. On that date a tenant whose worker image
+is behind starts failing at GitHub, and GAG has told nobody, on the tier every
+new tenant runs. This is the only gating row here with a date it does not
+control, which is why it was admitted without going through the candidate list.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>
