@@ -312,6 +312,43 @@ release_identity_regexp() {
 	printf '^https://github.com/%s/\\.github/workflows/publish\\.yml@refs/tags/v.*$' "$slug"
 }
 
+# resolve_release_tag [repo_root] — print the release an adopter is running, as
+# `<tag>\t<source>`, or nothing at all when no release exists yet (a fresh fork).
+# The caller decides whether that is a skip or an error.
+#
+# "The release" is the highest stable vX.Y.Z tag: 0.x and any `-rc`/`-alpha`/
+# `-beta` suffix are prereleases nobody installs. That is the same test
+# hooks/release_version.py applies to the docs-site announce bar, and publish.yml
+# and pages.yml to a tag they are handed — one definition, three readers.
+#
+# Tags are read locally first, then off origin: a shallow CI checkout carries no
+# tags, and an unfetched tag list is indistinguishable from a tagless repo
+# without asking. $GAG_RELEASE_TAG overrides both, for exercising a gate against
+# a version that does not exist yet.
+resolve_release_tag() {
+	local tree="${1:-.}" tag
+	if [[ -n "${GAG_RELEASE_TAG:-}" ]]; then
+		# shellcheck disable=SC2016 # the source label names the variable, literally
+		printf '%s\t%s\n' "$GAG_RELEASE_TAG" '$GAG_RELEASE_TAG'
+		return
+	fi
+	tag="$(git -C "$tree" tag --list 'v*' | _stable_release_tag)"
+	if [[ -n "$tag" ]]; then
+		printf '%s\tlocal tags\n' "$tag"
+		return
+	fi
+	# No `origin`, or no network, is "cannot tell" rather than an error here.
+	tag="$({ git -C "$tree" ls-remote --tags --refs origin 'v*' 2>/dev/null || true; } |
+		awk -F/ '{ print $NF }' | _stable_release_tag)"
+	[[ -n "$tag" ]] && printf '%s\torigin remote\n' "$tag"
+	return 0
+}
+
+# _stable_release_tag — filter a stream of tag names to the highest stable one.
+_stable_release_tag() {
+	awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && !/^v0\./' | sort -V | tail -1
+}
+
 # Placeholder sha256 digest used only to render the Helm chart for scanning
 # and validation: production installs pin the image digests, so auditing the
 # digest-pinned form reflects the SHIPPED posture. A digest is also REQUIRED

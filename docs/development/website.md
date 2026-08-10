@@ -87,6 +87,83 @@ The tag-selection rules (numeric ordering, prerelease exclusion, the
 by `scripts/docs/release-version-hook-test.sh`, which `make check` runs via
 `make scripts-test`.
 
+## Marketing badges
+
+Five small pills annotate the capability index and the roadmap. They share one
+geometry rule in [`extra.css`](../stylesheets/extra.css) and differ only by hue,
+because each answers a different question about a capability and a reader has to
+tell them apart at a glance.
+
+| Badge | Says | Where the fact lives |
+|---|---|---|
+| `gag-v2-badge` | needs the `v2beta1` API | the bullet, hand-written |
+| `gag-maturity-badge` | the API shape is still under its first stability contract | the bullet, hand-written |
+| `gag-release-chip` | the release this roadmap item blocks | `docs/STATUS.md`, injected at build time |
+| `gag-tier-badge` | reaches only one acquisition tier | the bullet, bound to a backlog row |
+| `gag-new-badge` | arrived in a named release | the bullet, expired by a gate |
+
+Two of them expire on their own, which is what makes them safe to write. Rules
+9-11 of [`devtools/docs/roadmapcheck`](../../devtools/docs/roadmapcheck/badges.go)
+enforce it, and `scripts/docs/check-roadmap-test.sh` pins every removal case.
+
+### The release chip
+
+A roadmap bullet's release commitment is **derived, never typed**.
+[`hooks/release_gates.py`](../../hooks/release_gates.py) reads the `X.Y-gate`
+labels out of `docs/STATUS.md`, follows each bullet's existing `<!-- q:QN -->`
+annotation, and injects the pill:
+
+```markdown
+- **[Bind each runner set to a GitHub runner group](plan/release-1.5.md)** <!-- q:Q712 -->
+```
+
+renders with a `1.5` pill beside the title, and loses it the day the label comes
+off. The page states no version anywhere, so no version on it can be stale. That
+was the failure of the prose form, where three of twenty-three bullets said
+*"Gating the 1.5 release"* and a punt that dropped the label left the promise
+standing (Q770).
+
+To see what the chips will read without building the site:
+
+```bash
+python3 hooks/release_gates.py docs
+```
+
+### The tier badge
+
+A shipped capability that reaches only one acquisition tier carries
+`gag-tier-badge` plus a `<!-- tier:QN -->` annotation naming the backlog row
+tracking the port. The gate then removes it on parity, by the same signal the
+roadmap uses: this repo deletes a row when its work ships, so a badge naming a
+row that no longer exists is a caveat the code outgrew.
+
+The badged bullet must also link a page under `operations/`. A tier limitation
+an operator cannot read about anywhere else is a marketing claim with nothing
+behind it.
+
+**No badge means both tiers.** That is why the badge is written only where the
+gap is real: adding *"both acquisition tiers"* to every other bullet is the
+prose version of the same fact, and it is the one that goes stale.
+
+### The new-in-release chip
+
+`gag-new-badge` reads `new in X.Y`, and is **declared by the pull request that
+ships the capability**. It is never backfilled: absence means "not new", the only
+reading that works on a page written after 1.0-1.2 already shipped.
+
+What makes it safe to add is that nobody has to remember to remove it: the gate
+expires a chip once it trails the current release by more than `-max-chip-age`
+(one, so a chip survives the release it names and the one after). A chip naming
+a release that has not shipped yet is fine, since the declaring PR lands before
+the tag. A chip from a previous major goes with
+the major.
+
+The current release is resolved by `resolve_release_tag`
+([`scripts/lib/common.sh`](../../scripts/lib/common.sh)), shared with
+`check-release-pins.sh` so both gates mean the same thing by "the current
+release". Without a tag, as on a fresh fork, the checker reports that it skipped
+the rule rather than passing quietly.
+
 ## Versioned deploy (mike)
 
 The published site is a **versioned tree** managed by
@@ -531,10 +608,21 @@ the hierarchy holds; raising the ceiling means raising Material's palette, which
 is Q734. Dark therefore still reads below the body-text floor, by design and on
 the record.
 
-Two things the rule does **not** cover. A short badge label (`.gag-v2-badge`,
-`.gag-maturity-badge`, measured Lc 64 to 71 on their own chip backgrounds) is
-spot text a reader recognises rather than reads, so the body-text floor is the
-wrong bar for it. And an icon carries the non-text bar, not this one.
+Two things the rule does **not** cover. A short badge label (the five
+[marketing badges](#marketing-badges), measured Lc 64.2 to 71.1 on their own
+chip backgrounds) is spot text a reader recognises rather than reads, so the
+body-text floor is the wrong bar for it. And an icon carries the non-text bar,
+not this one.
+
+**A new badge is measured into that band, not chosen to look like it.** The
+three added in 2026-08 (`.gag-release-chip` 69.4/64.6, `.gag-new-badge`
+70.3/64.2, `.gag-tier-badge` 70.9/64.3, light/dark) were computed by
+compositing each chip's `rgba` fill over the page background and running the
+APCA formula below over the pair: the same arithmetic the in-page probe does,
+which is why the reimplementation was first checked against every published
+anchor on this page (106, 63.1, 0, 75.2, 81.4, 39.4) before any of its verdicts
+were believed. The tier badge's first dark ink landed at 57.8 and was lightened
+until it cleared the band; nothing about the source said so.
 
 **Known residue, so the sweep is not read as a pass/fail gate.** APCA asks
 `Lc` 90 of 16px regular-weight prose, and muted text that reached 90 on white

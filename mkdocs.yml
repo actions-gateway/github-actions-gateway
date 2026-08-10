@@ -143,6 +143,7 @@ extra:
 # version banner links the backlog only where the page exists (Q558).
 hooks:
   - hooks/release_version.py
+  - hooks/release_gates.py
   - hooks/source_links.py
   - hooks/backlog_link.py
 

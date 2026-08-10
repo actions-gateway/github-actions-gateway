@@ -1018,8 +1018,17 @@ body[data-md-color-scheme="slate"] {
   word-break: normal;
 }
 
-/* v2 API badge — small pill on benefit cards that require the v2alpha1 API. */
-.gag-v2-badge {
+/* Marketing badges — one pill, four independent axes. Each answers a different
+   question about a capability: which API surface it needs, how stable its shape
+   is, which release it belongs to, and which acquisition tier it reaches. Hue
+   is the only thing that varies; the geometry lives here once so a fifth axis
+   cannot drift a pixel away from the other four. Contrast for every pair is
+   measured in docs/development/website.md, "Interface rules". */
+.gag-v2-badge,
+.gag-maturity-badge,
+.gag-release-chip,
+.gag-new-badge,
+.gag-tier-badge {
   display: inline-flex;
   align-items: center;
   padding: 0.1rem 0.4rem;
@@ -1028,11 +1037,15 @@ body[data-md-color-scheme="slate"] {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  background: rgba(103, 80, 164, 0.12);
-  color: #6750a4;
   vertical-align: middle;
   margin-left: 0.15rem;
   white-space: nowrap;
+}
+
+/* v2 API badge — the capability requires the v2beta1 API. */
+.gag-v2-badge {
+  background: rgba(103, 80, 164, 0.12);
+  color: #6750a4;
 }
 
 [data-md-color-scheme="slate"] .gag-v2-badge {
@@ -1040,29 +1053,55 @@ body[data-md-color-scheme="slate"] {
   color: #d0bcff;
 }
 
-/* Maturity badge — small pill marking a roadmap item's stability (alpha/beta/
-   GA) as a capability graduates. Distinct axis from the v2 API badge above:
-   this signals how stable a capability is, not which API surface it needs.
-   Shares the pill shape; amber warns "not yet GA". */
+/* Maturity badge — the API shape is still under its first stability contract.
+   Amber warns "not yet GA". */
 .gag-maturity-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.75rem;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   background: rgba(179, 118, 0, 0.14);
   color: #8a5a00;
-  vertical-align: middle;
-  margin-left: 0.15rem;
-  white-space: nowrap;
 }
 
 [data-md-color-scheme="slate"] .gag-maturity-badge {
   background: rgba(255, 202, 128, 0.16);
   color: #ffca80;
+}
+
+/* Release chip — the release a roadmap item blocks. Injected by
+   hooks/release_gates.py from the backlog's `X.Y-gate` labels, never typed into
+   the page (Q770), so a stale one is unreachable rather than unlikely. */
+.gag-release-chip {
+  background: rgba(0, 105, 110, 0.12);
+  color: #00696e;
+}
+
+[data-md-color-scheme="slate"] .gag-release-chip {
+  background: rgba(93, 216, 224, 0.16);
+  color: #5dd8e0;
+}
+
+/* New-in-release badge — the release a shipped capability arrived in, declared
+   by the pull request that ships it. Green reads as an addition; the gate in
+   devtools/docs/roadmapcheck expires it as releases pass (Q768). */
+.gag-new-badge {
+  background: rgba(30, 106, 58, 0.12);
+  color: #1e6a3a;
+}
+
+[data-md-color-scheme="slate"] .gag-new-badge {
+  background: rgba(126, 217, 156, 0.16);
+  color: #7ed99c;
+}
+
+/* Tier badge — the capability reaches only one acquisition tier. A caveat on a
+   shipped capability rather than a property of it, so it takes the rose the
+   other three leave free, and the gate removes it on parity (Q767). */
+.gag-tier-badge {
+  background: rgba(158, 44, 78, 0.12);
+  color: #9e2c4e;
+}
+
+[data-md-color-scheme="slate"] .gag-tier-badge {
+  background: rgba(255, 177, 198, 0.16);
+  color: #ffb1c6;
 }
 
 /* Every table: bigger text, rounded frame, emphasized header. NB: do not re-add

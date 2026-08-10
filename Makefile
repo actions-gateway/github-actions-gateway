@@ -377,7 +377,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/find-duplicate-rows-test \
                  docs/git-merge-plan-index-test docs/git-merge-status-test \
                  docs/lint-backlog-test \
-                 docs/release-version-hook-test docs/source-links-hook-test \
+                 docs/release-gates-hook-test docs/release-version-hook-test \
+                 docs/source-links-hook-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
                  dogfood/start-test dogfood/e2e-start-test dogfood/e2e-stop-test \
                  dogfood/delete-test dogfood/e2e-run-watch-test \
