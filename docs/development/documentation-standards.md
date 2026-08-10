@@ -35,13 +35,10 @@ In rough order of leverage:
    Coverage, not exhaustiveness.
 4. **Fit-for-purpose.** Right *type* (tutorial / how-to / reference / explanation) and right *altitude* (operator vs contributor).
    A reference dump when someone needs a five-step how-to fails regardless of formatting.
-5. **Usable.** Scannable, copy-paste-safe, free of filler — see [Write for
-   scanning](#write-for-scanning) and [Commands and code blocks](#commands-and-code-blocks).
+5. **Usable.** Scannable, copy-paste-safe, free of filler — see [Write for scanning](#write-for-scanning) and [Commands and code blocks](#commands-and-code-blocks).
    Necessary, cheap to get wrong, but not a substitute for 1–4.
-6. **Trustworthy in tone.** Specific and evidence-backed, not promotional, and honest
-   about limitations, failure modes, and "not yet implemented" — see [Write with
-   substance](#write-with-substance-dont-read-as-ai-slop). Trust is what makes a reader
-   rely on 1–5 instead of discounting the project on sight.
+6. **Trustworthy in tone.** Specific and evidence-backed, not promotional, and honest about limitations, failure modes, and "not yet implemented" — see [Write with substance](#write-with-substance-dont-read-as-ai-slop).
+   Trust is what makes a reader rely on 1–5 instead of discounting the project on sight.
 
 ## Write for scanning
 
@@ -272,7 +269,7 @@ The check is in `make check` and costs about a second for the whole tree. `.mdre
 
 ### What stays hard-wrapped, and why it stays that way
 
-Measured 2026-08-10: 99.11% of in-scope prose lines end at a sentence boundary, leaving 117.
+Measured 2026-08-10: 99.81% of in-scope prose lines end at a sentence boundary, leaving 25.
 "In-scope" excludes the generated docs and `docs/STATUS.md`, which `.mdreflow.yaml` skips.
 
 What remains is one guard, and it is a correctness property rather than a defect.
@@ -308,8 +305,9 @@ It counts YAML front matter, `<details>` blocks, `[label]: target` definitions a
 Corrected against one tree, that metric read 97.1% where the honest number was 99.34%.
 Measure by excluding the constructs mdreflow never reflows, and treat a closing delimiter after terminal punctuation as a sentence end.
 
-Five mdreflow bugs surfaced while adopting this, all fixed upstream: [#14](https://github.com/jbeda/mdreflow/issues/14), [#15](https://github.com/jbeda/mdreflow/issues/15), [#16](https://github.com/jbeda/mdreflow/issues/16), and pull requests [#29](https://github.com/jbeda/mdreflow/pull/29) and [#31](https://github.com/jbeda/mdreflow/pull/31).
-Between them they took this tree from roughly two thirds converted to 99.11%, and stopped callouts being destroyed.
+Six mdreflow bugs surfaced while adopting this, all fixed upstream: [#14](https://github.com/jbeda/mdreflow/issues/14), [#15](https://github.com/jbeda/mdreflow/issues/15), [#16](https://github.com/jbeda/mdreflow/issues/16), [#33](https://github.com/jbeda/mdreflow/issues/33), and pull requests [#29](https://github.com/jbeda/mdreflow/pull/29) and [#31](https://github.com/jbeda/mdreflow/pull/31).
+Between them they took this tree from roughly two thirds converted to 99.81%, and stopped callouts being destroyed.
+The last was fixed structurally rather than by another narrowing: deriving no-break spans from a goldmark parse means linkify is modeled by the parser instead of mirrored by hand, which is what let a code span ending in a URL stop skipping its paragraph.
 
 Two lessons worth keeping.
 A narrowing this repo proposed was wrong in a way a 2.8M-execution fuzz run did not catch: it armed only at paren depth zero, so a link destination opened inside an outer prose paren escaped it and was corrupted.
@@ -360,8 +358,4 @@ Before opening a docs PR, check against the goals — not just formatting:
 - [ ] **Complete (3):** answers the question a reader arrives with; no silent gap or undocumented failure mode.
 - [ ] **Fit-for-purpose (4):** right type and altitude for its audience (operator vs contributor).
 - [ ] **Usable (5):** answer-first; enumerations are lists and comparisons are tables; code/command blocks are copy-paste-runnable with consistent placeholders; no walls of text or filler.
-- [ ] **Trustworthy (6):** specific and evidence-backed, not promotional (doesn't read
-      as AI slop); honest about limitations and "not yet implemented"; acronyms expanded
-      on first use; terms match the glossary; no links to `CLAUDE.md`; every
-      [upstream-behavior claim cites a
-      measurement](#an-upstream-behavior-claim-cites-a-measurement) or the gate pinning it.
+- [ ] **Trustworthy (6):** specific and evidence-backed, not promotional (doesn't read as AI slop); honest about limitations and "not yet implemented"; acronyms expanded on first use; terms match the glossary; no links to `CLAUDE.md`; every [upstream-behavior claim cites a measurement](#an-upstream-behavior-claim-cites-a-measurement) or the gate pinning it.
