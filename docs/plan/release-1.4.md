@@ -79,8 +79,8 @@ existing per-run retry budget, with exhaustion on
 > promised a release none of these rows was ever labelled for. The proxy cluster
 > in particular is demand-gated, as the paragraph below says in its own words, so
 > it is parked rather than scheduled. The ladder is
-> [release-ladder.md](release-ladder.md); the reshape is
-> [Q772](../STATUS.md#Q772).
+> [release-ladder.md](release-ladder.md), and the reshape it called for landed on
+> 2026-08-09: all four rows are in Deferred, each with the demand that revives it.
 
 **The proxy hardening cluster stays together**:
 [Q564](../STATUS.md#Q564) audit logging, [Q565](../STATUS.md#Q565) per-tenant rate

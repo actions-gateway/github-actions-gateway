@@ -88,11 +88,15 @@ a trigger list, and every row in it names the event that revives it.
 
 ## What this does not decide
 
-The 1.6 contents above are a target, not a gate: neither
-[Q719](../STATUS.md#Q719) nor [Q727](../STATUS.md#Q727) carries a `1.6-gate`
-label yet, and [Q772](../STATUS.md#Q772) is the row that applies them along with
-the rest of the reshape. `release-1.6.md` gets written when 1.5 tags, on the same
-evidence the other release plans use.
+**Applied 2026-08-09.** The seven punted items above moved to Deferred with the
+triggers this page names, and [Q719](../STATUS.md#Q719) and
+[Q727](../STATUS.md#Q727) now carry `1.6-gate`, which is what publishes the
+commitment where an adopter reads it.
+
+That does not make 1.6 a decided release. The labels encode the target, and the
+reading above still governs: if both items slip on demand, the labels come off
+rather than an empty tag being cut. `release-1.6.md` gets written when 1.5 tags,
+on the same evidence the other release plans use.
 
 The one hard constraint the ladder does encode is [Q726](../STATUS.md#Q726)
 landing before `v2.0.0`, since 2.0 removes the `v2alpha1` escape hatch its godoc
