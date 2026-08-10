@@ -44,6 +44,21 @@ The hook is the better feedback loop and the weaker guarantee, and reading the i
 
 **Scope, and a commit that predates the gate.** The range is `merge-base(base, HEAD)..HEAD`: the commits the branch adds, never one already on the base. So every commit the gate can fail belongs to the branch being failed, and `git rebase -i` can always split it — there is no history it is asked to judge and cannot fix, which is why an older mixed commit gets no exemption. When rewriting genuinely costs more than it buys, `BACKLOG_ALLOW_MIXED_COMMITS="<sha> ..."` admits named commits, the same deliberate-and-reviewable shape as `BACKLOG_ALLOW_RESURRECT` and friends. Merge commits are skipped: their file list depends on which parent you diff against, so "what this commit touched" has no single answer for them.
 
+### A gate label and its roadmap bullet are two commits, and the first one is red
+
+`roadmapcheck` rule 7 requires every row labelled `X.Y-gate` to be named by a
+roadmap bullet, so adding the label and adding the bullet are one change in
+intent. Isolation splits them regardless: the label lives in `docs/STATUS.md`
+and the bullet in `docs/roadmap.md`, so they cannot share a commit.
+
+Read on its own, the `docs(status):` commit therefore fails rule 7, which looks
+alarming enough to go hunting for a way around it. There is none, and none is
+needed: `roadmapcheck` reads the **working tree**, not each commit in turn, so
+what `make check`, CI and the merge queue all judge is the pair together. Order
+the two commits however you like and check the tip. Only
+`status-isolation-check` reads commits individually, and it has no opinion about
+roadmap bullets.
+
 ## Search before you file
 
 The rule used to be "grep the Queue and Deferred tables first", and it failed three times: [Q442](https://github.com/actions-gateway/github-actions-gateway/pull/847) and [Q456](https://github.com/actions-gateway/github-actions-gateway/pull/893) both duplicated Q440, and [Q635](https://github.com/actions-gateway/github-actions-gateway/pull/1186) duplicated Q619. Every one satisfied the lint — a semantic duplicate is a well-formed row — and every one was filed mid-task, as a side effect of other work, exactly when the doc carrying the rule was not in context. A rule that fails at the same seam three times wants a mechanism.
