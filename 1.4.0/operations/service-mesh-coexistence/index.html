@@ -1,0 +1,3938 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/service-mesh-coexistence/">
+      
+      
+        <link rel="prev" href="../p2p-image-distribution/">
+      
+      
+        <link rel="next" href="../observability/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Service mesh coexistence - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/1.4.0",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/1.4.0"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#running-gag-alongside-a-service-mesh" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Service mesh coexistence
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#background-what-gag-assumes-about-a-worker-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background: what GAG assumes about a worker pod
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-per-pod-podtemplate-annotations-will-not-save-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why per-pod podTemplate annotations will not save you
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-label-answer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one-label answer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two hard prerequisites for any in-mesh GAG namespace
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Two hard prerequisites for any in-mesh GAG namespace">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-pod-security-admission-rejects-the-classic-proxy-init-container--use-the-mesh-cni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Pod Security Admission rejects the classic proxy-init container — use the mesh CNI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-gags-default-deny-egress-networkpolicy-blocks-the-sidecars-control-plane-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. GAG's default-deny egress NetworkPolicy blocks the sidecar's control-plane path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#problem-1-sidecars-strand-worker-slots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem 1: sidecars strand worker slots
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Problem 1: sidecars strand worker slots">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-happens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-a--opt-out-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix A — opt out (recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-b--native-sidecars-kubernetes-128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix B — native sidecars (Kubernetes 1.28+)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-c--sidecar-less--ambient-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix C — sidecar-less / ambient mesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-d--proxy-shutdown-hooks-last-resort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix D — proxy-shutdown hooks (last resort)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem 2: mesh egress interception vs the per-tenant proxy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Problem 2: mesh egress interception vs the per-tenant proxy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-happens_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-exclude-gags-proxy-path-from-interception" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix: exclude GAG's proxy path from interception
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-mesh-recipes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-mesh recipes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-mesh recipes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#istio--sidecar-mode-in-mesh-if-opt-out-is-not-allowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Istio — sidecar mode (in-mesh, if opt-out is not allowed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#istio--ambient-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Istio — ambient mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linkerd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linkerd
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cilium-service-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cilium Service Mesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-pattern-any-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic pattern (any mesh)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verifying-coexistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying coexistence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-fix-applies-to-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which fix applies to you
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#background-what-gag-assumes-about-a-worker-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background: what GAG assumes about a worker pod
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-per-pod-podtemplate-annotations-will-not-save-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why per-pod podTemplate annotations will not save you
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-label-answer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one-label answer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two hard prerequisites for any in-mesh GAG namespace
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Two hard prerequisites for any in-mesh GAG namespace">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-pod-security-admission-rejects-the-classic-proxy-init-container--use-the-mesh-cni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Pod Security Admission rejects the classic proxy-init container — use the mesh CNI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-gags-default-deny-egress-networkpolicy-blocks-the-sidecars-control-plane-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. GAG's default-deny egress NetworkPolicy blocks the sidecar's control-plane path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#problem-1-sidecars-strand-worker-slots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem 1: sidecars strand worker slots
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Problem 1: sidecars strand worker slots">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-happens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-a--opt-out-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix A — opt out (recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-b--native-sidecars-kubernetes-128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix B — native sidecars (Kubernetes 1.28+)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-c--sidecar-less--ambient-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix C — sidecar-less / ambient mesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-d--proxy-shutdown-hooks-last-resort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix D — proxy-shutdown hooks (last resort)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem 2: mesh egress interception vs the per-tenant proxy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Problem 2: mesh egress interception vs the per-tenant proxy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-happens_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-exclude-gags-proxy-path-from-interception" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix: exclude GAG's proxy path from interception
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-mesh-recipes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-mesh recipes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-mesh recipes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#istio--sidecar-mode-in-mesh-if-opt-out-is-not-allowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Istio — sidecar mode (in-mesh, if opt-out is not allowed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#istio--ambient-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Istio — ambient mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linkerd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linkerd
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cilium-service-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cilium Service Mesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-pattern-any-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic pattern (any mesh)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verifying-coexistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying coexistence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-fix-applies-to-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which fix applies to you
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="running-gag-alongside-a-service-mesh">Running GAG Alongside a Service Mesh<a class="headerlink" href="#running-gag-alongside-a-service-mesh" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Audience:</strong> Platform engineer</p>
+</blockquote>
+<p>A service mesh (Istio, Linkerd, Cilium Service Mesh, Kuma) is the single most
+common source of <em>silent</em> breakage for GitHub Actions Gateway (GAG). The mesh
+and GAG both make assumptions about the worker pod's lifecycle and its outbound
+network path, and those assumptions collide in two ways:</p>
+<ol>
+<li><strong>An injected sidecar stops a run-to-completion worker pod from ever
+   terminating</strong> — the job finishes, but the mesh proxy keeps the pod <code>Running</code>,
+   so the worker slot is never released. Capacity leaks one slot per job until
+   the RunnerGroup wedges at <code>maxWorkers</code>.</li>
+<li><strong>Mesh egress interception fights GAG's per-tenant egress proxy</strong> —
+   double-proxying, mutual-TLS (mTLS) handshake confusion, and a loss of the
+   per-tenant egress-IP attribution that isolates one tenant's GitHub traffic
+   from another's.</li>
+</ol>
+<p>Both failures are quiet: pods schedule, the mesh reports healthy, and the first
+symptom is "jobs stop getting picked up after a while" or "GitHub sees the wrong
+egress IP." This guide explains why the collision happens and gives the concrete
+configuration that resolves it for each mesh.</p>
+<p>If you read nothing else, read this: <strong>the supported, lowest-risk coexistence
+posture is to opt the GAG tenant namespace out of the mesh entirely.</strong> One label
+resolves both problems at once, and it costs you nothing GAG-specific — see
+<a href="#the-one-label-answer">The one-label answer</a>.</p>
+<blockquote>
+<p><strong>Validation status.</strong> The failure analysis, the
+<a href="#the-one-label-answer">namespace opt-out</a>, and the in-mesh mitigations below were
+exercised end-to-end on a live <strong>kind</strong> cluster (Kubernetes 1.35). All four meshes/modes
+named here have now been run through a real GAG job in a meshed tenant namespace:
+<strong>Istio 1.30.2</strong> in both sidecar (Q220) and <strong>ambient/ztunnel</strong> (Q280) modes, <strong>Linkerd
+edge-26.6.3</strong> sidecar (Q220, plus the <code>skip-outbound-ports</code> fix confirmed in Q280), and
+<strong>Cilium 1.19.5</strong> as the CNI/sidecar-less mesh (Q280). The exercise confirmed the two
+hazards, surfaced two hard prerequisites the earlier draft omitted
+(<a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace">in-mesh prerequisites</a>: mesh CNI
+for Pod Security, and a NetworkPolicy that reaches the mesh control plane), and pinned down
+the one path every mesh breaks. <strong>That path is the worker/AGC → per-tenant-proxy HTTPS
+<code>CONNECT</code> leg</strong> (port <code>8080</code>): the mesh proxy wraps it in mesh mTLS (Istio sidecar/ztunnel
+HBONE, Linkerd mTLS) and collides with the per-tenant proxy's own TLS, resetting the
+connection. Plain in-cluster HTTP (e.g. the AGC's control-plane calls to a same-cluster
+endpoint) survives; GitHub-bound egress, which all tunnels through that proxy leg, does not.
+Mesh knob names and defaults drift between releases (notably: modern Istio and Linkerd now
+inject <strong>native sidecars by default</strong> — see <a href="#fix-b--native-sidecars-kubernetes-128">Fix B</a>),
+so confirm against your own mesh version. <strong>The opt-out remains the recommended default, and
+the validation made the in-mesh path look <em>more</em> involved, not less</strong> — enrolling the GAG
+namespace in Istio ambient breaks the proxy leg with no explicit policy at all, and Linkerd
+needs an extra <code>skip-outbound-ports</code> annotation to restore it (see
+<a href="#linkerd">the Linkerd recipe</a>).</p>
+</blockquote>
+<hr />
+<h2 id="background-what-gag-assumes-about-a-worker-pod">Background: what GAG assumes about a worker pod<a class="headerlink" href="#background-what-gag-assumes-about-a-worker-pod" title="Permanent link">&para;</a></h2>
+<p>Two design facts drive everything below. Both are covered in depth in the
+<a href="../../design/02-architecture/">architecture overview</a> and the
+<a href="../../design/05-security/">security model</a>; the short version:</p>
+<ul>
+<li>
+<p><strong>Worker pods run to completion and are reaped by phase.</strong> Each acquired job
+  gets one ephemeral worker pod (a bare <code>Pod</code>, not a <code>Job</code> or <code>Deployment</code>).
+  When the runner container exits, the pod reaches a <em>terminal phase</em>
+  (<code>Succeeded</code> or <code>Failed</code>). The AGC frees the worker slot when it observes that
+  terminal phase, and the reaper deletes the pod once
+  <a href="../../design/03-api-contracts/"><code>completedPodTTL</code></a> elapses. A pod that never
+  reaches a terminal phase is never reaped by the completed-pod path and holds
+  its slot indefinitely. (The <code>pendingPodDeadline</code> reaper only covers pods stuck
+  in <code>Pending</code>, not a pod stuck in <code>Running</code>. On the ScaleSet protocol a pod
+  still <code>Running</code> five minutes after GitHub reports its job terminal is reaped
+  as a backstop — see
+  <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">WorkerPodOrphanedRunning</a>
+  — but the pod is killed rather than completing, so the sidecar still has to be
+  fixed.)</p>
+</li>
+<li>
+<p><strong>All GitHub-bound egress is funnelled through the per-tenant proxy.</strong> The GMC
+  injects <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>, and <code>NO_PROXY</code> into the AGC and every
+  worker pod. GitHub traffic <code>CONNECT</code>-tunnels through the per-tenant proxy
+  <code>Service</code> (<code>actions-gateway-proxy.&lt;namespace&gt;.svc.cluster.local:8080</code> by
+  default), which egresses on the tenant's dedicated IP(s). That per-tenant
+  egress IP <strong>is</strong> the tenant-isolation boundary for outbound traffic
+  (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>).
+  The proxy does <code>CONNECT</code> tunnelling only — it never terminates TLS.</p>
+</li>
+</ul>
+<p>A mesh sidecar breaks the first assumption (it is an extra long-lived container)
+and the second (it transparently re-routes the pod's outbound TCP).</p>
+<blockquote>
+<p><strong>The GAG tenant namespace is GAG-only.</strong> A tenant namespace holds the AGC,
+the proxy pool, ephemeral workers, and their Secrets — nothing else. You are
+not meant to co-locate unrelated application workloads there (see
+<a href="../tenant-onboarding/">tenant onboarding</a>). That is what makes the
+namespace-wide opt-out below cheap: you are not removing some <em>other</em> app from
+the mesh, only GAG's own components, none of which need it.</p>
+</blockquote>
+<hr />
+<h2 id="why-per-pod-podtemplate-annotations-will-not-save-you">Why per-pod <code>podTemplate</code> annotations will not save you<a class="headerlink" href="#why-per-pod-podtemplate-annotations-will-not-save-you" title="Permanent link">&para;</a></h2>
+<p>The instinct from mesh documentation is to disable injection or add egress
+exclusions <strong>per pod</strong>, via annotations on the workload's pod template
+(<code>sidecar.istio.io/inject: "false"</code>,
+<code>traffic.sidecar.istio.io/excludeOutboundPorts</code>, <code>linkerd.io/inject: disabled</code>,
+…). <strong>This does not work for GAG worker pods.</strong></p>
+<p>The AGC builds each worker pod from the tenant's <code>podTemplate</code>, but it does
+<strong>not</strong> copy arbitrary template metadata onto the pod. Labels are rebuilt from a
+fixed recommended set plus GAG's owner-identity labels, and only three
+node-disruption-safety annotation keys are honored from the template — every
+other annotation you put in <code>podTemplate.metadata.annotations</code> is dropped. So a
+mesh injection-control or egress-exclusion annotation placed on the RunnerGroup
+<code>podTemplate</code> never reaches the worker pod.</p>
+<p>That leaves the <strong>namespace</strong> as the only reliable lever for worker pods, which
+is exactly why the recommended posture is namespace-scoped. (Tracking the option
+to propagate an allowlisted set of mesh annotations onto worker pods is filed as
+a future enhancement; until then, configure the mesh at the namespace and the
+mesh-install level, never on the RunnerGroup <code>podTemplate</code>.)</p>
+<hr />
+<h2 id="the-one-label-answer">The one-label answer<a class="headerlink" href="#the-one-label-answer" title="Permanent link">&para;</a></h2>
+<p>For the overwhelming majority of operators, the correct coexistence posture is
+to <strong>exclude the GAG tenant namespace from the mesh</strong>. No sidecar means no
+stranded slots (problem 1) and no traffic interception (problem 2) — both
+conflicts disappear together, and GAG keeps providing its own per-tenant egress
+identity and its own metrics mTLS, so you lose nothing the mesh would have given
+you here.</p>
+<table>
+<thead>
+<tr>
+<th>Mesh</th>
+<th>Opt the namespace out</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Istio (sidecar mode)</strong></td>
+<td><code>kubectl label namespace &lt;tenant-ns&gt; istio-injection=disabled</code> — and, for a <em>revisioned</em> install, also ensure the namespace carries <strong>no</strong> <code>istio.io/rev</code> label (<code>kubectl label namespace &lt;tenant-ns&gt; istio.io/rev-</code>).</td>
+</tr>
+<tr>
+<td><strong>Istio (ambient mode)</strong></td>
+<td>Do <strong>not</strong> label the namespace <code>istio.io/dataplane-mode=ambient</code>. If a broader default enrolls it, set <code>kubectl label namespace &lt;tenant-ns&gt; istio.io/dataplane-mode=none</code>.</td>
+</tr>
+<tr>
+<td><strong>Linkerd</strong></td>
+<td>Injection is opt-in, so by default do nothing. If a parent scope injects, set <code>kubectl annotate namespace &lt;tenant-ns&gt; linkerd.io/inject=disabled</code>.</td>
+</tr>
+<tr>
+<td><strong>Cilium Service Mesh</strong></td>
+<td>Sidecar-less by design (per-node proxy); no per-pod injection to disable. Confirm no <code>CiliumEnvoyConfig</code> / L7 policy redirects the proxy's <code>:8080</code> egress (see <a href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy">problem 2</a>).</td>
+</tr>
+<tr>
+<td><strong>Kuma</strong></td>
+<td><code>kubectl annotate namespace &lt;tenant-ns&gt; kuma.io/sidecar-injection=disabled</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Apply the label <strong>before</strong> the <code>ActionsGateway</code> is reconciled (or roll the AGC,
+proxy, and any in-flight workers afterward) so existing pods are recreated
+without a sidecar.</p>
+<p>If your organization mandates mesh membership for <em>every</em> namespace and a blanket
+opt-out is not allowed, read on: first the two
+<a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace">in-mesh prerequisites</a> that a
+meshed GAG namespace cannot start without, then
+<a href="#problem-1-sidecars-strand-worker-slots">problem 1</a> and
+<a href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy">problem 2</a> with the
+per-mesh mitigations.</p>
+<hr />
+<h2 id="two-hard-prerequisites-for-any-in-mesh-gag-namespace">Two hard prerequisites for any in-mesh GAG namespace<a class="headerlink" href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace" title="Permanent link">&para;</a></h2>
+<p>Before the lifecycle and egress fixes below matter at all, an in-mesh GAG namespace
+must clear two gates that GAG's own hardening puts in the sidecar's way. Both were found
+during live validation (Q220); miss either and the tenant never starts — the symptom is
+<em>"no pods"</em> or <em>"pods stuck at <code>Init</code>"</em>, not a slow leak.</p>
+<h3 id="1-pod-security-admission-rejects-the-classic-proxy-init-container--use-the-mesh-cni">1. Pod Security Admission rejects the classic proxy-init container — use the mesh CNI<a class="headerlink" href="#1-pod-security-admission-rejects-the-classic-proxy-init-container--use-the-mesh-cni" title="Permanent link">&para;</a></h3>
+<p>The GMC stamps <code>pod-security.kubernetes.io/enforce=baseline</code> on every tenant namespace.
+A mesh's <strong>classic</strong> sidecar injection adds an init container (<code>istio-init</code>,
+<code>linkerd-init</code>) that requests the <code>NET_ADMIN</code> + <code>NET_RAW</code> capabilities to program the
+iptables redirect. <code>baseline</code> forbids those capabilities, so the apiserver <strong>rejects the
+AGC, proxy, and worker pods at creation</strong> — the Deployments sit at zero replicas with
+<code>FailedCreate</code> events and no pod (hence no sidecar, and none of Problem 1's stranding)
+ever exists:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Error creating: pods &quot;actions-gateway-controller-…&quot; is forbidden: violates PodSecurity
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>&quot;baseline:latest&quot;: non-default capabilities (container &quot;istio-init&quot; must not include
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>&quot;NET_ADMIN&quot;, &quot;NET_RAW&quot; in securityContext.capabilities.add)
+</code></pre></div>
+<p>The fix is the mesh's <strong>CNI plugin</strong>, which programs the redirect at the node level so no
+privileged init container is injected (a capability-free <code>istio-validation</code> /
+<code>linkerd-network-validator</code> init runs instead, which <code>baseline</code> allows):</p>
+<table>
+<thead>
+<tr>
+<th>Mesh</th>
+<th>Do this</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Istio</strong></td>
+<td>Install the <code>istio/cni</code> chart <strong>and</strong> tell istiod about it (<code>--set pilot.cni.enabled=true</code> on the <code>istio/istiod</code> chart). Verified: without <code>pilot.cni.enabled</code>, istiod keeps injecting the privileged <code>istio-init</code> even with the CNI daemonset running.</td>
+</tr>
+<tr>
+<td><strong>Linkerd</strong></td>
+<td>Install the <code>linkerd2-cni</code> chart <strong>and</strong> set <code>cniEnabled=true</code> on the <code>linkerd-control-plane</code> chart.</td>
+</tr>
+<tr>
+<td><strong>Cilium / ambient / any sidecar-less mesh</strong></td>
+<td>No per-pod proxy, no init container — this gate does not apply.</td>
+</tr>
+</tbody>
+</table>
+<p>The alternative — relaxing the namespace to <code>enforce=privileged</code> — is a Pod Security
+regression and is <strong>not</strong> recommended. Prefer the CNI, or <a href="#the-one-label-answer">opt out</a>.</p>
+<h3 id="2-gags-default-deny-egress-networkpolicy-blocks-the-sidecars-control-plane-path">2. GAG's default-deny egress NetworkPolicy blocks the sidecar's control-plane path<a class="headerlink" href="#2-gags-default-deny-egress-networkpolicy-blocks-the-sidecars-control-plane-path" title="Permanent link">&para;</a></h3>
+<p>Even once pods are admitted (CNI in place), the sidecar has to reach its own control
+plane to get configuration and a workload certificate. GAG's per-tenant NetworkPolicies
+are <strong>default-deny egress</strong> — they permit only DNS, the per-tenant proxy, the kube-API,
+and whatever additive rules you add. They do <strong>not</strong> anticipate a mesh control plane, so
+the sidecar's connection is silently dropped, it never becomes Ready, and the pod hangs
+at <code>Init</code> (native sidecar) or never-Ready (classic) — the AGC never registers a session:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># Istio: the native-sidecar proxy cannot reach istiod
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>failed to warm certificate: … dial tcp &lt;istiod&gt;:15012: i/o timeout
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a># Linkerd: the proxy cannot reach destination/identity/policy
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>linkerd-identity-headless.linkerd.svc.cluster.local:8080: service in fail-fast
+</code></pre></div>
+<p>You must add an <strong>additive</strong> NetworkPolicy that lets the GAG pods reach the mesh control
+plane. Additive policies only <em>add</em> an allowed path; they do not weaken the deny-by-default
+for everything else:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Istio — allow egress to istiod (xDS + CA). Verified on Istio 1.30.2.</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NetworkPolicy</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">allow-istiod-egress</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;tenant-ns&gt;</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">podSelector</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">policyTypes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Egress</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">egress</span><span class="p">:</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt">namespaceSelector</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="nv">istio-system</span><span class="p p-Indicator">}}}]</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="nv">15012</span><span class="p p-Indicator">,</span><span class="nt"> protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="nv">15010</span><span class="p p-Indicator">,</span><span class="nt"> protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">}]</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nn">---</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># Linkerd — allow egress to destination/identity/policy. Verified on edge-26.6.3.</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NetworkPolicy</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">allow-linkerd-egress</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;tenant-ns&gt;</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span><span class="nt">podSelector</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span><span class="nt">policyTypes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Egress</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="nt">egress</span><span class="p">:</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt">namespaceSelector</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="nv">linkerd</span><span class="p p-Indicator">}}}]</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="nv">8086</span><span class="p p-Indicator">,</span><span class="nt"> protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="nv">8080</span><span class="p p-Indicator">,</span><span class="nt"> protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="nv">8090</span><span class="p p-Indicator">,</span><span class="nt"> protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">}]</span>
+</code></pre></div>
+<p>(Also confirmed in passing: the tenant namespace must carry
+<code>actions-gateway.com/tenant=managed</code> for the GMC to reconcile it at all — this is normal
+<a href="../tenant-onboarding/">tenant onboarding</a>, not mesh-specific, but a fresh meshed namespace
+created by hand will otherwise be refused by the GMC's namespace-PSA admission policy.)</p>
+<hr />
+<h2 id="problem-1-sidecars-strand-worker-slots">Problem 1: sidecars strand worker slots<a class="headerlink" href="#problem-1-sidecars-strand-worker-slots" title="Permanent link">&para;</a></h2>
+<h3 id="what-happens">What happens<a class="headerlink" href="#what-happens" title="Permanent link">&para;</a></h3>
+<p>A classic sidecar (Istio's <code>istio-proxy</code>, Linkerd's <code>linkerd-proxy</code>) is injected
+as an ordinary container. The kubelet considers a pod's phase terminal only when
+<strong>all</strong> its containers have exited. The runner container exits when the job
+finishes — but the mesh proxy is built to run forever, so it keeps running. The
+pod stays <code>Running</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>NAME                         READY   STATUS    RESTARTS   AGE
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>runner-builders-a1b2c3       1/2     Running   0          14m   # job done 12m ago; istio-proxy still up
+</code></pre></div>
+<p>GAG never sees a terminal phase, so it never frees the slot. With
+<code>maxWorkers: N</code>, after <code>N</code> jobs every slot is held by a done-but-<code>Running</code> pod
+and <strong>no new job is ever admitted</strong>. This is the top silent-breakage mesh users
+hit. (Reproduced on Istio 1.30.2 with <code>ENABLE_NATIVE_SIDECARS=false</code> — Q220: the
+<code>runner</code> container exited but <code>istio-proxy</code> stayed <code>running</code>, leaving the pod at
+<code>READY 1/2</code> and non-terminal 90 s+ after the job finished.)</p>
+<blockquote>
+<p><strong>Why the reaper does not save you.</strong> <code>completedPodTTL</code> only deletes pods that
+reached a <em>terminal</em> phase, and <code>pendingPodDeadline</code> only deletes pods stuck
+<code>Pending</code>. A sidecar-pinned pod is neither — it is <code>Running</code> — so it falls
+through both phase-based reaper paths. ScaleSet sets get a backstop
+(<a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning"><code>WorkerPodOrphanedRunning</code></a>:
+a pod still <code>Running</code> five minutes after GitHub reports the job terminal is
+deleted), which stops the slots leaking — but it kills the pod instead of
+letting it complete, and Classic sets have no equivalent. The fix still has to
+make the pod actually terminate.</p>
+</blockquote>
+<h3 id="fix-a--opt-out-recommended">Fix A — opt out (recommended)<a class="headerlink" href="#fix-a--opt-out-recommended" title="Permanent link">&para;</a></h3>
+<p><a href="#the-one-label-answer">The one-label answer</a>. No sidecar, no stranding. Stop
+here unless mesh membership is mandatory.</p>
+<h3 id="fix-b--native-sidecars-kubernetes-128">Fix B — native sidecars (Kubernetes 1.28+)<a class="headerlink" href="#fix-b--native-sidecars-kubernetes-128" title="Permanent link">&para;</a></h3>
+<p>If the namespace must stay in the mesh, run the proxy as a <strong>native sidecar</strong> — a
+Kubernetes <em>sidecar container</em> (an init container with <code>restartPolicy: Always</code>, the
+<code>SidecarContainers</code> feature, GA in Kubernetes 1.29). The kubelet treats native sidecars
+specially: once all <em>regular</em> containers exit, it terminates the native sidecars and the
+pod reaches a terminal phase. A run-to-completion worker pod then completes normally and
+GAG reaps it.</p>
+<p><strong>Good news from validation (Q220): current meshes do this by default.</strong> On Istio 1.30.2
+the proxy was injected as a native sidecar with <code>ENABLE_NATIVE_SIDECARS</code> <em>unset</em>, and
+Linkerd edge-26.6.3 likewise injected <code>linkerd-proxy</code> with <code>restartPolicy: Always</code> by
+default. So on a recent mesh you typically get Fix B for free — the knobs below matter
+for <em>older</em> meshes or for confirming the mode, and <code>ENABLE_NATIVE_SIDECARS=false</code> is what
+<em>re-introduces</em> the stranding bug:</p>
+<ul>
+<li><strong>Istio</strong> — native sidecars are the default on ≥ 1.28. To force it (older releases):
+  <code>values.pilot.env.ENABLE_NATIVE_SIDECARS=true</code>. Requires Kubernetes ≥ 1.28.</li>
+<li><strong>Linkerd</strong> — native sidecars are the default on recent edge releases; <code>--set
+  proxy.nativeSidecar=true</code> forces it on 2.16+. Requires Kubernetes ≥ 1.28.</li>
+</ul>
+<blockquote>
+<p><strong>Verified (Istio 1.30.2, k8s 1.35).</strong> A native-sidecar worker pod terminated cleanly:
+the <code>runner</code> container exited, and the kubelet terminated the <code>istio-proxy</code> native
+sidecar <strong>one second later</strong> (exit 0, <code>Completed</code>), so the pod reached a terminal phase
+and GAG reaped it — no stranding. The inverse (<code>ENABLE_NATIVE_SIDECARS=false</code>) left the
+pod <code>Running</code> indefinitely with <code>istio-proxy</code> still up 90 s+ after the runner exited,
+reproducing <a href="#problem-1-sidecars-strand-worker-slots">Problem 1</a> exactly.</p>
+<p><strong>Fix B does not work on its own.</strong> A meshed namespace still needs both
+<a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace">in-mesh prerequisites</a> (the mesh
+CNI for Pod Security, and a control-plane egress NetworkPolicy) or no worker pod is ever
+admitted / the sidecar never starts. Native sidecars also fix termination, <strong>not</strong>
+interception — a native-sidecar proxy still transparently intercepts the worker's
+outbound traffic, so also read <a href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy">problem 2</a>.</p>
+</blockquote>
+<h3 id="fix-c--sidecar-less--ambient-mesh">Fix C — sidecar-less / ambient mesh<a class="headerlink" href="#fix-c--sidecar-less--ambient-mesh" title="Permanent link">&para;</a></h3>
+<p>Sidecar-less meshes never inject a per-pod proxy, so there is nothing to strand a
+worker pod:</p>
+<ul>
+<li><strong>Istio ambient mode</strong> — L4 is handled by a per-node <code>ztunnel</code>, not a per-pod
+  sidecar. Worker pods run to completion untouched. Enroll <em>other</em> namespaces in
+  ambient with <code>istio.io/dataplane-mode=ambient</code>; simply leave the GAG namespace
+  unlabeled (or <code>istio.io/dataplane-mode=none</code>) and still apply the
+  <a href="#istio--ambient-mode">egress consideration</a> for ztunnel.</li>
+<li><strong>Cilium Service Mesh</strong> — sidecar-less (per-node Envoy). No injection to
+  disable; verify no L7 redirect captures the proxy's egress.</li>
+</ul>
+<p>Ambient is the preferred coexistence story when you want <em>some</em> mesh presence in
+the cluster but cannot afford the worker-pod lifecycle conflict.</p>
+<blockquote>
+<p><strong>Scope of validation.</strong> Sidecar mode (Istio + Linkerd) was validated in Q220; ambient
+(<code>ztunnel</code>) and Cilium Service Mesh were validated end-to-end in Q280. <strong>Lifecycle held in
+every sidecar-less case</strong> — a per-node L4 proxy adds no per-pod container, so worker pods
+reached a terminal phase and were reaped (Istio ambient ~3 s, Cilium ~2 s). Ambient satisfies
+the <a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace">Pod Security prerequisite</a> natively
+(ztunnel is per-node, no privileged pod init container) and needs <strong>no</strong> control-plane egress
+NetworkPolicy (the pod's default-deny egress doesn't have to reach istiod). <strong>But egress is a
+different story:</strong> enrolling the GAG namespace in Istio ambient <em>breaks</em> the worker→proxy
+<code>CONNECT</code> leg (ztunnel HBONE vs the proxy's TLS → connection reset), so ambient is safe for GAG
+<strong>only when the namespace is left out of the dataplane</strong> — see <a href="#istio--ambient-mode">the ambient recipe</a>.
+Cilium's base CNI is safe in both dimensions by default (no L7 redirect) and genuinely enforces
+the egress deny — see <a href="#cilium-service-mesh">the Cilium recipe</a>.</p>
+</blockquote>
+<h3 id="fix-d--proxy-shutdown-hooks-last-resort">Fix D — proxy-shutdown hooks (last resort)<a class="headerlink" href="#fix-d--proxy-shutdown-hooks-last-resort" title="Permanent link">&para;</a></h3>
+<p>Classic meshes offer ways to ask the sidecar to exit when the main workload
+finishes — Istio's <code>EXIT_ON_ZERO_ACTIVE_CONNECTIONS=true</code> plus a
+<code>POST localhost:15020/quitquitquit</code> at job end, or Linkerd's
+<code>linkerd-await --shutdown -- &lt;cmd&gt;</code> wrapper, or
+<code>config.alpha.linkerd.io/proxy-await</code>. <strong>These require cooperating with the
+workload's entrypoint</strong> — the main process must signal the proxy as it exits.
+GAG owns the worker entrypoint (it runs the GitHub Actions runner), and these
+hooks cannot be injected through the RunnerGroup <code>podTemplate</code>
+(<a href="#why-per-pod-podtemplate-annotations-will-not-save-you">why</a>), so this path is
+<strong>not</strong> first-class for GAG. Prefer Fix A, B, or C. Documented here only so you
+recognize these knobs when you see them in mesh guides — they are the wrong tool
+for GAG worker pods.</p>
+<hr />
+<h2 id="problem-2-mesh-egress-interception-vs-the-per-tenant-proxy">Problem 2: mesh egress interception vs the per-tenant proxy<a class="headerlink" href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy" title="Permanent link">&para;</a></h2>
+<h3 id="what-happens_1">What happens<a class="headerlink" href="#what-happens_1" title="Permanent link">&para;</a></h3>
+<p>A sidecar transparently redirects the pod's outbound TCP into the mesh proxy
+(iptables/eBPF capture to <code>istio-proxy:15001</code> / <code>linkerd-proxy</code>). GAG has already
+pointed the worker at its per-tenant egress proxy via <code>HTTPS_PROXY</code>. The two
+layers now fight:</p>
+<ul>
+<li><strong>Double-proxying.</strong> The worker's connection to GAG's proxy <code>Service</code> is itself
+  captured by the mesh proxy, which then forwards to GAG's proxy, which tunnels
+  to GitHub. Extra hop, extra latency, and a second policy-enforcement point that
+  knows nothing about GAG's intent.</li>
+<li><strong>mTLS confusion.</strong> The mesh tries to wrap the worker→GAG-proxy leg in mesh
+  mTLS, but GAG's proxy speaks plain <code>CONNECT</code> (with its own per-tenant CA on the
+  tunnelled leg, see <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>),
+  not mesh mTLS. The handshake fails or falls back unpredictably.</li>
+<li><strong>Broken egress isolation.</strong> If the mesh routes the GitHub-bound traffic out
+  through its own <em>egress gateway</em> (or a <code>ServiceEntry</code>), the packets leave on the
+  mesh's egress IP instead of the tenant's proxy IP. The per-tenant egress-IP
+  attribution that isolates tenants is silently lost — the most damaging failure,
+  because nothing errors; the traffic just exits from the wrong identity.</li>
+</ul>
+<h3 id="fix-exclude-gags-proxy-path-from-interception">Fix: exclude GAG's proxy path from interception<a class="headerlink" href="#fix-exclude-gags-proxy-path-from-interception" title="Permanent link">&para;</a></h3>
+<p>The clean fix is the same namespace opt-out as problem 1 — no sidecar, no
+interception. If the namespace must stay meshed (e.g. you are using
+<a href="#fix-b--native-sidecars-kubernetes-128">native sidecars</a> for the lifecycle
+fix), you must additionally tell the mesh to <strong>leave GAG's egress path alone</strong> so
+the per-tenant proxy is honored. Exclude the proxy <code>Service</code> port (<code>8080</code>) and/or
+the cluster service CIDR from outbound capture.</p>
+<p>The canonical exclusions are <strong>pod-level annotations</strong>, which GAG strips from
+worker pods (<a href="#why-per-pod-podtemplate-annotations-will-not-save-you">why</a>).
+So for an in-mesh worker namespace you configure exclusions at the <strong>mesh-install
+/ revision level</strong>, not per pod. Per-mesh recipes follow.</p>
+<hr />
+<h2 id="per-mesh-recipes">Per-mesh recipes<a class="headerlink" href="#per-mesh-recipes" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p>These recipes are the in-mesh path. Each was validated end-to-end on the versions noted
+in its section (Q220/Q280), but mesh knob names, values, and version floors drift between
+releases — verify against your own mesh release before relying on them. The
+<a href="#the-one-label-answer">namespace opt-out</a> remains the recommended default.</p>
+</blockquote>
+<h3 id="istio--sidecar-mode-in-mesh-if-opt-out-is-not-allowed">Istio — sidecar mode (in-mesh, if opt-out is not allowed)<a class="headerlink" href="#istio--sidecar-mode-in-mesh-if-opt-out-is-not-allowed" title="Permanent link">&para;</a></h3>
+<p>Validated end-to-end on Istio 1.30.2 / k8s 1.35 (Q220). The full working sequence:</p>
+<ol>
+<li><strong>Prerequisites</strong> (<a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace">details</a>) —
+   without both, the tenant never starts:</li>
+<li>Install the Istio <strong>CNI</strong> (<code>istio/cni</code> chart) and set <code>pilot.cni.enabled=true</code> on
+     istiod, so the <code>NET_ADMIN</code> <code>istio-init</code> container is not injected (Pod Security).</li>
+<li>Add the <strong>istiod-egress NetworkPolicy</strong> (allow <code>istio-system</code> <code>:15012</code>/<code>:15010</code>) so
+     the sidecar can reach istiod for config + certs.</li>
+<li>Lifecycle: native sidecars (the Istio ≥ 1.28 default) let workers terminate — verify
+   with <a href="#fix-b--native-sidecars-kubernetes-128">Fix B</a>; do <strong>not</strong> set
+   <code>ENABLE_NATIVE_SIDECARS=false</code>.</li>
+<li>Egress: with no egress <code>Gateway</code>/<code>ServiceEntry</code> in play, the sidecar transparently
+   forwards the worker→proxy CONNECT and GAG's per-tenant egress path is <strong>preserved</strong> —
+   validation confirmed a meshed, workload-labeled pod reaching GitHub <em>through the tenant
+   proxy</em> returned HTTP 200, identical to a sidecar-excluded baseline. Excluding GAG's
+   proxy port (<code>8080</code>) and the cluster service CIDR from outbound capture is therefore an
+   <strong>optimization</strong> (it skips the extra Envoy hop and the mTLS-wrap of the worker→proxy
+   leg), not a correctness requirement. The per-pod form (shown for reference) is:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Reference only — GAG drops these from the worker podTemplate.</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">traffic.sidecar.istio.io/excludeOutboundPorts</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8080&quot;</span><span class="w">        </span><span class="c1"># GAG proxy CONNECT port</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">traffic.sidecar.istio.io/excludeOutboundIPRanges</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10.96.0.0/12&quot;</span><span class="w">  </span><span class="c1"># your cluster service CIDR</span>
+</code></pre></div>
+<p>Because the annotation cannot reach the worker pod, set the equivalent default
+   on the injection template for this revision via the <code>istio-sidecar-injector</code>
+   <code>ConfigMap</code> (<code>values.global.proxy.excludeOutboundPorts</code> /
+   <code>excludeIPRanges</code>), scoped to the revision that meshes the GAG namespace.
+   Confirm your cluster service CIDR first:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>cluster-info<span class="w"> </span>dump<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-m1<span class="w"> </span>service-cluster-ip-range
+</code></pre></div>
+<ol>
+<li>Do <strong>not</strong> define an egress <code>Gateway</code> / <code>ServiceEntry</code> that claims GitHub
+   hostnames for the GAG namespace — that is precisely the path that would strip
+   the per-tenant egress IP.</li>
+</ol>
+<blockquote>
+<p>Even with all of the above, sidecar mode is strictly more fragile than the
+<a href="#the-one-label-answer">namespace opt-out</a> or <a href="#istio--ambient-mode">ambient</a>.
+Use it only when policy forbids the simpler options.</p>
+</blockquote>
+<h3 id="istio--ambient-mode">Istio — ambient mode<a class="headerlink" href="#istio--ambient-mode" title="Permanent link">&para;</a></h3>
+<p>Validated end-to-end on Istio 1.30.2 / k8s 1.35 (Q280). Ambient is sidecar-less, so problem 1
+does not arise — a meshed worker pod stays single-container and reached a terminal phase in
+~3 s, reaped normally. <strong>The catch is egress.</strong> Keep the GAG namespace <strong>out</strong> of the ambient
+data plane so <code>ztunnel</code> does not capture the worker→proxy leg:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Leave the GAG namespace unlabeled, or explicitly:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>istio.io/dataplane-mode<span class="o">=</span>none
+</code></pre></div>
+<blockquote>
+<p><strong>Validated: opt-out is required, not merely preferred (Q280).</strong> With the tenant namespace
+<em>enrolled</em> (<code>istio.io/dataplane-mode=ambient</code>), the AGC still started and registered listeners
+(its plain in-cluster HTTP survives ztunnel, and ambient needs <strong>no</strong> control-plane egress
+NetworkPolicy — ztunnel is per-node, not a pod sidecar), but the worker→proxy HTTPS <code>CONNECT</code>
+leg was <strong>reset</strong> (<code>curl (35) Recv failure: Connection reset by peer</code>, HTTP 000): ztunnel wraps
+the L4 leg in HBONE/mTLS, which collides with the per-tenant proxy's own TLS. This happened with
+<strong>no</strong> waypoint, <code>CiliumEnvoyConfig</code>, or explicit egress policy in play — plain ztunnel capture
+is enough to break it. Setting <code>istio.io/dataplane-mode=none</code> and rolling the pods restored the
+proxy egress to HTTP 200. So do not enroll the GAG namespace in ambient; leave it out of the
+dataplane and verify the egress path as <a href="#verifying-coexistence">below</a>.</p>
+</blockquote>
+<h3 id="linkerd">Linkerd<a class="headerlink" href="#linkerd" title="Permanent link">&para;</a></h3>
+<p>Injection is <strong>opt-in</strong> and driven by an <strong>annotation</strong> (not a label like Istio's
+<code>istio-injection</code>), so a GAG namespace gets no proxy unless something enrolls it.</p>
+<ul>
+<li>Default: do nothing. Confirm there is no inherited
+  <code>linkerd.io/inject=enabled</code> <strong>annotation</strong>.</li>
+<li>If a parent scope injects, opt the namespace out:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>linkerd.io/inject<span class="o">=</span>disabled
+</code></pre></div>
+<blockquote>
+<p><strong>Validation (Q220 + Q280): Linkerd in-mesh coexistence needs one extra annotation, and the
+opt-out is still strongly preferred.</strong> On Linkerd edge-26.6.3 / k8s 1.35, after clearing both
+<a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace">in-mesh prerequisites</a> — the
+<code>linkerd2-cni</code> chart + <code>cniEnabled=true</code> for Pod Security, and a control-plane egress
+NetworkPolicy for <code>linkerd-dst:8086</code> / <code>linkerd-identity:8080</code> / <code>linkerd-policy:8090</code> —
+<strong>lifecycle is fine</strong>: <code>linkerd-proxy</code> injects as a native sidecar (the edge default) and worker
+pods reached a terminal phase in ~7 s and were reaped. The problem is the <strong>per-tenant-proxy
+HTTPS <code>CONNECT</code> leg</strong> (port <code>8080</code>): <code>linkerd-proxy</code> mTLS-wraps that outbound connection, which
+collides with the proxy's own per-tenant TLS and <strong>resets it</strong> (Q280 A/B: without the fix,
+<code>curl -x https://actions-gateway-proxy:8080</code> → HTTP 000, <code>curl (35) Connection reset by peer</code>).
+Because every GitHub-bound request tunnels through that proxy leg, this is what Q220 saw as the
+AGC's installation-token fetch failing (<code>POST access_tokens returned 504</code>) — the fetch to
+api.github.com goes through the proxy. (Plain in-cluster HTTP to a <em>same-cluster</em> endpoint is
+unaffected — Linkerd proxies it fine.) The same knobs Istio needs (native sidecars; PSA + NP
+prerequisites) all apply, plus you must stop Linkerd from capturing the proxy egress port:</p>
+</blockquote>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Namespace-level default applied to injected pods. Skip Linkerd&#39;s outbound capture of the</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># per-tenant proxy CONNECT port (8080) — every GitHub-bound request tunnels through it.</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>config.linkerd.io/skip-outbound-ports<span class="o">=</span><span class="m">8080</span>
+</code></pre></div>
+<p>As with Istio, the per-pod <code>config.linkerd.io/skip-outbound-ports</code> annotation does <strong>not</strong> reach
+  GAG worker pods if set on the <code>podTemplate</code>; apply it at the <strong>namespace</strong> so Linkerd's injector
+  picks it up (confirmed: the annotation lands on the injected pods and reprograms the outbound
+  redirect). <strong>Confirmed live (Q280):</strong> with <code>skip-outbound-ports=8080</code> set and the pods rolled,
+  the same proxy-egress check returns <strong>HTTP 200</strong>. Port <code>8080</code> alone suffices in the proxied model
+  because all GitHub-bound egress <code>CONNECT</code>-tunnels through the per-tenant proxy on that port; if
+  you run the proxy on a non-default port, skip that port instead. Prefer the
+  <a href="#the-one-label-answer">namespace opt-out</a> unless mesh membership is mandatory.</p>
+<h3 id="cilium-service-mesh">Cilium Service Mesh<a class="headerlink" href="#cilium-service-mesh" title="Permanent link">&para;</a></h3>
+<p>Validated end-to-end on Cilium 1.19.5 / k8s 1.35 (Q280), as the cluster CNI. Sidecar-less
+(per-node Envoy), so <strong>neither problem arises by default</strong> — the worker pod stayed
+single-container and reached a terminal phase in ~2 s (lifecycle), and the worker→proxy
+<code>CONNECT</code> egress returned HTTP 200 (egress preserved), with no mesh-specific configuration.
+Cilium also genuinely <strong>enforces</strong> the tenant's default-deny egress: a workload-labeled probe's
+direct (non-proxied) egress to GitHub timed out, so traffic can only leave via the per-tenant
+proxy and the egress-isolation boundary holds — unlike kindnet, which does not enforce it.</p>
+<p>The only thing to check is that no L7 <code>CiliumEnvoyConfig</code> / <code>CiliumClusterwideEnvoyConfig</code>
+or L7 <code>CiliumNetworkPolicy</code> redirects the worker's <code>:8080</code> egress or the
+GitHub-bound <code>CONNECT</code> into an Envoy listener — that would reintroduce the same interception
+Istio/Linkerd exhibit. If you use Cilium for egress
+control, prefer expressing the GitHub allowlist as <code>toFQDNs</code>/<code>toCIDR</code> policy that
+<em>complements</em> GAG's proxy rather than intercepting it (see the
+<a href="../../design/network-architecture/">network architecture</a> and the
+<a href="../../design/05-security/">CNI-native FQDN egress</a> direction).</p>
+<h3 id="generic-pattern-any-mesh">Generic pattern (any mesh)<a class="headerlink" href="#generic-pattern-any-mesh" title="Permanent link">&para;</a></h3>
+<p>For a mesh not listed above, apply the same rules, in order:</p>
+<ol>
+<li><strong>Admission</strong> — the sidecar must be <em>creatable</em> and <em>startable</em>: use the mesh's
+   node-level CNI so no <code>NET_ADMIN</code> proxy-init container is injected (GAG enforces
+   <code>baseline</code> Pod Security), and add a NetworkPolicy that lets the sidecar reach the mesh
+   control plane (GAG's egress is default-deny). See
+   <a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace">the two prerequisites</a>.</li>
+<li><strong>Lifecycle</strong> — guarantee the worker pod reaches a terminal phase: prefer
+   namespace injection opt-out; else a native-sidecar (Kubernetes 1.28+) mode (now the
+   default on current Istio/Linkerd); else a sidecar-less/ambient data plane. Never rely
+   on a classic sidecar that runs forever.</li>
+<li><strong>Egress</strong> — confirm the worker→proxy→GitHub <code>CONNECT</code> path survives the data plane. This is
+   the leg that breaks: validation showed Istio <em>sidecar</em> mode preserved it, but Istio <em>ambient</em>
+   (ztunnel HBONE) and Linkerd (proxy mTLS) both reset it against the per-tenant proxy's own TLS.
+   Exclude GAG's proxy <code>Service</code> port (<code>8080</code> by default) — and, if you run the proxy on a
+   different port, that port — from the mesh's outbound capture, configured at the <strong>mesh-install /
+   namespace level</strong> (GAG strips per-pod <code>podTemplate</code> annotations): an optimization on Istio
+   sidecar, <strong>mandatory</strong> on Linkerd (<code>skip-outbound-ports=8080</code>), and unavoidable on ambient
+   (there the only fix is to leave the namespace out of the dataplane). Never let a mesh egress
+   gateway claim GitHub hostnames for the GAG namespace.</li>
+<li><strong>Identity</strong> — after rollout, confirm GitHub still sees the per-tenant proxy
+   egress IP, not a mesh egress-gateway IP (<a href="#verifying-coexistence">verify</a>).</li>
+</ol>
+<hr />
+<h2 id="verifying-coexistence">Verifying coexistence<a class="headerlink" href="#verifying-coexistence" title="Permanent link">&para;</a></h2>
+<p>After applying any of the above, confirm both problems are actually resolved.</p>
+<p><strong>Lifecycle — worker pods terminate and are reaped:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Run a job, then watch its worker pod reach a terminal phase and disappear.</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;<span class="w"> </span>-w
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Expect: Running -&gt; Succeeded/Completed -&gt; deleted (after completedPodTTL).</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># A pod that sits at READY 1/2 STATUS Running long after the job finished</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># means a sidecar is still pinning it — revisit problem 1.</span>
+</code></pre></div>
+<p>Check the container layout on a live worker. What "correct" looks like depends on
+whether you opted out or stayed in-mesh:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Regular containers:</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.containers[*].name}{&quot;\n&quot;}&#39;</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Native-sidecar init containers (restartPolicy: Always):</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .spec.initContainers[*]}{.name}({.restartPolicy}) {end}{&quot;\n&quot;}&#39;</span>
+</code></pre></div>
+<ul>
+<li><strong>Opted out</strong> (<a href="#the-one-label-answer">Fix A</a>): just the runner container, no proxy
+  anywhere. The safest state.</li>
+<li><strong>In-mesh, native sidecar</strong> (<a href="#fix-b--native-sidecars-kubernetes-128">Fix B</a>): the proxy
+  shows up as an <strong>init</strong> container with <code>restartPolicy: Always</code> (e.g. <code>istio-proxy(Always)</code>
+  or <code>linkerd-proxy(Always)</code>). This is fine — the kubelet terminates it when the runner
+  exits, so the pod still reaches a terminal phase.</li>
+<li><strong>In-mesh, classic sidecar (the bug):</strong> the proxy is a <strong>regular</strong> container
+  (<code>istio-proxy</code> under <code>.spec.containers</code>). When the runner exits, the pod sits at
+  <code>READY 1/2 STATUS Running</code> forever — revisit <a href="#problem-1-sidecars-strand-worker-slots">problem 1</a>
+  and switch the mesh to native sidecars.</li>
+</ul>
+<p><strong>Egress — GitHub sees the per-tenant proxy IP:</strong> follow the egress-isolation
+check in the <a href="../../design/network-architecture/#how-to-validate-network-isolation">network architecture validation</a>
+— GitHub-bound traffic must exit through the tenant proxy <code>Service</code>, and no
+direct or mesh-egress-gateway egress to GitHub should be observed from a worker
+pod. If the observed source IP is the mesh egress gateway's, the per-tenant
+attribution is broken — revisit <a href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy">problem 2</a>.</p>
+<p>If jobs stop being picked up, the
+<a href="../troubleshooting/">troubleshooting guide</a> covers the wedged-RunnerGroup
+symptom; a namespace in a mesh with classic sidecars is the first thing to rule
+out.</p>
+<hr />
+<h2 id="which-fix-applies-to-you">Which fix applies to you<a class="headerlink" href="#which-fix-applies-to-you" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Do this</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>You can keep the GAG namespace out of the mesh</td>
+<td><a href="#the-one-label-answer">Opt the namespace out</a>. Done — both problems gone. Validation only reinforced this as the default.</td>
+</tr>
+<tr>
+<td>Mesh membership is mandatory, Kubernetes ≥ 1.28</td>
+<td>Satisfy <strong>both</strong> <a href="#two-hard-prerequisites-for-any-in-mesh-gag-namespace">in-mesh prerequisites</a> (mesh CNI for Pod Security <strong>and</strong> a control-plane egress NetworkPolicy) or nothing starts; then rely on <a href="#fix-b--native-sidecars-kubernetes-128">native sidecars</a> (the modern default) for lifecycle and confirm the <a href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy">egress path</a> end-to-end.</td>
+</tr>
+<tr>
+<td>You run Linkerd and must stay in-mesh</td>
+<td>Clear both prerequisites, then add <code>config.linkerd.io/skip-outbound-ports=8080</code> on the namespace to un-break the proxy <code>CONNECT</code> leg (Q280-confirmed: 000→200). <a href="#linkerd">Prefer the opt-out</a>.</td>
+</tr>
+<tr>
+<td>You run Istio <strong>ambient</strong></td>
+<td>Sidecar-less lifecycle is fine, but enrolling breaks the proxy egress leg (ztunnel HBONE) — leave the GAG namespace <a href="#istio--ambient-mode">out of the data plane</a> (<code>dataplane-mode=none</code>).</td>
+</tr>
+<tr>
+<td>You run <strong>Cilium</strong> Service Mesh</td>
+<td>Safe by default (Q280): sidecar-less lifecycle + proxy egress both work, and it enforces the egress deny. Just <a href="#cilium-service-mesh">confirm no L7 redirect</a> captures <code>:8080</code>.</td>
+</tr>
+<tr>
+<td>You were about to set mesh annotations on the RunnerGroup <code>podTemplate</code></td>
+<td>Don't — <a href="#why-per-pod-podtemplate-annotations-will-not-save-you">GAG strips them</a>. Configure the namespace and the mesh install instead.</td>
+</tr>
+</tbody>
+</table>
+<p>See also: <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">security model §5.2</a>
+(per-tenant egress proxy), <a href="../tenant-onboarding/">tenant onboarding</a>,
+<a href="../troubleshooting/">troubleshooting</a>, and the
+<a href="../../design/network-architecture/">network architecture</a>.</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../p2p-image-distribution/" class="md-footer__link md-footer__link--prev" aria-label="Previous: P2P image distribution">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                P2P image distribution
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../observability/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Overview
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

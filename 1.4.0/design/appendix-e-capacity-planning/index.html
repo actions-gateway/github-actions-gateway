@@ -1,0 +1,3493 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/appendix-e-capacity-planning/">
+      
+      
+        <link rel="prev" href="../appendix-d-alternatives-considered/">
+      
+      
+        <link rel="next" href="../appendix-f-cost-model/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Appendix E — Capacity planning - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/1.4.0",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/1.4.0"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#appendix-e--capacity-planning--runnergroup-design" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Appendix E — Capacity planning
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#e1-the-three-binding-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.1. The Three Binding Constraints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e2-what-runnergroups-are-and-arent-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.2. What RunnerGroups Are (and Aren't) For
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e3-the-per-workflow-runnergroup-question" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.3. The Per-Workflow RunnerGroup Question
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e4-sizing-maxlisteners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.4. Sizing maxListeners
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e5-multi-repo-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.5. Multi-Repo Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e6-when-to-shard-across-installations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.6. When to Shard Across Installations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e7-per-tenant-vs-per-team-partitioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.7. Per-Tenant vs. Per-Team Partitioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e8-decision-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.8. Decision Guide
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e9-scaling-the-agc-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.9. Scaling the AGC Itself
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e10-worked-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.10. Worked Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="E.10. Worked Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-team-with-3-runnergroups-and-20-concurrent-gpu-jobs-at-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1: Team with 3 RunnerGroups and 20 Concurrent GPU Jobs at Peak
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-cpu-only-team-100-jobsday-bursty-up-to-10-concurrent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2: CPU-Only Team, 100 Jobs/Day, Bursty (Up to 10 Concurrent)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-large-tenant-hitting-the-250-session-ceiling--sharding-walkthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3: Large Tenant Hitting the 250-Session Ceiling — Sharding Walkthrough
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e11-managed-vertical-right-sizing-of-the-control-planes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11. Managed Vertical Right-Sizing of the Control Planes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="E.11. Managed Vertical Right-Sizing of the Control Planes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#e111-precedence-against-agcresources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11.1. Precedence against agcResources
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e112-when-the-vpa-crds-are-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11.2. When the VPA CRDs are absent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#e1-the-three-binding-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.1. The Three Binding Constraints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e2-what-runnergroups-are-and-arent-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.2. What RunnerGroups Are (and Aren't) For
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e3-the-per-workflow-runnergroup-question" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.3. The Per-Workflow RunnerGroup Question
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e4-sizing-maxlisteners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.4. Sizing maxListeners
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e5-multi-repo-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.5. Multi-Repo Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e6-when-to-shard-across-installations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.6. When to Shard Across Installations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e7-per-tenant-vs-per-team-partitioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.7. Per-Tenant vs. Per-Team Partitioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e8-decision-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.8. Decision Guide
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e9-scaling-the-agc-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.9. Scaling the AGC Itself
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e10-worked-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.10. Worked Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="E.10. Worked Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-team-with-3-runnergroups-and-20-concurrent-gpu-jobs-at-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1: Team with 3 RunnerGroups and 20 Concurrent GPU Jobs at Peak
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-cpu-only-team-100-jobsday-bursty-up-to-10-concurrent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2: CPU-Only Team, 100 Jobs/Day, Bursty (Up to 10 Concurrent)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-large-tenant-hitting-the-250-session-ceiling--sharding-walkthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3: Large Tenant Hitting the 250-Session Ceiling — Sharding Walkthrough
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e11-managed-vertical-right-sizing-of-the-control-planes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11. Managed Vertical Right-Sizing of the Control Planes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="E.11. Managed Vertical Right-Sizing of the Control Planes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#e111-precedence-against-agcresources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11.1. Precedence against agcResources
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e112-when-the-vpa-crds-are-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11.2. When the VPA CRDs are absent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="appendix-e--capacity-planning--runnergroup-design">Appendix E — Capacity Planning &amp; RunnerGroup Design<a class="headerlink" href="#appendix-e--capacity-planning--runnergroup-design" title="Permanent link">&para;</a></h1>
+<p>← <a href="../appendix-d-alternatives-considered/">Appendix D</a> | <a href="../">Back to index</a></p>
+<hr />
+<p>This appendix is a practical guide for operators and tenant teams deciding how to structure their <code>RunnerGroup</code>s, size their <code>maxListeners</code> counts, and plan for growth. The raw constraint numbers live in <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>; this appendix explains how to reason about them in practice.</p>
+<blockquote>
+<p><strong>Milestone 1 protocol findings</strong> (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-1.md#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
+<p><em>Session reuse confirmed</em> (Investigation C) — a session remains live after <code>acquirejob</code>; goroutines loop without a delete→create cycle. The steady-state cost remains <strong>one session per RunnerGroup</strong>.</p>
+<p><em>One session per registered runner agent enforced</em> (Investigation D) — <code>POST /sessions</code> returns 409 if the agentId already has a session. Each concurrent listener goroutine requires a distinct pre-registered agent. The AGC must provision up to <code>maxListeners</code> agents per RunnerGroup at setup time. This does not change the rate-limit math (one active session per agent, same session-count formula), but it adds an agent-registration step to RunnerGroup provisioning — see <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a>.</p>
+<p><em>Opportunistic delivery supported</em> (inferred from Investigation C timing) — a newly dispatched job arrived in <code>GetMessage</code> within ~1 second of dispatch, consistent with delivery to any active polling session. No warm standby pool is needed.</p>
+</blockquote>
+<hr />
+<h2 id="e1-the-three-binding-constraints">E.1. The Three Binding Constraints<a class="headerlink" href="#e1-the-three-binding-constraints" title="Permanent link">&para;</a></h2>
+<p>Every capacity decision is governed by three independent ceilings. Hitting any one of them limits throughput regardless of the others.</p>
+<table>
+<thead>
+<tr>
+<th>Constraint</th>
+<th>Steady-state cost</th>
+<th>Peak cost</th>
+<th>Where it comes from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GitHub App rate limit</td>
+<td>1 session per RunnerGroup (~72 req/hr each)</td>
+<td>Up to <code>maxListeners</code> sessions per RunnerGroup</td>
+<td><a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a>: each active session polls <code>GET /message</code> ~72 times/hour against a 15,000/hour budget</td>
+</tr>
+<tr>
+<td>AGC pod memory</td>
+<td>~60 KiB per active listener goroutine</td>
+<td>Negligible at realistic listener counts</td>
+<td><a href="../appendix-a-capacity-slos/">Appendix A</a>: goroutine stack + HTTP buffer</td>
+</tr>
+<tr>
+<td>Namespace ResourceQuota</td>
+<td>—</td>
+<td>Caps concurrent running worker pods</td>
+<td>Platform-owned <code>ResourceQuota</code> on the tenant namespace (not a CR field — see <a href="../../operations/tenant-onboarding/">tenant-onboarding</a>)</td>
+</tr>
+</tbody>
+</table>
+<p>With the adaptive listener model, <strong>the GitHub App rate limit is no longer a steady-state concern for most tenants.</strong> One session per RunnerGroup means 10 RunnerGroups consume ~720 req/hour against a 15,000/hour budget — 5% utilization at rest. The rate limit becomes relevant only at sustained peak burst when many RunnerGroups are simultaneously at their <code>maxListeners</code> ceiling.</p>
+<p>The key formulas:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Steady-state sessions   = number of RunnerGroups in the ActionsGateway
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Peak sessions (worst case) = sum of maxListeners across all RunnerGroups
+</code></pre></div>
+<p>The platform-owned namespace <code>ResourceQuota</code> remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the <code>ActionsGateway</code> CR. For the arithmetic that turns runner shapes and <code>maxWorkers</code> into the actual quota numbers — including the native sidecars, Kata <code>RuntimeClass</code> overhead, and per-worker PVCs that the per-container asks alone do not account for — see <a href="../../operations/resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>.</p>
+<hr />
+<h2 id="e2-what-runnergroups-are-and-arent-for">E.2. What RunnerGroups Are (and Aren't) For<a class="headerlink" href="#e2-what-runnergroups-are-and-arent-for" title="Permanent link">&para;</a></h2>
+<p>A <code>RunnerGroup</code> represents a <strong>pool of listener goroutines sharing a common pod shape</strong>. It is not a per-repo, per-team, or per-workflow construct.</p>
+<p>GitHub routes jobs to a RunnerGroup by matching the job's <code>runs-on</code> labels against the RunnerGroup's <code>runnerLabels</code>. Any workflow in any repository with access to the GitHub App installation can target a RunnerGroup — repo boundaries are invisible to the routing layer.</p>
+<p>This means:</p>
+<ul>
+<li><strong>Multiple repos → one RunnerGroup</strong> (if they share the same pod shape and labels).</li>
+<li><strong>Multiple workflows → one RunnerGroup</strong> (if they share the same pod shape and labels).</li>
+<li><strong>Multiple pod shapes → multiple RunnerGroups</strong> (GPU count, memory, CPU profile, or special volumes differ).</li>
+</ul>
+<hr />
+<h2 id="e3-the-per-workflow-runnergroup-question">E.3. The Per-Workflow RunnerGroup Question<a class="headerlink" href="#e3-the-per-workflow-runnergroup-question" title="Permanent link">&para;</a></h2>
+<p>Because the steady-state rate-limit cost of a RunnerGroup is one session (~72 req/hour), adding a new RunnerGroup is genuinely cheap. This makes fine-grained RunnerGroup topologies much more practical than they would be under a fixed-session model.</p>
+<p>The argument for per-workflow RunnerGroups is now strong:</p>
+<ul>
+<li>Each workflow gets the minimum GPU count it actually needs, eliminating over-provisioning at the pod level.</li>
+<li>Teams own their runner shapes independently without coordinating with other teams.</li>
+<li>Metrics are naturally scoped per workflow via the <code>runner_group</code> label.</li>
+<li>Adding a new RunnerGroup for a new test suite is a self-service config change with negligible operational cost.</li>
+</ul>
+<p>The remaining constraints are practical rather than rate-limit-driven:</p>
+<p><strong><code>maxListeners</code> must be sized per RunnerGroup.</strong> A RunnerGroup that receives large simultaneous job bursts needs a higher <code>maxListeners</code> ceiling to acquire them all within the 2-minute window. Misconfigured ceilings can cause missed acquisitions during bursts, not just queuing delays.</p>
+<p><strong>Peak rate-limit consumption scales with RunnerGroup count × <code>maxListeners</code>.</strong> At extreme scale — many RunnerGroups all bursting simultaneously — the peak session count can approach the installation budget. For most tenants this is not a practical concern; see <a href="#e6-when-to-shard-across-installations">E.6</a> for shard triggers.</p>
+<p><strong>Configuration overhead grows with RunnerGroup count.</strong> Each RunnerGroup requires a pod shape definition, label assignment, and <code>maxListeners</code> tuning. At very high RunnerGroup counts this becomes a maintenance surface.</p>
+<p><strong>The practical guidance:</strong> per-workflow RunnerGroups are a reasonable default for teams with meaningfully different resource requirements between workflows. Consolidate by pod shape only when workflows are resource-identical — there is no longer a strong rate-limit reason to force consolidation.</p>
+<hr />
+<h2 id="e4-sizing-maxlisteners">E.4. Sizing <code>maxListeners</code><a class="headerlink" href="#e4-sizing-maxlisteners" title="Permanent link">&para;</a></h2>
+<p><code>RunnerGroup.maxListeners</code> caps the number of listener goroutines that can run concurrently during a burst. The AGC always maintains at least one listener; additional goroutines spawn as jobs arrive and shut down when the queue drains.</p>
+<p>This field is a <strong>burst ceiling, not a steady-state count.</strong> Setting it higher than needed costs nothing at rest — idle listener goroutines do not exist. The cost of setting it too low is missed job acquisitions: if 20 jobs arrive simultaneously and <code>maxListeners</code> is 5, only 5 can be acquired in the first wave; the remaining 15 must wait for sessions to free up, potentially timing out the 2-minute acquisition window if the burst is sustained.</p>
+<p>A practical starting approach:</p>
+<ol>
+<li><strong>Estimate peak simultaneous job arrivals</strong> for this RunnerGroup. A team that pushes to many PRs at once at the start of the day may see 20–30 jobs arrive in a few seconds; a team with staggered pipelines may never exceed 5.</li>
+<li><strong>Set <code>maxListeners</code> to cover that peak</strong> with a small margin (e.g. peak + 2–3).</li>
+<li><strong>Monitor <code>actions_gateway_active_sessions</code></strong> relative to <code>maxListeners</code>. If it consistently hits the ceiling during burst periods and jobs are being cancelled for acquisition timeout, increase it. If it never exceeds 3–4, the default of 10 is more than sufficient.</li>
+</ol>
+<p>For most RunnerGroups the default of 10 is the right starting point and requires no tuning.</p>
+<hr />
+<h2 id="e5-multi-repo-usage">E.5. Multi-Repo Usage<a class="headerlink" href="#e5-multi-repo-usage" title="Permanent link">&para;</a></h2>
+<p>A GitHub App installation is scoped to an organization or a specific set of repositories. Within that scope, all repos can target any RunnerGroup by label — there is no per-repo RunnerGroup configuration required.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Organization: my-org
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  ├── repo-a  (workflow: runs-on: [self-hosted, gpu-2x])   ──┐
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  ├── repo-b  (workflow: runs-on: [self-hosted, gpu-2x])   ──┤── same RunnerGroup
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  └── repo-c  (workflow: runs-on: [self-hosted, gpu-2x])   ──┘
+</code></pre></div>
+<p>The only case that requires separate <code>ActionsGateway</code> CRs for repo-boundary reasons is when repos live in <strong>different GitHub organizations</strong> — because each org needs its own App installation, and each installation maps to exactly one <code>ActionsGateway</code> CR.</p>
+<hr />
+<h2 id="e6-when-to-shard-across-installations">E.6. When to Shard Across Installations<a class="headerlink" href="#e6-when-to-shard-across-installations" title="Permanent link">&para;</a></h2>
+<p>With the adaptive listener model, sharding is a much rarer need than under a fixed-session design. Shard to a new <code>ActionsGateway</code> CR (and therefore a new GitHub App installation) when:</p>
+<ul>
+<li>The <code>RateLimited</code> condition appears on any <code>RunnerGroup</code> during sustained peak load — the installation's 15,000 req/hour budget is being exhausted by simultaneous burst activity across many RunnerGroups.</li>
+<li>You need more than ~200 RunnerGroups in a single <code>ActionsGateway</code> (steady-state sessions approach the rate limit budget even at one session each).</li>
+<li>Repos in a different GitHub organization need access to the same Kubernetes tenant namespace.</li>
+<li>A team wants fully isolated credentials — a separate GitHub App installation with an independent rate-limit budget.</li>
+</ul>
+<p>As a rough check: <code>number of RunnerGroups × 72 req/hr</code> should stay well below 15,000/hr at rest. At 200 RunnerGroups that is 14,400 req/hr — already tight, with no headroom for burst. Keep steady-state RunnerGroup count comfortably below 150 per installation to preserve burst headroom.</p>
+<p>Each <code>ActionsGateway</code> CR requires its own namespace. If multiple shards are needed within a single team, the standard pattern is one namespace per installation:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>team-a/                    ← namespace 1, ActionsGateway CR, GitHub App install 1
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>team-a-overflow/           ← namespace 2, ActionsGateway CR, GitHub App install 2
+</code></pre></div>
+<p>Label the RunnerGroups consistently across installations (<code>gpu-2x</code>, <code>gpu-8x</code>, etc.) and split workflows between them based on priority or throughput class. There is no cross-installation load balancing built into this system; job routing is determined solely by which repos are covered by each installation's scope.</p>
+<hr />
+<h2 id="e7-per-tenant-vs-per-team-partitioning">E.7. Per-Tenant vs. Per-Team Partitioning<a class="headerlink" href="#e7-per-tenant-vs-per-team-partitioning" title="Permanent link">&para;</a></h2>
+<p>The Gateway Manager Controller (GMC) multi-tenant model provisions one <code>ActionsGateway</code> per namespace. Within an organization, two common partitioning patterns emerge:</p>
+<p><strong>One gateway per team.</strong> Each team owns a namespace and an <code>ActionsGateway</code> CR. Runner shapes, <code>maxListeners</code> counts, and quota are fully self-managed per team. This is the recommended default — it aligns operational ownership with the team boundary, gives each team an independent rate-limit budget, and eliminates cross-team coordination on RunnerGroup configuration.</p>
+<p><strong>One gateway per environment (shared by multiple teams).</strong> A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g. <code>team-a-gpu-2x</code>, <code>team-b-gpu-4x</code>). This reduces total AGC instances and GitHub App installations at the cost of reintroducing the coordination the self-service model is designed to avoid. Use this pattern only when the number of teams is small and the platform team is comfortable arbitrating RunnerGroup configuration and quota allocation.</p>
+<hr />
+<h2 id="e8-decision-guide">E.8. Decision Guide<a class="headerlink" href="#e8-decision-guide" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>New runner requirement arriving:
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>│
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>├─ Does an existing RunnerGroup have the same GPU count, memory,
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>│  and tooling requirements?
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>│   ├─ Yes → Target the existing RunnerGroup&#39;s label from the workflow.
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>│   │         No new RunnerGroup needed.
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>│   └─ No  → Create a new RunnerGroup with the appropriate pod shape
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>│             and set maxListeners to cover the expected burst size.
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>│             Check that total steady-state RunnerGroup count across
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>│             the ActionsGateway stays below ~150.
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>│
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>├─ Are simultaneous job bursts being lost (acquisition timeout)?
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>│   ├─ No  → Default maxListeners (10) is sufficient.
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>│   └─ Yes → Increase maxListeners on the affected RunnerGroup to
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>│             cover the observed peak simultaneous arrival rate.
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>│
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>├─ Is the RateLimited condition appearing during peak periods?
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>│   ├─ No  → No action needed.
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>│   └─ Yes → Either reduce RunnerGroup count, reduce maxListeners on
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>│             high-burst groups, or shard to a second ActionsGateway
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>│             CR with a separate GitHub App installation.
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>│
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>└─ Are the repos in a different GitHub organization?
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>    ├─ No  → Same ActionsGateway CR can serve them all.
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    └─ Yes → Separate ActionsGateway CR required (separate installation).
+</code></pre></div>
+<hr />
+<h2 id="e9-scaling-the-agc-itself">E.9. Scaling the AGC Itself<a class="headerlink" href="#e9-scaling-the-agc-itself" title="Permanent link">&para;</a></h2>
+<p>The AGC is a single-pod controller that holds all listener goroutine state in memory. It cannot be horizontally scaled to multiple replicas without distributing that state — a significant complexity increase that is not in scope for this design. The scaling levers available to operators are vertical scaling, optional VPA right-sizing, and sharding across multiple <code>ActionsGateway</code> CRs.</p>
+<p><strong>Vertical scaling (manual).</strong> The primary tuning surface is the AGC pod's resource footprint. The working memory consumed by listener goroutines at peak burst is:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>peak_goroutine_memory ≈ sum(maxListeners across all RunnerGroups) × 60 KiB
+</code></pre></div>
+<p>For example, 50 RunnerGroups each with <code>maxListeners: 10</code> → 500 concurrent goroutines at peak → ~30 MiB of goroutine working set. The recommended sizing (see <a href="../appendix-a-capacity-slos/">Appendix A</a>) is a <code>2Gi</code> memory <strong>request</strong> with a <code>4Gi</code> memory <strong>limit</strong> — the request is a generous scheduling reservation absorbing Go runtime overhead and heap churn during reconcile storms, and the limit sits well above the working set so transient bursts don't OOMKill the single-pod control plane while a true runaway is still bounded. On the v1 API the GMC stamps no resources on the AGC pod, so the platform applies this sizing on the AGC Deployment through its Helm/Kustomize overlay (or a namespace <code>LimitRange</code> that supplies default requests). If an operator adds many RunnerGroups with high <code>maxListeners</code> values and begins observing <code>container OOMKilled</code> events or high GC pressure (visible via <code>go_gc_duration_seconds</code> in Prometheus), raising the AGC Deployment's <code>resources.limits.memory</code> is the correct first response.</p>
+<p>CPU consumption is predominantly I/O-bound — goroutines spend nearly all of their time blocked on <code>GET /message</code> long-polls. CPU pressure appears only during reconcile churn (many RunnerGroups being created or deleted simultaneously) or during a token refresh storm. The recommended <code>2</code>-core CPU <strong>limit</strong> is sufficient for most deployments; raise the AGC Deployment's <code>resources.limits.cpu</code> only if <code>container_cpu_throttled_seconds_total</code> shows sustained throttling during peak reconcile activity.</p>
+<p><strong>Optional VPA right-sizing.</strong> A <a href="https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler">Vertical Pod Autoscaler</a> (VPA) observes the AGC's actual CPU and memory usage over time and adjusts its resource requests automatically. This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing. The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via <code>DELETE /sessions</code>, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see <a href="../04-operational-flows/#42-job-execution-flow-agc">§4.2</a> and the <code>SessionReacquisition</code> SLO in <a href="../appendix-a-capacity-slos/">Appendix A</a>).</p>
+<p>Under v2 this is a first-class opt-in rather than something the operator hand-rolls: see <a href="#e11-managed-vertical-right-sizing-of-the-control-planes">E.11</a> for the two managed opt-ins the system ships, the precedence rules against <code>agcResources</code>, and what happens on a cluster where the VPA CRDs are not installed.</p>
+<blockquote>
+<p><strong>v2 promotes AGC sizing to a CR field — <code>spec.agcResources</code> (Q171).</strong> This appendix describes the v1 API (<code>actions-gateway.github.com/v1alpha1</code>), where AGC sizing is platform-applied on the Deployment as above. The v2 <code>ActionsGateway</code> (<code>actions-gateway.com/v2alpha1</code>) instead exposes an optional <code>agcResources</code> field of the standard <code>corev1.ResourceRequirements</code> shape for tenant-controlled per-gateway sizing, and makes the <a href="../appendix-a-capacity-slos/">Appendix A</a> sizing (requests <code>cpu: 500m</code> / <code>memory: 2Gi</code>, limits <code>cpu: 2</code> / <code>memory: 4Gi</code>) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged. See <a href="../appendix-h-v2-api-decomposition/">Appendix H</a> for the v2 decomposition and <a href="../../operations/tenant-onboarding/#tuning-agc-control-plane-resources">tenant-onboarding</a> for the operator-facing how-to and the recommended floor.</p>
+</blockquote>
+<p><strong>Horizontal sharding.</strong> When the number of RunnerGroups or their aggregate <code>maxListeners</code> exceeds what a single vertically-scaled AGC pod can comfortably handle — or when rate-limit pressure appears (see <a href="#e6-when-to-shard-across-installations">E.6</a>) — the correct scale path is to shard into a second <code>ActionsGateway</code> CR in a new namespace with a separate GitHub App installation. Each shard has its own AGC pod, its own rate-limit budget, and its own independent listener goroutine pool. See <a href="#e6-when-to-shard-across-installations">E.6</a> for shard triggers and the standard namespace partitioning pattern.</p>
+<hr />
+<h2 id="e10-worked-examples">E.10. Worked Examples<a class="headerlink" href="#e10-worked-examples" title="Permanent link">&para;</a></h2>
+<p>The following concrete scenarios show how to apply the formulas and decision guide above to real configurations.</p>
+<h3 id="scenario-1-team-with-3-runnergroups-and-20-concurrent-gpu-jobs-at-peak">Scenario 1: Team with 3 RunnerGroups and 20 Concurrent GPU Jobs at Peak<a class="headerlink" href="#scenario-1-team-with-3-runnergroups-and-20-concurrent-gpu-jobs-at-peak" title="Permanent link">&para;</a></h3>
+<p><strong>Context.</strong> A machine learning team runs three workload shapes: model training (8-GPU pods, up to 10 concurrent), model evaluation (2-GPU pods, up to 20 concurrent), and CPU-based preprocessing (no GPU, up to 50 concurrent).</p>
+<p><strong>Configuration.</strong></p>
+<p>The namespace quota is platform-owned — the platform admin applies it on the namespace, sized to the maximum simultaneous pod count:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ml-team-quota</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ml-team</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">hard</span><span class="p">:</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;80&quot;</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;320Gi&quot;</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;85&quot;</span><span class="w">           </span><span class="c1"># 10 + 20 + 50 + 5 headroom</span>
+</code></pre></div>
+<p>The tenant's <code>ActionsGateway</code> then declares the runner groups (no quota field).
+An embedded <code>runnerGroups[]</code> entry has no <code>name</code> field — the GMC derives each
+RunnerGroup's name from its first <code>runnerLabels</code> entry, so keep the distinguishing
+label first to give every group a distinct name:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ml-team-gateway</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ml-team</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/my-org</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu-8x&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># → RunnerGroup ml-team-gateway-gpu-8x</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12</span><span class="w">   </span><span class="c1"># peak 10, +2 margin</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">                </span><span class="nt">limits</span><span class="p">:</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">                  </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu-2x&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># → RunnerGroup ml-team-gateway-gpu-2x</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">22</span><span class="w">   </span><span class="c1"># peak 20, +2 margin</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">      </span><span class="nt">priorityTiers</span><span class="p">:</span>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-critical</span>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">          </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">          </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="w">                </span><span class="nt">limits</span><span class="p">:</span>
+<a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="w">                  </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2&quot;</span>
+<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>
+<a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;cpu-preprocess&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># → RunnerGroup ml-team-gateway-cpu-preprocess</span>
+<a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">   </span><span class="c1"># rarely bursts, default is fine</span>
+<a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
+</code></pre></div>
+<p><strong>Rate-limit check.</strong> Steady-state: 3 sessions × 72 req/hr = 216 req/hr — negligible against the 15,000/hr budget. Peak burst: (12 + 22 + 10) = 44 sessions × 72 req/hr = 3,168 req/hr — well within budget. No sharding needed.</p>
+<p><strong>Peak goroutine memory.</strong> 44 concurrent goroutines × 60 KiB ≈ 2.6 MiB — trivial.</p>
+<p><strong>Namespace quota.</strong> Sized to the maximum simultaneous pod count (10 + 20 + 50 = 80) plus 5 AGC/proxy headroom. The <code>requests.cpu</code> and <code>requests.memory</code> fields must sum to cover the worker pod requests for all concurrent jobs.</p>
+<hr />
+<h3 id="scenario-2-cpu-only-team-100-jobsday-bursty-up-to-10-concurrent">Scenario 2: CPU-Only Team, 100 Jobs/Day, Bursty (Up to 10 Concurrent)<a class="headerlink" href="#scenario-2-cpu-only-team-100-jobsday-bursty-up-to-10-concurrent" title="Permanent link">&para;</a></h3>
+<p><strong>Context.</strong> A backend team runs integration tests. Jobs arrive in bursts at the start of PRs — up to 10 jobs may land simultaneously — but total daily volume is modest.</p>
+<p><strong>Configuration.</strong> Minimal; no GPU, no priority tiers. The platform admin owns the namespace quota:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backend-team-quota</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backend-team</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="nt">hard</span><span class="p">:</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;20&quot;</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;40Gi&quot;</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15&quot;</span><span class="w">           </span><span class="c1"># 10 workers + 3 proxy + 1 AGC + 1 headroom</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backend-team-gateway</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backend-team</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/my-org</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># → RunnerGroup backend-team-gateway-linux</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12</span><span class="w">   </span><span class="c1"># peak burst 10, +2 margin</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">                </span><span class="nt">requests</span><span class="p">:</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">                  </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2&quot;</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">                  </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4Gi&quot;</span>
+</code></pre></div>
+<p><strong>Rate-limit check.</strong> 1 session × 72 req/hr = 72 req/hr at rest. Burst: 12 × 72 = 864 req/hr — well within budget.</p>
+<p><strong>Note on simplicity.</strong> Because there is no <code>priorityTiers</code>, no <code>PriorityClass</code> objects need to be pre-created. <code>maxWorkers</code> alone is sufficient for a flat concurrency ceiling. This is the recommended starting point for teams that do not have competing priority requirements.</p>
+<hr />
+<h3 id="scenario-3-large-tenant-hitting-the-250-session-ceiling--sharding-walkthrough">Scenario 3: Large Tenant Hitting the 250-Session Ceiling — Sharding Walkthrough<a class="headerlink" href="#scenario-3-large-tenant-hitting-the-250-session-ceiling--sharding-walkthrough" title="Permanent link">&para;</a></h3>
+<p><strong>Context.</strong> A platform team provides shared runners across 200 repositories in the same organization. They have 180 RunnerGroups (one per workflow shape), each with <code>maxListeners: 10</code>. At peak load, 60 RunnerGroups are simultaneously bursting.</p>
+<p><strong>Problem.</strong> The burst peak is 60 RunnerGroups × 10 sessions × 72 req/hr = 43,200 req/hr — nearly 3× the 15,000/hr installation budget. The <code>RateLimited</code> condition appears during business hours.</p>
+<p><strong>Steady-state check.</strong> 180 RunnerGroups × 72 req/hr = 12,960 req/hr. Even at rest, this is 86% of the budget — no headroom for any burst.</p>
+<p><strong>Solution: shard to two ActionsGateway CRs.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>namespace: platform-runners-1   → GitHub App installation 1
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>  RunnerGroups: 90 (the first half)
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>namespace: platform-runners-2   → GitHub App installation 2
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>  RunnerGroups: 90 (the second half)
+</code></pre></div>
+<p>Split strategy: partition RunnerGroups by workflow class. If model-training workflows always burst together, put them in the same shard so their burst pressure is contained within one budget. If CPU and GPU workflows burst independently, split them across shards to spread peak load.</p>
+<p>After sharding, each installation has 90 × 72 = 6,480 req/hr at rest — 43% of the 15,000/hr budget with headroom for burst.</p>
+<p><strong>Steps.</strong></p>
+<ol>
+<li>Create a second GitHub App installation in the same organization.</li>
+<li>Apply a second <code>ActionsGateway</code> CR in a new namespace (<code>platform-runners-2</code>) referencing the new installation's Secret.</li>
+<li>Move 90 RunnerGroup definitions from the first CR to the second.</li>
+<li>Update workflow files to target the correct label sets.</li>
+<li>Confirm <code>RateLimited</code> condition clears on both CRs.</li>
+</ol>
+<hr />
+<h2 id="e11-managed-vertical-right-sizing-of-the-control-planes">E.11. Managed Vertical Right-Sizing of the Control Planes<a class="headerlink" href="#e11-managed-vertical-right-sizing-of-the-control-planes" title="Permanent link">&para;</a></h2>
+<p>Both control planes — the cluster-wide Gateway Manager Controller (GMC) and each per-tenant AGC — are single-shape, long-lived workloads whose correct resource footprint is exactly the thing an operator cannot know in advance. Manual sizing is therefore either wasteful (a 2Gi request for a 60 MiB working set) or dangerous (a limit below the working set OOMKills a single-pod control plane). Q360 ships two opt-ins that hand that judgement to a Vertical Pod Autoscaler instead.</p>
+<p>Both are <strong>opt-in and off by default</strong>, and both default to recommendation-only, so turning them on is observable before it is disruptive.</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Opt-in</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GMC (cluster-wide)</td>
+<td>Helm value <code>vpa.enabled: true</code></td>
+<td>the <code>*-controller-manager</code> Deployment</td>
+</tr>
+<tr>
+<td>AGC (per tenant)</td>
+<td><code>ActionsGateway.spec.agcAutoscaling</code></td>
+<td>that gateway's <code>&lt;gw&gt;-agc</code> Deployment</td>
+</tr>
+</tbody>
+</table>
+<p>The per-gateway opt-in is the presence of the block; there is no <code>enabled</code> flag, so removing <code>agcAutoscaling</code> deletes the managed <code>VerticalPodAutoscaler</code> again. <code>spec.agcAutoscaling.mode</code> is the autoscaler's <code>updateMode</code>, restricted to three values:</p>
+<table>
+<thead>
+<tr>
+<th><code>mode</code></th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Off</code> (default)</td>
+<td>The autoscaler publishes a recommendation in its own status and never mutates a pod.</td>
+</tr>
+<tr>
+<td><code>Initial</code></td>
+<td>The recommendation is applied at pod creation only. A running AGC is never evicted by the autoscaler.</td>
+</tr>
+<tr>
+<td><code>Recreate</code></td>
+<td>The autoscaler may evict the AGC pod to apply a new recommendation — safe per the restart analysis in <a href="#e9-scaling-the-agc-itself">E.9</a>, but still a control-plane restart, so it is opt-in.</td>
+</tr>
+</tbody>
+</table>
+<p>Upstream's fourth value, <code>Auto</code>, is deliberately <strong>not</strong> exposed. It is an alias whose actuation mechanism is version-dependent (today it evicts like <code>Recreate</code>; in-place pod resize is still alpha), so a gateway pinned to <code>Auto</code> would silently change its restart behavior on a VPA upgrade. Naming <code>Recreate</code> makes the eviction explicit.</p>
+<h3 id="e111-precedence-against-agcresources">E.11.1. Precedence against <code>agcResources</code><a class="headerlink" href="#e111-precedence-against-agcresources" title="Permanent link">&para;</a></h3>
+<p>Both <code>agcResources</code> and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins. <strong>They compose; they do not compete.</strong></p>
+<ul>
+<li><strong><code>agcResources</code> alone decides what the GMC stamps on the Deployment.</strong> That is unchanged by the opt-in, and it is the sizing actually in effect whenever the autoscaler is not actuating: <code>mode: Off</code>, the VPA components absent or down, or before the first recommendation exists.</li>
+<li><strong>The managed autoscaler is pinned to <code>controlledValues: RequestsOnly</code>.</strong> It moves <em>requests</em> only; the limits from <code>agcResources</code> (or the platform default) are never raised or lowered by it. On a single-pod control plane, an autoscaler that also drifted the memory <em>limit</em> would erode the OOM ceiling that bounds a runaway — the property the limit exists for.</li>
+<li><strong>A request the tenant explicitly set becomes the autoscaler's <code>minAllowed</code>.</strong> An explicit floor is honored as a floor rather than silently overwritten. Leave <code>agcResources.requests</code> unset to let the autoscaler size the AGC all the way down to its own global floor — that is the configuration where right-sizing has the most to win.</li>
+<li><strong>The effective limits become <code>maxAllowed</code>.</strong> This is a correctness requirement, not a preference: a container whose request exceeds its own limit is rejected by the apiserver, so the autoscaler must never recommend above the stamped limit. It is also the pairing upstream requires — <code>RequestsOnly</code> on a container that <em>has</em> limits is only safe with a <code>maxAllowed</code> at most equal to them — which is why the ceiling is always emitted rather than optional.</li>
+</ul>
+<p><strong>Resolved at reconcile, not at admission.</strong> Setting both fields is a coherent configuration (sizing plus bounds), not a contradiction, so rejecting the combination at admission would remove a useful and idiomatic way to configure a VPA. What admission-time rejection buys — "no silent surprises" — is bought instead by making the resolution visible: the derived bounds are on the stamped <code>VerticalPodAutoscaler</code> object, the GMC emits a Normal Event naming them when the autoscaler first appears, and the <code>AGCAutoscalingUnavailable</code> condition states which knob owns what. The chart-level opt-in follows the same rules against the chart's <code>resources</code> value.</p>
+<h3 id="e112-when-the-vpa-crds-are-absent">E.11.2. When the VPA CRDs are absent<a class="headerlink" href="#e112-when-the-vpa-crds-are-absent" title="Permanent link">&para;</a></h3>
+<p>The <code>autoscaling.k8s.io</code> CRDs are not part of core Kubernetes, so an opt-in can be unsatisfiable through no fault of the CR. The GMC probes its RESTMapper for the <code>VerticalPodAutoscaler</code> kind and, when it is missing:</p>
+<ul>
+<li><strong>provisions the gateway normally</strong> — the AGC is created with its <code>agcResources</code> sizing and reaches <code>Ready=True</code>. A missing optional right-sizing prerequisite is not a reason to withhold a tenant's runners;</li>
+<li><strong>does not fail or retry the write</strong> — nothing is applied against a kind the apiserver does not serve, so there is no error to hot-loop on;</li>
+<li><strong>surfaces it</strong> — the advisory <code>AGCAutoscalingUnavailable=True</code> condition (reason <code>VPACRDNotInstalled</code>, naming the remediation) plus one Warning Event per transition. The condition is advisory: it never gates <code>Ready</code>, exactly like <code>EgressUnattributed</code>. Like every other v2 gateway condition it also exports a Prometheus gauge, <code>actions_gateway_agc_autoscaling_unavailable</code> (Q390), so the unsatisfiable opt-in is alertable rather than visible only via <code>kubectl describe</code>;</li>
+<li><strong>converges on its own</strong> — the gateway re-probes every 10 minutes, so installing the vertical-pod-autoscaler later takes effect without an operator edit. Ten minutes is a poll, not a hot loop: one cached-discovery lookup per gateway per interval.</li>
+</ul>
+<p>The chart-level opt-in has no equivalent runtime path — Helm renders the object at install time, so <code>vpa.enabled: true</code> without the CRDs fails <code>helm install</code> loudly, the same prerequisite contract as <code>metrics.serviceMonitor.enabled</code>.</p>
+<hr />
+<p>← <a href="../appendix-d-alternatives-considered/">Appendix D</a> | <a href="../">Back to index</a></p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../appendix-d-alternatives-considered/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Appendix D — Alternatives considered">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Appendix D — Alternatives considered
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../appendix-f-cost-model/" class="md-footer__link md-footer__link--next" aria-label="Next: Appendix F — Cost model">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Appendix F — Cost model
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

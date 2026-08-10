@@ -1,0 +1,7 @@
+# Allow all crawlers; point them at the MkDocs-generated sitemap.
+# MkDocs copies docs_dir root files verbatim into the site root (same mechanism
+# as docs/CNAME), so this lands at https://actions-gateway.com/robots.txt.
+User-agent: *
+Allow: /
+
+Sitemap: https://actions-gateway.com/sitemap.xml
