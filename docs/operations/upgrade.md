@@ -131,7 +131,7 @@ same kind at a newer version — which is why the warning names
 
 **Nothing breaks, and the upgrade needs no action.** Deprecation marks intent and removes
 nothing: `v1alpha1` stays fully served, existing objects keep reconciling untouched, and
-the removal release is the same `v2.0.0` the docs have named since `v1.3.0`. The warning
+the removal release is the same `v2.0.0` the docs have named since the deprecation shipped. The warning
 is advisory client-side output; it does not fail an `apply`, and controllers or CI that
 ignore warnings are unaffected. The AGC and GMC receive the same warning through their
 own Kubernetes clients but log it once per unique message per process (deduplicated), so
@@ -965,12 +965,12 @@ Every tenant whose template changes rolls, so a GMC upgrade fans out into one [A
 
 The shipped install artifact is the **`actions-gateway` Helm chart**, published and cosign-signed to the GHCR OCI registry (`oci://ghcr.io/actions-gateway/charts/actions-gateway`); the [`charts/actions-gateway/`](../../charts/actions-gateway/README.md) source path is the dev/CI copy of the same chart. The chart is the **sole** install/upgrade vehicle — there is no kustomize path. For dev/CI iteration `make deploy` wraps `helm install` of the local chart with floating image tags.
 
-> **Current release — `v1.3.0`** (chart version = release tag without the leading `v`). Pin `--version 1.3.0`; copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
+> **Current release — `v1.4.0`** (chart version = release tag without the leading `v`). Pin `--version 1.4.0`; copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
 
 ```sh
 # First install (from the published, signed OCI chart)
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.3.0 \
+  --version 1.4.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \

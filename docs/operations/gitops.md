@@ -56,7 +56,7 @@ chart refactor.
 
 The chart is an OCI artifact, so the Argo CD `Application` points its Helm source
 at the GHCR registry path. Copy the four image digests from the
-[release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0)
+[release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0)
 — the chart ships **no** baked-in digests (an unconfigured render is rejected,
 fail-closed).
 
@@ -76,7 +76,7 @@ spec:
   source:
     repoURL: ghcr.io/actions-gateway/charts   # OCI registry path, NOT the chart
     chart: actions-gateway
-    targetRevision: 1.3.0                      # chart version = release tag minus the leading "v"
+    targetRevision: 1.4.0                      # chart version = release tag minus the leading "v"
     helm:
       parameters:
         - name: gmc.image.digest
@@ -141,7 +141,7 @@ spec:
   interval: 30m
   url: oci://ghcr.io/actions-gateway/charts/actions-gateway
   ref:
-    tag: "1.3.0"   # chart version = release tag minus the leading "v"
+    tag: "1.4.0"   # chart version = release tag minus the leading "v"
   # Verify the chart's keyless cosign signature before pulling (Flux >= 2.0):
   verify:
     provider: cosign
@@ -204,7 +204,7 @@ spec:
   chart:
     spec:
       chart: actions-gateway
-      version: "1.3.0"
+      version: "1.4.0"
       sourceRef:
         kind: HelmRepository
         name: actions-gateway
