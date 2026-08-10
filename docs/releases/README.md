@@ -23,6 +23,7 @@ breaks the rendering). All of it lives in
 
 | Release | Notes |
 |---|---|
+| v1.4.0 | [v1.4.0.md](v1.4.0.md) |
 | v1.3.0 | [v1.3.0.md](v1.3.0.md) |
 
 Releases before `v1.3.0` predate this convention; their bodies live only on the
