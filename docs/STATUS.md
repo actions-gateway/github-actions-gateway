@@ -144,6 +144,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q745"></a>Q745 | [piped-gate lets a backgrounded gate report a trailing command's exit status](../.claude/piped-gate-guard.json) | `debt` `retro` | 🔲 | S | `make check > log; echo "EXIT=$?"; grep …` backgrounded reports `grep`'s 0, so a red gate reads green. It already denies a backgrounded call ending in `echo`/`\|\|`/`&`; this shape ends in a filter. Needs both-direction assertions. |
 | <a id="Q687"></a>Q687 | [Document the predicate for a genuine human prompt in a transcript](development/README.md) | `docs` `retro` | 🔲 | S | A real prompt is `origin.kind == "human"` minus four classes that also carry it: hook denial text, `<bash-input>`, `<create-pr-command>`, `<system-reminder>` prefixes. One use so far. |
 | <a id="Q735"></a>Q735 | [Narrow the semver floor past test files in released package dirs](../devtools/release/semverfloor/narrow.go) | `debt` | 🔲 | S | Distinct from Q705 (comment-only): `go list -deps` reports directories, so a `_test.go` beside compiled source reads as shipped. Measured 2026-08-08: 2 of 68 raising commits in v1.2.0..v1.3.0 ship only `_test.go`, both `fix`, so no verdict flips. |
+| <a id="Q783"></a>Q783 | [Re-point `.git-blame-ignore-revs` at the squashed reflow commit](../CONTRIBUTING.md#skip-the-reflow-commit-in-git-blame) | `docs` | 🚫 | S | The squash mints a SHA that exists only once the reflow PR lands, so the file ships naming its pre-merge one. On git 2.55.0 that is a silent no-op, not an error. |
 
 ---
 
