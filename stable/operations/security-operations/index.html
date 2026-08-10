@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/security-operations/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/security-operations/">
       
       
         <link rel="prev" href="../troubleshooting/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -712,7 +780,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -734,14 +802,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1329,6 +1397,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1345,7 +1417,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1367,14 +1439,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1384,6 +1456,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1645,6 +1745,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1787,10 +1915,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -1808,8 +1936,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2558,6 +2686,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sharing-an-egress-proxy-across-namespaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sharing an egress proxy across namespaces
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sharing an egress proxy across namespaces">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#consent-lives-on-the-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consent lives on the provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-you-must-not-assume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you must not assume
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-a-grant-took-effect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying a grant took effect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#revoking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Revoking
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2653,13 +2842,30 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" class="md-nav__link">
+  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Self-service additions via the PriorityClassAllowlist CR (Q188)
+        Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#disjointness-is-enforced-on-every-edit-not-only-at-startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disjointness is enforced on every edit, not only at startup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -2859,6 +3065,110 @@
     
   
     Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
   
 
     
@@ -3206,6 +3516,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sharing-an-egress-proxy-across-namespaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sharing an egress proxy across namespaces
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sharing an egress proxy across namespaces">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#consent-lives-on-the-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consent lives on the provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-you-must-not-assume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you must not assume
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-a-grant-took-effect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying a grant took effect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#revoking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Revoking
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3301,13 +3672,30 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" class="md-nav__link">
+  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Self-service additions via the PriorityClassAllowlist CR (Q188)
+        Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#disjointness-is-enforced-on-every-edit-not-only-at-startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disjointness is enforced on every edit, not only at startup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3449,7 +3837,7 @@
 
 <h1 id="security-operations-abuse-detection--response">Security Operations: Abuse Detection &amp; Response<a class="headerlink" href="#security-operations-abuse-detection--response" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> SRE, Security</p>
+<p><strong>Audience:</strong> Platform engineer, Security</p>
 </blockquote>
 <p>This runbook turns the abuse
 heuristics in the <a href="../../design/05-security/">threat model</a> into concrete,
@@ -3493,6 +3881,7 @@ to the metric or audit-log query that surfaces it.</p>
 <li><a href="#managing-egress-at-scale">Managing egress at scale</a></li>
 <li><a href="#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">Expressing GitHub egress by FQDN: the <code>egressPolicyMode</code> opt-in</a></li>
 <li><a href="#worker-egress-destinations-the-egress-allowlist">Worker egress destinations: the egress allowlist</a></li>
+<li><a href="#sharing-an-egress-proxy-across-namespaces">Sharing an egress proxy across namespaces</a></li>
 <li><a href="#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist">Tightening AGC apiserver egress: the <code>apiserver-cidrs</code> allowlist</a></li>
 <li><a href="#github-api-base-url-must-be-https">GitHub API base URL must be HTTPS</a></li>
 <li><a href="#priority-classes-the-allowed-priority-classes-allowlist">Priority classes: the <code>allowed-priority-classes</code> allowlist</a></li>
@@ -3558,7 +3947,7 @@ to the metric or audit-log query that surfaces it.</p>
 </tr>
 <tr>
 <td><strong>AGC overpermissioned Secret access</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>, H-2 residual) — compromised AGC binary issuing a full-body Secret <code>list</code></td>
-<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">security.md H-2</a>)</td>
+<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/security.md">security.md H-2</a>)</td>
 <td>Audit log</td>
 <td>Page</td>
 </tr>
@@ -3722,7 +4111,7 @@ drop the interpolation.</p>
 <p>The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC
 calls that are <em>permitted</em> but <em>anomalous</em> — are invisible to Prometheus.
 The legitimate code paths avoid them (the AGC enumerates its Secrets
-metadata-only per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">H-2</a>; the GMC reads Secret bodies
+metadata-only per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/security.md">H-2</a>; the GMC reads Secret bodies
 only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls
 below originating from a controller ServiceAccount indicates the binary is
 doing something its source does not.</p>
@@ -3747,7 +4136,7 @@ alert on</em> once that policy is in place.</p>
 <tr>
 <td><strong>AGC full-body Secret list</strong></td>
 <td><code>verb=list resource=secrets</code> by the AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:actions-gateway-controller</code>) returning object bodies</td>
-<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
+<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/security.md">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
 <td>Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image.</td>
 </tr>
 <tr>
@@ -3985,8 +4374,8 @@ at admission time.</p>
 <h3 id="manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)<a class="headerlink" href="#manifest-posture--polaris-automated-in-ci" title="Permanent link">&para;</a></h3>
 <p><a href="https://polaris.docs.fairwinds.com/">polaris</a> audits the Kubernetes
 security/best-practice posture of the <strong>shipped install artifact</strong>: the CI
-<code>polaris</code> job (in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>)
-renders the <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.3.0/charts/actions-gateway">Helm chart</a> and checks the rendered
+<code>polaris</code> job (in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>)
+renders the <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.4.0/charts/actions-gateway">Helm chart</a> and checks the rendered
 manifests. It runs on every PR that touches the chart or the <code>Makefile</code>, and on
 every push to <code>main</code>.</p>
 <ul>
@@ -4000,7 +4389,7 @@ every push to <code>main</code>.</p>
   cross-document NetworkPolicy match polaris can't resolve statically, the
   <code>IfNotPresent</code> pull policy that is correct for a digest-pinned image, and
   Helm's <code>app.kubernetes.io/instance</code> labelling) are tuned to <code>ignore</code> in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>,
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>,
   each with a justifying comment. <strong>Never relax a <code>danger</code> check to silence a
   finding — fix the chart instead</strong> (secure-by-default).</li>
 <li><strong>Run it yourself.</strong> <code>make polaris-scan</code> (needs <code>helm</code> and <code>polaris</code> on
@@ -4083,7 +4472,7 @@ after any control-plane upgrade).</p>
 </ul>
 <p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong>
 before the first production tenant (per
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/milestone-5.md">milestone-5.md</a> §3).</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-5.md">milestone-5.md</a> §3).</p>
 <h2 id="tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening<a class="headerlink" href="#tenant-egress-posture--deliberate-widening" title="Permanent link">&para;</a></h2>
 <p><strong>The secure default is controller-managed and not opt-in.</strong> For every tenant,
 the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to
@@ -4315,7 +4704,7 @@ backend's CRD is absent, the GMC's apply fails loudly and the <code>EgressProxy<
 never silently opened. The still-deferred cluster-scoped backends (AKS
 <code>CiliumClusterwideNetworkPolicy</code>, EKS <code>ClusterNetworkPolicy</code>) and OpenShift OVN
 <code>EgressFirewall</code> are tracked in the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.</p>
 <p><strong>The <code>gke</code> backend is additive-allow, so the base NetworkPolicy is load-bearing.</strong>
 Unlike Cilium/Calico policies (which are self-default-denying), a GKE <code>FQDNNetworkPolicy</code>
 only <em>adds</em> an allow — it is a union with any NetworkPolicy on the same pod, not a
@@ -4449,7 +4838,7 @@ allowlist. See
 <a href="#priority-classes-the-allowed-priority-classes-allowlist">Priority classes: the two allowlists</a>.</p>
 <p>The full per-tenant egress-IP reference architecture — cloud-by-cloud primitives,
 cost model, and the live-validated GKE recipe — is in the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/q243-egress-ip-reference-arch.md">Q243 plan</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/q243-egress-ip-reference-arch.md">Q243 plan</a>.</p>
 <hr />
 <h2 id="worker-egress-destinations-the-egress-allowlist">Worker egress destinations: the egress allowlist<a class="headerlink" href="#worker-egress-destinations-the-egress-allowlist" title="Permanent link">&para;</a></h2>
 <p>By default a worker can reach <strong>only GitHub</strong> through its per-tenant egress proxy —
@@ -4554,6 +4943,72 @@ allowlist is the union of the flags and the ConfigMap, enforced by the EgressPro
 validating webhook on every create/update — a destination outside it is rejected with
 a message naming the effective allowlist.</p>
 <hr />
+<h2 id="sharing-an-egress-proxy-across-namespaces">Sharing an egress proxy across namespaces<a class="headerlink" href="#sharing-an-egress-proxy-across-namespaces" title="Permanent link">&para;</a></h2>
+<p>By default an <code>EgressProxy</code> serves only its own namespace. One proxy pool can serve
+several namespaces (a platform-operated central pool, or a set of cooperating teams),
+but only if the <strong>proxy's owner</strong> says so.</p>
+<h3 id="consent-lives-on-the-provider">Consent lives on the provider<a class="headerlink" href="#consent-lives-on-the-provider" title="Permanent link">&para;</a></h3>
+<p>Naming a proxy from the consumer side authorizes nothing. The proxy owner lists the
+namespaces permitted to use it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared-pool</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">platform-egress</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">  </span><span class="nt">sharing</span><span class="p">:</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">    </span><span class="nt">allowedNamespaces</span><span class="p">:</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-b</span>
+</code></pre></div>
+<p>A consumer then names the proxy and its namespace:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">  </span><span class="nt">defaultProxyRef</span><span class="p">:</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared-pool</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">platform-egress</span>
+</code></pre></div>
+<p>The same <code>namespace</code> field is available on <code>RunnerSet.spec.proxyRef</code>. Omitting it
+means the referrer's own namespace, which is what every pre-existing manifest does,
+so nothing changes for them.</p>
+<h3 id="what-you-must-not-assume">What you must not assume<a class="headerlink" href="#what-you-must-not-assume" title="Permanent link">&para;</a></h3>
+<p><strong>A shared proxy is a shared egress identity.</strong> Every namespace using the pool leaves
+GitHub from the same addresses, so per-tenant egress attribution no longer holds
+between them. Share a proxy between tenants you are willing to treat as one for
+attribution purposes; give mutually-distrusting tenants their own pools.</p>
+<p><strong>Only the public certificate crosses the boundary.</strong> The GMC copies the proxy's
+certificate into each granted namespace as a ConfigMap named
+<code>proxy-share-&lt;provider-namespace&gt;-&lt;proxy-name&gt;</code>. The private key stays in the
+provider namespace. That ConfigMap is GMC-owned: do not edit or delete it, and do not
+create one by hand expecting it to grant access, since the GMC reconciles it back.</p>
+<h3 id="verifying-a-grant-took-effect">Verifying a grant took effect<a class="headerlink" href="#verifying-a-grant-took-effect" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>-l<span class="w"> </span>actions-gateway/proxy-share<span class="o">=</span><span class="nb">true</span>
+</code></pre></div>
+<p>One entry per proxy <code>team-a</code> is entitled to. If it is missing, the grant has not been
+accepted; check the consumer's condition:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span>
+</code></pre></div>
+<p><code>Degraded</code> with reason <code>ProxyShareNotGranted</code> means the proxy exists but does not list
+this namespace. Reason <code>ProxyNotFound</code> means the name or namespace is wrong. Both fail
+closed: no worker pods run and no traffic is permitted while either is set.</p>
+<p>Confirm the provider side admits the consumer:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>platform-egress<span class="w"> </span>shared-pool-proxy<span class="w"> </span>-o<span class="w"> </span>yaml
+</code></pre></div>
+<p>The ingress rules should carry one peer per granted namespace, each with <strong>both</strong> a
+<code>namespaceSelector</code> and a <code>podSelector</code> inside the same list entry. Two separate
+entries would mean "any pod in that namespace, or any workload pod anywhere". If you
+ever see that shape, treat it as a defect and report it.</p>
+<h3 id="revoking">Revoking<a class="headerlink" href="#revoking" title="Permanent link">&para;</a></h3>
+<p>Remove the namespace from <code>allowedNamespaces</code>. The GMC deletes the projected
+ConfigMap and drops the ingress peer, and the consumer's references go
+<code>ProxyShareNotGranted</code>. Revocation is immediate in the control plane; in-flight
+connections through the proxy end when their pods do, so drain the consumer's
+RunnerSets first if you need a clean cut.</p>
+<hr />
 <h2 id="tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist">Tightening AGC apiserver egress: the <code>apiserver-cidrs</code> allowlist<a class="headerlink" href="#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist" title="Permanent link">&para;</a></h2>
 <p>The AGC pod holds the tenant's GitHub App private key and is the only workload
 that needs the Kubernetes API server. The GMC therefore reconciles a NetworkPolicy
@@ -4569,10 +5024,10 @@ on 443, not just the apiserver.</p>
 <p><strong>If your platform exposes the apiserver on a <em>stable</em> CIDR</strong>, you can close that
 residual by scoping the rule to it. Set the chart value <code>apiServerCIDRs</code> (passed
 to the GMC as <code>--apiserver-cidrs</code>) to the apiserver CIDR set:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># values.yaml — opt-in tightening of the AGC apiserver-egress rule.</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nt">apiServerCIDRs</span><span class="p">:</span>
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;10.0.0.1/32&quot;</span><span class="w">        </span><span class="c1"># the apiserver&#39;s post-DNAT endpoint (single IP)</span>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;172.16.0.0/12&quot;</span><span class="w">      </span><span class="c1"># or a CIDR covering the control-plane node pool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># values.yaml — opt-in tightening of the AGC apiserver-egress rule.</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nt">apiServerCIDRs</span><span class="p">:</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;10.0.0.1/32&quot;</span><span class="w">        </span><span class="c1"># the apiserver&#39;s post-DNAT endpoint (single IP)</span>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;172.16.0.0/12&quot;</span><span class="w">      </span><span class="c1"># or a CIDR covering the control-plane node pool</span>
 </code></pre></div>
 <p>When set, the GMC scopes every tenant's AGC NetworkPolicy 443/6443 rule to these
 CIDRs via <code>ipBlock</code> peers (ports unchanged); when <strong>empty (the default)</strong> the rule
@@ -4588,9 +5043,9 @@ virtual IP is DNAT'd away <em>before</em> NetworkPolicy is evaluated, so an <cod
 naming the ClusterIP matches nothing and severs apiserver access). The post-DNAT
 destinations are exactly the <strong>endpoints</strong> of the <code>kubernetes</code> Service in the
 <code>default</code> namespace. On every platform, confirm them before you scope:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpoints<span class="w"> </span>kubernetes<span class="w"> </span>-n<span class="w"> </span>default<span class="w"> </span>-o<span class="w"> </span>wide
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># NAME         ENDPOINTS                          AGE</span>
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># kubernetes   10.0.12.34:443,10.0.34.56:443      90d</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpoints<span class="w"> </span>kubernetes<span class="w"> </span>-n<span class="w"> </span>default<span class="w"> </span>-o<span class="w"> </span>wide
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># NAME         ENDPOINTS                          AGE</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># kubernetes   10.0.12.34:443,10.0.34.56:443      90d</span>
 </code></pre></div>
 <p>Those <code>ENDPOINTS</code> IP:port pairs are the literal targets the policy evaluator
 matches against. Your <code>apiServerCIDRs</code> must contain a CIDR covering <strong>all</strong> of
@@ -4703,9 +5158,9 @@ The token provider
 <strong>rejects a non-HTTPS <code>GITHUB_API_BASE_URL</code> at startup</strong> — the AGC (and the
 <code>probe</code>) will refuse to start with a clear error rather than leak credentials on
 the first token mint:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>githubapp: refusing non-HTTPS GITHUB_API_BASE_URL &quot;http://…&quot;:
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>GitHub App token exchange must use HTTPS to protect credentials in transit;
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>plaintext is permitted only under an explicit dev/test opt-in
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>githubapp: refusing non-HTTPS GITHUB_API_BASE_URL &quot;http://…&quot;:
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>GitHub App token exchange must use HTTPS to protect credentials in transit;
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>plaintext is permitted only under an explicit dev/test opt-in
 </code></pre></div>
 <p>This is <strong>secure-by-default</strong>: HTTPS is required with no configuration, an
 HTTPS value (including a GitHub Enterprise Server base such as
@@ -4772,13 +5227,13 @@ Leave it unset (the default) unless you mean to grant it.</p>
    class lets <em>any</em> tenant that uses it evict <em>any</em> lower-priority pod cluster-wide,
    across tenant boundaries.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
-<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
-<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
-<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">   </span><span class="c1"># orders ahead in scheduling without evicting others</span>
-<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Standard</span><span class="nv"> </span><span class="s">self-hosted</span><span class="nv"> </span><span class="s">runner</span><span class="nv"> </span><span class="s">worker</span><span class="nv"> </span><span class="s">pods.&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">   </span><span class="c1"># orders ahead in scheduling without evicting others</span>
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Standard</span><span class="nv"> </span><span class="s">self-hosted</span><span class="nv"> </span><span class="s">runner</span><span class="nv"> </span><span class="s">worker</span><span class="nv"> </span><span class="s">pods.&quot;</span>
 </code></pre></div>
 <ol>
 <li><strong>The platform allowlists the names on the GMC.</strong> Set the
@@ -4789,9 +5244,9 @@ Leave it unset (the default) unless you mean to grant it.</p>
    <code>RunnerTemplate</code> whose <code>podTemplate.spec.priorityClassName</code> is off the list, and
    any v2 <code>RunnerSet</code> whose <code>priorityTiers[].priorityClassName</code> is off the list.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="nt">args</span><span class="p">:</span>
-<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">args</span><span class="p">:</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
 </code></pre></div>
 <p><strong>An empty/unset allowlist forbids every named PriorityClass</strong> (secure default):
    out of the box no tenant can set one. An <em>unset</em> <code>podTemplate.spec.priorityClassName</code>
@@ -4823,21 +5278,23 @@ any worker surface.</p>
 <p><strong>The GMC enforces disjointness at startup.</strong> If a class appears in both
 <code>--allowed-priority-classes</code> and <code>--allowed-infra-priority-classes</code>, the GMC <strong>refuses
 to boot</strong> — converting a silent priority inversion into a loud configuration error.
-Keep the two sets separate; a good convention is an <code>infra-</code> name prefix.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
-<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nt">args</span><span class="p">:</span>
-<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
-<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-infra-priority-classes=gag-infra-critical</span><span class="w">   </span><span class="c1"># DISJOINT from the above</span>
+Keep the two sets separate; a good convention is an <code>infra-</code> name prefix. The flags
+are not the only route to an overlap once the watched CR is in play; see
+<a href="#disjointness-is-enforced-on-every-edit-not-only-at-startup">Disjointness is enforced on every edit</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="nt">args</span><span class="p">:</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-infra-priority-classes=gag-infra-critical</span><span class="w">   </span><span class="c1"># DISJOINT from the above</span>
 </code></pre></div>
 <p>Create the infra class with a value <strong>above</strong> the worker classes so the scheduler
 keeps infra pods when a node is contended:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
-<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-infra-critical</span>
-<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000000</span><span class="w">            </span><span class="c1"># well above the runner-* classes</span>
-<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">      </span><span class="c1"># order ahead without evicting others, unless you mean to</span>
-<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;GAG</span><span class="nv"> </span><span class="s">per-tenant</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">AGC</span><span class="nv"> </span><span class="s">control-plane</span><span class="nv"> </span><span class="s">pods.&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-infra-critical</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000000</span><span class="w">            </span><span class="c1"># well above the runner-* classes</span>
+<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">      </span><span class="c1"># order ahead without evicting others, unless you mean to</span>
+<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;GAG</span><span class="nv"> </span><span class="s">per-tenant</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">AGC</span><span class="nv"> </span><span class="s">control-plane</span><span class="nv"> </span><span class="s">pods.&quot;</span>
 </code></pre></div>
 <h3 id="upgrading-previously-ungated-priorityclassname-fields-are-now-gated">Upgrading: previously ungated <code>priorityClassName</code> fields are now gated<a class="headerlink" href="#upgrading-previously-ungated-priorityclassname-fields-are-now-gated" title="Permanent link">&para;</a></h3>
 <p>Two of the tenant-reachable routes shipped before their gate did:
@@ -4849,41 +5306,67 @@ next <code>create</code>/<code>update</code></strong> (admission webhooks do not
 objects, so nothing breaks until the CR is edited).</p>
 <p>Before upgrading, find the affected objects and either add their class to
 <code>--allowed-priority-classes</code> or remove the field:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># v2 RunnerTemplates</span>
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>runnertemplates<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="s1">  .items[]</span>
-<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="s1">  | select(.spec.podTemplate.spec.priorityClassName != null)</span>
-<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="s1">  | &quot;\(.metadata.namespace)/\(.metadata.name) -&gt; \(.spec.podTemplate.spec.priorityClassName)&quot;&#39;</span>
-<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
-<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="c1"># v2 RunnerSets (each priorityTiers[] entry names a class)</span>
-<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
-<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="s1">  .items[]</span>
-<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
-<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="s1">  | (.spec.priorityTiers // [])[]</span>
-<a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="s1">  | &quot;\($ns)/\($name) -&gt; \(.priorityClassName)&quot;&#39;</span>
-<a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>
-<a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a><span class="c1"># v1 ActionsGateways (the class lives on each runnerGroups[] entry)</span>
-<a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
-<a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="s1">  .items[]</span>
-<a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
-<a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a><span class="s1">  | (.spec.runnerGroups // [])[]</span>
-<a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a><span class="s1">  | select(.podTemplate.spec.priorityClassName != null)</span>
-<a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a><span class="s1">  | &quot;\($ns)/\($name) -&gt; \(.podTemplate.spec.priorityClassName)&quot;&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># v2 RunnerTemplates</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>runnertemplates<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="s1">  .items[]</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="s1">  | select(.spec.podTemplate.spec.priorityClassName != null)</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="s1">  | &quot;\(.metadata.namespace)/\(.metadata.name) -&gt; \(.spec.podTemplate.spec.priorityClassName)&quot;&#39;</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="c1"># v2 RunnerSets (each priorityTiers[] entry names a class)</span>
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="s1">  .items[]</span>
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a><span class="s1">  | (.spec.priorityTiers // [])[]</span>
+<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="s1">  | &quot;\($ns)/\($name) -&gt; \(.priorityClassName)&quot;&#39;</span>
+<a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a>
+<a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a><span class="c1"># v1 ActionsGateways (the class lives on each runnerGroups[] entry)</span>
+<a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
+<a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a><span class="s1">  .items[]</span>
+<a id="__codelineno-29-17" name="__codelineno-29-17" href="#__codelineno-29-17"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
+<a id="__codelineno-29-18" name="__codelineno-29-18" href="#__codelineno-29-18"></a><span class="s1">  | (.spec.runnerGroups // [])[]</span>
+<a id="__codelineno-29-19" name="__codelineno-29-19" href="#__codelineno-29-19"></a><span class="s1">  | select(.podTemplate.spec.priorityClassName != null)</span>
+<a id="__codelineno-29-20" name="__codelineno-29-20" href="#__codelineno-29-20"></a><span class="s1">  | &quot;\($ns)/\($name) -&gt; \(.podTemplate.spec.priorityClassName)&quot;&#39;</span>
 </code></pre></div>
 <p>Any class these print that is <strong>not</strong> in your <code>--allowed-priority-classes</code> was an
 open cross-tenant preemption lever; treat a <code>system-cluster-critical</code> or
 <code>system-node-critical</code> result as an incident, not a config change.</p>
-<h3 id="self-service-additions-via-the-priorityclassallowlist-cr-q188">Self-service additions via the <code>PriorityClassAllowlist</code> CR (Q188)<a class="headerlink" href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" title="Permanent link">&para;</a></h3>
+<h3 id="self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Self-service additions via the <code>PriorityClassAllowlist</code> CR (Q188, Q298)<a class="headerlink" href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298" title="Permanent link">&para;</a></h3>
 <p>Editing <code>--allowed-priority-classes</code> and rolling out the GMC for every new class
-is slow. The GMC <strong>also</strong> sources the allowlist from a cluster-scoped
+is slow. The GMC <strong>also</strong> sources both allowlists from a cluster-scoped
 <code>PriorityClassAllowlist</code> CR it watches, so a platform admin can add an allowed
 class without a flag edit or restart — the change takes effect on the next watch
 event.</p>
+<p>One object carries both sets, in two lists that mirror the two flags:</p>
+<table>
+<thead>
+<tr>
+<th>CR field</th>
+<th>Augments the flag</th>
+<th>Gates</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec.allowedPriorityClasses</code></td>
+<td><code>--allowed-priority-classes</code></td>
+<td>worker pods (<code>priorityTiers[]</code>, <code>podTemplate.spec</code>)</td>
+</tr>
+<tr>
+<td><code>spec.allowedInfraPriorityClasses</code></td>
+<td><code>--allowed-infra-priority-classes</code></td>
+<td>infra pods (<code>EgressProxy</code> / <code>ActionsGateway</code> <code>spec.scheduling</code>)</td>
+</tr>
+</tbody>
+</table>
 <p>The chart always renders this object (named <code>&lt;release&gt;-priorityclass-allowlist</code>)
-from <code>allowedPriorityClasses</code>, and always points the GMC at it. The <strong>same object
-is the <a href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289"><code>priorityclass-allowlist-guard</code></a>
+from <code>allowedPriorityClasses</code> and <code>allowedInfraPriorityClasses</code>, and always points
+the GMC at it. The <strong>same object is the
+<a href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289"><code>priorityclass-allowlist-guard</code></a>
 policy's parameter</strong>, so the webhook and the policy read one source and cannot
-drift — there is no superset discipline to remember.</p>
+drift — there is no superset discipline to remember. The policy reads only
+<code>allowedPriorityClasses</code>: its job is the direct-write path to <code>runnergroups</code>, which
+carry no infra scheduling block, and the two infra kinds have <code>failurePolicy: fail</code>
+webhooks of their own.</p>
 <div class="admonition note">
 <p class="admonition-title">This replaced a watched ConfigMap (Q492)</p>
 <p><code>priorityClassAllowlist.configMapName</code> is removed; setting it now fails the
@@ -4894,26 +5377,80 @@ resolution for any <em>core-type</em> <code>paramKind</code> (see
 Migration steps: <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>.</p>
 </div>
 <p><strong>Add a class without a restart.</strong> Edit the object in place:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClassAllowlist</span>
-<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priorityclass-allowlist</span>
-<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
-<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span>
-<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClassAllowlist</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priorityclass-allowlist</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
+<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span>
+<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span>
+<a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a><span class="w">  </span><span class="nt">allowedInfraPriorityClasses</span><span class="p">:</span><span class="w">      </span><span class="c1"># DISJOINT from the list above</span>
+<a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-infra-high</span>
 </code></pre></div>
-<p>The <strong>effective allowlist for the webhook is the union</strong> of the static
-<code>--allowed-priority-classes</code> flag and this object's entries: it can only <em>widen</em>
-the webhook allowlist, never remove a flag-pinned class. You still pre-create each
-<code>PriorityClass</code> object first (step 1 of the previous section) — the allowlist only
-governs which <em>names</em> a tenant may reference.</p>
+<p>The <strong>effective allowlist for each webhook is the union</strong> of its static flag and the
+matching list here: the CR can only <em>widen</em> an allowlist, never remove a
+flag-pinned class. You still pre-create each <code>PriorityClass</code> object first (step 1 of
+the previous section) — the allowlist only governs which <em>names</em> a tenant may
+reference.</p>
+<h4 id="disjointness-is-enforced-on-every-edit-not-only-at-startup">Disjointness is enforced on every edit, not only at startup<a class="headerlink" href="#disjointness-is-enforced-on-every-edit-not-only-at-startup" title="Permanent link">&para;</a></h4>
+<p>The startup check reads the two flags. Once either list can also be edited in a CR,
+that check alone is not enough: an edit could put one class on both surfaces long
+after the GMC booted. Three gates hold the invariant, and the first one you hit
+depends on how the overlap was written.</p>
+<table>
+<thead>
+<tr>
+<th>Where the overlap comes from</th>
+<th>What stops it</th>
+<th>What you see</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Both flags name the class</td>
+<td>Startup check</td>
+<td>The GMC <strong>refuses to boot</strong> with the shared names</td>
+</tr>
+<tr>
+<td>Both CR lists name the class</td>
+<td>CRD CEL rule</td>
+<td><code>kubectl apply</code> is <strong>rejected</strong>: <code>allowedPriorityClasses (worker) and allowedInfraPriorityClasses must be disjoint</code></td>
+</tr>
+<tr>
+<td>One CR list collides with the <em>other</em> flag</td>
+<td>GMC reconciler</td>
+<td>The write is admitted (CEL cannot read a controller flag), then <strong>both dynamic sets are dropped</strong> and the GMC logs <code>WARNING: PriorityClassAllowlist would make the worker and infra allowlists intersect</code> with <code>sharedClasses</code></td>
+</tr>
+<tr>
+<td>Anything that got past all three</td>
+<td>Admission read path</td>
+<td>A class on both allowlists is admitted on <strong>neither</strong> surface</td>
+</tr>
+</tbody>
+</table>
+<p>The third row is the one to recognize in practice, because the <code>kubectl apply</code>
+<strong>succeeds</strong>. The GMC then falls back to the two flag allowlists — so the symptom is
+that <em>every</em> recently self-serviced class, worker and infra alike, stops being
+accepted at once. That is deliberate: a partially applied pair is how an overlap
+becomes real, so the object is refused whole. Grep the GMC log for <code>sharedClasses</code>,
+remove the named class from one of the two lists, and the next watch event restores
+both dynamic sets.</p>
 <div class="admonition warning">
-<p class="admonition-title">A chart upgrade reasserts <code>allowedPriorityClasses</code> over this object</p>
+<p class="admonition-title">A chart upgrade reasserts both lists over this object</p>
 <p>An in-place edit is the fast path, not the durable one. Persist any class you
-intend to keep in the chart's <code>allowedPriorityClasses</code> value.</p>
+intend to keep in the chart's <code>allowedPriorityClasses</code> /
+<code>allowedInfraPriorityClasses</code> values.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Setting <code>allowedInfraPriorityClasses</code> for the first time needs the CRD step</p>
+<p>The field is new in Q298. Helm never reapplies the chart-root <code>crds/</code> dir on
+upgrade, so a release upgrading from before it existed still has a CRD whose
+schema lacks the field. The chart omits the key while the value is empty, so a
+default upgrade is unaffected; set it, and apply the CRDs first —
+<a href="../upgrade/#gmc-install-and-upgrade-via-helm-recommended">upgrade.md</a>.</p>
 </div>
 <p><strong>One caveat the flag does not share.</strong> The <em>policy</em> sees only this object, never
 the flag. A class listed in <code>--allowed-priority-classes</code> but absent here is
@@ -4923,17 +5460,18 @@ by hand.</p>
 <p><strong>Fail-safe behavior.</strong> The allowlist is a cross-tenant-isolation guardrail, so a
 broken object must never silently widen it:</p>
 <ul>
-<li>The CRD schema constrains every entry to a valid DNS-1123 subdomain and the list
-  to a set, so a malformed name is <strong>rejected at write time</strong> — it never reaches
-  the GMC or the policy.</li>
+<li>The CRD schema constrains every entry in <strong>both</strong> lists to a valid DNS-1123
+  subdomain and each list to a set, so a malformed name is <strong>rejected at write
+  time</strong> — it never reaches the GMC or the policy.</li>
 <li>A <strong>missing or deleted</strong> object, or any invalid entry that predates the schema,
-  causes the GMC to fall back to the <strong>static flag allowlist only</strong> and log a
+  causes the GMC to fall back to the <strong>static flag allowlists only</strong> and log a
   warning.</li>
-<li>An invalid list is rejected <strong>wholesale</strong> — a valid name sitting next to a typo
-  is <em>not</em> partially applied — so a mistake can never smuggle a class in.</li>
-<li>An <strong>absent or empty</strong> <code>allowedPriorityClasses</code> is valid and simply adds nothing.</li>
+<li>An invalid list is rejected <strong>wholesale</strong>, and across both lists — a valid name
+  sitting next to a typo is <em>not</em> partially applied, and a good infra addition does
+  not ride in on an object whose worker list is malformed.</li>
+<li>An <strong>absent or empty</strong> list is valid and simply adds nothing.</li>
 </ul>
-<p>Because the dynamic set is additive and resets to the static base on any error,
+<p>Because the dynamic sets are additive and reset to the static bases on any error,
 the worst case is that recently-added self-service classes stop being accepted
 until it is fixed — never that an unintended class becomes allowed.</p>
 <p><strong>RBAC.</strong> The chart grants the GMC a <code>ClusterRole</code> with <code>get</code>/<code>list</code>/<code>watch</code> on
@@ -4969,12 +5507,12 @@ validated (design rationale:
    cover the tenant-authored kinds; also check the GMC-authored <code>RunnerGroup</code>s,
    which store the class too:</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s1">  .items[]</span>
-<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
-<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="s1">  | ((.spec.priorityTiers // [])[].priorityClassName),</span>
-<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="s1">    (.spec.podTemplate.spec.priorityClassName // empty)</span>
-<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="s1">  | &quot;\($ns)/\($name) -&gt; \(.)&quot;&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="s1">  .items[]</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="s1">  | ((.spec.priorityTiers // [])[].priorityClassName),</span>
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="s1">    (.spec.podTemplate.spec.priorityClassName // empty)</span>
+<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a><span class="s1">  | &quot;\($ns)/\($name) -&gt; \(.)&quot;&#39;</span>
 </code></pre></div>
 <ol>
 <li>
@@ -5029,7 +5567,7 @@ writers can create <code>PriorityClass</code> objects anyway).</p>
 cannot read the GMC flag). The chart renders that object from
 <code>allowedPriorityClasses</code> — the same value that feeds <code>--allowed-priority-classes</code>
 — and the GMC watches the very same object, so the webhook and the policy cannot
-drift. See <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188">Self-service additions</a>.</p>
+drift. See <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Self-service additions</a>.</p>
 <p><strong>Why a CRD and not a ConfigMap (Q492).</strong> A <code>paramKind</code> on a <em>core</em> type is
 destroyed by a kube-apiserver defect the moment the set of bindings naming it goes
 empty — which <code>helm uninstall</code> does. See
@@ -5045,8 +5583,8 @@ recover. Deleting it does not affect running workloads.</p>
 <p>Releases before the <code>PriorityClassAllowlist</code> migration used a <strong>ConfigMap</strong> as the
 policy's <code>paramKind</code>, and were exposed to a kube-apiserver defect that denied
 every matched write cluster-wide:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>denied request: failed to configure binding: no params found for policy binding
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>with `Deny` parameterNotFoundAction
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>denied request: failed to configure binding: no params found for policy binding
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>with `Deny` parameterNotFoundAction
 </code></pre></div>
 <p>…while the ConfigMap plainly existed at the referenced name and namespace. Because
 <code>parameterNotFoundAction: Deny</code> resolves parameters <strong>before</strong> any per-object
@@ -5067,7 +5605,7 @@ the same empty-binding-set transition, one GVK apart — by
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>,
 and the uninstall/reinstall cycle is now a CI gate
 (<code>scripts/e2e/chart-reinstall-check.sh</code>). Mechanism and measurements:
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/archive/q444-vap-param-resolution.md"><code>q444-vap-param-resolution.md</code></a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/archive/q444-vap-param-resolution.md"><code>q444-vap-param-resolution.md</code></a>.</p>
 <p><strong>If you are still on an affected release</strong>, upgrade in place — <code>helm upgrade</code>
 never removes the binding and is safe — and see
 <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>. If you are
@@ -5103,16 +5641,16 @@ label every image already carries.</p>
   worker image ships a shell + coreutils + tar, so <code>exec</code>-cat and <code>kubectl cp</code>
   work on a worker pod:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;tenant-ns&gt;/&lt;worker-pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither</span>
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># exec-cat nor kubectl cp works on them — read their /licenses from the repo</span>
-<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;tenant-ns&gt;/&lt;worker-pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="c1"># The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="c1"># exec-cat nor kubectl cp works on them — read their /licenses from the repo</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
 </code></pre></div>
 <ul>
 <li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is
   <strong>generated and committed</strong> by <code>make third-party-notices</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>),
+  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>),
   which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under
   the committed, version-pinned <code>vendor/</code> tree — offline, no network or module
   cache. The CI <code>license-notices</code> workflow runs <code>make third-party-notices-check</code>
@@ -5124,7 +5662,7 @@ label every image already carries.</p>
 <h2 id="image-provenance-signature--sbom-verification">Image provenance: signature &amp; SBOM verification<a class="headerlink" href="#image-provenance-signature--sbom-verification" title="Permanent link">&para;</a></h2>
 <p>The five first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>) are
 published to
-GHCR by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every
+GHCR by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every
 <code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in
 <a href="../release/">release.md</a>). Each one is:</p>
 <ul>
@@ -5160,12 +5698,12 @@ swap (the "Verify the image" step in the
 <a href="#suspected-compromised-agc-tenant-scoped">compromised-AGC</a> and
 <a href="#suspected-compromised-gmc-cluster-scoped-tier-0">compromised-GMC</a> playbooks) —
 confirm the image was signed by <em>this project's</em> publish workflow:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># GitHub&#39;s OIDC provider. A signature from any other identity (or none) fails.</span>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="c1"># GitHub&#39;s OIDC provider. A signature from any other identity (or none) fails.</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
 </code></pre></div>
 <ul>
 <li><strong>A <code>cosign verify</code> failure is a stop-ship / incident signal.</strong> It means the
@@ -5187,11 +5725,11 @@ confirm the image was signed by <em>this project's</em> publish workflow:</p>
 the complement to the signature's <em>who signed it</em>. It is bound to the <strong>index</strong>
 digest (unlike the per-arch SBOM attestations), so a tag or index-digest
 reference verifies directly. The one-command check uses the GitHub CLI:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Confirms the signed SLSA provenance was minted by this project&#39;s publish</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="c1"># workflow. Resolve the tag to the index digest first for a workload check.</span>
-<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Confirms the signed SLSA provenance was minted by this project&#39;s publish</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="c1"># workflow. Resolve the tag to the index digest first for a workload check.</span>
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 </code></pre></div>
 <blockquote>
 <p><strong>Scripting this check?</strong> <code>gh attestation verify</code> prints its summary only to a
@@ -5203,11 +5741,11 @@ must name this repo's <code>publish.yml</code> at a <code>refs/tags/v*</code> re
 <p><code>cosign</code> verifies the same attestation against the keyless identity, matching the
 signature/SBOM commands above (the predicate type is the SLSA provenance v1
 in-toto type):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>slsaprovenance1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>slsaprovenance1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters&#39;</span>
 </code></pre></div>
 <ul>
 <li><strong>A provenance verification failure is a stop-ship / incident signal</strong>, exactly
@@ -5224,21 +5762,21 @@ attached to that architecture's manifest digest</strong> (not to the index, so t
 SBOM you audit is exactly what your nodes run) — and are also uploaded as build
 artifacts on each publish run. To pull and inspect one from the registry,
 resolve the per-arch digest from the index first:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
-<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
-<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>
-<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="c1"># Download that arch&#39;s SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
-<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
-<a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a>
-<a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
-<a id="__codelineno-33-13" name="__codelineno-33-13" href="#__codelineno-33-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.packages[].name&#39;</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a>
+<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="c1"># Download that arch&#39;s SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
+<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
+<a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a>
+<a id="__codelineno-38-12" name="__codelineno-38-12" href="#__codelineno-38-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
+<a id="__codelineno-38-13" name="__codelineno-38-13" href="#__codelineno-38-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.packages[].name&#39;</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
 </code></pre></div>
-<p>PR CI (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds
+<p>PR CI (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds
 each image and generates the same SBOM as a build artifact, so SBOM generation is
 exercised on every code PR — but <strong>signing and attestation run only on
 publish</strong> (they need a registry push and the publish workflow's OIDC identity).
@@ -5251,7 +5789,7 @@ exercise the cosign sign/attest path.</p>
 <li><a href="../observability/">observability.md</a> — full metrics reference and SLO alerting</li>
 <li><a href="../runbook/">runbook.md</a> — incident response and day-2 operations</li>
 <li><a href="../troubleshooting/">troubleshooting.md</a> — symptom → diagnosis → remediation</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/security.md">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
 </ul>
 
 

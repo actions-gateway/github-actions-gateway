@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/design/appendix-g-future-enhancements/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/appendix-g-future-enhancements/">
       
       
         <link rel="prev" href="../appendix-f-cost-model/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -717,7 +785,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -739,14 +807,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1489,6 +1557,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1502,7 +1574,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1524,14 +1596,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1541,6 +1613,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1802,6 +1902,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1941,10 +2069,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1962,8 +2090,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2464,6 +2592,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2657,9 +2889,9 @@ the allowlist for what a mirror can't proxy.</p>
   (Worker Exfiltration via an Allowlisted Non-GitHub Destination).</li>
 <li>Network shape: <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>.</li>
 <li>Operator runbook: <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>.</li>
-<li>Full design + deliverables: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/archive/q242-g1-proxy-destination-allowlist.md">Q242 plan</a>.</li>
+<li>Full design + deliverables: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/archive/q242-g1-proxy-destination-allowlist.md">Q242 plan</a>.</li>
 </ul>
-<p><strong>Related security finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">docs/plan/security.md</a>
+<p><strong>Related security finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/security.md">docs/plan/security.md</a>
 M-2.</p>
 <hr />
 <h2 id="g2-proxy-enforced-per-tenant-rate-limiting">G.2. Proxy-Enforced Per-Tenant Rate Limiting<a class="headerlink" href="#g2-proxy-enforced-per-tenant-rate-limiting" title="Permanent link">&para;</a></h2>
@@ -2780,7 +3012,7 @@ environment — it takes no command-line flags) is the detection harness:
 pointed at an Ed25519 agent's credentials, a <code>session OK</code> result with a
 non-empty <code>EncryptionKey</code> would indicate the broker is sending a key the
 agent can use.</p>
-<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">docs/plan/security.md</a> M-11,
+<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/security.md">docs/plan/security.md</a> M-11,
 D-5.</p>
 <hr />
 <h2 id="g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement">G.7. ValidatingAdmissionPolicy for direct RunnerGroup PriorityClass enforcement<a class="headerlink" href="#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement" title="Permanent link">&para;</a></h2>
@@ -2811,7 +3043,7 @@ the other kinds.</p>
 <li>Stored-object upgrade sweep:
   <a href="../../operations/security-operations/#upgrading-previously-ungated-priorityclassname-fields-are-now-gated">security-operations.md § Upgrading</a>.</li>
 </ul>
-<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/archive/q132-priorityclass-allowlist.md">docs/plan/q132-priorityclass-allowlist.md</a>.</p>
+<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/archive/q132-priorityclass-allowlist.md">docs/plan/q132-priorityclass-allowlist.md</a>.</p>
 <hr />
 <h2 id="g8-optional-disable-able-egress-proxy">G.8. Optional (Disable-able) Egress Proxy<a class="headerlink" href="#g8-optional-disable-able-egress-proxy" title="Permanent link">&para;</a></h2>
 <p><strong>Current behavior.</strong> The per-tenant egress proxy pool
@@ -2819,7 +3051,7 @@ the other kinds.</p>
 unconditionally for every <code>ActionsGateway</code>. The Gateway Manager
 Controller (GMC) always emits the proxy <code>Deployment</code>, <code>Service</code>, <code>HPA</code>,
 <code>PodDisruptionBudget</code>, and TLS cert <code>Secret</code>, and the workload
-<code>NetworkPolicy</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/cmd/gmc/internal/controller/builder.go"><code>buildWorkloadNetworkPolicy</code></a>)
+<code>NetworkPolicy</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/cmd/gmc/internal/controller/builder.go"><code>buildWorkloadNetworkPolicy</code></a>)
 grants Actions Gateway Controller (AGC) and worker pods egress to
 <em>only</em> cluster DNS and the proxy on port 8080 — so with no proxy, those
 pods have no network path to GitHub at all. <code>spec.proxy</code> is <code>+optional</code>,
@@ -2832,7 +3064,7 @@ still carries all traffic.</p>
 control-plane and worker data-plane alike — through the per-tenant
 proxy is what makes the gateway's differentiating claim coherent:
 stable per-tenant egress IPs at GitHub. Four downstream capabilities
-rest on it (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/worker-egress-proxy.md">docs/plan/worker-egress-proxy.md</a>):
+rest on it (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/worker-egress-proxy.md">docs/plan/worker-egress-proxy.md</a>):
 GitHub-side IP allowlisting, per-tenant audit attribution, GitHub-side
 incident containment (a rate-limit / abuse-flag / IP-ban hits one
 tenant, not whoever shares the node), and the one-operation per-tenant
@@ -2880,13 +3112,13 @@ behavior.</p>
 single-tenant / dev / cost-sensitive deployment, or a deployment that
 already provides per-tenant egress attribution at the node or cloud
 layer and wants to shed the proxy's always-on cost.</p>
-<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/worker-egress-proxy.md">docs/plan/worker-egress-proxy.md</a>
+<p><strong>Related finding.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/worker-egress-proxy.md">docs/plan/worker-egress-proxy.md</a>
 (the four properties forfeited);
 <a href="../02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md §2.3</a>.</p>
 <hr />
 <h2 id="g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies">G.9. NetworkPolicy Egress Extensibility (signers, telemetry, job dependencies)<a class="headerlink" href="#g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies" title="Permanent link">&para;</a></h2>
 <p><strong>Current behavior.</strong> The GMC reconciles three default-deny per-tenant
-NetworkPolicies (§5.2, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>).
+NetworkPolicies (§5.2, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>).
 The <strong>AGC</strong> policy permits egress to cluster DNS + the kube API server
 (+ the GitHub CIDR allowlist in direct mode), and — once the Vault egress
 work landed — a <em>scoped</em> AGC→Vault rule when a workload-identity gateway
@@ -2901,7 +3133,7 @@ for anything else.</p>
 default-deny envelope: a peer the <strong>tenant names in its own CR</strong>, that the
 <strong>GMC scopes</strong> to a single peer + port, attached to the <strong>AGC policy only</strong>
 so untrusted worker pods never inherit it. That peer descriptor is now the
-shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type
+shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type
 (selector | CIDR + optional explicit port), extracted from the Vault-specific
 shape before the v2 freeze so future consumers reuse one descriptor (Q204; see
 the pre-v2 analysis below). The entries below are the other egress holes we can
@@ -2975,7 +3207,7 @@ work shipped a per-feature peer descriptor (<code>VaultNetworkPolicy</code>: sel
 CIDR, port derived from the address). If KMS, telemetry, and worker-egress had
 each grown their own near-duplicate descriptor, v2 would freeze three
 inconsistent shapes. <strong>Resolved (Q204):</strong> the descriptor is now the shared
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type (selector | CIDR
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type (selector | CIDR
 + an optional explicit port), and <code>signer.vault.networkPolicy</code> references it.
 The extraction is serialization-compatible — the field keys (<code>podSelector</code>,
 <code>namespaceSelector</code>, <code>cidr</code>) are unchanged, so the v2alpha1 shape already
@@ -2983,7 +3215,7 @@ shipped is preserved; only the additive optional <code>port</code> is new, with 
 builder still deriving the port from the address when <code>port</code> is unset. Future
 consumers (KMS, telemetry) now reference the same type instead of forking it —
 the shape that is far cheaper to settle before the v2alpha1 → v2beta1
-graduation (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/STATUS.md">Q74</a>) than after.</p>
+graduation (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md">Q74</a>) than after.</p>
 <p><strong>What would trigger building any of it.</strong> A concrete signer provider beyond
 Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job
 dependency reachable, or the graduation review deciding to consolidate the
@@ -2991,7 +3223,7 @@ peer descriptor.</p>
 <p><strong>Related.</strong> <a href="../05-security/">05-security.md</a> (the per-tenant NetworkPolicy
 isolation model); <a href="#g1-proxy-enforced-destination-allowlist">G.1 Proxy-Enforced Destination Allowlist</a>;
 <a href="#g8-optional-disable-able-egress-proxy">G.8 Optional Egress Proxy</a>;
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>.</p>
 <hr />
 <h2 id="g10-controller-discovered-apiserver-cidr-auto-narrowing">G.10. Controller-Discovered apiserver-CIDR Auto-Narrowing<a class="headerlink" href="#g10-controller-discovered-apiserver-cidr-auto-narrowing" title="Permanent link">&para;</a></h2>
 <p><strong>Current behavior.</strong> The AGC NetworkPolicy's Kubernetes API server egress rule
@@ -3027,13 +3259,13 @@ review concluded this <strong>must not be a default</strong>, for three reasons:
 <p><strong>What would trigger building it.</strong> A design that closes the lockout window —
 e.g. always-union the freshly-observed endpoints with the prior set and only
 <em>remove</em> an IP after a confirmed drain, plus a fail-open watchdog that reverts to
-any-destination if the GMC loses apiserver contact — and demonstrated robustness
+any-destination if the GMC loses apiserver contact — and evidence that it holds
 across the managed-CP rotation behaviours above. Until then, narrowing stays the
 operator-confirmed, per-cluster <code>apiServerCIDRs</code> opt-in.</p>
 <p><strong>Related.</strong> <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">05-security.md §5.2</a>;
 <a href="../../operations/security-operations/#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist">security-operations.md § Tightening AGC apiserver egress</a>;
 <a href="../network-architecture/#policy-2-actions-gateway-controller--agc--kubernetes-api-server">network-architecture.md § Policy 2</a>;
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>shared_networkpolicy.go</code></a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>shared_networkpolicy.go</code></a>.</p>
 <hr />
 <h2 id="g11-worker-scale-up-rate-limiting-anti-stampede">G.11. Worker Scale-Up Rate Limiting (anti-stampede)<a class="headerlink" href="#g11-worker-scale-up-rate-limiting-anti-stampede" title="Permanent link">&para;</a></h2>
 <blockquote>
@@ -3157,7 +3389,7 @@ coexists with the node autoscaler (bounding pod-admission rate eases the
 node-scale-up burst, and the autoscaler keeps its own rate controls). Each throttle
 increments <code>actions_gateway_worker_scaleup_throttled_total</code>. Operator guidance:
 <a href="../../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">tenant-onboarding.md § worker scale-up rate limit</a>;
-design record: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/archive/q223-worker-scaleup-rate-limit.md">archive/q223-worker-scaleup-rate-limit.md</a>.</p>
+design record: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/archive/q223-worker-scaleup-rate-limit.md">archive/q223-worker-scaleup-rate-limit.md</a>.</p>
 <p><strong>Related.</strong> The Q211 P2P image-distribution operations guide (image-pull
 storms); <a href="#g2-proxy-enforced-per-tenant-rate-limiting">G.2</a> (proxy egress rate
 limiting — distinct); <a href="../appendix-e-capacity-planning/">appendix-e-capacity-planning.md</a>
@@ -3170,7 +3402,7 @@ limiting — distinct); <a href="../appendix-e-capacity-planning/">appendix-e-ca
 warmth (a peer-to-peer mirror / pre-pull DaemonSet — see <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a>
 and the Q211 guide) and <em>not</em> build-/model-cache warmth (a cache volume mounted
 in the worker <code>podTemplate</code> — a raw PVC works today; a <em>managed</em> backend is
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/STATUS.md#Q215">Q215</a>). Those cheaper layers should be exhausted first; this
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md#Q215">Q215</a>). Those cheaper layers should be exhausted first; this
 item is the residual.</p>
 </blockquote>
 <p><strong>Current behavior.</strong> Worker pods are created <strong>reactively</strong> the moment a job is
@@ -3206,7 +3438,7 @@ layer has a <em>cheaper</em> fix that does not hold idle compute:</p>
 </tr>
 <tr>
 <td>Build cache / <strong>model weights</strong> (the real GPU/ML startup cost)</td>
-<td>Cache volume in the <code>podTemplate</code> (raw PVC works today; managed backend = <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/STATUS.md#Q215">Q215</a>).</td>
+<td>Cache volume in the <code>podTemplate</code> (raw PVC works today; managed backend = <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md#Q215">Q215</a>).</td>
 </tr>
 <tr>
 <td><strong>Pod scheduling</strong></td>
@@ -3336,8 +3568,8 @@ in-cluster pull-through registry mirror (so workers need no direct registry egre
 plus a tight egress policy scoped to the mirror, GitHub, and DNS. Operator-facing
 context: <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>.</p>
 <p><strong>Status: active — the Demand trigger fired 2026-07-31 (operator ask), moving
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/STATUS.md#Q408">Q408</a> into the Queue with a phased plan:
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/q408-untrusted-pr-egress.md">q408-untrusted-pr-egress.md</a>.</strong> Published
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md#Q408">Q408</a> into the Queue with a phased plan:
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/q408-untrusted-pr-egress.md">q408-untrusted-pr-egress.md</a>.</strong> Published
 on the <a href="../../roadmap/#exploring--longer-term">public roadmap</a> as the named path
 to untrusted-PR CI.</p>
 <hr />
@@ -3414,7 +3646,7 @@ the claim, with no GitHub lock ticking, and asking is itself the request for
 capacity, so the autoscaler trigger is not forfeited. No CI runner controller
 appears to use this primitive.</p>
 <p><strong>Sketch.</strong> Two further values of the <code>spec.capacityGate.mode</code> enum introduced by
-the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/capacity-aware-intake.md">capacity-aware-intake plan</a> (<code>Probe</code>,
+the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/capacity-aware-intake.md">capacity-aware-intake plan</a> (<code>Probe</code>,
 <code>Provision</code>), reusing that plan's rung, condition, rejection-metric label,
 rate-limiting behavior, and fail-open contract unchanged. A negative answer
 refuses the claim, leaving the job queued at GitHub for redelivery. Off by
@@ -3457,7 +3689,7 @@ would be far too chatty.</p>
    <code>best-effort-atomic-scale-up</code>). The negative verdict this rung acts on —
    <em>cannot place, do not claim</em> — therefore needs no scale-up to reproduce.
    <strong>The kwok harness now exists</strong> — Q474 shipped it as the capacity gate's
-   live drift gate (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>,
+   live drift gate (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>,
    <code>make autoscaler-cluster</code>), so a cluster with a real cluster-autoscaler in it
    is one <code>--enable-provisioning-requests</code> away. Still unverified end-to-end:
    the kwok provider is <code>v1alpha1</code> and its docs are silent on
@@ -3490,7 +3722,7 @@ booking model with no measurement of how much residual claim-burn is actually
 left after rate-bounding.</p>
 <p><strong>Triggers to revisit.</strong> Any one of: an operator finds the measured residual
 burn of the latched gate — ~1 claim per deadline window
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/capacity-aware-intake.md#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">plan §9h</a>)
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/capacity-aware-intake.md#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">plan §9h</a>)
 — still unacceptable (the GPU/spot case, where
 one wasted claim per window is expensive); an operator asks with a
 cluster already running cluster-autoscaler with provisioning requests enabled;
@@ -3565,12 +3797,13 @@ runner-platform layer for GitHub Actions:</p>
 </table>
 <p><strong>Sketch — detection before actuation, two phases.</strong></p>
 <ol>
-<li><strong>Flaky-job detection (no behavior change).</strong> GAG already sees every job
-   outcome per <code>RunnerSet</code>. Record re-run-then-pass transitions per job name
-   (the Azure/Buildkite detector) and surface them: a per-set flaky-jobs
-   metric, K8s events, and an advisory condition. This is pure observability,
-   zero masking risk, and no CI product offers it per <em>tenant</em> on shared
-   runners. It also builds the history an only-known-flakes mode needs.</li>
+<li><strong>Flaky-job detection (no behavior change).</strong> Record re-run-then-pass
+   transitions per job name (the Azure/Buildkite detector) and surface them: a
+   per-set flaky-jobs metric, K8s events, and an advisory condition. This is
+   pure observability, zero masking risk, and no CI product offers it per
+   <em>tenant</em> on shared runners. It also builds the history an only-known-flakes
+   mode needs. Its prerequisite is a real per-job outcome, which the AGC does
+   not read today — see the signal note below.</li>
 <li><strong>Opt-in retry (<code>spec.flakyRetry</code> on the <code>RunnerSet</code>).</strong> Bounded per-run
    budget separate from <code>maxEvictionRetries</code>, its own <code>cause</code> value on the
    existing counters, driven by the same paced <code>rerun-failed-jobs</code> loop.
@@ -3594,11 +3827,101 @@ runner-platform layer for GitHub Actions:</p>
    compute; per-set counters must make the spend visible (the
    <a href="../../operations/cost-attribution/">cost-attribution doc</a> would gain a
    flake-spend line).</li>
-<li><strong>Failure classification is thin at the platform layer.</strong> GAG sees job
-   conclusions and step outcomes via the jobs API, not exit codes; a
-   GitLab-style failure taxonomy would need log/annotation heuristics.
-   Phase 2 ships without matchers first — budget + scope knobs only.</li>
+<li><strong>Failure classification is thin at the platform layer, but less thin than
+   it looks.</strong> The AGC polls no jobs API; its only outcome signal is the pod
+   phase, used as a proxy (<code>PodFailed</code>→failed, else succeeded). One layer
+   down there is more: <code>Runner.Worker</code> encodes the job's real <code>TaskResult</code> as
+   exit code <code>100 + result</code>, and the wrapper flattens only 100/101 (the two
+   GitHub concludes as <code>success</code>) to 0, passing 102 failed / 103 canceled /
+   104 skipped through verbatim
+   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/cmd/worker/main.go"><code>translateWorkerExitCode</code></a>). Nothing in the
+   AGC reads <code>ContainerStatuses[].State.Terminated.ExitCode</code>. Reading it is
+   the cheap prerequisite for phase 1's detector; a GitLab-style taxonomy
+   past that still needs log or annotation heuristics. Phase 2 ships without
+   matchers first: budget and scope knobs only.</li>
 </ol>
+<p><strong>Signals, and why an explicit one from the job is a separate question.</strong></p>
+<p>The three retry arms all decide from Kubernetes pod facts alone: phase,
+<code>reason: Evicted</code>, the <code>DisruptionTarget</code> condition, a <code>deletionTimestamp</code>.
+Nothing from inside the job reaches the decision. A tenant-supplied "this
+failure was flaky, retry it" verdict is a different signal class from the
+static per-set opt-in phase 2 sketches, and needs its own channel. Four
+candidates, and only one is both expressive and safe:</p>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Carries</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container exit code</td>
+<td>The runner's real <code>TaskResult</code></td>
+<td>Free (already propagated, unread), but the runner owns it and no step can set it. Fidelity, not intent.</td>
+</tr>
+<tr>
+<td>Termination message (<code>/dev/termination-log</code> → <code>State.Terminated.Message</code>)</td>
+<td>Anything the job writes, 4 KiB</td>
+<td>The workable one, with one hole: the log is per-container, so a step running in a workflow <code>container:</code> job writes to a different filesystem than the kubelet reads. The wrapper must also make the path writable by the job's user.</td>
+</tr>
+<tr>
+<td>A <code>runs-on</code> label (e.g. <code>gag-flaky-retry</code>)</td>
+<td>Per-job opt-in</td>
+<td>Free, since the listener sees job labels at acquisition, but static policy rather than a per-failure verdict.</td>
+</tr>
+<tr>
+<td>Pod self-annotation</td>
+<td>Anything</td>
+<td>Rejected. Grants tenant-controlled workflow code patch permission on its own pod.</td>
+</tr>
+</tbody>
+</table>
+<p>Two objections bound the value. First, the moment a tenant writes a signal
+into their workflow, the "nothing in your workflows changes" property this
+enhancement is sold on is gone, and a job that can emit "retry me" can
+equally wrap the step in a retry loop. What survives: an in-workflow wrapper
+retries steps <em>on the same worker</em>, while a platform signal re-runs the whole
+job on a fresh pod — new node, new network, clean runner — which is a flake
+class a step wrapper structurally cannot fix. Second, <code>rerun-failed-jobs</code> is
+run-granular and fires only after the run concludes, so a signal from one job
+re-runs its siblings too; the waiting machinery exists (<code>rerunUntilAccepted</code>
+already holds through <code>errRunNotConcluded</code>), the fan-out is the cost.</p>
+<p>Whichever channel wins, the writer is tenant-controlled code, often an
+untrusted PR's workflow. Gating is not optional: an operator-set <code>RunnerSet</code>
+opt-in (a workflow author's signal must never enable retry on its own), the
+existing per-run budget plus a per-window cap, and its own <code>cause</code> label so
+the spend is attributable.</p>
+<p><strong>What the isolation shapes do and do not change.</strong> Neither Docker-in-Docker
+nor Kata interposes on the exit code. In both shipped shapes <code>dockerd</code> is a
+nested process of the runner container or a native sidecar reachable over
+localhost (<a href="../../operations/kata-dind-workloads/">Kata + DinD</a>), so the
+wrapper is still PID 1 of the runner container and still owns its exit code;
+what DinD changes is reaping (Q249), which is phase <em>timing</em>, not outcome
+fidelity. Kata reports exit status through the ordinary <code>kata-agent</code> → shim →
+containerd → kubelet path.</p>
+<p>Two things are worth stating plainly before anything is built on this:</p>
+<ul>
+<li><strong>Nothing has measured that a runner-produced non-zero exit reaches
+  <code>PodFailed</code>.</strong> <code>translateWorkerExitCode</code>'s 102 passthrough is unit-tested;
+  the e2e sites that assert <code>PodFailed</code> are all external-kill shapes (evicted,
+  deleted), not a job that failed on its own merits. A green e2e run cannot
+  settle it either, because a <em>successful</em> job exits 0 whether or not the
+  runtime propagates codes faithfully. The measurement is a single dogfood
+  turn-up on the Kata overlay: fail a step deliberately, then read
+  <code>.status.containerStatuses[0].state.terminated.exitCode</code> and <code>.status.phase</code>.</li>
+<li><strong>A workflow <code>container:</code> job is the real boundary</strong>, and it splits the two
+  channels. The exit code survives it, because the runner execs into the job
+  container, reads the step status, and computes <code>TaskResult</code> itself. A signal
+  <em>file</em> does not: the workspace is bind-mounted across that boundary and
+  <code>/dev/termination-log</code> is not, so the obvious implementation vanishes
+  silently for exactly the tenants most likely to want it.</li>
+</ul>
+<p>That argues for the wrapper as the translator rather than the job writing a
+pod-visible file directly. It sits on the runner-container side of every one
+of these boundaries, already owns the exit code, and can read a
+workspace-relative marker the job wrote from wherever it ran.</p>
 <p><strong>Trigger.</strong> Q555 tracks the design decision. Promote when a design session
 commits the CRD shape, or an operator asks for it (the demand signal that
 reorders everything else on the roadmap).</p>

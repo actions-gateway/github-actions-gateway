@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/air-gapped-install/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/runner-template-library/">
       
       
-        <link rel="prev" href="../install/">
+        <link rel="prev" href="../resourcequota-sizing/">
       
       
-        <link rel="next" href="../gitops/">
+        <link rel="next" href="../in-runner-image-builds/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Air-gapped install - GitHub Actions Gateway</title>
+        <title>Runner template library - GitHub Actions Gateway</title>
       
     
     
@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#air-gapped--private-registry-install" class="md-skip">
+        <a href="#runner-template-library" class="md-skip">
           Skip to content
         </a>
       
@@ -177,7 +177,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Air-gapped install
+              Runner template library
             
           </span>
         </div>
@@ -1518,37 +1518,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Air-gapped install
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1564,125 +1537,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-you-relocate" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What you relocate
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#1-mirror-the-images-preserving-digests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Mirror the images (preserving digests)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-relocate-the-helm-chart" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Relocate the Helm chart
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-create-the-image-pull-secret-the-secure-pattern" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Create the image-pull Secret (the secure pattern)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-install-the-chart-with-the-overrides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Install the chart with the overrides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Wire pull Secrets for the runtime workloads (AGC / proxy / worker)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#6-point-the-worker-image-at-the-mirror" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Point the worker image at the mirror
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#7-verify" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Verify
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1888,10 +1742,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../runner-template-library/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1907,6 +1788,159 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#choosing-an-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing an entry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites-you-supply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites you supply
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites you supply">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#all-three" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        All three
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kata-dind-and-privileged-dind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kata-dind and privileged-dind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kata-dind-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kata-dind only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nothing-ships-as-a-cluster-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nothing ships as a cluster default
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forking-an-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forking an entry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Forking an entry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A strategic-merge patch against a custom resource deletes list entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sizing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-may-be-added-to-the-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What may be added to the library
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2715,10 +2749,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-you-relocate" class="md-nav__link">
+  <a href="#choosing-an-entry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What you relocate
+        Choosing an entry
       
     </span>
   </a>
@@ -2726,10 +2760,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#1-mirror-the-images-preserving-digests" class="md-nav__link">
+  <a href="#prerequisites-you-supply" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Mirror the images (preserving digests)
+        Prerequisites you supply
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites you supply">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#all-three" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        All three
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kata-dind-and-privileged-dind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kata-dind and privileged-dind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kata-dind-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kata-dind only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nothing-ships-as-a-cluster-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nothing ships as a cluster default
       
     </span>
   </a>
@@ -2737,10 +2821,38 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-relocate-the-helm-chart" class="md-nav__link">
+  <a href="#forking-an-entry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Relocate the Helm chart
+        Forking an entry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Forking an entry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A strategic-merge patch against a custom resource deletes list entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sizing
       
     </span>
   </a>
@@ -2748,10 +2860,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-create-the-image-pull-secret-the-secure-pattern" class="md-nav__link">
+  <a href="#what-may-be-added-to-the-library" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Create the image-pull Secret (the secure pattern)
+        What may be added to the library
       
     </span>
   </a>
@@ -2759,54 +2871,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-install-the-chart-with-the-overrides" class="md-nav__link">
+  <a href="#related" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Install the chart with the overrides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Wire pull Secrets for the runtime workloads (AGC / proxy / worker)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#6-point-the-worker-image-at-the-mirror" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Point the worker image at the mirror
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#7-verify" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Verify
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next steps
+        Related
       
     </span>
   </a>
@@ -2833,284 +2901,325 @@
   
 
 
-<h1 id="air-gapped--private-registry-install">Air-gapped / private-registry install<a class="headerlink" href="#air-gapped--private-registry-install" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Audience:</strong> Platform engineer</p>
-</blockquote>
-<p>This guide installs the Gateway Manager Controller (GMC) on a cluster that
-<strong>cannot pull from GitHub Container Registry (GHCR)</strong> — an air-gapped or
-egress-restricted environment. The default <a href="../install/">install</a> pulls every
-image (and the Helm chart) straight from <code>ghcr.io</code>; here you instead <strong>relocate</strong>
-them to a private registry, point the chart at that registry, and authenticate
-the pulls. Read <a href="../install/">install.md</a> first — this guide only covers the
-deltas for a private-registry install.</p>
-<p>The secure-by-default posture is unchanged: <strong>all images stay pinned by digest</strong>
-(relocation is content-addressed, so digests do not change) and registry
-credentials are <strong>never</strong> committed to <code>values.yaml</code>.</p>
-<hr />
-<h2 id="what-you-relocate">What you relocate<a class="headerlink" href="#what-you-relocate" title="Permanent link">&para;</a></h2>
-<p>GAG references five images plus the OCI Helm chart. Only the GMC image is pulled
-by the chart itself; the AGC, proxy, wrapper, and worker images are pulled by
-pods the GMC and AGC provision <strong>at runtime</strong>.</p>
+<h1 id="runner-template-library">Runner template library<a class="headerlink" href="#runner-template-library" title="Permanent link">&para;</a></h1>
+<p>GAG ships three ready-to-apply worker pod shapes under
+<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/templates"><code>deploy/templates/</code></a>,
+so you can start from a validated template instead of hand-authoring one. A
+<code>RunnerSet</code> picks one by name, and moving to your own template later is the same
+field pointing somewhere else.</p>
+<p>Apply one, point a <code>RunnerSet</code> at it, done:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>deploy/templates/plain
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterRunnerTemplate</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<h2 id="choosing-an-entry">Choosing an entry<a class="headerlink" href="#choosing-an-entry" title="Permanent link">&para;</a></h2>
+<p>Pick by what your jobs do. Workload names are rows in this table, not template
+names: "kind end-to-end tests" is the Docker-in-Docker shape, delivered as
+<code>kata-dind</code> or <code>privileged-dind</code> depending on what your nodes can do.</p>
 <table>
 <thead>
 <tr>
-<th>Image</th>
-<th>Public ref</th>
-<th>Pulled by</th>
-<th>Where you point it at the mirror</th>
+<th>Your jobs</th>
+<th>Entry</th>
+<th>What you get</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>GMC</strong></td>
-<td><code>ghcr.io/actions-gateway/gmc</code></td>
-<td>the chart's GMC Deployment</td>
-<td><code>gmc.image.repository</code> + <code>gmc.image.digest</code> (chart value)</td>
+<td>Unit tests, lint, deploys, anything that does not build container images</td>
+<td><code>plain</code></td>
+<td>No Docker daemon, no elevated capabilities. The only entry that composes with GAG's security gap-fill rather than opting out of it.</td>
 </tr>
 <tr>
-<td><strong>AGC</strong></td>
-<td><code>ghcr.io/actions-gateway/agc</code></td>
-<td>per-tenant AGC Deployments (GMC-provisioned)</td>
-<td><code>agc.image.repository</code> + <code>agc.image.digest</code> (chart value; GMC injects it as <code>AGC_IMAGE</code>)</td>
+<td>Build container images, run <code>docker compose</code>, run a nested cluster</td>
+<td><code>kata-dind</code></td>
+<td>A real Docker daemon inside a KVM micro-VM. An escape reaches a throwaway guest kernel, not your node.</td>
 </tr>
 <tr>
-<td><strong>Proxy</strong></td>
-<td><code>ghcr.io/actions-gateway/proxy</code></td>
-<td>per-tenant egress-proxy pools (GMC-provisioned)</td>
-<td><code>proxy.image.repository</code> + <code>proxy.image.digest</code> (chart value; GMC injects it as <code>PROXY_IMAGE</code>)</td>
+<td>The same, where Kata is not an option (see below)</td>
+<td><code>privileged-dind</code></td>
+<td>The same daemon with no isolation. Trusted jobs only.</td>
 </tr>
 <tr>
-<td><strong>Wrapper</strong></td>
-<td><code>ghcr.io/actions-gateway/wrapper</code></td>
-<td>worker pods (init container the AGC injects, or a read-only image volume)</td>
-<td><code>wrapper.image.repository</code> + <code>wrapper.image.digest</code> (chart value; GMC injects it as <code>WRAPPER_IMAGE</code>, forwarded to each AGC)</td>
-</tr>
-<tr>
-<td><strong>Worker</strong></td>
-<td><code>ghcr.io/actions/actions-runner</code> (default)</td>
-<td>worker pods (AGC-provisioned)</td>
-<td><code>RunnerGroup.spec.workerImage</code> per tenant — <strong>not</strong> a chart value</td>
-</tr>
-<tr>
-<td><strong>Helm chart</strong></td>
-<td><code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code></td>
-<td><code>helm install</code></td>
-<td>the <code>oci://</code> ref you pass to <code>helm</code></td>
+<td>Build images with no daemon at all</td>
+<td>none of these</td>
+<td>Rootless BuildKit or Kaniko run fine under <code>plain</code>. See <a href="../in-runner-image-builds/">In-runner image builds</a>.</td>
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p>The <strong>wrapper</strong> is on by default: the chart always sets <code>WRAPPER_IMAGE</code>, and
-the GMC rejects a floating wrapper tag at startup exactly as it does for
-<code>agc</code>/<code>proxy</code>, so you must mirror it and pin <code>wrapper.image.digest</code> like the
-others. It is a tiny (~2 MB) <code>FROM scratch</code> image the AGC injects into each
-worker pod, letting the runner container be the unmodified upstream
-<code>actions-runner</code>. See <a href="../release/#the-worker-images-wrapper-and-worker">release.md § The worker images</a>.</p>
-<p>The worker default is the upstream digest-pinned <code>ghcr.io/actions/actions-runner</code>.
-The project also publishes a first-party <code>ghcr.io/actions-gateway/worker</code>; if a
-tenant uses it, mirror that ref instead. Either way the worker image is set per
-tenant on the <code>RunnerGroup</code>, so it is configured during tenant onboarding, not
-at chart install. See <a href="../release/#the-worker-images-wrapper-and-worker">release.md § The worker images</a>.</p>
-</blockquote>
-<p>Copy the five image digests from the
-<a href="https://github.com/actions-gateway/github-actions-gateway/releases">release notes</a>
-for the version you are installing. Throughout this guide, replace
-<code>registry.internal/gag</code> with your private registry path.</p>
-<hr />
-<h2 id="1-mirror-the-images-preserving-digests">1. Mirror the images (preserving digests)<a class="headerlink" href="#1-mirror-the-images-preserving-digests" title="Permanent link">&para;</a></h2>
-<p>Copy each image from GHCR to your private registry <strong>by digest</strong>, so the mirrored
-copy is byte-identical and the same <code>sha256:</code> digest pins it on both sides. Run
-this from a host that can reach <em>both</em> registries (a bastion / jump host), then
-move the registry behind the air gap — or pull to a tarball and <code>load</code> on the
-inside.</p>
-<p>Use whichever tool you already have. <a href="https://docs.sigstore.dev/cosign/working_with_other_artifacts/"><code>cosign copy</code></a>
-carries the cosign signature and SBOM/provenance attestations along with the
-image, so prefer it when you want to keep verifying provenance after relocation:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Replace &lt;gmc&gt;/&lt;agc&gt;/&lt;proxy&gt;/&lt;wrapper&gt; with the digests from the release notes,</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># and X.Y.Z with the release version.</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>wrapper<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>cosign<span class="w"> </span>copy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>ghcr.io/actions-gateway/<span class="nv">$img</span>:X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>registry.internal/gag/<span class="nv">$img</span>:X.Y.Z
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">done</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Worker (upstream runner image — has no GAG cosign signature):</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>crane<span class="w"> </span>copy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>ghcr.io/actions/actions-runner:2.335.1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>registry.internal/gag/actions-runner:2.335.1
-</code></pre></div>
-<p><code>crane copy</code> or <code>skopeo copy --all</code> (use <code>--all</code> to carry the full multi-arch
-OCI index, not just one platform) are equivalent for the copy itself; they do
-not relocate the cosign signature, so use <code>cosign copy</code> for the signed GAG
-images if you intend to re-verify provenance from the mirror.</p>
-<p><strong>Verify the digest is preserved</strong> — it must match the release notes:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>crane<span class="w"> </span>digest<span class="w"> </span>registry.internal/gag/gmc:X.Y.Z
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Expected: sha256:&lt;gmc&gt;  (identical to the public digest)</span>
-</code></pre></div>
-<blockquote>
-<p>Tarball variant (no shared-network bastion): <code>crane pull … out.tar</code> on the
-outside, transfer the tarball across the gap, <code>crane push out.tar
-registry.internal/gag/gmc:X.Y.Z</code> on the inside. The digest is preserved.</p>
-</blockquote>
-<hr />
-<h2 id="2-relocate-the-helm-chart">2. Relocate the Helm chart<a class="headerlink" href="#2-relocate-the-helm-chart" title="Permanent link">&para;</a></h2>
-<p>The chart is an OCI artifact. If your cluster cannot reach <code>ghcr.io</code>, mirror it
-too (skip this if you install from a <a href="../install/#install">source checkout</a> — the
-<code>charts/actions-gateway</code> path needs no registry):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>oras<span class="w"> </span>cp<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>ghcr.io/actions-gateway/charts/actions-gateway:X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>registry.internal/gag/charts/actions-gateway:X.Y.Z
-</code></pre></div>
-<p><code>helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway --version X.Y.Z</code>
-followed by <code>helm push</code> to the internal registry is an equivalent two-step. If
-you use the opt-in v2 CRD chart (<code>actions-gateway-crds-v2</code>), relocate it the same
-way.</p>
-<hr />
-<h2 id="3-create-the-image-pull-secret-the-secure-pattern">3. Create the image-pull Secret (the secure pattern)<a class="headerlink" href="#3-create-the-image-pull-secret-the-secure-pattern" title="Permanent link">&para;</a></h2>
-<p>The private registry requires authentication. Create a
-<code>kubernetes.io/dockerconfigjson</code> Secret <strong>from a credentials file</strong> — never
-embed registry credentials in <code>values.yaml</code> (it gets committed to Git) or pass
-them on a command line (they leak into shell history and process listings).</p>
-<p>Write a Docker config file containing a <strong>scoped, read-only</strong> registry token,
-<code>chmod 600</code> it, create the Secret from it, then delete the file:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">umask</span><span class="w"> </span><span class="m">077</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Use a robot/read-only pull token, not a human admin credential.</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>dockerconfig.json<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39;</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="s">{ &quot;auths&quot;: { &quot;registry.internal&quot;: { &quot;auth&quot;: &quot;&lt;base64 user:token&gt;&quot; } } }</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="s">EOF</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>docker-registry<span class="w"> </span>private-registry<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span>--from-file<span class="o">=</span>.dockerconfigjson<span class="o">=</span>dockerconfig.json
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>shred<span class="w"> </span>-u<span class="w"> </span>dockerconfig.json<span class="w">   </span><span class="c1"># or: rm -P / rm -f</span>
-</code></pre></div>
-<p><code>kubectl create secret docker-registry</code> also accepts <code>--docker-server/-username/-password</code>
-flags, but those place the password in your shell history and the process
-table — prefer the <code>--from-file</code> form above.</p>
-<p>You will create this Secret in <strong><code>gmc-system</code></strong> (for the GMC pull, this step) and
-in <strong>each tenant namespace</strong> (for the AGC/proxy/worker pulls, <a href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">step 5</a>).</p>
-<hr />
-<h2 id="4-install-the-chart-with-the-overrides">4. Install the chart with the overrides<a class="headerlink" href="#4-install-the-chart-with-the-overrides" title="Permanent link">&para;</a></h2>
-<p>Install from the relocated chart, overriding each image <code>repository</code> to the
-mirror, keeping the <code>digest</code> from the release notes, and referencing the pull
-Secret:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://registry.internal/gag/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.repository<span class="o">=</span>registry.internal/gag/gmc<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.repository<span class="o">=</span>registry.internal/gag/agc<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.repository<span class="o">=</span>registry.internal/gag/proxy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.repository<span class="o">=</span>registry.internal/gag/wrapper<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span>--set<span class="w"> </span><span class="s1">&#39;imagePullSecrets[0].name=private-registry&#39;</span>
-</code></pre></div>
+<p>Prefer <code>kata-dind</code> when you can have it, and a rootless builder before either. A
+privileged dockerd exposes the host kernel to every job that lands on that
+template, so a container escape from any one job reaches the node.</p>
+<p><strong>But "when you can have it" excludes more than it sounds like.</strong> Kata needs a
+KVM-capable host, which on a cloud provider means nested virtualisation or bare
+metal, and that is not universally available:</p>
 <ul>
-<li><code>imagePullSecrets</code> is attached to the <strong>GMC pod only</strong> — that is the one
-  workload this chart runs.</li>
-<li><code>agc.image.*</code> / <code>proxy.image.*</code> / <code>wrapper.image.*</code> set the references the GMC
-  <strong>injects</strong> into the gateways it provisions — the AGC and proxy pods, and the
-  wrapper init container in every worker pod; relocating the repository here is
-  enough for the GMC to pull them from the mirror. Their <em>pull Secret</em> is wired
-  separately in <a href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">step 5</a>.</li>
-<li>Digest pinning is unchanged — <code>gmc.image.digest</code> is still mandatory (rendering
-  fails without it) and the GMC still rejects floating AGC/proxy/wrapper tags at
-  startup. Do <strong>not</strong> reach for <code>allowFloatingImageTags</code>; relocation keeps the digest.</li>
+<li><strong>GPU builds are the clearest case.</strong> Getting a GPU into a Kata guest needs
+  VFIO/IOMMU passthrough, which a cloud instance does not expose to a nested
+  guest; NVIDIA's GPU Operator supports Kata in single-GPU-passthrough mode only,
+  and does not support configuring only some GPUs on a node for it. If your jobs
+  build on GPU instances, <code>privileged-dind</code> is the realistic path, not a
+  concession.</li>
+<li><strong>CPU architecture and machine family.</strong> Google Compute Engine excludes E2,
+  memory-optimized, H4D, and every AMD- and Arm-powered VM from nested
+  virtualisation. On AWS, nested virtualisation means a <code>.metal</code> instance.</li>
+<li>Where nested virtualisation does work, expect a measured performance cost:
+  GCE documents 10% or more for CPU-bound work, potentially more for I/O-bound.</li>
 </ul>
-<blockquote>
-<p>Many <code>--set</code> flags are easier to manage in a values file. Put the
-<code>repository</code>/<code>digest</code>/<code>imagePullSecrets</code> overrides in <code>air-gapped-values.yaml</code>
-and <code>helm install … -f air-gapped-values.yaml</code>. The pull Secret is referenced
-by <strong>name</strong> there — its credentials still live only in the Secret from step 3,
-never in this file.</p>
-</blockquote>
-<hr />
-<h2 id="5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">5. Wire pull Secrets for the runtime workloads (AGC / proxy / worker)<a class="headerlink" href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker" title="Permanent link">&para;</a></h2>
-<p>The AGC, proxy, and worker pods are created by the GMC/AGC at runtime, so the
-chart cannot attach <code>imagePullSecrets</code> to them. Use the standard Kubernetes
-mechanism: an <code>imagePullSecrets</code> reference on a <strong>ServiceAccount</strong> is
-auto-injected into every pod that uses that SA. All the relevant ServiceAccounts
-live in the <strong>tenant namespace</strong>.</p>
-<p>For each tenant namespace, first create the pull Secret there (repeat step 3 with
-<code>--namespace &lt;tenant-ns&gt;</code>), then patch the ServiceAccounts:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">TENANT_NS</span><span class="o">=</span>team-a
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># AGC pods run as the fixed AGC ServiceAccount &quot;actions-gateway-controller&quot;</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># (one per tenant namespace; the name is not derived from the gateway name).</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TENANT_NS</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;imagePullSecrets&quot;:[{&quot;name&quot;:&quot;private-registry&quot;}]}&#39;</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Worker pods run as &quot;actions-gateway-worker&quot; — this SA also pulls the injected</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># wrapper init container, so no separate wrapper Secret/SA is needed.</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>actions-gateway-worker<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TENANT_NS</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;imagePullSecrets&quot;:[{&quot;name&quot;:&quot;private-registry&quot;}]}&#39;</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Proxy pods run as the namespace &quot;default&quot; ServiceAccount.</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>default<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TENANT_NS</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;imagePullSecrets&quot;:[{&quot;name&quot;:&quot;private-registry&quot;}]}&#39;</span>
+<p>So treat this as a real choice rather than a fallback with a bad reputation. If
+Kata is unavailable to you, the meaningful comparison is <code>privileged-dind</code>
+against a rootless builder, and the question is whether your jobs genuinely need
+a Docker daemon. Where you land on <code>privileged-dind</code>, confine it: a dedicated
+node pool, trusted jobs only, and never a fork's pull request.</p>
+<h2 id="prerequisites-you-supply">Prerequisites you supply<a class="headerlink" href="#prerequisites-you-supply" title="Permanent link">&para;</a></h2>
+<p>GAG never installs runtime handlers, <code>RuntimeClass</code> objects, or node pools. That
+is deliberate and unchanged by the library
+(<a href="../kata-dind-workloads/">Running DinD workloads under Kata</a> covers the split in
+full). Each entry needs a different amount of groundwork.</p>
+<h3 id="all-three">All three<a class="headerlink" href="#all-three" title="Permanent link">&para;</a></h3>
+<p>The v2 CRDs must be installed (the opt-in <code>actions-gateway-crds-v2</code> chart), and
+the namespace must be a marked tenant namespace per
+<a href="../tenant-onboarding/">Tenant onboarding</a>.</p>
+<h3 id="kata-dind-and-privileged-dind"><code>kata-dind</code> and <code>privileged-dind</code><a class="headerlink" href="#kata-dind-and-privileged-dind" title="Permanent link">&para;</a></h3>
+<p><strong>A build-capable runner image.</strong> Both ship <code>spec.workerImage</code> set to
+<code>example.invalid/build-capable-runner:replace-me</code> and you must replace it. The
+runner container needs a Docker CLI on <code>PATH</code>; the sidecar supplies the daemon,
+not the client, and the stock <code>ghcr.io/actions/actions-runner</code> image ships
+neither. The reserved <code>.invalid</code> host is chosen so an unreplaced value fails at
+image pull rather than succeeding into a job that dies on <code>docker: not found</code>
+twenty minutes in. <code>scripts/dogfood/e2e-runner/Dockerfile</code> in this repo is a
+worked example.</p>
+<p><strong>Watch the worker pod, not the <code>RunnerSet</code>, when you suspect an unreplaced
+image.</strong> The pod reports the problem within seconds: it binds to a node and then
+sits Pending in <code>ImagePullBackOff</code>, with a <code>Failed</code> event naming the host it
+could not resolve.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>linux
 </code></pre></div>
-<p>The GMC creates the <code>actions-gateway-controller</code> and <code>actions-gateway-worker</code>
-ServiceAccounts when it reconciles the <code>ActionsGateway</code> CR; create the gateway
-first, then patch. The
-patch <strong>survives GMC reconciliation</strong> — the GMC only manages those SAs' labels
-and owner reference, never their <code>imagePullSecrets</code> — and it never touches the
-<code>default</code> SA at all.</p>
-<blockquote>
-<p>Alternative: if your registry is reachable by the cluster but only needs auth,
-a cluster-wide approach (e.g. a <code>default</code>-SA mutating policy, or a registry
-pull-through cache that injects credentials) also works. The per-SA patch above
-is the no-extra-tooling baseline.</p>
-</blockquote>
-<hr />
-<h2 id="6-point-the-worker-image-at-the-mirror">6. Point the worker image at the mirror<a class="headerlink" href="#6-point-the-worker-image-at-the-mirror" title="Permanent link">&para;</a></h2>
-<p>The worker image is <strong>not</strong> a chart value — it is set per tenant. When onboarding
-a tenant (see <a href="../tenant-onboarding/">tenant-onboarding.md</a>), set the mirrored,
-digest-pinned worker reference on the <code>RunnerGroup</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerGroup</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="c1"># Mirror of ghcr.io/actions/actions-runner, digest preserved.</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">registry.internal/gag/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29</span>
+<p>The <code>RunnerSet</code> stays quiet for much longer, because a pod that cannot pull its
+image still scheduled perfectly well. <code>WorkersUnschedulable</code> reports only the
+scheduler's verdict, so it stays False and
+<code>actions_gateway_runnerset_workers_unschedulable</code> stays 0 for the whole window.
+The first
+<code>RunnerSet</code>-level signal is the <code>WorkerPodStuckPending</code> Warning event the reaper
+emits when it deletes the pod at <code>spec.pendingPodDeadline</code>, 10 minutes after the
+pod was created unless you lower that field. Until then the pod holds a
+concurrency slot, and each further job the set acquires starts the same cycle
+again.</p>
+<p><strong>A namespace at PSA <code>privileged</code>, plus GAG's three gates.</strong> Both entries need
+capabilities that Pod Security Standards <code>baseline</code> forbids, and PSA has no
+Kata-aware level in between. Tenants cannot self-elevate: the namespace needs
+all four settings in one object.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Namespace</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">actions-gateway.com/tenant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">managed</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">actions-gateway.com/security-profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">privileged</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">pod-security.kubernetes.io/enforce</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">privileged</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">actions-gateway.com/privileged-profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allowed</span><span class="w">      </span><span class="c1"># platform-set eligibility</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">actions-gateway.com/allow-profile-downgrade</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allowed</span><span class="w"> </span><span class="c1"># platform-set consent</span>
 </code></pre></div>
-<p>Keep the <code>@sha256:</code> digest — it must match the upstream image you mirrored in
-step 1. The worker SA patched in step 5 supplies the pull credentials.</p>
-<hr />
-<h2 id="7-verify">7. Verify<a class="headerlink" href="#7-verify" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># GMC pulls from the mirror and is Running (no ImagePullBackOff).</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[0].spec.containers[0].image}{&quot;\n&quot;}&#39;</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Expected: registry.internal/gag/gmc@sha256:&lt;gmc&gt;</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># The GMC injects the mirrored AGC/proxy refs into provisioned gateways.</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>gmc-controller-manager<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .spec.template.spec.containers[0].env[?(@.name==&quot;AGC_IMAGE&quot;)]}{.value}{&quot;\n&quot;}{end}&#39;</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Expected: registry.internal/gag/agc@sha256:&lt;agc&gt;</span>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
-<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># After creating a tenant gateway: its AGC / proxy / worker pods (and the</span>
-<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># injected wrapper init container) pull from the mirror with no ImagePullBackOff.</span>
-<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>team-a
-</code></pre></div>
-<p>Then continue the standard <a href="../install/#verify-a-healthy-install">healthy-install verification</a>.
-If a pod shows <code>ImagePullBackOff</code>, <code>kubectl describe pod</code> it: a 401/403 means the
-pull Secret is missing from that namespace or not referenced by the pod's
-ServiceAccount (step 5); a "manifest unknown" means the digest was not preserved
-during relocation (step 1).</p>
-<hr />
-<h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<p>Understand what this costs before you set it. Under the <code>privileged</code> profile
+GAG's <code>applySecurityDefaults</code> gap-fill becomes a no-op by design, so the template
+carries the entire security posture of its workers. That is the trade the library
+is meant to improve on: you get a vetted capability set instead of a hand-rolled
+one, not an exemption from thinking about it.</p>
+<h3 id="kata-dind-only"><code>kata-dind</code> only<a class="headerlink" href="#kata-dind-only" title="Permanent link">&para;</a></h3>
 <ul>
-<li><a href="../install/">install.md</a> — the full install reference these deltas build on.</li>
-<li><a href="../tenant-onboarding/">tenant-onboarding.md</a> — onboard a tenant, where the
-  worker image and tenant-namespace pull Secret are configured.</li>
-<li><a href="../release/">release.md</a> — published image/chart digests, signatures, and the
-  worker-image distinction.</li>
+<li>Nodes with nested virtualisation, and a Kata runtime installed on them
+  (kata-deploy or your distribution's equivalent).</li>
+<li>A <code>RuntimeClass</code> named <strong><code>kata</code></strong>. kata-deploy registers handler-named classes
+  (<code>kata-qemu</code>, <code>kata-clh</code>, and so on); either register <code>kata</code> as an alias or
+  patch <code>runtimeClassName</code> to the handler you have.</li>
+<li>A default <code>StorageClass</code> that supports <code>volumeMode: Block</code>. The template leaves
+  <code>storageClassName</code> unset so your cluster default applies; most CSI block
+  drivers qualify, most file and NFS drivers do not. Set it explicitly if yours
+  does not.</li>
+<li>A metadata control: Workload Identity, IMDSv2 with hop limit 1, or a
+  <code>NetworkPolicy</code> denying <code>169.254.169.254/32</code>. Kata bounds the kernel, not the
+  pod network. GAG measured GKE's service-account token endpoint answering
+  <code>HTTP 200</code> from inside a Kata guest, so the metadata server stays reachable
+  even though the container escape path does not.</li>
 </ul>
-<hr />
-<p>← <a href="../">Back to Operations</a></p>
+<h2 id="nothing-ships-as-a-cluster-default">Nothing ships as a cluster default<a class="headerlink" href="#nothing-ships-as-a-cluster-default" title="Permanent link">&para;</a></h2>
+<p>Every entry is opt-in and applied on its own. There is no aggregate
+kustomization that applies all three, and no entry carries the
+<code>actions-gateway.com/is-default-template</code> annotation.</p>
+<p>That is a deliberate line rather than an oversight. A <code>ClusterRunnerTemplate</code>
+marked as the cluster default applies to every <code>RunnerSet</code> that names no
+template, so shipping one as a default would silently hand a privileged pod
+shape to sets that never asked for it. Marking a default is your decision; the
+resolution order is <code>templateRef</code>, then the gateway default, then the
+cluster-default annotation.</p>
+<h2 id="forking-an-entry">Forking an entry<a class="headerlink" href="#forking-an-entry" title="Permanent link">&para;</a></h2>
+<p>Two supported paths.</p>
+<p><strong>Copy it.</strong> Take <code>deploy/templates/&lt;entry&gt;/template.yaml</code>, rename the object,
+edit, and apply. Simple, and you own the result including any future fix that
+lands upstream.</p>
+<p><strong>Patch it with kustomize.</strong> Keeps you on the shipped base, so an upstream fix
+reaches you on the next pull.</p>
+<p>Read the next section before you write the patch. It is the single most
+expensive thing to get wrong here, and it fails silently.</p>
+<h3 id="a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries">A strategic-merge patch against a custom resource deletes list entries<a class="headerlink" href="#a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries" title="Permanent link">&para;</a></h3>
+<p>kustomize decides how to merge a list from the OpenAPI schema of the type being
+patched. It ships schemas for built-in Kubernetes types only, so for a
+<code>ClusterRunnerTemplate</code> it has none, and a strategic-merge patch degrades to an
+RFC 7386 JSON merge patch. Under RFC 7386 a list is <strong>replaced wholesale</strong>
+rather than merged by key.</p>
+<p>Concretely: this patch, which reads like it adjusts one field,</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">patches</span><span class="p">:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">patch</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">      </span><span class="no">apiVersion: actions-gateway.com/v2beta1</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">      </span><span class="no">kind: ClusterRunnerTemplate</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="no">metadata:</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">        </span><span class="no">name: kata-dind</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">      </span><span class="no">spec:</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">        </span><span class="no">podTemplate:</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">          </span><span class="no">spec:</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">            </span><span class="no">initContainers:</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">              </span><span class="no">- name: dind</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">                </span><span class="no">resources:</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">                  </span><span class="no">requests:</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">                    </span><span class="no">cpu: &quot;3&quot;</span>
+</code></pre></div>
+<p>produces a <code>dind</code> container with <em>only</em> <code>name</code> and <code>resources</code>. Its <code>image</code>,
+<code>restartPolicy: Always</code>, the entire capability set, the startup probe and the
+<code>volumeDevices</code> binding the block volume are gone. <code>kubectl kustomize</code> prints
+this and exits <strong>0</strong>. The pod then fails at admission or, worse, starts without
+the daemon the runner is configured to reach. Measured on kustomize v5.8.1, as
+embedded in kubectl 1.36.</p>
+<p>Scalars and maps are safe either way. Lists are not, and <code>containers</code>,
+<code>initContainers</code>, <code>volumes</code> and <code>tolerations</code> are all lists.</p>
+<p>There are two ways out.</p>
+<p><strong>Option 1, JSON 6902. What this repo uses, and the one to reach for.</strong> A
+targeted op list needs no schema, so it cannot degrade:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># my-overlay/kustomization.yaml</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kustomize.config.k8s.io/v1beta1</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Kustomization</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">../deploy/templates/kata-dind</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nt">patches</span><span class="p">:</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">target</span><span class="p">:</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">      </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">      </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v2beta1</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterRunnerTemplate</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata-dind</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="nt">patch</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">      </span><span class="no">- op: replace</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="no">path: /spec/workerImage</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="no">value: ghcr.io/myorg/build-runner:1.2.3</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">      </span><span class="no">- op: add</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">        </span><span class="no">path: /spec/podTemplate/spec/nodeSelector</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">        </span><span class="no">value:</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">          </span><span class="no">node-role: builders</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">      </span><span class="no">- op: replace</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">        </span><span class="no">path: /spec/podTemplate/spec/initContainers/0/resources/requests/cpu</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">        </span><span class="no">value: &quot;3&quot;</span>
+</code></pre></div>
+<p>The cost is that a JSON pointer carries a list index, so a patch survives on the
+base's ordering. Pin what you depend on with a comment, or prefer the whole-map
+<code>op: replace</code> over a deep path when the base might reorder.</p>
+<p><strong>Option 2, teach kustomize the schema.</strong> Supply an OpenAPI document that
+declares the merge key, and strategic merge starts behaving the way it does for
+a <code>Deployment</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;definitions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">&quot;com.actions-gateway.v2beta1.ClusterRunnerTemplate&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">      </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">        </span><span class="nt">&quot;spec&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">          </span><span class="nt">&quot;podTemplate&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">            </span><span class="nt">&quot;spec&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">              </span><span class="nt">&quot;initContainers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">                </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;array&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">                </span><span class="nt">&quot;items&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">                </span><span class="nt">&quot;x-kubernetes-patch-merge-key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;name&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">                </span><span class="nt">&quot;x-kubernetes-patch-strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;merge&quot;</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">              </span><span class="p">}</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">            </span><span class="p">}}</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">          </span><span class="p">}}</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">        </span><span class="p">}}</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">      </span><span class="p">},</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">      </span><span class="nt">&quot;x-kubernetes-group-version-kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">        </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;group&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;actions-gateway.com&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;kind&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ClusterRunnerTemplate&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;v2beta1&quot;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">      </span><span class="p">]</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">openapi</span><span class="p">:</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">crt-schema.json</span>
+</code></pre></div>
+<p>Verified working under kubectl's embedded kustomize, with no standalone
+<code>kustomize</code> binary: the patch above then changes only <code>requests.cpu</code> and leaves
+the image, <code>restartPolicy</code>, capabilities, probe and <code>volumeDevices</code> intact, and
+strategic merges against built-in types in the same kustomization keep working.</p>
+<p><strong>The trap in option 2, which has the same signature as the bug.</strong> A custom
+schema <em>replaces</em> kustomize's built-in one rather than extending it, so a
+<code>$ref</code> into a built-in definition does not resolve. Writing the obvious thing,</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">&quot;podTemplate&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;$ref&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;#/definitions/io.k8s.api.core.v1.PodTemplateSpec&quot;</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p>leaves the ref dangling, kustomize finds no merge key, and it falls straight
+back to wholesale replacement, silently, at exit 0. That is indistinguishable
+from having written no schema at all. Declare the merge keys inline on the paths
+you patch, as above, and confirm by rendering and diffing rather than by the
+exit code.</p>
+<p>This repo stays on option 1 because option 2 means hand-maintaining a schema
+against a CRD that changes, and a schema that drifts fails open.</p>
+<p>GAG's own end-to-end suite is the worked example for option 1: the overlays
+under <code>deploy/dogfood-e2e/overlays/</code> consume these bases and patch in their
+cluster specifics and nothing else. <code>make template-library-check</code> rejects a
+strategic-merge patch against a <code>ClusterRunnerTemplate</code> in this repo, and
+compares each overlay's render against its base to catch a list that lost
+entries by any route.</p>
+<h2 id="sizing">Sizing<a class="headerlink" href="#sizing" title="Permanent link">&para;</a></h2>
+<p>The resource requests and limits in <code>kata-dind</code> and <code>privileged-dind</code> are
+measured, not guessed, but they are measured on <strong>GAG's own end-to-end suite</strong>:
+a compile-heavy runner driving a nested Kubernetes cluster inside the sidecar.
+That is a plausible starting point for an image-building runner and a poor one
+for a job with a different shape.</p>
+<p>Two things about the Kata entry that do not transfer from ordinary pod sizing:
+CPU limits become the guest's vCPU count, and memory limits become the guest's
+entire RAM including page cache. There is none of the burst-to-node headroom the
+privileged variant's requests-only CPU gets. Add the <code>RuntimeClass</code> overhead
+(250m CPU, 160Mi) when you size nodes.</p>
+<p>Re-measure for your workload: <a href="../worker-rightsizing/">Worker rightsizing</a>.</p>
+<h2 id="what-may-be-added-to-the-library">What may be added to the library<a class="headerlink" href="#what-may-be-added-to-the-library" title="Permanent link">&para;</a></h2>
+<p>Only what CI exercises. A shipped golden template is an implicit claim that it
+works, so membership is gated on evidence rather than on plausibility:</p>
+<ul>
+<li>every entry is applied to a real API server on each integration run, which
+  proves it satisfies the CRD schema and the v2 reserved-field validation rules;</li>
+<li><code>kata-dind</code> and <code>privileged-dind</code> are additionally the bases GAG's own dogfood
+  tenant runs real end-to-end jobs on.</li>
+</ul>
+<p><code>make template-library-check</code> reconciles the shipped set against the exercised
+set on every run of the local gate and in CI, in both directions. gVisor, sysbox
+and rootless BuildKit are excluded for exactly this reason: they have no
+template-level coverage here, so shipping them would claim a validation that
+does not exist.</p>
+<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../kata-dind-workloads/">Running DinD workloads under Kata</a>: the full Kata
+  reference, including what GAG does and does not manage</li>
+<li><a href="../in-runner-image-builds/">In-runner image builds</a>: the five build
+  approaches and their security profiles</li>
+<li><a href="../tenant-onboarding/">Tenant onboarding</a>: namespace marking, quotas, and the
+  v2 object set</li>
+<li><a href="../worker-rightsizing/">Worker rightsizing</a>: measuring your own numbers</li>
+</ul>
 
 
 
@@ -3148,7 +3257,7 @@ during relocation (step 1).</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../install/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Install">
+          <a href="../resourcequota-sizing/" class="md-footer__link md-footer__link--prev" aria-label="Previous: ResourceQuota sizing">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3158,20 +3267,20 @@ during relocation (step 1).</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Install
+                ResourceQuota sizing
               </div>
             </div>
           </a>
         
         
           
-          <a href="../gitops/" class="md-footer__link md-footer__link--next" aria-label="Next: GitOps install (Argo CD / Flux)">
+          <a href="../in-runner-image-builds/" class="md-footer__link md-footer__link--next" aria-label="Next: In-runner image builds">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                GitOps install (Argo CD / Flux)
+                In-runner image builds
               </div>
             </div>
             <div class="md-footer__button md-icon">

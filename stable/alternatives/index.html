@@ -10,31 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/06-implementation-phases/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/alternatives/">
       
       
-        <link rel="prev" href="../05-security/">
+        <link rel="prev" href="../why-gag/">
       
       
-        <link rel="next" href="../07-test-plan/">
+        <link rel="next" href="../features/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/favicon.svg">
+      <link rel="icon" href="../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Implementation phases - GitHub Actions Gateway</title>
+        <title>Alternatives - GitHub Actions Gateway</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,9 +47,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -59,9 +59,9 @@
     
   
   
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
   <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#6-implementation-phasing--delivery-milestones" class="md-skip">
+        <a href="#choosing-how-to-run-self-hosted-ci" class="md-skip">
           Skip to content
         </a>
       
@@ -148,7 +148,7 @@
   <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
-            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
           </aside>
         
       </div>
@@ -158,9 +158,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href=".." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -177,7 +177,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Implementation phases
+              Alternatives
             
           </span>
         </div>
@@ -290,7 +290,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href=".." class="md-tabs__link">
         
   
   
@@ -309,7 +309,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../why-gag/" class="md-tabs__link">
+      <a href="../why-gag/" class="md-tabs__link">
         
   
   
@@ -326,9 +326,11 @@
   
   
   
+    
   
-    <li class="md-tabs__item">
-      <a href="../../alternatives/" class="md-tabs__link">
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
         
   
   
@@ -347,7 +349,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../features/" class="md-tabs__link">
+      <a href="../features/" class="md-tabs__link">
         
   
   
@@ -366,7 +368,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../demo/" class="md-tabs__link">
+      <a href="../demo/" class="md-tabs__link">
         
   
   
@@ -385,7 +387,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
+      <a href="../getting-started/" class="md-tabs__link">
         
   
   
@@ -404,7 +406,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../roadmap/" class="md-tabs__link">
+      <a href="../roadmap/" class="md-tabs__link">
         
   
   
@@ -421,13 +423,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../design/" class="md-tabs__link">
           
   
   
@@ -449,7 +449,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../operations/" class="md-tabs__link">
+        <a href="../operations/" class="md-tabs__link">
           
   
   
@@ -471,7 +471,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../reference/" class="md-tabs__link">
+        <a href="../reference/" class="md-tabs__link">
           
   
   
@@ -496,7 +496,9 @@
           
             
               
-              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" hidden>
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
@@ -507,9 +509,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href=".." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../assets/logo.svg" alt="logo">
 
     </a>
     GitHub Actions Gateway
@@ -536,7 +538,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -563,7 +565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../why-gag/" class="md-nav__link">
+      <a href="../why-gag/" class="md-nav__link">
         
   
   
@@ -587,10 +589,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../alternatives/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -606,6 +635,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#when-not-to-choose-gag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When not to choose GAG
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#location-location-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Location, location, location
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-tenant-platforms-are-an-order-of-magnitude-more-complex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-tenant platforms are an order of magnitude more complex
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-paved-road-is-worth-more-than-a-trail-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A paved road is worth more than a trail map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#no-offering-is-perfect-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No offering is perfect, yet…
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-further" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading further
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -617,7 +732,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/" class="md-nav__link">
+      <a href="../features/" class="md-nav__link">
         
   
   
@@ -644,7 +759,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../demo/" class="md-nav__link">
+      <a href="../demo/" class="md-nav__link">
         
   
   
@@ -671,7 +786,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../getting-started/" class="md-nav__link">
         
   
   
@@ -698,7 +813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../roadmap/" class="md-nav__link">
+      <a href="../roadmap/" class="md-nav__link">
         
   
   
@@ -722,8 +837,6 @@
       
   
   
-    
-  
   
   
     
@@ -773,23 +886,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../design/" class="md-nav__link ">
               
   
   
@@ -807,13 +917,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -833,7 +943,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../01-executive-summary/" class="md-nav__link">
+      <a href="../design/01-executive-summary/" class="md-nav__link">
         
   
   
@@ -861,7 +971,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../02-architecture/" class="md-nav__link">
+      <a href="../design/02-architecture/" class="md-nav__link">
         
   
   
@@ -889,7 +999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../network-architecture/" class="md-nav__link">
+      <a href="../design/network-architecture/" class="md-nav__link">
         
   
   
@@ -917,7 +1027,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../03-api-contracts/" class="md-nav__link">
+      <a href="../design/03-api-contracts/" class="md-nav__link">
         
   
   
@@ -945,7 +1055,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../04-operational-flows/" class="md-nav__link">
+      <a href="../design/04-operational-flows/" class="md-nav__link">
         
   
   
@@ -973,7 +1083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../05-security/" class="md-nav__link">
+      <a href="../design/05-security/" class="md-nav__link">
         
   
   
@@ -998,37 +1108,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Implementation phases
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../design/06-implementation-phases/" class="md-nav__link">
         
   
   
@@ -1044,81 +1127,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#milestone-1-wire-protocol-probe-days-14" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Milestone 1: Wire Protocol Probe (Days 1–4)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#milestone-2-agc-controller--reconciler-days-510" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Milestone 2: AGC Controller &amp; Reconciler (Days 5–10)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#milestone-3-worker-pod--pipe-handoff-days-1116" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Milestone 3: Worker Pod &amp; Pipe Handoff (Days 11–16)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#milestone-4-gateway-manager-controller--proxy-days-1722" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Milestone 4: Gateway Manager Controller + Proxy (Days 17–22)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#milestone-5-hardening--load-testing-days-2326" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Milestone 5: Hardening &amp; Load Testing (Days 23–26)
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1131,7 +1139,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../07-test-plan/" class="md-nav__link">
+      <a href="../design/07-test-plan/" class="md-nav__link">
         
   
   
@@ -1159,7 +1167,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../08-glossary/" class="md-nav__link">
+      <a href="../design/08-glossary/" class="md-nav__link">
         
   
   
@@ -1187,7 +1195,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-a-capacity-slos/" class="md-nav__link">
+      <a href="../design/appendix-a-capacity-slos/" class="md-nav__link">
         
   
   
@@ -1215,7 +1223,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-b-worker-isolation/" class="md-nav__link">
+      <a href="../design/appendix-b-worker-isolation/" class="md-nav__link">
         
   
   
@@ -1243,7 +1251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-c-ai-implementation/" class="md-nav__link">
+      <a href="../design/appendix-c-ai-implementation/" class="md-nav__link">
         
   
   
@@ -1271,7 +1279,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-d-alternatives-considered/" class="md-nav__link">
+      <a href="../design/appendix-d-alternatives-considered/" class="md-nav__link">
         
   
   
@@ -1299,7 +1307,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-e-capacity-planning/" class="md-nav__link">
+      <a href="../design/appendix-e-capacity-planning/" class="md-nav__link">
         
   
   
@@ -1327,7 +1335,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-f-cost-model/" class="md-nav__link">
+      <a href="../design/appendix-f-cost-model/" class="md-nav__link">
         
   
   
@@ -1355,7 +1363,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-g-future-enhancements/" class="md-nav__link">
+      <a href="../design/appendix-g-future-enhancements/" class="md-nav__link">
         
   
   
@@ -1383,7 +1391,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-h-v2-api-decomposition/" class="md-nav__link">
+      <a href="../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
         
   
   
@@ -1411,7 +1419,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../github-protocol-dependencies/" class="md-nav__link">
+      <a href="../design/github-protocol-dependencies/" class="md-nav__link">
         
   
   
@@ -1523,7 +1531,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../operations/" class="md-nav__link ">
+            <a href="../operations/" class="md-nav__link ">
               
   
   
@@ -1567,7 +1575,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/personas/" class="md-nav__link">
+      <a href="../operations/personas/" class="md-nav__link">
         
   
   
@@ -1595,7 +1603,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/install/" class="md-nav__link">
+      <a href="../operations/install/" class="md-nav__link">
         
   
   
@@ -1623,7 +1631,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+      <a href="../operations/air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1651,7 +1659,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/gitops/" class="md-nav__link">
+      <a href="../operations/gitops/" class="md-nav__link">
         
   
   
@@ -1679,7 +1687,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/upgrade/" class="md-nav__link">
+      <a href="../operations/upgrade/" class="md-nav__link">
         
   
   
@@ -1707,7 +1715,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+      <a href="../operations/migration-from-arc/" class="md-nav__link">
         
   
   
@@ -1735,7 +1743,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+      <a href="../operations/migration-v1-to-v2/" class="md-nav__link">
         
   
   
@@ -1763,7 +1771,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+      <a href="../operations/v1alpha1-deprecation/" class="md-nav__link">
         
   
   
@@ -1791,7 +1799,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+      <a href="../operations/tenant-onboarding/" class="md-nav__link">
         
   
   
@@ -1819,7 +1827,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+      <a href="../operations/resourcequota-sizing/" class="md-nav__link">
         
   
   
@@ -1847,7 +1855,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runner-template-library/" class="md-nav__link">
+      <a href="../operations/runner-template-library/" class="md-nav__link">
         
   
   
@@ -1875,7 +1883,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+      <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
   
@@ -1903,7 +1911,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+      <a href="../operations/kata-dind-workloads/" class="md-nav__link">
         
   
   
@@ -1931,7 +1939,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+      <a href="../operations/p2p-image-distribution/" class="md-nav__link">
         
   
   
@@ -1959,7 +1967,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+      <a href="../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
   
@@ -2053,7 +2061,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability/" class="md-nav__link">
+      <a href="../operations/observability/" class="md-nav__link">
         
   
   
@@ -2081,7 +2089,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics/" class="md-nav__link">
+      <a href="../operations/observability-metrics/" class="md-nav__link">
         
   
   
@@ -2109,7 +2117,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+      <a href="../operations/observability-metrics-access/" class="md-nav__link">
         
   
   
@@ -2137,7 +2145,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-alerting/" class="md-nav__link">
+      <a href="../operations/observability-alerting/" class="md-nav__link">
         
   
   
@@ -2165,7 +2173,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+      <a href="../operations/observability-dashboards/" class="md-nav__link">
         
   
   
@@ -2193,7 +2201,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-logging/" class="md-nav__link">
+      <a href="../operations/observability-logging/" class="md-nav__link">
         
   
   
@@ -2229,7 +2237,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/cost-attribution/" class="md-nav__link">
+      <a href="../operations/cost-attribution/" class="md-nav__link">
         
   
   
@@ -2257,7 +2265,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+      <a href="../operations/worker-rightsizing/" class="md-nav__link">
         
   
   
@@ -2285,7 +2293,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+      <a href="../operations/node-shutdown-budgets/" class="md-nav__link">
         
   
   
@@ -2313,7 +2321,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runbook/" class="md-nav__link">
+      <a href="../operations/runbook/" class="md-nav__link">
         
   
   
@@ -2341,7 +2349,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/backup-restore/" class="md-nav__link">
+      <a href="../operations/backup-restore/" class="md-nav__link">
         
   
   
@@ -2369,7 +2377,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+      <a href="../operations/velero-backup-restore/" class="md-nav__link">
         
   
   
@@ -2397,7 +2405,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/troubleshooting/" class="md-nav__link">
+      <a href="../operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -2425,7 +2433,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/security-operations/" class="md-nav__link">
+      <a href="../operations/security-operations/" class="md-nav__link">
         
   
   
@@ -2453,7 +2461,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/admission-policies/" class="md-nav__link">
+      <a href="../operations/admission-policies/" class="md-nav__link">
         
   
   
@@ -2481,7 +2489,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/release/" class="md-nav__link">
+      <a href="../operations/release/" class="md-nav__link">
         
   
   
@@ -2509,7 +2517,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+      <a href="../operations/kata-ci-spike-runbook/" class="md-nav__link">
         
   
   
@@ -2569,7 +2577,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../reference/" class="md-nav__link ">
+            <a href="../reference/" class="md-nav__link ">
               
   
   
@@ -2613,7 +2621,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/api/" class="md-nav__link">
+      <a href="../reference/api/" class="md-nav__link">
         
   
   
@@ -2649,6 +2657,8 @@
             
             
               
+                
+              
               <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
@@ -2668,10 +2678,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#milestone-1-wire-protocol-probe-days-14" class="md-nav__link">
+  <a href="#when-not-to-choose-gag" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 1: Wire Protocol Probe (Days 1–4)
+        When not to choose GAG
       
     </span>
   </a>
@@ -2679,10 +2689,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-2-agc-controller--reconciler-days-510" class="md-nav__link">
+  <a href="#location-location-location" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 2: AGC Controller &amp; Reconciler (Days 5–10)
+        Location, location, location
       
     </span>
   </a>
@@ -2690,10 +2700,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-3-worker-pod--pipe-handoff-days-1116" class="md-nav__link">
+  <a href="#multi-tenant-platforms-are-an-order-of-magnitude-more-complex" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 3: Worker Pod &amp; Pipe Handoff (Days 11–16)
+        Multi-tenant platforms are an order of magnitude more complex
       
     </span>
   </a>
@@ -2701,10 +2711,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-4-gateway-manager-controller--proxy-days-1722" class="md-nav__link">
+  <a href="#a-paved-road-is-worth-more-than-a-trail-map" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 4: Gateway Manager Controller + Proxy (Days 17–22)
+        A paved road is worth more than a trail map
       
     </span>
   </a>
@@ -2712,10 +2722,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-5-hardening--load-testing-days-2326" class="md-nav__link">
+  <a href="#no-offering-is-perfect-yet" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 5: Hardening &amp; Load Testing (Days 23–26)
+        No offering is perfect, yet…
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-further" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading further
       
     </span>
   </a>
@@ -2736,101 +2757,236 @@
               <article class="md-content__inner md-typeset">
                 
                   
+  
+
 
 
   
   
 
 
-<h1 id="6-implementation-phasing--delivery-milestones">6. Implementation Phasing &amp; Delivery Milestones<a class="headerlink" href="#6-implementation-phasing--delivery-milestones" title="Permanent link">&para;</a></h1>
-<p>← <a href="../05-security/">Security</a> | <a href="../">Back to index</a> | Next: <a href="../07-test-plan/">Test Plan →</a></p>
-<hr />
-<p>The system is delivered across five milestones over roughly five weeks. Each milestone produces a deliverable and a verifiable success criterion; later milestones build on the artifacts of earlier ones (the probe binary becomes the AGC's polling implementation, the decrypted payload becomes the test fixture for the worker pod, and so on). Operators who prefer AI-assisted implementation can consult <a href="../appendix-c-ai-implementation/">Appendix C</a> for prompting guidance and a discussion of the trade-offs — that material is optional and orthogonal to the milestone structure itself.</p>
+<h1 id="choosing-how-to-run-self-hosted-ci">Choosing how to run self-hosted CI<a class="headerlink" href="#choosing-how-to-run-self-hosted-ci" title="Permanent link">&para;</a></h1>
+<p>One question decides most of this: <strong>must the compute be yours, and do several
+teams have to share it?</strong> If either half is no, something simpler than GitHub
+Actions Gateway (GAG) is probably right.</p>
+<h2 id="when-not-to-choose-gag">When not to choose GAG<a class="headerlink" href="#when-not-to-choose-gag" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Phase</th>
-<th>Days</th>
-<th>Focus</th>
+<th>If</th>
+<th>Use</th>
+<th>Not GAG, because</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1 — API Probe</td>
-<td>1–4</td>
-<td>Wire protocol · Auth + decrypt · Broker fixtures</td>
+<td>A vendor can run your jobs</td>
+<td>a managed runner service (Blacksmith, Namespace, Depot, WarpBuild, Ubicloud)</td>
+<td>they compete on build speed and price per minute; GAG does not (<a href="../design/appendix-d-alternatives-considered/#d14-managed-runner-services-an-explicit-non-competitor">D.14</a>)</td>
 </tr>
 <tr>
-<td>2 — AGC Core</td>
-<td>5–10</td>
-<td>RunnerGroup CRD · Goroutine loop · AGC CRUD safe</td>
+<td>Managed Kubernetes is cheap and your CI fits one cloud</td>
+<td>a cluster per team, in its own project</td>
+<td>a project boundary isolates harder than any shared cluster, and costs an API call</td>
 </tr>
 <tr>
-<td>3 — Worker</td>
-<td>11–16</td>
-<td>Pipe wrapper · Dockerfile · E2E smoke test</td>
+<td>One team owns the cluster and the runners</td>
+<td><a href="https://github.com/actions/actions-runner-controller">ARC</a></td>
+<td>GAG speaks the same protocol through the same client library. This is not a protocol argument (<a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">D.3</a>)</td>
 </tr>
 <tr>
-<td>4 — GMC + Proxy</td>
-<td>17–22</td>
-<td>ActionsGateway CRD · GMC reconciler · Proxy + HPA deploy</td>
-</tr>
-<tr>
-<td>5 — Harden &amp; Ship</td>
-<td>23–26</td>
-<td>Security policies · Multi-tenant load · 1000-session burst</td>
+<td>Your compute is elastic cloud capacity, no cluster wanted</td>
+<td><a href="https://runs-on.com">RunsOn</a>, <a href="https://github.com/github-aws-runners/terraform-aws-github-runner">terraform-aws-github-runner</a>, <a href="https://actuated.com">Actuated</a></td>
+<td>a VM per job isolates without any namespace argument (<a href="../design/appendix-d-alternatives-considered/#d11-self-hosted-github-actions-without-kubernetes">D.11</a>)</td>
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="milestone-1-wire-protocol-probe-days-14">Milestone 1: Wire Protocol Probe (Days 1–4)<a class="headerlink" href="#milestone-1-wire-protocol-probe-days-14" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-1.md">docs/plan/milestone-1.md</a> for the implementation plan and current status.</p>
+<div class="admonition tip">
+<p class="admonition-title">GAG is for what is left</p>
+<p>The nodes are big and expensive, several teams have to share them, and that
+sharing has to be safe.</p>
+</div>
+<h2 id="location-location-location">Location, location, location<a class="headerlink" href="#location-location-location" title="Permanent link">&para;</a></h2>
+<p>Where each option can actually run is the fastest filter, and most comparisons
+omit it: "self-hosted" usually means "self-hosted on AWS".</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Runs on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Managed runner services</td>
+<td>the vendor's infrastructure</td>
+</tr>
+<tr>
+<td>RunsOn, terraform-aws-github-runner, <a href="https://github.com/cisco-open/forge">ForgeMT</a></td>
+<td>AWS only</td>
+</tr>
+<tr>
+<td>Actuated</td>
+<td>your hardware, vendor-hosted control plane</td>
+</tr>
+<tr>
+<td>ARC, GAG</td>
+<td>any conformant Kubernetes cluster, including on-premises and air-gapped</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition tip">
+<p class="admonition-title">On-premises, most of this list is already gone</p>
+<p>Only the last row is left, ruled out by the same constraint that made you
+self-host in the first place, before a single feature is compared.</p>
+</div>
+<p>That also breaks account-per-tenant isolation, which is ForgeMT's model and the
+serious argument against a shared cluster: an AWS account is a free API call,
+but its bare-metal equivalent is a hardware purchase, and partitioned capacity
+cannot be shifted between tenants.
+<a href="../design/appendix-d-alternatives-considered/#d9-forgemt-and-account-per-tenant-runner-platforms">Appendix D.9</a>
+takes it seriously and states both trade-offs.</p>
+<h2 id="multi-tenant-platforms-are-an-order-of-magnitude-more-complex">Multi-tenant platforms are an order of magnitude more complex<a class="headerlink" href="#multi-tenant-platforms-are-an-order-of-magnitude-more-complex" title="Permanent link">&para;</a></h2>
+<p>Adding teams does not add a feature, it adds roles. Three end up in the room,
+each with different powers and a different blast radius, and holding them apart
+is most of the work. ARC models the first two as one person, which is coherent
+for a single-owner cluster and is why it has no primitive separating them.</p>
+<table>
+<thead>
+<tr>
+<th>The boundary</th>
+<th>How GAG draws it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Platform sets a cap the tenant cannot raise</td>
+<td><code>ResourceQuota</code> is platform-owned; the controller has no write verb on it</td>
+</tr>
+<tr>
+<td>Platform grants privilege, tenant cannot self-grant</td>
+<td>Pod Security Admission is a namespace label; privileged shapes come from a platform <code>ClusterRunnerTemplate</code></td>
+</tr>
+<tr>
+<td>Platform bounds priority, tenant composes within it</td>
+<td><a href="../operations/tenant-onboarding/"><code>priorityTiers</code></a> draws from a platform allowlist, editable without a restart</td>
+</tr>
+<tr>
+<td>Tenant self-serves without cluster-admin</td>
+<td>one <a href="../getting-started/"><code>ActionsGateway</code></a> provisions controller, proxy, RBAC and policies inside the quota</td>
+</tr>
+<tr>
+<td>Tenant sees its own data only</td>
+<td><a href="../operations/observability-dashboards/">metrics and a dashboard per tenant</a>, plus a separate platform view</td>
+</tr>
+<tr>
+<td>Contributor's code is contained</td>
+<td><a href="../design/05-security/">default-deny egress, per-tenant egress identity, Kata workers</a></td>
+</tr>
+</tbody>
+</table>
+<p>Each role and what it cannot do: <a href="../operations/personas/">Personas</a>.</p>
+<h2 id="a-paved-road-is-worth-more-than-a-trail-map">A paved road is worth more than a trail map<a class="headerlink" href="#a-paved-road-is-worth-more-than-a-trail-map" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Deliverable:</strong> A standalone Go binary under <code>cmd/probe/</code> that runs the full pre-execution sequence: authenticate via GitHub App credentials → <code>POST /sessions</code> → long-poll <code>GET /message</code> → <code>POST /acquirejob</code> on the <code>run_service_url</code> extracted from the message body → start a <code>renewjob</code> loop every 60 seconds. The probe prints the decrypted job payload to stdout and continues renewing until cancelled. Decrypted payload is committed as a fixture under <code>testdata/</code>.</li>
-<li><strong>Success Criteria:</strong> The probe acquires a real job and renews its lock at least three times without GitHub cancelling it. The committed payload becomes the ground-truth fixture for all subsequent integration tests.</li>
-<li><strong>Investigation — <code>AcknowledgeRunnerRequest</code>:</strong> The official runner source (<code>MessageListener.cs</code>) calls <code>AcknowledgeRunnerRequestAsync(runnerRequestId, sessionId)</code> after handing a job to the worker. This endpoint is not documented and its role is unclear — it may be the broker API's replacement for the old <code>DeleteMessage</code> call, or a no-op acknowledgment. The probe should attempt this call after a successful <code>acquirejob</code> and observe whether omitting it causes any downstream issue (e.g., the same job being redelivered, or session errors). If confirmed necessary, add it to the execution flow in <a href="../04-operational-flows/#42-job-execution-flow-agc">§4.2</a> and <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>.</li>
-<li>
-<p><strong>Risk investigation — egress IP variance:</strong> Before finishing this milestone, route the probe's broker API calls through a local two-pod proxy pool (two <code>httptest</code>-backed <code>CONNECT</code> proxies bound to different ports, simulating different egress IPs) and verify that <code>sessions</code>, <code>message</code>, <code>acquirejob</code>, and <code>renewjob</code> calls all succeed when each call lands on a different proxy. If any call fails or returns an unexpected status, pause and evaluate before proceeding to the proxy pool design in Milestone 4 — the fallback options are <code>sessionAffinity: ClientIP</code> on the proxy Service (low effort) or per-goroutine proxy assignment (higher fidelity).</p>
-</li>
-<li>
-<p><strong>Investigation — session reuse after <code>acquirejob</code>:</strong> The adaptive listener model in <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a> requires that a goroutine can call <code>GET /message</code> again on the same <code>sessionId</code> immediately after a successful <code>POST /acquirejob</code>. Using the probe, acquire a job and then — without calling <code>DELETE /sessions</code> — immediately re-enter the <code>GET /message</code> long-poll on the same session. Confirm whether GitHub accepts the renewed poll and eventually delivers a second job, or returns a session error (e.g. 404, 410, or a protocol-level rejection). If session reuse is not permitted, the AGC must call <code>DELETE /sessions</code> and <code>POST /sessions</code> between each job, adding registration latency to every acquisition cycle. Document the observed behavior in <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a> and adjust the Session Multiplexer implementation plan in Milestone 2 accordingly.</p>
-</li>
-<li>
-<p><strong>Investigation — job delivery throttling by session count:</strong> Confirm whether GitHub's broker delivers jobs only to sessions that were registered <em>before</em> the job was queued, or whether it will deliver to any session that starts polling after the job arrives. To test: queue two jobs simultaneously with only one session registered, then register a second session mid-queue and observe whether both sessions receive a job. If GitHub throttles delivery to the registered session count at queue time, the adaptive spawn-on-acquire model may miss jobs during bursts (a job arrives while the replacement listener's <code>POST /sessions</code> call is in flight). If GitHub delivers opportunistically to any ready session, the model is safe. If throttling is confirmed, evaluate pre-spawning a small warm standby pool (2–3 sessions per RunnerGroup) as a mitigation, and update <a href="../appendix-e-capacity-planning/">Appendix E</a> accordingly.</p>
-</li>
+<li><strong>Feature comparisons</strong> tell you what <em>can</em> be done.</li>
+<li><strong>Reference architectures</strong> prove it has been validated, and tell you how to
+  do it.</li>
+<li><strong>Runbooks, dashboards, and alerts</strong> tell you how to operate it.</li>
 </ul>
-<hr />
-<h2 id="milestone-2-agc-controller--reconciler-days-510">Milestone 2: AGC Controller &amp; Reconciler (Days 5–10)<a class="headerlink" href="#milestone-2-agc-controller--reconciler-days-510" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-2.md">docs/plan/milestone-2.md</a> for the implementation plan and current status.</p>
-<ul>
-<li><strong>Deliverable:</strong> A deployable AGC scaffolded with <code>controller-runtime</code>/<code>kubebuilder</code> that reconciles <code>RunnerGroup</code> CRs into adaptive listener goroutine pools: one permanent goroutine at rest, spawning additional goroutines on demand up to <code>maxListeners</code> during bursts, with idle goroutines shutting down once the queue drains. Includes the Token Manager (mutex-protected installation token with T-5min proactive refresh), the per-job RenewJob loop, the <code>maxWorkers</code> simple pod-count ceiling (enforced without PriorityClass when <code>priorityTiers</code> is absent), and the polling implementation lifted from the Milestone 1 probe. Unit tests cover create/update/delete lifecycle transitions, goroutine spawn/kill/leak detection (via <code>goleak.VerifyNone</code>), idle-shutdown triggering after 50 consecutive empty 202 responses, and clock-based assertions that token refresh fires before expiry without interrupting in-flight goroutines.</li>
-<li><strong>Success Criteria:</strong> Creating, scaling <code>maxListeners</code>, and deleting a <code>RunnerGroup</code> in a local <code>kind</code> cluster produces no goroutine leaks (verified via <code>pprof</code> and <code>goleak</code>) and no orphaned Kubernetes resources. The goroutine count at rest is exactly one per RunnerGroup regardless of <code>maxListeners</code> setting. Token refresh completes without goroutines restarting.</li>
-</ul>
-<hr />
-<h2 id="milestone-3-worker-pod--pipe-handoff-days-1116">Milestone 3: Worker Pod &amp; Pipe Handoff (Days 11–16)<a class="headerlink" href="#milestone-3-worker-pod--pipe-handoff-days-1116" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-3.md">docs/plan/milestone-3.md</a> for the implementation plan and current status.</p>
-<ul>
-<li><strong>Deliverable:</strong> A worker container image plus the pod-provisioning logic in the AGC: Dockerfile, entrypoint wrapper (Go binary that reads the mounted payload Secret and writes to Named Pipes), Secret mount logic, and the <code>AcquireJob</code> → pod-create handoff sequence. The Named Pipe handoff is the underdocumented part of this milestone — start by validating the wrapper with the static decrypted payload from Milestone 1 before wiring it into pod creation, so the pipe semantics can be debugged without a live GitHub trigger in the loop.</li>
-<li><strong>Success Criteria:</strong> A real workflow job dispatched from GitHub appears in the Actions UI with correct step output, timing, and a green checkmark. The worker container exits with code <code>0</code> on success, and both the pod and the job Secret are garbage-collected by the AGC.</li>
-</ul>
-<hr />
-<h2 id="milestone-4-gateway-manager-controller--proxy-days-1722">Milestone 4: Gateway Manager Controller + Proxy (Days 17–22)<a class="headerlink" href="#milestone-4-gateway-manager-controller--proxy-days-1722" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-4.md">docs/plan/milestone-4.md</a> for the implementation plan and current status.</p>
-<ul>
-<li><strong>Deliverable:</strong> A second operator (<code>cmd/gmc/</code>) sharing the repo with the AGC, reconciling <code>ActionsGateway</code> CRs into the full tenant resource set: ServiceAccount, Role, RoleBinding, NetworkPolicy, proxy Deployment, proxy Service, PodDisruptionBudget, HPA, AGC Deployment, and bootstrap RunnerGroups. (The namespace <code>ResourceQuota</code> is platform-owned — the GMC operates within it but never creates or mutates it; see Q130.) Includes a minimal stateless Go <code>CONNECT</code> proxy implementation (HTTPS tunneling only, no TLS termination), the admission webhook that rejects CRs in reserved namespaces, and <code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code> injection into both the AGC Deployment and the worker pod template. RBAC test enumerates the GMC's generated ClusterRole rules and asserts no <code>*</code> verbs on <code>secrets</code>, <code>pods</code>, or <code>nodes</code> (regression guard against accidental escalation).</li>
-<li><strong>Success Criteria:</strong> Applying two <code>ActionsGateway</code> CRs in a <code>kind</code> cluster produces two independent tenant namespaces, each with a running AGC and a proxy pool with at least <code>minReplicas</code> Ready. Deleting one CR tears down only that tenant's resources. Updating <code>spec.proxy.maxReplicas</code> causes the HPA to reflect the new bound within one reconcile cycle.</li>
-</ul>
-<hr />
-<h2 id="milestone-5-hardening--load-testing-days-2326">Milestone 5: Hardening &amp; Load Testing (Days 23–26)<a class="headerlink" href="#milestone-5-hardening--load-testing-days-2326" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-5.md">docs/plan/milestone-5.md</a> for the implementation plan and current status.</p>
-<ul>
-<li><strong>Deliverable:</strong> Production Helm chart or Kustomize overlays with locked-down Pod Security Standards, optional gVisor <code>RuntimeClass</code> configuration (see <a href="../appendix-b-worker-isolation/">Appendix B</a>), hardened proxy pod specs (read-only root filesystem, no capabilities), and a multi-tenant load harness under <code>test/load/</code> that simulates multiple tenants in parallel against a staging cluster with the full GMC+AGC stack running. (The per-tenant namespace <code>ResourceQuota</code> is provisioned out-of-band by the platform admin — the GAG chart does not ship it; the GMC operates within it but never creates or mutates it. See Q130.)</li>
-<li><strong>Success Criteria:</strong> 1,000 concurrent virtual runner sessions across 10 simulated tenants sustain a burst load with zero dropped messages, no cross-tenant resource visibility, and no deadlocked Go channels. The proxy HPA scales up under load and returns to <code>minReplicas</code> within 5 minutes of load subsiding. A <code>kube-bench</code> or <code>polaris</code> scan returns no critical findings.</li>
-</ul>
-<hr />
-<p>← <a href="../05-security/">Security</a> | <a href="../">Back to index</a> | Next: <a href="../07-test-plan/">Test Plan →</a></p>
-
-
+<p>Measured 2026-08-06 against ARC 0.14.2 and <code>master</code>.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>GAG</th>
+<th>ARC</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sandboxed workers</td>
+<td><a href="../operations/kata-dind-workloads/">500-line guide</a>, default in GAG's own end-to-end CI, validated on named kernels, no privileged container</td>
+<td>same <code>runtimeClassName</code> field; no doc covers it, absent from chart values, two closed issues ever</td>
+</tr>
+<tr>
+<td>Observability</td>
+<td><a href="../operations/observability-alerting/">20 alert rules</a>, <a href="../operations/observability-dashboards/">two dashboards for two audiences</a>, <a href="../operations/observability-metrics/">per-tenant metrics</a>, <a href="../operations/observability-logging/">redaction before any log line</a></td>
+<td>one per-scale-set sample dashboard, no alert rules, metrics opt-in; <a href="https://github.com/actions/actions-runner-controller/issues/3753">dashboard request open since 2025-01-13</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="no-offering-is-perfect-yet">No offering is perfect, yet…<a class="headerlink" href="#no-offering-is-perfect-yet" title="Permanent link">&para;</a></h2>
+<p>Here is where GAG loses, and to whom. <strong>No single alternative holds all of
+these</strong>, which is why the middle column matters as much as the first.</p>
+<table>
+<thead>
+<tr>
+<th>What GAG lacks</th>
+<th>Who has it</th>
+<th>Tracked</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Install base</td>
+<td>ARC 6,417 stars, ForgeMT 211, GAG 3 (2026-08-06)</td>
+<td>see below</td>
+</tr>
+<tr>
+<td>Commercial support</td>
+<td>ARC, and every managed service</td>
+<td>none planned, by design</td>
+</tr>
+<tr>
+<td>Multi-label <code>runs-on</code></td>
+<td>ARC, since 0.14.0 (2026-03-19)</td>
+<td>Q726</td>
+</tr>
+<tr>
+<td><code>container:</code>/<code>services:</code> without privilege</td>
+<td>ARC, via <code>containerMode: kubernetes</code></td>
+<td>Q727</td>
+</tr>
+<tr>
+<td>In-cluster cache</td>
+<td>GitLab Runner, managed services. <strong>Not ARC</strong></td>
+<td><a href="../roadmap/">worker cache backend</a></td>
+</tr>
+<tr>
+<td>GHES tested on a real appliance</td>
+<td>ARC</td>
+<td><a href="../features/">flagged untested</a>; needs an operator with one</td>
+</tr>
+<tr>
+<td>Bound GitHub runner group</td>
+<td>ARC, via <code>runnerGroup</code></td>
+<td><a href="../roadmap/">Q712</a>, gating the next release</td>
+</tr>
+<tr>
+<td>Default-tier latency metrics</td>
+<td>nobody: a defect, not a rival's feature</td>
+<td><a href="../roadmap/">Q713</a>, gating the next release</td>
+</tr>
+</tbody>
+</table>
+<p>Two footnotes on that table.</p>
+<p><strong>Cache is usually misread.</strong> <code>actions/cache</code> works on GAG today; what is
+missing is a cache <em>inside</em> the cluster. ARC has none either, so this is not a
+reason to prefer ARC.</p>
+<p><strong>Install base has no engineering answer.</strong> If being the first production
+deployment is unacceptable, that settles it. The only counterweight is the
+evidence trail: dated measurements, failure modes documented with the incidents
+that found them, and a
+<a href="../design/appendix-a-capacity-slos/">published retraction</a> of the project's own
+best number once it proved unmeasurable.</p>
+<h2 id="reading-further">Reading further<a class="headerlink" href="#reading-further" title="Permanent link">&para;</a></h2>
+<p><a href="../design/appendix-d-alternatives-considered/">Appendix D</a> argues every
+alternative in full, including
+<a href="../design/appendix-d-alternatives-considered/#d10-prow-and-the-prior-art-for-automatic-re-run">Prow</a>,
+which is why GAG does not claim automatic re-run is novel, and
+<a href="../design/appendix-d-alternatives-considered/#d12-gitlab-runners-kubernetes-executor">GitLab Runner</a>,
+which faces the identical problem and resolves it the other way.
+<a href="../why-gag/">Why GAG?</a> is the capability-by-capability comparison against ARC.</p>
 
 
 
@@ -2839,7 +2995,14 @@
 
 
   
+  
 
+
+
+  
+
+
+  
 
 
 
@@ -2863,10 +3026,12 @@
   
     
       
+        
+      
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../05-security/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Security">
+          <a href="../why-gag/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Why GAG">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2876,20 +3041,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Security
+                Why GAG
               </div>
             </div>
           </a>
         
         
           
-          <a href="../07-test-plan/" class="md-footer__link md-footer__link--next" aria-label="Next: Test plan">
+          <a href="../features/" class="md-footer__link md-footer__link--next" aria-label="Next: Features">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Test plan
+                Features
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -2951,12 +3116,12 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../javascripts/extra.js"></script>
+        <script src="../javascripts/extra.js"></script>
       
     
   </body>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/observability-dashboards/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/observability-dashboards/">
       
       
         <link rel="prev" href="../observability-alerting/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -712,7 +780,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -734,14 +802,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1329,6 +1397,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1345,7 +1417,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1367,14 +1439,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1384,6 +1456,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1645,6 +1745,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1789,10 +1917,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" checked>
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -1810,8 +1938,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2392,6 +2520,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2473,11 +2705,11 @@
 
 <h1 id="grafana-dashboards">Grafana Dashboards<a class="headerlink" href="#grafana-dashboards" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> SRE, Platform engineer</p>
+<p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
 <p>Part of the <a href="../observability/">Observability</a> guide. The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Two reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a> — import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand. They split along the scrape boundary each reads from; the layouts below document what each contains.</p>
+<p><strong>Import as code.</strong> Two reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a> — import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand. They split along the scrape boundary each reads from; the layouts below document what each contains.</p>
 </blockquote>
 <table>
 <thead>
@@ -2489,24 +2721,24 @@
 </thead>
 <tbody>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
 <td>a tenant's AGC + egress proxy (per-tenant mTLS)</td>
 <td>operator of one tenant's runners</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
 <td>the GMC manager (one cluster-wide TLS scrape)</td>
-<td>SRE running the GMC / the fleet</td>
+<td>Platform engineer running the GMC / the fleet</td>
 </tr>
 </tbody>
 </table>
 <p>The split mirrors how the metrics are exposed (see <a href="../observability-metrics-access/#how-to-access-metrics">Accessing metrics</a>): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (<code>managed_gateways</code>, <code>runnergroups_degraded</code>, <code>egress_rules_stale</code>, the proxy-quota gauges) get their own dashboard.</p>
 <blockquote>
-<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
+<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
 </blockquote>
 <h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>
-<p>Filtered by the <code>$namespace</code> and <code>$runner_group</code> template variables. Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a> as data sources where applicable.</p>
+<p>Filtered by the <code>$namespace</code>, <code>$runner_group</code>, and <code>$runner_set</code> template variables. Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a> as data sources where applicable.</p>
 <p><strong>Row 1 — Gateway Health (per namespace)</strong></p>
 <table>
 <thead>
@@ -2540,6 +2772,9 @@
 </tbody>
 </table>
 <p><strong>Row 2 — Pod Creation Latency SLO</strong></p>
+<blockquote>
+<p>Every panel in this row is <strong>classic acquisition only</strong> (Q713). <code>pod_creation_latency_seconds</code> is not observed on the scale-set path, so on a <code>ScaleSet</code> set, the default tier since P5, all three read blank rather than green. A blank SLO gauge here is a missing series, not a met target.</p>
+</blockquote>
 <table>
 <thead>
 <tr>
@@ -2584,12 +2819,17 @@
 <tr>
 <td>Job duration p50/p95</td>
 <td><code>actions_gateway:job_duration_seconds:p50/p95</code></td>
-<td>Time series</td>
+<td>Time series. <strong>Classic acquisition only</strong> (Q713): <code>job_duration_seconds</code> is not observed on the scale-set path, so this panel is empty on a <code>ScaleSet</code> set</td>
 </tr>
 <tr>
 <td>Disruption retries</td>
 <td><code>sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
-<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work — different investigations entirely</td>
+<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>deletion</code>, <code>abandoned</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them — different investigations entirely</td>
+</tr>
+<tr>
+<td>Abandoned runs awaiting capacity</td>
+<td><code>sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))</code></td>
+<td>Stat or bar chart, split by acquisition tier since Q766 ported the recovery to <code>scaleset</code>. <code>expired</code> is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand</td>
 </tr>
 <tr>
 <td>Disruption budget exhausted</td>
@@ -2609,7 +2849,7 @@
 </tbody>
 </table>
 <p><strong>Row 4 — Scale-set Acquisition Tier (per runner_set)</strong></p>
-<p>The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here. Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these.</p>
+<p>The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here. Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these — the <code>$runner_set</code> variable does.</p>
 <table>
 <thead>
 <tr>
@@ -2658,18 +2898,23 @@
 <tbody>
 <tr>
 <td>Worker quota exceeded</td>
-<td><code>max(actions_gateway_worker_quota_exceeded)</code></td>
+<td><code>max(actions_gateway_worker_quota_exceeded or actions_gateway_runnerset_worker_quota_exceeded)</code></td>
 <td>Stat (1 = red)</td>
 </tr>
 <tr>
 <td>Workers unschedulable</td>
-<td><code>max(actions_gateway_workers_unschedulable)</code></td>
+<td><code>max(actions_gateway_workers_unschedulable or actions_gateway_runnerset_workers_unschedulable)</code></td>
 <td>Stat (1 = red)</td>
 </tr>
 <tr>
 <td>Worker quota pressure</td>
-<td><code>max(actions_gateway_worker_quota_pressure)</code></td>
+<td><code>max(actions_gateway_worker_quota_pressure or actions_gateway_runnerset_worker_quota_pressure)</code></td>
 <td>Stat (1 = yellow)</td>
+</tr>
+<tr>
+<td>Worker capacity declined</td>
+<td><code>max by (reason) (actions_gateway_runnerset_worker_capacity_declined)</code></td>
+<td>Stat (1 = orange), reason shown beside the value</td>
 </tr>
 <tr>
 <td>Agent recycle errors</td>
@@ -2678,6 +2923,24 @@
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p>The first three capacity panels union the v1 <code>RunnerGroup</code> family with its
+<code>actions_gateway_runnerset_*</code> v2 twin (Q319). The two families key on different
+labels — <code>runner_group</code> and <code>runner_set</code> — so <code>or</code> unions rather than overlaps them,
+and a panel that named only the v1 family would read a flat <code>0</code> on a v2-only deploy.
+To break either out per owner, replace <code>max(...)</code> with
+<code>max by (namespace, runner_set) (actions_gateway_runnerset_...)</code>.</p>
+<p><strong>Worker capacity declined has no v1 twin, and <code>No data</code> is a normal reading</strong>
+(Q643, Q658). The <a href="../observability-metrics/">gauge</a> is emitted only for a
+<code>RunnerSet</code> that set <code>spec.capacityGate.mode</code>, so an empty panel means no set
+opted in, not that the query is broken. It groups by <code>reason</code> rather than
+reducing to a bare <code>0</code>/<code>1</code> because the value alone cannot separate a live decline
+from the latched <code>AwaitingProbe</code> state, and those call for different actions;
+exactly one series exists per gated set, so <code>max by (reason)</code> cannot double-count.
+The <code>1</code> is orange rather than red on purpose: a latched gate is
+<a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">throttling intake, not failing</a>,
+and it can sit <code>True</code> indefinitely on an idle set whose shape stays unplaceable.</p>
+</blockquote>
 <p><strong>Row 6 — Egress Proxy (per tenant)</strong></p>
 <table>
 <thead>
@@ -2913,7 +3176,7 @@
 <tr>
 <td>Pod creation p99 by namespace</td>
 <td><code>actions_gateway:pod_creation_latency_seconds:p99</code></td>
-<td>Time series</td>
+<td>Time series. <strong>Classic acquisition only</strong> (Q713), so namespaces running <code>ScaleSet</code> sets contribute no series</td>
 </tr>
 </tbody>
 </table>
@@ -2921,7 +3184,8 @@
 <p>The dashboards ship with these template variables already wired:</p>
 <ul>
 <li><code>$namespace</code> — <code>label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code> — filters to a single tenant (both dashboards). The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no <code>active_sessions</code>, so keying the variable on that alone would leave the dashboard blank.</li>
-<li><code>$runner_group</code> — <code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code> — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The scale-set panels are labelled <code>runner_set</code> and are not filtered by it.</li>
+<li><code>$runner_group</code> — <code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code> — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The <code>runner_set</code>-labelled panels are not filtered by it; <code>$runner_set</code> is their variable.</li>
+<li><code>$runner_set</code> — <code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code> — filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels (tenant dashboard). It reads its label values from the Q319 capacity gauges rather than the <code>scaleset_*</code> series on purpose: those gauges are emitted for <strong>every</strong> <code>RunnerSet</code>, while <code>scaleset_*</code> exists only for <code>ScaleSet</code>-protocol sets, so keying on the latter would hide a <code>Classic</code> set from the dropdown entirely.</li>
 </ul>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>

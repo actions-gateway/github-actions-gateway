@@ -107,6 +107,13 @@ body[data-md-color-scheme="default"] {
   --gag-win-fill: #0f8a5f;
   --gag-bad-ink: #c23a22;
   --gag-bad-fill: #c23a22;
+
+  /* Secondary prose and accent-coloured labels. Same ink/fill split as above:
+     these are text colours, and the Material tokens they replace are tuned for
+     the light palette only. See website.md § Interface rules the custom layer
+     must satisfy for the per-palette APCA readings. */
+  --gag-muted: #6e6e6e;
+  --gag-accent-ink: #2456c9;
 }
 
 body[data-md-color-scheme="slate"] {
@@ -122,6 +129,13 @@ body[data-md-color-scheme="slate"] {
   --gag-win-fill: #0f8a5f;
   --gag-bad-ink: #f4744f;
   --gag-bad-fill: #e5533c;
+
+  /* Both are capped by slate's own body text, which sits at Lc 66.9: muted
+     prose that out-contrasts body copy inverts the hierarchy. Hence Lc 55.6 and
+     61.5 rather than the 75 an unconstrained reading of the rule would ask for.
+     Raising the ceiling means raising Material's palette, which is Q734. */
+  --gag-muted: hsl(225deg 15% 70%);
+  --gag-accent-ink: hsl(220deg 82% 78%);
 }
 
 /* Header: Material gives the site title a 1rem left margin, which leaves a big
@@ -165,6 +179,16 @@ body[data-md-color-scheme="slate"] {
   -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 28%, #000, transparent 75%);
   mask-image: radial-gradient(ellipse 70% 70% at 50% 28%, #000, transparent 75%);
   opacity: 0.6;
+}
+
+/* Drop the horizontal bleed once the hero nearly fills the viewport. Above the
+   large breakpoint the hero is inset far enough that 2rem is absorbed (880px
+   hero inside a 1,408px column at 1440px); below it the hero keeps only a 16px
+   margin, so the same bleed put 24px of horizontal scroll on the page. */
+@media screen and (max-width: 76.25em) {
+  .gag-hero::before {
+    inset: -1.5rem 0 0;
+  }
 }
 
 /* Illuminated-initial logomark: the faceted ring sits like a manuscript drop
@@ -250,7 +274,7 @@ body[data-md-color-scheme="slate"] {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   margin: 0 0 0.75rem;
 }
 
@@ -294,9 +318,46 @@ body[data-md-color-scheme="slate"] {
   display: none;
 }
 
+/* The three load-bearing promises, read as one wide line rather than a
+   sentence. Each claim is its own span separated by real whitespace, so a
+   screen reader gets three phrases; the dots are generated content and stay
+   out of the accessibility tree entirely. */
+.gag-hero .gag-claims {
+  font-size: clamp(1.05rem, 0.85rem + 0.8vw, 1.22rem);
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--md-default-fg-color);
+  margin: 0 0 0.85rem;
+  text-align: center;
+}
+
+
+/* Each claim is an inline-block so a wrap falls *between* phrases; a phrase
+   breaks internally only when no line is wide enough to hold it, which is the
+   graceful case on a phone rather than the common one. */
+.gag-hero .gag-claims span {
+  display: inline-block;
+}
+
+.gag-hero .gag-claims span + span::before {
+  content: "·";
+  color: var(--gag-accent-ink);
+  font-weight: 400;
+  /* Oversized against the claim text so the dot reads as a divider rather than
+     punctuation. `em` here resolves against the claim's own clamped size, so it
+     scales with the row; line-height 0 keeps the taller glyph from growing the
+     line box. */
+  font-size: 1.8em;
+  line-height: 0;
+  vertical-align: -0.08em;
+  /* Owned by the claim that follows it, so a wrap never strands the dot at the
+     end of a line. Padding is in the dot's own em, hence the smaller numbers. */
+  padding: 0 0.28em 0 0.08em;
+}
+
 .gag-hero .gag-tagline {
   font-size: clamp(1rem, 0.95rem + 0.4vw, 1.15rem);
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   margin: 0 0 1.5rem;
   text-wrap: pretty;
 }
@@ -324,14 +385,14 @@ body[data-md-color-scheme="slate"] {
 
 .gag-reassure {
   font-size: 0.82rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   max-width: 48rem;
   margin: 1.1rem 0 0;
   text-wrap: pretty;
 }
 
 .gag-reassure .twemoji {
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
 }
 
 /* Benefit cards: 3 across (two balanced rows of three), degrading when narrow. */
@@ -356,9 +417,12 @@ body[data-md-color-scheme="slate"] {
    shadow, no hover lift) with an accent rule, so the "not for everyone" scope
    note reads as confident honesty — a trust signal — and closes the section. */
 .gag-fit-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
+  /* Block, not flex. This is a paragraph with a leading icon, and a flex
+     container promotes every inline child (`strong`, `a`) to its own flex item
+     that will not wrap. Measured 2026-08-07 at 375px: the flex version pushed
+     the layout viewport to 485px and rendered "Not your setup?" as a 52px
+     column three lines tall. Block keeps the icon inline and the prose prose. */
+  display: block;
   margin: 1.1rem 0 0;
   padding: 0.8rem 1rem;
   border: 1px solid var(--md-default-fg-color--lightest);
@@ -371,7 +435,7 @@ body[data-md-color-scheme="slate"] {
   );
   font-size: 0.82rem;
   line-height: 1.5;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   text-wrap: pretty;
 }
 
@@ -380,9 +444,27 @@ body[data-md-color-scheme="slate"] {
 }
 
 .gag-fit-note .twemoji {
-  flex: none;
-  color: var(--md-accent-fg-color);
-  margin-top: 0.08rem;
+  color: var(--gag-accent-ink);
+  margin-right: 0.4rem;
+  vertical-align: -0.16em;
+}
+
+/* Tighten the routing list: it is three scan lines, not body copy, so it gets
+   less leading than the surrounding prose and no extra block margins. */
+.gag-fit-note > :first-child {
+  margin-top: 0;
+}
+
+.gag-fit-note > :last-child {
+  margin-bottom: 0;
+}
+
+.gag-fit-note ul {
+  margin: 0.5rem 0;
+}
+
+.gag-fit-note li {
+  margin-bottom: 0.15rem;
 }
 
 .gag-fit-note .twemoji svg {
@@ -435,7 +517,7 @@ body[data-md-color-scheme="slate"] {
 
 .gag-vs-hero__lede {
   font-size: clamp(1rem, 0.95rem + 0.35vw, 1.12rem);
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   max-width: 34rem;
   margin: 0 0 1.5rem;
   text-wrap: pretty;
@@ -474,7 +556,7 @@ body[data-md-color-scheme="slate"] {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   margin: 0 0 0.1rem;
 }
 
@@ -583,7 +665,7 @@ body[data-md-color-scheme="slate"] {
   margin-top: 0.45rem;
   font-size: 0.78rem;
   line-height: 1.4;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   text-wrap: pretty;
 }
 
@@ -632,7 +714,7 @@ body[data-md-color-scheme="slate"] {
 .gag-calc__field-label {
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-calc__field input {
@@ -681,7 +763,7 @@ body[data-md-color-scheme="slate"] {
 
 .gag-calc__preset small {
   font-size: 0.7rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-calc__grid {
@@ -710,6 +792,9 @@ body[data-md-color-scheme="slate"] {
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.02em;
+  /* These four re-render on every keystroke, so proportional figures make the
+     digits shuffle width as the reader types. Tabular pins them. */
+  font-variant-numeric: tabular-nums;
 }
 
 .gag-calc__cell--win .gag-calc__cell-num {
@@ -728,14 +813,14 @@ body[data-md-color-scheme="slate"] {
   display: block;
   margin-top: 0.15rem;
   font-size: 0.68rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-calc__note {
   margin: 0.9rem 0 0;
   font-size: 0.76rem;
   line-height: 1.5;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   text-wrap: pretty;
 }
 
@@ -790,12 +875,12 @@ body[data-md-color-scheme="slate"] {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   margin-bottom: 0.15rem;
 }
 
 .gag-flow__tier--input {
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-flow__title {
@@ -806,11 +891,11 @@ body[data-md-color-scheme="slate"] {
 .gag-flow__sub {
   display: block;
   font-size: 0.78rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 .gag-flow__arrow {
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   font-size: 0.8rem;
 }
 
@@ -819,6 +904,31 @@ body[data-md-color-scheme="slate"] {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.6rem;
+}
+
+/* Roll-up variant (why-gag "What changes with GAG"). Two differences from the
+   four-tier diagram: it may use the full content column, and its nodes carry a
+   sentence rather than a label, so they must share the row evenly instead of
+   sizing to their text. `flex: 1 1 0` splits each row N ways whatever N is,
+   while the inherited 12rem floor decides when to wrap: the four-outcome row is
+   4-across at full width and 2x2 in a narrow column. */
+.gag-flow--wide {
+  max-width: 52rem;
+}
+
+.gag-flow--wide .gag-flow__row {
+  align-self: stretch;
+}
+
+.gag-flow--wide .gag-flow__row .gag-flow__node {
+  flex: 1 1 0;
+}
+
+/* A capability that is only partly delivered. Dashed rather than solid so the
+   diagram cannot claim more than has shipped; the node still reads as an input
+   because the delivered half genuinely feeds the outcome. */
+.gag-flow__node--wip {
+  border-style: dashed;
 }
 
 /* Wider content column (less side gutter) so wide tables have room to breathe. */
@@ -908,8 +1018,17 @@ body[data-md-color-scheme="slate"] {
   word-break: normal;
 }
 
-/* v2 API badge — small pill on benefit cards that require the v2alpha1 API. */
-.gag-v2-badge {
+/* Marketing badges — one pill, four independent axes. Each answers a different
+   question about a capability: which API surface it needs, how stable its shape
+   is, which release it belongs to, and which acquisition tier it reaches. Hue
+   is the only thing that varies; the geometry lives here once so a fifth axis
+   cannot drift a pixel away from the other four. Contrast for every pair is
+   measured in docs/development/website.md, "Interface rules". */
+.gag-v2-badge,
+.gag-maturity-badge,
+.gag-release-chip,
+.gag-new-badge,
+.gag-tier-badge {
   display: inline-flex;
   align-items: center;
   padding: 0.1rem 0.4rem;
@@ -918,11 +1037,15 @@ body[data-md-color-scheme="slate"] {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  background: rgba(103, 80, 164, 0.12);
-  color: #6750a4;
   vertical-align: middle;
   margin-left: 0.15rem;
   white-space: nowrap;
+}
+
+/* v2 API badge — the capability requires the v2beta1 API. */
+.gag-v2-badge {
+  background: rgba(103, 80, 164, 0.12);
+  color: #6750a4;
 }
 
 [data-md-color-scheme="slate"] .gag-v2-badge {
@@ -930,24 +1053,11 @@ body[data-md-color-scheme="slate"] {
   color: #d0bcff;
 }
 
-/* Maturity badge — small pill marking a roadmap item's stability (alpha/beta/
-   GA) as a capability graduates. Distinct axis from the v2 API badge above:
-   this signals how stable a capability is, not which API surface it needs.
-   Shares the pill shape; amber warns "not yet GA". */
+/* Maturity badge — the API shape is still under its first stability contract.
+   Amber warns "not yet GA". */
 .gag-maturity-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.75rem;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   background: rgba(179, 118, 0, 0.14);
   color: #8a5a00;
-  vertical-align: middle;
-  margin-left: 0.15rem;
-  white-space: nowrap;
 }
 
 [data-md-color-scheme="slate"] .gag-maturity-badge {
@@ -955,10 +1065,51 @@ body[data-md-color-scheme="slate"] {
   color: #ffca80;
 }
 
-/* Comparison / data tables: bigger text, rounded frame, emphasized header + GAG
-   column. NB: do not re-add a :not([class]) guard here — the scroll-reveal JS
-   stamps .gag-reveal onto marketing-page tables, which a :not([class]) selector
-   would then exclude, dropping all this styling (that was the why-gag bug). */
+/* Release chip — the release a roadmap item blocks. Injected by
+   hooks/release_gates.py from the backlog's `X.Y-gate` labels, never typed into
+   the page (Q770), so a stale one is unreachable rather than unlikely. */
+.gag-release-chip {
+  background: rgba(0, 105, 110, 0.12);
+  color: #00696e;
+}
+
+[data-md-color-scheme="slate"] .gag-release-chip {
+  background: rgba(93, 216, 224, 0.16);
+  color: #5dd8e0;
+}
+
+/* New-in-release badge — the release a shipped capability arrived in, declared
+   by the pull request that ships it. Green reads as an addition; the gate in
+   devtools/docs/roadmapcheck expires it as releases pass (Q768). */
+.gag-new-badge {
+  background: rgba(30, 106, 58, 0.12);
+  color: #1e6a3a;
+}
+
+[data-md-color-scheme="slate"] .gag-new-badge {
+  background: rgba(126, 217, 156, 0.16);
+  color: #7ed99c;
+}
+
+/* Tier badge — the capability reaches only one acquisition tier. A caveat on a
+   shipped capability rather than a property of it, so it takes the rose the
+   other three leave free, and the gate removes it on parity (Q767). */
+.gag-tier-badge {
+  background: rgba(158, 44, 78, 0.12);
+  color: #9e2c4e;
+}
+
+[data-md-color-scheme="slate"] .gag-tier-badge {
+  background: rgba(255, 177, 198, 0.16);
+  color: #ffb1c6;
+}
+
+/* Every table: bigger text, rounded frame, emphasized header. NB: do not re-add
+   a :not([class]) guard here — the scroll-reveal JS stamps .gag-reveal onto
+   every plain table in .md-content, which a :not([class]) selector would then
+   exclude, dropping all this styling (that was the why-gag bug). That same reach
+   is why the GAG-column accent lives with the comparison table below and not
+   here: "last column" means GAG on exactly one of the site's ~660 tables. */
 .md-typeset table {
   font-size: 0.8rem;
   border: 1px solid var(--md-default-fg-color--lightest);
@@ -975,17 +1126,7 @@ body[data-md-color-scheme="slate"] {
   font-weight: 500;
 }
 
-/* Last column = GitHub Actions Gateway: tint it so the eye lands on "us". */
-.md-typeset table th:last-child {
-  color: var(--md-accent-fg-color);
-}
-
-.md-typeset table th:last-child,
-.md-typeset table td:last-child {
-  background: var(--gag-accent-soft);
-}
-
-.md-typeset table tbody tr:hover td:not(:last-child) {
+.md-typeset table tbody tr:hover td {
   background: color-mix(in srgb, var(--md-accent-fg-color) 4%, transparent);
 }
 
@@ -1040,6 +1181,23 @@ body[data-md-color-scheme="slate"] {
 .md-content__inner:has(.gag-vs-hero) table td {
   padding: 0.7rem 1.05rem;
   vertical-align: top;
+}
+
+/* Last column = GitHub Actions Gateway: tint it so the eye lands on "us". This
+   is the whole reason the accent is page-scoped — on every other table the last
+   column is whatever the author put rightmost, and the tint reads as an emphasis
+   the page never meant. */
+.md-content__inner:has(.gag-vs-hero) table th:last-child {
+  color: var(--gag-accent-ink);
+}
+
+.md-content__inner:has(.gag-vs-hero) table th:last-child,
+.md-content__inner:has(.gag-vs-hero) table td:last-child {
+  background: var(--gag-accent-soft);
+}
+
+.md-content__inner:has(.gag-vs-hero) table tbody tr:hover td:last-child {
+  background: var(--gag-accent-soft);
 }
 
 /* On phones the 3-column table is unreadable (cells wrap to many lines, code
@@ -1097,6 +1255,47 @@ body[data-md-color-scheme="slate"] {
     content: "GAG";
     color: var(--gag-win-ink);
   }
+}
+
+/* The generated API reference (docs/reference/api.md): every type renders as the
+   same Field / Description / Default / Validation table, so the columns are
+   pinned rather than left to auto layout. Auto layout splits width by each
+   column's max-content demand, which the descriptions dominate and which shifts
+   with the container: measured at a 748px content column, Description held 38%
+   while Default held 13% for values never longer than "kubernetes"; widen the
+   container and the split inverts, starving Field until `githubCABundleRef` and
+   its type link break mid-word. Scoped by the page's own h1, the same :has()
+   page-scoping the comparison table above uses. */
+.md-typeset:has(> h1#api-reference) table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.md-typeset:has(> h1#api-reference) table th:nth-child(1) {
+  width: 24%;
+}
+
+.md-typeset:has(> h1#api-reference) table th:nth-child(2) {
+  width: 50%;
+}
+
+/* Every default in the generated page is a short scalar (longest: "kubernetes"),
+   so this column only needs room for its own header. */
+.md-typeset:has(> h1#api-reference) table th:nth-child(3) {
+  width: 10%;
+}
+
+/* Enum tables are Field / Description only; the widths above would leave the
+   description at half the row with nothing beside it. */
+.md-typeset:has(> h1#api-reference) table th:nth-child(2):last-child {
+  width: 76%;
+}
+
+/* Rows are tall and uneven (a one-line default beside a five-line description),
+   so cell text starts at the top rather than floating in the middle. */
+.md-typeset:has(> h1#api-reference) table th,
+.md-typeset:has(> h1#api-reference) table td {
+  vertical-align: top;
 }
 
 /* Verdict icons in the comparison table: green for a GAG win, warm red for an
@@ -1160,7 +1359,7 @@ html.gag-reveal-ready .gag-reveal.is-visible {
   border-radius: 1rem;
   border: 1px solid var(--md-default-fg-color--lightest);
   background: transparent;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
   cursor: pointer;
   transition: background-color 0.15s var(--gag-ease), color 0.15s var(--gag-ease),
     border-color 0.15s var(--gag-ease);
@@ -1180,10 +1379,13 @@ html.gag-reveal-ready .gag-reveal.is-visible {
   display: inline-block;
   font-size: 0.7rem;
   line-height: 1.5;
-  padding: 0.05rem 0.5rem;
+  /* 0.1rem, not 0.05rem: the row pills are buttons, and 14px of text at 1.5
+     leaves a 23px control at the smaller value — a pixel under the 24px hit
+     target floor. See website.md § Interface rules the custom layer must satisfy. */
+  padding: 0.1rem 0.5rem;
   border-radius: 0.8rem;
   background: var(--gag-accent-soft);
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   white-space: nowrap;
 }
 
@@ -1215,7 +1417,7 @@ button.persona-pill:focus-visible {
 /* Audience pills are links to the filtered ops index — keep the pill look. */
 .md-typeset a.persona-pill {
   text-decoration: none;
-  color: var(--md-accent-fg-color);
+  color: var(--gag-accent-ink);
   transition: background-color 0.15s var(--gag-ease);
 }
 
@@ -1242,7 +1444,7 @@ button.persona-pill:focus-visible {
   font-size: 0.68rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 /* The bars sit inside a labelled row, so drop the standalone bottom margin. */
@@ -1253,7 +1455,7 @@ button.persona-pill:focus-visible {
 .md-typeset .backlog-count {
   margin: 0.2rem 0 0;
   font-size: 0.7rem;
-  color: var(--md-default-fg-color--light);
+  color: var(--gag-muted);
 }
 
 /* Row labels select their chip, like the persona pills. */

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/release/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/release/">
       
       
         <link rel="prev" href="../admission-policies/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -712,7 +780,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -734,14 +802,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1329,6 +1397,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1345,7 +1417,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1367,14 +1439,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1384,6 +1456,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1645,6 +1745,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1787,10 +1915,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -1808,8 +1936,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2383,6 +2511,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#a-killed-gate-is-reclaimed-by-the-next-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A killed gate is reclaimed by the next one
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#run-it-detached-the-sentinel-reports-it-back" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2537,10 +2676,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#7-hand-off-to-operators" class="md-nav__link">
+  <a href="#7-bump-the-pinned-release-in-the-docs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Hand off to operators
+        7. Bump the pinned release in the docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-hand-off-to-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Hand off to operators
       
     </span>
   </a>
@@ -2690,6 +2840,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2784,6 +3038,17 @@
   
     <nav class="md-nav" aria-label="Validate the release candidate on dogfood">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-killed-gate-is-reclaimed-by-the-next-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A killed gate is reclaimed by the next one
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#run-it-detached-the-sentinel-reports-it-back" class="md-nav__link">
@@ -2940,10 +3205,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#7-hand-off-to-operators" class="md-nav__link">
+  <a href="#7-bump-the-pinned-release-in-the-docs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Hand off to operators
+        7. Bump the pinned release in the docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-hand-off-to-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Hand off to operators
       
     </span>
   </a>
@@ -3078,7 +3354,7 @@ package + push + sign the chart) → verify → record digests. This is the
 <strong>maintainer</strong> runbook for
 <em>producing</em> a release. Operators <em>consuming</em> a release pin the published digests
 at install time — see <a href="../tenant-onboarding/">tenant-onboarding.md</a> and the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/README.md">chart README</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/README.md">chart README</a>.</p>
 <h2 id="what-a-release-produces">What a release produces<a class="headerlink" href="#what-a-release-produces" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p>Operators <em>installing</em> a release pin the published digests at install time —
@@ -3114,7 +3390,7 @@ see <a href="../install/#pin-images-by-digest">install.md § Pin images by diges
   registry (<code>helm install … oci://…</code>) with the published image <strong>digests</strong> pinned
   — no <code>git clone</code> of the chart. OCI (over a <code>gh-pages</code> chart repo) is chosen so
   the chart reuses the images' registry, login, and keyless-signing path; Artifact
-  Hub (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations)
+  Hub (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations)
   indexes the OCI ref for discoverability.</li>
 <li>The <strong>opt-in v2 CRD chart</strong>, packaged and pushed alongside the main chart to
   <code>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2</code>, with the same
@@ -3147,7 +3423,7 @@ see <a href="../install/#pin-images-by-digest">install.md § Pin images by diges
   so a maintainer's pre-tag curated notes are never clobbered.</li>
 </ul>
 <p>Both the image and chart work are automated by the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on
 the <code>v*</code> tag push (the <code>chart-publish</code> job runs after every image leg succeeds).
 The maintainer's job is to cut the tag and verify the result.</p>
 <blockquote>
@@ -3186,8 +3462,55 @@ since the last tag:</p>
 </code></pre></div>
 <p>It reports, for <code>&lt;last stable tag&gt;..origin/main</code>, the commits by Conventional
 Commit type (breaking ones called out), the Queue rows closed in that window, the
-API diffstat that is the semver signal, and the operator-facing pages touched.
-Pass an explicit <code>FROM</code> (and optionally <code>TO</code>) to look at a different window.</p>
+API diffstat, and the operator-facing pages touched. Pass an explicit <code>FROM</code> (and
+optionally <code>TO</code>) to look at a different window.</p>
+<p>Its type counts answer "how much landed", not "what may this be called". For
+that:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/release/semver-floor.sh
+</code></pre></div>
+<p>It reports the <strong>minimum bump the merged work already requires</strong>, the floor a
+release cannot be cut below, by reading the paths each commit touched rather
+than its subject. That distinction is the whole point: of the 17 <code>feat</code> commits
+in the <code>v1.3.0..v1.4.0</code> window, 11 are dev tooling, CI, and docs that ship in no
+image and no chart, so the <code>feat</code> count is not the answer and never was. The
+report names the commits that set the floor, with the shipped files that put
+each one there, and lists the ones it withheld so a dropped commit stays visible.</p>
+<p><strong>A shipped path is where attribution starts, not where it ends.</strong> A commit that
+edits only a godoc line inside a released package directory touches the surface
+and ships a byte-identical binary. So each shipped Go file is read again on both
+sides of the commit and kept only when its token stream moved: comments and
+whitespace are not in that stream, while <code>//go:build</code> and <code>//go:embed</code> are, since
+those decide whether a file compiles and what goes into the binary. Everything
+less certain is kept as shipping, including a chart file, a file that does not
+scan, and one that was added or deleted. The floor is a floor, and the only
+costly error is dropping a commit that did change behaviour, so what the
+narrowing removed is printed under <strong>Comment-only</strong> rather than dropped quietly.
+It still reproduces all four release windows to date as <code>minor</code>.</p>
+<p><strong>The surface it checks against is derived, not listed.</strong> It reads publish.yml's
+image matrix, follows each image's Dockerfile stage back through its
+<code>COPY --from=</code> edges to the <code>go build</code> that produced the binary, and expands
+those with <code>go list -deps</code>; the chart trees come from the same workflow's
+<code>helm package</code> calls. Add an image or a chart and it is picked up with nothing to
+maintain. The one thing not derivable is a release asset built by a script, the
+<code>gag-migrate</code> CLI, which is declared instead; <code>make semver-floor-sources-check</code>
+(part of <code>make check</code>) fails if publish.yml stops matching that declaration.</p>
+<p><strong>It reports; it does not gate.</strong> The floor is monotonic and saturates early.
+Across the four release windows to date it reached <code>minor</code> at commit 15 of 341,
+6 of 95, 40 of 463, and 16 of 121, so a gate on the transition would fire on 4
+pull requests out of 1,020 and say nothing for the rest of every cycle. The first
+shipping feature after a tag is the expected event, not an accident worth
+catching.</p>
+<p><strong>A breaking marker is reported as an unresolved major, never as one.</strong> Whether a
+<code>!</code> broke anything depends on whether the last tag had published the surface it
+changed, which is a field-level question. All three markers in <code>v1.2.0..v1.3.0</code>
+changed surface <code>v1.2.0</code> never published (<code>capacityGate</code> and <code>windowStartTime</code>
+are both absent there), which is why <code>v1.3.0</code> shipped as a minor, and why a tool
+that promoted them to major would fail to reproduce the one release that tests
+it. The report narrows the question with the part that is measurable, diffing the
+CRD property names <code>FROM</code> published against <code>TO</code>; a clean result means no
+published property was removed, and nothing more. A published field whose type
+changed or whose enum narrowed, and the non-CRD contracts, stay with
+<a href="#1-pre-flight"><code>api-surface-since.sh</code></a> and the human reading it.</p>
 <p><strong>The triggers.</strong> Any one of these is reason enough to scope a release; none of
 them is automatic, and the report is the input to the judgement rather than a
 substitute for it:</p>
@@ -3197,7 +3520,7 @@ substitute for it:</p>
   backports</a>).</li>
 <li><strong>A headline capability landed.</strong> Scope a minor around it — one thing an adopter
   would upgrade <em>for</em>, with the rest of the window riding along. That is the
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/release-1.3.md">1.3</a> pattern: worker right-sizing was the headline, and
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/release-1.3.md">1.3</a> pattern: worker right-sizing was the headline, and
   three dozen other changes shipped underneath it.</li>
 <li><strong>User-visible fixes accumulated with no feature.</strong> A patch release. The bar is
   that an operator running the current tag is hitting something already fixed, not
@@ -3212,10 +3535,20 @@ what makes "enough" a real bar rather than a formality — it is also why the
 answer to a thin delta is <em>wait</em>, not <em>cut a small one</em>.</p>
 <p><strong>Once you decide to cut, the question changes.</strong> From that point the report stops
 being the view: write the release plan doc, open it with a
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/maintaining-backlog.md#cutting-a-release-the-scope-ledger">scope ledger</a>,
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/maintaining-backlog.md#cutting-a-release-the-scope-ledger">scope ledger</a>,
 and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.</p>
 <h2 id="release-sequence">Release sequence<a class="headerlink" href="#release-sequence" title="Permanent link">&para;</a></h2>
 <h3 id="1-pre-flight">1. Pre-flight<a class="headerlink" href="#1-pre-flight" title="Permanent link">&para;</a></h3>
+<p><strong>Which of these bind when the tag is a release candidate.</strong> The first two bind
+at every tag: an RC cut from a red <code>main</code> validates nothing, and the version you
+pick fixes the stable tag's. The last four are stable-tag obligations, because a
+prerelease deploys no docs and its GitHub Release body is generated rather than
+curated, so there is no published surface for them to be wrong on yet.</p>
+<p>The <strong>API surface review is the exception worth pulling forward to the first
+RC</strong>. Its deadline really is the stable tag, but the RC is the artifact that
+gets validated, and a rename decided after the candidate is published costs a
+new RC and another hour-long dogfood run. Reviewing it at the first RC and
+recording the verdict then is what keeps that cheap.</p>
 <ul>
 <li><code>main</code> is green: unit/integration/e2e and <code>security-scan.yml</code> all passing on
   the commit you are about to tag. Run <code>make check</code> locally as a final gate.</li>
@@ -3227,10 +3560,10 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   the cheap window closes. Nothing lints this — it is judgement, not a gate that
   can pass or fail mechanically.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/release/api-surface-since.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
 <p>Apply the checklist in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/api-review.md#step-2--ask-these-of-each-addition">api-review.md</a>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/api-review.md#step-2--ask-these-of-each-addition">api-review.md</a>
   to each addition it lists, record the verdict in the release's plan doc, and
   file anything deferred as a Queue row carrying this release's gate label.
   <strong>"Ship as-is, deliberately" is a valid and common outcome</strong> — the point is
@@ -3239,16 +3572,46 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   <code>capacityGate.mode: On</code> days before 1.3.0 would have published it, and only
   because the question came up in an unrelated conversation.</p>
 <ul>
+<li><strong>Reconcile the marketing surfaces against what this tag actually ships.</strong>
+  <code>docs/index.md</code>, <code>docs/why-gag.md</code>, <code>README.md</code>, and <code>docs/features.md</code> make
+  claims about GAG <em>and</em> about alternatives, and both halves rot: GAG gains
+  capabilities the pages never learn about, and a competitor closes a gap the
+  pages still assert. Neither is caught by any gate, because both are prose.</li>
+</ul>
+<p>Three questions, in this order:</p>
+<ol>
+<li><strong>Does anything shipped since the last tag belong on a marketing surface?</strong>
+     <code>docs/features.md</code> is the accurate inventory; the other three are curated.
+     Nothing propagates upward on its own, so a capability that lands only in
+     <code>features.md</code> is a capability nobody selling the project knows about.</li>
+<li><strong>Does every claim about GAG still describe GAG?</strong> Check especially claims
+     written against an older acquisition tier or API version, and any "by
+     default" wording against the actual kubebuilder defaults in <code>api/</code>.</li>
+<li><strong>Does every claim about an alternative still hold, and does it say when it
+     was measured?</strong> A competitive claim without a version and a date cannot be
+     re-checked, so it silently becomes false rather than becoming stale.</li>
+</ol>
+<p>Record the verdict in the release's plan doc and file corrections as Queue
+  rows carrying this release's gate label.</p>
+<p>This step exists because the 2026-08-06 competitive review found 11 rows in
+  <code>why-gag.md</code> asserting a gap in Actions Runner Controller (ARC) with <strong>no ARC
+  version and no measurement date on any of them</strong>. Two had gone false at
+  datable upstream releases (ARC 0.13.1 and 0.14.0) and nobody noticed, one
+  contradicted an explicit instruction in the project's own working notes, and
+  one promised a recovery behaviour the code deliberately refuses. The same
+  review found nine shipped capabilities that no marketing surface mentioned.
+  Rot runs in both directions and only a deliberate pass catches it.</p>
+<ul>
 <li><strong>Review the operator-facing caveats this tag publishes, and curate the notes
   if there are any.</strong> <code>publish.yml</code> writes a generated body from the commit log,
   which never says "this upgrade needs a manual step first". Richer notes are
   opt-in and must be created <em>before</em> you push the tag (<a href="#5-cut-the-github-release">§ 5</a>),
   so the decision belongs here, not after.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/release/operator-caveats-since.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scripts/release/operator-caveats-since.sh
 </code></pre></div>
 <p>It needs no bookkeeping to stay current: the
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/doc-update-matrix.md">doc-update matrix</a> already requires an
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/doc-update-matrix.md">doc-update matrix</a> already requires an
   operator-visible change to land in <code>docs/operations/</code>, so the diff of those
   pages since the last tag already <em>is</em> the list — this only makes it scannable
   (added sections, bold-lead bullets, anything marked <code>BREAKING</code>) instead of a
@@ -3256,7 +3619,7 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
 <p>Reading it is judgement: a clarification is not a caveat, and the script cannot
   tell them apart. What it guarantees is that you have <strong>seen</strong> them. Carry the
   real ones into a curated body:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gh<span class="w"> </span>release<span class="w"> </span>create<span class="w"> </span>vX.Y.Z<span class="w"> </span>--draft<span class="w"> </span>--notes-file<span class="w"> </span>&lt;file&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>gh<span class="w"> </span>release<span class="w"> </span>create<span class="w"> </span>vX.Y.Z<span class="w"> </span>--draft<span class="w"> </span>--notes-file<span class="w"> </span>&lt;file&gt;
 </code></pre></div>
 <p>This step exists because the alternative is remembering. The <code>v1.2.0</code>→next
   window accumulated a required pre-upgrade <code>kubectl apply</code>, a removed values key
@@ -3277,10 +3640,10 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   <em>Exploring</em>. A 2026-07-25 audit found six of seven near-term items already
   shipped.</li>
 <li><strong>Optional: refresh the docs-site announce bar's highlight.</strong> The banner in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip
   at the top of every page on the site. Its <strong>version needs no action</strong>: it is
   derived from the git tags at build time, so a stable tag names itself
-  automatically (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/website.md#the-announce-bar">website.md § The announce bar</a>).
+  automatically (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/website.md#the-announce-bar">website.md § The announce bar</a>).
   What you may want to update is the one-line highlight after it, and the
   <code>highlight_for</code> version that guards it. Leave both alone and the banner reads
   <em>"vX.Y.Z is here. Read the release notes."</em>, which is correct but plainer;
@@ -3292,7 +3655,7 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   <em>"v1.0.0 is here"</em>. Preview what the tag will render, standing in the version
   you are about to cut (without it the local build resolves the <em>current</em> newest
   tag, which is still the previous release):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">GAG_DOCS_RELEASE</span><span class="o">=</span>vX.Y.Z<span class="w"> </span>make<span class="w"> </span>docs-build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">&#39;/md-banner/,/&lt;\/aside&gt;/&#39;</span><span class="w"> </span>site/index.html
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">GAG_DOCS_RELEASE</span><span class="o">=</span>vX.Y.Z<span class="w"> </span>make<span class="w"> </span>docs-build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">&#39;/md-banner/,/&lt;\/aside&gt;/&#39;</span><span class="w"> </span>site/index.html
 </code></pre></div>
 <p><strong><code>publish.yml</code> enforces the result</strong> via its <code>announce-bar</code> job, which every
   publishing job depends on: it builds the site at the tag and fails the release
@@ -3301,7 +3664,7 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   newer minor, since the banner advertises the newest release by design.</p>
 <p>(A <code>docs_ref</code> seed of an already-cut release pins <code>overrides/</code> to the current
   checkout, so re-seeding refreshes the highlight on past tags too. See
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/website.md#seeding-already-released-versions">website.md § Seeding</a>.)</p>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/website.md#seeding-already-released-versions">website.md § Seeding</a>.)</p>
 <h4 id="validate-the-release-candidate-on-dogfood">Validate the release candidate on dogfood<a class="headerlink" href="#validate-the-release-candidate-on-dogfood" title="Permanent link">&para;</a></h4>
 <p>Before promoting a release-candidate line to a <strong>stable</strong> <code>vX.Y.Z</code> tag, validate
 the <em>latest RC</em> functionally on the dogfood cluster. <code>main</code>-green covers
@@ -3317,7 +3680,8 @@ a git ref (for the matching CRDs) — an RC tag satisfies both by construction.<
 it after the first confirmation. <code>validate-release.sh</code> bakes in all the
 env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e
 matrix (run-scoped routing) → CRD smoke → teardown — is idempotent, and
-self-cleans back to 0 nodes on exit (success or failure). On failure it first
+self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though
+<a href="#a-killed-gate-is-reclaimed-by-the-next-one">not on every ending</a>). On failure it first
 dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the
 gate's output, because the teardown's scale-to-0 evicts every pod and destroys
 the evidence — read the <code>Failure diagnostics</code> section of a failed run's log
@@ -3332,18 +3696,60 @@ made. The gate settles the lane up front — before the node scale-up, the deplo
 and the e2e AGC — so a collision costs a wait, not a cluster cycle. It polls for
 up to <code>E2E_WAIT_TIMEOUT</code> seconds (default 1800), then fails with the run id;
 <code>E2E_WAIT_TIMEOUT=0</code> fails immediately instead of waiting.</p>
+<p><strong>The e2e leg's watch is bounded, so a run that never starts cannot hold the
+cluster.</strong> The dispatched run is watched for up to <code>E2E_RUN_WATCH_TIMEOUT</code>
+seconds (default 5400 — 90 minutes: the 60-minute job ceiling plus the same 30
+minutes of queue the settle wait allows). Past that the gate fails with exit
+124, names the run, and tears the cluster back down to 0 nodes as it would for
+any other e2e failure. <strong>The run itself keeps going on GitHub</strong> — the deadline
+releases the nodes the <em>gate</em> is holding, not the ones the run is queued for, so
+cancel the run by hand if it is genuinely wedged. A healthy leg finishes in
+25–33 minutes; raise the variable rather than removing the bound if yours is
+legitimately slower.</p>
 <p>The gate also checks every local tool it needs up front — including the pinned
 <code>cosign</code> the final CRD-smoke leg verifies with (<code>make cosign</code> downloads it to
 <code>.build/cosign</code>; <code>COSIGN=&lt;path&gt;</code> overrides) — so a missing binary fails the run
 before it spends anything, not 25 minutes in.</p>
+<h5 id="a-killed-gate-is-reclaimed-by-the-next-one">A killed gate is reclaimed by the next one<a class="headerlink" href="#a-killed-gate-is-reclaimed-by-the-next-one" title="Permanent link">&para;</a></h5>
+<p><strong>Self-cleaning covers most endings, not all of them.</strong> Bash runs the teardown
+trap on Ctrl-C and on an ordinary <code>kill</code>, so those tear the cluster back down.
+<code>kill -9</code>, a killed parent process, and a teardown interrupted part-way through
+do not — each leaves billable nodes up with no process left to release them, and
+twice that was caught only by hunting for a live teardown process by hand
+(Q640).</p>
+<p>So the gate takes an ownership lease for exactly the window in which it owns
+cluster state, and reclaims an <em>orphaned</em> one — a lease for the same target
+whose owning process is gone — before it spends anything. Running the gate again
+is therefore enough to end a leak the previous run started. To do only that,
+without starting a validation run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>…<span class="w"> </span>scripts/dogfood/validate-release.sh<span class="w"> </span>--reclaim
+</code></pre></div>
+<p>It reports a target nothing claims and exits, or tears an orphaned run's cluster
+back down to 0 nodes (confirming first, as the gate itself does). Run it when a
+gate was killed and you are not about to start another one.</p>
+<p><strong>The lease is the only thing it acts on</strong>, because the alternative is worse
+than the leak. A cluster that merely has nodes up is what a hand-run
+<code>setup.sh</code>/<code>start.sh</code> debugging session looks like, so nothing here infers an
+orphan from cluster state: no lease, no teardown. A lease whose process is still
+alive means another gate is running, and the second gate refuses to start rather
+than tearing down the first one's environment. A lease written by another host
+is reported and never acted on — a pid means nothing off the host that minted
+it. Leases live in <code>${XDG_STATE_HOME:-~/.local/state}/github-actions-gateway/</code>,
+host-wide rather than per-checkout, so a gate killed in one worktree is visible
+to a gate started from another.</p>
+<p>Two gaps remain, both by design. A cluster left up by something <em>other</em> than
+this gate is not visible to the reclaim — nothing claims it, so nothing reclaims
+it; take it down with <code>scripts/dogfood/stop.sh</code>. And a killed gate that is never
+followed by another run or a <code>--reclaim</code> still bills: the state is recorded, but
+nothing reads it until someone runs one of the two.</p>
 <h5 id="run-it-detached-the-sentinel-reports-it-back">Run it detached; the sentinel reports it back<a class="headerlink" href="#run-it-detached-the-sentinel-reports-it-back" title="Permanent link">&para;</a></h5>
 <p><strong>This is the default path.</strong> Nobody should spend an hour watching a terminal
 for a gate built to be walked away from. Launch it as a background task — an
 agent session's background task, or <code>nohup … &amp;</code> by hand — from a checkout of any
 post-Q74 ref, with <code>PROJECT</code>/<code>CLUSTER</code>/<code>ZONE</code>/<code>REPO</code> exported (App IDs
 auto-resolved; the one-time <code>scripts/dogfood/e2e-setup.sh</code> must have run once):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">ASSUME_YES</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>…<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>nohup<span class="w"> </span>scripts/dogfood/validate-release.sh<span class="w"> </span>vX.Y.Z-rc.N<span class="w"> </span>&gt;tmp/validate-release.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">&amp;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nv">ASSUME_YES</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>…<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>nohup<span class="w"> </span>scripts/dogfood/validate-release.sh<span class="w"> </span>vX.Y.Z-rc.N<span class="w"> </span>&gt;tmp/validate-release.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">&amp;</span>
 </code></pre></div>
 <p><strong><code>ASSUME_YES=1</code> is required when detaching.</strong> The gate confirms the resolved
 target once before it spends anything, and a detached run has no stdin to answer
@@ -3352,12 +3758,13 @@ off when you run the gate in your own terminal, so the confirmation still gates
 a fat-finger.</p>
 <p>Then launch the sentinel as a second background task. It is what turns a silent
 hour into a report:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>bash<span class="w"> </span>scripts/dogfood/release-sentinel.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>bash<span class="w"> </span>scripts/dogfood/release-sentinel.sh
 </code></pre></div>
 <p>It sleeps, and <em>exits</em> when there is something to say — a phase transition, a
 verdict, or a gate that has gone quiet for <code>RELEASE_SENTINEL_STALL</code> seconds
-(default 1200). That exit is the report: it carries the phase, both clocks, the
-latest e2e heartbeat, and what to do next. Relaunch it after each report until a
+(default 1200) <strong>while GitHub reports no live run it could be waiting on</strong>. That
+exit is the report: it carries the phase, both clocks, the run URL, the latest
+e2e heartbeat, and what to do next. Relaunch it after each report until a
 verdict arrives — in an agent session, the exit is what wakes the session, and
 the relay-and-relaunch loop is the session's job. Reporting is therefore driven
 by what the gate does, not by a clock: nothing is spent on an interval where
@@ -3368,18 +3775,41 @@ reported), <code>RELEASE_SENTINEL_TIMEOUT</code> (watch budget, default 7200),
 <p><strong>The sentinel's exit is a wake, never a verdict</strong> — every event exits 0. The
 verdict is the gate's own exit status, and the failure diagnostics are in the
 gate's log, not in the report.</p>
+<p><strong>A quiet gate is not on its own a stalled one.</strong> Through the ~25-minute e2e leg
+the only thing writing to the stream is the relayed spec heartbeat, and that
+needs a job log GitHub will sometimes not serve — one run answered every log
+fetch with <code>BlobNotFound</code> for its whole 30 minutes and then passed. Since the
+stall threshold is shorter than a healthy leg, quiet alone reported a stall on
+every poll of that run. So the sentinel reconciles the silence against the run's
+own status (<code>gh run view --json status</code>, the run record — a different endpoint
+from the log, and one that answered throughout that incident) and reports a
+stall only once the run is no longer live. Phases with no run to consult — the
+deploy and teardown legs — are unchanged: quiet there is the gate's own.</p>
+<p>A gate genuinely stuck on a run that never concludes is caught elsewhere, by the
+watch's own <code>E2E_RUN_WATCH_TIMEOUT</code>, which fails the gate and reaches the
+sentinel as a <code>failed</code> event.</p>
+<p><strong>A stall is reported once, not once per relaunch.</strong> The quiet does not clear
+when the report is read, so a watcher relaunched against it would exit
+immediately, forever. The sentinel remembers the stall it reported in
+<code>tmp/release-validation-progress.jsonl.stall</code> and stays asleep through the same
+one; it speaks up again when the stream moves, or when the same silence has
+deepened by another full <code>RELEASE_SENTINEL_STALL</code>. Nothing needs cleaning up
+between runs — the marker is keyed to the moment it went quiet.</p>
 <h5 id="where-is-it-right-now">Where is it right now?<a class="headerlink" href="#where-is-it-right-now" title="Permanent link">&para;</a></h5>
 <p>Reading back an hour of log to answer that is the wrong shape, so the gate keeps
 its event stream rendered as one object in <code>tmp/release-validation-status.json</code>,
 rewritten atomically after every phase transition and every relayed e2e
 heartbeat. This is what the sentinel reads, and it answers the same question
 directly for a human:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>jq<span class="w"> </span>.<span class="w"> </span>tmp/release-validation-status.json
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>jq<span class="w"> </span>.<span class="w"> </span>tmp/release-validation-status.json
 </code></pre></div>
 <p><code>gate</code> is <code>preflight</code> (settling the e2e lane, nothing spent yet), <code>running</code>,
 <code>passed</code>, or <code>failed</code>; <code>phase</code>, <code>elapsed</code>, <code>phaseElapsed</code> and <code>idle</code> say where
-and for how long; <code>heartbeat</code> carries the newest relayed spec line; <code>failure</code>
-names the phase that broke — the one that broke first, not the teardown that
+and for how long; <code>runRepo</code>/<code>runId</code> name the dispatched e2e run, which is what
+makes a quiet leg checkable against GitHub rather than only against the stream;
+<code>heartbeat</code> carries the newest relayed spec line — absent for a whole leg when
+GitHub will not serve the job log, which is a fetch problem and not a stalled
+run; <code>failure</code> names the phase that broke — the one that broke first, not the teardown that
 followed it. <code>scripts/dogfood/release-status.sh [stream-file]</code> renders the same
 object from any stream, including one whose gate process is gone.
 <code>RELEASE_STATUS_FILE=</code> disables the file.</p>
@@ -3391,13 +3821,13 @@ unaffected.</p>
 <h5 id="running-it-in-your-own-terminal-instead">Running it in your own terminal instead<a class="headerlink" href="#running-it-in-your-own-terminal-instead" title="Permanent link">&para;</a></h5>
 <p>Equally supported, and equally legible — drop the <code>nohup</code>/<code>&amp;</code>/<code>ASSUME_YES=1</code> and
 answer the confirmation:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>…<span class="w"> </span>scripts/dogfood/validate-release.sh<span class="w"> </span>vX.Y.Z-rc.N
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>…<span class="w"> </span>scripts/dogfood/validate-release.sh<span class="w"> </span>vX.Y.Z-rc.N
 </code></pre></div>
 <p><strong>The gate narrates itself while it runs.</strong> Each phase is announced as it starts
 (<code>==&gt; [e2e] Running the e2e matrix on GAG runners</code>), and the e2e leg — the long
 one, ~25 minutes while runners autoscale in — relays the dispatched run's own
 spec heartbeat into your terminal every 30 s:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s)
 </code></pre></div>
 <p>The run URL is printed before the watch begins if you would rather follow it in
 a browser. When the e2e leg finishes — pass <strong>or fail</strong> — the run's JUnit report
@@ -3424,13 +3854,13 @@ if a leg needs re-running by hand. From a detached checkout of the RC tag
    (a timed-out rollout wait here is fine), then <code>scripts/dogfood/start.sh</code>. Run the
    one-time <code>scripts/dogfood/e2e-setup.sh</code> first if the e2e node pool / GitHub App
    Secret aren't set up yet. The cluster, context pinning, and prod-guard cautions are
-   in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/gke-dogfood.md">gke-dogfood.md</a>.</li>
+   in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/gke-dogfood.md">gke-dogfood.md</a>.</li>
 <li><strong>Run the e2e job matrix on GAG runners.</strong> This is two moves, not one.
    <code>scripts/dogfood/e2e-start.sh</code> spins up the on-demand e2e tenant's AGC — it
    does <strong>not</strong> start a run and does <strong>not</strong> touch routing. Trigger the matrix by
    <strong>dispatching a run with routing scoped to it</strong>:</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>e2e-test.yml<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span>-f<span class="w"> </span><span class="nv">runner</span><span class="o">=</span><span class="s1">&#39;&quot;gag-ci-e2e&quot;&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>e2e-test.yml<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span>-f<span class="w"> </span><span class="nv">runner</span><span class="o">=</span><span class="s1">&#39;&quot;gag-ci-e2e&quot;&#39;</span>
 </code></pre></div>
 <p>(same for <code>e2e-calico.yml</code>). Only that dispatched run lands on the RC's
    GAG-provisioned runners; every concurrent PR and merge keeps its normal
@@ -3515,37 +3945,37 @@ if a leg needs re-running by hand. From a detached checkout of the RC tag
 the GA tag</strong>: fix forward and cut a new RC — never promote a known-bad RC to a stable
 tag.</p>
 <h3 id="2-tag-and-push">2. Tag and push<a class="headerlink" href="#2-tag-and-push" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>git<span class="w"> </span>switch<span class="w"> </span>main<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>pull<span class="w"> </span>--ff-only
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release vX.Y.Z&quot;</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>git<span class="w"> </span>switch<span class="w"> </span>main<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>pull<span class="w"> </span>--ff-only
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release vX.Y.Z&quot;</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
 </code></pre></div>
 <p>Pushing the tag starts <code>publish.yml</code>. Watch it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>gh<span class="w"> </span>run<span class="w"> </span>watch<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="o">=</span>publish.yml<span class="w"> </span>--branch<span class="o">=</span>vX.Y.Z<span class="w"> </span>-L1<span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;.[0].databaseId&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>gh<span class="w"> </span>run<span class="w"> </span>watch<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="o">=</span>publish.yml<span class="w"> </span>--branch<span class="o">=</span>vX.Y.Z<span class="w"> </span>-L1<span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;.[0].databaseId&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
 </code></pre></div>
 <blockquote>
 <p>A <code>workflow_dispatch</code> run with a <code>tag</code> input publishes the same way without a
 git tag — use it to dry-run the pipeline against a throwaway <code>vX.Y.Z-rc1</code> tag.</p>
 <p><strong>The docs site publishes this release too (Q238).</strong> A <strong>stable</strong> <code>vX.Y.Z</code> tag
-also triggers <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/pages.yml"><code>pages.yml</code></a>, which deploys the
+also triggers <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/pages.yml"><code>pages.yml</code></a>, which deploys the
 release's docs as a new version on <a href="https://actions-gateway.com">actions-gateway.com</a>
 and moves the <code>stable</code> alias + the site's default root redirect to it — so the
 public docs default to this release, with the unreleased <code>main</code> docs kept behind
 an opt-in <code>dev</code> version. Prerelease tags (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) do
 <strong>not</strong> deploy the site. The versioned-docs model, and the one-time <code>mike</code>
 seeding of releases cut before it landed, are documented in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/website.md#versioned-deploy-mike">website.md § Versioned deploy</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/website.md#versioned-deploy-mike">website.md § Versioned deploy</a>.</p>
 </blockquote>
 <h3 id="3-verify-the-publish">3. Verify the publish<a class="headerlink" href="#3-verify-the-publish" title="Permanent link">&para;</a></h3>
 <p>Confirm every image <strong>and the chart</strong> was signed by <em>this</em> workflow before
 announcing the release. The one-command check uses the pinned cosign
 (<code>make</code> downloads <code>COSIGN_VERSION</code> — the same version <code>publish.yml</code> signs with —
 into <code>.build/</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>make<span class="w"> </span>verify-release<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>make<span class="w"> </span>verify-release<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
 </code></pre></div>
 <blockquote>
 <p><strong>A broken or missing chart publish now reddens PR CI, not just operators.</strong>
 CI's released-chart upgrade gate
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/testing.md#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>)
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/testing.md#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>)
 discovers the highest stable <code>vX.Y.Z</code> tag on the repo and <code>helm pull</code>s that
 chart version from GHCR on every e2e run. Pushing a stable tag whose
 <code>chart-publish</code> job failed therefore fails e2e on <strong>every subsequent PR</strong>
@@ -3563,22 +3993,22 @@ each is a <code>cosign verify --certificate-identity-regexp '…/publish\.yml@re
 GitHub Release's <strong>signed v2 CRD manifest</strong> asset (Q276), which is a <em>blob</em> signature —
 verify it against the same identity with <code>verify-blob</code>. Download the manifest and its
 bundle from the release, then:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span>--bundle<span class="w"> </span>actions-gateway-crds-v2.yaml.cosign.bundle<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span>actions-gateway-crds-v2.yaml<span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>OK
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span>--bundle<span class="w"> </span>actions-gateway-crds-v2.yaml.cosign.bundle<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>actions-gateway-crds-v2.yaml<span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>OK
 </code></pre></div>
 <p>A <code>cosign verify</code> failure is a <strong>stop-ship</strong>: do not announce the release until it
 passes. Spot-check one SBOM attestation too so the attestation path is exercised —
 SBOM attestations are bound to the <strong>per-arch manifest digests</strong>, not the index,
 so resolve one first (the full command set is in
 <a href="../security-operations/#retrieve-and-inspect-the-sbom">security-operations.md § Retrieve and inspect the SBOM</a>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>OK
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>OK
 </code></pre></div>
 <p>Also spot-check that the index actually carries both platforms
 (<code>docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z</code> should
@@ -3586,10 +4016,10 @@ list <code>linux/amd64</code> and <code>linux/arm64</code> manifests).</p>
 <p>Finally, confirm the <strong>build-provenance attestation</strong> is present and was minted
 by <em>this</em> workflow. The attestation binds to the <strong>index</strong> digest (unlike the
 per-arch SBOMs), so a tag reference resolves correctly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Verifies the signed SLSA provenance against the publish workflow&#39;s identity.</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verifies the signed SLSA provenance against the publish workflow&#39;s identity.</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 </code></pre></div>
 <blockquote>
 <p><strong>Exit 0 alone does not prove this ran.</strong> <code>gh attestation verify</code> writes its
@@ -3597,12 +4027,12 @@ summary only to a terminal — redirected to a file or captured in a variable it
 prints <strong>nothing</strong>, so a real verification and a silent no-op look identical.
 When you are not reading the output live, ask for something assertable and
 check it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>--format<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[0].verificationResult.signature.certificate</span>
-<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="s1">           | &quot;\(.buildSignerURI)\n\(.sourceRepositoryDigest)&quot;&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span>--format<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[0].verificationResult.signature.certificate</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="s1">           | &quot;\(.buildSignerURI)\n\(.sourceRepositoryDigest)&quot;&#39;</span>
 </code></pre></div>
 <p>The workflow URI must end <code>publish.yml@refs/tags/vX.Y.Z</code> for <em>this</em> tag, and
 the digest must be the commit you tagged. That is the check — not the status.</p>
@@ -3618,8 +4048,8 @@ Release notes</strong> (step 5). These are the <strong>multi-arch index digests<
 ref that serves both amd64 and arm64 nodes. Operators pin the workload to the
 digest (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>), not the mutable <code>vX.Y.Z</code> tag.
 You can also resolve a digest directly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span>--format<span class="w"> </span><span class="s1">&#39;{{json .Manifest.Digest}}&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span>--format<span class="w"> </span><span class="s1">&#39;{{json .Manifest.Digest}}&#39;</span>
 </code></pre></div>
 <h3 id="5-cut-the-github-release">5. Cut the GitHub Release<a class="headerlink" href="#5-cut-the-github-release" title="Permanent link">&para;</a></h3>
 <p><strong><code>publish.yml</code> creates the GitHub Release itself</strong> (Q293) — no manual step. The
@@ -3645,7 +4075,7 @@ One file per stable tag, <code>vX.Y.Z.md</code>, holding the release body verbat
 front matter, and <strong>no title heading</strong> — the Releases page already renders the tag
 name as the page's <code>&lt;h1&gt;</code>, so a <code># vX.Y.Z</code> in the body duplicates it. Publish from
 it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>gh<span class="w"> </span>release<span class="w"> </span>edit<span class="w"> </span>vX.Y.Z<span class="w"> </span>--notes-file<span class="w"> </span>docs/releases/vX.Y.Z.md
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>gh<span class="w"> </span>release<span class="w"> </span>edit<span class="w"> </span>vX.Y.Z<span class="w"> </span>--notes-file<span class="w"> </span>docs/releases/vX.Y.Z.md
 </code></pre></div>
 <p><code>v1.3.0</code>'s notes were drafted under <code>tmp/</code> and edited straight on the Release. By
 the time they were right they had been through a wrong count, a dead anchor, 46
@@ -3656,10 +4086,10 @@ published body reproducible from a commit.</p>
 <p>These files are excluded from the docs site on <strong>every</strong> version, dev included:
 they are written for github.com's renderer, which the site is not. The exclusion
 is spelled out in four places that must agree — <code>mkdocs.yml</code>, two <code>env:</code> blocks
-and one <code>export</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/pages.yml"><code>pages.yml</code></a>, and
+and one <code>export</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/pages.yml"><code>pages.yml</code></a>, and
 <code>scripts/docs/docs-preview.sh</code>.</p>
 <p><strong>Past bodies are retrievable, so the previous release is your template:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>gh<span class="w"> </span>release<span class="w"> </span>view<span class="w"> </span>vX.Y.Z<span class="w"> </span>--json<span class="w"> </span>body<span class="w"> </span>--jq<span class="w"> </span>.body
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>gh<span class="w"> </span>release<span class="w"> </span>view<span class="w"> </span>vX.Y.Z<span class="w"> </span>--json<span class="w"> </span>body<span class="w"> </span>--jq<span class="w"> </span>.body
 </code></pre></div>
 <p>Use it to seed a new file when a tag predates this convention.</p>
 <p><strong>Notes answer "what is in it" and "what must I do". The docs answer "how" and
@@ -3780,8 +4210,8 @@ exactly that.</p>
 <p><strong>Diff <code>docs/</code> as well, and link what is new from where it is actionable.</strong> A new
 operator page is the strongest signal of a capability the notes forgot, and a
 heavily grown one shows where the release's real weight landed:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>git<span class="w"> </span>diff<span class="w"> </span>--name-status<span class="w"> </span>v&lt;prev&gt;..origin/main<span class="w"> </span>--<span class="w"> </span>docs/operations/<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;^A&#39;</span>
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>git<span class="w"> </span>diff<span class="w"> </span>--stat<span class="w">     </span>v&lt;prev&gt;..origin/main<span class="w"> </span>--<span class="w"> </span>docs/operations/<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-t<span class="s1">&#39;|&#39;</span><span class="w"> </span>-k2<span class="w"> </span>-rn<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>git<span class="w"> </span>diff<span class="w"> </span>--name-status<span class="w"> </span>v&lt;prev&gt;..origin/main<span class="w"> </span>--<span class="w"> </span>docs/operations/<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;^A&#39;</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>git<span class="w"> </span>diff<span class="w"> </span>--stat<span class="w">     </span>v&lt;prev&gt;..origin/main<span class="w"> </span>--<span class="w"> </span>docs/operations/<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-t<span class="s1">&#39;|&#39;</span><span class="w"> </span>-k2<span class="w"> </span>-rn<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
 </code></pre></div>
 <p><code>v1.3.0</code> added three operator guides and grew <code>troubleshooting.md</code> by 36
 sections. Link a new guide from the bullet it serves rather than from a
@@ -3794,8 +4224,12 @@ is not a field: the chart installs chart-root <code>crds/</code> on a <em>fresh 
 so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two
 must cross-reference. Then fold the rest — new spec fields, new status fields, new
 condition reasons — grouped by kind, counted like any other fold. <code>v1.3.0</code> listed
-28 new condition reasons this way. Until a generated API reference exists, say
-which artifact is authoritative (<code>kubectl explain</code>, or the signed CRD asset).</p>
+28 new condition reasons this way, and had to name <code>kubectl explain</code> and the
+signed CRD asset as the authority because no reference page existed. Link the
+<a href="../../reference/api/">generated API reference</a> instead, at <strong>this release's</strong>
+version path (<code>/X.Y.Z/reference/api/</code>), so the fields the notes name are one
+click from their descriptions. It covers <code>v2beta1</code> only; a deprecated-version
+field still needs <code>kubectl explain</code>.</p>
 <p><strong>Validation is receipts, not adjectives.</strong> "Thoroughly tested" is worth nothing.
 Link the run, quote the counts, and quote a value measured at the layer that
 matters: <code>v1.3.0</code> cites 73/73 specs with a run link, and a derived <code>1500m</code> observed
@@ -3817,8 +4251,8 @@ everything an operator needs.</p>
 <p><strong>The caveats script reports headings that <em>changed</em>, not headings that are
 <em>new</em>.</strong> A section edited in this window is listed exactly like one added in it.
 Test each before repeating it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>git<span class="w"> </span>show<span class="w"> </span>&lt;prev-tag&gt;:docs/operations/upgrade.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-qF<span class="w"> </span><span class="s2">&quot;### &lt;heading&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;pre-existing&quot;</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;new in this window&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>git<span class="w"> </span>show<span class="w"> </span>&lt;prev-tag&gt;:docs/operations/upgrade.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-qF<span class="w"> </span><span class="s2">&quot;### &lt;heading&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;pre-existing&quot;</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;new in this window&quot;</span>
 </code></pre></div>
 <p><code>v1.3.0</code> listed two <code>BREAKING</code> headings and <strong>neither</strong> was a caveat for an
 upgrading operator: <code>priorityTiers</code> was already in <code>v1.2.0</code> (a pre-1.0 change),
@@ -3836,15 +4270,15 @@ State which of the two you mean.</p>
 <p><strong>Enumerate from the commit log, filtered to what ships.</strong> Conventional Commit
 subjects are already terse diagnoses, so they need only the prefix and Q-ID
 removed:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>git<span class="w"> </span>log<span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;%s&#39;</span><span class="w"> </span>&lt;prev-tag&gt;..HEAD<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;^(feat|fix)\((agc|gmc|proxy|worker|api|scaleset|chart|broker|wrapper|admission|provisioner|metrics|scalesetlistener|migrate|observability)\)&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>git<span class="w"> </span>log<span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;%s&#39;</span><span class="w"> </span>&lt;prev-tag&gt;..HEAD<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;^(feat|fix)\((agc|gmc|proxy|worker|api|scaleset|chart|broker|wrapper|admission|provisioner|metrics|scalesetlistener|migrate|observability)\)&#39;</span>
 </code></pre></div>
 <p><strong>That scope list is a guess, so reconcile what it dropped — never just run it.</strong>
 An allow-list silently omits any scope nobody thought of, and the result still
 looks like a complete list. Print the residue and read every scope in it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>git<span class="w"> </span>log<span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;%s&#39;</span><span class="w"> </span>&lt;prev-tag&gt;..HEAD<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;^(feat|fix)&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>/tmp/all
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># ...run the filter above into /tmp/kept, then:</span>
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>grep<span class="w"> </span>-vxF<span class="w"> </span>-f<span class="w"> </span>/tmp/kept<span class="w"> </span>/tmp/all<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;s/^((feat|fix)\([^)]*\)).*/\1/&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>git<span class="w"> </span>log<span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;%s&#39;</span><span class="w"> </span>&lt;prev-tag&gt;..HEAD<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;^(feat|fix)&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>/tmp/all
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># ...run the filter above into /tmp/kept, then:</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>grep<span class="w"> </span>-vxF<span class="w"> </span>-f<span class="w"> </span>/tmp/kept<span class="w"> </span>/tmp/all<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;s/^((feat|fix)\([^)]*\)).*/\1/&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn
 </code></pre></div>
 <p><code>v1.3.0</code>'s first pass kept 57 of 132 and dropped <strong>seven shipping fixes</strong>: two
 <code>fix(scalesetlistener)</code> (the pattern had <code>scaleset</code>, which does not match it), a
@@ -3862,8 +4296,8 @@ The filter matches a scope string, and scopes are reused. <code>v1.3.0</code> li
 is <code>feat(metrics)</code> and touches only <code>claude-usage/</code>, the Claude Code usage
 tooling, because that module and the product's Prometheus metrics share a scope.
 Assert the paths for every cited PR instead of reading the subjects:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>git<span class="w"> </span>show<span class="w"> </span>--stat<span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;&#39;</span><span class="w"> </span>--name-only<span class="w"> </span>&lt;sha&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-qE<span class="w"> </span><span class="s1">&#39;^(api|broker|cmd|githubapp|scaleset|charts)/&#39;</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;NOT PRODUCT&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>git<span class="w"> </span>show<span class="w"> </span>--stat<span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;&#39;</span><span class="w"> </span>--name-only<span class="w"> </span>&lt;sha&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-qE<span class="w"> </span><span class="s1">&#39;^(api|broker|cmd|githubapp|scaleset|charts)/&#39;</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;NOT PRODUCT&quot;</span>
 </code></pre></div>
 <p>It was one entry in 64, and no amount of re-reading the list would have found it.</p>
 <p><strong>Cite the commit that did the work, not the one that filed it.</strong> A Q-numbered
@@ -3929,27 +4363,35 @@ per stable tag: <code>https://actions-gateway.com/X.Y.Z/operations/…</code>. M
 the site drops the leading <code>v</code> exactly like the chart does. <code>v1.3.0</code> shipped 18
 such links. They 404 until the docs deploy for the tag completes, which is
 expected while the Release is still a draft.</p>
-<p><strong>Verify every link and anchor.</strong> Nothing checks them for you: <code>make doc-links</code>
-skips external URLs by design, and every link in a notes file is absolute. Anchors
-are the usual failure, and the built site is the authoritative oracle — read the
-ids MkDocs actually emitted rather than re-deriving a slug by hand, which gets
-punctuation, backticks, and parenthesised clauses wrong:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>make<span class="w"> </span>docs-build
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;id=&quot;[^&quot;]*&quot;&#39;</span><span class="w"> </span>site/operations/upgrade/index.html<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s/id=&quot;//;s/&quot;//&#39;</span>
+<p><strong>Verify every link and anchor.</strong> A gate does it for you now (Q636):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>make<span class="w"> </span>release-links-check
 </code></pre></div>
-<p>Better, resolve every link in the file against <code>site/</code> in one pass. Whatever you
-write, <strong>include a URL you know is broken</strong> and confirm it is reported: a checker
-that silently resolves nothing looks exactly like a clean file. <code>v1.3.0</code>'s notes
-were verified this way — 20 site URLs resolved, plus one deliberately bogus
-anchor that the same run flagged.</p>
+<p>It builds <code>site/</code> if it is missing and resolves every
+<code>https://actions-gateway.com/X.Y.Z/…</code> link in <code>docs/releases/</code> against it —
+<code>…/operations/upgrade/#gmc-rollback</code> becomes
+<code>site/operations/upgrade/index.html</code> carrying <code>id="gmc-rollback"</code>. Anchors are
+the usual failure, and the built site is the authoritative oracle: reading the
+ids MkDocs actually emitted beats re-deriving a slug by hand, which gets
+punctuation, backticks, and parenthesised clauses wrong.</p>
+<p>Two things it cannot answer, so they stay yours. A <strong>third-party or github.com
+URL</strong> has no local oracle and is only counted, not resolved. And <code>site/</code> is
+built from the current tree, so only the <strong>newest</strong> notes file's version is
+resolvable — links naming an older release are reported as skipped with their
+count, never quietly passed. That is also the shape to watch when the docs move
+on after a tag: the gate then reports a link the frozen published version still
+serves, and fixing the note is right only if the next release would inherit the
+same broken link.</p>
+<p>The site-side ids for one page, when you want to read them directly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;id=&quot;[^&quot;]*&quot;&#39;</span><span class="w"> </span>site/operations/upgrade/index.html<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s/id=&quot;//;s/&quot;//&#39;</span>
+</code></pre></div>
 <p><strong>Do not hard-wrap.</strong> GitHub renders a release body with comment-flavour GFM,
 where a single newline becomes <code>&lt;br&gt;</code>. Keep every paragraph, blockquote, and list
 continuation on one line. <code>v1.3.0</code>'s hard-wrapped draft rendered 46 of them.</p>
 <p>Check this against the <strong>renderer</strong>, not the source. <code>gh release view --json body</code>
 returns the raw Markdown, which never contains <code>&lt;br&gt;</code> however badly it is wrapped,
 so grepping that is a check that cannot fail. Render it the way GitHub will:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>/markdown<span class="w"> </span>-f<span class="w"> </span><span class="nv">mode</span><span class="o">=</span>gfm<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;text=</span><span class="k">$(</span>cat<span class="w"> </span>docs/releases/vX.Y.Z.md<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;&lt;br&gt;&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>/markdown<span class="w"> </span>-f<span class="w"> </span><span class="nv">mode</span><span class="o">=</span>gfm<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;text=</span><span class="k">$(</span>cat<span class="w"> </span>docs/releases/vX.Y.Z.md<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;&lt;br&gt;&#39;</span>
 </code></pre></div>
 <p><code>mode=gfm</code> is the comment flavour; <code>mode=markdown</code> is not, and reports 0 on a
 hard-wrapped file. The same render confirms the rest of the GitHub-only markup
@@ -3959,8 +4401,8 @@ per fold, and no literal <code>[!</code> anywhere.</p>
 <code>id</code>, so <code>[Upgrading](#upgrading)</code> is a dead link. Refer to a section by name in
 bold instead. Verify on a published release rather than trusting this — the page
 does emit ids, but only on GitHub's own chrome:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span>https://github.com/&lt;owner&gt;/&lt;repo&gt;/releases/tag/&lt;tag&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;&lt;h[1-6][^&gt;]*&gt;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;id=&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span>https://github.com/&lt;owner&gt;/&lt;repo&gt;/releases/tag/&lt;tag&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;&lt;h[1-6][^&gt;]*&gt;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;id=&#39;</span>
 </code></pre></div>
 <p><strong>So a table of contents is not available, and should not be faked.</strong> An unlinked
 list of section names is dead weight that costs collapsed height against the
@@ -3972,6 +4414,24 @@ under <code>docs/releases/</code> does get GitHub's auto-generated file outline 
 which is a second reason not to hand-roll one.)</p>
 <p><strong>Watch the chart-version form.</strong> Images are tagged <code>vX.Y.Z</code>, charts <code>X.Y.Z</code>.
 A copy-pasteable <code>helm</code> command with a <code>v</code> in it fails.</p>
+<p><strong>Curating the notes means adding the image digests by hand — after the tag.</strong>
+The compose step in <code>publish.yml</code> writes the five index digests, the verify
+command, and a changelog, but it runs <strong>only when the tag has no Release yet</strong>.
+A curated draft is exactly that condition, so the step logs <code>already exists;
+leaving its notes and flags untouched</code> and the digests never appear. They also
+cannot be written in advance: the images are built <em>from</em> the tag.</p>
+<p>So after <code>publish.yml</code> goes green, resolve them and amend the notes file:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>worker<span class="w"> </span>wrapper<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span><span class="s2">&quot;ghcr.io/actions-gateway/</span><span class="si">${</span><span class="nv">img</span><span class="si">}</span><span class="s2">:vX.Y.Z&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">    </span>--format<span class="w"> </span><span class="s1">&#39;{{json .Manifest.Digest}}&#39;</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="k">done</span>
+</code></pre></div>
+<p>Confirm they are <strong>index</strong> digests, not per-arch manifests — the mediaType must
+be a manifest list, and the index must carry both <code>linux/amd64</code> and <code>linux/arm64</code>.
+A per-arch digest pins the workload to one architecture and fails to schedule on
+the other. This makes the tagged copy of the notes file permanently one section
+behind the published body, which is intended; <code>docs/releases/README.md</code> § Image
+digests explains why.</p>
 <p><strong>Run the <code>deslop</code> skill over the draft before publishing.</strong> Release notes are the
 most-read prose the project ships.</p>
 <h5 id="before-publishing-the-mechanical-checks">Before publishing: the mechanical checks<a class="headerlink" href="#before-publishing-the-mechanical-checks" title="Permanent link">&para;</a></h5>
@@ -4039,7 +4499,7 @@ needs a hand-flip. The remaining items below are one-time setup or guardrails, n
 per-release steps:</p>
 <ul>
 <li><strong>Prerelease annotation — derived, not hand-flipped (Q293).</strong>
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> carries
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> carries
   <code>artifacthub.io/prerelease</code>, but its committed value is a <strong>dev placeholder</strong>:
   <code>publish.yml</code> overrides it with <code>yq</code> before <code>helm package</code>, setting <code>"true"</code> for
   a <code>0.x</code> or <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> tag and <code>"false"</code> for a stable <code>≥1.0.0</code> tag
@@ -4047,29 +4507,56 @@ per-release steps:</p>
   to land before or after a cut. The v2 CRD chart is stamped the same way.</li>
 <li><strong>Artifact Hub listing.</strong> Discoverability metadata (description, keywords,
   prerelease flag) ships in the chart's own annotations. Ownership verification
-  uses <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/artifacthub-repo.yml"><code>artifacthub-repo.yml</code></a> at the repo root —
+  uses <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/artifacthub-repo.yml"><code>artifacthub-repo.yml</code></a> at the repo root —
   register the OCI repository in the Artifact Hub control panel, copy the
   assigned <code>repositoryID</code> into that file, and push it to the registry as the
   repository-metadata OCI artifact (the file's header documents the exact
   steps). This is a one-time control-panel action, not part of <code>publish.yml</code>.</li>
 <li><strong>Empty <code>values.yaml</code> digests.</strong> <strong>Do not</strong> commit real <code>sha256:…</code> digests into
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/values.yaml"><code>values.yaml</code></a>. The empty <code>digest</code>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/values.yaml"><code>values.yaml</code></a>. The empty <code>digest</code>
   fields are the <em>secure default</em>: an unconfigured install fails closed (the GMC
   rejects floating AGC/proxy tags at startup) until the operator pins a real
   digest at install time. Baking a digest into the shipped chart would defeat
   that fail-closed posture and immediately go stale. The published digests belong
   in the <strong>release notes</strong> (step 5), which is where the operator copies them from.</li>
 </ul>
-<h3 id="7-hand-off-to-operators">7. Hand off to operators<a class="headerlink" href="#7-hand-off-to-operators" title="Permanent link">&para;</a></h3>
+<h3 id="7-bump-the-pinned-release-in-the-docs">7. Bump the pinned release in the docs<a class="headerlink" href="#7-bump-the-pinned-release-in-the-docs" title="Permanent link">&para;</a></h3>
+<p>The adopter-facing pages transcribe the chart version, the image tag, and the
+release-notes URL by hand. Nothing in the pipeline rewrites them, so after the
+tag they still advertise the <em>previous</em> release — and a reader following one
+installs a release behind, digests and all. A gate runs the bump instead of
+remembering it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>make<span class="w"> </span>release-pins-check
+</code></pre></div>
+<p>It resolves the newest stable <code>vX.Y.Z</code> tag and fails with the file and line of
+every pin that still names an older one, across the five pages that tell a
+reader which version to install — <code>README.md</code>, <code>docs/index.md</code>, and
+<code>docs/operations/</code>'s <code>install.md</code>, <code>upgrade.md</code>, and <code>gitops.md</code>. Bump each site
+it reports (charts drop the leading <code>v</code>; <code>gitops.md</code> carries the Argo
+<code>targetRevision</code> and both Flux forms) and re-run until it is green.</p>
+<p>Two things it deliberately leaves alone, both documented in
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/scripts/docs/check-release-pins.sh"><code>scripts/docs/check-release-pins.sh</code></a>:
+a line beginning <code>Measured on kind</code>, whose version records what was actually
+installed for a measurement — bumping it would falsify the record — and
+<code>v2.0.0</code>, the announced <code>v1alpha1</code>/<code>v2alpha1</code> removal release. A page that
+yields <em>no</em> pin at all is a failure rather than a pass, so a pin that moves out
+of the scan's reach is reported instead of silently going unchecked.</p>
+<p>Landing the bump is a normal PR; the gate is part of <code>make check</code> and of the
+<code>doc-links</code> CI workflow, so a stale pin reddens every subsequent PR until it is
+fixed. This step exists because <code>v1.3.0</code> shipped without it: <code>README.md</code>,
+<code>docs/index.md</code>, and <code>install.md</code> were fixed by hand while <code>upgrade.md</code> and
+<code>gitops.md</code> kept pointing at <code>1.2.0</code>, and <code>install.md</code>'s own patch-line hint
+still read <code>1.2.z</code> (Q638).</p>
+<h3 id="8-hand-off-to-operators">8. Hand off to operators<a class="headerlink" href="#8-hand-off-to-operators" title="Permanent link">&para;</a></h3>
 <p>Operators install/upgrade straight from the <strong>published OCI chart</strong> with the
 digests pinned via <code>--set</code>, exactly as
 <a href="../install/#pin-images-by-digest">install.md § Pin images by digest</a> and
 <a href="../upgrade/">upgrade.md</a> document (<code>X.Y.Z</code> is the release tag without the <code>v</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
 <h2 id="patch-releases-and-backports">Patch releases and backports<a class="headerlink" href="#patch-releases-and-backports" title="Permanent link">&para;</a></h2>
 <p>A patch release (<code>vX.Y.Z+1</code>) is <strong>bugfix-only</strong> by SemVer. That has a release-
@@ -4101,7 +4588,7 @@ a commit that carries the harness fixes you want the line to keep. Cutting it fr
 an older RC's commit to make the tag byte-match the validated artifact is the trap
 — it strands every gate fix found <em>during</em> that release's validation, which is
 exactly when gate fixes tend to be found. <code>v1.3.0</code> is the worked example: rc.5's
-validation produced two harness fixes (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/release-1.3.md#Q627">Q627</a> and the e2e watch
+validation produced two harness fixes (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/release-1.3.md#Q627">Q627</a> and the e2e watch
 deadline), and a <code>release-1.3</code> branch cut from rc.5's commit would reproduce both
 on every future <code>v1.3.x</code>.</p>
 <p>Validating an RC whose product code matches <code>main</code> is unaffected: the images and
@@ -4114,7 +4601,7 @@ content — no unreleased features. And the site's <code>stable</code> alias + d
 redirect move <strong>only to the highest released version</strong>, so a backport patch
 released <em>after</em> a newer minor updates its own version's docs without demoting the
 site (see
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/website.md#versioned-deploy-mike">website.md § Versioned deploy</a>).
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/website.md#versioned-deploy-mike">website.md § Versioned deploy</a>).
 No docs-specific branch is ever required beyond what the release itself needs.</p>
 <h2 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h2>
 <p>A release is just a tag and a set of immutable, digest-addressed images — nothing
@@ -4134,8 +4621,8 @@ same <code>cmd/worker</code> wrapper that feeds the job payload into <code>Runne
   the <strong>unmodified upstream <code>ghcr.io/actions/actions-runner</code></strong> (or any tenant
   <code>workerImage</code>). This is what makes <code>DefaultWorkerImage</code> (still the digest-pinned
   upstream <code>actions-runner</code>, runner version locked to <code>agent.version</code> — see
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/building.md#runner-version-pin-lockstep">building.md</a>) actually
-  run jobs (Q235, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/archive/q235-worker-wrapper-injection.md">plan</a>).</li>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/building.md#runner-version-pin-lockstep">building.md</a>) actually
+  run jobs (Q235, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/archive/q235-worker-wrapper-injection.md">plan</a>).</li>
 <li><strong><code>ghcr.io/actions-gateway/worker</code></strong> — the full upstream <code>actions-runner</code> + the
   wrapper as <code>ENTRYPOINT</code> (~520 MB). Kept as an optional batteries-included image;
   unnecessary once injection is enabled, since the runner image is the upstream one
@@ -4193,27 +4680,45 @@ write</code>: its ambient OIDC identity <em>is</em> the release trust root. A hi
 that job could push and keyless-sign malicious images as the legitimate publish
 identity. Three controls keep the pipeline itself trustworthy.</p>
 <h3 id="actions-are-pinned-to-full-commit-shas">Actions are pinned to full commit SHAs<a class="headerlink" href="#actions-are-pinned-to-full-commit-shas" title="Permanent link">&para;</a></h3>
-<p>Every <code>uses:</code> across <code>.github/workflows/</code> is pinned to a full 40-char commit SHA
-with a trailing <code># vX.Y.Z</code> comment for readability — never a floating tag (<code>@v4</code>)
-or branch. A tag is mutable: whoever controls the upstream repo can repoint it at
-new code, which would then run inside the privileged publish job. A SHA is
-immutable. The runtime tool downloads in the publish path are pinned the same way:
+<p>Every <code>uses:</code> in the repo is pinned to a full 40-char commit SHA with a trailing
+<code># vX.Y.Z</code> comment — never a floating tag (<code>@v4</code>) or branch. A tag is mutable:
+whoever controls the upstream repo can repoint it at new code, which would then
+run inside the privileged publish job. A SHA is immutable. The comment is not
+decoration: it is what Dependabot reads to know which release a SHA is, so a pin
+without one is a pin nothing will bump.</p>
+<p><code>make uses-pinned-check</code> enforces both halves, and the CI <code>uses-pinned</code> job
+(<code>unit-test.yml</code>) runs it on any workflow change. Exempt shapes, because neither
+is a mutable third-party reference: a local <code>./…</code> action or reusable workflow,
+which is in-tree code the same PR reviews, and a <code>docker://</code> image, which must
+carry an <code>@sha256:</code> digest instead. An unparseable workflow fails the gate rather
+than being skipped.</p>
+<p>The runtime tool downloads in the publish path are pinned the same way:
 <code>cosign</code> via <code>sigstore/cosign-installer</code> with an explicit <code>cosign-release</code>
 (kept in step with <code>COSIGN_VERSION</code> in the Makefile so a local <code>make
 verify-release</code> uses the same version that signed), and <code>syft</code> via the
 <code>syft-version</code> input on <code>anchore/sbom-action/download-syft</code> (the action is
 SHA-pinned, but syft itself is a runtime download).</p>
 <p><strong>Bumping a pinned action.</strong> Dependabot's <code>github-actions</code> ecosystem
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that
 bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and
 merge those like any dependency PR. To pin or bump by hand, resolve the tag to its
 commit SHA and keep the comment in sync:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.sha&#39;</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.sha&#39;</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
 </code></pre></div>
 <p><code>syft-version</code> is <strong>not</strong> Dependabot-managed (it's a tool download, not an action
 ref) — bump it by hand in <code>publish.yml</code> when you bump the <code>anchore/sbom-action</code>
-SHA. <code>actionlint</code> (CI <code>lint</code> job) keeps SHA-pinned <code>uses:</code> lint-clean.</p>
+SHA.</p>
+<p>The two workflow gates divide the work, and it is worth knowing which answers
+what. <code>actionlint</code> checks that a <code>uses:</code> ref is present and well formed, so a pin
+edited down to a bare <code>owner/repo</code> fails the PR. But measured against v1.7.12,
+the version <code>tools/</code> pins, it accepts <code>@v7.0.1</code>, <code>@v4</code> and <code>@main</code> at exit 0,
+resolving the action's inputs off the tag while doing so. It reads the ref and
+never asserts it is a SHA. <code>uses-pinned-check</code> is the gate for that, and its scope
+is wider: actionlint lints only the root <code>.github/workflows/</code> directory, while the
+pin gate covers every workflow and composite action in the tree,
+including <code>cmd/gmc/.github/workflows/</code>: kubebuilder scaffolding GitHub never
+runs, whose refs no gate had read before.</p>
 <h3 id="signing-identity-is-tags-only">Signing identity is tags-only<a class="headerlink" href="#signing-identity-is-tags-only" title="Permanent link">&para;</a></h3>
 <p>Releases are cut by pushing a <code>v*</code> tag, so a legitimate keyless signature's Fulcio
 certificate records <code>publish.yml</code> running from <code>refs/tags/vX.Y.Z</code>. Two layers
@@ -4225,7 +4730,7 @@ enforce that a signature can only ever be a tag signature:</p>
 <li><strong><code>make verify-release</code> only accepts a tags identity.</strong> The
   <code>--certificate-identity-regexp</code> is anchored to <code>…/publish\.yml@refs/tags/v.*$</code>
   (sourced from <code>release_identity_regexp</code> in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted
   from <code>refs/heads/…</code> is rejected even if one were somehow produced. The
   <code>scripts/release/verify-release-test.sh</code> assertions (run by <code>make check</code> and CI) guard
   that the regexp stays tags-only.</li>
@@ -4248,7 +4753,7 @@ that verifies them</em>.</p>
   which re-fetches every module verified against <code>go.sum</code> — and fails on any diff
   against the committed trees. A Dependabot <code>go.mod</code> bump legitimately fails this
   gate until a follow-up vendor sync lands; that is the intended signal (see
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/go-workspaces.md#changing-dependencies">go-workspaces.md § Changing dependencies</a>).</li>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/go-workspaces.md#changing-dependencies">go-workspaces.md § Changing dependencies</a>).</li>
 <li><strong>The cosign verify binary is checksummed.</strong> GitHub release assets are mutable
   for an existing tag, so a raw download of the release verifier can't be trusted
   on its own. The publish pipeline obtains cosign via the SHA-pinned

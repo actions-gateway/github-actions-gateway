@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/roadmap/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/roadmap/">
       
       
         <link rel="prev" href="../getting-started/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -532,6 +573,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -794,7 +862,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -816,14 +884,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1409,6 +1477,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1422,7 +1494,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1444,14 +1516,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1461,6 +1533,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1722,6 +1822,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1861,10 +1989,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1882,8 +2010,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2384,6 +2512,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2468,62 +2700,179 @@
 
 
 <h1 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">&para;</a></h1>
-<p>This page is about what GAG does <strong>not</strong> do yet. For what it does today, see
-<a href="../features/">Features</a> — every shipped capability, with a link to the doc that
-explains it — and <a href="../why-gag/">Why GAG?</a> for the capability-by-capability
+<p>This page is about what GitHub Actions Gateway (GAG) does <strong>not</strong> do yet. For what it does today, see
+<a href="../features/">Features</a> for every shipped capability, with a link to the doc that
+explains it, and <a href="../why-gag/">Why GAG?</a> for the capability-by-capability
 comparison against Actions Runner Controller (ARC).</p>
-<p>GitHub Actions Gateway (GAG) is <strong>1.0, generally available, and installable from
-the GitHub Container Registry (GHCR)</strong>. It is Apache-2.0, vendor-neutral, and
+<p>GAG is <strong>generally available and installable from the GitHub Container Registry
+(GHCR)</strong>; the
+<a href="https://github.com/actions-gateway/github-actions-gateway/releases">releases page</a>
+names the current version. It is Apache-2.0, vendor-neutral, and
 built for one outcome: real operators running multi-tenant self-hosted runners in
-real clusters. There is no paid tier and no commercial roadmap — the plan below is
-about capability and adoption, not revenue.</p>
+real clusters. There is no paid tier and no commercial roadmap, so the plan below
+is about capability and adoption, not revenue.</p>
 <p>It is a direction-of-travel snapshot, not a dated commitment. Priorities move with
 what adopters actually hit first, so the surest way to influence what comes next is
 to <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a>
 describing your setup. Every open item, in priority order, is in the
 <a href="https://actions-gateway.com/dev/STATUS/">working backlog</a>.</p>
 <h2 id="in-progress--near-term">In progress / near-term<a class="headerlink" href="#in-progress--near-term" title="Permanent link">&para;</a></h2>
-<p>Work that is scoped and actively being built — adoption-enabling polish and the
-last gaps an outside operator hits.</p>
+<p>Committed to a named release. Every item here blocks a release tag, and nothing
+else appears in this section: work waiting on demand, on an unbuilt
+prerequisite, or on hardware sits under
+<a href="#exploring--longer-term">Exploring / longer-term</a> with the signal that revives
+it. The pill beside each title names the release it blocks, read from the
+backlog rather than typed here, so it cannot outlive the commitment.</p>
 <ul>
 <li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/q408-untrusted-pr-egress.md">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 -->
+<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/release-1.5.md#q712--the-runner-group-binding-is-declared-and-never-wired">Bind each runner set to a GitHub runner group</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q712 -->
+  The runner group is GitHub's own control over which repositories may target a
+  runner set, and GAG does not set it today, so every scale set registers into
+  the installation's default group. Kubernetes-side isolation is unaffected;
+  what is unbounded is which repositories can send work to a tenant.</p>
+</li>
+<li>
+<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/release-1.5.md#q713--the-shipped-tier-emits-no-duration-or-latency-series">Job duration and pod-creation latency on the default tier</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q713 -->
+  Both series are emitted on the classic tier only, so on the scale-set tier that
+  every new tenant runs, two Service Level Objectives, an alert, four recording
+  rules, and panels in both shipped dashboards have no data. Until it lands,
+  expect those panels to read empty.</p>
+</li>
+<li>
+<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/arc-parity.md#where-arc-is-actually-ahead">Multi-label runner sets for <code>runs-on</code> arrays</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q726 -->
+  A runner set takes exactly one label today, so a workflow targeting
+  <code>runs-on: [linux, gpu]</code> needs one edit per target to move here from Actions
+  Runner Controller (ARC). That is the one gap breaking the otherwise zero-edit
+  migration.</p>
+</li>
+<li>
+<p><strong><a href="../operations/tenant-onboarding/">Detect the runner version a tenant's worker image ships</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q715 -->
+  The version GAG reports to GitHub is the pinned default, whatever
+  <code>spec.workerImage</code> holds, and the too-old warning fires on the classic tier
+  only. GitHub raises its enforced minimum on 2026-09-25, so a stale image fails
+  with no prior signal.</p>
+</li>
+<li>
+<p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q719 -->
+  Workers are storage-less by design and nothing validates a <code>ReadWriteMany</code>
+  volume mounted into one, so the stance is undocumented rather than decided.
+  <code>ReadWriteMany</code> is how jobs share files, and it is what ARC's
+  <code>containerMode: kubernetes</code> depends on, so it also matters to anyone migrating
+  off that mode. Validation and a reference architecture come before any API.</p>
+</li>
+<li>
+<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/arc-parity.md#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q727 -->
+  ARC runs these as separate pods on a shared volume under
+  <code>containerMode: kubernetes</code>. One worker pod per job means the path here is
+  Docker-in-Docker, unprivileged only under Kata. Sequenced behind the
+  <code>ReadWriteMany</code> validation above, which it depends on; documenting Kata
+  Docker-in-Docker as the permanent answer is a valid outcome.</p>
+</li>
+</ul>
+<h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
+<p>Directions we expect to pursue as demand and validated evidence accumulate. These
+are intentionally unscheduled. Each waits on a real operator need, a measured
+limit, or a gating release before it becomes scheduled work. The first entry is
+the exception: a firm commitment, waiting only on the release that carries it.</p>
+<ul>
+<li>
+<p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition protocol</a></strong> <!-- q:Q273 -->
+  Committed, but not yet started. <code>v1.3.0</code> is the one-release-ahead announcement;
+  <strong><code>v2.0.0</code></strong> is the named release that removes all three together, since
+  <code>v2beta1</code> is already ScaleSet-only. Gated on the <code>v2</code> GA API being validated,
+  not on a date.</p>
+</li>
+<li>
+<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/arc-parity.md#where-arc-is-actually-ahead">Validate GHES against a real appliance</a></strong> <!-- q:Q765 -->
+  Both GitHub Enterprise Server (GHES) capabilities ship marked untested against
+  real hardware: the appliance-addressing path and the private-CA bundle. They
+  are believed correct and unproven, which is not the same thing. Waits on
+  access to an appliance.</p>
+</li>
+<li>
+<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/q408-untrusted-pr-egress.md">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 -->
   <a href="../operations/kata-dind-workloads/">Kata workers</a> are validated for <em>trusted</em>
   CI only: the micro-VM bounds the guest kernel, the runner's egress stays
   permissive. Untrusted PRs need an in-cluster pull-through registry mirror plus
-  egress scoped to it, GitHub, and DNS. Scheduled on an operator's ask;
-  measurement first.</p>
-</li>
-<li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/runner-template-library.md">A curated runner template library</a></strong> <!-- q:Q554 -->
-  Every tenant writes its own worker pod template today, including the fiddly
-  parts: the Docker-in-Docker sidecar, the Kata <code>runtimeClassName</code>, the volume
-  and security-context wiring. The templates our own end-to-end CI exercises
-  become a shipped kustomize base you patch. No new API surface.</p>
+  egress scoped to it, GitHub, and DNS. Waits on an operator's ask, then a
+  measurement.</p>
 </li>
 <li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Opt-in auto-retry for flaky jobs</a></strong> <!-- q:Q555 -->
   A job the cluster disrupts already
   <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>;
   a flaky failure does not. Same machinery, opted in per runner set with its own
-  budget so a broken test cannot loop. Detection comes first.</p>
+  budget so a broken test cannot loop. Waits on detection, which needs a real
+  job outcome.</p>
 </li>
+<li>
+<p><strong>Controller horizontal scaling / high availability.</strong> <!-- q:Q169 --> The
+  per-tenant controller runs
+  <a href="../design/02-architecture/">one replica by design</a>: the session registry is
+  in-memory, and HA comes from GitHub redelivering an unacquired job.
+  Distributed session state would enable multi-replica HA if a single controller
+  becomes a measured bottleneck.</p>
+</li>
+<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-api.md#deferred-out-of-the-critical-path">Bring-your-own proxy TLS certificate</a></strong> <!-- q:Q174 -->
+  Supply the proxy's certificate from your managed PKI or Vault instead of the
+  self-signed default the Gateway Manager Controller (GMC) issues.
+  (The autoscaler half has shipped:
+  <code>managedAutoscaling: false</code> hands the pool to KEDA, VPA, or a custom
+  HorizontalPodAutoscaler.)</li>
+<li><strong><a href="../design/appendix-e-capacity-planning/">First-class GPU runner support</a></strong> <!-- q:Q216 -->
+  Priority tiers and the
+  <a href="../operations/worker-rightsizing/"><code>NodeShare</code> sizing profile</a> already carry the
+  GPU cases, but GPU Operator / Node Feature Discovery awareness, and
+  <code>nodeSelector</code> / toleration / <code>RuntimeClass</code> conventions that make a GPU runner
+  set feel native, wait on a concrete GPU workload to design against.</li>
+<li><strong><a href="../design/appendix-e-capacity-planning/">Multi-node GPU jobs</a></strong> <!-- q:Q718 --> One job needing several
+  co-scheduled workers in one NVLink or InfiniBand domain is a different problem
+  from one job needing one GPU: capacity is advertised to GitHub as a single
+  integer, and a gang requirement is a placement predicate rather than a count.
+  Waits on a real multi-node workload, and would interact with a batch scheduler
+  such as Kueue or Volcano.</li>
+<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane">A worker cache backend</a></strong> <!-- q:Q215 -->
+  <code>actions/cache</code> already works. What is missing is a cache <em>inside</em> the
+  cluster, to cut egress cost and restore latency. Docker layer caching has no
+  home either way, because workers are storage-less by design. It waits on a
+  <a href="../design/05-security/">security review</a> of cross-job cache isolation: a
+  shared cache between tenants is an obvious exfiltration path.</li>
+<li><strong><a href="../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">A warm worker pool</a></strong> <!-- q:Q268 -->
+  An opt-in pool of idle pods per runner set, for teams that still hit
+  pod-schedule latency after image pre-pull and caching.</li>
+<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-5.md">gVisor validation</a></strong> <!-- q:Q15 --> The <code>runtimeClassName</code> path is
+  <a href="../operations/kata-dind-workloads/">validated end-to-end with Kata</a>; gVisor is
+  documented but unproven on a real cluster. It waits on an operator who wants
+  lightweight syscall filtering for compute-only, non-Docker-in-Docker jobs, since
+  Kata already covers the DinD case.</li>
+<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2beta1.md#workload-identity-a-different-config-vault-first">SPIFFE / SPIRE workload identity</a></strong> <!-- q:Q214 -->
+  A keyless, SPIRE-backed signer slots behind the
+  <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">existing signer interface</a>
+  alongside the deferred cloud-KMS providers, for operators who want no GitHub App
+  private key anywhere.</li>
+<li><strong>An Operator Lifecycle Manager bundle.</strong> <!-- q:Q217 -->
+  <a href="../operations/install/">Helm-only</a> is the deliberate install stance; an
+  OperatorHub catalog entry waits on OpenShift demand.</li>
+<li><strong>A published benchmark and case study.</strong> <!-- q:Q198 --> Real GitHub-at-scale
+  numbers behind the <a href="../design/appendix-f-cost-model/">cost model</a>, which needs a
+  funded scale run rather than a local cluster.</li>
 </ul>
-<p>The next four are all opt-in additions to the
-<a href="../design/network-architecture/">per-tenant proxy</a>, tracked and shipping
-separately.</p>
+<p>The last four are opt-in additions to the
+<a href="../design/network-architecture/">per-tenant proxy</a>, shelved together because
+none has demand recorded against it. A coherent theme is not a release.</p>
 <ul>
 <li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></strong> <!-- q:Q564 -->
-  A structured line per accepted CONNECT — tenant, host and port, bytes each way,
+  A structured line per accepted CONNECT: tenant, host and port, bytes each way,
   duration. The proxy emits counters only today, so per-tenant egress is
   reconstructable just from cluster flow logs. Off by default.</p>
 </li>
 <li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g2-proxy-enforced-per-tenant-rate-limiting">Per-tenant proxy rate limiting</a></strong> <!-- q:Q565 -->
   A token bucket at the proxy, so one looping tenant is slowed before it reaches
-  GitHub's ceiling; today the only feedback is a 429 and AGC backoff. Per-pod
-  state — global limits would need a shared backend.</p>
+  GitHub's ceiling; today the only feedback is a 429 and Actions Gateway
+  Controller (AGC) backoff. Per-pod state, since global limits would need a
+  shared backend.</p>
 </li>
 <li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g4-tls-between-agcworkers-and-the-proxy">TLS on the in-cluster proxy hop</a></strong> <!-- q:Q566 -->
@@ -2537,80 +2886,15 @@ separately.</p>
   co-tenant's. Give an opted-in group its own Deployment, Service, and
   autoscaler. Largest of the four; needs a plan doc before code.</p>
 </li>
-<li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2-api.md">Cross-namespace proxy sharing</a></strong> <!-- q:Q166 --> Share an
-  <a href="../design/network-architecture/">egress proxy pool</a> across namespaces with
-  explicit consent: <code>sharing.allowedNamespaces</code> is served API today but not
-  yet enforced, so the consent check lands before the beta contract hardens.</p>
-</li>
-</ul>
-<h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
-<p>Directions we expect to pursue as demand and validated evidence accumulate. These
-are intentionally unscheduled — each waits on a real operator need, a measured
-limit, or a gating release before it becomes scheduled work. The first entry is
-the exception that proves the rule: it is a firm commitment, waiting only on the
-release that carries it.</p>
-<ul>
-<li>
-<p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition protocol</a></strong> <!-- q:Q273 -->
-  Committed, but not yet started. <code>v1.3.0</code> is the one-release-ahead announcement;
-  <strong><code>v2.0.0</code></strong> is the named release that removes all three together, since
-  <code>v2beta1</code> is already ScaleSet-only. Gated on the <code>v2</code> GA API being validated,
-  not on a date.</p>
-</li>
-<li>
-<p><strong>Controller horizontal scaling / high availability.</strong> <!-- q:Q169 --> The
-  per-tenant controller runs
-  <a href="../design/02-architecture/">one replica by design</a> — the session registry is
-  in-memory, and HA comes from GitHub redelivering an unacquired job.
-  Distributed session state would enable multi-replica HA if a single controller
-  becomes a measured bottleneck.</p>
-</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2-api.md#deferred-out-of-the-critical-path">Bring-your-own proxy TLS certificate</a></strong> <!-- q:Q174 -->
-  Supply the proxy's certificate from your managed PKI or Vault instead of the
-  GMC's self-signed default. (The autoscaler half has shipped:
-  <code>managedAutoscaling: false</code> hands the pool to KEDA, VPA, or a custom
-  HorizontalPodAutoscaler.)</li>
-<li><strong><a href="../design/appendix-e-capacity-planning/">First-class GPU runner support</a></strong> <!-- q:Q216 -->
-  Priority tiers and the
-  <a href="../operations/worker-rightsizing/"><code>NodeShare</code> sizing profile</a> already carry the
-  GPU cases, but GPU Operator / Node Feature Discovery awareness, and
-  <code>nodeSelector</code> / toleration / <code>RuntimeClass</code> conventions that make a GPU runner
-  set feel native, wait on a concrete GPU workload to design against.</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane">A worker cache backend</a></strong> <!-- q:Q215 -->
-  Workers are storage-less by design, so
-  <code>actions/cache</code> and Docker layer caching have no home. Adding an optional
-  PVC or object-store cache needs a
-  <a href="../design/05-security/">security review</a> of cross-job cache isolation first: a
-  shared cache between tenants' jobs is an obvious exfiltration path.</li>
-<li><strong><a href="../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">A warm worker pool</a></strong> <!-- q:Q268 -->
-  An opt-in pool of idle pods per runner set, for teams that still hit
-  pod-schedule latency after image pre-pull and caching.</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/milestone-5.md">gVisor validation</a></strong> <!-- q:Q15 --> The <code>runtimeClassName</code> path is
-  <a href="../operations/kata-dind-workloads/">validated end-to-end with Kata</a>; gVisor is
-  documented but unproven on a real cluster. It waits on an operator who wants
-  lightweight syscall filtering for compute-only, non-Docker-in-Docker jobs, since
-  Kata already covers the DinD case.</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2beta1.md#workload-identity-a-different-config-vault-first">SPIFFE / SPIRE workload identity</a></strong> <!-- q:Q214 -->
-  A keyless, SPIRE-backed signer slots behind the
-  <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">existing signer interface</a>
-  alongside the deferred cloud-KMS providers, for operators who want no GitHub App
-  private key anywhere.</li>
-<li><strong>An Operator Lifecycle Manager bundle.</strong> <!-- q:Q217 -->
-  <a href="../operations/install/">Helm-only</a> is the deliberate install stance; an
-  OperatorHub catalog entry waits on OpenShift demand.</li>
-<li><strong>A published benchmark and case study.</strong> <!-- q:Q198 --> Real GitHub-at-scale
-  numbers behind the <a href="../design/appendix-f-cost-model/">cost model</a>, which needs a
-  funded scale run rather than a local cluster.</li>
 </ul>
 <h2 id="how-priorities-are-set">How priorities are set<a class="headerlink" href="#how-priorities-are-set" title="Permanent link">&para;</a></h2>
 <p>GAG's success metric is <strong>external operators running it and telling us what
-breaks</strong> — not stars or downloads. That feedback drives the ordering above far
+breaks</strong>, not stars or downloads. That feedback drives the ordering above far
 more than any internal plan. If something here is in your way, or missing
-entirely, <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a>
-— it's the fastest way to move it up.</p>
+entirely, <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a>.
+That is the fastest way to move it up.</p>
 <p>The page above is the adopter-facing summary. The day-to-day ordering behind it
-is the <strong><a href="https://actions-gateway.com/dev/STATUS/">working backlog</a></strong> — every
+is the <strong><a href="https://actions-gateway.com/dev/STATUS/">working backlog</a></strong>: every
 open item, filterable by label, status, and size. It tracks the unreleased
 <code>main</code> branch, so it is published only on the <code>dev</code> version of this site and
 carries no commitment: rows are added, reordered, and deleted as work lands.</p>

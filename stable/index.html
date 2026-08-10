@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/">
       
       
       
@@ -61,15 +61,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -77,14 +77,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -93,8 +93,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -143,7 +143,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="features/" class="md-tabs__link">
         
   
@@ -435,6 +454,28 @@
     
   
   Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
 
         </a>
       </li>
@@ -587,6 +628,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#what-a-tenant-actually-declares" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a tenant actually declares
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -610,6 +662,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -792,7 +871,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -814,14 +893,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1407,6 +1486,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1420,7 +1503,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1442,14 +1525,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1459,6 +1542,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1720,6 +1831,34 @@
   
   
     <li class="md-nav__item">
+      <a href="operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1859,10 +1998,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1880,8 +2019,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2382,6 +2521,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2443,6 +2686,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#what-a-tenant-actually-declares" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a tenant actually declares
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2473,12 +2727,13 @@
 <h1 id="self-hosted-github-actions-with-zero-idle-compute"><span class="gag-hero__phrase">Self-hosted GitHub Actions</span> with <span class="gag-hero__phrase">zero idle compute</span><a class="headerlink" href="#self-hosted-github-actions-with-zero-idle-compute" title="Permanent link">&para;</a></h1>
 </div>
 </div>
-<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources — and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
+<p class="gag-claims"><span>No idle workers.</span> <span>Disrupted jobs auto-retry.</span> <span>Enforceable quotas.</span></p>
+<p class="gag-tagline">GitHub Actions Gateway (GAG) is an Actions Runner Controller (ARC) alternative for shared, multi-tenant clusters.</p>
 <p><a class="md-button md-button--primary" href="getting-started/">Get started</a>
 <a class="md-button" href="demo/">Watch the demo</a>
 <a class="md-button" href="why-gag/">Why GAG?</a>
 <a class="md-button" href="https://github.com/actions-gateway/github-actions-gateway">View on GitHub</a></p>
-<p class="gag-reassure"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> Drop-in for your existing setup — jobs target the same runner labels, so nothing in your <code>.github/workflows</code> changes.</p>
+<p class="gag-reassure"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> Drop-in for your existing setup: jobs target the same runner labels, so nothing in your <code>.github/workflows</code> changes.</p>
 </div>
 <div class="gag-install">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span><span class="se">\</span>
@@ -2497,8 +2752,27 @@
 </div>
 <div class="gag-section-intro">
 <h2 id="what-gag-gives-you">What GAG gives you<a class="headerlink" href="#what-gag-gives-you" title="Permanent link">&para;</a></h2>
-<p>Most of these ladder up to one outcome — <a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc"><strong>lower cost</strong></a>: no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. <a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">Estimate your savings vs ARC →</a> · <a href="features/">See every feature →</a></p>
+<p>These ladder up one way: <strong>safe quotas and self-healing disruption make shared capacity usable</strong>, which is what lets you bin-pack expensive nodes and run on preemptible capacity. <a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">Estimate your savings vs ARC →</a> · <a href="features/">See every feature →</a></p>
 </div>
+<div class="gag-stats" markdown="0">
+  <div class="gag-stat">
+    <span class="gag-stat__num">1&nbsp;pod</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint at rest</strong>: all listeners are goroutines in one shared pod; ARC runs one always-on pod per set</span>
+  </div>
+  <div class="gag-stat">
+    <span class="gag-stat__num">15&ndash;26&nbsp;s</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Measured recovery from a preemption or drain</strong>: the run concludes and re-runs itself, with no manual rerun and no ticket</span>
+  </div>
+  <div class="gag-stat">
+    <span class="gag-stat__num">0</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Idle GPU pods between jobs</strong>: workers exist only while a job runs, deleted on completion</span>
+  </div>
+  <div class="gag-stat">
+    <span class="gag-stat__num">20</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Alert rules shipped as code</strong>, with a tenant dashboard and a platform dashboard beside them</span>
+  </div>
+</div>
+
 <div class="gag-pillars">
 <div class="grid cards">
 <ul>
@@ -2510,7 +2784,7 @@
 <li>Platform-owned quota cap</li>
 <li>Blocked jobs auto-recover</li>
 <li>Zero manual reruns</li>
-<li>Self-serve <code>ActionsGateway</code> CRs — no platform ticket per change</li>
+<li>Self-serve <code>ActionsGateway</code>, no ticket per change</li>
 </ul>
 </li>
 <li>
@@ -2539,9 +2813,10 @@
 <hr />
 <p>Each tenant's own proxy pool:</p>
 <ul>
-<li>Allow-list runners on GitHub Enterprise Managed Users (EMU)</li>
-<li>No shared cluster allow-list</li>
-<li>Flagged tenants stay isolated</li>
+<li>Allow-list runners on Enterprise Managed Users</li>
+<li>Live-validated on GKE, 2026-07-13</li>
+<li><a href="design/network-architecture/#per-tenant-egress-ip-the-source-ip-mechanism">Stable IP needs a gateway or cloud NAT under it</a></li>
+<li><a href="operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Share a pool across namespaces, by consent</a></li>
 <li>v2: proxy optional</li>
 </ul>
 </li>
@@ -2552,7 +2827,7 @@
 <ul>
 <li>~12 KiB per listener session</li>
 <li>One shared pod per tenant</li>
-<li>1 pod vs 10 always-on pods for ten groups</li>
+<li>ARC: one always-on pod per set</li>
 </ul>
 </li>
 <li>
@@ -2574,6 +2849,7 @@
 <ul>
 <li><code>RunnerTemplate</code> per many sets</li>
 <li>Platform <code>ClusterRunnerTemplate</code></li>
+<li><a href="operations/runner-template-library/">Three validated templates ship in-box</a></li>
 <li>Identical templates collapse</li>
 <li>Migrate v1→v2 with <code>gag-migrate</code></li>
 </ul>
@@ -2583,10 +2859,11 @@
 <hr />
 <p>Hardening reconciled by default:</p>
 <ul>
-<li><code>baseline</code> Pod Security Admission (PSA) per namespace</li>
+<li><code>baseline</code> Pod Security Admission per namespace</li>
 <li>Default-deny NetworkPolicies</li>
 <li>Credentials never in env vars</li>
-<li>Signed images + Software Bill of Materials (SBOM) + SLSA</li>
+<li><a href="design/05-security/#57-workload-identity-the-no-pem-delegation-model">Workload identity</a> keeps the App key out</li>
+<li>Signed images, SBOM, and SLSA provenance</li>
 <li><a href="operations/kata-dind-workloads/">Kata micro-VM workers</a>, proven in our own CI</li>
 </ul>
 </li>
@@ -2636,7 +2913,7 @@
 <hr />
 <p>Done paying for accelerators between jobs:</p>
 <ul>
-<li>Workers scale to zero — no idle GPU</li>
+<li>Workers scale to zero, so no idle GPU</li>
 <li>GPU nodes return to the scheduler on completion</li>
 <li>Priority tiers keep critical GPU jobs scheduling</li>
 </ul>
@@ -2644,10 +2921,18 @@
 </ul>
 </div>
 </div>
-<p class="gag-fit-note"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m-1 15h2v-6h-2z"/></svg></span> <strong>Not your setup?</strong> If you're happy running on a vendor's infrastructure, a managed-SaaS runner is the better fit. GAG competes with Actions Runner Controller (ARC) for self-hosted, multi-tenant clusters — not on raw build speed.</p>
+<div class="gag-fit-note">
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m-1 15h2v-6h-2z"/></svg></span> <strong>Not your setup?</strong> Three cases where something else wins, and we would rather say so.</p>
+<ul>
+<li><strong>A vendor can run your jobs</strong> → a managed runner service, on speed and setup</li>
+<li><strong>Managed Kubernetes is cheap, CI fits one cloud</strong> → a cluster per team isolates harder</li>
+<li><strong>One team owns the cluster and the runners</strong> → <a href="https://github.com/actions/actions-runner-controller">ARC</a>, whose protocol GAG is built on</li>
+</ul>
+<p>GAG is for big, expensive nodes that several teams must share, safely. <a href="alternatives/">Compare the options →</a></p>
+</div>
 <div class="gag-section-intro">
 <h2 id="how-it-fits-together">How it fits together<a class="headerlink" href="#how-it-fits-together" title="Permanent link">&para;</a></h2>
-<p>A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its <code>ActionsGateway</code>. Jobs are acquired with the <strong>same single-acquirer runner-scale-set protocol ARC uses</strong> — the shipped default — so GAG is a strict superset of ARC's model, not a different-architecture trade-off.</p>
+<p>A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its <code>ActionsGateway</code>. Jobs are acquired with the <strong>same single-acquirer runner-scale-set protocol ARC uses</strong>, through the same <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> client library, and it is the shipped default. So <code>runs-on</code> keeps working and the protocol is not the difference. What differs is that the acquisition decision lives in the control plane rather than in the runner pod, which is what lets a job be declined before it is claimed.</p>
 </div>
 <div class="gag-flow">
   <div class="gag-flow__node gag-flow__node--input">
@@ -2661,7 +2946,7 @@
     <span class="gag-flow__title">Gateway Manager Controller</span>
     <span class="gag-flow__sub">cluster-scoped · installed once</span>
   </div>
-  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the AGC + proxy per tenant</div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the Actions Gateway Controller (AGC) + proxy per tenant</div>
   <div class="gag-flow__row">
     <div class="gag-flow__node">
       <span class="gag-flow__tier">Tier 2</span>
@@ -2683,6 +2968,112 @@
 </div>
 
 <p class="gag-flow__caption">Read the <a href="design/02-architecture/">architecture overview</a> for the full breakdown, jump to <a href="why-gag/">why GAG over ARC</a>, browse <a href="features/">every feature</a>, or see the <a href="roadmap/">public roadmap</a> for what's next.</p>
+<h2 id="what-a-tenant-actually-declares">What a tenant actually declares<a class="headerlink" href="#what-a-tenant-actually-declares" title="Permanent link">&para;</a></h2>
+<p>The whole object set for a proxied gateway with a GPU runner set (priority
+tiers) and a Linux runner set. Every resource is namespaced, none is
+cluster-scoped, and no <code>ResourceQuota</code> field appears anywhere: the quota is
+platform-owned and set on the namespace, so it is a cap the tenant cannot raise.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span><span class="w">               </span><span class="c1"># (1)!</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">maxReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="nn">---</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerTemplate</span><span class="w">            </span><span class="c1"># (2)!</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">  </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nn">---</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span><span class="w">            </span><span class="c1"># (3)!</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-gateway</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GitHubApp</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">    </span><span class="nt">githubApp</span><span class="p">:</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-github-app</span><span class="w">       </span><span class="c1"># name-only Secret ref in this namespace</span>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="w">  </span><span class="nt">defaultProxyRef</span><span class="p">:</span>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span><span class="w">         </span><span class="c1"># every RunnerSet inherits this unless it sets proxyRef</span>
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="nn">---</span>
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu</span>
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># (4)!</span>
+<a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu&quot;</span><span class="p p-Indicator">]</span><span class="w">         </span><span class="c1"># (5)!</span>
+<a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a><span class="w">  </span><span class="nt">priorityTiers</span><span class="p">:</span><span class="w">                </span><span class="c1"># (6)!</span>
+<a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-critical</span>
+<a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
+<a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a><span class="nn">---</span>
+<a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
+<a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>
+<a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-1-57" name="__codelineno-1-57" href="#__codelineno-1-57"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-1-58" name="__codelineno-1-58" href="#__codelineno-1-58"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-1-59" name="__codelineno-1-59" href="#__codelineno-1-59"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+</code></pre></div>
+<ol>
+<li>Optional. A standalone per-tenant egress proxy pool, Horizontal Pod Autoscaler
+    (HPA)-managed between these bounds; all GitHub traffic exits through it on
+    dedicated IPs. Drop it (and <code>defaultProxyRef</code>) for direct, still
+    <code>NetworkPolicy</code>-restricted egress, collapsing the minimum to three objects.</li>
+<li>A reusable pod shape referenced by both <code>RunnerSet</code>s below via <code>templateRef</code>.
+    Define it once; a cluster-scoped <code>ClusterRunnerTemplate</code> shares one shape
+    across every namespace. The Pod Security Admission (PSA) level is a <strong>namespace
+    label</strong> in v2, not a CR field. All gateways in a namespace share one level.</li>
+<li><code>credentials.githubApp.name</code> references a <code>Secret</code> in this namespace holding
+    the GitHub App <code>appId</code>, <code>installationId</code>, and <code>privateKey</code>. The GMC watches the
+    reference name, not the Secret contents. See
+    <a href="getting-started/#rotating-github-app-credentials">credential rotation</a>.
+    <code>WorkloadIdentity</code> is the opt-in no-PEM credential member.</li>
+<li>Both runner sets reference the <strong>same</strong> <code>RunnerTemplate</code>. There is no
+    <code>ResourceQuota</code> field on any of these CRs. The single quota every runner set
+    shares is <strong>platform-owned</strong>, set on the namespace by the platform admin, so it
+    is a real cap the tenant cannot raise. Priority tiers decide who wins when it
+    is contended.</li>
+<li>Exactly one label per runner set: it is the set's scale-set name at GitHub and
+    its single <code>runs-on</code> match target (<code>runs-on: gpu</code>), unique across the sets
+    under one gateway. A single-name <code>runs-on</code> carries over from ARC unchanged; a
+    workflow targeting an array needs one edit per target, covered in
+    <a href="operations/migration-from-arc/">migrating from ARC</a>.</li>
+<li>The first 5 GPU pods get the higher-priority <code>PriorityClass</code>; the next tier
+    bursts opportunistically; the final threshold caps total concurrency. The
+    <code>priorityClassName</code> values must be on the platform's allowlist (a watched
+    <code>PriorityClassAllowlist</code> CR, grown without a GMC restart; the
+    <code>--allowed-priority-classes</code> flag remains the fail-safe baseline), and whether a tier preempts is set on the
+    platform-owned <code>PriorityClass</code> object, so a tenant cannot name a class that
+    evicts other tenants' pods.</li>
+</ol>
+<p>The legacy single-CR <code>v1alpha1</code> shape, which expresses this whole gateway in one
+<code>ActionsGateway</code> CR, is still fully served but
+<strong><a href="operations/v1alpha1-deprecation/">deprecated, and removed at <code>v2.0.0</code></a></strong>; see the
+<a href="getting-started/#legacy-the-v1alpha1-api-deprecated">getting-started walkthrough</a>
+for it and the <a href="operations/migration-v1-to-v2/">v1 → v2 migration guide</a> to move
+across without changing how your jobs are acquired.</p>
+<p>Ready to try it? Follow the <a href="getting-started/">getting-started guide</a>. Already
+running ARC? The <a href="operations/migration-from-arc/">Migrating from ARC guide</a> maps
+every concept above onto GAG and walks one runner group across with zero downtime.</p>
 
 
 

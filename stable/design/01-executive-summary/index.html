@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/design/01-executive-summary/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/01-executive-summary/">
       
       
         <link rel="prev" href="../">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -717,7 +785,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -739,14 +807,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -825,15 +893,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#executive-summary" class="md-nav__link">
+  <a href="#the-case-by-audience" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Executive Summary
+        The Case, by Audience
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Executive Summary">
+    <nav class="md-nav" aria-label="The Case, by Audience">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1512,6 +1580,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1525,7 +1597,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1547,14 +1619,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1564,6 +1636,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1825,6 +1925,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1964,10 +2092,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -1985,8 +2113,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2487,6 +2615,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2514,15 +2746,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#executive-summary" class="md-nav__link">
+  <a href="#the-case-by-audience" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Executive Summary
+        The Case, by Audience
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Executive Summary">
+    <nav class="md-nav" aria-label="The Case, by Audience">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2669,7 +2901,7 @@
 <h1 id="1-executive-summary--problem-statement">1. Executive Summary &amp; Problem Statement<a class="headerlink" href="#1-executive-summary--problem-statement" title="Permanent link">&para;</a></h1>
 <p>← <a href="../">Back to index</a> | Next: <a href="../02-architecture/">Core Architectural Components →</a></p>
 <hr />
-<h2 id="executive-summary">Executive Summary<a class="headerlink" href="#executive-summary" title="Permanent link">&para;</a></h2>
+<h2 id="the-case-by-audience">The Case, by Audience<a class="headerlink" href="#the-case-by-audience" title="Permanent link">&para;</a></h2>
 <h3 id="for-executive-leadership">For Executive Leadership<a class="headerlink" href="#for-executive-leadership" title="Permanent link">&para;</a></h3>
 <p><strong>Make GitHub Actions self-hosted runners safe and economical to operate at multi-tenant enterprise scale.</strong> This system turns the shared Kubernetes cluster hosting CI/CD into a managed internal platform: one operator, deployed once, that lets dozens of tenant teams onboard themselves and run thousands of jobs per hour — without the platform team becoming the bottleneck and without any one team's incident becoming everyone's outage.</p>
 <ul>
@@ -2680,7 +2912,7 @@
 <p><strong>GPU utilization that holds under contention.</strong> GPU runners are guaranteed scheduling slots even when cheap CPU runners flood a shared quota, so the most expensive hardware actually runs instead of losing the race. GPU nodes return to the cluster scheduler the moment each job completes, freeing them for other workloads between CI jobs. Per-tenant utilization metrics give finance and platform leadership the data to justify GPU allocations and reclaim under-used capacity.</p>
 </li>
 <li>
-<p><strong>No manual recovery from infrastructure incidents.</strong> Preempted, OOM-killed, and node-lost jobs are cancelled at GitHub when their job lock lapses (within the remaining lock window, ~10 minutes at worst) and rerun automatically, with a per-job retry budget. The recovery needs no human in the loop, so the class of "my CI job died on infrastructure, please rerun it" support tickets is closed by construction, eliminating a recurring source of toil for both tenant teams and on-call.</p>
+<p><strong>No manual recovery when the cluster takes a worker away.</strong> Three causes are recovered: kubelet eviction under node pressure, scheduler preemption by a <code>priorityTiers</code> floor, and deletion of a running worker by a node drain or a bare <code>kubectl delete pod</code>. A preemption or a drain concludes at GitHub in seconds (measured 15–26s) because the runner gets its grace period and reports; a hard eviction has to wait out the job lock instead, ~10 minutes at worst. Either way the run is re-run automatically under a per-run retry budget, so the class of "my CI job died on infrastructure, please rerun it" support tickets is closed by construction. A job that ran and <em>failed</em> on its own merits, including an OOM-killed container, is deliberately never re-run: that would mask real breakage. The full boundary is in <a href="../../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Which disruptions auto-re-run a job</a>.</p>
 </li>
 <li>
 <p><strong>Per-tenant security and audit isolation.</strong> Every tenant's GitHub traffic exits through a dedicated egress IP pool, enabling per-team IP allowlisting on the GitHub side and per-tenant audit attribution. A rate limit, abuse flag, or IP ban triggered by one team is contained to that team — other tenants are unaffected. For organizations with GitHub Enterprise IP allowlist requirements or regulated workloads, this is what makes a shared cluster viable instead of one cluster per tenant.</p>
@@ -2701,7 +2933,7 @@
 <p><strong>GPU slots that are actually guaranteed under contention.</strong> Priority tiers let you declare a minimum number of GPU runner pods that schedule even when the cluster's GPU quota is otherwise saturated. The cheap CPU runners that today crowd you out of the queue cannot push your GPU jobs out of the schedule.</p>
 </li>
 <li>
-<p><strong>Failed jobs from infrastructure issues just disappear.</strong> When a worker pod is preempted, OOM-killed, or lost to a node failure, the system cancels the job at GitHub as its lock lapses (~10 minutes at worst) and reruns it automatically, with no ticket to file. No more "did this fail for a real reason or was it just infrastructure?" investigations.</p>
+<p><strong>Jobs the cluster interrupts recover themselves.</strong> When a worker pod is preempted by a higher-priority tier, drained off a node, or evicted under node pressure, the run concludes at GitHub and is re-run automatically, with no ticket to file. That is exactly the "did this fail for a real reason or was it just infrastructure?" question, answered by construction: infrastructure took it away, so it comes back; the job failed on its own, so it stays failed.</p>
 </li>
 <li>
 <p><strong>No cold-start tax to pay around.</strong> You don't need to pin a minimum runner count to mask first-job latency — the listener is always warm, and worker pods are created on demand. Configure for the load you actually have, not the cold start you're trying to hide.</p>
@@ -2726,7 +2958,7 @@
 <p><strong>Tenant security policies enforced by construction, not convention.</strong> Per-tenant egress IP pools, namespace-scoped RBAC, and NetworkPolicies are part of what the controller provisions, all operating within the platform-owned namespace <code>ResourceQuota</code>. Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.</p>
 </li>
 <li>
-<p><strong>Worker eviction is no longer a paging event.</strong> Preempted, OOM-killed, and node-lost jobs are recovered automatically. The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.</p>
+<p><strong>Worker eviction is no longer a paging event.</strong> Evicted, preempted, and drained workers have their runs recovered automatically, under one shared per-run budget. The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.</p>
 </li>
 <li>
 <p><strong>Per-tenant cost and capacity visibility out of the box.</strong> Prometheus metrics scoped per tenant and per runner group make it straightforward to spot under-used GPU quota, hot tenants approaching their limits, and which runner shapes are driving the most cost — without per-tenant deployment-level instrumentation to assemble.</p>
@@ -2740,12 +2972,14 @@
 <h3 id="the-problem-scheduling-fairness-in-a-shared-namespace">The Problem: Scheduling Fairness in a Shared Namespace<a class="headerlink" href="#the-problem-scheduling-fairness-in-a-shared-namespace" title="Permanent link">&para;</a></h3>
 <p>In a multi-tenant Kubernetes cluster, teams running multiple types of GitHub Actions self-hosted runners face a scheduling fairness problem that existing solutions — including Actions Runner Controller (ARC) — cannot address. When a namespace's <code>ResourceQuota</code> is shared across runner groups, smaller and cheaper runner pods can exhaust available quota before larger pods have a chance to schedule. The result is that GPU runners — which carry the most expensive hardware requirements and the longest queue times — are systematically starved by a flood of small CPU runner pods claiming quota first.</p>
 <p>ARC provides no mechanism to express minimum scheduling guarantees across runner sets within a shared pool. Each <code>RunnerScaleSet</code> has an independent <code>maxRunners</code> cap, making it impossible to declare "GPU runners must always be able to claim at least N slots, regardless of how many CPU runners are active." The only workaround — lowering CPU runner caps to protect headroom — still cannot guarantee that headroom is actually available for GPU runners when they need it, and introduces a separate per-set configuration burden that grows with the number of runner types.</p>
-<p>This design addresses the problem through a <code>priorityTiers</code> field on each <code>RunnerGroup</code>: a ranked list of Kubernetes <code>PriorityClass</code> assignments with cumulative pod-count thresholds. The first N pods of a GPU runner group are assigned a higher-priority <code>PriorityClass</code> and (if that class preempts) will displace lower-priority CPU runner pods when the namespace is contended — guaranteeing they schedule; subsequent tiers gain scheduling priority for burst and best-effort pods. A final threshold caps total concurrency per group. Crucially, the platform owns which <code>PriorityClass</code> names a tenant may reference (the GMC <code>--allowed-priority-classes</code> allowlist) and whether each class preempts (set on the platform-created <code>PriorityClass</code> object — defaulting to non-preempting so a tenant cannot evict <em>other tenants'</em> pods); see <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>. This lets a platform team express "GPU runners always get at least 5 slots, can burst to 20, and are capped at 30," all enforced by the Kubernetes scheduler against a single shared namespace <code>ResourceQuota</code>.</p>
-<p>Framed defensively, priority tiers stop expensive runners from being starved. Framed offensively, they are a utilization-and-cost lever. Without a scheduling guarantee, the only way to keep GPU runners schedulable under a shared quota is to hold headroom in reserve — cap cheap runners below the quota, or leave slack unused — so a GPU pod always has room. That reserved headroom is idle, paid-for capacity. The floor tier removes the need for it: because guaranteed pods preempt their way in on demand, cheap and burst runners can fill the quota to capacity and yield the instant a GPU job arrives. This is oversubscription of the shared quota — more runner demand is admitted than the guaranteed floors reserve, with the Kubernetes scheduler arbitrating by priority instead of an operator pre-reserving idle slack. The same provisioned cluster runs closer to full utilization and clears more jobs per hour, which is what lowers cost per unit of work.</p>
+<p>This design addresses the problem through a <code>priorityTiers</code> field on each <code>RunnerGroup</code>: a ranked list of Kubernetes <code>PriorityClass</code> assignments with cumulative pod-count thresholds. The first N pods of a GPU runner group are assigned a higher-priority <code>PriorityClass</code> and (if that class preempts) will displace lower-priority CPU runner pods when the namespace is contended — guaranteeing they schedule; subsequent tiers gain scheduling priority for burst and best-effort pods. A final threshold caps total concurrency per group. The platform owns which <code>PriorityClass</code> names a tenant may reference (the GMC <code>--allowed-priority-classes</code> allowlist) and whether each class preempts (set on the platform-created <code>PriorityClass</code> object — defaulting to non-preempting so a tenant cannot evict <em>other tenants'</em> pods); see <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>. This lets a platform team express "GPU runners always get at least 5 slots, can burst to 20, and are capped at 30," all enforced by the Kubernetes scheduler against a single shared namespace <code>ResourceQuota</code>.</p>
+<p>Framed defensively, priority tiers stop expensive runners from being starved. Framed offensively, they are a utilization-and-cost lever. Without a scheduling guarantee, the only way to keep GPU runners schedulable under a shared quota is to hold headroom in reserve — cap cheap runners below the quota, or leave slack unused — so a GPU pod always has room. That reserved headroom is idle, paid-for capacity.</p>
+<p>The floor tier removes the need for it: because guaranteed pods preempt their way in on demand, cheap and burst runners can fill the quota to capacity and yield the instant a GPU job arrives. This is oversubscription of the shared quota — more runner demand is admitted than the guaranteed floors reserve, with the Kubernetes scheduler arbitrating by priority instead of an operator pre-reserving idle slack. The same provisioned cluster runs closer to full utilization and clears more jobs per hour, which is what lowers cost per unit of work.</p>
 <p><strong>What the displaced job costs, stated plainly.</strong> Both halves are now measured: the guaranteed tier really does preempt its way in, <em>and</em> the work it displaces comes back by itself. The residual cost is the displaced job's own elapsed time — it restarts from the beginning, not from where it was interrupted — so this lever is still best pointed at low-priority work that is cheap to repeat.</p>
-<p>When a worker loses its job to infrastructure, the AGC automatically re-queues it without user intervention: it stops renewing the job lock to prompt a fast GitHub cancellation, then calls GitHub's rerun API to reschedule. Two disruptions qualify. The <strong>kubelet's node-pressure eviction</strong> (memory or disk exhaustion) is detected from the <code>Evicted</code> pod status. <strong>kube-scheduler preemption</strong> — what a floor tier actually drives — deletes its victim instead, and is detected from the <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code> that the scheduler stamps on the way out (Q497, measured 2026-07-29 as Q423). Both acquisition tiers cover both causes, by different routes: on the classic tier the Job Lock Renewer observes the pod it is already watching, while the scale-set tier — which provisions fire-and-forget — records the workflow run on the worker pod and lets the owning reconciler detect the disruption from the pod itself (Q417). A configurable retry budget, shared across both tiers <em>and</em> both causes per workflow run, prevents infinite loops on persistently failing workloads. Jobs that exhaust their retry budget surface via a dedicated metric rather than silently disappearing.</p>
-<p><strong>What about a drain?</strong> An operator's <code>kubectl drain</code> or <code>kubectl delete pod</code> leaves the same graceful-termination path a preemption does — the Q385 SIGTERM relay gives the runner its grace period to abort and report, so the job concludes on GitHub promptly rather than hanging — and since Q502 it is <strong>also re-run automatically</strong>, keyed on the pod's <code>deletionTimestamp</code> at the moment its terminal phase publishes. That mark was measured (2026-07-29) to be absent on a human-cancelled run and on a genuine failure, which is what made it safe to act on; the AGC's own deletions (the reaper's, and the Q501 reclaim of an abandoned job's worker) are excluded by a stamp written before each delete, and a deleted worker whose container never ran stays unrecovered (no reportable failure exists to re-run). Detail: <a href="../04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">§4.2</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
-<p>This recovery runs on <strong>both acquisition tiers</strong>. It was classic-only until Q417, because the <code>ScaleSet</code> protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since <code>ScaleSet</code> is the default and the only protocol <code>v2beta1</code> exposes. The port records the workflow run on the worker pod and moves detection to the owning reconciler, so the capability survives the <code>v2.0.0</code> removal of classic (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/scaleset-eviction-recovery.md">plan</a>, <a href="../04-operational-flows/#on-the-scale-set-tier-q417">§4</a>).</p>
+<p>When a worker loses its job to infrastructure, the AGC automatically re-queues it without user intervention: it stops renewing the job lock to prompt a fast GitHub cancellation, then calls GitHub's rerun API to reschedule. Two disruptions qualify. The <strong>kubelet's node-pressure eviction</strong> (memory or disk exhaustion) is detected from the <code>Evicted</code> pod status. <strong>kube-scheduler preemption</strong> — what a floor tier actually drives — deletes its victim instead, and is detected from the <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code> that the scheduler stamps on the way out (Q497, measured 2026-07-29 as Q423).</p>
+<p>Both acquisition tiers cover both causes, by different routes: on the classic tier the Job Lock Renewer observes the pod it is already watching, while the scale-set tier — which provisions fire-and-forget — records the workflow run on the worker pod and lets the owning reconciler detect the disruption from the pod itself (Q417). A configurable retry budget, shared across both tiers <em>and</em> both causes per workflow run, prevents infinite loops on persistently failing workloads. Jobs that exhaust their retry budget surface via a dedicated metric rather than silently disappearing.</p>
+<p><strong>What about a drain?</strong> An operator's <code>kubectl drain</code> or <code>kubectl delete pod</code> leaves the same graceful-termination path a preemption does — the Q385 SIGTERM relay gives the runner its grace period to abort and report, so the job concludes on GitHub promptly rather than hanging — and since Q502 it is <strong>also re-run automatically</strong>, keyed on the pod's <code>deletionTimestamp</code> at the moment its terminal phase publishes. That mark was measured (2026-07-29) to be absent on a human-cancelled run and on a genuine failure, which is what made it safe to act on; the AGC's own deletions (the reaper's, and the Q501 reclaim of an abandoned job's worker) are excluded by a stamp written before each delete, and a deleted worker whose container never ran stays unrecovered (no reportable failure exists to re-run). Detail: <a href="../04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">§4.2</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
+<p>This recovery runs on <strong>both acquisition tiers</strong>. It was classic-only until Q417, because the <code>ScaleSet</code> protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since <code>ScaleSet</code> is the default and the only protocol <code>v2beta1</code> exposes. The port records the workflow run on the worker pod and moves detection to the owning reconciler, so the capability survives the <code>v2.0.0</code> removal of classic (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/scaleset-eviction-recovery.md">plan</a>, <a href="../04-operational-flows/#on-the-scale-set-tier-q417">§4</a>).</p>
 <h3 id="gpu-node-utilization">GPU Node Utilization<a class="headerlink" href="#gpu-node-utilization" title="Permanent link">&para;</a></h3>
 <p>For teams running GPU-accelerated workflows, runner pod lifecycle is a direct driver of hardware utilization. Where GAG provides headroom over ARC depends on how ARC is configured:</p>
 <ul>
@@ -2756,7 +2990,8 @@
 <p>In all configurations, the AGC itself runs on a CPU-only node pool, so no GPU capacity is consumed by the controller. Worker pods are provisioned on-demand after a job is acquired and release their compute — including the GPU — the moment the job completes (the terminal pod object is deleted after a short configurable TTL and holds no resources in the meantime). Across a shared GPU node pool, GAG keeps GPU nodes available to other workloads up until the moment a job arrives, with no per-scale-set baseline tuning to maintain.</p>
 <h3 id="for-teams-migrating-from-host-machine-or-vm-runners">For Teams Migrating from Host-Machine or VM Runners<a class="headerlink" href="#for-teams-migrating-from-host-machine-or-vm-runners" title="Permanent link">&para;</a></h3>
 <p>The arguments above apply equally to teams already running Kubernetes-native runners. For teams migrating from runners on host machines or virtual machines — where runners are registered as persistent processes rather than Kubernetes pods — the Kubernetes model itself introduces an additional overhead worth quantifying.</p>
-<p>In a traditional self-hosted runner setup (host or VM), each registered runner slot runs a full .NET <code>Runner.Listener</code> process held resident around the clock: 1,000 concurrent slots means 1,000 always-on listener processes across the fleet, regardless of whether any jobs are pending. ARC's <code>RunnerScaleSet</code> mode improves on this — it runs one listener per scale set rather than one per slot (a Go binary, <code>ghalistener</code>, distinct from the runner's .NET <code>Runner.Listener</code>) — but each listener is still its own always-on pod with its own cluster IP: a tenant operating 10 RunnerScaleSets holds 10 listener pods at rest. In contrast, this system runs every listener session as a goroutine inside one shared AGC pod, at a measured ~12 KiB of AGC state per session (~60 KiB as the conservative design bound; see <a href="../appendix-a-capacity-slos/">Appendix A</a>). At the 1,000-session burst ceiling, the AGC's goroutine working set is roughly 60 MiB under that conservative bound; the steady-state cost at rest is one goroutine per RunnerGroup regardless of how many slots are configured — and still one pod, one cluster IP per tenant.</p>
+<p>In a traditional self-hosted runner setup (host or VM), each registered runner slot runs a full .NET <code>Runner.Listener</code> process held resident around the clock: 1,000 concurrent slots means 1,000 always-on listener processes across the fleet, regardless of whether any jobs are pending. ARC's <code>RunnerScaleSet</code> mode improves on this — it runs one listener per scale set rather than one per slot (a Go binary, <code>ghalistener</code>, distinct from the runner's .NET <code>Runner.Listener</code>) — but each listener is still its own always-on pod with its own cluster IP: a tenant operating 10 RunnerScaleSets holds 10 listener pods at rest.</p>
+<p>In contrast, this system runs every listener session as a goroutine inside one shared AGC pod, at a measured ~12 KiB of AGC state per session (~60 KiB as the conservative design bound; see <a href="../appendix-a-capacity-slos/">Appendix A</a>). At the 1,000-session burst ceiling, the AGC's goroutine working set is roughly 60 MiB under that conservative bound; the steady-state cost at rest is one goroutine per RunnerGroup regardless of how many slots are configured — and still one pod, one cluster IP per tenant.</p>
 <p>The IP address problem compounds this for pod-per-slot deployments. Every runner pod consumes a cluster IP. In clusters already dense with application workloads, 1,000 idle runner pods exhaust a significant fraction of the available address space — a hard limit that cannot be worked around without re-addressing the cluster. Each pod's long-poll connection also generates sustained polling noise through network firewalls, adding to the operational burden of teams managing cluster egress.</p>
 <h3 id="design-goals">Design Goals<a class="headerlink" href="#design-goals" title="Permanent link">&para;</a></h3>
 <p>The system is designed to satisfy four requirements that existing solutions do not address together:</p>
@@ -2766,7 +3001,7 @@
 <li><strong>Eliminate idle resource overhead.</strong> Virtual runner sessions are goroutines, not pods. Compute is provisioned only when a job is acquired and released immediately on completion — including GPU allocations.</li>
 <li><strong>Per-tenant egress IP isolation.</strong> Each tenant's GitHub traffic — both AGC control-plane calls and worker data-plane traffic — exits through a dedicated proxy pool. This gives operators IP-based allowlisting at the GitHub side, per-tenant audit attribution, and a per-tenant kill-switch: GitHub-side rate limits, abuse flags, or IP bans against one tenant's egress IPs do not affect other tenants. See <a href="../02-architecture/#23-tier-3--egress-proxy-pool">§2.3</a> for why worker egress also flows through the proxy.</li>
 <li><strong>Self-service multi-tenant onboarding.</strong> A team creates one <code>ActionsGateway</code> CR in their existing namespace and receives a fully isolated gateway instance. No cluster-admin involvement is required after initial GMC installation.</li>
-<li><strong>Replaceable managed defaults — good-enough by default, opt-out to specialist tools.</strong> For each managed concern, the platform provisions an opinionated default so a tenant onboards with zero tuning — but every such concern exposes an opt-out (a <code>managed…: false</code> toggle or a <code>…Ref</code> to operator-supplied material) that disables the default and lets an operator substitute a more capable tool. Today: <code>managedNetworkPolicy: false</code> → bring Cilium/Calico FQDN policies; <code>managedAutoscaling: false</code> (v2 <code>EgressProxy</code>) → bring KEDA/VPA/a custom HPA for the proxy pool. Planned, behind triggers: an operator-supplied proxy TLS certificate → external PKI/Vault (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/STATUS.md#deferred">Q174</a>). The opt-out shifts <em>ownership</em>, never a security invariant: a replacement must still satisfy the property the default guaranteed — e.g. <code>managedNetworkPolicy: false</code> still requires equivalent egress restriction. This keeps the common path simple and the advanced path unblocked, and pairs with <a href="../05-security/">secure-by-default</a>: the managed default is the safe one, the opt-out is explicit. Not every managed component gets an opt-out — safety invariants (PodDisruptionBudget, pod security context), architectural constraints (single-replica AGC, fixed proxy ports), and non-tenant-facing plumbing (Services, RBAC) stay managed.</li>
+<li><strong>Replaceable managed defaults — good-enough by default, opt-out to specialist tools.</strong> For each managed concern, the platform provisions an opinionated default so a tenant onboards with zero tuning — but every such concern exposes an opt-out (a <code>managed…: false</code> toggle or a <code>…Ref</code> to operator-supplied material) that disables the default and lets an operator substitute a more capable tool. Today: <code>managedNetworkPolicy: false</code> → bring Cilium/Calico FQDN policies; <code>managedAutoscaling: false</code> (v2 <code>EgressProxy</code>) → bring KEDA/VPA/a custom HPA for the proxy pool. Planned, behind triggers: an operator-supplied proxy TLS certificate → external PKI/Vault (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md#deferred">Q174</a>). The opt-out shifts <em>ownership</em>, never a security invariant: a replacement must still satisfy the property the default guaranteed — e.g. <code>managedNetworkPolicy: false</code> still requires equivalent egress restriction. This keeps the common path simple and the advanced path unblocked, and pairs with <a href="../05-security/">secure-by-default</a>: the managed default is the safe one, the opt-out is explicit. Not every managed component gets an opt-out — safety invariants (PodDisruptionBudget, pod security context), architectural constraints (single-replica AGC, fixed proxy ports), and non-tenant-facing plumbing (Services, RBAC) stay managed.</li>
 </ol>
 <h3 id="the-solution-a-four-tier-virtualized-gateway">The Solution: A Four-Tier Virtualized Gateway<a class="headerlink" href="#the-solution-a-four-tier-virtualized-gateway" title="Permanent link">&para;</a></h3>
 <p>This document outlines the design for a <strong>four-tier system</strong> that addresses these problems at their root:</p>

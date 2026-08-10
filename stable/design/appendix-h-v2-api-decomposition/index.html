@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/design/appendix-h-v2-api-decomposition/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/appendix-h-v2-api-decomposition/">
       
       
         <link rel="prev" href="../appendix-g-future-enhancements/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -717,7 +785,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -739,14 +807,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1448,6 +1516,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="H.9. Cross-namespace proxy sharing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-implementing-it-settled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What implementing it settled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1801,6 +1886,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1814,7 +1903,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1836,14 +1925,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1853,6 +1942,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -2114,6 +2231,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2253,10 +2398,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -2274,8 +2419,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2776,6 +2921,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2977,6 +3226,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="H.9. Cross-namespace proxy sharing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-implementing-it-settled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What implementing it settled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3258,7 +3524,7 @@ with <code>v1alpha1</code> during the coexistence window — nothing in the ship
 <code>v1alpha1</code> API changes, and tenants migrate on their own schedule via the
 migration tool, a deliberate tool-assisted fan-out (see <a href="#h11-migration-v2-tool-assisted">§H.11</a>).
 Milestone sequencing and the itemized task record are in the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2-api.md">v2 API plan</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-api.md">v2 API plan</a>.</p>
 </blockquote>
 <hr />
 <h2 id="h1-why-decompose">H.1. Why decompose<a class="headerlink" href="#h1-why-decompose" title="Permanent link">&para;</a></h2>
@@ -3695,7 +3961,7 @@ only that the runner had lost communication (Q473). v1 therefore applies the bou
 where the name is derived, through the shared <code>api/apinames</code> helpers that also own the
 worker-pod budget (Q467). The rule generalises: <strong>budget against the tightest consumer
 of a name (63), not the limit of the object being created (253)</strong> — see
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
 <h3 id="field-naming-freezes-at-ga--do-the-pass-now">Field naming freezes at GA — do the pass now<a class="headerlink" href="#field-naming-freezes-at-ga--do-the-pass-now" title="Permanent link">&para;</a></h3>
 <p>JSON field names are part of the API contract and become permanent at <code>v2</code>. Do
 the naming pass during M1 while names are still cheap to change under <code>v2alpha1</code>:</p>
@@ -3902,7 +4168,7 @@ is post-hoc — it arrives with the first pod the profile builds, since a pod is
 what it reads. While a profile is <code>Active</code>, <code>SizingDrift</code> reports
 <code>False/SizingProfileActive</code> (the template ask is not what pods run with).</p>
 <p><strong>Why <code>profile</code> bundles two mechanisms deliberately (Q481).</strong> The 1.3
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/api-review.md">pre-release API review</a> asked of <code>sizing.profile</code>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/api-review.md">pre-release API review</a> asked of <code>sizing.profile</code>
 the question Q470 asked of <code>capacityGate.mode</code> — <em>does this enum answer exactly
 one question?</em> — and mechanically it does not. Two axes run through it: where the
 request comes from (the template, the usage history, a declared node envelope)
@@ -4044,7 +4310,7 @@ correct:</p>
   from more than a second later — inside that window the pair is one loop's own output,
   and resolves open. Measured, not assumed: cluster-autoscaler v1.36.1 emitted
   <code>TriggeredScaleUp</code> and then <code>NotTriggerScaleUp</code> for the same pod 4ms apart
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>).
+  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>).
   The window is what makes that read a property of the autoscaler's behavior rather
   than of its recorder's resolution, which is the difference between the two generations
   in the field.</li>
@@ -4150,6 +4416,8 @@ must never over-gate.</p>
   same informer/watch without taking on a finalizer that can block deletion.</li>
 </ul>
 <h2 id="h9-cross-namespace-proxy-sharing">H.9. Cross-namespace proxy sharing<a class="headerlink" href="#h9-cross-namespace-proxy-sharing" title="Permanent link">&para;</a></h2>
+<p><strong>Shipped (Q166, M4).</strong> The mechanisms below are implemented; two points this section
+originally left open are recorded at the end.</p>
 <p>Default is same-namespace. Cross-namespace sharing uses <strong>provider consent</strong>: the
 owner of the <code>EgressProxy</code> publishes that it is shareable (via
 <code>spec.sharing.allowedNamespaces</code> or a namespace selector). Naming a
@@ -4180,6 +4448,35 @@ not, and these are the bulk of the implementation cost:</p>
    may instead be published as a <code>Bundle</code>. No new secret-distribution mechanism is
    required — the earlier framing of this as a "secret" overstated the cost.</li>
 </ol>
+<h3 id="what-implementing-it-settled">What implementing it settled<a class="headerlink" href="#what-implementing-it-settled" title="Permanent link">&para;</a></h3>
+<p><strong>The reference needed a namespace, and it could not go on <code>ObjectRef</code>.</strong> Nothing in
+the v2 API could express a cross-namespace reference at all: <code>ObjectRef</code> and
+<code>LocalObjectRef</code> were name-only, and both resolution sites resolved in the referrer's
+own namespace. <code>ObjectRef</code> also backs <code>gatewayRef</code>, <code>templateRef</code> and
+<code>defaultTemplateRef</code>, so adding <code>Namespace</code> there would have made four references
+cross-namespace at once, three of them with no consent handshake behind them. The
+proxy references therefore moved to their own <code>ProxyObjectRef</code> (<code>name</code> +
+optional <code>namespace</code>). Empty <code>namespace</code> means the referrer's own, so every existing
+manifest keeps its meaning. This dropped the optional <code>kind</code> property from
+<code>proxyRef</code>'s schema, whose enum admitted only the two template kinds and which
+nothing read; structural-schema pruning means a manifest that set it still applies.</p>
+<p><strong>The AGC cannot read a remote <code>EgressProxy</code>, so the GMC mediates.</strong> The AGC's cache
+is pinned to its own tenant namespace precisely so it needs only the per-tenant <code>Role</code>
+the GMC creates rather than a <code>ClusterRole</code>, and <code>RunnerSet.spec.proxyRef</code> is resolved
+by the AGC. Widening that to a <code>ClusterRole</code> would let every tenant's AGC read every
+other tenant's <code>EgressProxy</code>, a blast-radius regression, and the secure-by-default
+rule keeps the narrower option. A per-grant <code>Role</code> plus an uncached read preserves
+least privilege but loses the watch, since controller-runtime fixes cache namespaces
+at manager construction.</p>
+<p>So the CA ConfigMap this section already mandates carries the decision as well as the
+trust material: <strong>its presence is the grant</strong>, and its data holds the proxy's Service
+DNS name and port. The AGC reads it from its own namespace, resolves nothing across a
+boundary, and fails closed when it is absent. Revoking a grant deletes it. That is one
+mechanism doing two jobs rather than a second mechanism invented for the purpose.</p>
+<p>One consequence worth stating: the GMC reads these projections through its <strong>uncached</strong>
+API reader. Its ConfigMap informer is pinned to a single name in its own namespace, so
+a cached label-selected list would return nothing and the prune that revokes a
+withdrawn grant would silently find nothing to delete.</p>
 <h2 id="h10-the-egress-proxy-becomes-optional">H.10. The egress proxy becomes optional<a class="headerlink" href="#h10-the-egress-proxy-becomes-optional" title="Permanent link">&para;</a></h2>
 <p>The proxy earns its keep for <strong>stable per-tenant egress IPs</strong> (GitHub
 IP-allowlisting, common with Enterprise Managed Users), <strong>egress attribution /
@@ -4309,16 +4606,16 @@ migration is a tool, not a webhook.</p>
 <p>The v1→v2 fan-out is one-time. Once on <code>v2alpha1</code>, the API graduates <strong>in place</strong>
 <code>v2alpha1 → v2beta1 → v2</code> via a conversion webhook (a thing a conversion webhook
 <em>can</em> do, since the kinds no longer change shape) — see the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a>
 in the implementation plan for the per-hop mechanics. The superseded versions do not
 linger indefinitely: <code>v2alpha1</code> is dropped at <strong><code>v2.0.0</code></strong>, the same release that
 removes <code>v1alpha1</code> and the classic acquisition machinery, announced one release ahead
 in <code>v1.3.0</code>. That coupling and the operator-facing contract are the
 <a href="../../operations/v1alpha1-deprecation/">deprecation and removal notice</a>; the release
-sequencing is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2-ga.md">v2-ga.md</a>.</p>
+sequencing is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-ga.md">v2-ga.md</a>.</p>
 <h2 id="h12-folding-in-the-grandfathered-label-value-alignment-q147">H.12. Folding in the grandfathered label-value alignment (Q147)<a class="headerlink" href="#h12-folding-in-the-grandfathered-label-value-alignment-q147" title="Permanent link">&para;</a></h2>
 <p>Two shipped keys still carry boolean-looking <code>"true"</code> values that predate the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/kubernetes-conventions.md">no-boolean label convention</a> and are
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/kubernetes-conventions.md">no-boolean label convention</a> and are
 grandfathered only because changing them is breaking:</p>
 <ul>
 <li><code>actions-gateway.github.com/tenant: "true"</code> — the managed-tenant marker, matched
@@ -4399,7 +4696,7 @@ impact list, to be turned into plan-doc scope when scheduled:</p>
 <li><strong>Docs:</strong> <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1 CRD schemas</a>,
   <a href="../appendix-e-capacity-planning/">Appendix E (RunnerGroup design)</a>, and the
   operator-facing docs per the
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/development/doc-update-matrix.md">doc-update matrix</a>.</li>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/doc-update-matrix.md">doc-update matrix</a>.</li>
 <li><strong>Migration tool</strong> + its tests.</li>
 <li><strong>Label keys + values (Q147 + group rename):</strong> both the domain <em>prefix</em>
   (<code>actions-gateway.github.com/*</code> → <code>actions-gateway.com/*</code>, plus finalizer names)
@@ -4621,8 +4918,8 @@ tiers — so it buys only the rung-2 wins, not tiering. Promote when <strong>any
 <li><strong>GitOps</strong> — policy must be managed declaratively / changed without a
   controller redeploy.</li>
 <li><strong>RBAC separation</strong> — the people who set policy must be distinct from the
-  people who own the controller Deployment (a platform-policy team vs. the SRE
-  who deploys the GMC).</li>
+  people who own the controller Deployment (a platform-policy team vs. the
+  platform engineer who deploys the GMC).</li>
 <li><strong>Audit/compliance</strong> — "show me, as a cluster object, exactly what tenants are
   allowed" is an actual requirement.</li>
 </ul>
@@ -4737,7 +5034,7 @@ only the ones that fix a problem we have today.</p>
   so cloud KMS providers add without another breaking change). Adding it validated the
   shape against a real second consumer, the whole point of fixing the shape before the
   freeze. See <a href="../05-security/#57-workload-identity-the-no-pem-delegation-model">05-security.md §5.7</a>
-  for the trust model. Plan + schema sketch: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2beta1.md">v2beta1.md</a>.</p>
+  for the trust model. Plan + schema sketch: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2beta1.md">v2beta1.md</a>.</p>
 </li>
 </ul>
 <p><strong>Explicitly NOT now (shape for additive later, do not build):</strong></p>
@@ -4821,14 +5118,14 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.<
    now keyed <strong>once per namespace</strong> instead of per gateway. Co-located gateways
    therefore always share one posture; tenants that need <em>different</em> postures use
    <em>different</em> namespaces — the natural PSA isolation boundary anyway. Land the
-   field-home change no later than <strong>M3a (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/STATUS.md#queue">Q164</a>)</strong>, where
+   field-home change no later than <strong>M3a (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md#queue">Q164</a>)</strong>, where
    <code>ActionsGateway</code> is first reconciled, so M3a reads the profile from its new home
    rather than building per-gateway logic that M3b would rip out. Migration is
    unaffected (one v1 namespace → one gateway → one profile).</p>
 <p><strong>Implemented mechanism (M3a, Q175).</strong> The namespace-side selector is the label
    <code>actions-gateway.com/security-profile: baseline|restricted|privileged</code>
    (<code>SecurityProfileLabel</code>); absent on a managed tenant namespace ⇒ <code>baseline</code> (secure
-   default). Two GMC-side pieces realize the guarantee, and crucially the relocation
+   default). Two GMC-side pieces realize the guarantee, and the relocation
    makes the guard <em>simpler</em> than v1, not just relocated:
    - <strong><code>NamespacePSAReconciler</code></strong> (GMC) watches managed v2 tenant namespaces and stamps
      the six <code>pod-security.kubernetes.io/*</code> labels from the profile label via
@@ -4889,7 +5186,7 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.<
 <p>The migration (<a href="#h11-migration-v2-tool-assisted">§H.11</a>) is the first and only
 place two invariants this design <em>asserts</em> are tested against real v1 data. Both
 are stated confidently above; neither has been exercised. They are acceptance
-criteria the M5 tool (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/STATUS.md#queue">Q165</a>) must meet — and, because they are
+criteria the M5 tool (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md#queue">Q165</a>) must meet — and, because they are
 pure data-shape questions, they can be validated <strong>before</strong> M5 by a mapping over
 representative v1 fixtures, surfacing any v2 schema gap at alpha-rewrite cost
 instead of post-adoption cost. (The <code>v2alpha1</code> types do not exist yet, so this is a

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/worker-rightsizing/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/worker-rightsizing/">
       
       
         <link rel="prev" href="../cost-attribution/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -712,7 +780,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -734,14 +802,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1329,6 +1397,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1345,7 +1417,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1367,14 +1439,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1384,6 +1456,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1645,6 +1745,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1787,10 +1915,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -1808,8 +1936,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2462,6 +2590,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2615,7 +2847,7 @@
 
 <h1 id="right-sizing-worker-resources-from-measured-usage">Right-sizing worker resources from measured usage<a class="headerlink" href="#right-sizing-worker-resources-from-measured-usage" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> SRE, Platform engineer</p>
+<p><strong>Audience:</strong> Tenant operator, Platform engineer</p>
 </blockquote>
 <p>Every worker pod's CPU/memory <code>requests</code>/<code>limits</code> start as a guess in the
 tenant's <code>RunnerTemplate</code>. This guide turns the gateway's built-in usage
@@ -2675,7 +2907,39 @@ recommendation (waste) or a memory limit sits below the highest observed
 per-job peak (OOM risk):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;SizingDrift&quot;)]}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </code></pre></div>
-<p>It never gates <code>Ready</code>, and by default nothing is auto-applied: apply the
+<table>
+<thead>
+<tr>
+<th><code>status</code> / <code>reason</code></th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>True</code> / <code>SizingDriftDetected</code></td>
+<td>At least one template container has drifted materially. The message names each one, the resource, and the direction — <code>request … is &gt;=2x the recommended …</code> (waste) or <code>memory limit … is below the observed per-job peak …</code> (OOM risk) — with both measured figures.</td>
+</tr>
+<tr>
+<td><code>False</code> / <code>SizingWithinRange</code></td>
+<td>Every container the AGC could judge is inside the thresholds. <strong>Not the same as "right-sized":</strong> drift flags only waste and OOM risk, so an <em>under</em>-asking CPU request reads as within range — CPU is compressible, and the job bursts into idle node capacity rather than failing. Read <code>status.sizingRecommendation</code> yourself if you are sizing for latency.</td>
+</tr>
+<tr>
+<td><code>False</code> / <code>InsufficientSamples</code></td>
+<td>Fewer than 20 sampled jobs for every template container, so drift is not judged yet; the message points at each entry's <code>sampleCount</code>. Also what you get when the containers that <em>do</em> have enough samples are not in the template (an injected sidecar) — there is measured data but no ask to compare it against.</td>
+</tr>
+<tr>
+<td><code>False</code> / <code>SizingProfileActive</code></td>
+<td>A <a href="#sizing-profiles-opt-in-auto-apply">sizing profile</a> is deriving resources at pod build, so the template's static ask is not what worker pods run with and judging it would mislead.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>No <code>SizingDrift</code> condition at all</strong> means there was nothing to judge: no
+<code>status.sizingRecommendation</code> (metrics-server absent, sampling off, or the
+sampler still warming up) or no resolved <code>RunnerTemplate</code>. That silence is
+deliberate — otherwise every set in a cluster without metrics-server would carry
+<code>InsufficientSamples</code> forever. Read a missing condition as "not measured", not
+as "no drift"; if you expected data, start at <a href="#troubleshooting">Troubleshooting</a>.</p>
+<p>The condition never gates <code>Ready</code>, and by default nothing is auto-applied: apply the
 values to the <code>RunnerTemplate</code> yourself (Step 2's validation still applies), or
 opt into a <a href="#sizing-profiles-opt-in-auto-apply">sizing profile</a> to have the
 gateway apply them at pod-build time. Use the PromQL below when you want the
@@ -2705,7 +2969,7 @@ for). Then, per container (the runner container is named <code>runner</code>):</
 range, not an exact figure, and cross-check against the max-peak gauges.</p>
 <h2 id="step-2--derive-requestslimits">Step 2 — derive <code>requests</code>/<code>limits</code><a class="headerlink" href="#step-2--derive-requestslimits" title="Permanent link">&para;</a></h2>
 <p>Apply the resource-model rules (proven in the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/dogfood-runner-rightsizing.md#resource-model-principles">dogfood right-sizing exercise</a>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/dogfood-runner-rightsizing.md#resource-model-principles">dogfood right-sizing exercise</a>
 that this feature automates the measurement half of):</p>
 <table>
 <thead>
@@ -2747,7 +3011,7 @@ the node shape and namespace <code>ResourceQuota</code>
 workers per node — the right call on expensive nodes (GPUs, large VMs) where
 worker count per node is the cost driver. Sizing up (requests ≈ max) buys
 burst headroom so jobs finish faster. The
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/runner-sizing-profiles.md">sizing-profiles plan</a> tracks automating
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/runner-sizing-profiles.md">sizing-profiles plan</a> tracks automating
 this choice; today it is a per-<code>RunnerTemplate</code> decision.</p>
 <h2 id="sizing-profiles-opt-in-auto-apply">Sizing profiles (opt-in auto-apply)<a class="headerlink" href="#sizing-profiles-opt-in-auto-apply" title="Permanent link">&para;</a></h2>
 <p>Instead of copying the recommendation into the <code>RunnerTemplate</code> by hand, a
@@ -2947,7 +3211,7 @@ ten minutes.</p>
 <p><strong>All jobs land in <code>…_jobs_unsampled_total</code></strong> — the workload's jobs finish
 faster than the sampling interval. There is no per-job signal to size from at
 15s resolution; size such a RunnerSet by its node-shape share instead (see the
-<code>NodeShare</code> idea in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/runner-sizing-profiles.md">sizing-profiles plan</a>).</p>
+<code>NodeShare</code> idea in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/runner-sizing-profiles.md">sizing-profiles plan</a>).</p>
 <p><strong><code>Throughput</code> is <code>Active</code> but jobs still run at the old CPU ceiling</strong> — read
 <code>SizingProfileOverridden</code> on the <code>RunnerSet</code>. <code>True/CPULimitInjected</code> means a pod
 the profile built without a CPU limit was admitted with one; the message names

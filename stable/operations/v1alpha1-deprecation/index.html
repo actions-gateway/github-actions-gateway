@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/v1alpha1-deprecation/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/v1alpha1-deprecation/">
       
       
         <link rel="prev" href="../migration-v1-to-v2/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -712,7 +780,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -734,14 +802,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1329,6 +1397,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1345,7 +1417,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1367,14 +1439,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1384,6 +1456,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1668,6 +1768,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-v1alpha1-fields-are-inert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two v1alpha1 fields are inert
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1766,6 +1883,34 @@
     
   
     ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
   
 
     
@@ -1928,10 +2073,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -1949,8 +2094,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2451,6 +2596,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2524,6 +2773,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-v1alpha1-fields-are-inert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two v1alpha1 fields are inert
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2679,7 +2945,7 @@ the removal would have had to either break <code>v2beta1</code> objects or quiet
 <ul>
 <li><strong><code>v3.0.0</code> is not scheduled and carries no date</strong>, exactly as <code>v2.0.0</code> carries none.
   It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2-ga.md">v2 GA plan</a>). The commitment here is a floor — <em>not
+  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-ga.md">v2 GA plan</a>). The commitment here is a floor — <em>not
   before</em> <code>v3.0.0</code> — and the removal still gets its own one-release-ahead announcement.</li>
 <li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open
   question</strong>, settled by the graduation hop rather than by this notice. <code>v2</code> is a new
@@ -2695,24 +2961,74 @@ write that still names a deprecated value, and the warning names <code>v3.0.0</c
 <ul>
 <li><strong>All three are deprecated and still fully served.</strong> No release has removed any of
   them. Existing tenants keep running unchanged until they upgrade past <code>v2.0.0</code>.</li>
-<li><strong>New tenants should onboard on <code>v2beta1</code>.</strong> See
-  <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.</li>
-<li><strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong>
+<li>
+<p><strong>The apiserver says so too, on both deprecated versions.</strong> Every <code>v1alpha1</code> and
+  <code>v2alpha1</code> CRD carries <code>deprecated: true</code> plus a <code>deprecationWarning</code>, so <code>kubectl</code>
+  prints the notice on any read or write of one of those versions — it is no longer
+  something you have to have read this page to know:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Warning: actions-gateway.github.com/v1alpha1 RunnerGroup is deprecated; use actions-gateway.com/v2beta1 RunnerSet. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate.
+</code></pre></div>
+<p>The warning is advisory: it does not fail an <code>apply</code>, and both controllers
+deduplicate it to one log line per process
+(<a href="../observability-logging/#logging">observability-logging</a>). Classic acquisition
+carries no apiserver warning of its own — it is a <em>field value</em>, not a version, and
+the versions that admit it are the two that warn above.
+- <strong>New tenants should onboard on <code>v2beta1</code>.</strong> See
+  <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.
+- <strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong>
   It carries the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs, which a
   new tenant does not. Note that alpha's contract allows an alpha version to be
   dropped without notice; naming <code>v2.0.0</code> for it is a stronger commitment than the
-  maturity level requires.</li>
-<li><strong>Existing tenants migrate with the tool</strong> on their own schedule: see
+  maturity level requires.
+- <strong>Existing tenants migrate with the tool</strong> on their own schedule: see
   <a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a>. The migration is a one-shot
   fan-out, not an automatic conversion, because one v1 object becomes several v2
-  objects.</li>
-<li><strong>Migrating preserves how your jobs are acquired.</strong> <code>gag-migrate</code> maps v1 runner
+  objects.
+- <strong>Migrating preserves how your jobs are acquired.</strong> <code>gag-migrate</code> maps v1 runner
   groups to v2 <code>RunnerSet</code>s that use the same job-acquisition path: it writes
   <code>acquisitionProtocol: Classic</code> onto every emitted set, so the migration changes the
   API objects, not the runtime behaviour, and is safe to do ahead of any other change.
   Adopting <code>ScaleSet</code> for a migrated group is a distinct, later step (create a fresh
-  single-label set), never a side effect of migrating off <code>v1alpha1</code>.</li>
+  single-label set), never a side effect of migrating off <code>v1alpha1</code>.</p>
+</li>
 </ul>
+<h3 id="two-v1alpha1-fields-are-inert">Two <code>v1alpha1</code> fields are inert<a class="headerlink" href="#two-v1alpha1-fields-are-inert" title="Permanent link">&para;</a></h3>
+<p>Both are in the served schema, both do nothing, and neither gains a behaviour before
+<code>v2.0.0</code> removes the version. They are called out because the schema alone does not
+say so: one is rejected at admission despite reading like a supported knob, and the
+other is a status field the GMC never writes.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>What it actually does</th>
+<th>Read instead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ActionsGateway.spec.gitHubAppRef.namespace</code></td>
+<td>Nothing. Any non-empty value is <strong>rejected by the GMC validating webhook</strong> on create and on update. The Secret always resolves in the <code>ActionsGateway</code>'s own namespace.</td>
+<td>Leave it unset and put the Secret in the gateway's namespace.</td>
+</tr>
+<tr>
+<td><code>ActionsGateway.status.activeSessions</code></td>
+<td>Nothing. The GMC never sets it, so it is absent from every gateway. It is not a count that happens to be zero.</td>
+<td><code>status.activeSessions</code> on each <code>RunnerGroup</code>, or the <code>actions_gateway_active_sessions</code> metric (<a href="../observability-metrics/">observability-metrics</a>).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>An alert or dashboard reading <code>ActionsGateway.status.activeSessions</code> is reading a
+field no controller populates</strong>, so it reports absent (or zero) no matter how busy
+the gateway is. Point it at the per-<code>RunnerGroup</code> field or the metric instead.</p>
+<p>Neither field is carried into v2. <code>v2beta1</code> replaces <code>SecretReference</code> with the
+name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and
+<code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>. So migrating with
+<a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> needs no action for either: there is nothing
+to carry across.</p>
+<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/api-review.md#removal-needs-a-version-increment-not-a-promise">removing a field from
+a served version is a breaking change</a>.
+The removal is the version's own, at <code>v2.0.0</code>.</p>
 <h2 id="why-v2-what-the-decomposition-buys">Why v2 (what the decomposition buys)<a class="headerlink" href="#why-v2-what-the-decomposition-buys" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Reusable pod templates.</strong> The large <code>PodTemplateSpec</code> moves to a referenced

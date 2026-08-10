@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/">
       
       
         <link rel="prev" href="../design/github-protocol-dependencies/">
       
       
-        <link rel="next" href="install/">
+        <link rel="next" href="personas/">
       
       
         
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#docsoperations" class="md-skip">
+        <a href="#operations" class="md-skip">
           Skip to content
         </a>
       
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -712,7 +780,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -734,14 +802,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1329,6 +1397,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1345,7 +1417,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1367,14 +1439,14 @@
             </a>
             
               
-              <label class="md-nav__link md-nav__link--active" for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link md-nav__link--active" for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1384,6 +1456,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1645,6 +1745,34 @@
   
   
     <li class="md-nav__item">
+      <a href="runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1787,10 +1915,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -1808,8 +1936,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2310,6 +2438,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2348,8 +2580,8 @@
   
 
 
-<h1 id="docsoperations">docs/operations/<a class="headerlink" href="#docsoperations" title="Permanent link">&para;</a></h1>
-<p>Operator-facing references. Audience: on-call SRE and platform engineers running the Gateway Manager Controller (GMC) and per-tenant Actions Gateway Controllers (AGCs).</p>
+<h1 id="operations">Operations<a class="headerlink" href="#operations" title="Permanent link">&para;</a></h1>
+<p>Operator-facing references for the two roles that run GitHub Actions Gateway (GAG): the <strong>platform engineer</strong> who owns the cluster and the Gateway Manager Controller (GMC), and the <strong>tenant operator</strong> who owns one namespace's Actions Gateway Controller (AGC), runner sets, and the workflows that target them. <a href="personas/">Who owns what</a> defines every role and what each cannot do.</p>
 <table>
 <thead>
 <tr>
@@ -2360,54 +2592,59 @@
 </thead>
 <tbody>
 <tr>
+<td><a href="personas/">personas.md</a></td>
+<td>All</td>
+<td>Who owns what: each role defined by what it owns and what it cannot do, the external contributor as a threat-model actor rather than an audience, and how persona tags are recorded.</td>
+</tr>
+<tr>
 <td><a href="runbook/">runbook.md</a></td>
-<td>SRE</td>
-<td>Production runbook — high-level operational procedures. For initial setup see <a href="../getting-started/">Getting Started</a>.</td>
+<td>Platform engineer</td>
+<td>Production runbook: high-level operational procedures. For initial setup see <a href="../getting-started/">Getting Started</a>.</td>
 </tr>
 <tr>
 <td><a href="backup-restore/">backup-restore.md</a></td>
-<td>SRE, Platform engineer</td>
-<td>Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted <code>ActionsGateway</code> CR.</td>
+<td>Platform engineer</td>
+<td>Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted <code>ActionsGateway</code> custom resource.</td>
 </tr>
 <tr>
 <td><a href="velero-backup-restore/">velero-backup-restore.md</a></td>
-<td>SRE, Platform engineer</td>
-<td>Velero-specific how-to — namespace-level backup/restore commands grounded in GAG's ownership model, with the selector that skips GMC-owned children so the controllers rebuild them.</td>
+<td>Platform engineer</td>
+<td>Velero-specific how-to: namespace-level backup/restore commands grounded in GAG's ownership model, with the selector that skips GMC-owned children so the controllers rebuild them.</td>
 </tr>
 <tr>
 <td><a href="troubleshooting/">troubleshooting.md</a></td>
-<td>SRE, Platform engineer</td>
+<td>Platform engineer, Tenant operator</td>
 <td>Symptom → diagnosis → remediation, organised by observable failure mode.</td>
 </tr>
 <tr>
 <td><a href="observability/">observability.md</a></td>
-<td>SRE, Platform engineer</td>
-<td>Observability guide hub — links to the <a href="observability-metrics/">metrics reference</a>, <a href="observability-metrics-access/">scraping setup</a>, <a href="observability-alerting/">alerting &amp; SLOs</a>, <a href="observability-dashboards/">Grafana dashboards</a>, and <a href="observability-logging/">logging &amp; tracing</a>.</td>
+<td>Platform engineer, Tenant operator</td>
+<td>Observability guide hub: links to the <a href="observability-metrics/">metrics reference</a>, <a href="observability-metrics-access/">scraping setup</a>, <a href="observability-alerting/">alerting &amp; SLOs</a>, <a href="observability-dashboards/">Grafana dashboards</a>, and <a href="observability-logging/">logging &amp; tracing</a>.</td>
 </tr>
 <tr>
 <td><a href="cost-attribution/">cost-attribution.md</a></td>
-<td>SRE, Platform engineer, Budget owner</td>
-<td>Live per-tenant cost attribution — map GAG's tenant namespaces and <code>app.kubernetes.io/*</code> labels to OpenCost/Kubecost allocation queries for real $/tenant.</td>
+<td>Platform engineer, Budget owner</td>
+<td>Live per-tenant cost attribution: map GAG's tenant namespaces and <code>app.kubernetes.io/*</code> labels to OpenCost/Kubecost allocation queries for real $/tenant.</td>
 </tr>
 <tr>
 <td><a href="worker-rightsizing/">worker-rightsizing.md</a></td>
-<td>SRE, Platform engineer</td>
-<td>Right-size worker <code>requests</code>/<code>limits</code> from the gateway's built-in per-RunnerSet usage metrics — read the peak distribution, derive values, validate.</td>
+<td>Tenant operator, Platform engineer</td>
+<td>Right-size worker <code>requests</code>/<code>limits</code> from the gateway's built-in per-RunnerSet usage metrics: read the peak distribution, derive values, validate.</td>
 </tr>
 <tr>
 <td><a href="node-shutdown-budgets/">node-shutdown-budgets.md</a></td>
-<td>SRE, Platform engineer</td>
-<td>How much shutdown time each platform actually grants — graceful-node-shutdown and preemption-notice defaults for GKE/EKS/AKS/RKE2/Kubespray/OpenShift, drain timeouts, and why proxy pools should stay off spot capacity.</td>
+<td>Platform engineer</td>
+<td>How much shutdown time each platform actually grants: graceful-node-shutdown and preemption-notice defaults for GKE/EKS/AKS/RKE2/Kubespray/OpenShift, drain timeouts, and why proxy pools should stay off spot capacity.</td>
 </tr>
 <tr>
 <td><a href="security-operations/">security-operations.md</a></td>
-<td>SRE, Security</td>
-<td>Abuse-detection runbook — maps the threat model's abuse heuristics to operator alerts and compromise-response playbooks.</td>
+<td>Platform engineer, Security</td>
+<td>Abuse-detection runbook: maps the threat model's abuse heuristics to operator alerts and compromise-response playbooks.</td>
 </tr>
 <tr>
 <td><a href="admission-policies/">admission-policies.md</a></td>
 <td>Platform engineer, Security</td>
-<td>Kyverno/Gatekeeper compatibility matrix — whether GAG pods comply with common cluster admission policies, plus sample enforce/exception policies.</td>
+<td>Kyverno/Gatekeeper compatibility matrix: whether GAG pods comply with common cluster admission policies, plus sample enforce/exception policies.</td>
 </tr>
 <tr>
 <td><a href="tenant-onboarding/">tenant-onboarding.md</a></td>
@@ -2417,47 +2654,52 @@
 <tr>
 <td><a href="resourcequota-sizing/">resourcequota-sizing.md</a></td>
 <td>Platform engineer</td>
-<td>Turn runner shapes and concurrency ceilings into the namespace <code>ResourceQuota</code> numbers — what the quota actually counts (native sidecars, Kata overhead, PVCs), which keys are safe to constrain, and a worked DinD example.</td>
+<td>Turn runner shapes and concurrency ceilings into the namespace <code>ResourceQuota</code> numbers: what the quota actually counts (native sidecars, Kata overhead, PVCs), which keys are safe to constrain, and a worked DinD example.</td>
+</tr>
+<tr>
+<td><a href="runner-template-library/">runner-template-library.md</a></td>
+<td>Platform engineer, Tenant operator</td>
+<td>Adopt one of the three shipped worker pod shapes (<code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code>) instead of hand-authoring one: which entry fits which jobs, the cluster prerequisites each needs, and how to fork one safely.</td>
 </tr>
 <tr>
 <td><a href="in-runner-image-builds/">in-runner-image-builds.md</a></td>
-<td>Platform engineer, Tenant owner</td>
+<td>Platform engineer, Tenant operator</td>
 <td>Map each in-runner image-build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) to the right <code>securityProfile</code>/PSA level, with a decision table.</td>
 </tr>
 <tr>
 <td><a href="kata-dind-workloads/">kata-dind-workloads.md</a></td>
 <td>Platform engineer</td>
-<td>Run DinD / image-build jobs under Kata Containers (KVM micro-VM) at <code>securityProfile: baseline</code> — nested-virt node prerequisites, the Kata DaemonSet + <code>RuntimeClass</code> setup, and the worker <code>podTemplate</code> <code>runtimeClassName</code>.</td>
+<td>Run DinD / image-build jobs under Kata Containers (KVM micro-VM) at <code>securityProfile: baseline</code>: nested-virt node prerequisites, the Kata DaemonSet + <code>RuntimeClass</code> setup, and the worker <code>podTemplate</code> <code>runtimeClassName</code>.</td>
 </tr>
 <tr>
 <td><a href="p2p-image-distribution/">p2p-image-distribution.md</a></td>
-<td>Platform engineer, SRE</td>
-<td>Recommended scale companion — adding a peer-to-peer image mirror (Spegel/Dragonfly) to survive ephemeral-worker pull storms, and the <code>imagePullPolicy</code>/digest-pin interplay.</td>
+<td>Platform engineer</td>
+<td>Recommended scale companion: adding a peer-to-peer image mirror (Spegel/Dragonfly) to survive ephemeral-worker pull storms, and the <code>imagePullPolicy</code>/digest-pin interplay.</td>
 </tr>
 <tr>
 <td><a href="service-mesh-coexistence/">service-mesh-coexistence.md</a></td>
-<td>Platform engineer, SRE</td>
-<td>Running GAG alongside Istio/Linkerd/ambient — injection opt-out, sidecar lifecycle, and egress exclusions so the per-tenant proxy is honored.</td>
+<td>Platform engineer</td>
+<td>Running GAG alongside Istio/Linkerd/ambient: injection opt-out, sidecar lifecycle, and egress exclusions so the per-tenant proxy is honored.</td>
 </tr>
 <tr>
 <td><a href="migration-from-arc/">migration-from-arc.md</a></td>
 <td>Platform engineer</td>
-<td>Coming from Actions Runner Controller (ARC) scale-set mode — concept mapping, behavioral differences, and a worked one-runner-group migration.</td>
+<td>Coming from Actions Runner Controller (ARC) scale-set mode: concept mapping, behavioral differences, and a worked one-runner-group migration.</td>
 </tr>
 <tr>
 <td><a href="install/">install.md</a></td>
 <td>Platform engineer</td>
-<td>Install the GMC with the <code>actions-gateway</code> Helm chart — prerequisites, digest pinning, healthy-install verification, uninstall.</td>
+<td>Install the GMC with the <code>actions-gateway</code> Helm chart: prerequisites, digest pinning, healthy-install verification, uninstall.</td>
 </tr>
 <tr>
 <td><a href="air-gapped-install/">air-gapped-install.md</a></td>
 <td>Platform engineer</td>
-<td>Install on an air-gapped / egress-restricted cluster — relocate the images and OCI chart to a private registry (digests preserved), set per-image registry overrides + image-pull Secrets, wire pull Secrets for the runtime AGC/proxy/worker pods.</td>
+<td>Install on an air-gapped / egress-restricted cluster: relocate the images and OCI chart to a private registry (digests preserved), set per-image registry overrides + image-pull Secrets, wire pull Secrets for the runtime AGC/proxy/worker pods.</td>
 </tr>
 <tr>
 <td><a href="gitops/">gitops.md</a></td>
 <td>Platform engineer</td>
-<td>Install the OCI chart declaratively via Argo CD or Flux — <code>Application</code> / <code>HelmRelease</code> examples with the CRD-pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed).</td>
+<td>Install the OCI chart declaratively via Argo CD or Flux: <code>Application</code> / <code>HelmRelease</code> examples with the CustomResourceDefinition pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed).</td>
 </tr>
 <tr>
 <td><a href="v1alpha1-deprecation/">v1alpha1-deprecation.md</a></td>
@@ -2482,7 +2724,7 @@
 <tr>
 <td><a href="kata-ci-spike-runbook/">kata-ci-spike-runbook.md</a></td>
 <td>Platform engineer, Security</td>
-<td>Live go/no-go runbook for the Q226 Kata-on-GKE spike — run an unprivileged <code>dockerd</code>+<code>kind</code> runner inside a Kata micro-VM, step-by-step against the six acceptance criteria. Applies the artifacts in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.3.0/deploy/kata-ci">deploy/kata-ci/</a>.</td>
+<td>Live go/no-go runbook for the Q226 Kata-on-GKE spike: run an unprivileged <code>dockerd</code>+<code>kind</code> runner inside a Kata micro-VM, step-by-step against the six acceptance criteria. Applies the artifacts in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.4.0/deploy/kata-ci">deploy/kata-ci/</a>.</td>
 </tr>
 <tr>
 <td><a href="../design/08-glossary/">../design/08-glossary.md</a></td>
@@ -2546,13 +2788,13 @@
         
         
           
-          <a href="install/" class="md-footer__link md-footer__link--next" aria-label="Next: Install">
+          <a href="personas/" class="md-footer__link md-footer__link--next" aria-label="Next: Personas: who owns what">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Install
+                Personas: who owns what
               </div>
             </div>
             <div class="md-footer__button md-icon">

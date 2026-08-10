@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/tenant-onboarding/">
+        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/tenant-onboarding/">
       
       
         <link rel="prev" href="../v1alpha1-deprecation/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.3.0",
+    "url": "https://actions-gateway.com/1.4.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.3.0"
+      "url": "https://actions-gateway.com/1.4.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.3.0",
-    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.4.0",
+    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.3.0 is here.</strong>
-      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
+            <strong>v1.4.0 is here.</strong>
+      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -328,6 +328,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../features/" class="md-tabs__link">
         
   
@@ -444,6 +463,28 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -530,6 +571,33 @@
     
   
     Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
   
 
     
@@ -712,7 +780,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -734,14 +802,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1329,6 +1397,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1345,7 +1417,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1367,14 +1439,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1384,6 +1456,34 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
               
             
               
@@ -1877,6 +1977,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#starting-from-a-shipped-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starting from a shipped template
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#optional-templateref-a-default-worker-pod-shape" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1960,6 +2071,34 @@
     
   
     ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
   
 
     
@@ -2122,10 +2261,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
             
   
   
@@ -2143,8 +2282,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2645,6 +2784,110 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2900,6 +3143,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#starting-from-a-shipped-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starting from a shipped template
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#optional-templateref-a-default-worker-pod-shape" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3006,7 +3260,7 @@ v1? <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> moves you acro
   This label is what authorizes the GMC to operate in the namespace at all. Two admission policies key on it: <code>namespace-psa-guard</code> denies the GMC any namespace patch (the PSA-stamping step) it has <em>not</em> been marked for, and <code>gmc-tenant-resource-guard</code> denies the GMC any create/update/delete of tenant resources (Deployments, Secrets, RoleBindings, NetworkPolicies, …) outside marked namespaces. So an unlabelled namespace leaves the <code>ActionsGateway</code> stuck with a <code>NamespaceMarkerMissing</code> warning event and no provisioned resources. Apply the label with a trusted (administrator) identity — the GMC must never set it itself. Verify: <code>kubectl get namespace &lt;tenant-namespace&gt; -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/tenant}'</code> → <code>true</code>.</li>
 <li>[ ] <strong>Cluster CNI enforces egress NetworkPolicy.</strong> The tenant isolation model (workers restricted to DNS + the per-tenant proxy; no direct GitHub or Kubernetes API egress) is implemented as NetworkPolicy egress rules, which are inert unless the cluster's Container Network Interface (CNI) plugin enforces them. Production clusters must run an egress-enforcing CNI such as Calico or Cilium — kind's default kindnet, for example, accepts NetworkPolicy objects without enforcing egress. Verify with your CNI's documentation, or run the negative probes in <a href="../../design/network-architecture/#how-to-validate-network-isolation">network-architecture.md § How to Validate Network Isolation</a> after onboarding: the "blocked" probes must actually time out.</li>
 <li>[ ] <strong>Service mesh is accounted for (if the cluster runs one).</strong> A mesh (Istio, Linkerd, Cilium Service Mesh, Kuma) that injects a sidecar into the tenant namespace will strand completed worker pods and fight the per-tenant egress proxy. The supported posture is to opt the GAG tenant namespace out of the mesh; if mesh membership is mandatory, use native sidecars or an ambient/sidecar-less data plane plus egress exclusions. Decide this before provisioning — see <a href="../service-mesh-coexistence/">Running GAG Alongside a Service Mesh</a>.</li>
-<li>[ ] <strong>GMC is running.</strong> The Gateway Manager Controller (GMC) is deployed and healthy: <code>kubectl get deploy -n gmc-system gmc-controller-manager</code>. Install it with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
+<li>[ ] <strong>GMC is running.</strong> The Gateway Manager Controller (GMC) is deployed and healthy: <code>kubectl get deploy -n gmc-system gmc-controller-manager</code>. Install it with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
 <li>[ ] <strong>CRDs are installed.</strong> <code>kubectl get crd actionsgateways.actions-gateway.github.com &amp;&amp; kubectl get crd runnergroups.actions-gateway.github.com</code>.</li>
 <li>[ ] <strong>GitHub App is registered.</strong> The GitHub App is registered in the target GitHub organization with at least <code>Actions: Read</code> and <code>Administration: Read</code> permissions. The platform team has the <code>appId</code>, <code>installationId</code>, and private key <code>.pem</code> file. First time? <a href="#step-0-create-and-install-the-github-app">Step 0</a> walks through creating the App and capturing all three.</li>
 <li>[ ] <strong>GitHub App is installed.</strong> The App is installed on the organization (or specific repos): Settings → Developer settings → GitHub Apps → <code>&lt;app&gt;</code> → Install App.</li>
@@ -3062,7 +3316,7 @@ v1? <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> moves you acro
 <p>You can also read it back with the GitHub CLI authenticated as the App (advanced — requires an App JWT, not your user token). The web-UI URL above is the reliable path; the <code>gh api /app/installations</code> endpoint is available once you can present an App JWT.</p>
 <h3 id="0d-generate-and-download-the-private-key-pem">0d. Generate and download the private key (<code>.pem</code>)<a class="headerlink" href="#0d-generate-and-download-the-private-key-pem" title="Permanent link">&para;</a></h3>
 <p>On the App's <strong>General</strong> page → <strong>Private keys</strong> → <strong>Generate a private key</strong>. The browser downloads a <code>.pem</code> file <strong>once</strong> — GitHub never shows it again, so store it safely and treat it as a high-value secret.</p>
-<p><strong>The exact PEM format the controller expects.</strong> The AGC parses the key with Go's standard library and accepts exactly two PEM block types (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/githubapp/auth.go"><code>githubapp/auth.go</code></a>):</p>
+<p><strong>The exact PEM format the controller expects.</strong> The AGC parses the key with Go's standard library and accepts exactly two PEM block types (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/githubapp/auth.go"><code>githubapp/auth.go</code></a>):</p>
 <table>
 <thead>
 <tr>
@@ -3257,6 +3511,7 @@ gateway will not fight it.</p>
 <p>A third cleanup arm has no knob: on the ScaleSet protocol, a worker pod still <code>Running</code> five minutes after GitHub reports its job terminal is deleted, because it is a worker that never received its job (or one held open by a container that outlived the runner) and it is holding a slot for nothing. It emits a <code>WorkerPodOrphanedRunning</code> Warning Event — see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. A pod whose job is still assigned is never touched, however long it runs.</p>
 <p>A reaped Pending pod emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup and cancels the job (it never started); see <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">troubleshooting: worker pod reaped while Pending</a>.</p>
 <p><strong>Per-job Secrets are reclaimed on job completion, not on <code>completedPodTTL</code>.</strong> Alongside each worker pod the AGC stages one short-lived Secret holding that job's credentials. It is deleted as soon as the job finishes — independent of <code>completedPodTTL</code>, which retains only the pod — so <code>kubectl get secrets -n &lt;tenant-ns&gt;</code> shows Secrets for in-flight jobs only, never a backlog proportional to jobs run. Both objects also carry an <code>OwnerReference</code> to their RunnerGroup/RunnerSet as a backstop, so deleting the owner cascade-deletes anything still present. If you do see <code>job-</code> or <code>job-ss-</code> Secrets outliving their pods, check the AGC log for <code>reclaim completed job's worker Secret</code> warnings — a persistently failing delete (usually an RBAC regression on <code>secrets</code>) falls back to that cascade-GC and leaves credentials in the namespace until the owner is deleted.</p>
+<p><strong>One small ConfigMap per ScaleSet RunnerSet is normal.</strong> Alongside the pods and Secrets, a <code>ScaleSet</code>-protocol set keeps a <code>scaleset-guards-&lt;runnerset&gt;</code> ConfigMap (labelled <code>actions-gateway.com/runner-set=&lt;name&gt;</code>): the AGC's durable record of jobs it has concluded whose queue messages are not yet deleted, which is what stops a hard-killed AGC from re-running a finished job's assignment (Q606). It is bounded by in-flight work, owner-ref'd to its RunnerSet so it is garbage-collected with it, and never something to edit: a hand-edited one fails the listener start; see <a href="../troubleshooting/#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap">troubleshooting</a>.</p>
 <p><strong>Optional — worker scale-up rate limit (<code>scaleUp</code>, opt-in, default-off).</strong> Each <code>runnerGroups[]</code> entry accepts an optional <code>scaleUp</code> token bucket that caps the <strong>rate</strong> at which the AGC <em>creates</em> new worker pods. It is <strong>off by default</strong> — omit it and provisioning stays immediate (GAG's zero-idle default). It is <strong>not</strong> the same as <code>maxWorkers</code>: <code>maxWorkers</code> caps how <em>many</em> worker pods run at once (a ceiling), while <code>scaleUp</code> caps how <em>fast</em> they start (a ramp). Reach for it only when a burst of simultaneously-acquired jobs stampedes a shared, rate-sensitive <strong>egress</strong> path — a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN — where the <em>onset</em> of connections (not the steady-state count) is what causes damage. It deliberately delays already-claimed jobs, trading time-to-pickup for a gentler ramp.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">]</span>
@@ -3378,7 +3633,7 @@ gateway will not fight it.</p>
 <a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>rm<span class="w"> </span>-rf<span class="w"> </span>/var/lib/apt/lists/*
 <a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">USER</span><span class="w"> </span><span class="s">runner   # keep the non-root UID 1001 the AGC expects</span>
 </code></pre></div>
-<p>A working reference you can copy and extend lives at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI. <strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan. Keep the runner version in step with the default the AGC would otherwise inject (it is the version GitHub validates at session creation); a stale runner surfaces as the <code>RunnerGroup</code> <code>VersionTooOld</code> condition.</p>
+<p>A working reference you can copy and extend lives at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI. <strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan. Keep the runner version in step with the default the AGC would otherwise inject (it is the version GitHub validates at session creation); a stale runner surfaces as the <code>RunnerGroup</code> <code>VersionTooOld</code> condition.</p>
 <p><strong>Optional — distributed tracing.</strong> To send the AGC's OpenTelemetry traces to a collector, add a <code>spec.tracing</code> block. Setting <code>endpoint</code> is what turns tracing on; leave the block out to keep it off (the default). <code>sampler</code> is a fixed enum — an unrecognized value is rejected by admission (see <a href="../troubleshooting/#tracing-sampler-rejected-by-admission">troubleshooting: tracing sampler rejected</a>).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
@@ -3559,8 +3814,8 @@ gateway will not fight it.</p>
 </tr>
 <tr>
 <td><code>EgressProxy</code>/<code>ActionsGateway</code> apply rejected: <code>spec.scheduling.priorityClassName … is not in the platform infra allowlist</code></td>
-<td>The class named for an <strong>infra</strong> pod is not on the GMC <code>--allowed-infra-priority-classes</code> flag (a <em>separate</em> allowlist from the worker one, empty by default)</td>
-<td>Have the platform admin create the <code>PriorityClass</code> and add its name to <code>--allowed-infra-priority-classes</code>, kept disjoint from <code>--allowed-priority-classes</code>; see <a href="../security-operations/#infra-pods-the-separate-allowed-infra-priority-classes-allowlist">security-operations.md § Infra pods</a></td>
+<td>The class named for an <strong>infra</strong> pod is not on the infra allowlist — the GMC <code>--allowed-infra-priority-classes</code> flag plus the <code>PriorityClassAllowlist</code> CR's <code>allowedInfraPriorityClasses</code> (a <em>separate</em> allowlist from the worker one, empty by default)</td>
+<td>Have the platform admin create the <code>PriorityClass</code> and add its name to <code>spec.allowedInfraPriorityClasses</code> on the CR (restart-free) or to the flag, kept disjoint from the worker allowlist either way; see <a href="../security-operations/#infra-pods-the-separate-allowed-infra-priority-classes-allowlist">security-operations.md § Infra pods</a></td>
 </tr>
 </tbody>
 </table>
@@ -3674,6 +3929,15 @@ the scale-set model cannot express, until it is ready to split those groups up.<
   (<code>kubectl edit runnersets.v2alpha1.actions-gateway.com …</code>). Ratcheting is on by
   default from Kubernetes 1.30; the v2 floor is 1.31, so every supported cluster has it.</li>
 </ul>
+<h3 id="starting-from-a-shipped-template">Starting from a shipped template<a class="headerlink" href="#starting-from-a-shipped-template" title="Permanent link">&para;</a></h3>
+<p>Before hand-authoring a <code>RunnerTemplate</code>, check whether one of the three shipped
+entries already fits. <code>kubectl apply -k deploy/templates/plain</code> gives a baseline
+worker; <code>kata-dind</code> and <code>privileged-dind</code> cover jobs that build container
+images. A <code>RunnerSet</code> then names one with <code>templateRef: { name: plain, kind:
+ClusterRunnerTemplate }</code>. They are cluster-scoped and platform-applied, none is
+marked as the cluster default, and each carries prerequisites the template
+cannot express: see the
+<a href="../runner-template-library/">runner template library</a>.</p>
 <h3 id="optional-templateref-a-default-worker-pod-shape">Optional <code>templateRef</code> (a default worker pod shape)<a class="headerlink" href="#optional-templateref-a-default-worker-pod-shape" title="Permanent link">&para;</a></h3>
 <p><code>RunnerSet.spec.templateRef</code> is <strong>optional</strong>. A <code>RunnerSet</code> that omits it resolves a worker pod shape through a fallback chain, so a tenant does not have to name a template in every runner set. The chain (resolved at runtime, fail-closed):</p>
 <ol>
