@@ -39,7 +39,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	ff := &flags{set: map[string]bool{}}
 	fs.StringVar(&ff.mode, "mode", "sentence", "reflow mode: sentence, para, or wrap")
-	fs.IntVar(&ff.maxWidth, "max-width", 0, "max line width in runes (0 = unbounded in sentence mode, 80 in wrap mode; invalid in para mode)")
+	fs.StringVar(&ff.dialect, "dialect", "gfm", "Markdown flavor: gfm (GitHub-flavored, default), or mkdocs to also reflow admonition bodies")
+	fs.IntVar(&ff.maxWidth, "max-width", 0, "max line width in runes, 0 or >= 20 (0 = unbounded in sentence mode, 80 in wrap mode; invalid in para mode)")
 	fs.BoolVar(&ff.check, "check", false, "report files that would be reformatted, write nothing, exit 1 if any would change")
 	fs.BoolVar(&ff.diff, "diff", false, "like --check, but print a unified diff to stdout instead of a one-line report")
 	fs.BoolVar(&ff.stdout, "stdout", false, "print the formatted result to stdout instead of writing in place (requires exactly one input file; ignored if --check or --diff is also given)")
@@ -48,8 +49,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.BoolVar(&ff.noGitignore, "no-gitignore", false, "do not consult .gitignore files when walking directories or checking excludes")
 	fs.StringVar(&ff.hardBreaks, "hard-breaks", "br", "hard line break style: br, spaces, or backslash")
 	fs.BoolVar(&ff.stripSentenceTerminalBreaks, "strip-sentence-terminal-breaks", false, "treat a trailing double-space immediately after sentence-terminal punctuation as an accidental hard break and remove it")
-	fs.BoolVar(&ff.smartQuotes, "smart-quotes", false, "substitute curly quotes for straight quotes in prose (never in code spans, links, or skipped blocks)")
-	fs.BoolVar(&ff.ellipses, "ellipses", false, `substitute "…" for "..." in prose (never in code spans, links, or skipped blocks)`)
 	fs.BoolVar(&ff.version, "version", false, "print version information to stdout and exit 0")
 
 	// Parse errors already name the offending flag; a pointer to --help
@@ -85,20 +84,42 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return runPaths(ff, paths, stdout, stderr)
 }
 
+// configDiscoveryBoundary returns the directory config.Discover should
+// stop at, inclusive (security review S5): gitRepoRoot if the caller
+// found an enclosing git repository, otherwise the invoking user's home
+// directory, otherwise "" (unbounded, matching pre-hardening behavior)
+// if neither is available. A boundary caps how far upward a
+// .mdreflow.yaml can be discovered from, so a config planted in a
+// shared ancestor directory (a world-writable /tmp, a multi-tenant CI
+// workspace) can't silently apply to files far below it.
+func configDiscoveryBoundary(gitRepoRoot string) string {
+	if gitRepoRoot != "" {
+		return gitRepoRoot
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return home
+	}
+	return ""
+}
+
 func runStdin(ff *flags, stdin io.Reader, stdout, stderr io.Writer) int {
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(stderr, "mdreflow: %v\n", err)
 		return exitUsage
 	}
+	gitRepoRoot := ""
+	if root, err := exclude.FindRepoRoot(cwd); err == nil {
+		gitRepoRoot = root
+	}
 
-	cc := newConfigCache()
-	cfg, cfgDir, err := cc.resolve(cwd, ff.configPath)
+	cc := newConfigCache(configDiscoveryBoundary(gitRepoRoot))
+	cfg, _, err := cc.resolve(cwd, ff.configPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "mdreflow: %v\n", err)
 		return exitUsage
 	}
-	ro, err := mergeOptions(ff, cfg, cfgDir)
+	ro, err := mergeOptions(ff, cfg)
 	if err != nil {
 		fmt.Fprintf(stderr, "mdreflow: %v\n", err)
 		return exitUsage
@@ -133,14 +154,21 @@ func runPaths(ff *flags, paths []string, stdout, stderr io.Writer) int {
 	if info, err := os.Stat(startDir); err != nil || !info.IsDir() {
 		startDir = filepath.Dir(startDir)
 	}
+	// gitRepoRoot is computed unconditionally: config discovery needs it
+	// as a boundary (security review S5) even under --no-gitignore,
+	// which only disables *.gitignore* matching, not the repo-root
+	// concept itself. The excluder still only receives it when gitignore
+	// matching is enabled.
+	gitRepoRoot := ""
+	if root, err := exclude.FindRepoRoot(startDir); err == nil {
+		gitRepoRoot = root
+	}
 	repoRoot := ""
 	if !ff.noGitignore {
-		if root, err := exclude.FindRepoRoot(startDir); err == nil {
-			repoRoot = root
-		}
+		repoRoot = gitRepoRoot
 	}
 
-	cc := newConfigCache()
+	cc := newConfigCache(configDiscoveryBoundary(gitRepoRoot))
 	ex := newExcluder(ff.noGitignore, repoRoot, ff.configPath, cc)
 
 	var targets []target
@@ -173,12 +201,12 @@ func runPaths(ff *flags, paths []string, stdout, stderr io.Writer) int {
 	sawReformat := false
 	for _, t := range targets {
 		dir := filepath.Dir(t.path)
-		cfg, cfgDir, err := cc.resolve(dir, ff.configPath)
+		cfg, _, err := cc.resolve(dir, ff.configPath)
 		if err != nil {
 			fmt.Fprintf(stderr, "mdreflow: %v\n", err)
 			return exitUsage
 		}
-		ro, err := mergeOptions(ff, cfg, cfgDir)
+		ro, err := mergeOptions(ff, cfg)
 		if err != nil {
 			fmt.Fprintf(stderr, "mdreflow: %s: %v\n", t.path, err)
 			return exitUsage

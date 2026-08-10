@@ -70,10 +70,57 @@ type Paragraph struct {
 // mdreflow-configured goldmark instance (see package gm); source must be
 // the exact bytes that were parsed, since the returned ranges index into it.
 func Paragraphs(doc ast.Node, source []byte) []Paragraph {
+	return ParagraphsForDialect(doc, source, false)
+}
+
+// ParagraphsForDialect is Paragraphs with dialect-specific block
+// recognition enabled. mkdocs additionally treats a MkDocs admonition body
+// as prose; see admonitionBody for why that cannot be the default.
+func ParagraphsForDialect(doc ast.Node, source []byte, mkdocs bool) []Paragraph {
 	var out []Paragraph
 	fmEnd := frontMatterEnd(source)
-	collect(doc, source, false, 0, fmEnd, &out)
+	collect(doc, source, false, 0, fmEnd, defRunAbove(source), &out, mkdocs)
 	return out
+}
+
+// defRunAbove reports, per physical line (keyed by the line's start byte
+// offset), whether a definition-shaped line — the same shapes
+// inLinkRefDefZone checks on the immediately preceding line — occurs
+// anywhere ABOVE that line within its contiguous run of non-blank lines.
+// A blank line resets the run.
+//
+// This exists because a definition's reach downward is not limited to one
+// line: its title alone may span arbitrarily many lines, so a paragraph
+// can sit several lines below the "[label]:" opener yet still be the next
+// text the definition's own scan touches — reflowing that paragraph moves
+// the title's closing boundary and re-carves every line in between on the
+// next parse. Found by FuzzFormat on
+// "[0]:\n1\n\"\n\"[0]:0\n[1]:0\n\"20\n0\n00\n\"" (seed 97329a80dd2cb7d4):
+// the only reflow-eligible paragraph was the two-line tail of a title
+// spanning three lines below its def, one line beyond the neighbor check.
+// The transitive rule is verdict-stable by construction: every paragraph
+// inside a def-containing run is in-zone, so nothing in such a run ever
+// reflows, so the run's line layout — and with it every verdict keyed on
+// it — cannot change between passes. Computed in one top-down pass so the
+// zone check stays O(1) per paragraph.
+func defRunAbove(source []byte) map[int]bool {
+	m := make(map[int]bool)
+	seen := false
+	for ls := 0; ls < len(source); {
+		end := ls
+		for end < len(source) && source[end] != '\n' {
+			end++
+		}
+		line := bytes.TrimRight(source[ls:end], "\r")
+		m[ls] = seen
+		if len(bytes.Trim(line, " \t")) == 0 {
+			seen = false
+		} else if defLineOpenerRE.Match(line) || bareCaretOpenerRE.Match(line) || orphanDefCloserRE.Match(line) {
+			seen = true
+		}
+		ls = end + 1
+	}
+	return m
 }
 
 // maxContainerDepth caps how many List/Blockquote container levels deep a
@@ -105,8 +152,12 @@ const maxContainerDepth = 2
 // through untouched — no reflow is always render-preserving by
 // construction. Found by FuzzFormat on "000000000000000000\n>* >! 0"
 // (blockquote > list > blockquote, three levels).
-func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int, out *[]Paragraph) {
+func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int, zoneAbove map[int]bool, out *[]Paragraph, mkdocs bool) {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		if cb, ok := c.(*ast.CodeBlock); ok {
+			*out = append(*out, admonitionBodies(cb, source, mkdocs)...)
+			continue
+		}
 		switch c.(type) {
 		case *ast.Paragraph, *ast.TextBlock:
 			if depth > maxContainerDepth {
@@ -130,7 +181,7 @@ func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int,
 			// shape, from build's own raw-byte scan (see
 			// inLinkRefDefZone) — design.md's "The link-reference-
 			// definition zone: skip bluntly, by shape".
-			if pp, skip := build(c, source, inBlockquote, fmEnd, precededByTable); !skip {
+			if pp, skip := build(c, source, inBlockquote, fmEnd, precededByTable, zoneAbove); !skip {
 				*out = append(*out, pp)
 			}
 			continue
@@ -144,7 +195,7 @@ func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int,
 		case *ast.List:
 			childDepth++
 		}
-		collect(c, source, childInBQ, childDepth, fmEnd, out)
+		collect(c, source, childInBQ, childDepth, fmEnd, zoneAbove, out, mkdocs)
 	}
 }
 
@@ -154,7 +205,7 @@ func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int,
 // or -1 if source has no front matter) — see its use below. precededByTable
 // is true when p's immediately preceding sibling in the AST is a GFM
 // *ast.Table — see its use below for why.
-func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTable bool) (pp Paragraph, skip bool) {
+func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTable bool, zoneAbove map[int]bool) (pp Paragraph, skip bool) {
 	lines := p.Lines()
 	n := lines.Len()
 	if n == 0 {
@@ -256,7 +307,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// machinery, not paragraph interior).
 		return Paragraph{}, true
 	}
-	if inLinkRefDefZone(source, trimmed, start0) {
+	if inLinkRefDefZone(source, trimmed, start0, zoneAbove) {
 		// design.md, "The link-reference-definition zone: skip bluntly, by
 		// shape": a link reference definition renders nothing (it is URL
 		// metadata) and its grammar is the least reflow-compatible
@@ -277,9 +328,37 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// shape-based predicate — see its own doc comment.
 		return Paragraph{}, true
 	}
-	if hasUnbalancedBracket(trimmed) ||
-		hasUnclosedDestParen(trimmed) ||
-		hasUnclosedAngleDestOpener(trimmed) {
+	if hasBacktickInBareURL(trimmed) {
+		// A backtick inside a GFM-linkify-eligible bare URL is not a code
+		// span delimiter to goldmark — linkify's URL parser consumes it
+		// into the link destination before the code-span parser can see
+		// it — so every backtick after it pairs one delimiter out of step
+		// with what this package's own scanner (segment.CodeSpans, which
+		// does not model linkify) computes. The protected no-break spans
+		// then cover the wrong bytes and a break can land *inside* a real
+		// code span, where a newline is whitespace: found by FuzzFormat on
+		// "http://e.m/` ``e`\tg `" (seed 41e98cb4c9e00729, minimized from
+		// a 4 KB corpus-derived input), whose real span content "\tg "
+		// became " g " once the tab was replaced by the break, which
+		// CommonMark then strips at both edges to "g" — a rendered content
+		// change.
+		//
+		// Skipping the paragraph rather than teaching segment.CodeSpans to
+		// model linkify is deliberate, and not the usual bluntness trade:
+		// mirroring linkify's grammar (scheme and "www." forms, email
+		// forms, and its trailing-punctuation trimming rules) is exactly
+		// the kind of hand-mirrored grammar this codebase has repeatedly
+		// lost to implementation quirks (see isCompleteLinkRefDefLine's
+		// history), and here a wrong mirror would misjudge the no-break
+		// spans of the very many *ordinary* documents that contain URLs.
+		// The skip costs only paragraphs with a backtick inside a bare
+		// URL, which is close to nonexistent in real prose.
+		return Paragraph{}, true
+	}
+	masked := maskCodeSpans(trimmed)
+	if (hasUnbalancedBracket(masked) && couldFormLinkRefDef(masked)) ||
+		hasUnclosedDestParen(masked) ||
+		hasUnclosedAngleDestOpener(masked) {
 		// Fuzz-found content-loss hazard family, more severe than (and
 		// broader than) reflow.isLinkRefDefOpener's per-output-line
 		// defense: a CommonMark link reference definition's label,
@@ -398,6 +477,18 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// nesting), not a replacement for it.
 		contPrefix += "    "
 	}
+	if admonitionMarkerRE.MatchString(trimmed[0]) {
+		// A MkDocs admonition written without a blank line after its
+		// marker is one paragraph here: the indented body is a lazy
+		// continuation, not the code block the blank-line spelling
+		// produces. Joining the marker into the body destroys the
+		// callout, and so does dropping the body's indent, so the marker
+		// line is immovable and the body carries the 4-space indent the
+		// extension requires. Same treatment as the footnote definition
+		// above, for the same reason.
+		boundary[0] = true
+		contPrefix += "    "
+	}
 
 	return Paragraph{
 		Node:       p,
@@ -469,6 +560,27 @@ func hasHiddenLineGap(source []byte, lines *gmtext.Segments) bool {
 // defLineOpenerRE's doc comment).
 const nonCaretLabelBody = `(?:\\.|[^\^\[\]])(?:\\.|[^\[\]])*`
 
+// nonFootnoteCaretLabelAlt matches the caret-led labels that are NOT
+// footnotes to goldmark and so must count as ordinary definition labels
+// in the def-shape regexes below: goldmark's footnote extension requires
+// at least one non-space label character after the "^" ("[^x]:" and
+// "[^^]:" are footnotes; "[^]:" and "[^ ]:" are plain definitions
+// labeled "^"/"^ ", confirmed directly). Treating those as
+// footnote-shaped exempted from the zone exactly the line goldmark
+// treats as a definition: found by FuzzFormat on
+// "[0]:\n1\n\"\n\"[0]:0\n\"1\"[^]:0\n\"0\n00\n\"" (seed
+// 6042b560f6c7dcd2), where joining the paragraph after "[^]:0" completed
+// that definition and turned the paragraph's prose into its title — a
+// render corruption, not just an idempotency flip.
+const nonFootnoteCaretLabelAlt = `\^(?:[ \t][^\[\]]*)?`
+
+// caretLabelBody is the footnote-shaped label sub-pattern shared by the
+// caret-exemption regexes below: "^" followed by at least one non-space,
+// non-bracket character — the mirror of nonFootnoteCaretLabelAlt's
+// boundary, so every label is classified the same way by the exemption
+// checks and the def-shape checks.
+const caretLabelBody = `\^[^ \t\[\]][^\[\]]*`
+
 // nonCaretDefShapeRE matches a non-footnote link-reference-definition-
 // shaped "[label]:" opener: an optional reflow-escape backslash, "[", an
 // optional non-caret label (nonCaretLabelBody), "]:", ANYWHERE in the
@@ -485,7 +597,7 @@ const nonCaretLabelBody = `(?:\\.|[^\^\[\]])(?:\\.|[^\[\]])*`
 // the next pass: found by FuzzFormat on "0[X1]: &Zz!\n  >0%0c) n2e%11"
 // (seed f6ab6616a4253b35), where the blockquote deferred to a neighbor
 // shape the neighbor itself was allowed to reshape.
-var nonCaretDefShapeRE = regexp.MustCompile(`\\?\[(?:` + nonCaretLabelBody + `)?\]:`)
+var nonCaretDefShapeRE = regexp.MustCompile(`\\?\[(?:` + nonCaretLabelBody + `|` + nonFootnoteCaretLabelAlt + `)?\]:`)
 
 // defLineOpenerRE is nonCaretDefShapeRE's counterpart for judging the
 // raw source line directly above a paragraph (see inLinkRefDefZone). It
@@ -501,7 +613,7 @@ var nonCaretDefShapeRE = regexp.MustCompile(`\\?\[(?:` + nonCaretLabelBody + `)?
 // emission escapes (package reflow's isCompleteLinkRefDefLine and the
 // bare-opener escape), the harness's documented caret scope gate, and
 // the public convergence backstop — see design.md's zone section.
-var defLineOpenerRE = regexp.MustCompile(`^[ \t>]*\\?\[(?:` + nonCaretLabelBody + `)?\]:`)
+var defLineOpenerRE = regexp.MustCompile(`^[ \t>]*\\?\[(?:` + nonCaretLabelBody + `|` + nonFootnoteCaretLabelAlt + `)?\]:`)
 
 // defShapeAnywhereRE is defLineOpenerRE's counterpart with no left-
 // boundary requirement at all — used only for the "spans the boundary"
@@ -519,7 +631,7 @@ var defLineOpenerRE = regexp.MustCompile(`^[ \t>]*\\?\[(?:` + nonCaretLabelBody 
 // once a definition can start immediately after another already-consumed
 // one, so this check accepts some extra false-positive skips as the price
 // of staying blunt rather than tracking definition-chain state.
-var defShapeAnywhereRE = regexp.MustCompile(`\\?\[(?:` + nonCaretLabelBody + `)?\]:`)
+var defShapeAnywhereRE = regexp.MustCompile(`\\?\[(?:` + nonCaretLabelBody + `|` + nonFootnoteCaretLabelAlt + `)?\]:`)
 
 // footnoteDefFirstLineRE matches a footnote definition's own opening
 // "[^label]:" marker at the start of a paragraph's first (trimmed) line,
@@ -530,7 +642,7 @@ var defShapeAnywhereRE = regexp.MustCompile(`\\?\[(?:` + nonCaretLabelBody + `)?
 // FuzzFormat on " [^1]: !Y )9.01" (seed 425ffd537fd28733), whose escaped
 // second-pass first line ("\[^1]: !Y") stopped matching an earlier,
 // escape-blind version of this regex.
-var footnoteDefFirstLineRE = regexp.MustCompile(`^\\?\[\^[^\[\]]*\]:`)
+var footnoteDefFirstLineRE = regexp.MustCompile(`^\\?\[` + caretLabelBody + `\]:`)
 
 // bareCaretOpenerRE matches a BARE footnote-shaped opener — "[^label]:"
 // with nothing after the colon but whitespace, at a line's end. A bare
@@ -559,7 +671,22 @@ var footnoteDefFirstLineRE = regexp.MustCompile(`^\\?\[\^[^\[\]]*\]:`)
 // degenerate enough that the over-skip is free.
 var orphanDefCloserRE = regexp.MustCompile(`^(?:\\.|[^\[\]\\])*\]:`)
 
-var bareCaretOpenerRE = regexp.MustCompile(`(^|[ \t])[ \t>]*\\?\[\^[^\[\]]*\]:[ \t]*$`)
+// The trailing class includes "\r": CR is trailing whitespace to
+// goldmark (same whitespace-alignment family as reflow's
+// bareLinkRefDefOpenerLineRE and isTableDelimiterRowShaped), so a bare
+// caret opener with a trailing CR is still a bare caret opener.
+//
+// There is deliberately NO left-boundary requirement, for exactly the
+// reason defShapeAnywhereRE has none: a definition can start immediately
+// after a previous one's title closes, with no whitespace between them at
+// all. An earlier version required the shape to sit at a line start or
+// after whitespace, which missed "\"7\"[^0]:" — a bare opener directly
+// against the preceding definition's closing title quote (found by
+// FuzzFormat on "[^0]:110\n\"7\"[^0]:\n軠1\n\"\"0", seed
+// 39bb3b34cfc62d3d, 93 minutes into a soak). The extra over-skip this
+// buys (a footnote body whose line happens to END in "x[^2]:") is the
+// same free trade the rest of the zone makes.
+var bareCaretOpenerRE = regexp.MustCompile(`\\?\[` + caretLabelBody + `\]:[ \t\r]*$`)
 
 // inLinkRefDefZone reports whether the paragraph whose trimmed lines are
 // trimmed, starting at contentStart, sits in design.md's link-reference-
@@ -597,7 +724,7 @@ var bareCaretOpenerRE = regexp.MustCompile(`(^|[ \t])[ \t>]*\\?\[\^[^\[\]]*\]:[ 
 // open immediately after a previous one's title closes with no separating
 // whitespace at all (found by FuzzFormat on
 // "[0]:0\n\"0\"[00]:0\n\"\n\"[0]:0", seed a651ae68822c7c5c).
-func inLinkRefDefZone(source []byte, trimmed []string, contentStart int) bool {
+func inLinkRefDefZone(source []byte, trimmed []string, contentStart int, zoneAbove map[int]bool) bool {
 	for _, t := range trimmed {
 		if nonCaretDefShapeRE.MatchString(t) || bareCaretOpenerRE.MatchString(t) || orphanDefCloserRE.MatchString(t) {
 			return true
@@ -609,6 +736,13 @@ func inLinkRefDefZone(source []byte, trimmed []string, contentStart int) bool {
 	ls := lineStart(source, contentStart)
 	if ls == 0 {
 		return false
+	}
+	if zoneAbove[ls] {
+		// A def-shaped line anywhere above, in this line's contiguous
+		// non-blank run — not just on the immediately preceding line: a
+		// definition's title scan can reach the paragraph across any
+		// number of intervening machinery lines. See defRunAbove.
+		return true
 	}
 	prevStart := lineStart(source, ls-1)
 	prevLine := bytes.TrimRight(source[prevStart:ls], "\r\n")
@@ -713,6 +847,47 @@ var unterminatedTagStartRE = regexp.MustCompile(`^<[A-Za-z]`)
 // why this triggers a whole-paragraph skip.
 func looksLikeUnterminatedTag(firstLineTrimmed string) bool {
 	return unterminatedTagStartRE.MatchString(firstLineTrimmed) && !strings.ContainsRune(firstLineTrimmed, '>')
+}
+
+// linkifyStartRE matches where GFM's linkify extension turns text into a
+// bare link: a scheme-prefixed URL, a "www."-prefixed one, or an email
+// address. Same shape as package reflow's linkifyTokenStart (kept as an
+// independent copy — the two serve different roles: that one decides
+// whether a break may move a token, this one decides whether to skip a
+// paragraph) but deliberately UNANCHORED: linkify fires mid-token too,
+// e.g. after a "](" that never opened a real link, which is exactly the
+// shape seed 41e98cb4c9e00729 carries.
+var linkifyStartRE = regexp.MustCompile(
+	"(?i)(?:[a-z][a-z0-9+.-]*://|www\\.|[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+)")
+
+// hasBacktickInBareURL reports whether any whitespace-delimited token in
+// trimmedLines both starts like a linkify-eligible bare URL and contains
+// a backtick — see build's call site for the code-span pairing hazard.
+//
+// Verdict-stable by construction: a matching paragraph is skipped whole,
+// so its own tokens never move, and reflow can never *create* such a
+// token in another paragraph (joining lines inserts a space between
+// fragments, so two tokens never fuse; splitting only breaks tokens
+// apart).
+func hasBacktickInBareURL(trimmedLines []string) bool {
+	for _, line := range trimmedLines {
+		for _, tok := range strings.FieldsFunc(line, func(r rune) bool {
+			return r == ' ' || r == '\t' || r == '\r'
+		}) {
+			bt := strings.IndexByte(tok, '`')
+			if bt < 0 {
+				continue
+			}
+			// Only a URL that STARTS before the backtick can swallow it.
+			// A backtick that opens first is a code-span delimiter whose
+			// span merely contains a URL ("`oci://host/path`"), which is
+			// the ordinary way documentation names a registry or endpoint.
+			if loc := linkifyStartRE.FindStringIndex(tok); loc != nil && loc[0] < bt {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasUnbalancedBracket reports whether trimmedLines, taken together (a
@@ -848,4 +1023,192 @@ func hasUnclosedDelimiterAcrossLine(trimmedLines []string, open, close byte) boo
 		}
 	}
 	return depth > 0
+}
+
+// maskCodeSpans returns trimmedLines with the interior of every inline
+// code span replaced by a filler byte, preserving line structure and byte
+// offsets so the delimiter scans above see identical geometry.
+//
+// A bracket inside a code span is literal: it cannot open a link label, a
+// reference definition, or a destination, so it is not the hazard the
+// spanning-delimiter guards exist for. It still arms them today, which
+// skips paragraphs that merely *document* Markdown or YAML syntax
+// ("`runs-on: [self-hosted,` / `<label>]`").
+//
+// Masking follows CommonMark's code-span rule rather than "text between
+// backticks": a backtick run of length N opens a span that only a run of
+// exactly N closes, newlines included. A run with no matching closer is
+// literal text and is deliberately left unmasked — that is what keeps an
+// unclosed "`unclosed [bracket" arming the guard, where the bracket is
+// ordinary prose and the paragraph really is hazardous.
+//
+// ORDERING INVARIANT (issue #28): this pairing does not model GFM
+// linkify, so a backtick inside a linkify-eligible bare URL — which
+// goldmark consumes into the link destination, never a delimiter — pairs
+// one out of step here and masks bytes goldmark treats as live prose,
+// including a real "[label]:" opener (which would disarm
+// couldFormLinkRefDef on a paragraph that genuinely contains a
+// definition). This function is only sound because build's
+// hasBacktickInBareURL check returns first and skips every such
+// paragraph before masking runs. Anyone narrowing that guard must keep
+// this blind spot covered; TestMaskCodeSpansRequiresBareURLGuard pins
+// the dependency. The render backstop bounds the damage if this ever
+// regresses — a wrongly-disarmed guard becomes a reverted reflow, not
+// content loss — but a silently dead guard is still a bug.
+func maskCodeSpans(trimmedLines []string) []string {
+	joined := strings.Join(trimmedLines, "\n")
+	b := []byte(joined)
+	out := make([]byte, len(b))
+	copy(out, b)
+	for i := 0; i < len(b); {
+		if b[i] != '`' {
+			i++
+			continue
+		}
+		run := 0
+		for i+run < len(b) && b[i+run] == '`' {
+			run++
+		}
+		// Look for a closing run of exactly the same length.
+		j := i + run
+		closed := -1
+		for j < len(b) {
+			if b[j] != '`' {
+				j++
+				continue
+			}
+			r2 := 0
+			for j+r2 < len(b) && b[j+r2] == '`' {
+				r2++
+			}
+			if r2 == run {
+				closed = j
+				break
+			}
+			j += r2
+		}
+		if closed < 0 {
+			// No closer: the run is literal text, mask nothing.
+			i += run
+			continue
+		}
+		for k := i + run; k < closed; k++ {
+			if out[k] != '\n' {
+				out[k] = 'x'
+			}
+		}
+		i = closed + run
+	}
+	return strings.Split(string(out), "\n")
+}
+
+// couldFormLinkRefDef reports whether a "]:" appears anywhere in the
+// paragraph, the only shape a link reference definition can be built from.
+//
+// hasUnbalancedBracket exists for one hazard, named in its own doc comment:
+// a definition *label* spanning a soft line break, so that reflow's join or
+// re-split changes which bytes complete it ("[\n0]:0\n\"\"0"). Every other
+// bracket construct tolerates a soft break in its label or text by
+// construction. CommonMark allows a newline inside inline-link text,
+// reference-link labels, image alt text and footnote labels, and label
+// matching collapses internal whitespace, so "[a\nb]" and "[a b]" resolve
+// to the same definition. The destination side, where a newline genuinely
+// is load-bearing, is guarded separately by hasUnclosedDestParen and
+// hasUnclosedAngleDestOpener.
+//
+// Without a "]:" no definition can form however the lines are rearranged,
+// so a spanning bracket is a wrapped link and safe to reflow. This is worth
+// more than tidiness: such a paragraph is otherwise a fixed point. It is
+// skipped because a link spans a break, and being skipped is exactly what
+// stops that break ever being removed, so it keeps its pre-reflow wrapping
+// permanently. Adopting sentence-per-line across a 27,848-line docset left
+// 60 such lines stranded, recoverable only by joining each link by hand.
+func couldFormLinkRefDef(trimmedLines []string) bool {
+	for _, line := range trimmedLines {
+		if strings.Contains(line, "]:") {
+			return true
+		}
+	}
+	// A "]" ending one line and a ":" opening the next is the same shape
+	// spread across the break.
+	for i := 0; i < len(trimmedLines)-1; i++ {
+		if strings.HasSuffix(trimmedLines[i], "]") && strings.HasPrefix(trimmedLines[i+1], ":") {
+			return true
+		}
+	}
+	return false
+}
+
+// admonitionMarkerRE matches a MkDocs / Python-Markdown admonition marker
+// line: "!!! note", "??? warning", "???+ tip", optionally with a quoted
+// title. The type word is required, which is what keeps an ordinary
+// paragraph merely starting with "!!!" from claiming the block below it.
+var admonitionMarkerRE = regexp.MustCompile(`^(?:!{3}|\?{3}\+?)[ \t]+[A-Za-z][\w-]*(?:[ \t]+"[^"]*")?[ \t]*$`)
+
+// admonitionBody reports whether cb is the indented body of a MkDocs
+// admonition and, if so, describes it as a reflow-eligible paragraph.
+//
+// MkDocs and Python-Markdown write an admonition as a marker line followed
+// by a blank line and a 4-space-indented body. That body is ordinary prose,
+// but no CommonMark parser can know it: an indented block is an indented
+// code block, so goldmark hands it over as *ast.CodeBlock and the paragraph
+// walk never sees it. On a real MkDocs docset that silently excludes every
+// callout from reflow — 17 blocks and 69 prose lines on the 27,848-line
+// tree this was measured against.
+//
+// Two conditions keep the recognition honest. The previous sibling must be
+// a paragraph whose only line is an admonition marker, so a genuine
+// indented code block after ordinary prose is untouched. And the body must
+// contain no fence marker: a fenced block indented inside an admonition is
+// literal text to goldmark, so reflowing it would rewrap real code.
+func admonitionBodies(cb *ast.CodeBlock, source []byte, mkdocs bool) []Paragraph {
+	if !mkdocs {
+		return nil
+	}
+	prev := cb.PreviousSibling()
+	if prev == nil || prev.Kind() != ast.KindParagraph || prev.Lines().Len() != 1 {
+		return nil
+	}
+	ps := prev.Lines().At(0)
+	if !admonitionMarkerRE.Match(bytes.TrimRight(ps.Value(source), " \t\r\n")) {
+		return nil
+	}
+	lines := cb.Lines()
+	if lines.Len() == 0 {
+		return nil
+	}
+	for i := 0; i < lines.Len(); i++ {
+		seg := lines.At(i)
+		t := bytes.TrimLeft(seg.Value(source), " \t")
+		if bytes.HasPrefix(t, []byte("```")) || bytes.HasPrefix(t, []byte("~~~")) {
+			return nil
+		}
+	}
+	first := lines.At(0)
+	start := lineStart(source, first.Start)
+	contPrefix := string(source[start:first.Start])
+	if strings.TrimLeft(contPrefix, " \t") != "" {
+		return nil
+	}
+	// A multi-paragraph body is left alone. goldmark keeps the separating
+	// blank lines inside the one code block and package reflow works from
+	// Node.Lines() rather than the Start/End range, so every run would be
+	// reflowed as a single cluster and two rendered paragraphs would merge
+	// into one <p>. Splitting them needs a per-run node, which is more
+	// surgery than the recognition itself is worth; a single-paragraph
+	// callout is the overwhelmingly common shape.
+	for i := 0; i < lines.Len(); i++ {
+		seg := lines.At(i)
+		if len(bytes.TrimSpace(seg.Value(source))) == 0 {
+			return nil
+		}
+	}
+	last := lines.At(lines.Len() - 1)
+	return []Paragraph{{
+		Node:       cb,
+		Start:      first.Start,
+		End:        last.Stop,
+		ContPrefix: contPrefix,
+		Boundary:   make([]bool, lines.Len()),
+	}}
 }

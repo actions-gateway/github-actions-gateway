@@ -22,8 +22,8 @@ import (
 
 	"github.com/jbeda/mdreflow/internal/blockmap"
 	"github.com/jbeda/mdreflow/internal/gm"
+	"github.com/jbeda/mdreflow/internal/opts"
 	"github.com/jbeda/mdreflow/internal/segment"
-	"github.com/jbeda/mdreflow/internal/typography"
 )
 
 // Segmenter is the subset of mdreflow.Segmenter the pipeline needs. A
@@ -34,27 +34,25 @@ type Segmenter interface {
 }
 
 // HardBreakStyle mirrors mdreflow.HardBreakStyle (an internal package
-// cannot import the root package, which imports this one). format.go
-// converts between the two; the iota values are kept in lockstep.
-type HardBreakStyle int
+// package opts is the one definition of both enums (go-quality review
+// S4: the former hand-mirrored copies here were "kept in lockstep" by
+// comment alone); these aliases keep this package's call sites reading
+// naturally.
+type HardBreakStyle = opts.HardBreakStyle
 
-// HardBreak style constants, in the same order as mdreflow.HardBreakStyle.
 const (
-	HardBreakBr HardBreakStyle = iota
-	HardBreakSpaces
-	HardBreakBackslash
+	HardBreakBr        = opts.HardBreakBr
+	HardBreakSpaces    = opts.HardBreakSpaces
+	HardBreakBackslash = opts.HardBreakBackslash
 )
 
-// Mode mirrors mdreflow.Mode (an internal package cannot import the root
-// package, which imports this one). format.go converts between the two;
-// the iota values are kept in lockstep.
-type Mode int
+// Mode aliases the shared definition in package opts; see HardBreakStyle.
+type Mode = opts.Mode
 
-// Mode constants, in the same order as mdreflow.Mode.
 const (
-	ModeSentence Mode = iota
-	ModePara
-	ModeWrap
+	ModeSentence = opts.ModeSentence
+	ModePara     = opts.ModePara
+	ModeWrap     = opts.ModeWrap
 )
 
 // defaultWrapWidth is ModeWrap's effective width when Options.MaxWidth is
@@ -73,12 +71,6 @@ type Options struct {
 	// responsible for rejecting MaxWidth != 0 with ModePara before this
 	// package ever sees it.
 	MaxWidth int
-	// Typography selects the opt-in span-level prose substitutions
-	// (smart quotes, ellipsis); 0 is off. Unlike Mode and
-	// HardBreakStyle, this needs no local mirror type: package
-	// typography is internal too, so both this package and format.go
-	// can name its type directly.
-	Typography typography.Typography
 	// HardBreaks selects the normalized hard-break style every preserved
 	// hard break is rewritten to.
 	HardBreaks HardBreakStyle
@@ -88,13 +80,16 @@ type Options struct {
 	// ordinary soft break instead). Only the double-space syntax is
 	// eligible; backslash and <br> hard breaks are always respected.
 	StripSentenceTerminalBreaks bool
+	// MkDocs enables MkDocs-specific block recognition, currently the
+	// admonition body; see blockmap.admonitionBody.
+	MkDocs bool
 }
 
 // Format reflows every eligible paragraph in doc (see package blockmap) and
 // returns the full document bytes, splicing reflowed prose into the
 // otherwise-untouched source.
 func Format(source []byte, doc ast.Node, seg Segmenter, opts Options) []byte {
-	paras := blockmap.Paragraphs(doc, source)
+	paras := blockmap.ParagraphsForDialect(doc, source, opts.MkDocs)
 
 	var out bytes.Buffer
 	cursor := 0
@@ -145,7 +140,36 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 	// Format's doc comment on Paragraph.Start), so writeParagraph never
 	// touches them directly, but escapeBlockInterrupt still needs to know
 	// them — see its firstLinePrefix parameter doc comment.
-	firstLinePrefix := string(source[blockmap.LineStart(source, p.Start):p.Start])
+	//
+	// Leading blockquote markers are stripped first: the joint
+	// thematic-break check must judge the line the way a reparse's *block*
+	// scan will, and blockquote markers are consumed by the blockquote
+	// parser before that scan ever sees the rest — so for a paragraph
+	// opening a list item inside a blockquote (raw prefix ">* "), the
+	// spelling CommonMark actually judges is the list marker plus content
+	// ("* " + "**" = "* **", a thematic break). Keeping the ">" in the
+	// joint string masked exactly that: found by FuzzFormat on
+	// " Y& - \"y\x1a\n>* ** y \n>* " (seed ca0b97d6b3cd0380), where a
+	// width-3 split landed "**" as the item's first output line and the
+	// next parse read "* **" as a thematic break instead of a list item —
+	// a structure change pass 2 then compounded.
+	//
+	// Then any leading indentation whitespace is stripped for the same
+	// reason: a list item whose marker line has an empty body carries its
+	// prose on a later, indented physical line, so this prefix is that
+	// line's own leading spaces/tabs — pure container indentation the block
+	// scan consumes before judging the rest, contributing no marker byte to
+	// the joint spelling (unlike "* " or "- ", whose leading marker char
+	// IS part of the thematic-break run and so survives the strip). A tab
+	// left in place disqualified the whole line from isThematicBreak, which
+	// counts only spaces as separators: found on "*\n\t**\n**\n:::\n0" (#32),
+	// where the item's "**"/"**" prose reflowed to "** **" and, tab-indented,
+	// reparsed as a thematic break — silently ending the list and dropping
+	// the ::: paragraph out of it.
+	firstLinePrefix := strings.TrimLeft(
+		blockquoteMarkersRE.ReplaceAllString(
+			string(source[blockmap.LineStart(source, p.Start):p.Start]), ""),
+		" \t")
 
 	// rawContents[i] is line i's content (line ending stripped, hard-break
 	// marker bytes not yet stripped). insideSpanAfter[i] reports whether
@@ -181,6 +205,19 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 		if len(curLines) == 0 && marker == "" {
 			return
 		}
+		// The cluster's final line boundary can sit inside a code span
+		// that reaches past the cluster — across a Boundary line into
+		// the rest of the paragraph — in which case its trailing
+		// whitespace is span *content*, not a hard-break spelling
+		// (insideCodeSpanAfterLine computes this over ALL paragraph
+		// lines, boundaries included, so the last frag's
+		// trailingProtected already knows). Found by FuzzFormat on
+		// "``  \n:::``" (seed a2b98c8b49e6b07e): the span opens on line
+		// 1 and closes on the ::: boundary line, so the cluster is line
+		// 1 alone and the join resolves nothing; treating its trailing
+		// double space as a break wrote a literal "<br>" into the
+		// rendered code content.
+		insideSpan := curLines[len(curLines)-1].trailingProtected
 		text := joinClusterLines(curLines, marker != "")
 		curLines = nil
 		if marker == "" {
@@ -201,39 +238,15 @@ func writeParagraph(buf *bytes.Buffer, p blockmap.Paragraph, source []byte, seg 
 			// per-line calls use: a paragraph-final backslash or double
 			// space is NOT a break (a lone "\" document must stay a lone
 			// "\" — seed 577e36abd20bf697 pinned the regression from an
-			// earlier hardcoded false here), while the br-tag form
-			// normalizes even paragraph-finally, exactly as pass 2's
-			// per-line pass would. insideSpan=false matches the per-line
-			// call for a line whose span context the join has resolved.
-			if m, rest := detectHardBreak(text, opts, lastCluster, false); m != "" {
+			// earlier hardcoded false here). The br-tag form normalizes
+			// even paragraph-finally, exactly as pass 2's per-line pass
+			// would; insideSpan carries the final line's span context,
+			// which the join resolves for spans within the cluster but
+			// cannot resolve for one reaching past it (see above).
+			if m, rest := detectHardBreak(text, opts, lastCluster, insideSpan); m != "" {
 				marker = m
 				text = rest
 			}
-		}
-		// Typography substitution happens here — on the whole joined
-		// cluster, *before* computeLines segments or wraps it — not on
-		// the per-line output afterwards. Two reasons:
-		//
-		//   - Idempotency of the ellipsis. Sentence segmentation must
-		//     see the same terminal punctuation on every pass. Pass 1
-		//     would segment against literal "..." and pass 2 against an
-		//     already-substituted "…"; substituting first makes both
-		//     passes segment the identical text. (segment.terminalRun
-		//     recognizes both spellings regardless, so the two agree —
-		//     but only doing the substitution up front makes that
-		//     agreement structural rather than incidental.)
-		//   - One mental model. Quote directionality is decided from
-		//     local raw-text context, which is unaffected by where a
-		//     later line break lands, so quotes could go either way;
-		//     keeping both substitutions in the same place, on the same
-		//     text, is simpler than splitting them.
-		//
-		// The protected ranges are computed on this same
-		// pre-substitution text, which is what lets Apply consult them
-		// by original-text byte position while a quote substitution
-		// grows from 1 byte to 3 (see typography.Apply).
-		if opts.Typography != 0 {
-			text = typography.Apply(text, segment.NoBreakSpans(fenceEscapeNeutralize(text)), opts.Typography)
 		}
 		// A fence-opener-shaped cluster is pre-escaped here, before
 		// computeLines ever measures or wraps it — not left for
@@ -1473,7 +1486,11 @@ var htmlBlockAnyOpenerRE = regexp.MustCompile(`(?i)^(<[A-Za-z][A-Za-z0-9-]*( [^<
 // history block,
 // third bullet, for the fuzz find). Escaping the bracket renders as the
 // same literal text the paragraph showed before.
-var bareLinkRefDefOpenerLineRE = regexp.MustCompile(`^[ \t]{0,3}\[[^\[\]]*\]:[ \t\f\v]*$`)
+// The trailing class includes "\r": CR is trailing whitespace to
+// goldmark's definition parser ("[0]: \r" followed by a destination line
+// still forms a definition, confirmed directly), the same
+// goldmark-whitespace-alignment family as isTableDelimiterRowShaped's CR.
+var bareLinkRefDefOpenerLineRE = regexp.MustCompile(`^[ \t]{0,3}\[[^\[\]]*\]:[ \t\f\v\r]*$`)
 
 // backtickFenceStart and tildeFenceStart match a fenced-code-block opener's
 // leading run of 3+ backticks or tildes, so isFenceOpener can inspect what
@@ -1499,8 +1516,7 @@ func isFenceOpener(line string) bool {
 
 // fenceOpenerRunLen returns the length of line's leading run of backticks
 // and/or tildes — the run isFenceOpener recognizes and that
-// escapeBlockInterrupt's fence-opener branch (and fenceEscapeNeutralize)
-// both walk. Factored out so the two stay in lockstep.
+// escapeBlockInterrupt's fence-opener branch walks.
 func fenceOpenerRunLen(line string) int {
 	i := 0
 	for i < len(line) && (line[i] == '`' || line[i] == '~') {
@@ -1536,95 +1552,6 @@ func escapeFenceOpenerRun(line string) string {
 	}
 	b.WriteString(line[n:])
 	return b.String()
-}
-
-// fenceEscapeNeutralize returns text with its leading fence-opener run's
-// backtick characters (if any) replaced by tildes, matching the same
-// byte length so that a Span computed against the result still indexes
-// correctly into the real, unmodified text.
-//
-// This exists because a hard-break cluster's whole joined text (what flush
-// calls this with) always becomes its first *output* line's own leading
-// bytes — computeLines never introduces a break before position 0 — so a
-// fence-opener-shaped text is always, eventually, run through
-// escapeBlockInterrupt's fence-opener branch. That branch runs much later
-// (per output line, after wrapping), well after this cluster's
-// typography.Apply/segment.NoBreakSpans have already decided what to
-// protect from the *pre*-escape text. If the leading run is itself one
-// side of a genuine code span reaching further into the cluster,
-// pre-escape text answers a question about a span that will not survive
-// to the emitted output: escaping the run's backticks (whichever escape
-// form is used, backslash or the current HTML-entity form — see
-// escapeBlockInterrupt) removes them from ever pairing as a delimiter
-// again, so the span's *other* side goes unmatched, and whatever it used
-// to protect (e.g. a quote typography would otherwise leave alone)
-// reparses completely differently on the very next pass.
-//
-// Found by FuzzFormat (issue #8, see issues_test.go's
-// issue8-fence-escape-codespan-pairing-smartquotes for the exact repro
-// bytes: ModeWrap, SmartQuotes, a tilde-fence-shaped leading run whose
-// trailing backtick pair genuinely pairs with a later, matching backtick
-// pair further into the line): the leading run's backtick pair pairs
-// with that later one on the pre-escape text, so typography leaves the
-// apostrophe between them straight — but escaping the leading run to
-// defeat the tilde-fence
-// block trigger destroys that pairing, so a second pass (parsing the
-// first pass's own output fresh) finds no code span there at all and
-// curls it: an idempotency break, and incidentally a render-preservation
-// one too (the original source genuinely renders that apostrophe inside
-// a <code> span; escaping the fence run unavoidably loses it either way,
-// but the decision should agree with that loss immediately, not one pass
-// late). Neutralizing the run here — before NoBreakSpans ever sees it —
-// makes this cluster's *own* protection decision agree with what its
-// output will actually reparse as, so there is nothing left for a second
-// pass to disagree about.
-//
-// The placeholder is '~', not deletion or any other rewrite, specifically
-// to keep every later byte offset identical to the real text: the caller
-// passes this function's result to segment.NoBreakSpans only, and applies
-// the resulting spans against the real, unescaped text directly — no
-// offset remapping needed. '~' is never itself scanned by
-// segment.codeSpans (backtick-only) and is inert to every other
-// NoBreakSpans sub-scanner (brackets, autolinks, HTML tags, ...), none of
-// which treats a bare run of tildes specially.
-func fenceEscapeNeutralize(text string) string {
-	// Second instance of the same mismatch, for the link-ref-def escapes
-	// instead of the fence escape: a cluster that will itself be emitted
-	// def-opener-shaped gets its leading "[" backslash-escaped at
-	// emission, which destroys any bracketed span NoBreakSpans would
-	// otherwise derive from that "[" — and with it, e.g., smart-quote
-	// protection for a quote inside the brackets, which then curls one
-	// pass late. Found by FuzzFormat on "[^\\]:\"1A0]" in ModePara with
-	// SmartQuotes (seed 38cbdf400862101d). Neutralize the leading "["
-	// (length-preserving, same rationale as the fence case below) so the
-	// protection decision matches the escaped output's reparse.
-	if isCompleteLinkRefDefLine(text) || bareLinkRefDefOpenerLineRE.MatchString(text) {
-		// The opener bracket may sit after up to 3 columns of indent
-		// (up to 3 columns of indent); neutralize the bracket itself.
-		b := []byte(text)
-		i := 0
-		for i < len(b) && (b[i] == ' ' || b[i] == '\t') {
-			i++
-		}
-		if i < len(b) && b[i] == '[' {
-			b[i] = '~'
-		}
-		return string(b)
-	}
-	if !isFenceOpener(text) {
-		return text
-	}
-	n := fenceOpenerRunLen(text)
-	if !strings.ContainsRune(text[:n], '`') {
-		return text // pure tilde run: nothing here for codeSpans to see anyway
-	}
-	b := []byte(text)
-	for i := 0; i < n; i++ {
-		if b[i] == '`' {
-			b[i] = '~'
-		}
-	}
-	return string(b)
 }
 
 // orderedListRE matches an ordered-list marker: 1-9 digits followed by "."
@@ -1684,12 +1611,23 @@ var orderedListRE = regexp.MustCompile(`^\d{1,9}([.)])(\s|$)`)
 // marker mdreflow itself emits) once a first draft of the type-7 handling
 // folded it into the always-applies set.
 //
+// blockquoteMarkersRE matches a run of leading blockquote markers (each up
+// to 3 spaces of indent, ">", one optional following space or tab —
+// CommonMark's marker spelling), for stripping container-prefix bytes down
+// to what a reparse's block scan will actually judge; see writeParagraph's
+// firstLinePrefix.
+var blockquoteMarkersRE = regexp.MustCompile(`^([ \t]{0,3}>[ \t]?)+`)
+
 // firstLinePrefix is the raw source bytes writeParagraph's caller (package
 // reflow's own Format) already copied byte-for-byte immediately before a
-// nested paragraph's first line — a list item's "- "/"1. " marker or a
-// blockquote's "> ", for instance — and is empty for every other call
-// (continuation lines, and any paragraph not nested in a container at
-// all). It matters only to isThematicBreak, and only for the paragraph's
+// nested paragraph's first line — with leading blockquote markers and then
+// leading indentation whitespace already stripped (see writeParagraph's
+// firstLinePrefix, blockquoteMarkersRE, and the TrimLeft beside them: a
+// reparse's blockquote parser and its container-indentation scan both
+// consume those before the block scan this check simulates ever runs, so
+// ">* " contributes "* " and a bare "\t" indent contributes ""). It is empty for
+// every other call (continuation lines, and any paragraph not nested in a
+// container at all). It matters only to isThematicBreak, and only for the paragraph's
 // first output line (every other caller passes ""): a thematic break's
 // three-instance-of-the-same-character rule can be satisfied *jointly* by
 // the container marker's own leading byte plus wrapped content that, on
@@ -1781,8 +1719,8 @@ func escapeBlockInterrupt(line string, isFirstLine bool, firstLinePrefix string,
 		// escaped, one of them can spuriously close against that
 		// dangling backtick on reparse — retroactively manufacturing a
 		// code span (and its no-break protection) that never existed,
-		// changing what a hard-break marker or a typography substitution
-		// downstream of it decided. Found by FuzzFormat (issues #6/#12)
+		// changing what a hard-break marker downstream of it decided.
+		// Found by FuzzFormat (issues #6/#12)
 		// on "`  \n    ```" in ModeWrap: the hard-break-separated "`"
 		// has no partner pre-escape, but pass 1's fence-defeating escape
 		// of the following "```" pairs one of its now-individual
@@ -1937,7 +1875,13 @@ func isSetextUnderline(line string) bool {
 		switch s[i] {
 		case '=':
 			count++
-		case ' ', '\t':
+		case ' ', '\t', '\r':
+			// CR is trailing whitespace to goldmark ("A\n=\r" is a real
+			// heading, confirmed directly), same whitespace-class family
+			// as isTableDelimiterRowShaped's CR. Accepting it anywhere in
+			// the line (goldmark itself rejects an *interior* CR, "=\r=")
+			// over-matches, at the usual documented cost: one
+			// superfluous, identically-rendering escape.
 		default:
 			return false
 		}
@@ -1946,8 +1890,16 @@ func isSetextUnderline(line string) bool {
 }
 
 // isTableDelimiterRowShaped reports whether line is shaped like a GFM
-// table delimiter row: once trimmed of leading/trailing space/tab, it
-// contains only "-", ":", "|", spaces, and tabs, with at least one "-".
+// table delimiter row: once trimmed of leading/trailing whitespace, it
+// contains only "-", ":", "|", spaces, tabs, and CRs, with at least one
+// "-". CR is in the class because it is in goldmark's (util.IsSpace-based)
+// cell-padding whitespace — "|-\r|" is a real delimiter row to goldmark,
+// found by FuzzFormat on "C009019\n , z0cA z0 |-\r| 10" (seed
+// d994c9196409b0fd), where a width-constrained split landed "|-\r|" at
+// line start unescaped and a table formed on reparse. Same
+// goldmark-whitespace-alignment family as the four v0.1.4 finds
+// (design.md: when a scanner disagrees with goldmark about whitespace,
+// goldmark wins).
 // Deliberately crude and permissive, matching GFM's own leniency (a bare
 // "-|" or ":-" already qualifies, and spaces are allowed *within* the
 // shape, not just at its edges — e.g. "-- |" is still a valid delimiter
@@ -1961,8 +1913,8 @@ func isSetextUnderline(line string) bool {
 // that one decides whether to skip an assertion, this one decides whether
 // to change output.
 func isTableDelimiterRowShaped(line string) bool {
-	trimmed := strings.Trim(line, " \t")
-	return trimmed != "" && strings.ContainsRune(trimmed, '-') && strings.Trim(trimmed, "-:| \t") == ""
+	trimmed := strings.Trim(line, " \t\r")
+	return trimmed != "" && strings.ContainsRune(trimmed, '-') && strings.Trim(trimmed, "-:| \t\r") == ""
 }
 
 // attachMarker appends marker directly after s, unless doing so would
@@ -2261,7 +2213,21 @@ func stripLineEnding(raw []byte) (content string, hadNewline bool) {
 // found by FuzzFormat on "0<Br\n\t>" (seed a9266695f535279c). A real
 // "<br >" in source loses marker normalization and passes through as the
 // raw HTML it already is; renders identically either way.
-var hardBreakBrRE = regexp.MustCompile(`(?i)[ \t]*<br([ \t]*/)?>[ \t]*$`)
+//
+// The *outer* whitespace runs (before the tag, and after it to line end)
+// include '\r', matching joinClusterLines' [ \t\r] fragment-trim class:
+// a bare CR next to the marker is whitespace the join will trim whenever
+// the marker has been stripped off first (per-line path), but not when
+// the marker is still attached at trim time (post-join detection path) —
+// so leaving CR out of these classes let the two paths disagree about
+// "0\r<Br\n/>" (pass 1 emitted "0\r<br>", pass 2 trimmed to "0<br>"),
+// found by FuzzFormat 25 minutes into a soak (seed bd0bd1a98740a08d).
+// Consuming the CR into the match resolves it the same direction the
+// join trims. The *interior* class stays [ \t] only: a CR inside the tag
+// ("<br\r/>") stops goldmark parsing it as a tag at all (confirmed
+// directly — it renders as literal escaped text), exactly like the \f/\v
+// case above.
+var hardBreakBrRE = regexp.MustCompile(`(?i)[ \t\r]*<br([ \t]*/)?>[ \t\r]*$`)
 
 // sentenceTerminalEndRE matches text ending in sentence-terminal
 // punctuation (optionally followed by closing quotes/brackets), used by
@@ -2317,7 +2283,21 @@ func detectHardBreak(content string, opts Options, isLastLine, insideSpan bool) 
 		// the rendered content, not just its style.
 		n := trailingBackslashCount(content)
 		if n == 1 {
-			return normalizedMarker(opts), content[:len(content)-1]
+			// Trailing whitespace *before* the backslash goes with the
+			// marker, not with the prose. The other two syntaxes already
+			// do this — the double-space branch below consumes its whole
+			// space run, and hardBreakBrRE's leading "[ \t\r]*" eats the
+			// whitespace ahead of the tag — so leaving it here made the
+			// backslash spelling the odd one out. Since every pass after
+			// the first sees the normalized "<br>" spelling, pass 1 and
+			// pass 2 then disagreed: "` \\" emitted "` <br>" on pass 1,
+			// which pass 2 re-read as marker-with-leading-whitespace and
+			// re-emitted as "`<br>" (seed d4274cf2d1364325). These bytes
+			// are insignificant whitespace before a line-ending break in
+			// every spelling, so this is a normalization, not a content
+			// change; a remaining odd backslash run is still handled by
+			// attachMarker's fusion guard.
+			return normalizedMarker(opts), strings.TrimRight(content[:len(content)-1], " \t\r")
 		}
 
 		// Trailing spaces: two or more.

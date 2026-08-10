@@ -684,17 +684,18 @@ github.com/huandu/xstrings
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
-# github.com/jbeda/mdreflow v0.1.5-0.20260809044140-466988ba6630
-## explicit; go 1.24.4
+# github.com/jbeda/mdreflow v0.1.6-0.20260810012538-8d751e7214cb
+## explicit; go 1.25.0
 github.com/jbeda/mdreflow
 github.com/jbeda/mdreflow/cmd/mdreflow
 github.com/jbeda/mdreflow/internal/blockmap
 github.com/jbeda/mdreflow/internal/config
 github.com/jbeda/mdreflow/internal/exclude
 github.com/jbeda/mdreflow/internal/gm
+github.com/jbeda/mdreflow/internal/opts
 github.com/jbeda/mdreflow/internal/reflow
+github.com/jbeda/mdreflow/internal/render
 github.com/jbeda/mdreflow/internal/segment
-github.com/jbeda/mdreflow/internal/typography
 # github.com/jgautheron/goconst v1.10.0
 ## explicit; go 1.23
 github.com/jgautheron/goconst

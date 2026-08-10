@@ -9,86 +9,67 @@
 // parser is used read-only to locate paragraph prose; output is produced
 // by splicing reflowed prose into the verbatim source bytes.
 //
-// The library API in docs/design.md is complete as of M5: all three
-// modes, MaxWidth, hard-break normalization, the abbreviation list, a
-// pluggable Segmenter, and the opt-in typography substitutions are all
-// implemented.
+// The library API in docs/design.md is complete: all three modes,
+// MaxWidth, hard-break normalization, the abbreviation list, and a
+// pluggable Segmenter are all implemented.
 package mdreflow
 
-import "github.com/jbeda/mdreflow/internal/segment"
+import (
+	"github.com/jbeda/mdreflow/internal/opts"
+	"github.com/jbeda/mdreflow/internal/segment"
+)
 
 // Mode selects the top-level reflow strategy.
-type Mode int
+//
+// (Mode, HardBreakStyle, and their constants are aliases of one shared
+// definition in an internal leaf package the pipeline uses directly, so
+// the public and internal values can never drift; this alias is the
+// documented, supported name.)
+type Mode = opts.Mode
 
 const (
 	// ModeSentence joins each paragraph's lines and splits at sentence
 	// boundaries, one sentence per line. The default mode.
-	ModeSentence Mode = iota
+	ModeSentence Mode = opts.ModeSentence
 	// ModePara joins each paragraph (each hard-break cluster — see
 	// HardBreakStyle) to a single line, with no further splitting.
 	// Options.MaxWidth must be 0 in this mode: para mode's whole point is
 	// one unconditional line, so a non-zero MaxWidth has nothing to apply
 	// to and Format returns an error rather than silently ignoring it —
 	// see Options.MaxWidth's doc comment.
-	ModePara
+	ModePara Mode = opts.ModePara
 	// ModeWrap hard-wraps at Options.MaxWidth, breaking at word
 	// boundaries only: a no-break span or a single word wider than the
 	// limit overflows rather than being split. Options.MaxWidth of 0
 	// defaults to 80 in this mode only — see Options.MaxWidth's doc
 	// comment.
-	ModeWrap
+	ModeWrap Mode = opts.ModeWrap
 )
 
 // HardBreakStyle selects how hard line breaks are normalized when
 // reflowed prose moves them to a new position in the source. Every
 // preserved hard break (however it was originally spelled) is rewritten to
 // this style.
-type HardBreakStyle int
+type HardBreakStyle = opts.HardBreakStyle
 
 const (
 	// HardBreakBr renders a hard break as a literal <br>. Default: an
 	// accidental double-space hard break survives formatting but becomes
 	// loudly visible in a diff.
-	HardBreakBr HardBreakStyle = iota
+	HardBreakBr HardBreakStyle = opts.HardBreakBr
 	// HardBreakSpaces renders a hard break as a trailing double space.
-	HardBreakSpaces
+	HardBreakSpaces HardBreakStyle = opts.HardBreakSpaces
 	// HardBreakBackslash renders a hard break as a trailing backslash.
-	HardBreakBackslash
-)
-
-// Typography selects opt-in, span-level prose substitutions. They apply
-// to paragraph prose only: never inside an inline code span, a link or
-// its destination, an autolink, inline math, a footnote reference, an
-// inline shortcode or {expr} span, or an inline HTML/JSX tag, and never
-// inside a skipped construct (code block, front matter, table, raw HTML
-// block, dialect-skipped paragraph), which the reflow pipeline never
-// touches at all.
-//
-// Off by default: Markdown destined for prompts and tooling generally
-// wants ASCII. Typography is the documented exception to mdreflow's
-// render-preservation guarantee — changing quotes is its purpose — but
-// not to idempotency, which holds unconditionally.
-type Typography uint
-
-const (
-	// SmartQuotes substitutes straight quotes for curly quotes, using
-	// the standard open/close heuristic: a quote after start-of-text,
-	// whitespace, or opening punctuation opens; a quote after a word
-	// character or closing punctuation closes; an apostrophe inside a
-	// word is a right single quote ("don't", "the dog's"), as is a
-	// decade abbreviation's elided century ("the '90s"). It is a
-	// per-character heuristic, not a matching-pair stack; see package
-	// internal/typography for the cases it is deliberately naive about
-	// (prime/measurement marks, elisions other than decades).
-	SmartQuotes Typography = 1 << iota
-	// Ellipses substitutes "..." — exactly three periods, never part of
-	// a longer run — for "…" (U+2026).
-	Ellipses
+	HardBreakBackslash HardBreakStyle = opts.HardBreakBackslash
 )
 
 // Span is a half-open byte range [Start, End) into the text passed to a
-// Segmenter's Breaks method.
-type Span = segment.Span
+// Segmenter's Breaks method. It is a concrete struct (not an alias to an
+// internal type) so its fields are visible in rendered documentation;
+// Format adapts it at the Segmenter boundary.
+type Span struct {
+	Start, End int
+}
 
 // Segmenter finds sentence boundaries in prose text. It is independently
 // testable and swappable: provide Options.Segmenter to plug in something
@@ -101,13 +82,43 @@ type Segmenter interface {
 	Breaks(text string) []Span
 }
 
-// Options configures Format, Check, and FormatReader. The zero value is
-// the default and is always valid: sentence mode, unbounded width, no
-// typography substitutions, <br> hard-break style, the built-in segmenter
-// with its default abbreviation list.
+// MinMaxWidth is the smallest non-zero Options.MaxWidth Format accepts —
+// see Options.MaxWidth's doc comment for why tiny widths are refused.
+const MinMaxWidth = 20
+
+// Dialect names the renderer profile a document tree targets. It is a
+// single-select enum like Mode, and a bundle rather than a feature flag:
+// a dialect selects which flavor-specific block recognitions are on
+// (docs/design.md, "Dialects: renderer profiles, and the skip-list").
+type Dialect = opts.Dialect
+
+const (
+	// DialectGFM is the default: the permissive GitHub-flavored superset
+	// (GFM extensions plus footnotes). There is deliberately no
+	// "commonmark" value — that name is kept for a possible future
+	// strict profile with the GFM extensions off, and aliasing it to the
+	// default would burn the name on the one thing it doesn't accurately
+	// describe.
+	DialectGFM Dialect = opts.DialectGFM
+	// DialectMkDocs additionally reflows MkDocs / Python-Markdown
+	// admonition bodies ("!!! note" plus a 4-space-indented body). A
+	// CommonMark parser can only see such a body as an indented code
+	// block, so reflowing it changes what a CommonMark renderer emits —
+	// which is why it is opt-in and can never be the default.
+	DialectMkDocs Dialect = opts.DialectMkDocs
+)
+
+// Options configures Format, NeedsFormat, and FormatReader. The zero value is
+// the default and is always valid: sentence mode, unbounded width, <br>
+// hard-break style, the GFM dialect, the built-in segmenter with its
+// default abbreviation list.
 type Options struct {
 	// Mode selects the reflow strategy. Zero value is ModeSentence.
 	Mode Mode
+
+	// Dialect opts into flavor-specific block recognition. Zero value
+	// is DialectGFM (today's behavior); see the Dialect constants.
+	Dialect Dialect
 
 	// MaxWidth bounds line length, measured in runes — not bytes, and not
 	// Unicode grapheme clusters or East-Asian display width. That is a
@@ -117,6 +128,13 @@ type Options struct {
 	// here. In every mode, a no-break span (inline code, a link, ...) or
 	// a single word wider than the limit overflows rather than being
 	// split.
+	//
+	// A non-zero MaxWidth below MinMaxWidth (20) is an options error.
+	// Nearly every pathological width behavior the fuzz campaign found
+	// needed single-digit widths, where the geometry forces breaks
+	// inside constructs; no real document wants width 12. Refusing the
+	// range outright deletes that adversarial surface from the product
+	// (docs/design.md, "The width floor").
 	//
 	// MaxWidth's meaning is mode-dependent:
 	//
@@ -134,10 +152,6 @@ type Options struct {
 	//     single line unconditionally in this mode, so Format returns an
 	//     error for a non-zero MaxWidth rather than silently ignoring it.
 	MaxWidth int
-
-	// Typography enables opt-in prose substitutions. Zero value is off;
-	// see Typography for what each flag does and what it never touches.
-	Typography Typography
 
 	// HardBreaks selects the normalized hard-break style every preserved
 	// hard break is rewritten to. Zero value is HardBreakBr.

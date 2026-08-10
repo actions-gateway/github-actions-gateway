@@ -1,5 +1,9 @@
 # mdreflow
 
+[![CI build status badge](https://github.com/jbeda/mdreflow/actions/workflows/ci.yaml/badge.svg)](https://github.com/jbeda/mdreflow/actions/workflows/ci.yaml)
+[![Go reference documentation badge](https://pkg.go.dev/badge/github.com/jbeda/mdreflow.svg)](https://pkg.go.dev/github.com/jbeda/mdreflow)
+[![Latest release version badge](https://img.shields.io/github/v/release/jbeda/mdreflow)](https://github.com/jbeda/mdreflow/releases/latest)
+
 Reflow Markdown prose.
 The default mode is sentence-per-line ([semantic line breaks](https://sembr.org/)); paragraph-per-line and classic hard wrap share the same pipeline.
 It is a Go library first, with a thin CLI on top.
@@ -56,14 +60,20 @@ import "github.com/jbeda/mdreflow"
 out, err := mdreflow.Format(src, mdreflow.Options{})
 ```
 
-`Options{}` is valid and sensible: sentence mode, no width limit, typography off.
+`Options{}` is valid and sensible: sentence mode, no width limit.
 The full API reference is on [pkg.go.dev](https://pkg.go.dev/github.com/jbeda/mdreflow).
 
 ## Modes
 
-- `sentence` (default): one sentence per source line. `--max-width` optionally adds clause-level breaks inside sentences that run past the limit; the default of 0 means unbounded.
+- `sentence` (default): one sentence per source line. `--max-width` optionally adds clause-level breaks inside sentences that run past the limit; the default of 0 means unbounded. Non-zero widths below 20 are refused in every mode — very narrow wrapping forces breaks inside Markdown constructs.
 - `para`: each paragraph joined onto a single line. `--max-width` is an error here.
 - `wrap`: classic hard wrap at `--max-width` (default 80).
+
+## Dialects
+
+The default dialect, `gfm`, is the permissive GitHub-flavored superset: GFM extensions plus footnotes. Docusaurus, Hugo, and MDX constructs are recognized and passed through untouched in every dialect.
+`--dialect mkdocs` additionally reflows MkDocs/Python-Markdown admonition bodies (`!!! note` followed by a 4-space-indented body), which CommonMark parsers can only see as indented code blocks — opt-in because reflowing one changes what a CommonMark renderer emits.
+Recognition is deliberately narrow: bodies containing a fence marker or more than one paragraph are left alone.
 
 ## Configuration
 
@@ -73,8 +83,8 @@ Unknown keys and unrecognized values are a loud error (exit 2), not a silent no-
 
 ```yaml
 mode: sentence          # sentence | para | wrap
+dialect: gfm            # gfm | mkdocs (mkdocs also reflows admonition bodies)
 max-width: 0
-typography: []          # any of: smart-quotes, ellipses (default: none)
 hard-breaks: br         # br | spaces | backslash
 abbreviations:          # additions to the built-in list
   - "et al."
@@ -84,13 +94,6 @@ exclude:                # gitignore syntax, matched like a .gitignore
 ```
 
 These are all the keys; `--strip-sentence-terminal-breaks` is flag-only.
-
-## Typography
-
-`--smart-quotes` curls straight quotes and `--ellipses` turns `...` into `…`.
-Both are off by default, because Markdown headed for prompts, diffs, and tooling usually wants plain ASCII, and both are the only options that change how a document renders.
-They apply to paragraph prose only: never inside inline code, links, autolinks, math, shortcodes, `{expr}` spans, or inline HTML, and never inside a skipped block like a code fence, front matter, or a table.
-Set them in `.mdreflow.yaml` as `typography: [smart-quotes, ellipses]`.
 
 ## Excludes
 
@@ -113,7 +116,7 @@ The numbers follow Unix convention (diff-style 1, usage-error 2), so severity do
 ```yaml
 repos:
   - repo: https://github.com/jbeda/mdreflow
-    rev: v0.1.4 # or any commit
+    rev: v0.1.5 # or any commit
     hooks:
       - id: mdreflow # formats staged Markdown in place
       # - id: mdreflow-check  # or: fail the commit instead of rewriting

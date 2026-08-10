@@ -8,6 +8,13 @@
 mode: sentence
 max-width: 0
 
+# Our docs are MkDocs-flavoured, so a `!!! note` callout's indented body is
+# prose rather than the code block CommonMark reads it as. Off by default
+# upstream, because reflowing it changes what a plain CommonMark renderer
+# emits; here the published site is the renderer that matters, and its
+# output is unchanged apart from source whitespace.
+dialect: mkdocs
+
 exclude:
   # Generated — a reflow here is reverted by the next `make api-reference` /
   # `make compat-report`.

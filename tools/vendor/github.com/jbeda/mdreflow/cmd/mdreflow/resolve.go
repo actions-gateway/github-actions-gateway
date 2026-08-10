@@ -14,6 +14,7 @@ import (
 // beats config even at its zero value).
 type flags struct {
 	mode                        string
+	dialect                     string
 	maxWidth                    int
 	check                       bool
 	diff                        bool
@@ -23,8 +24,6 @@ type flags struct {
 	noGitignore                 bool
 	hardBreaks                  string
 	stripSentenceTerminalBreaks bool
-	smartQuotes                 bool
-	ellipses                    bool
 	version                     bool
 
 	set map[string]bool // flag name -> explicitly set on the command line
@@ -58,38 +57,25 @@ func parseHardBreaks(s string) (mdreflow.HardBreakStyle, error) {
 	}
 }
 
-// parseTypography turns a config file's typography: list into the
-// corresponding mdreflow.Typography bit set. An unrecognized value is a
-// loud error, matching package config's "unknown keys are a loud error"
-// philosophy: an agent that typos "smartquotes" should be told, not
-// silently given plain ASCII output.
-func parseTypography(list []string) (mdreflow.Typography, error) {
-	var t mdreflow.Typography
-	for _, v := range list {
-		switch v {
-		case "smart-quotes":
-			t |= mdreflow.SmartQuotes
-		case "ellipses":
-			t |= mdreflow.Ellipses
-		default:
-			return 0, fmt.Errorf("unsupported typography %q (want one of: smart-quotes, ellipses)", v)
-		}
-	}
-	return t, nil
-}
-
 // configCache memoizes upward config discovery (by starting directory)
 // and config file parsing (by config file path), since the same
 // .mdreflow.yaml is typically discovered from many files during a
 // directory walk.
 type configCache struct {
+	boundary   string                  // upward discovery stops here, inclusive (see config.Discover)
 	discovered map[string]string       // starting dir -> discovered config path ("" = none found)
 	loaded     map[string]*config.File // config path -> parsed file
 	errs       map[string]error        // config path -> load error, if any
 }
 
-func newConfigCache() *configCache {
+// newConfigCache builds a configCache whose upward discovery never walks
+// above boundary — see config.Discover's doc comment. Every call in a
+// single run shares one boundary (there is exactly one repository root
+// or home directory per invocation), so it lives on the cache rather
+// than being threaded through every resolve call.
+func newConfigCache(boundary string) *configCache {
 	return &configCache{
+		boundary:   boundary,
 		discovered: map[string]string{},
 		loaded:     map[string]*config.File{},
 		errs:       map[string]error{},
@@ -106,7 +92,7 @@ func (c *configCache) resolve(dir, explicitPath string) (*config.File, string, e
 		if cached, ok := c.discovered[dir]; ok {
 			path = cached
 		} else {
-			found, err := config.Discover(dir)
+			found, err := config.Discover(dir, c.boundary)
 			if err != nil {
 				return nil, "", err
 			}
@@ -134,16 +120,16 @@ func (c *configCache) resolve(dir, explicitPath string) (*config.File, string, e
 
 // resolvedOptions is the outcome of merging built-in defaults, a
 // discovered config file, and explicit CLI flags for one target.
+// Exclude patterns are deliberately not carried here: the excluder does
+// its own config lookup, and a second copy would be drift bait.
 type resolvedOptions struct {
-	opts            mdreflow.Options
-	excludePatterns []string
-	excludeBase     string // directory the exclude patterns are rooted at
+	opts mdreflow.Options
 }
 
 // mergeOptions applies docs/design.md's precedence: flags > config file
 // > built-in defaults (mdreflow.Options{} zero value). cfg may be nil
 // (no config file found or applicable, e.g. stdin with none discovered).
-func mergeOptions(f *flags, cfg *config.File, cfgDir string) (resolvedOptions, error) {
+func mergeOptions(f *flags, cfg *config.File) (resolvedOptions, error) {
 	var r resolvedOptions
 	opts := mdreflow.Options{}
 
@@ -163,18 +149,23 @@ func mergeOptions(f *flags, cfg *config.File, cfgDir string) (resolvedOptions, e
 			}
 			opts.HardBreaks = hb
 		}
-		if len(cfg.Typography) > 0 {
-			ty, err := parseTypography(cfg.Typography)
+		if cfg.Dialect != "" {
+			d, err := parseDialect(cfg.Dialect)
 			if err != nil {
 				return r, fmt.Errorf("config: %w", err)
 			}
-			opts.Typography = ty
+			opts.Dialect = d
 		}
 		opts.Abbreviations = append(opts.Abbreviations, cfg.Abbreviations...)
-		r.excludePatterns = cfg.Exclude
-		r.excludeBase = cfgDir
 	}
 
+	if f.isSet("dialect") {
+		d, err := parseDialect(f.dialect)
+		if err != nil {
+			return r, fmt.Errorf("--dialect: %w", err)
+		}
+		opts.Dialect = d
+	}
 	if f.isSet("mode") {
 		m, err := parseMode(f.mode)
 		if err != nil {
@@ -192,19 +183,6 @@ func mergeOptions(f *flags, cfg *config.File, cfgDir string) (resolvedOptions, e
 		}
 		opts.HardBreaks = hb
 	}
-	// Each typography flag is merged on the isSet pattern rather than
-	// assigned unconditionally the way stripSentenceTerminalBreaks is
-	// below, because typography (unlike that option) has a config-file
-	// equivalent: an explicit --smart-quotes=false must be able to turn
-	// off what a discovered .mdreflow.yaml turned on, and an omitted
-	// flag must leave the config's value alone.
-	if f.isSet("smart-quotes") {
-		opts.Typography = setTypographyBit(opts.Typography, mdreflow.SmartQuotes, f.smartQuotes)
-	}
-	if f.isSet("ellipses") {
-		opts.Typography = setTypographyBit(opts.Typography, mdreflow.Ellipses, f.ellipses)
-	}
-
 	// stripSentenceTerminalBreaks has no config-file key, so its flag
 	// value is simply the answer.
 	opts.StripSentenceTerminalBreaks = f.stripSentenceTerminalBreaks
@@ -212,15 +190,28 @@ func mergeOptions(f *flags, cfg *config.File, cfgDir string) (resolvedOptions, e
 	if opts.Mode == mdreflow.ModePara && opts.MaxWidth != 0 {
 		return r, fmt.Errorf("--max-width is not valid with --mode=para (para mode always joins to a single line)")
 	}
+	if opts.MaxWidth != 0 && opts.MaxWidth < mdreflow.MinMaxWidth {
+		return r, fmt.Errorf("--max-width must be 0 (unbounded) or at least %d, got %d (very narrow widths force breaks inside Markdown constructs)", mdreflow.MinMaxWidth, opts.MaxWidth)
+	}
 
 	r.opts = opts
 	return r, nil
 }
 
-// setTypographyBit returns t with bit set or cleared according to on.
-func setTypographyBit(t, bit mdreflow.Typography, on bool) mdreflow.Typography {
-	if on {
-		return t | bit
+// parseDialect validates a dialect name. An unrecognized value is a loud
+// error, matching mode: a typo must not silently disable the recognition
+// it was meant to enable. "commonmark" is rejected with its own message:
+// the name is reserved for a possible future strict profile (GFM
+// extensions off), and quietly aliasing it to the gfm default would both
+// burn the name and mislead about what the parser actually does.
+func parseDialect(s string) (mdreflow.Dialect, error) {
+	switch s {
+	case "", "gfm":
+		return mdreflow.DialectGFM, nil
+	case "mkdocs":
+		return mdreflow.DialectMkDocs, nil
+	case "commonmark":
+		return 0, fmt.Errorf("dialect %q is not accepted: the default profile is %q (the GitHub-flavored superset); the commonmark name is kept for a possible future strict profile", s, "gfm")
 	}
-	return t &^ bit
+	return 0, fmt.Errorf("unsupported dialect %q (want one of: gfm, mkdocs)", s)
 }

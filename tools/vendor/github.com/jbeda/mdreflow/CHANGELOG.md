@@ -11,7 +11,70 @@ At release time the section is retitled to the version and the prose lead is wri
 
 ### Fixed
 
+- A MkDocs admonition written without a blank line after its marker is no longer flattened into one paragraph, which stopped it rendering as a callout (#31, contributed by Karl Isenberg).
+  That spelling is a single paragraph to CommonMark, since the indented body is a lazy continuation rather than the code block the blank-line spelling produces.
+  The marker line is now immovable and the body carries the 4-space indent the extension requires, the same treatment a footnote definition already gets.
+
+- Reflowing a tab-indented list-item body no longer risks turning it into a thematic break (#32, found by Karl Isenberg).
+  Two emphasis-only lines like `**` and `**` join to `** **` — four asterisks, which CommonMark reads as a thematic break — and the tab indent hid that from the escape that would otherwise neutralize it, so the join silently ended the list and changed what the document rendered to.
+  The body is now escaped and reflows normally.
+
+## v0.1.5 (2026-08-09)
+
+Narrower promises, structurally enforced.
+The core guarantee — reflow never changes what a document renders to — is now checked at runtime, not just in tests: `Format` compares renders before and after and returns your document untouched rather than ever shipping a difference.
+Around that, the tool's surface got deliberately smaller and sharper: typography substitution is gone (your renderer does it better), very narrow `--max-width` values are refused, and the Markdown flavor is now an explicit `--dialect` with `gfm` as the default and an opt-in `mkdocs` that reflows admonition bodies.
+Running unattended on untrusted trees is hardened end to end, and four guard fixes contributed by Karl Isenberg stop link- and URL-adjacent paragraphs from being silently skipped — on his 263-file docset, sentence-per-line coverage went from 96% to over 99%.
+
+Act on these when upgrading:
+
+- The library function `Check` is now `NeedsFormat` (same behavior; the old name read backwards). The `--check` flag is unchanged.
+- A `typography:` key in `.mdreflow.yaml` is now an error — delete the line and configure typography in your renderer instead.
+- `--max-width` below 20 is now an error; the library requires Go 1.25+.
+
+### Added
+
+- Render preservation is now structurally guaranteed, not just tested for: after reflowing, `Format` renders the input and the output through the same parser and compares them (modulo soft-break whitespace and `<br>` spelling — the two documented cosmetic differences). On any other difference the document is returned unchanged, so an unknown formatter bug can now cost you a reflow, never your content. The opt-in `--strip-sentence-terminal-breaks` remains the one documented exception, since removing an accidental hard break is a render change by design.
+
+- `--dialect mkdocs` (and a `dialect:` config key) additionally reflows MkDocs and Python-Markdown admonition bodies (#19, contributed by Karl Isenberg).
+  A callout's 4-space-indented body is prose, but every CommonMark parser reads it as an indented code block, so it was silently excluded from reflow.
+  Off by default: to a CommonMark renderer that body is code, so reflowing it changes the rendered `<pre><code>`.
+  Recognition is narrow, skipping bodies that contain a fence marker or more than one paragraph.
+  The default dialect is named `gfm` — the GitHub-flavoured superset the parser has always used; `commonmark` is reserved for a possible future strict profile.
+
+### Changed
+
+- Running unattended on an untrusted tree is now hardened end to end: symlinks, FIFOs, and device nodes are refused (exit 3) instead of read or written through — a directory walk skips symlinks silently, `--force` remains the escape hatch; in-place writes go through a same-directory temp file and atomic rename, so a crash or full disk mid-write can no longer truncate a file; a discovered `.mdreflow.yaml` is capped at 1 MB and screened against YAML alias/nesting bombs before parsing; and config discovery stops at the enclosing git repository root (or your home directory outside one), so a config planted in a shared ancestor directory like `/tmp` no longer applies.
+- `--no-gitignore` outside a git repository no longer misfires the built-in `vendor`/`node_modules`/`.git` excludes on directories *above* the path you named: the check is scoped to components below the walked directory (or an explicit file's own directory), not the full absolute path.
+- `--max-width` (and the library's `Options.MaxWidth`) now rejects non-zero values below 20 with a loud error. Very narrow widths force line breaks inside Markdown constructs and were the source of nearly all fuzz-found width pathology; no real document wants them. 0 still means unbounded (sentence mode) or the default 80 (wrap mode).
+
+- Library API: `Check` is renamed `NeedsFormat` — `ok, err := Check(...)`, the shape a Go reader expects from that name, read exactly backwards (`true` means the file *would* change). The `--check` flag keeps its name; it describes the operation, the function describes the question. No deprecation wrapper: renaming now, pre-v1, is the cheap moment.
+- `Mode`, `HardBreakStyle`, and `Dialect` now implement `fmt.Stringer` with their CLI-facing names ("sentence", "gfm", "br", ...), so validation errors and logs speak the same vocabulary as flags and config keys.
+- Library API, pre-v1 cleanup: `Span` is now a concrete struct whose `Start`/`End` fields appear in rendered documentation (it was an alias to an internal type that pkg.go.dev showed with no fields), and the option enums have a single internal definition instead of hand-mirrored public/internal copies. No source changes needed for typical callers; a custom `Segmenter` implementation is unaffected beyond recompiling.
+
+- The library now requires Go 1.25+ (was 1.24), following a dependency update; releases build with the current Go toolchain.
+
+### Removed
+
+- Typography substitution (`--smart-quotes`, `--ellipses`, the `typography:` config key, and the library's `Typography` options) is removed. It was the only feature whose purpose was to change rendered output, which put it at odds with mdreflow's core guarantee; substituting at render time is the better home (goldmark's Typographer, Hugo's smartypants, Python-Markdown's smarty), and anyone wanting it baked into source bytes wants a full parse-and-re-emit formatter, which mdreflow deliberately is not. A leftover `typography:` key in `.mdreflow.yaml` is now an unknown-key config error (exit 2); delete the line.
+
+### Fixed
+
+- Trailing double spaces inside a code span that closes on a later marker line (a `:::` fence, say) are no longer treated as a hard break: they are span content, and normalizing them wrote a literal `<br>` into the rendered code. Fuzz-found on pathological input; v0.1.4 renders it corrupted, while the render backstop above already reduced it to a missed reflow before this root fix.
+- A paragraph is no longer skipped just because a code span contains a URL (`` `oci://ghcr.io/org/chart` ``), which is how documentation names a registry or endpoint (#29, contributed by Karl Isenberg).
+  The backtick-in-bare-URL guard now requires the URL to start *before* the backtick, which is the only order in which linkify can swallow one.
+- A paragraph whose link text or destination spans a line break is no longer skipped unless the paragraph could actually form a link reference definition (#18, contributed by Karl Isenberg).
+  The bracket guard now also requires a `]:` somewhere in the paragraph, the only shape a definition can be built from.
+  Such a paragraph was otherwise a fixed point: skipped because a link spans a break, and being skipped is what stopped the break from ever being removed.
+- A bracket inside an inline code span no longer counts toward the spanning-delimiter safety guards, so paragraphs that document Markdown or YAML syntax (`` `runs-on: [self-hosted,` `` wrapping across a line) reflow instead of being skipped (#17, contributed by Karl Isenberg).
 - Paragraphs containing a link are no longer skipped just because a prose parenthetical spans a line break elsewhere in them (#16, reported with a proposed fix by Karl Isenberg): the guard now fires only on a `](`-opened paren left open at a line end — the one spelling that can open an inline link destination — instead of any unclosed paren in a paragraph that contains a `[` anywhere. On the reporter's 263-file docset this unblocks 137 files.
+- More scanner whitespace classes aligned with goldmark's, which treats a bare carriage return as whitespace where the spec says space/tab: table-delimiter-row and setext-underline recognition, two link-reference-definition opener shapes, and hard-break `<br>` marker detection.
+  Fuzz-found on pathological input (paragraphs containing a bare CR); no effect on normal documents.
+- A width split inside a list item nested in a blockquote could land an asterisk run right after the `* ` marker, which the next parse read as a thematic break (`>* **` is `* **` once the quote marker is stripped — a real `<hr>`); the escape that already defended this for plain list items now sees through blockquote markers.
+  Fuzz-found at width 3 on adversarial input; real documents are unaffected.
+- `[^]:` and `[^ ]:` (a caret label that is empty or starts with a space) are ordinary link-reference definitions to goldmark, not footnotes; they now get the definition zone's protection instead of the footnote exemption, closing a fuzz-found corner where joining an adjacent paragraph turned its prose into the definition's title.
+- A paragraph containing a backtick inside a bare URL now passes through unchanged. GitHub-style autolinking absorbs such a backtick into the link, which shifts how every later backtick in the paragraph pairs into code spans; mdreflow's own scanner did not model that and could break a line inside a real code span, changing the code's rendered content.
+- The definition zone now extends through a whole contiguous run of non-blank lines below a `[label]:` line, not just the line directly against it: a definition's multi-line title scan can reach a paragraph several lines down, and reflowing that paragraph re-carved the title's boundary on the next pass. Definitions in their own blank-line-separated block — the normal layout — are unaffected.
 
 ## v0.1.4 (2026-08-08)
 
