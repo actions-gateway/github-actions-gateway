@@ -272,7 +272,7 @@ The check is in `make check` and costs about a second for the whole tree. `.mdre
 
 ### What stays hard-wrapped, and why it stays that way
 
-Measured 2026-08-09: 99.91% of in-scope prose lines end at a sentence boundary, leaving 12.
+Measured 2026-08-10: 99.11% of in-scope prose lines end at a sentence boundary, leaving 117.
 "In-scope" excludes the generated docs and `docs/STATUS.md`, which `.mdreflow.yaml` skips.
 
 What remains is one guard, and it is a correctness property rather than a defect.
@@ -286,28 +286,35 @@ rc.6, [self-hosted] ready). Second sentence.       → reflows
 b) here. Second one.                               → skipped
 ```
 
-The 12 survivors are the pages that document Markdown itself, where a literal `` `[label]: target` `` or `` `[!` `` in a code span arms the guard.
-Nothing removes those without changing what the page says.
+Do not hand-wrap around it.
+A paragraph the formatter leaves alone is correctly formatted, and hand-joining to force one through is how a link ends up straddling a break in the first place.
 
-**Never hand-wrap inside a link.** A link whose text or destination straddles a source line break wedges its paragraph permanently: the formatter skips it because the link spans a break, and being skipped is exactly what stops that break being removed.
-Adopting sentence-per-line left 17 such paragraphs stranded at their old wrapping until each link was joined back onto one line by hand.
-Writing one sentence per line prevents it, since a sentence is never wrapped and so a link never straddles anything.
+### Coverage is not the check that matters
+
+The coverage figure counts line breaks.
+It cannot see whether a page still renders what it should, and that difference is not academic: a MkDocs callout flattened into a paragraph still scores as sentence-per-line, because it is.
+
+Adopting this convention destroyed 7 of 17 callouts on this tree and every gate stayed green, because the output was still valid Markdown that built.
+What caught it was rendering the site before and after and diffing every page. **A change that moves line breaks across the docs is verified by a `mkdocs build` diff, not by `make check` and not by a coverage number.**
+
+Two pages differ structurally under that diff today, and both are the reflow fixing latent bugs rather than causing them: a sentence wrapped so `10.` began a line had been rendering as a stray list item, and a heading missing from a page's nav now appears.
+Wrapping mid-sentence is what puts a number, a `---`, or another block-starting token at line start where Markdown reinterprets it.
+One sentence per line cannot.
 
 ### Measuring the residue
 
 Counting lines that "do not end in sentence punctuation" over-reports badly, and every intermediate figure in this section's history came from that mistake.
-It counts YAML front matter, `<details>` blocks, and `[label]: target` definitions as prose the formatter failed to split, and it misses a sentence ending `.)` or `."`.
-Corrected against the same tree, that metric read 97.1% where the honest number was 99.34%.
+It counts YAML front matter, `<details>` blocks, `[label]: target` definitions and immovable marker lines as prose the formatter failed to split, and it misses a sentence ending `.)` or `."`.
+Corrected against one tree, that metric read 97.1% where the honest number was 99.34%.
 Measure by excluding the constructs mdreflow never reflows, and treat a closing delimiter after terminal punctuation as a sentence end.
 
-Three mdreflow bugs surfaced while adopting this, all fixed upstream.
-[#14](https://github.com/jbeda/mdreflow/issues/14) skipped paragraphs holding no bracket at all and [#15](https://github.com/jbeda/mdreflow/issues/15) refused a valid file whose multi-byte rune straddled byte 8192, both fixed in v0.1.4.
-[#16](https://github.com/jbeda/mdreflow/issues/16) armed the guard on any paren in any paragraph containing a bracket, which in link-dense prose is nearly always.
+Five mdreflow bugs surfaced while adopting this, all fixed upstream: [#14](https://github.com/jbeda/mdreflow/issues/14), [#15](https://github.com/jbeda/mdreflow/issues/15), [#16](https://github.com/jbeda/mdreflow/issues/16), and pull requests [#29](https://github.com/jbeda/mdreflow/pull/29) and [#31](https://github.com/jbeda/mdreflow/pull/31).
+Between them they took this tree from roughly two thirds converted to 99.11%, and stopped callouts being destroyed.
 
-One lesson worth keeping from #16.
-The narrowing this repo proposed was wrong in a way a 2.8M-execution fuzz run did not catch: it armed only at paren depth zero, so a destination opened inside an outer prose paren escaped it and was corrupted.
-Upstream tracks the armed flag per open paren instead.
+Two lessons worth keeping.
+A narrowing this repo proposed was wrong in a way a 2.8M-execution fuzz run did not catch: it armed only at paren depth zero, so a link destination opened inside an outer prose paren escaped it and was corrupted.
 A large execution count over a corpus that never contained the shape is weaker evidence than one deliberately constructed case.
+And a differential test needs a known-answer case of its own: an oracle built on a bare goldmark reported a render change on every hard break, because it omits raw HTML where mdreflow's own instance sets `html.WithUnsafe()`.
 
 ## Maintenance
 
