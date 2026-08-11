@@ -83,6 +83,11 @@ jobs:
               - 'go.work'
               - 'go.work.sum'
               - 'Makefile'
+              # The two steps below run through this wrapper, which sources
+              # scripts/lib/. A change to either decides how this tier runs, so
+              # it has to be able to trigger the tier that would catch it.
+              - 'scripts/go/go-test-integration.sh'
+              - 'scripts/lib/**'
               - '.github/workflows/integration-test.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
@@ -95,7 +100,12 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
-    timeout-minutes: 15
+    # Must exceed both suite budgets plus their builds, or a hung suite is killed
+    # by THIS timeout first — which reports a cancelled job and no goroutine dump,
+    # the one failure shape that says less than the panic it pre-empts. Two 10m
+    # budgets plus setup and the -race builds is ~24m worst case; a normal run is
+    # ~12m (measured 2026-08-10).
+    timeout-minutes: 30
     # ENVTEST_K8S_VERSION pins the Kubernetes API-server version the integration
     # tier tests against. Single-sourced here (the cache key + the `use` below both
     # read it) and kept in lockstep with the same pin in cmd/{gmc,agc}/Makefile by
@@ -121,12 +131,14 @@ jobs:
         run: |
           KUBEBUILDER_ASSETS=$(.build/setup-envtest use "$ENVTEST_K8S_VERSION" --bin-dir /tmp/envtest-bins -p path)
           echo "KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS" >> "$GITHUB_ENV"
+      # The wrapper owns -race, the `integration` tag and the -timeout budget, so
+      # the budget is one number here and in both module Makefiles, and a breach
+      # annotates the step with "the suite ran out of time" instead of leaving
+      # the panic to blame whichever test held the wall (Q741).
       - name: Run GMC integration tests
-        run: go test -race -v -tags integration -timeout 5m -count=1 ./internal/controller/integration/...
-        working-directory: cmd/gmc
+        run: scripts/go/go-test-integration.sh cmd/gmc -v -count=1 ./internal/controller/integration/...
       - name: Run AGC integration tests
-        run: go test -race -v -tags integration -timeout 5m -count=1 ./internal/controller/integration/...
-        working-directory: cmd/agc
+        run: scripts/go/go-test-integration.sh cmd/agc -v -count=1 ./internal/controller/integration/...
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`integration-test-gate`) required in the branch ruleset — never the
