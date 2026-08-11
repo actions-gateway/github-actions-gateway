@@ -2827,6 +2827,14 @@
 <td>Deleting a bullet and leaving its indented continuation attaches it to the bullet above, whose cap then breaks. Hit 2026-08-11 closing Q726: accurate message, innocent bullet, reads as pre-existing. Name the line range, or flag the orphan.</td>
 </tr>
 <tr>
+<td><a id="Q799"></a>Q799</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.gitattributes">Route <code>docs/roadmap.md</code> through an ID-keyed merge driver</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Each gate PR deletes its own <code>&lt;!-- q:QNNN --&gt;</code> bullet and de-links its own anchor, so two conflict by construction: Q715's was queue-evicted 3x in a session, each a rebase and a gate cycle. <code>STATUS.md</code> and <code>plan/README.md</code> merged clean.</td>
+</tr>
+<tr>
 <td><a id="Q790"></a>Q790</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate's <code>docs/STATUS.md</code> overlap exemption cannot fire on a row deletion</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
