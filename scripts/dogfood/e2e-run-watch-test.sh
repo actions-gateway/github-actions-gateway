@@ -26,6 +26,15 @@ WORK="${REPO_ROOT}/tmp/e2e-run-watch-test.$$"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
+# Set before sourcing: progress.sh defaults these only when unset, and watch_run
+# records the run it parks on (progress_run, Q630). Unscoped, that append lands
+# in the repo's live release-validation stream and repoints the sentinel's stall
+# check at a run that does not exist — a `make check` during the v1.4.0-rc.2 gate
+# put three owner/repo 42 events there (Q777).
+RELEASE_PROGRESS_FILE="${WORK}/progress.jsonl"
+RELEASE_STATUS_FILE="${WORK}/status.json"
+export RELEASE_PROGRESS_FILE RELEASE_STATUS_FILE
+
 # shellcheck source=scripts/dogfood/e2e-run-watch.sh
 source "$REPO_ROOT/scripts/dogfood/e2e-run-watch.sh"
 
@@ -162,6 +171,10 @@ echo '== the watch is bounded =='
 CLOCK="${WORK}/clock"
 POLLS="${WORK}/polls"
 
+# progress_run appends only to a stream that already exists, so without this the
+# watches below record nothing and the scoping above is asserted by nobody.
+progress_init
+
 # 60s per reading, so a watch cannot outlast its budget by polling slowly.
 now() {
 	local t
@@ -230,6 +243,16 @@ arm 3 'completed failure'
 rc=0
 watch_run 42 >/dev/null 2>&1 || rc=$?
 want_eq 'a failed run fails as a failure, not a timeout' 1 "$rc"
+
+# Q777. Each watch above recorded the run it parked on; assert all three landed
+# in this suite's own stream. Naming the path rather than the variable is the
+# point: read through RELEASE_PROGRESS_FILE this passes just as well when the
+# scoping is gone and the events went to the live stream instead.
+want_eq 'the three watches recorded their run here, not in the live stream' 3 \
+	"$(jq -c 'select(.kind == "run" and .repo == "owner/repo" and .id == "42")' \
+		"${WORK}/progress.jsonl" 2>/dev/null | grep -c . || true)"
+want_eq 'and it is this suite'\''s status file that names that run' 42 \
+	"$(jq -r '.runId' "${WORK}/status.json" 2>/dev/null || true)"
 
 unset -f now sleep run_state e2e_job_ids arm
 

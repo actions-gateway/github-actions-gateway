@@ -1661,6 +1661,22 @@ This matters because the interesting assertion about a bring-up script is usuall
 Written the first way, that test passes no matter what the script does — a false green in the same family as Q404 and Q432.
 Use the second form, and mutation-check it: break the abort (append `|| true` to the wait), confirm the assertion goes red, restore.
 
+### A dogfood suite scopes the release progress stream before it sources anything
+
+[`lib/progress.sh`](../../scripts/dogfood/lib/progress.sh) defaults `RELEASE_PROGRESS_FILE` and `RELEASE_STATUS_FILE` to repo-local paths that a live release-validation gate is actively writing.
+Any suite that sources a script reaching that library inherits the operator's own stream unless it says otherwise, and sourcing is the whole trigger: `e2e-run-watch.sh` pulls the library in, and `watch_run` records the run it parked on so the sentinel can tell a quiet leg from a wedge (Q630).
+So `e2e-run-watch-test.sh` appended three `owner/repo` run events to the real stream during the v1.4.0-rc.2 gate, repointing that stall check at a run that does not exist (Q777).
+The gate still passed, which is the part worth noticing: the damage was to the artifact a human was reading to decide whether the candidate was good.
+
+Set both variables to paths under the suite's own `$WORK` **before** the `source` line, as [`release-status-test.sh`](../../scripts/dogfood/release-status-test.sh) and [`release-sentinel-test.sh`](../../scripts/dogfood/release-sentinel-test.sh) do.
+The library defaults on *unset*, so an assignment after the source line is too late for anything that line already ran.
+Disabling the stream with `RELEASE_PROGRESS_FILE=` is not a substitute: `progress_init` removes `RELEASE_STATUS_FILE` whether or not the stream is on, so the live default stays reachable (Q786).
+Scope both even when the suite wants no stream at all.
+
+Then assert the positive, and name the path rather than the variable.
+An assertion that reads `"$RELEASE_PROGRESS_FILE"` passes exactly as well once the scoping is gone and the events went to the live stream, so it guards nothing; reading `"${WORK}/progress.jsonl"` goes red.
+Because `progress_run` and `progress_heartbeat` append only to a stream that already exists, a suite that wants that assertion has to call `progress_init` first.
+
 ### A path assembled at runtime is only checked by running the script
 
 shellcheck resolves nothing: `"$(dirname "$0")/../fetch/download-verified.sh"` is a string to it, correct or not.
