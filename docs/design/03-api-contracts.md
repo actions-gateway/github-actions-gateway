@@ -541,7 +541,10 @@ type RunnerGroupSpec struct {
     //
     // GitHub enforces a minimum runner version at session creation time and
     // returns 400 Bad Request for versions below the threshold. Tenants are
-    // responsible for keeping this image current.
+    // responsible for keeping this image current; the AGC reads the runner
+    // version off this reference each reconcile and reports it as the
+    // RunnerVersionTooOld condition, so carrying a version tag alongside the
+    // digest ("…:2.335.1@sha256:abc…") is what makes the check possible.
     //
     // Omitting this field causes the AGC to use its operator-configured default.
     // The compile-time constant DefaultWorkerImage in

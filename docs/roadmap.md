@@ -25,9 +25,6 @@ The pill beside each title names the release it blocks, read from the backlog ra
 - **[Bind each runner set to a GitHub runner group](plan/release-1.5.md#q712--the-runner-group-binding-is-declared-and-never-wired)** <!-- q:Q712 --> The runner group is GitHub's own control over which repositories may target a runner set, and GAG does not set it today, so every scale set registers into the installation's default group.
   Kubernetes-side isolation is unaffected; what is unbounded is which repositories can send work to a tenant.
 
-- **[Detect the runner version a tenant's worker image ships](operations/tenant-onboarding.md)** <!-- q:Q715 --> The version GAG reports to GitHub is the pinned default, whatever `spec.workerImage` holds, and the too-old warning fires on the classic tier only.
-  GitHub raises its enforced minimum on 2026-09-25, so a stale image fails with no prior signal.
-
 - **[Persistent and shared worker storage](operations/README.md)** <!-- q:Q719 --> Workers are storage-less by design and nothing validates a `ReadWriteMany` volume mounted into one, so the stance is undocumented rather than decided. `ReadWriteMany` is how jobs share files and what ARC's `containerMode: kubernetes` depends on, so it also matters to anyone migrating off that mode.
   Validation and a reference architecture come before any API.
 

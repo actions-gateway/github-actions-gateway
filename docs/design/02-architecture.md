@@ -557,6 +557,7 @@ Each `Reason` mirrors the corresponding metric name so the two correlate:
 |---|---|---|---|
 | `JobAcquisitionFailed` | Warning | `actions_gateway_job_acquisition_errors_total` | `acquirejob` failed for a delivered job; it stays queued for redelivery |
 | `RunnerVersionTooOld` | Warning | — (also the `RunnerVersionTooOld` condition) | `POST /sessions` rejected: runner version too old (classic protocol only — the scale-set protocol carries no runner version) |
+| `WorkerImageBelowMinimum` | Warning | — (also the `RunnerVersionTooOld` condition) | The effective worker image ships a runner below GitHub's enforced minimum, read at reconcile on both tiers. Emitted once per transition, ahead of any GitHub rejection (Q715) |
 | `SessionUnauthorized` | Warning | — (also the `Degraded` condition) | A session call rejected as unauthorized (invalid/revoked credentials) — classic `POST /sessions`, or a ScaleSet-path session create/refresh (Q325) |
 | `QuotaRetriesExhausted` | Warning | `actions_gateway_quota_retries_exhausted_total` | Pod creation abandoned after the `ResourceQuota` retry budget exhausted |
 | `EvictionRetriesExhausted` | Warning | `actions_gateway_eviction_retries_exhausted_total` | Disrupted job's auto-retry budget exhausted; manual re-run required. The event names the cause (eviction, preemption, or deletion) |
@@ -601,6 +602,12 @@ Each upgrades on its own cadence.
 
 GitHub enforces a minimum runner version at session creation; tenants who let `workerImage` drift will start receiving `400 Bad Request` from `POST /sessions`.
 The session goroutine surfaces this as a `RunnerGroup` condition (see [§7.1](07-test-plan.md#71-unit-tests)) so operators can detect the staleness without scraping pod logs.
+
+That rejection is classic-only, since the scale-set protocol carries no runner version at session creation, and it arrives only once the version has already stopped working.
+So both reconcilers independently read the runner version off the effective worker image reference each reconcile and publish the same `RunnerVersionTooOld` condition from it, with the `WorkerImage*` reasons: `True` below the enforced minimum, `False` at or above it, `Unknown` when the reference names no version and nothing has been checked.
+Two versions are in play and they answer different questions. `agent.version`, sent at session creation, is the AGC's own listener protocol version, and stays pinned to the version GAG implements: the AGC is the registered agent on the classic path, whatever image a worker pod runs.
+The worker image's runner version is what will execute the job, and is the one this condition reports.
+The injected wrapper logs it from the runner's own dependency manifest at worker startup, which is the only reading that holds for an image whose tag says nothing.
 
 ---
 

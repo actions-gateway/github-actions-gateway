@@ -1132,9 +1132,20 @@ To test a new image on a subset of jobs before rolling it out broadly:
 
 ### Minimum Version Requirement
 
-GitHub enforces a minimum runner version at session creation time.
-If the worker image contains a runner below this threshold, the session goroutine will receive a `400 Bad Request` and surface a `VersionTooOld` condition on the `RunnerGroup`.
-Monitor `actions_gateway_active_sessions` and RunnerGroup conditions for this symptom after deploying an older image.
+GitHub enforces a minimum runner version to register, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.
+[Troubleshooting § Worker Image Runner Version](troubleshooting.md#worker-image-runner-version) carries the current floor and where it comes from.
+
+You do not have to wait for a failure to see this.
+On both acquisition tiers, every reconcile, the AGC reads the runner version off the effective `workerImage` reference and reports `RunnerVersionTooOld` with reason `WorkerImageBelowMinimum` (`True`), `WorkerImageCurrent` (`False`), or `WorkerImageVersionUnknown` (`Unknown`, when the reference names no version).
+Check it right after deploying a different worker image:
+
+```sh
+kubectl get runnerset <name> -n <namespace> \
+  -o jsonpath='{.status.conditions[?(@.type=="RunnerVersionTooOld")]}'
+```
+
+On the classic tier the session goroutine additionally surfaces GitHub's own rejection, a `400 Bad Request` under reason `VersionTooOld`, once the version has already stopped working.
+See [troubleshooting § Worker Image Runner Version](troubleshooting.md#worker-image-runner-version) for reading the version a running worker actually shipped.
 
 ### Worker image rollback
 

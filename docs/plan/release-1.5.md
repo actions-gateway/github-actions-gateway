@@ -1,7 +1,7 @@
 # Release 1.5 Milestone Definition
 
 > **Status: scope opening 2026-08-06.** [Release 1.4](release-1.4.md) is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
-> Four gating Queue rows so far, labelled `1.5-gate`: [Q712](../STATUS.md#Q712), Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus [Q715](../STATUS.md#Q715), admitted the same day off an external date.
+> Four gating Queue rows so far, labelled `1.5-gate`: [Q712](../STATUS.md#Q712), Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date and [shipped 2026-08-11](#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only).
 
 ## Why these gate a release rather than riding along
 
@@ -56,6 +56,20 @@ The consequence is still that no tier both knows the real version and can warn a
 **What makes it gate rather than wait:** GitHub raises the enforced minimum runner version on GHEC on 2026-09-25.
 On that date a tenant whose worker image is behind starts failing at GitHub, and GAG has told nobody, on the tier every new tenant runs.
 This is the only gating row here with a date it does not control, which is why it was admitted without going through the candidate list.
+
+**Shipped 2026-08-11.** Two corrections to the framing above came out of measuring it.
+
+The runway is shorter than the row's date: GHEC runs brownouts from 2026-08-24 through 2026-09-18 before full enforcement on 2026-09-25 ([changelog, 2026-06-12](https://github.blog/changelog/2026-06-12-github-actions-minimum-version-enforcement-timeline-for-self-hosted-runners/)).
+A brownout is a four-hour window, so the first symptom is intermittent — a job that fails at midday and works by evening reads as a flake, not a version problem, which is exactly what a named condition is for.
+The floor is `2.329.0` for registration, plus a rolling requirement that each release be installed within 30 days of publication to keep executing jobs; a compiled-in constant can hold the first and not the second, so `names.MinRunnerVersion` is documented as the registration floor only.
+
+`agent.version` was left alone, against the row's own wording.
+There are two versions with different jobs: on the classic path the AGC *is* the registered agent, so `agent.version` describes the listener protocol the AGC implements and not whatever image a worker runs.
+Reporting the tenant's image version there would have GitHub refuse sessions for a listener that is current, converting a silent risk into an immediate outage.
+The fix adds the second number instead of changing the first: both reconcilers read the runner version off the effective worker image each reconcile and publish `RunnerVersionTooOld` from it (`WorkerImageBelowMinimum` / `WorkerImageCurrent` / `WorkerImageVersionUnknown`), which needs no session and so reaches the ScaleSet tier.
+
+What the image reference cannot answer, the worker now does: the upstream runner image carries no `RUNNER_VERSION` env var and no version label — its `org.opencontainers.image.version` is the Ubuntu base's `24.04` — but `bin/Runner.Listener.deps.json` names the real version, so the injected wrapper reads it and logs it once per pod.
+Reporting that reading back to the AGC, rather than only to `kubectl logs`, is deferred: it needs a channel out of the worker and a status field, and it reports nothing until a set's first job finishes.
 
 ## Candidates not yet accepted
 
