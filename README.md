@@ -299,17 +299,13 @@ Use the per-module commands:
 (cd cmd/probe && go test ./...)     # probe module
 ```
 
-Integration tests require the envtest binaries staged via `KUBEBUILDER_ASSETS`:
+Integration tests need the envtest binaries.
+Use the make targets: they stage `KUBEBUILDER_ASSETS` at the Kubernetes version each module pins, and apply the suite's wall-clock budget.
 
 ```sh
-make setup-envtest
-export KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.30.x \
-    --bin-dir /tmp/envtest-bins -p path)
-
-(cd cmd/agc && go test -v -tags integration -timeout 5m -count=1 \
-    ./internal/controller/integration/...)
-(cd cmd/gmc && go test -v -tags integration -timeout 5m -count=1 \
-    ./internal/controller/integration/...)
+make test-integration              # both modules
+make -C cmd/agc test-integration   # AGC only
+make -C cmd/gmc test-integration   # GMC only
 ```
 
 </details>

@@ -1032,6 +1032,7 @@ Each is a claim about state, and each has a cheap way of being wrong:
   Q166 spent two wrong hypotheses on this.
   A red envtest suite was blamed first on the session's own concurrent test runs, then on a cluster-wide List the branch had added, which was narrowed on that theory for no improvement; `origin/main` alone then measured 324.5s against a 5m timeout with none of the branch's code, and the failing test's name had moved between runs because what was actually failing was the suite's wall clock (Q741).
   The tell is a failing test whose identity changes run to run, or one in a file the diff never touches: both say the branch is a bystander.
+  The tier now says it for you: a breach of the [envtest suite budget](#the-envtest-suite-budget) reports that the *suite* ran out of time and names the panic's test as a bystander, rather than leaving the reader to notice that the name moved.
 - **A check sequenced before a state-changing command does not gate it.** `scripts/docs/lint-backlog.sh > tmp/lint.log; git add docs/STATUS.md && git commit` runs the commit whatever the linter said, because `;` sequences rather than conditions, and the `&&` binds the commit to `git add` instead.
   This is the sibling of the pipe traps above: there the status is misread, here it is read correctly and then ignored.
   Bind the mutation to the check that authorizes it, `scripts/docs/lint-backlog.sh && git add docs/STATUS.md && git commit`, or branch on `$?` explicitly.
@@ -1771,6 +1772,56 @@ Hand-assembling it has two traps, both of which surface as a confusing envtest f
   The Makefiles pass `$(REPO_ROOT)/.build`.
 
 Unit tests (`make test` / `go test ./...`) do **not** require envtest — the integration packages are excluded by their `//go:build integration` tag.
+
+### The envtest suite budget
+
+`go test -timeout` gives each suite a wall-clock budget.
+It is **10m**, single-sourced in [`scripts/go/go-test-integration.sh`](../../scripts/go/go-test-integration.sh), which both module Makefiles and both CI steps run through.
+The budget is per test *binary*, so each module's suite gets its own.
+
+Every run reports what it spent:
+
+```
+==> github.com/actions-gateway/github-actions-gateway/gmc/internal/controller/integration used 213.9s of its 10m budget (36%)
+```
+
+Past 80% that line moves to stderr as a warning.
+That is the signal that was missing before Q741: a suite creeping toward the cliff looked exactly like one with room to spare, right up to the run that panicked.
+
+**When the budget is exceeded, the test named in the panic is a bystander.** Go's timeout panic names whichever test held the wall at that instant, so the name moves from run to run and lands on tests the diff never touched.
+Q166 spent two wrong hypotheses there; see [A gate that fails on your branch is not yours until it fails on the base too](#the-status-you-report-is-a-claim-too).
+The wrapper says so outright on a breach, and on CI emits it as a step annotation as well, because for most readers the annotation *is* the failure.
+
+#### Why the budget was raised rather than the package split
+
+Q741 offered both remedies.
+The measurements chose:
+
+| Run | GMC suite | AGC suite |
+|---|---|---|
+| CI (`ubuntu-latest`, 9 runs, 2026-08-09/10) | 201.5–217.8s | 259.1–263.7s |
+| Local, idle dev Mac, alone (2026-08-10) | 197.4–219.5s (5 runs) | 255.9–257.7s (2 runs) |
+| Local, the two suites run concurrently | 227.7s | 263.1s |
+
+**No test dominates.** Across 166 top-level GMC tests the largest is 12.4s and the top ten are 43% of the total; the median is 0.73s.
+Splitting a uniform tail in half is an arbitrary cut that buys ~100s per package and pays for a second envtest bootstrap, while leaving whatever breached the budget untouched.
+
+**The suite's own spread is not what breaches it either.** Within an environment the range is about 10%, and CI and an idle laptop agree per test to within a few hundredths of a second.
+A 300s budget was never marginal for a 200s suite.
+
+So neither remedy the row proposed addresses the thing that actually went wrong, because **the 324.5s Q741 recorded has no measured mechanism.** Three candidates were tested and all three came back too small:
+
+- The local Makefile target runs `./...` where CI runs only the integration package, so the suite could have been contending with its own module's other packages.
+  It is not: 221.9s and 198.2s inside a `./...` run, against 197.4–219.5s isolated.
+- The two environments could have differed.
+  They do not.
+- Two suites on one machine could have starved each other.
+  At two they cost each other 4% (AGC) and up to 8% (GMC), nowhere near the 1.5x excursion.
+  A heavier [parallel-dispatch](parallel-dispatch.md) wave remains plausible and is unmeasured.
+
+That is what settles it.
+A budget with real headroom is the remedy that does not depend on knowing which of those it was, and it is the one that keeps the next occurrence cheap: at 10m a breach means a 2.7x slowdown, which is a finding rather than a coin flip, and the run says so in those words instead of naming a test.
+The tier also now takes the machine-wide heavy-build slot `make check` takes, which it had never held: a guard on the one hypothesis the measurement could not rule out, not a demonstrated fix.
 
 ### Avoiding shared-stub flakes in the AGC suite
 

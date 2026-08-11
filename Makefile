@@ -391,6 +391,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
                  go/check-codegen-drift-test go/check-v2-api-sync-test \
                  go/coverage-test go/go-lint-scope-test go/go-test-run-filter-test \
+                 go/go-test-integration-test \
                  go/go-vet-tags-test go/go-work-tidy-test \
                  release/download-cosign-test release/release-delta-test \
                  release/verify-release-test \
