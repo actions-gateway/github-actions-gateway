@@ -2725,35 +2725,35 @@ it. The pill beside each title names the release it blocks, read from the
 backlog rather than typed here, so it cannot outlive the commitment.</p>
 <ul>
 <li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/release-1.5.md#q712--the-runner-group-binding-is-declared-and-never-wired">Bind each runner set to a GitHub runner group</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q712 -->
+<p><strong><a href="../plan/release-1.5/#q712--the-runner-group-binding-is-declared-and-never-wired">Bind each runner set to a GitHub runner group</a></strong> <!-- q:Q712 -->
   The runner group is GitHub's own control over which repositories may target a
   runner set, and GAG does not set it today, so every scale set registers into
   the installation's default group. Kubernetes-side isolation is unaffected;
   what is unbounded is which repositories can send work to a tenant.</p>
 </li>
 <li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/release-1.5.md#q713--the-shipped-tier-emits-no-duration-or-latency-series">Job duration and pod-creation latency on the default tier</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q713 -->
+<p><strong><a href="../plan/release-1.5/#q713--the-shipped-tier-emits-no-duration-or-latency-series">Job duration and pod-creation latency on the default tier</a></strong> <!-- q:Q713 -->
   Both series are emitted on the classic tier only, so on the scale-set tier that
   every new tenant runs, two Service Level Objectives, an alert, four recording
   rules, and panels in both shipped dashboards have no data. Until it lands,
   expect those panels to read empty.</p>
 </li>
 <li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/arc-parity.md#where-arc-is-actually-ahead">Multi-label runner sets for <code>runs-on</code> arrays</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q726 -->
+<p><strong><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Multi-label runner sets for <code>runs-on</code> arrays</a></strong> <!-- q:Q726 -->
   A runner set takes exactly one label today, so a workflow targeting
   <code>runs-on: [linux, gpu]</code> needs one edit per target to move here from Actions
   Runner Controller (ARC). That is the one gap breaking the otherwise zero-edit
   migration.</p>
 </li>
 <li>
-<p><strong><a href="../operations/tenant-onboarding/">Detect the runner version a tenant's worker image ships</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q715 -->
+<p><strong><a href="../operations/tenant-onboarding/">Detect the runner version a tenant's worker image ships</a></strong> <!-- q:Q715 -->
   The version GAG reports to GitHub is the pinned default, whatever
   <code>spec.workerImage</code> holds, and the too-old warning fires on the classic tier
   only. GitHub raises its enforced minimum on 2026-09-25, so a stale image fails
   with no prior signal.</p>
 </li>
 <li>
-<p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q719 -->
+<p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <!-- q:Q719 -->
   Workers are storage-less by design and nothing validates a <code>ReadWriteMany</code>
   volume mounted into one, so the stance is undocumented rather than decided.
   <code>ReadWriteMany</code> is how jobs share files, and it is what ARC's
@@ -2761,7 +2761,7 @@ backlog rather than typed here, so it cannot outlive the commitment.</p>
   off that mode. Validation and a reference architecture come before any API.</p>
 </li>
 <li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/arc-parity.md#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q727 -->
+<p><strong><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></strong> <!-- q:Q727 -->
   ARC runs these as separate pods on a shared volume under
   <code>containerMode: kubernetes</code>. One worker pod per job means the path here is
   Docker-in-Docker, unprivileged only under Kata. Sequenced behind the
@@ -2783,14 +2783,14 @@ the exception: a firm commitment, waiting only on the release that carries it.</
   not on a date.</p>
 </li>
 <li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/arc-parity.md#where-arc-is-actually-ahead">Validate GHES against a real appliance</a></strong> <!-- q:Q765 -->
+<p><strong><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate GHES against a real appliance</a></strong> <!-- q:Q765 -->
   Both GitHub Enterprise Server (GHES) capabilities ship marked untested against
   real hardware: the appliance-addressing path and the private-CA bundle. They
   are believed correct and unproven, which is not the same thing. Waits on
   access to an appliance.</p>
 </li>
 <li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/q408-untrusted-pr-egress.md">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 -->
+<p><strong><a href="../plan/q408-untrusted-pr-egress/">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 -->
   <a href="../operations/kata-dind-workloads/">Kata workers</a> are validated for <em>trusted</em>
   CI only: the micro-VM bounds the guest kernel, the runner's egress stays
   permissive. Untrusted PRs need an in-cluster pull-through registry mirror plus
@@ -2813,7 +2813,7 @@ the exception: a firm commitment, waiting only on the release that carries it.</
   Distributed session state would enable multi-replica HA if a single controller
   becomes a measured bottleneck.</p>
 </li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-api.md#deferred-out-of-the-critical-path">Bring-your-own proxy TLS certificate</a></strong> <!-- q:Q174 -->
+<li><strong><a href="../plan/v2-api/#deferred-out-of-the-critical-path">Bring-your-own proxy TLS certificate</a></strong> <!-- q:Q174 -->
   Supply the proxy's certificate from your managed PKI or Vault instead of the
   self-signed default the Gateway Manager Controller (GMC) issues.
   (The autoscaler half has shipped:
@@ -2831,7 +2831,7 @@ the exception: a firm commitment, waiting only on the release that carries it.</
   integer, and a gang requirement is a placement predicate rather than a count.
   Waits on a real multi-node workload, and would interact with a batch scheduler
   such as Kueue or Volcano.</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane">A worker cache backend</a></strong> <!-- q:Q215 -->
+<li><strong><a href="../plan/ecosystem-integration-landscape/#j-registry-build-cache--images-runner-workload-plane">A worker cache backend</a></strong> <!-- q:Q215 -->
   <code>actions/cache</code> already works. What is missing is a cache <em>inside</em> the
   cluster, to cut egress cost and restore latency. Docker layer caching has no
   home either way, because workers are storage-less by design. It waits on a
@@ -2840,12 +2840,12 @@ the exception: a firm commitment, waiting only on the release that carries it.</
 <li><strong><a href="../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">A warm worker pool</a></strong> <!-- q:Q268 -->
   An opt-in pool of idle pods per runner set, for teams that still hit
   pod-schedule latency after image pre-pull and caching.</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/milestone-5.md">gVisor validation</a></strong> <!-- q:Q15 --> The <code>runtimeClassName</code> path is
+<li><strong><a href="../plan/milestone-5/">gVisor validation</a></strong> <!-- q:Q15 --> The <code>runtimeClassName</code> path is
   <a href="../operations/kata-dind-workloads/">validated end-to-end with Kata</a>; gVisor is
   documented but unproven on a real cluster. It waits on an operator who wants
   lightweight syscall filtering for compute-only, non-Docker-in-Docker jobs, since
   Kata already covers the DinD case.</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2beta1.md#workload-identity-a-different-config-vault-first">SPIFFE / SPIRE workload identity</a></strong> <!-- q:Q214 -->
+<li><strong><a href="../plan/v2beta1/#workload-identity-a-different-config-vault-first">SPIFFE / SPIRE workload identity</a></strong> <!-- q:Q214 -->
   A keyless, SPIRE-backed signer slots behind the
   <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">existing signer interface</a>
   alongside the deferred cloud-KMS providers, for operators who want no GitHub App

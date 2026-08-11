@@ -2969,7 +2969,7 @@ for). Then, per container (the runner container is named <code>runner</code>):</
 range, not an exact figure, and cross-check against the max-peak gauges.</p>
 <h2 id="step-2--derive-requestslimits">Step 2 — derive <code>requests</code>/<code>limits</code><a class="headerlink" href="#step-2--derive-requestslimits" title="Permanent link">&para;</a></h2>
 <p>Apply the resource-model rules (proven in the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/dogfood-runner-rightsizing.md#resource-model-principles">dogfood right-sizing exercise</a>
+<a href="../../plan/dogfood-runner-rightsizing/#resource-model-principles">dogfood right-sizing exercise</a>
 that this feature automates the measurement half of):</p>
 <table>
 <thead>
@@ -3011,7 +3011,7 @@ the node shape and namespace <code>ResourceQuota</code>
 workers per node — the right call on expensive nodes (GPUs, large VMs) where
 worker count per node is the cost driver. Sizing up (requests ≈ max) buys
 burst headroom so jobs finish faster. The
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/runner-sizing-profiles.md">sizing-profiles plan</a> tracks automating
+<a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a> tracks automating
 this choice; today it is a per-<code>RunnerTemplate</code> decision.</p>
 <h2 id="sizing-profiles-opt-in-auto-apply">Sizing profiles (opt-in auto-apply)<a class="headerlink" href="#sizing-profiles-opt-in-auto-apply" title="Permanent link">&para;</a></h2>
 <p>Instead of copying the recommendation into the <code>RunnerTemplate</code> by hand, a
@@ -3211,7 +3211,7 @@ ten minutes.</p>
 <p><strong>All jobs land in <code>…_jobs_unsampled_total</code></strong> — the workload's jobs finish
 faster than the sampling interval. There is no per-job signal to size from at
 15s resolution; size such a RunnerSet by its node-shape share instead (see the
-<code>NodeShare</code> idea in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/runner-sizing-profiles.md">sizing-profiles plan</a>).</p>
+<code>NodeShare</code> idea in the <a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a>).</p>
 <p><strong><code>Throughput</code> is <code>Active</code> but jobs still run at the old CPU ceiling</strong> — read
 <code>SizingProfileOverridden</code> on the <code>RunnerSet</code>. <code>True/CPULimitInjected</code> means a pod
 the profile built without a CPU limit was admitted with one; the message names

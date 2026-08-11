@@ -2831,7 +2831,7 @@
 <hr />
 <h2 id="recommended-alert-rules">Recommended Alert Rules<a class="headerlink" href="#recommended-alert-rules" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Apply as code.</strong> These rules — and the <a href="#slo-recording-rules">SLO recording rules</a> below — ship as a directly-appliable <code>PrometheusRule</code> at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/deploy/monitoring/prometheusrule.yaml"><code>deploy/monitoring/prometheusrule.yaml</code></a>. <code>kubectl apply</code> it into a namespace your Prometheus selects rules from instead of copying the YAML below by hand (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/deploy/monitoring/README.md"><code>deploy/monitoring/README.md</code></a>). The blocks here are the same rules, reproduced for reference.</p>
+<p><strong>Apply as code.</strong> These rules — and the <a href="#slo-recording-rules">SLO recording rules</a> below — ship as a directly-appliable <code>PrometheusRule</code> at <a href="../../deploy/monitoring/prometheusrule.yaml"><code>deploy/monitoring/prometheusrule.yaml</code></a>. <code>kubectl apply</code> it into a namespace your Prometheus selects rules from instead of copying the YAML below by hand (see <a href="../../deploy/monitoring/README.md"><code>deploy/monitoring/README.md</code></a>). The blocks here are the same rules, reproduced for reference.</p>
 </blockquote>
 <p>The following Prometheus alerting rules map to the SLO targets in <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>. Adjust thresholds to match your environment.</p>
 <blockquote>

@@ -3106,7 +3106,7 @@ pod, or pick a stricter worker profile).</p>
 <h3 id="row-notes-the-why-grounded-in-the-pod-specs">Row notes (the <em>why</em>, grounded in the pod specs)<a class="headerlink" href="#row-notes-the-why-grounded-in-the-pod-specs" title="Permanent link">&para;</a></h3>
 <p><strong><code>runAsNonRoot: true</code></strong> — On <code>baseline</code>/<code>restricted</code> the AGC gap-fills
 pod-level <code>runAsNonRoot: true</code> <em>and</em> a numeric <code>runAsUser: 1001</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a>
+(<a href="../../cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a>
 <code>applySecurityDefaults</code>). The numeric UID matters: kubelet cannot verify
 <code>runAsNonRoot</code> against the runner image's non-numeric <code>USER runner</code>, so without
 it the pod is rejected with <code>CreateContainerConfigError</code> (Q115). The
@@ -3152,7 +3152,7 @@ per-tenant opt-in
 <code>@sha256:</code> digest: the GMC, AGC, and proxy images are digest-pinned and the
 Helm chart <strong>refuses to render</strong> without a digest (<code>validateImageDigest</code>); the
 default worker image is also digest-pinned
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/cmd/agc/names/names.go"><code>names.go</code></a>). The ⚠️ is only because a tenant
+(<a href="../../cmd/agc/names/names.go"><code>names.go</code></a>). The ⚠️ is only because a tenant
 <em>may</em> override <code>spec.workerImage</code> (or a <code>PodTemplate</code> container image) with a
 floating tag — a tenant choice, not a GAG default. A "require digest" policy
 scoped to tenant namespaces is a good way to force tenants to pin too.</p>

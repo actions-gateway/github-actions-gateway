@@ -3524,7 +3524,7 @@ with <code>v1alpha1</code> during the coexistence window — nothing in the ship
 <code>v1alpha1</code> API changes, and tenants migrate on their own schedule via the
 migration tool, a deliberate tool-assisted fan-out (see <a href="#h11-migration-v2-tool-assisted">§H.11</a>).
 Milestone sequencing and the itemized task record are in the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-api.md">v2 API plan</a>.</p>
+<a href="../../plan/v2-api/">v2 API plan</a>.</p>
 </blockquote>
 <hr />
 <h2 id="h1-why-decompose">H.1. Why decompose<a class="headerlink" href="#h1-why-decompose" title="Permanent link">&para;</a></h2>
@@ -3961,7 +3961,7 @@ only that the runner had lost communication (Q473). v1 therefore applies the bou
 where the name is derived, through the shared <code>api/apinames</code> helpers that also own the
 worker-pod budget (Q467). The rule generalises: <strong>budget against the tightest consumer
 of a name (63), not the limit of the object being created (253)</strong> — see
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
+<a href="../../development/kubernetes-conventions/#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
 <h3 id="field-naming-freezes-at-ga--do-the-pass-now">Field naming freezes at GA — do the pass now<a class="headerlink" href="#field-naming-freezes-at-ga--do-the-pass-now" title="Permanent link">&para;</a></h3>
 <p>JSON field names are part of the API contract and become permanent at <code>v2</code>. Do
 the naming pass during M1 while names are still cheap to change under <code>v2alpha1</code>:</p>
@@ -4168,7 +4168,7 @@ is post-hoc — it arrives with the first pod the profile builds, since a pod is
 what it reads. While a profile is <code>Active</code>, <code>SizingDrift</code> reports
 <code>False/SizingProfileActive</code> (the template ask is not what pods run with).</p>
 <p><strong>Why <code>profile</code> bundles two mechanisms deliberately (Q481).</strong> The 1.3
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/api-review.md">pre-release API review</a> asked of <code>sizing.profile</code>
+<a href="../../development/api-review/">pre-release API review</a> asked of <code>sizing.profile</code>
 the question Q470 asked of <code>capacityGate.mode</code> — <em>does this enum answer exactly
 one question?</em> — and mechanically it does not. Two axes run through it: where the
 request comes from (the template, the usage history, a declared node envelope)
@@ -4310,7 +4310,7 @@ correct:</p>
   from more than a second later — inside that window the pair is one loop's own output,
   and resolves open. Measured, not assumed: cluster-autoscaler v1.36.1 emitted
   <code>TriggeredScaleUp</code> and then <code>NotTriggerScaleUp</code> for the same pod 4ms apart
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>).
+  (<a href="../../plan/capacity-aware-intake/#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>).
   The window is what makes that read a property of the autoscaler's behavior rather
   than of its recorder's resolution, which is the difference between the two generations
   in the field.</li>
@@ -4606,16 +4606,16 @@ migration is a tool, not a webhook.</p>
 <p>The v1→v2 fan-out is one-time. Once on <code>v2alpha1</code>, the API graduates <strong>in place</strong>
 <code>v2alpha1 → v2beta1 → v2</code> via a conversion webhook (a thing a conversion webhook
 <em>can</em> do, since the kinds no longer change shape) — see the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a>
+<a href="../../plan/v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a>
 in the implementation plan for the per-hop mechanics. The superseded versions do not
 linger indefinitely: <code>v2alpha1</code> is dropped at <strong><code>v2.0.0</code></strong>, the same release that
 removes <code>v1alpha1</code> and the classic acquisition machinery, announced one release ahead
 in <code>v1.3.0</code>. That coupling and the operator-facing contract are the
 <a href="../../operations/v1alpha1-deprecation/">deprecation and removal notice</a>; the release
-sequencing is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2-ga.md">v2-ga.md</a>.</p>
+sequencing is <a href="../../plan/v2-ga/">v2-ga.md</a>.</p>
 <h2 id="h12-folding-in-the-grandfathered-label-value-alignment-q147">H.12. Folding in the grandfathered label-value alignment (Q147)<a class="headerlink" href="#h12-folding-in-the-grandfathered-label-value-alignment-q147" title="Permanent link">&para;</a></h2>
 <p>Two shipped keys still carry boolean-looking <code>"true"</code> values that predate the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/kubernetes-conventions.md">no-boolean label convention</a> and are
+<a href="../../development/kubernetes-conventions/">no-boolean label convention</a> and are
 grandfathered only because changing them is breaking:</p>
 <ul>
 <li><code>actions-gateway.github.com/tenant: "true"</code> — the managed-tenant marker, matched
@@ -4696,7 +4696,7 @@ impact list, to be turned into plan-doc scope when scheduled:</p>
 <li><strong>Docs:</strong> <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1 CRD schemas</a>,
   <a href="../appendix-e-capacity-planning/">Appendix E (RunnerGroup design)</a>, and the
   operator-facing docs per the
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/doc-update-matrix.md">doc-update matrix</a>.</li>
+  <a href="../../development/doc-update-matrix/">doc-update matrix</a>.</li>
 <li><strong>Migration tool</strong> + its tests.</li>
 <li><strong>Label keys + values (Q147 + group rename):</strong> both the domain <em>prefix</em>
   (<code>actions-gateway.github.com/*</code> → <code>actions-gateway.com/*</code>, plus finalizer names)
@@ -5034,7 +5034,7 @@ only the ones that fix a problem we have today.</p>
   so cloud KMS providers add without another breaking change). Adding it validated the
   shape against a real second consumer, the whole point of fixing the shape before the
   freeze. See <a href="../05-security/#57-workload-identity-the-no-pem-delegation-model">05-security.md §5.7</a>
-  for the trust model. Plan + schema sketch: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/v2beta1.md">v2beta1.md</a>.</p>
+  for the trust model. Plan + schema sketch: <a href="../../plan/v2beta1/">v2beta1.md</a>.</p>
 </li>
 </ul>
 <p><strong>Explicitly NOT now (shape for additive later, do not build):</strong></p>
@@ -5118,7 +5118,7 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.<
    now keyed <strong>once per namespace</strong> instead of per gateway. Co-located gateways
    therefore always share one posture; tenants that need <em>different</em> postures use
    <em>different</em> namespaces — the natural PSA isolation boundary anyway. Land the
-   field-home change no later than <strong>M3a (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md#queue">Q164</a>)</strong>, where
+   field-home change no later than <strong>M3a (<a href="../../STATUS/#queue">Q164</a>)</strong>, where
    <code>ActionsGateway</code> is first reconciled, so M3a reads the profile from its new home
    rather than building per-gateway logic that M3b would rip out. Migration is
    unaffected (one v1 namespace → one gateway → one profile).</p>
@@ -5186,7 +5186,7 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.<
 <p>The migration (<a href="#h11-migration-v2-tool-assisted">§H.11</a>) is the first and only
 place two invariants this design <em>asserts</em> are tested against real v1 data. Both
 are stated confidently above; neither has been exercised. They are acceptance
-criteria the M5 tool (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/STATUS.md#queue">Q165</a>) must meet — and, because they are
+criteria the M5 tool (<a href="../../STATUS/#queue">Q165</a>) must meet — and, because they are
 pure data-shape questions, they can be validated <strong>before</strong> M5 by a mapping over
 representative v1 fixtures, surfacing any v2 schema gap at alpha-rewrite cost
 instead of post-adoption cost. (The <code>v2alpha1</code> types do not exist yet, so this is a

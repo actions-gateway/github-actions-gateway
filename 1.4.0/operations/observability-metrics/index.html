@@ -3461,7 +3461,7 @@ See the
 <p>The per-tenant egress proxy exposes its own metrics on <code>:8443</code> over <strong>mutual
 TLS</strong> — the same posture as the AGC (see <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy
 metrics (mTLS)</a>), and
-restricted by the L-8 NetworkPolicy (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/security.md">security.md L-8</a>).
+restricted by the L-8 NetworkPolicy (see <a href="../../plan/security/">security.md L-8</a>).
 The proxy's <code>:8081</code> port serves only the plaintext health probes (<code>/healthz</code>,
 <code>/readyz</code>), not metrics. Each proxy is a separate scrape target; these metrics
 carry no intrinsic <code>namespace</code> label. The GMC-generated per-tenant proxy

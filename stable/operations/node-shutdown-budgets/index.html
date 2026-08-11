@@ -3429,7 +3429,7 @@ and the server can observe it directly — a local signal where no cluster-wide 
 exists. Because the wait is spent <em>inside</em> the drain budget rather than ahead of
 it, worst case is <code>max(linger, drain)</code> rather than their sum, which is what keeps
 a truncated window spending its seconds on draining rather than idling. See
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/kubernetes-conventions.md#graceful-shutdown-sigterm">kubernetes-conventions</a>
+<a href="../../development/kubernetes-conventions/#graceful-shutdown-sigterm">kubernetes-conventions</a>
 for the pattern and the reasoning.</p>
 <hr />
 <h2 id="checklist-for-sizing-a-budget">Checklist for sizing a budget<a class="headerlink" href="#checklist-for-sizing-a-budget" title="Permanent link">&para;</a></h2>

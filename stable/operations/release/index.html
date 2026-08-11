@@ -3354,7 +3354,7 @@ package + push + sign the chart) → verify → record digests. This is the
 <strong>maintainer</strong> runbook for
 <em>producing</em> a release. Operators <em>consuming</em> a release pin the published digests
 at install time — see <a href="../tenant-onboarding/">tenant-onboarding.md</a> and the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/README.md">chart README</a>.</p>
+<a href="../../charts/actions-gateway/README.md">chart README</a>.</p>
 <h2 id="what-a-release-produces">What a release produces<a class="headerlink" href="#what-a-release-produces" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p>Operators <em>installing</em> a release pin the published digests at install time —
@@ -3390,7 +3390,7 @@ see <a href="../install/#pin-images-by-digest">install.md § Pin images by diges
   registry (<code>helm install … oci://…</code>) with the published image <strong>digests</strong> pinned
   — no <code>git clone</code> of the chart. OCI (over a <code>gh-pages</code> chart repo) is chosen so
   the chart reuses the images' registry, login, and keyless-signing path; Artifact
-  Hub (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations)
+  Hub (see <a href="../../charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations)
   indexes the OCI ref for discoverability.</li>
 <li>The <strong>opt-in v2 CRD chart</strong>, packaged and pushed alongside the main chart to
   <code>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2</code>, with the same
@@ -3423,7 +3423,7 @@ see <a href="../install/#pin-images-by-digest">install.md § Pin images by diges
   so a maintainer's pre-tag curated notes are never clobbered.</li>
 </ul>
 <p>Both the image and chart work are automated by the
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on
+<a href="../../.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on
 the <code>v*</code> tag push (the <code>chart-publish</code> job runs after every image leg succeeds).
 The maintainer's job is to cut the tag and verify the result.</p>
 <blockquote>
@@ -3520,7 +3520,7 @@ substitute for it:</p>
   backports</a>).</li>
 <li><strong>A headline capability landed.</strong> Scope a minor around it — one thing an adopter
   would upgrade <em>for</em>, with the rest of the window riding along. That is the
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/release-1.3.md">1.3</a> pattern: worker right-sizing was the headline, and
+  <a href="../../plan/release-1.3/">1.3</a> pattern: worker right-sizing was the headline, and
   three dozen other changes shipped underneath it.</li>
 <li><strong>User-visible fixes accumulated with no feature.</strong> A patch release. The bar is
   that an operator running the current tag is hitting something already fixed, not
@@ -3535,7 +3535,7 @@ what makes "enough" a real bar rather than a formality — it is also why the
 answer to a thin delta is <em>wait</em>, not <em>cut a small one</em>.</p>
 <p><strong>Once you decide to cut, the question changes.</strong> From that point the report stops
 being the view: write the release plan doc, open it with a
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/maintaining-backlog.md#cutting-a-release-the-scope-ledger">scope ledger</a>,
+<a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope ledger</a>,
 and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.</p>
 <h2 id="release-sequence">Release sequence<a class="headerlink" href="#release-sequence" title="Permanent link">&para;</a></h2>
 <h3 id="1-pre-flight">1. Pre-flight<a class="headerlink" href="#1-pre-flight" title="Permanent link">&para;</a></h3>
@@ -3563,7 +3563,7 @@ recording the verdict then is what keeps that cheap.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
 <p>Apply the checklist in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/api-review.md#step-2--ask-these-of-each-addition">api-review.md</a>
+  <a href="../../development/api-review/#step-2--ask-these-of-each-addition">api-review.md</a>
   to each addition it lists, record the verdict in the release's plan doc, and
   file anything deferred as a Queue row carrying this release's gate label.
   <strong>"Ship as-is, deliberately" is a valid and common outcome</strong> — the point is
@@ -3611,7 +3611,7 @@ recording the verdict then is what keeps that cheap.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scripts/release/operator-caveats-since.sh
 </code></pre></div>
 <p>It needs no bookkeeping to stay current: the
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/doc-update-matrix.md">doc-update matrix</a> already requires an
+  <a href="../../development/doc-update-matrix/">doc-update matrix</a> already requires an
   operator-visible change to land in <code>docs/operations/</code>, so the diff of those
   pages since the last tag already <em>is</em> the list — this only makes it scannable
   (added sections, bold-lead bullets, anything marked <code>BREAKING</code>) instead of a
@@ -3640,10 +3640,10 @@ recording the verdict then is what keeps that cheap.</p>
   <em>Exploring</em>. A 2026-07-25 audit found six of seven near-term items already
   shipped.</li>
 <li><strong>Optional: refresh the docs-site announce bar's highlight.</strong> The banner in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip
+  <a href="../../overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip
   at the top of every page on the site. Its <strong>version needs no action</strong>: it is
   derived from the git tags at build time, so a stable tag names itself
-  automatically (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/website.md#the-announce-bar">website.md § The announce bar</a>).
+  automatically (<a href="../../development/website/#the-announce-bar">website.md § The announce bar</a>).
   What you may want to update is the one-line highlight after it, and the
   <code>highlight_for</code> version that guards it. Leave both alone and the banner reads
   <em>"vX.Y.Z is here. Read the release notes."</em>, which is correct but plainer;
@@ -3664,7 +3664,7 @@ recording the verdict then is what keeps that cheap.</p>
   newer minor, since the banner advertises the newest release by design.</p>
 <p>(A <code>docs_ref</code> seed of an already-cut release pins <code>overrides/</code> to the current
   checkout, so re-seeding refreshes the highlight on past tags too. See
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/website.md#seeding-already-released-versions">website.md § Seeding</a>.)</p>
+  <a href="../../development/website/#seeding-already-released-versions">website.md § Seeding</a>.)</p>
 <h4 id="validate-the-release-candidate-on-dogfood">Validate the release candidate on dogfood<a class="headerlink" href="#validate-the-release-candidate-on-dogfood" title="Permanent link">&para;</a></h4>
 <p>Before promoting a release-candidate line to a <strong>stable</strong> <code>vX.Y.Z</code> tag, validate
 the <em>latest RC</em> functionally on the dogfood cluster. <code>main</code>-green covers
@@ -3854,7 +3854,7 @@ if a leg needs re-running by hand. From a detached checkout of the RC tag
    (a timed-out rollout wait here is fine), then <code>scripts/dogfood/start.sh</code>. Run the
    one-time <code>scripts/dogfood/e2e-setup.sh</code> first if the e2e node pool / GitHub App
    Secret aren't set up yet. The cluster, context pinning, and prod-guard cautions are
-   in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/gke-dogfood.md">gke-dogfood.md</a>.</li>
+   in <a href="../../plan/gke-dogfood/">gke-dogfood.md</a>.</li>
 <li><strong>Run the e2e job matrix on GAG runners.</strong> This is two moves, not one.
    <code>scripts/dogfood/e2e-start.sh</code> spins up the on-demand e2e tenant's AGC — it
    does <strong>not</strong> start a run and does <strong>not</strong> touch routing. Trigger the matrix by
@@ -3956,14 +3956,14 @@ tag.</p>
 <p>A <code>workflow_dispatch</code> run with a <code>tag</code> input publishes the same way without a
 git tag — use it to dry-run the pipeline against a throwaway <code>vX.Y.Z-rc1</code> tag.</p>
 <p><strong>The docs site publishes this release too (Q238).</strong> A <strong>stable</strong> <code>vX.Y.Z</code> tag
-also triggers <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/pages.yml"><code>pages.yml</code></a>, which deploys the
+also triggers <a href="../../.github/workflows/pages.yml"><code>pages.yml</code></a>, which deploys the
 release's docs as a new version on <a href="https://actions-gateway.com">actions-gateway.com</a>
 and moves the <code>stable</code> alias + the site's default root redirect to it — so the
 public docs default to this release, with the unreleased <code>main</code> docs kept behind
 an opt-in <code>dev</code> version. Prerelease tags (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) do
 <strong>not</strong> deploy the site. The versioned-docs model, and the one-time <code>mike</code>
 seeding of releases cut before it landed, are documented in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/website.md#versioned-deploy-mike">website.md § Versioned deploy</a>.</p>
+<a href="../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>.</p>
 </blockquote>
 <h3 id="3-verify-the-publish">3. Verify the publish<a class="headerlink" href="#3-verify-the-publish" title="Permanent link">&para;</a></h3>
 <p>Confirm every image <strong>and the chart</strong> was signed by <em>this</em> workflow before
@@ -3975,7 +3975,7 @@ into <code>.build/</code>):</p>
 <blockquote>
 <p><strong>A broken or missing chart publish now reddens PR CI, not just operators.</strong>
 CI's released-chart upgrade gate
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/testing.md#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>)
+(<a href="../../development/testing/#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>)
 discovers the highest stable <code>vX.Y.Z</code> tag on the repo and <code>helm pull</code>s that
 chart version from GHCR on every e2e run. Pushing a stable tag whose
 <code>chart-publish</code> job failed therefore fails e2e on <strong>every subsequent PR</strong>
@@ -4086,7 +4086,7 @@ published body reproducible from a commit.</p>
 <p>These files are excluded from the docs site on <strong>every</strong> version, dev included:
 they are written for github.com's renderer, which the site is not. The exclusion
 is spelled out in four places that must agree — <code>mkdocs.yml</code>, two <code>env:</code> blocks
-and one <code>export</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/workflows/pages.yml"><code>pages.yml</code></a>, and
+and one <code>export</code> in <a href="../../.github/workflows/pages.yml"><code>pages.yml</code></a>, and
 <code>scripts/docs/docs-preview.sh</code>.</p>
 <p><strong>Past bodies are retrievable, so the previous release is your template:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>gh<span class="w"> </span>release<span class="w"> </span>view<span class="w"> </span>vX.Y.Z<span class="w"> </span>--json<span class="w"> </span>body<span class="w"> </span>--jq<span class="w"> </span>.body
@@ -4499,7 +4499,7 @@ needs a hand-flip. The remaining items below are one-time setup or guardrails, n
 per-release steps:</p>
 <ul>
 <li><strong>Prerelease annotation — derived, not hand-flipped (Q293).</strong>
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> carries
+  <a href="../../charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> carries
   <code>artifacthub.io/prerelease</code>, but its committed value is a <strong>dev placeholder</strong>:
   <code>publish.yml</code> overrides it with <code>yq</code> before <code>helm package</code>, setting <code>"true"</code> for
   a <code>0.x</code> or <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> tag and <code>"false"</code> for a stable <code>≥1.0.0</code> tag
@@ -4507,13 +4507,13 @@ per-release steps:</p>
   to land before or after a cut. The v2 CRD chart is stamped the same way.</li>
 <li><strong>Artifact Hub listing.</strong> Discoverability metadata (description, keywords,
   prerelease flag) ships in the chart's own annotations. Ownership verification
-  uses <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/artifacthub-repo.yml"><code>artifacthub-repo.yml</code></a> at the repo root —
+  uses <a href="../../artifacthub-repo.yml"><code>artifacthub-repo.yml</code></a> at the repo root —
   register the OCI repository in the Artifact Hub control panel, copy the
   assigned <code>repositoryID</code> into that file, and push it to the registry as the
   repository-metadata OCI artifact (the file's header documents the exact
   steps). This is a one-time control-panel action, not part of <code>publish.yml</code>.</li>
 <li><strong>Empty <code>values.yaml</code> digests.</strong> <strong>Do not</strong> commit real <code>sha256:…</code> digests into
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/charts/actions-gateway/values.yaml"><code>values.yaml</code></a>. The empty <code>digest</code>
+  <a href="../../charts/actions-gateway/values.yaml"><code>values.yaml</code></a>. The empty <code>digest</code>
   fields are the <em>secure default</em>: an unconfigured install fails closed (the GMC
   rejects floating AGC/proxy tags at startup) until the operator pins a real
   digest at install time. Baking a digest into the shipped chart would defeat
@@ -4535,7 +4535,7 @@ reader which version to install — <code>README.md</code>, <code>docs/index.md<
 it reports (charts drop the leading <code>v</code>; <code>gitops.md</code> carries the Argo
 <code>targetRevision</code> and both Flux forms) and re-run until it is green.</p>
 <p>Two things it deliberately leaves alone, both documented in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/scripts/docs/check-release-pins.sh"><code>scripts/docs/check-release-pins.sh</code></a>:
+<a href="../../scripts/docs/check-release-pins.sh"><code>scripts/docs/check-release-pins.sh</code></a>:
 a line beginning <code>Measured on kind</code>, whose version records what was actually
 installed for a measurement — bumping it would falsify the record — and
 <code>v2.0.0</code>, the announced <code>v1alpha1</code>/<code>v2alpha1</code> removal release. A page that
@@ -4588,7 +4588,7 @@ a commit that carries the harness fixes you want the line to keep. Cutting it fr
 an older RC's commit to make the tag byte-match the validated artifact is the trap
 — it strands every gate fix found <em>during</em> that release's validation, which is
 exactly when gate fixes tend to be found. <code>v1.3.0</code> is the worked example: rc.5's
-validation produced two harness fixes (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/release-1.3.md#Q627">Q627</a> and the e2e watch
+validation produced two harness fixes (<a href="../../plan/release-1.3/#Q627">Q627</a> and the e2e watch
 deadline), and a <code>release-1.3</code> branch cut from rc.5's commit would reproduce both
 on every future <code>v1.3.x</code>.</p>
 <p>Validating an RC whose product code matches <code>main</code> is unaffected: the images and
@@ -4601,7 +4601,7 @@ content — no unreleased features. And the site's <code>stable</code> alias + d
 redirect move <strong>only to the highest released version</strong>, so a backport patch
 released <em>after</em> a newer minor updates its own version's docs without demoting the
 site (see
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/website.md#versioned-deploy-mike">website.md § Versioned deploy</a>).
+<a href="../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>).
 No docs-specific branch is ever required beyond what the release itself needs.</p>
 <h2 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h2>
 <p>A release is just a tag and a set of immutable, digest-addressed images — nothing
@@ -4621,8 +4621,8 @@ same <code>cmd/worker</code> wrapper that feeds the job payload into <code>Runne
   the <strong>unmodified upstream <code>ghcr.io/actions/actions-runner</code></strong> (or any tenant
   <code>workerImage</code>). This is what makes <code>DefaultWorkerImage</code> (still the digest-pinned
   upstream <code>actions-runner</code>, runner version locked to <code>agent.version</code> — see
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/building.md#runner-version-pin-lockstep">building.md</a>) actually
-  run jobs (Q235, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/plan/archive/q235-worker-wrapper-injection.md">plan</a>).</li>
+  <a href="../../development/building/#runner-version-pin-lockstep">building.md</a>) actually
+  run jobs (Q235, <a href="../../plan/archive/q235-worker-wrapper-injection/">plan</a>).</li>
 <li><strong><code>ghcr.io/actions-gateway/worker</code></strong> — the full upstream <code>actions-runner</code> + the
   wrapper as <code>ENTRYPOINT</code> (~520 MB). Kept as an optional batteries-included image;
   unnecessary once injection is enabled, since the runner image is the upstream one
@@ -4699,7 +4699,7 @@ verify-release</code> uses the same version that signed), and <code>syft</code> 
 <code>syft-version</code> input on <code>anchore/sbom-action/download-syft</code> (the action is
 SHA-pinned, but syft itself is a runtime download).</p>
 <p><strong>Bumping a pinned action.</strong> Dependabot's <code>github-actions</code> ecosystem
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that
+(<a href="../../.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that
 bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and
 merge those like any dependency PR. To pin or bump by hand, resolve the tag to its
 commit SHA and keep the comment in sync:</p>
@@ -4730,7 +4730,7 @@ enforce that a signature can only ever be a tag signature:</p>
 <li><strong><code>make verify-release</code> only accepts a tags identity.</strong> The
   <code>--certificate-identity-regexp</code> is anchored to <code>…/publish\.yml@refs/tags/v.*$</code>
   (sourced from <code>release_identity_regexp</code> in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted
+  <a href="../../scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted
   from <code>refs/heads/…</code> is rejected even if one were somehow produced. The
   <code>scripts/release/verify-release-test.sh</code> assertions (run by <code>make check</code> and CI) guard
   that the regexp stays tags-only.</li>
@@ -4753,7 +4753,7 @@ that verifies them</em>.</p>
   which re-fetches every module verified against <code>go.sum</code> — and fails on any diff
   against the committed trees. A Dependabot <code>go.mod</code> bump legitimately fails this
   gate until a follow-up vendor sync lands; that is the intended signal (see
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.4.0/docs/development/go-workspaces.md#changing-dependencies">go-workspaces.md § Changing dependencies</a>).</li>
+  <a href="../../development/go-workspaces/#changing-dependencies">go-workspaces.md § Changing dependencies</a>).</li>
 <li><strong>The cosign verify binary is checksummed.</strong> GitHub release assets are mutable
   for an existing tag, so a raw download of the release verifier can't be trusted
   on its own. The publish pipeline obtains cosign via the SHA-pinned

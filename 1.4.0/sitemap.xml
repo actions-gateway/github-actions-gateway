@@ -2,250 +2,250 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://actions-gateway.com/1.4.0/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/alternatives/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/demo/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/features/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/getting-started/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/roadmap/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/why-gag/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/01-executive-summary/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/02-architecture/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/03-api-contracts/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/04-operational-flows/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/05-security/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/06-implementation-phases/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/07-test-plan/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/08-glossary/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/appendix-a-capacity-slos/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/appendix-b-worker-isolation/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/appendix-c-ai-implementation/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/appendix-d-alternatives-considered/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/appendix-e-capacity-planning/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/appendix-f-cost-model/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/appendix-g-future-enhancements/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/appendix-h-v2-api-decomposition/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/github-protocol-dependencies/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/design/network-architecture/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/admission-policies/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/air-gapped-install/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/backup-restore/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/cost-attribution/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/gitops/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/in-runner-image-builds/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/install/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/kata-ci-spike-runbook/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/kata-dind-workloads/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/migration-from-arc/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/migration-v1-to-v2/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/node-shutdown-budgets/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/observability-alerting/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/observability-dashboards/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/observability-logging/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/observability-metrics-access/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/observability-metrics/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/observability/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/p2p-image-distribution/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/personas/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/release/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/resourcequota-sizing/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/runbook/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/runner-template-library/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/security-operations/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/service-mesh-coexistence/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/tenant-onboarding/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/troubleshooting/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/upgrade/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/v1alpha1-deprecation/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/velero-backup-restore/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/worker-rightsizing/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/operations/examples/policies/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/reference/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/1.4.0/reference/api/</loc>
-         <lastmod>2026-08-10</lastmod>
+         <lastmod>2026-08-11</lastmod>
     </url>
 </urlset>
