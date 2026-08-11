@@ -606,9 +606,6 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		"phase", outcome.Phase, "reason", outcome.Reason, "preempted", outcome.Preempted,
 		"externallyDeleted", outcome.ExternallyDeleted,
 		"deletedBeforeStart", outcome.DeletedBeforeStart, "duration", duration)
-	if p.Metrics != nil {
-		p.Metrics.JobDuration.WithLabelValues(key.Namespace, key.Name).Observe(duration.Seconds())
-	}
 
 	// 7. Disruption recovery. Started here because this goroutine owns the pod and
 	// still holds the payload's identity; the scale-set tier, which has neither,

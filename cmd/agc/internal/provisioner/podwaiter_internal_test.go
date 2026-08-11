@@ -3,6 +3,7 @@ package provisioner
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/utils/ptr"
@@ -61,17 +63,30 @@ func newTestWaiter(objs ...client.Object) *InformerPodWaiter {
 		WithObjects(objs...).
 		Build()
 	return &InformerPodWaiter{
-		cache:   nil,
-		reader:  reader,
-		log:     slog.Default(),
-		waiters: make(map[string]map[chan podResult]struct{}),
+		cache:    nil,
+		reader:   reader,
+		log:      slog.Default(),
+		waiters:  make(map[string]map[chan podResult]struct{}),
+		observed: make(map[types.UID]struct{}),
 	}
 }
 
 func pod(ns, name string, phase corev1.PodPhase, reason string) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
+		ObjectMeta: workerMeta(ns, name),
 		Status:     corev1.PodStatus{Phase: phase, Reason: reason},
+	}
+}
+
+// workerMeta is the identity a worker pod carries in production and that the
+// histogram path reads: a UID, which the waiter dedupes observations by, and the
+// owner-identity label the runner_group series label comes from.
+func workerMeta(ns, name string) metav1.ObjectMeta {
+	return metav1.ObjectMeta{
+		Namespace: ns,
+		Name:      name,
+		UID:       types.UID(ns + "/" + name),
+		Labels:    map[string]string{LabelRunnerSet: "set-a"},
 	}
 }
 
@@ -111,7 +126,7 @@ func TestInformerPodWaiter_EventDrivenSucceeded(t *testing.T) {
 
 	// Let the goroutine register before the event fires.
 	waitForRegistration(t, w, "ns/p")
-	w.onPodEvent(pod("ns", "p", corev1.PodSucceeded, ""))
+	w.onPodEvent(pod("ns", "p", corev1.PodSucceeded, ""), false)
 
 	res := mustResolve(t, done)
 	if res.outcome.Phase != corev1.PodSucceeded {
@@ -129,7 +144,7 @@ func TestInformerPodWaiter_EventDrivenEviction(t *testing.T) {
 	}()
 
 	waitForRegistration(t, w, "ns/p")
-	w.onPodEvent(pod("ns", "p", corev1.PodFailed, "Evicted"))
+	w.onPodEvent(pod("ns", "p", corev1.PodFailed, "Evicted"), false)
 
 	res := mustResolve(t, done)
 	if res.outcome.Phase != corev1.PodFailed || res.outcome.Reason != "Evicted" {
@@ -296,7 +311,7 @@ func TestInformerPodWaiter_TerminalPhaseCarriesPreemptionMarker(t *testing.T) {
 	}()
 
 	waitForRegistration(t, w, "ns/p")
-	w.onPodEvent(preemptedPod("ns", "p", corev1.PodSucceeded))
+	w.onPodEvent(preemptedPod("ns", "p", corev1.PodSucceeded), false)
 
 	res := mustResolve(t, done)
 	if res.outcome.Phase != corev1.PodSucceeded {
@@ -365,7 +380,7 @@ func TestInformerPodWaiter_TerminalPhaseCarriesDeletionMark(t *testing.T) {
 	}()
 
 	waitForRegistration(t, w, "ns/p")
-	w.onPodEvent(drainedPod("ns", "p"))
+	w.onPodEvent(drainedPod("ns", "p"), false)
 
 	res := mustResolve(t, done)
 	if res.outcome.Phase != corev1.PodFailed || res.outcome.Reason != "" {
@@ -391,7 +406,7 @@ func TestInformerPodWaiter_AGCOwnDeletionIsNotExternal(t *testing.T) {
 	waitForRegistration(t, w, "ns/p")
 	reaped := drainedPod("ns", "p")
 	reaped.Annotations = map[string]string{AnnotationDeletionReason: "orphaned_running"}
-	w.onPodEvent(reaped)
+	w.onPodEvent(reaped, false)
 
 	if res := mustResolve(t, done); res.outcome.ExternallyDeleted {
 		t.Fatal("a reaper-deleted worker was reported as externally deleted; the reaper would become a re-run trigger")
@@ -413,7 +428,7 @@ func TestInformerPodWaiter_NeverRanDeletionIsNotExternal(t *testing.T) {
 	}()
 
 	waitForRegistration(t, w, "ns/p")
-	w.onPodEvent(deletingPod("ns", "p", corev1.PodFailed))
+	w.onPodEvent(deletingPod("ns", "p", corev1.PodFailed), false)
 
 	if res := mustResolve(t, done); res.outcome.ExternallyDeleted {
 		t.Fatal("a deleted worker with no container exit was reported as externally deleted; " +
@@ -442,7 +457,7 @@ func TestInformerPodWaiter_CleanupDeleteOfFailedPodIsNotExternal(t *testing.T) {
 			FinishedAt: metav1.NewTime(deletionRequestedAt(cleaned).Add(-5 * time.Minute)),
 		}},
 	}}
-	w.onPodEvent(cleaned)
+	w.onPodEvent(cleaned, false)
 
 	if res := mustResolve(t, done); res.outcome.ExternallyDeleted {
 		t.Fatal("a cleanup delete of an already-failed pod was reported as externally deleted; " +
@@ -492,7 +507,7 @@ func TestInformerPodWaiter_NotFoundThenTerminal(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 	}
 
-	w.onPodEvent(pod("ns", "p", corev1.PodSucceeded, ""))
+	w.onPodEvent(pod("ns", "p", corev1.PodSucceeded, ""), false)
 	res := mustResolve(t, done)
 	if res.outcome.Phase != corev1.PodSucceeded {
 		t.Fatalf("got phase=%q, want Succeeded", res.outcome.Phase)
@@ -541,7 +556,7 @@ func TestInformerPodWaiter_NonTerminalEventIgnored(t *testing.T) {
 	}()
 
 	waitForRegistration(t, w, "ns/p")
-	w.onPodEvent(pod("ns", "p", corev1.PodRunning, "")) // still not terminal
+	w.onPodEvent(pod("ns", "p", corev1.PodRunning, ""), false) // still not terminal
 
 	select {
 	case res := <-done:
@@ -549,7 +564,7 @@ func TestInformerPodWaiter_NonTerminalEventIgnored(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 	}
 
-	w.onPodEvent(pod("ns", "p", corev1.PodFailed, ""))
+	w.onPodEvent(pod("ns", "p", corev1.PodFailed, ""), false)
 	if res := mustResolve(t, done); res.outcome.Phase != corev1.PodFailed {
 		t.Fatalf("got phase=%q, want Failed", res.outcome.Phase)
 	}
@@ -587,8 +602,8 @@ func TestInformerPodWaiter_MultipleWaiters(t *testing.T) {
 	}
 
 	// An unrelated pod's event must not wake them.
-	w.onPodEvent(pod("ns", "other", corev1.PodSucceeded, ""))
-	w.onPodEvent(pod("ns", "p", corev1.PodSucceeded, ""))
+	w.onPodEvent(pod("ns", "other", corev1.PodSucceeded, ""), false)
+	w.onPodEvent(pod("ns", "p", corev1.PodSucceeded, ""), false)
 
 	wg.Wait()
 	close(results)
@@ -641,6 +656,48 @@ func TestInformerPodWaiter_DebugLogsOnCancel(t *testing.T) {
 	}
 }
 
+// podRunFor is how long startedPod's container runs once started, so a pod's
+// lifetime (creation → FinishedAt) is startedAfter + podRunFor.
+const podRunFor = 42 * time.Second
+
+// The duration histogram under test. One finite bucket, wide enough to hold
+// every lifetime these tests observe, so the rendered exposition expectHistogram
+// compares against stays short — the assertions are about the observations, not
+// the bucketing.
+const (
+	durationMetric = "test_job_duration_seconds"
+	durationHelp   = "Worker pod lifetime."
+	durationBucket = 1000
+)
+
+// newDurationHistogram returns an unregistered histogram with the production
+// label set, for asserting worker-pod lifetime observations in isolation.
+func newDurationHistogram() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    durationMetric,
+		Help:    durationHelp,
+		Buckets: []float64{durationBucket},
+	}, []string{"namespace", "runner_group"})
+}
+
+// expectDuration asserts h holds exactly one series, for ns/owner, carrying
+// count observations totalling sum. It compares a rendered exposition because
+// that is how the rest of the repo asserts on metrics.
+func expectDuration(t *testing.T, h *prometheus.HistogramVec, ns, owner string, count int, sum float64) {
+	t.Helper()
+	labels := fmt.Sprintf("namespace=%q,runner_group=%q", ns, owner)
+	want := fmt.Sprintf(`# HELP %[1]s %[2]s
+# TYPE %[1]s histogram
+%[1]s_bucket{%[3]s,le="%[4]d"} %[5]d
+%[1]s_bucket{%[3]s,le="+Inf"} %[5]d
+%[1]s_sum{%[3]s} %[6]v
+%[1]s_count{%[3]s} %[5]d
+`, durationMetric, durationHelp, labels, durationBucket, count, sum)
+	if err := testutil.CollectAndCompare(h, strings.NewReader(want)); err != nil {
+		t.Fatalf("duration histogram: %v", err)
+	}
+}
+
 // newLatencyHistogram returns an unregistered histogram with the production
 // label set, for asserting pod-creation-latency observations in isolation.
 func newLatencyHistogram() *prometheus.HistogramVec {
@@ -651,8 +708,9 @@ func newLatencyHistogram() *prometheus.HistogramVec {
 }
 
 // startedPod builds a pod whose runner container started startedAfter the pod
-// was created, in the given phase. A terminal phase carries Terminated.StartedAt;
-// a Running phase carries Running.StartedAt.
+// was created, in the given phase. A terminal phase carries Terminated.StartedAt
+// and a FinishedAt ranAfter the start, so the pod also has a lifetime; a Running
+// phase carries Running.StartedAt.
 func startedPod(ns, name string, phase corev1.PodPhase, startedAfter time.Duration) *corev1.Pod {
 	created := metav1.Now()
 	startedAt := metav1.NewTime(created.Add(startedAfter))
@@ -660,10 +718,15 @@ func startedPod(ns, name string, phase corev1.PodPhase, startedAfter time.Durati
 	if phase == corev1.PodRunning {
 		state.Running = &corev1.ContainerStateRunning{StartedAt: startedAt}
 	} else {
-		state.Terminated = &corev1.ContainerStateTerminated{StartedAt: startedAt}
+		state.Terminated = &corev1.ContainerStateTerminated{
+			StartedAt:  startedAt,
+			FinishedAt: metav1.NewTime(startedAt.Add(podRunFor)),
+		}
 	}
+	meta := workerMeta(ns, name)
+	meta.CreationTimestamp = created
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, CreationTimestamp: created},
+		ObjectMeta: meta,
 		Status: corev1.PodStatus{
 			Phase:             phase,
 			ContainerStatuses: []corev1.ContainerStatus{{Name: "runner", State: state}},
@@ -685,11 +748,11 @@ func TestInformerPodWaiter_PodCreationLatencyObservedOnce(t *testing.T) {
 
 	waitForRegistration(t, w, "ns/p")
 	terminal := startedPod("ns", "p", corev1.PodSucceeded, 3*time.Second)
-	w.onPodEvent(terminal)
+	w.onPodEvent(terminal, false)
 	mustResolve(t, done)
 
 	// A second post-terminal event must not double-count (no waiters remain).
-	w.onPodEvent(terminal)
+	w.onPodEvent(terminal, false)
 
 	if got := testutil.CollectAndCount(w.PodCreationLatency); got != 1 {
 		t.Fatalf("got %d latency observations, want exactly 1", got)
@@ -709,11 +772,136 @@ func TestInformerPodWaiter_PodCreationLatencySkippedWhenNeverStarted(t *testing.
 	}()
 
 	waitForRegistration(t, w, "ns/p")
-	w.onPodEvent(pod("ns", "p", corev1.PodFailed, "")) // no container ever started
+	w.onPodEvent(pod("ns", "p", corev1.PodFailed, ""), false) // no container ever started
 	mustResolve(t, done)
 
 	if got := testutil.CollectAndCount(w.PodCreationLatency); got != 0 {
 		t.Fatalf("got %d latency observations, want 0 for a never-started pod", got)
+	}
+}
+
+// The scale-set tier provisions fire-and-forget and registers no waiter, so a
+// scale-set worker pod resolves with an empty waiter set. Both histograms must
+// still be observed for it: hanging them off the waiter set is exactly what left
+// the tier every new tenant runs emitting both series empty (Q713).
+func TestInformerPodWaiter_ObservesScaleSetPodWithNoWaiter(t *testing.T) {
+	w := newTestWaiter()
+	w.PodCreationLatency = newLatencyHistogram()
+	w.JobDuration = newDurationHistogram()
+
+	p := startedPod("ns", "p", corev1.PodSucceeded, 3*time.Second)
+	p.Labels[LabelAcquisitionProtocol] = AcquisitionProtocolScaleSet
+	w.onPodEvent(p, false)
+
+	if got := testutil.CollectAndCount(w.PodCreationLatency); got != 1 {
+		t.Fatalf("got %d latency series for a scale-set pod, want 1", got)
+	}
+	// Creation → last container finish, which is what makes the span the same one
+	// the classic tier reports.
+	expectDuration(t, w.JobDuration, "ns", "set-a", 1, (3*time.Second + podRunFor).Seconds())
+}
+
+// The runner_group label must come off the pod's own owner label, since a
+// fire-and-forget scale-set worker has no Target left to read it from.
+func TestInformerPodWaiter_DurationCarriesOwnerFromPodLabel(t *testing.T) {
+	w := newTestWaiter()
+	w.JobDuration = newDurationHistogram()
+
+	p := startedPod("ns", "p", corev1.PodSucceeded, time.Second)
+	p.Labels = map[string]string{LabelRunnerGroup: "group-v1"}
+	w.onPodEvent(p, false)
+
+	expectDuration(t, w.JobDuration, "ns", "group-v1", 1, (time.Second + podRunFor).Seconds())
+}
+
+// The tenant namespace holds the AGC's own pods too. A pod carrying no owner
+// label is not a worker pod and must contribute to neither series.
+func TestInformerPodWaiter_SkipsNonWorkerPod(t *testing.T) {
+	w := newTestWaiter()
+	w.PodCreationLatency = newLatencyHistogram()
+	w.JobDuration = newDurationHistogram()
+
+	p := startedPod("ns", "p", corev1.PodSucceeded, time.Second)
+	p.Labels = nil
+	w.onPodEvent(p, false)
+
+	if got := testutil.CollectAndCount(w.JobDuration); got != 0 {
+		t.Fatalf("got %d duration series for a non-worker pod, want 0", got)
+	}
+	if got := testutil.CollectAndCount(w.PodCreationLatency); got != 0 {
+		t.Fatalf("got %d latency series for a non-worker pod, want 0", got)
+	}
+}
+
+// The informer delivers many post-terminal update events for one pod. Only the
+// first may be observed, or a long-lived terminal pod inflates both histograms.
+func TestInformerPodWaiter_DurationObservedOncePerPod(t *testing.T) {
+	w := newTestWaiter()
+	w.JobDuration = newDurationHistogram()
+
+	p := startedPod("ns", "p", corev1.PodSucceeded, time.Second)
+	w.onPodEvent(p, false)
+	w.onPodEvent(p, false)
+	w.onPodEvent(p, false)
+
+	expectDuration(t, w.JobDuration, "ns", "set-a", 1, (time.Second + podRunFor).Seconds())
+}
+
+// A pod already terminal when the informer lists it finished before this process
+// started, and was observed by the AGC that provisioned it. Re-observing it would
+// spike both histograms at every restart with one duplicate per terminal worker
+// pod still inside completedPodTTL.
+func TestInformerPodWaiter_InitialListTerminalPodNotObserved(t *testing.T) {
+	w := newTestWaiter()
+	w.PodCreationLatency = newLatencyHistogram()
+	w.JobDuration = newDurationHistogram()
+
+	p := startedPod("ns", "p", corev1.PodSucceeded, time.Second)
+	w.onPodEvent(p, true)
+
+	if got := testutil.CollectAndCount(w.JobDuration); got != 0 {
+		t.Fatalf("got %d duration series from the initial list, want 0", got)
+	}
+	if got := testutil.CollectAndCount(w.PodCreationLatency); got != 0 {
+		t.Fatalf("got %d latency series from the initial list, want 0", got)
+	}
+
+	// And the claim it took must hold: a later update for the same pod is the
+	// same completion, not a new one.
+	w.onPodEvent(p, false)
+	if got := testutil.CollectAndCount(w.JobDuration); got != 0 {
+		t.Fatalf("got %d duration series after a post-list update, want 0", got)
+	}
+}
+
+// A worker deleted mid-run consumed the node time it ran for, so it is billed for
+// it. Such a pod publishes no container FinishedAt, so its lifetime ends at the
+// deletion request instead.
+func TestInformerPodWaiter_DurationOfPodDeletedMidRun(t *testing.T) {
+	w := newTestWaiter()
+	w.JobDuration = newDurationHistogram()
+
+	p := startedPod("ns", "p", corev1.PodRunning, 2*time.Second)
+	deletedAt := metav1.NewTime(p.CreationTimestamp.Add(90 * time.Second))
+	p.DeletionTimestamp = &deletedAt
+	w.onPodDelete(p)
+
+	// Creation → deletion request, since such a pod publishes no FinishedAt.
+	expectDuration(t, w.JobDuration, "ns", "set-a", 1, 90)
+}
+
+// A pod removed before any container started ran no job and occupied no node
+// time, so it must not enter the duration histogram at all.
+func TestInformerPodWaiter_NoDurationWhenPodNeverStarted(t *testing.T) {
+	w := newTestWaiter()
+	w.JobDuration = newDurationHistogram()
+
+	p := pod("ns", "p", corev1.PodFailed, "")
+	p.CreationTimestamp = metav1.Now()
+	w.onPodEvent(p, false)
+
+	if got := testutil.CollectAndCount(w.JobDuration); got != 0 {
+		t.Fatalf("got %d duration series for a never-started pod, want 0", got)
 	}
 }
 

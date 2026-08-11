@@ -6,16 +6,11 @@ Part of the [Observability](observability.md) guide.
 The metrics referenced below are catalogued in the [Metrics reference](observability-metrics.md); to scrape them, see [Accessing metrics](observability-metrics-access.md).
 For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
 
-> **The duration and latency series are classic-only, so the rules built on them are silent on the default tier.** `actions_gateway_pod_creation_latency_seconds` and `actions_gateway_job_duration_seconds` are observed only on the classic acquisition path.
-> On a `ScaleSet` set, the default since P5, both are absent, so `ActionsGatewayPodCreationLatencyP99`, `ActionsGatewayPodCreationLatencyP95` and the four `actions_gateway:*` recording rules below never fire and their panels read blank.
-> Treat that silence as a missing signal rather than a healthy one.
-> Tracked by Q713; scope is catalogued in the [Metrics reference](observability-metrics.md).
-
 ## Symptom → Metric Mapping
 
 | Symptom | Metric(s) to check | Notes |
 | --- | --- | --- |
-| Jobs are slow to start | `pod_creation_latency_seconds` p95/p99 | SLO: p95 ≤ 15s, p99 ≤ 60s. **Classic acquisition only** (Q713), so on a `ScaleSet` set this row has no series to check |
+| Jobs are slow to start | `pod_creation_latency_seconds` p95/p99 | SLO: p95 ≤ 15s, p99 ≤ 60s. Emitted on both acquisition tiers; observed when a pod's lifetime ends, so a burst of long jobs delays the signal rather than hiding it |
 | Jobs are randomly cancelled | `renew_job_errors_total` | Each sustained error risks a job cancellation |
 | Jobs are not being acquired | `active_sessions` (should be ≥ 1 per RunnerGroup), `job_acquisition_errors_total` | Zero sessions = no polling |
 | Jobs are queuing but not starting | `active_sessions` (OK) vs `jobs_acquired_total` not incrementing | Check `RateLimited` condition |

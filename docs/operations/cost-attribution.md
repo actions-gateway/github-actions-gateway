@@ -181,6 +181,7 @@ This live data is the input to the **showback vs chargeback** choice in [Appendi
   The `app.kubernetes.io/instance` breakdown lets you bill by runner shape if a tenant runs both cheap CPU and expensive GPU groups.
 
 Cross-check the allocation against GAG's own metrics for a sanity test: `actions_gateway_job_duration_seconds` (per `namespace`, `runner_group`) × the runner shape's GPU/CPU node fraction should land in the same ballpark as the `runner`-component allocation for that tenant.
+The series is worker pod lifetime on both acquisition tiers, so it is directly comparable to a cost tool's own pod-hours.
 A large divergence usually means oversized resource requests — the [worker right-sizing lever](../design/appendix-f-cost-model.md#worker-resource-right-sizing) in Appendix F.
 
 ---

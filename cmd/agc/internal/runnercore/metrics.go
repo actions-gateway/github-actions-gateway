@@ -215,7 +215,7 @@ func NewMetrics() *Metrics {
 
 		JobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "actions_gateway_job_duration_seconds",
-			Help:    "Wall time from acquirejob to worker pod completion.",
+			Help:    "Worker pod wall time: creation to the last container finishing, or to the deletion request for a worker removed mid-run. Emitted on both acquisition tiers, and the span the cost model bills against. A pod that never started a container is not observed.",
 			Buckets: prometheus.ExponentialBuckets(1, 2, 12),
 		}, []string{"namespace", "runner_group"}),
 

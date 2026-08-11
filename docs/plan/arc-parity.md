@@ -67,8 +67,6 @@ That is deliberate: parity is about removing surprises for a migrating team, and
   The intentional v1 to v2 differences are recorded in [v2-api-gap-analysis.md](v2-api-gap-analysis.md).
 - **Commercial support.** See above.
 - **In-cluster cache.** It appears on the comparison table as something GAG lacks, but ARC lacks it too ([Q215](../STATUS.md#Q215) tracks it against managed services and GitLab Runner, not ARC).
-- **Default-tier latency metrics** ([Q713](../STATUS.md#Q713)).
-  A GAG defect rather than a rival's feature; it gates 1.5 on its own merits.
 
 ## What the site may claim today
 

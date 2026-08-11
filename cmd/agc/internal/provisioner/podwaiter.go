@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -78,17 +79,9 @@ func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 	}
 }
 
-// podResult is delivered to a blocked waiter when its pod resolves. It also
-// carries the optional pod-creation latency observation so resolve can emit it
-// exactly once per pod (on the first resolving event that still has waiters).
+// podResult is delivered to a blocked waiter when its pod resolves.
 type podResult struct {
 	outcome PodOutcome
-	// namespace and latency carry the pod-creation-latency observation.
-	// latencyValid is false when the pod never started (no container StartedAt),
-	// in which case no observation is emitted.
-	namespace    string
-	latency      time.Duration
-	latencyValid bool
 }
 
 // podCreationLatency returns the time from the pod's creation to the earliest
@@ -126,6 +119,58 @@ func podCreationLatency(pod *corev1.Pod) (time.Duration, bool) {
 	return d, true
 }
 
+// podLifetime returns the worker pod's wall time: creation to the last container
+// finishing, or to the deletion request for a pod removed mid-run. The boolean is
+// false when no container ever started, so the pod occupied no node time to
+// attribute, and when a mid-run removal carries no deletion timestamp (a force
+// delete) and so has no trustworthy end.
+//
+// This is the span every documented consumer of the duration series wants: the
+// cost model multiplies it by an hourly node rate (appendix-f-cost-model.md), and
+// a pod is billed from creation, not from the acquisition that preceded it.
+func podLifetime(pod *corev1.Pod) (time.Duration, bool) {
+	created := pod.CreationTimestamp.Time
+	if created.IsZero() || !podEverStarted(pod) {
+		return 0, false
+	}
+	var last time.Time
+	for i := range pod.Status.ContainerStatuses {
+		t := pod.Status.ContainerStatuses[i].State.Terminated
+		if t == nil || t.FinishedAt.IsZero() {
+			continue
+		}
+		if f := t.FinishedAt.Time; f.After(last) {
+			last = f
+		}
+	}
+	if last.IsZero() {
+		if pod.DeletionTimestamp == nil {
+			return 0, false
+		}
+		last = pod.DeletionTimestamp.Time
+	}
+	d := last.Sub(created)
+	if d < 0 {
+		d = 0
+	}
+	return d, true
+}
+
+// workerOwner returns the name of the RunnerGroup or RunnerSet a worker pod
+// belongs to, and whether the pod is a worker pod at all. It is the pod-side
+// reading of Target.PodOwnerLabels — v1 stamps LabelRunnerGroup, v2
+// LabelRunnerSet — and is what lets a pod event be labelled without the Target
+// that created it, which a fire-and-forget scale-set worker no longer has.
+func workerOwner(pod *corev1.Pod) (string, bool) {
+	if v := pod.Labels[LabelRunnerSet]; v != "" {
+		return v, true
+	}
+	if v := pod.Labels[LabelRunnerGroup]; v != "" {
+		return v, true
+	}
+	return "", false
+}
+
 // podEverStarted reports whether any of pod's containers began executing. An
 // unschedulable pod carries no container statuses at all, so it reports false.
 func podEverStarted(pod *corev1.Pod) bool {
@@ -157,13 +202,24 @@ type InformerPodWaiter struct {
 	reader client.Reader
 	log    *slog.Logger
 
-	// PodCreationLatency, when non-nil, is observed once per pod when the pod
-	// resolves: the time from pod creation to its runner container starting
-	// (scheduling + image pull). Optional so unit tests can omit it.
+	// PodCreationLatency and JobDuration, when non-nil, are observed once per
+	// worker pod when its lifetime ends: respectively the time from pod creation
+	// to its runner container starting (scheduling + image pull), and the pod's
+	// whole wall time. Optional so unit tests can omit them.
+	//
+	// They hang off the informer rather than off a registered waiter because the
+	// scale-set tier provisions fire-and-forget and registers none, which left the
+	// tier every new tenant runs emitting both series empty (Q713). The informer
+	// sees both tiers' pods identically, so one emission site gives them one span.
 	PodCreationLatency *prometheus.HistogramVec
+	JobDuration        *prometheus.HistogramVec
 
 	mu      sync.Mutex
 	waiters map[string]map[chan podResult]struct{} // key: "namespace/name"
+	// observed keys the worker pods this process has already emitted histograms
+	// for, so the informer's repeated post-terminal update events cannot double
+	// count. An entry is released when the pod is deleted.
+	observed map[types.UID]struct{}
 }
 
 // NewInformerPodWaiter returns an InformerPodWaiter backed by the manager cache.
@@ -173,10 +229,11 @@ func NewInformerPodWaiter(c cache.Cache, log *slog.Logger) *InformerPodWaiter {
 		log = slog.Default()
 	}
 	return &InformerPodWaiter{
-		cache:   c,
-		reader:  c,
-		log:     log,
-		waiters: make(map[string]map[chan podResult]struct{}),
+		cache:    c,
+		reader:   c,
+		log:      log,
+		waiters:  make(map[string]map[chan podResult]struct{}),
+		observed: make(map[types.UID]struct{}),
 	}
 }
 
@@ -187,9 +244,12 @@ func (w *InformerPodWaiter) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("provisioner: get pod informer: %w", err)
 	}
-	reg, err := inf.AddEventHandler(toolscache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj any) { w.onPodEvent(obj) },
-		UpdateFunc: func(_, newObj any) { w.onPodEvent(newObj) },
+	// Detailed rather than plain handler funcs for isInInitialList: a pod already
+	// terminal when the informer lists it completed before this process started,
+	// and must not be re-observed. See onPodEvent.
+	reg, err := inf.AddEventHandler(toolscache.ResourceEventHandlerDetailedFuncs{
+		AddFunc:    func(obj any, isInInitialList bool) { w.onPodEvent(obj, isInInitialList) },
+		UpdateFunc: func(_, newObj any) { w.onPodEvent(newObj, false) },
 		DeleteFunc: w.onPodDelete,
 	})
 	if err != nil {
@@ -286,13 +346,6 @@ func (w *InformerPodWaiter) resolve(key string, res podResult) {
 	if set == nil {
 		return
 	}
-	// Emit the pod-creation-latency observation here — guarded by the non-nil
-	// waiter set — so it fires exactly once per pod (the first resolving event
-	// that still has registered waiters), even though the informer delivers many
-	// post-terminal update events.
-	if w.PodCreationLatency != nil && res.latencyValid {
-		w.PodCreationLatency.WithLabelValues(res.namespace).Observe(res.latency.Seconds())
-	}
 	for ch := range set {
 		select {
 		case ch <- res:
@@ -303,21 +356,69 @@ func (w *InformerPodWaiter) resolve(key string, res podResult) {
 	delete(w.waiters, key)
 }
 
-// onPodEvent resolves waiters when an Add/Update brings a pod to a terminal phase.
-func (w *InformerPodWaiter) onPodEvent(obj any) {
+// claimObservation reports whether this call is the first to claim pod uid, and
+// claims it. Only the claiming call may emit that pod's histograms.
+func (w *InformerPodWaiter) claimObservation(uid types.UID) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if _, ok := w.observed[uid]; ok {
+		return false
+	}
+	w.observed[uid] = struct{}{}
+	return true
+}
+
+// releaseObservation drops a deleted pod's claim, bounding the set by the worker
+// pods currently in the cache rather than by everything the process has seen.
+func (w *InformerPodWaiter) releaseObservation(uid types.UID) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.observed, uid)
+}
+
+// observeWorkerPod emits pod's histograms, at most once per pod. A pod carrying
+// no owner label is not a worker pod (the tenant namespace also holds the AGC's
+// own pods) and is skipped; so is one that never started a container, which
+// occupied no node time and ran no job to time.
+//
+// claimOnly takes the pod's claim without emitting, which is how an initial-list
+// pod is retired: it is a completion this process did not witness.
+func (w *InformerPodWaiter) observeWorkerPod(pod *corev1.Pod, claimOnly bool) {
+	owner, ok := workerOwner(pod)
+	if !ok || !w.claimObservation(pod.UID) || claimOnly {
+		return
+	}
+	if w.PodCreationLatency != nil {
+		if latency, ok := podCreationLatency(pod); ok {
+			w.PodCreationLatency.WithLabelValues(pod.Namespace).Observe(latency.Seconds())
+		}
+	}
+	if w.JobDuration != nil {
+		if d, ok := podLifetime(pod); ok {
+			w.JobDuration.WithLabelValues(pod.Namespace, owner).Observe(d.Seconds())
+		}
+	}
+}
+
+// onPodEvent resolves waiters when an Add/Update brings a pod to a terminal phase,
+// and emits that pod's histograms.
+//
+// A pod already terminal in the informer's initial list finished before this
+// process started, so the AGC that provisioned it already emitted its
+// observations. Its claim is taken without emitting: otherwise every AGC restart
+// would replay one duplicate observation per terminal worker pod still inside
+// completedPodTTL, as a spike at startup.
+func (w *InformerPodWaiter) onPodEvent(obj any, isInInitialList bool) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		return
 	}
-	if out, ok := terminalPhase(pod); ok {
-		latency, valid := podCreationLatency(pod)
-		w.resolve(pod.Namespace+"/"+pod.Name, podResult{
-			outcome:      out,
-			namespace:    pod.Namespace,
-			latency:      latency,
-			latencyValid: valid,
-		})
+	out, terminal := terminalPhase(pod)
+	if !terminal {
+		return
 	}
+	w.observeWorkerPod(pod, isInInitialList)
+	w.resolve(pod.Namespace+"/"+pod.Name, podResult{outcome: out})
 }
 
 // onPodDelete resolves waiters when a pod is deleted before reaching a terminal
@@ -344,6 +445,12 @@ func (w *InformerPodWaiter) onPodDelete(obj any) {
 	if pod == nil {
 		return
 	}
+	// A worker deleted mid-run still consumed the node time it ran for, so it is
+	// observed here rather than dropped; podLifetime ends such a pod at its
+	// deletion timestamp. A pod already observed terminal claims nothing new, and
+	// either way the claim is released now that the pod is gone.
+	w.observeWorkerPod(pod, false)
+	w.releaseObservation(pod.UID)
 	w.resolve(pod.Namespace+"/"+pod.Name, podResult{
 		outcome: PodOutcome{
 			Phase:              corev1.PodSucceeded,

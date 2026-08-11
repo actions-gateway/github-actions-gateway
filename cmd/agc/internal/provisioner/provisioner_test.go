@@ -290,9 +290,6 @@ func TestProvisioner_CreatesPodAndSecret(t *testing.T) {
 
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
 	require.NoError(t, <-done)
-
-	// H1: JobDuration must have been observed after pod completion.
-	assert.Equal(t, 1, testutil.CollectAndCount(m.JobDuration), "JobDuration histogram should have one observation")
 }
 
 // TestProvisioner_ForwardsJITConfigIntoSecret verifies that the agent's

@@ -522,7 +522,7 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 | `actions_gateway_jobs_acquired_total` | Counter | `namespace`, `runner_group` | Jobs successfully acquired |
 | `actions_gateway_jobs_admission_rejected_total` | Counter | `namespace`, `runner_group`, `reason` | Jobs left queued at GitHub because the pre-acquisition capacity gate refused (acquire skipped for redelivery). `reason="ceiling"`: at the configured worker ceiling. `reason="quota"`: the namespace `ResourceQuota` cannot admit another worker pod |
 | `actions_gateway_job_acquisition_errors_total` | Counter | `namespace`, `reason` | Acquisition failures (404/409/422/other) |
-| `actions_gateway_job_duration_seconds` | Histogram | `namespace`, `runner_group` | Wall time from acquirejob to pod completion |
+| `actions_gateway_job_duration_seconds` | Histogram | `namespace`, `runner_group` | Worker pod wall time, from pod creation to its last container finishing |
 | `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from worker pod creation to runner container start (scheduling + image pull) |
 | `actions_gateway_token_refreshes_total` | Counter | `namespace` | Successful installation token refreshes |
 | `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refreshes |
