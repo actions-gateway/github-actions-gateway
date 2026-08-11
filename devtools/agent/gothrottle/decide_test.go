@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -220,11 +221,54 @@ func TestRewritePlacesPrefixBeforeGo(t *testing.T) {
 // An empty prefix means throttling is off (CI, headless, SSH, an unsupported
 // OS). There is nothing to apply, so the hook must have no opinion rather than
 // emit a rewrite that prepends nothing.
+//
+// The deny case is here too, though a deny carries no rewrite: the prefix is
+// resolved before the branch, so it is silenced with the rest. That is the
+// assertion a Q703 occurrence failed on.
 func TestNoPrefixIsSilence(t *testing.T) {
-	for _, cmd := range []string{"go test ./...", "(cd x && go test -race ./...)", "timeout 900 go test -race ./..."} {
+	for _, cmd := range []string{
+		"go test ./...",
+		"(cd x && go test -race ./...)",
+		"timeout 900 go test -race ./...",
+		"go build ./... && go test -race ./...",
+	} {
 		if got := Decide(cmd, func() string { return "" }); got != nil {
 			t.Fatalf("%q: want silence with no prefix, got %s", cmd, got.Permission)
 		}
+	}
+}
+
+// Silence is the failure contract, which is also what makes a failure here
+// unattributable: fourteen paths across the hook and this binary end in exit 0
+// with empty stdout, and a Q703 occurrence left nothing but that. The trace
+// names the path — the empty-prefix one above all, since it is the only silent
+// return a contended machine can reach part-way through a suite.
+//
+// Both directions, for the reason the matcher asserts both: a trace that
+// stopped naming its site leaves the next occurrence as unattributable as the
+// last, and one that fired unasked would write to the stderr of every Bash call.
+func TestTraceNamesTheSilentPath(t *testing.T) {
+	const cmd = "go build ./... && go test -race ./..."
+
+	var buf bytes.Buffer
+	orig := traceOut
+	traceOut = &buf
+	t.Cleanup(func() { traceOut = orig })
+
+	t.Setenv(traceEnv, "")
+	if got := Decide(cmd, func() string { return "" }); got != nil {
+		t.Fatalf("want silence with no prefix, got %s", got.Permission)
+	}
+	if buf.Len() > 0 {
+		t.Errorf("trace with %s unset = %q, want nothing", traceEnv, buf.String())
+	}
+
+	t.Setenv(traceEnv, "1")
+	if got := Decide(cmd, func() string { return "" }); got != nil {
+		t.Fatalf("want silence with no prefix, got %s", got.Permission)
+	}
+	if !strings.Contains(buf.String(), "no throttle prefix") {
+		t.Errorf("trace = %q, want it to name the empty-prefix path", buf.String())
 	}
 }
 

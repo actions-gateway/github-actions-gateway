@@ -217,6 +217,10 @@ Two safety nets cover that gap, both reusing `scripts/agent/local-throttle.sh` s
 The decision is [`devtools/agent/gothrottle`](../../devtools/agent/gothrottle), a Go program over a real shell parser (`mvdan.cc/sh`); the shell file is the entry point that resolves and execs it, and every failure path (no Go toolchain, a build error, an unparseable command) is silent, so the hook is never the reason a Bash call fails.
 It became Go for the same reason its sibling `pipedgate` did (Q708): 178 of the shell version's 423 lines hand-rolled a shell-grammar scanner, which is the parsing-density criterion in [technical-debt.md](technical-debt.md#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length).
 
+**Set `GOTHROTTLE_DEBUG` to find out why the hook said nothing.** Silence is the failure contract, and it is also why a failure here is unattributable: fourteen paths across the entry point and the binary end in exit 0 with empty stdout, so the suite could only ever report `got decision= reason=` (Q703).
+With the variable set, each path names itself on stderr, and the probe that resolves the throttle prefix reports whether it *failed* or reported throttling *off*, which are otherwise the same empty string.
+Stdout is untouched either way, so the decision contract is unchanged; the suite sets it on every invocation and prints the trace with any failure.
+
 What counts as an invocation is a `go` token in **command position** — including behind an allowlisted wrapper (`timeout 900 go test -race …`, Q696), which the scanner missed entirely because `go` is an argument there.
 The allowlist (`wrappers` in the Go package) names the wrappers whose own options and operands can be skipped safely; a name it does not list, or an option its spec does not describe, stops the peel and the command passes through unthrottled rather than have the prefix guessed into the wrong place.
 Quoted strings and heredoc bodies parse as words rather than commands, so a `git commit -F -` message that quotes `go test -race` is not an invocation (Q624; before that it was, and a message naming it twice was denied outright).

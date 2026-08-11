@@ -29,7 +29,9 @@
 # Bash call, so the build writes a PID-suffixed file and renames it into place,
 # which is atomic within a filesystem; and every failure — no Go toolchain, a
 # build error, a missing throttle script — exits 0 with no output, which Claude
-# Code reads as "no opinion".
+# Code reads as "no opinion". GOTHROTTLE_DEBUG makes each of those name itself on
+# stderr without touching stdout, because otherwise they and the binary's own
+# silent paths are one symptom with no mechanism (Q703; see trace below).
 #
 # Wired up by .claude/settings.json as a PreToolUse hook on the Bash matcher.
 set -euo pipefail
@@ -42,6 +44,17 @@ BIN="$REPO_ROOT/.build/gothrottle"
 SRC="$REPO_ROOT/devtools/agent/gothrottle"
 THROTTLE="$REPO_ROOT/scripts/agent/local-throttle.sh"
 
+# trace names a silent path on stderr when GOTHROTTLE_DEBUG is set, and does
+# nothing otherwise. Silence is what keeps a hook from ever breaking a Bash
+# call, and it is also what makes a failure here unattributable: these exits and
+# the binary's own share one observable, exit 0 with empty stdout, which is all
+# a Q703 occurrence left behind. The binary reads the same variable.
+trace() {
+	if [[ -n "${GOTHROTTLE_DEBUG:-}" ]]; then
+		printf 'gothrottle-hook: %s\n' "$1" >&2
+	fi
+}
+
 # ensure_binary makes $BIN current, or fails so the caller can stay silent.
 ensure_binary() {
 	if [[ -x "$BIN" ]]; then
@@ -49,21 +62,32 @@ ensure_binary() {
 		newer="$(find "$SRC" -name '*.go' -newer "$BIN" -print -quit 2>/dev/null || true)"
 		[[ -z "$newer" ]] && return 0
 	fi
-	command -v go >/dev/null 2>&1 || return 1
-	mkdir -p "$REPO_ROOT/.build" || return 1
-	local staged="$BIN.$$"
-	if ! (cd "$REPO_ROOT/devtools" && GOWORK=off go build -o "$staged" ./agent/gothrottle) >/dev/null 2>&1; then
+	command -v go >/dev/null 2>&1 || {
+		trace "no go toolchain on PATH"
+		return 1
+	}
+	mkdir -p "$REPO_ROOT/.build" || {
+		trace "cannot create $REPO_ROOT/.build"
+		return 1
+	}
+	local staged="$BIN.$$" build_err
+	if ! build_err="$( (cd "$REPO_ROOT/devtools" && GOWORK=off go build -o "$staged" ./agent/gothrottle) 2>&1 )"; then
+		trace "go build of gothrottle failed: ${build_err//$'\n'/; }"
 		rm -f "$staged"
 		return 1
 	fi
 	mv -f "$staged" "$BIN" || {
+		trace "cannot install $BIN"
 		rm -f "$staged"
 		return 1
 	}
 }
 
 main() {
-	[[ -x "$THROTTLE" ]] || exit 0
+	[[ -x "$THROTTLE" ]] || {
+		trace "throttle script is not executable: $THROTTLE"
+		exit 0
+	}
 	ensure_binary || exit 0
 	exec "$BIN" "$THROTTLE"
 }
