@@ -98,6 +98,25 @@ There is none, and none is needed: `roadmapcheck` reads the **working tree**, no
 Order the two commits however you like and check the tip.
 Only `status-isolation-check` reads commits individually, and it has no opinion about roadmap bullets.
 
+## Closing a row: what else moves
+
+Deleting a Queue row is the one backlog edit with reach outside `docs/STATUS.md`.
+The row is an anchor, a plan doc's last reference, and often a roadmap bullet's reason to exist, so removing it breaks things in files the closing change never opened.
+Every one of these is caught by a gate, and every one is cheaper to do up front than to diagnose from a gate failure pointing somewhere unexpected.
+
+Work through all four:
+
+1. **De-link the ID wherever the repo cites it.** `grep -rn "STATUS.md#QNNN" docs/` finds every anchor that is now dead (`make doc-links`).
+   Rewrite them as a **bare `QNNN`**, the form the Archive rows in [`docs/plan/README.md`](../plan/README.md) already use.
+   Keep the prose; only the link goes.
+2. **Delete the roadmap bullet, continuation lines included.** A forward-looking bullet exists because the row does ([rule 7](#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)), so it goes when the row does.
+   Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the **previous** bullet, whose word count then breaks the cap. `make roadmap-check` reports that as a violation on a bullet you never touched, which reads convincingly like a pre-existing failure.
+3. **Archive the plan doc if this was its last `STATUS.md` reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
+4. **Update the plan's `docs/plan/README.md` row** in the same change, moving it to the Archive section.
+
+The cluster is wider than the docs tree: [Q790](../STATUS.md#Q790) is the same shape in the merge tooling, where the `docs/STATUS.md` overlap exemption cannot fire on a row *deletion* because the driver yields conflict markers for delete-vs-edit of one row.
+When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.
+
 ## Search before you file
 
 The rule used to be "grep the Queue and Deferred tables first", and it failed three times: [Q442](https://github.com/actions-gateway/github-actions-gateway/pull/847) and [Q456](https://github.com/actions-gateway/github-actions-gateway/pull/893) both duplicated Q440, and [Q635](https://github.com/actions-gateway/github-actions-gateway/pull/1186) duplicated Q619.
