@@ -2851,14 +2851,6 @@
 <td>Measured under Q703: <code>throttlePrefix</code> returns "" both for "throttling is off" and for "a probe that could not run", so a failed probe silently drops the <code>deny</code> guarding an unthrottled <code>-race</code>.</td>
 </tr>
 <tr>
-<td><a id="Q741"></a>Q741</td>
-<td><a href="../development/testing/">GMC envtest suite exceeds its 5m timeout</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-08 on <code>origin/main</code> 70ec7925, alone: 324.5s vs <code>-timeout 5m</code>, panic, CredRotation red. Runs: 246s green, 315s, 326s. Whichever test holds the wall takes the blame, so the name moves. Split the package or raise the budget.</td>
-</tr>
-<tr>
 <td><a id="Q784"></a>Q784</td>
 <td><a href="../operations/release/#the-bump-on-main-does-not-reach-the-published-release">Gate that a published version dir names its own release</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -3885,6 +3877,13 @@
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails on <code>main</code> again. The message names the silent path (<a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">trace</a>); refile on that, not the shared empty decision. <a href="#Q785">Q785</a> is what it measured. → top of Queue.</td>
+</tr>
+<tr>
+<td><a id="Q741"></a>Q741</td>
+<td><a href="../development/testing/#the-envtest-suite-budget">GMC envtest suite exceeds its 5m timeout</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> a run prints <code>ran out of its 10m budget</code> on <code>main</code> post-fix. Suites measure 197-220s (GMC) / 256-264s (AGC) solo, and the 324.5s excursion never reproduced (3 mechanisms refuted), so a breach is a real 2.7x. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q690"></a>Q690</td>
