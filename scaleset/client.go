@@ -433,7 +433,9 @@ func (c *Client) ResolveRunnerGroup(ctx context.Context, name string) (int, bool
 }
 
 // CreateRunnerScaleSet creates a scale set and returns the server-assigned object
-// (with its id). The scale set's single System label is its runs-on match target.
+// (with its id). Its System labels are its runs-on match targets, the first naming the
+// scale set. Read the returned Labels rather than assuming the request's survived: see
+// the Label godoc for the GHES appliance that keeps only the name.
 func (c *Client) CreateRunnerScaleSet(ctx context.Context, in RunnerScaleSet) (*RunnerScaleSet, error) {
 	var out RunnerScaleSet
 	if err := c.svcCall(ctx, http.MethodPost, "/_apis/runtime/runnerscalesets", in, &out); err != nil {

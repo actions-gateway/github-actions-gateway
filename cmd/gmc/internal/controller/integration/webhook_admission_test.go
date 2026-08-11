@@ -303,16 +303,51 @@ func TestWebhookAdmission_ScaleSetRunnerLabelUniqueness(t *testing.T) {
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), distinct)) })
 }
 
-// newScaleSetRunnerSet builds a ScaleSet-protocol RunnerSet with a single runnerLabel
-// bound to the named gateway (references are resolved at runtime, so no template need
-// exist for admission).
-func newScaleSetRunnerSet(name, ns, gateway, label string) *v2alpha1.RunnerSet {
+// TestWebhookAdmission_ScaleSetUniquenessIsOnTheFirstLabelOnly covers what Q726 moved.
+// Only the FIRST runnerLabel names the scale set at GitHub, so only it has to be
+// unique. Labels after the first are ordinary match targets — "linux" across a dozen
+// sets is the shape multi-label exists to serve — and which set an ambiguous runs-on
+// reaches is GitHub's decision, not an admission-time collision.
+func TestWebhookAdmission_ScaleSetUniquenessIsOnTheFirstLabelOnly(t *testing.T) {
+	const nsName = "team-webhook-scaleset-multilabel"
+	createNamespace(t, nsName)
+
+	gpu := newScaleSetRunnerSet("gpu-set", nsName, "gw", "gpu", "linux", "cuda")
+	require.NoError(t, k8sClient.Create(ctx, gpu), "a multi-label ScaleSet set must be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), gpu)) })
+
+	// A distinct first label, sharing every later one.
+	arm := newScaleSetRunnerSet("arm-set", nsName, "gw", "arm64", "linux", "cuda")
+	require.NoError(t, k8sClient.Create(ctx, arm),
+		"sets sharing only non-first labels must both be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), arm)) })
+
+	// The same first label is still a scale-set name collision, whatever follows it.
+	dup := newScaleSetRunnerSet("dup-first", nsName, "gw", "gpu", "arm64")
+	err := k8sClient.Create(ctx, dup)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), dup)) })
+	require.Error(t, err, "a second set whose FIRST label is already claimed must be rejected")
+	assert.Contains(t, err.Error(), "already used by RunnerSet",
+		"rejection must come from the GMC RunnerSet webhook")
+
+	// And a first label that merely appears LATER in another set's list is free: that
+	// set does not own the scale-set name.
+	claimsLinux := newScaleSetRunnerSet("linux-set", nsName, "gw", "linux")
+	require.NoError(t, k8sClient.Create(ctx, claimsLinux),
+		"a label another set carries in a non-first position must remain claimable as a name")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), claimsLinux)) })
+}
+
+// newScaleSetRunnerSet builds a ScaleSet-protocol RunnerSet bound to the named gateway,
+// whose first runnerLabel names its scale set (references are resolved at runtime, so
+// no template need exist for admission).
+func newScaleSetRunnerSet(name, ns, gateway, label string, more ...string) *v2alpha1.RunnerSet {
 	return &v2alpha1.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.RunnerSetSpec{
 			GatewayRef:          v2alpha1.ObjectRef{Name: gateway},
 			AcquisitionProtocol: v2alpha1.AcquisitionProtocolScaleSet,
-			RunnerLabels:        []string{label},
+			RunnerLabels:        append([]string{label}, more...),
 		},
 	}
 }

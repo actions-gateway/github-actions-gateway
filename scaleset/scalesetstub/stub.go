@@ -121,6 +121,7 @@ type scaleSet struct {
 	id       int
 	name     string
 	groupID  int
+	labels   []scaleset.Label
 	session  *session
 	jobs     []*job
 	messages []*qmessage
@@ -174,6 +175,9 @@ type Stub struct {
 	// failRunnerGroups makes the runnergroups lookup answer 500 while set — see
 	// FailRunnerGroups.
 	failRunnerGroups bool
+	// dropExtraScaleSetLabels makes a create keep only the scale set's name label
+	// while set, without erroring — see DropExtraScaleSetLabels.
+	dropExtraScaleSetLabels bool
 	// failStaticAcquire makes the _apis/runtime acquirejobs route answer 404 while
 	// set, leaving the queue-host route working — see FailStaticAcquireRoute.
 	failStaticAcquire bool
@@ -590,6 +594,34 @@ func (s *Stub) AddScaleSet(name string, groupID int) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.newScaleSetLocked(name, groupID).id
+}
+
+// DropExtraScaleSetLabels models a GitHub Enterprise Server appliance below 3.21
+// without DistributedTask.AllowRunnerScaleSetCustomLabels: a create keeps only the
+// label matching the scale set's name and discards the rest, answering 200 as though
+// it had taken them all. It is the silent half of the multi-label failure mode, and
+// the only way a client learns of it is by reading the labels back (Q726).
+func (s *Stub) DropExtraScaleSetLabels(on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dropExtraScaleSetLabels = on
+}
+
+// SetScaleSetLabels records the System labels a scale set carries, for a set put there
+// by AddScaleSet rather than by a create. Together they model the state an AGC restart
+// meets: a scale set registered by an earlier generation, carrying whatever labels were
+// declared then rather than the ones declared now.
+func (s *Stub) SetScaleSetLabels(id int, names ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.scaleSets[id]
+	if ss == nil {
+		return
+	}
+	ss.labels = nil
+	for _, n := range names {
+		ss.labels = append(ss.labels, scaleset.Label{Name: n, Type: "System"})
+	}
 }
 
 // SetAdminTokenTTL controls the TTL of the admin JWT minted by the
@@ -1024,8 +1056,17 @@ func (s *Stub) handleCreateScaleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ss := s.newScaleSetLocked(in.Name, in.RunnerGroupID)
+	ss.labels = in.Labels
+	if s.dropExtraScaleSetLabels {
+		ss.labels = nil
+		for _, lbl := range in.Labels {
+			if lbl.Name == in.Name {
+				ss.labels = append(ss.labels, lbl)
+			}
+		}
+	}
 	_ = json.NewEncoder(w).Encode(scaleset.RunnerScaleSet{
-		ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID, Labels: in.Labels, RunnerSetting: in.RunnerSetting,
+		ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID, Labels: ss.labels, RunnerSetting: in.RunnerSetting,
 	})
 }
 
@@ -1040,7 +1081,7 @@ func (s *Stub) handleGetScaleSetByName(w http.ResponseWriter, r *http.Request) {
 	var match []scaleset.RunnerScaleSet
 	for _, ss := range s.scaleSets {
 		if ss.name == name {
-			match = append(match, scaleset.RunnerScaleSet{ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID})
+			match = append(match, scaleset.RunnerScaleSet{ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID, Labels: ss.labels})
 		}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"count": len(match), "value": match})

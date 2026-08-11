@@ -562,3 +562,32 @@ const (
 	// second as the first would assert a health it has not established.
 	ReasonAwaitingWorkerPods = "AwaitingWorkerPods"
 )
+
+// Runner-label registration condition (Q726). A ScaleSet runner set registers every
+// spec.runnerLabels entry on its scale set at GitHub, the first entry naming it. The
+// registration can come back short without erroring: a GitHub Enterprise Server
+// appliance below 3.21 keeps only the name label unless a site admin enables
+// DistributedTask.AllowRunnerScaleSetCustomLabels, and discards the rest silently;
+// so does a scale set created before a label was appended, because the AGC reuses an
+// existing scale set by name rather than rewriting its labels.
+//
+// Both leave a set whose jobs on the missing labels queue at GitHub forever with
+// every other signal healthy, so the AGC compares what the server returned against
+// what the set declares and reports the shortfall. Advisory (abnormal-is-True): the
+// set still serves every job targeting the labels that did register, so it never
+// gates Ready and is not in ImpairingConditionTypes — a label an operator has to add
+// is a configuration mismatch, not an outage to roll up into the gateway's
+// RunnerSetsDegraded summary.
+const (
+	// ConditionRunnerLabelsIncomplete is True when the scale set at GitHub does not
+	// carry every label the runner set declares. The message names the missing
+	// labels and the scale set they are missing from.
+	ConditionRunnerLabelsIncomplete = "RunnerLabelsIncomplete"
+
+	// ReasonLabelsNotRegistered is the RunnerLabelsIncomplete=True reason: the
+	// server's label set is missing at least one declared label.
+	ReasonLabelsNotRegistered = "LabelsNotRegistered"
+	// ReasonLabelsRegistered is the RunnerLabelsIncomplete=False reason: every
+	// declared label is present on the scale set.
+	ReasonLabelsRegistered = "LabelsRegistered"
+)

@@ -251,8 +251,7 @@ func TestV2_RunnerSet_AcquisitionProtocolDefaultsScaleSet(t *testing.T) {
 	createNSForAGC(t, ns)
 
 	// Omit acquisitionProtocol entirely — as of Q264 P5 the apiserver must default it
-	// to ScaleSet. A bare set must therefore carry a single label (ScaleSet ⇒ one
-	// runnerLabel), so this fixture declares one.
+	// to ScaleSet.
 	rs := newV2RunnerSet(ns, "linux", "acme", "default")
 	rs.Spec.AcquisitionProtocol = "" // clear the helper's Classic pin to test the default
 	rs.Spec.RunnerLabels = []string{"self-hosted"}
@@ -265,60 +264,80 @@ func TestV2_RunnerSet_AcquisitionProtocolDefaultsScaleSet(t *testing.T) {
 		"acquisitionProtocol must default to ScaleSet (Q264 P5)")
 }
 
-// TestV2_RunnerSet_BareMultiLabelRejected documents the user-visible consequence of
-// the Q264 P5 default flip: a runner set that omits acquisitionProtocol AND declares
-// more than one runnerLabel is now rejected — it defaults to ScaleSet, which requires
-// exactly one label. Such a set must set acquisitionProtocol: Classic explicitly (the
-// deprecated multi-label path) or reduce to a single label.
-func TestV2_RunnerSet_BareMultiLabelRejected(t *testing.T) {
+// TestV2_RunnerSet_BareMultiLabelAccepted is the inverse of the rule Q264 P5's default
+// flip left behind: a runner set that omits acquisitionProtocol AND declares more than
+// one runnerLabel used to be rejected, because it defaults to ScaleSet and ScaleSet
+// required exactly one label. Q726 registers every label on the scale set, so the bare
+// multi-label shape — the one an ARC user's runs-on array maps onto — now admits, and
+// pinning Classic is no longer the price of multi-label matching.
+func TestV2_RunnerSet_BareMultiLabelAccepted(t *testing.T) {
 	const ns = "v2-runnerset-acqproto-baremulti"
 	createNSForAGC(t, ns)
 
 	bare := newV2RunnerSet(ns, "multi", "acme", "default") // two labels
 	bare.Spec.AcquisitionProtocol = ""                     // omit → defaults to ScaleSet
-	err := k8sClient.Create(ctx, bare)
-	require.Error(t, err)
-	assert.True(t, apierrors.IsInvalid(err),
-		"bare multi-label set should default to ScaleSet and be Invalid, got %v", err)
+	require.NoError(t, k8sClient.Create(ctx, bare),
+		"a bare multi-label set must admit and default to ScaleSet (Q726)")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, bare) })
 
-	// The same labels are accepted when the set opts into the deprecated Classic path.
+	var got agcv2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "multi"}, &got))
+	assert.Equal(t, agcv2alpha1.AcquisitionProtocolScaleSet, got.Spec.AcquisitionProtocol,
+		"the multi-label set must have taken the ScaleSet default, not been steered to Classic")
+	assert.Equal(t, []string{"self-hosted", "linux"}, got.Spec.RunnerLabels)
+
+	// The same labels are still accepted on the deprecated Classic path.
 	classic := newV2RunnerSet(ns, "multi-classic", "acme", "default") // helper pins Classic
 	require.NoError(t, k8sClient.Create(ctx, classic))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, classic) })
 }
 
-func TestV2_RunnerSet_ScaleSetRequiresSingleLabel(t *testing.T) {
+func TestV2_RunnerSet_ScaleSetAcceptsMultiLabel(t *testing.T) {
 	const ns = "v2-runnerset-acqproto-label"
 	createNSForAGC(t, ns)
 
-	// A ScaleSet set with more than one runnerLabel is rejected by the spec-level CEL
-	// rule: the scale set's name is its single runs-on label (Q264 §5a-U7).
+	// An explicit ScaleSet set with more than one runnerLabel: every label is
+	// registered on the scale set, the first one naming it (Q726).
 	multi := newV2RunnerSet(ns, "multi", "acme", "default") // labels: self-hosted, linux
 	multi.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
-	err := k8sClient.Create(ctx, multi)
-	require.Error(t, err)
-	assert.True(t, apierrors.IsInvalid(err), "ScaleSet with >1 label should be Invalid, got %v", err)
+	require.NoError(t, k8sClient.Create(ctx, multi))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, multi) })
 
-	// Exactly one label is accepted.
+	// One label remains the ordinary shape.
 	single := newV2RunnerSet(ns, "single", "acme", "default")
 	single.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
 	single.Spec.RunnerLabels = []string{"scale-set-linux"}
 	require.NoError(t, k8sClient.Create(ctx, single))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, single) })
+
+	// The per-item constraints survive the relaxation: MinItems=1 still bites, and so
+	// does the no-whitespace-or-commas pattern on EVERY item rather than only the
+	// first — a list validation is the easiest thing to relax past its intent.
+	none := newV2RunnerSet(ns, "no-labels", "acme", "default")
+	none.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
+	none.Spec.RunnerLabels = []string{}
+	err := k8sClient.Create(ctx, none)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "an empty runnerLabels should be Invalid, got %v", err)
+
+	comma := newV2RunnerSet(ns, "comma-label", "acme", "default")
+	comma.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
+	comma.Spec.RunnerLabels = []string{"linux", "gpu,big"}
+	err = k8sClient.Create(ctx, comma)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err),
+		"a comma in a NON-first label should be Invalid, got %v", err)
 }
 
-// TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub covers Q398. A Classic
-// multi-label set can only be authored on v2alpha1, but it is STORED as a v2beta1
-// hub object that violates v2beta1's ScaleSet-only single-runnerLabel rule. While
-// that rule sat on the spec, every unqualified `kubectl edit/patch/apply` — which
-// addresses the storage version — was rejected on a field that has nothing to do
-// with labels. The rule now sits on runnerLabels, so CRD validation ratcheting
-// (KEP-4008) suppresses it exactly while the labels are untouched.
+// TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub is Q398's regression guard,
+// outliving the rule that caused it. A Classic multi-label set is STORED as a v2beta1
+// hub object, and v2beta1 once rejected more than one runnerLabel — so every
+// unqualified `kubectl edit/patch/apply`, which addresses the storage version, failed
+// on a field that had nothing to do with labels. Q726 removed the rule outright, which
+// removes the cause; this keeps asserting the symptom is gone, because the shape that
+// produced it (a hub object holding a spoke-authored value) is permanent and the next
+// hub-wide rule would bring it straight back.
 func TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub(t *testing.T) {
-	if m := serverMinor(t); m < 30 {
-		t.Skipf("CRD validation ratcheting (KEP-4008) is on by default only on k8s >= 1.30; apiserver is 1.%d", m)
-	}
-
 	const ns = "v2-runnerset-hub-edit"
 	createNSForAGC(t, ns)
 
@@ -337,33 +356,32 @@ func TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub(t *testing.T) {
 
 	hub.Spec.MaxWorkers = ptr.To(int32(7))
 	require.NoError(t, k8sClient.Update(ctx, &hub),
-		"an unqualified edit of an unrelated field must not trip the single-label rule (Q398)")
+		"an unqualified edit of an unrelated field must not fail on runnerLabels (Q398)")
 
-	// Ratcheting forgives only an UNCHANGED value: editing the labels themselves
-	// through v2beta1 still has to satisfy the ScaleSet-only rule.
+	// And the labels themselves are now editable through the hub, which is what Q726
+	// changed: before it, this write was the one ratcheting could not forgive.
 	var again agcv2beta1.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, key, &again))
 	require.NotNil(t, again.Spec.MaxWorkers)
 	assert.Equal(t, int32(7), *again.Spec.MaxWorkers, "the unrelated edit should have landed")
 	again.Spec.RunnerLabels = []string{"self-hosted", "linux", "arm64"}
-	err := k8sClient.Update(ctx, &again)
-	require.Error(t, err)
-	assert.True(t, apierrors.IsInvalid(err),
-		"changing runnerLabels through v2beta1 should still be Invalid, got %v", err)
+	require.NoError(t, k8sClient.Update(ctx, &again),
+		"changing runnerLabels through v2beta1 must now be accepted (Q726)")
 
-	// The v2alpha1 view is unharmed: protocol and labels intact, the edit visible.
+	// The v2alpha1 view is unharmed: protocol intact, both edits visible.
 	var spoke agcv2alpha1.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, key, &spoke))
-	assert.Equal(t, agcv2alpha1.AcquisitionProtocolClassic, spoke.Spec.AcquisitionProtocol)
-	assert.Equal(t, []string{"self-hosted", "linux"}, spoke.Spec.RunnerLabels)
+	assert.Equal(t, agcv2alpha1.AcquisitionProtocolClassic, spoke.Spec.AcquisitionProtocol,
+		"a hub-side edit must not re-protocol the spoke object")
+	assert.Equal(t, []string{"self-hosted", "linux", "arm64"}, spoke.Spec.RunnerLabels)
 	require.NotNil(t, spoke.Spec.MaxWorkers)
 	assert.Equal(t, int32(7), *spoke.Spec.MaxWorkers)
 }
 
-// TestV2beta1_RunnerSet_MultiLabelCreateRejected pins the other half of Q398: the
-// ratcheting relaxation must not become a way to author a multi-label set on
-// v2beta1. A create has no old value to ratchet against, so the rule applies.
-func TestV2beta1_RunnerSet_MultiLabelCreateRejected(t *testing.T) {
+// TestV2beta1_RunnerSet_MultiLabelCreateAccepted is the shape Q726 exists for: an ARC
+// workflow's `runs-on: [linux, gpu]` expressed directly on the graduated version, with
+// no acquisitionProtocol lever to pull and no v2alpha1 Classic detour.
+func TestV2beta1_RunnerSet_MultiLabelCreateAccepted(t *testing.T) {
 	const ns = "v2beta1-runnerset-multi"
 	createNSForAGC(t, ns)
 
@@ -372,12 +390,16 @@ func TestV2beta1_RunnerSet_MultiLabelCreateRejected(t *testing.T) {
 		Spec: agcv2beta1.RunnerSetSpec{
 			GatewayRef:   agcv2beta1.ObjectRef{Name: "acme"},
 			TemplateRef:  &agcv2beta1.ObjectRef{Name: "default"},
-			RunnerLabels: []string{"self-hosted", "linux"},
+			RunnerLabels: []string{"self-hosted", "linux", "gpu"},
 		},
 	}
-	err := k8sClient.Create(ctx, multi)
-	require.Error(t, err)
-	assert.True(t, apierrors.IsInvalid(err), "v2beta1 create with >1 label should be Invalid, got %v", err)
+	require.NoError(t, k8sClient.Create(ctx, multi))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, multi) })
+
+	var got agcv2beta1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "multi"}, &got))
+	assert.Equal(t, []string{"self-hosted", "linux", "gpu"}, got.Spec.RunnerLabels,
+		"every declared label must round-trip through the storage version in order")
 }
 
 func TestV2_RunnerSet_AcquisitionProtocolImmutable(t *testing.T) {
