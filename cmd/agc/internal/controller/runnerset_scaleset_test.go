@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 )
 
@@ -114,5 +115,42 @@ func TestScaleSetSessionHeld_MatchesThroughTheStartWrap(t *testing.T) {
 		if scaleSetSessionHeld(err) {
 			t.Errorf("%s must not be treated as a held session", name)
 		}
+	}
+}
+
+// TestResolveRunnerGroupName pins the forge-side boundary's resolution chain (Q712):
+// the set's own spec.runnerGroup, else its gateway's defaultRunnerGroup, else empty
+// (GitHub's default group). It mirrors templateRef/proxyRef inheritance, so a tenant
+// declares the group once on the gateway and a set overrides it only when it means to.
+func TestResolveRunnerGroupName(t *testing.T) {
+	cases := []struct {
+		name       string
+		set        string
+		gateway    string
+		nilGateway bool
+		want       string
+	}{
+		{name: "set wins over gateway", set: "tenant-a-gpu", gateway: "tenant-a", want: "tenant-a-gpu"},
+		{name: "unset set inherits the gateway", gateway: "tenant-a", want: "tenant-a"},
+		{name: "both unset means GitHub's default group", want: ""},
+		{name: "set alone", set: "tenant-a-gpu", want: "tenant-a-gpu"},
+		// The gateway is resolved before this runs on the production path, but a nil
+		// must not panic the listener start it feeds.
+		{name: "no gateway resolved", set: "tenant-a-gpu", nilGateway: true, want: "tenant-a-gpu"},
+		{name: "no gateway resolved, nothing declared", nilGateway: true, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rs := &v2alpha1.RunnerSet{Spec: v2alpha1.RunnerSetSpec{RunnerGroup: tc.set}}
+			var gw *v2alpha1.ActionsGateway
+			if !tc.nilGateway {
+				gw = &v2alpha1.ActionsGateway{
+					Spec: v2alpha1.ActionsGatewaySpec{DefaultRunnerGroup: tc.gateway},
+				}
+			}
+			if got := resolveRunnerGroupName(rs, gw); got != tc.want {
+				t.Errorf("resolveRunnerGroupName = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

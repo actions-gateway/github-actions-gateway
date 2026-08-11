@@ -379,6 +379,34 @@ The infra webhook carries the same residual as the worker one (G.7): direct RBAC
 A `ValidatingAdmissionPolicy` backstop for the infra allowlist, following the G.7 `paramKind` pattern, is the planned closure; the worker-facing `priorityclass-allowlist-guard` policy reads only `allowedPriorityClasses`, since the kind it exists for (`runnergroups`, which has no webhook) carries no infra scheduling block. **Closed (Q284): flag, disjointness check, and both webhooks (`EgressProxy` extended; a new v2 `ActionsGateway` webhook stood up, since none existed).
 Dynamic augmentation Q298.**
 
+### Unbounded job intake via the installation's default runner group
+
+Every other control in this section bounds what a tenant's worker may *do* once it is running.
+This one bounds *who may cause it to run at all*, and it is the only control in the threat model that lives at GitHub rather than in the cluster: no NetworkPolicy, PSA label, admission policy, or `ResourceQuota` can reach it.
+
+A GitHub **runner group** carries a repository-access policy.
+A scale set registered into the installation's *default* group is targetable by every repository that group admits, which in a typical organization is all of them.
+The consequence on a shared cluster: a repository outside the tenant puts the tenant's runner label in `runs-on`, and GitHub assigns the job to the tenant's scale set.
+The AGC provisions a worker in the tenant's namespace, against the tenant's `ResourceQuota`, egressing from the tenant's proxy IPs.
+
+Nothing about pod-level isolation fails here, which is what makes it easy to miss.
+The worker still runs under the namespace's PSA level, its own `NetworkPolicy`, and the tenant's quota.
+What is unbounded is *intake*: whose workflow content executes there, whose logs and job metadata land in the tenant's namespace, and whose traffic leaves on the IPs an allowlist elsewhere may trust as that tenant's.
+
+`RunnerSet.spec.runnerGroup`, inheriting `ActionsGateway.spec.defaultRunnerGroup`, binds the set to a named group instead (Q712, §H.4).
+Two properties make it a boundary rather than a hint:
+
+- **Unresolvable fails closed.** A name the installation has no group for leaves the set `Ready=False`/`RunnerGroupNotFound` and registers no scale set.
+  The obvious alternative, falling back to the default group, is a silent *widening* triggered by a typo, which is the worst possible direction for a security default.
+- **An adopted scale set is reconciled, not left.** A set registered by an earlier run keeps the group it was created in unless the declared group moves it, so the field means the same thing on an existing set as on a new one.
+
+**What stays outside GAG's control, and must stay documented.** GAG never creates a runner group and never edits which repositories one admits; both are the platform admin's, at GitHub.
+So the guarantee is exactly "the tenant's runners live in the group you named" and never "only your repositories can reach them" — a named group whose access policy is *All repositories* is the default group with extra steps.
+See [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
+
+The field is tenant-authored, and the [whose-fact](../development/api-review.md#ask-whose-fact-it-is) question resolves benignly: a tenant naming a group that is not theirs volunteers *its own* runners to that group's repositories.
+It costs the tenant that lied and escalates nothing across tenants, which is why it is not gated by a platform allowlist the way `priorityClassName` is. **Closed (Q712).**
+
 ---
 
 ## 5.3. Security Profiles and the Privileged Opt-In

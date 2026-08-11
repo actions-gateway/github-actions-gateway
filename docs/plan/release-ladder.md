@@ -15,7 +15,7 @@ That is a page telling adopters nine things are in progress when they are waitin
 | Release | Carries | Gate |
 |---|---|---|
 | **1.4** | Shipped scope: cross-namespace proxy sharing, the runner template library, v2 capacity gauges, the v1alpha1 apiserver warning, and the abandoned-run recovery | [release-1.4.md](release-1.4.md) |
-| **1.5** | [Q712](../STATUS.md#Q712) runner-group binding, Q713 default-tier latency series, Q726 multi-label runner sets, plus the marketing reconciliation | [release-1.5.md](release-1.5.md) |
+| **1.5** | Q712 runner-group binding, Q713 default-tier latency series, and Q726 multi-label runner sets, all shipped, plus the marketing reconciliation | [release-1.5.md](release-1.5.md) |
 | **1.6** | The ARC-parity ports: [Q719](../STATUS.md#Q719) RWX storage validation, then [Q727](../STATUS.md#Q727) the non-privileged `container:` path | release-1.6.md, written when 1.5 tags |
 | **2.0** | v2 GA graduation and the three coupled removals: `v1alpha1`, `v2alpha1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
 

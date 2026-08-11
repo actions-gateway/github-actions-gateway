@@ -65,6 +65,7 @@ func fullRunnerSet(protocol string, labels ...string) *v2alpha1.RunnerSet {
 			MaxListeners:        25,
 			MaxWorkers:          ptrTo[int32](8),
 			RunnerLabels:        labels,
+			RunnerGroup:         "tenant-a",
 			AcquisitionProtocol: protocol,
 			PriorityTiers:       []v2alpha1.PriorityTier{{PriorityClassName: "high", Threshold: 8}},
 			MaxEvictionRetries:  ptrTo[int32](3),
@@ -241,6 +242,7 @@ func TestActionsGatewayConversion_RoundTrip(t *testing.T) {
 			GitHubURL:          "https://github.com/my-org",
 			DefaultProxyRef:    &v2alpha1.ProxyObjectRef{Name: "proxy"},
 			DefaultTemplateRef: &v2alpha1.ObjectRef{Name: "tmpl"},
+			DefaultRunnerGroup: "tenant-a",
 			AGCResources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{corev1.ResourceCPU: mustQuantity("500m")},
 			},

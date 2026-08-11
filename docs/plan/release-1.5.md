@@ -1,7 +1,8 @@
 # Release 1.5 Milestone Definition
 
 > **Status: scope opening 2026-08-06.** [Release 1.4](release-1.4.md) is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
-> Four gating Queue rows so far, labelled `1.5-gate`: [Q712](../STATUS.md#Q712), Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date and [shipped 2026-08-11](#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only).
+> Four gating Queue rows so far, labelled `1.5-gate`: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
+> All four shipped 2026-08-11.
 
 ## Why these gate a release rather than riding along
 
@@ -11,19 +12,31 @@ That is what makes them release-gating: shipping another minor while either is o
 Q726 is the same shape read from the other side.
 It is the one [ARC parity](arc-parity.md) gap that breaks the zero-edit migration claim the front door makes, so it gates for the same reason: the claim is published and the product does not honour it for a `runs-on` array.
 
-### Q712 — the runner-group binding is declared and never wired
+### Q712 — the runner-group binding is declared and never wired ✅ shipped
 
-`RunnerGroupName` exists on the scale-set listener config (`cmd/agc/internal/scalesetlistener/listener.go:372`) and is resolved when non-empty (`:690`), but the sole production construction site in `cmd/agc/internal/controller/runnerset_scaleset.go` never sets it.
-Every scale set therefore registers into the installation's default runner group.
+`RunnerGroupName` exists on the scale-set listener config (`cmd/agc/internal/scalesetlistener/listener.go`) and is resolved when non-empty, but the sole production construction site in `cmd/agc/internal/controller/runnerset_scaleset.go` never set it.
+Every scale set therefore registered into the installation's default runner group.
 
 The GitHub runner group is the **forge-side authorization point** for which repositories may target which runners.
 With every tenant's scale set in one group, a repository outside a tenant can name that scale set in `runs-on` and route work into the tenant's namespace, quota, and egress IP.
 GAG's pod-level isolation is unaffected; what is unbounded is *who can cause a job to run there*.
 
-Scope note, to be settled in the work rather than assumed: exploitability depends on the default group's repository-access configuration at GitHub, which GAG does not manage today.
-The row covers wiring the field, deciding whether the gateway should also assert group membership, and documenting what the platform admin still owns at GitHub.
+This is also the one place ARC was ahead on GAG's own core claim: its `gha-runner-scale-set` chart exposes `runnerGroup` as a first-class value.
 
-This is also the one place ARC is ahead on GAG's own core claim: its `gha-runner-scale-set` chart exposes `runnerGroup` as a first-class value.
+**Two defects the row did not name, found by measuring before coding.** Wiring the field alone would have shipped a boundary that looks declared and is not:
+
+- The resolver **fell back to the default group** when the name did not resolve (`ok == false` kept `groupID = 1`), so a typo widened the boundary to the whole installation at exactly the moment the operator was narrowing it.
+- `ensureScaleSet` **adopts an existing scale set by name without reading its group**, so declaring `runnerGroup` on a set registered by an earlier run would have left the original group in force with nothing reporting it.
+
+**What shipped.** `RunnerSet.spec.runnerGroup`, inheriting `ActionsGateway.spec.defaultRunnerGroup` when unset (the `templateRef`/`proxyRef` shape, so a tenant declares its boundary once on the gateway), both `v2alpha1` and `v2beta1`.
+An unresolvable name fails the set closed at `Ready=False`/`RunnerGroupNotFound` rather than falling back; an adopted scale set is moved into its declared group; and changing the declared group restarts the set's listener rather than waiting for an AGC rollout.
+An **undeclared** group still leaves an existing scale set where it is, so widening is always explicit.
+
+**The gateway-assertion question, settled.** The gateway carries the group as an inherited default, not as an enforced ceiling.
+GAG does not create runner groups and does not manage their repository access, so there is nothing for it to assert *against*: a tenant naming a group only volunteers its own runners to that group's repositories, which costs the tenant and escalates nothing across tenants.
+What the platform admin still owns at GitHub is documented in [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group) and [appendix H](../design/appendix-h-v2-api-decomposition.md).
+
+Adjacent hole found while measuring, filed rather than fixed: the `RunnerSet` webhook's scale-set label-uniqueness guard is **namespace-scoped**, so two tenants under one GitHub org can claim one scale-set name across namespaces ([Q791](../STATUS.md#Q791)).
 
 ### Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11
 
@@ -93,7 +106,7 @@ Three bodies of work, in dependency order:
 2. **Under-claims.** Nine capabilities shipped and appear only in `features.md`.
    The largest are no-PEM workload identity (the GitHub App private key never enters the cluster), the live-validated per-tenant egress IP result, and the durability programme whose motivating incident was five worker pods running 16 hours on 82 spot node-hours.
 3. **Structure.** Q713 blocked any number-bearing claim, since the shipped tier emitted no latency or duration series to measure; it landed 2026-08-11, so latency and cost claims are now measurable on the default tier.
-   Q712 blocks publishing tenant-isolation marketing, because the runner-group binding it would be claiming is unwired.
+   Q712 blocked publishing tenant-isolation marketing and landed the same day, so that claim is available too: state it as the runner-group *binding*, not as GAG controlling repository access, which stays the platform admin's at GitHub.
 
 The recurring form of this is now [release.md § Pre-flight](../operations/release.md#1-pre-flight), which asks the same three questions before every tag.
 1.5 is the first release to run it, and the backlog it produced is the reason the step exists.

@@ -74,6 +74,7 @@ const (
 	ReasonCABundleNotFound        = apiconditions.ReasonCABundleNotFound
 	ReasonCABundleInvalid         = apiconditions.ReasonCABundleInvalid
 	ReasonNoActiveSessions        = apiconditions.ReasonNoActiveSessions
+	ReasonRunnerGroupNotFound     = apiconditions.ReasonRunnerGroupNotFound
 	ReasonListenerActive          = apiconditions.ReasonListenerActive
 	ReasonTokenUnavailable        = apiconditions.ReasonTokenUnavailable
 	ReasonDirectEgress            = apiconditions.ReasonDirectEgress

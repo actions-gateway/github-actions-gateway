@@ -122,6 +122,7 @@ type ActionsGatewaySpec struct {
     // rather than provisioning an AGC whose pod cannot start.
     GitHubCABundleRef *LocalConfigMapReference `json:"githubCABundleRef,omitempty"`
     DefaultTemplateRef *ObjectRef           `json:"defaultTemplateRef"` // optional (Q172): inherited by RunnerSets with no templateRef
+    DefaultRunnerGroup string               `json:"defaultRunnerGroup"` // optional (Q712): GitHub runner group inherited by RunnerSets with no runnerGroup
     Tracing            TracingConfig        `json:"tracing"`            // unchanged
 
     // REMOVED vs v1alpha1: SecurityProfile string → PSA is namespace-scoped, so it
@@ -226,6 +227,7 @@ type RunnerSetSpec struct {
     ProxyRef    *ObjectRef // EgressProxy; nil ⇒ gateway.defaultProxyRef; both nil ⇒ direct egress
 
     RunnerLabels  []string
+    RunnerGroup   string     // GitHub runner group; "" ⇒ gateway.defaultRunnerGroup; both "" ⇒ GitHub's default group (Q712)
     MaxListeners  int32
     MaxWorkers    *int32
     PriorityTiers []PriorityTier
@@ -249,6 +251,23 @@ If two are marked, the AGC fails closed `Ready=False`/`AmbiguousDefault` (naming
 The ≤1 invariant is checked at *resolution time* in the AGC reconciler, not at admission, for the same reason all reference integrity is runtime here (§H.7): it is a cross-object invariant single-object CEL cannot express, and an admission reject would break GitOps apply-ordering.
 The trade-off — admission would give earlier feedback — is accepted; the condition surfaces the moment a `RunnerSet` actually depends on the ambiguous default, and clears the moment one default is demoted (the `ClusterRunnerTemplate` watch re-enqueues).
 A `defaultTemplateRef`/`templateRef` that *names a missing* template still fails closed (`TemplateNotFound`), exactly like a missing proxy fails closed (`ProxyNotFound`); only an entirely-unset reference falls through to the next rung.
+
+**The forge-side boundary: `runnerGroup` / `defaultRunnerGroup` (Q712, shipped).** Everything else in this appendix bounds what a tenant's runners *may do*; the GitHub runner group bounds *who may cause them to run*.
+It is the forge's own authorization point for which repositories can target a scale set, and it sits outside the cluster entirely, so no NetworkPolicy, PSA label, or admission rule reaches it.
+A scale set left in the installation's default group is targetable by every repository that group admits, typically the whole organization, so a repository outside the tenant can name the set in `runs-on` and route work into the tenant's namespace, quota, and egress IP.
+Pod-level isolation is unaffected by this; what is unbounded without a group is the *intake*.
+
+`RunnerSet.spec.runnerGroup` names the group, inheriting `ActionsGateway.spec.defaultRunnerGroup` when unset.
+That is the same shape as `templateRef`/`proxyRef`, so a tenant declares its boundary once on the gateway and a set overrides it only to narrow further (a GPU set whose repository access differs, say).
+Both unset leaves GitHub's default group, which is today's behaviour and stays the default because a group GAG did not create is not GAG's to assume.
+
+Resolution is runtime and fail-closed, per §H.7: a name the installation has no group for leaves the set `Ready=False`/**`RunnerGroupNotFound`** rather than registering into the default group.
+That direction is the whole point, because the convenient fallback silently *widens* the boundary the operator was narrowing, and does it at exactly the moment they typed the name wrong.
+Two consequences follow from the group being read once, at scale-set registration: a set adopted from an earlier run is **moved** into its declared group rather than keeping the group it was created in, and changing the declared group restarts the set's listener rather than waiting for an AGC rollout.
+
+What GAG does **not** own: creating runner groups, and configuring which repositories each admits.
+Both are the platform admin's, at GitHub.
+See [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
 
 **Per-gateway AGC resources — `agcResources` (Q171, shipped).** The AGC control-plane container is sized by an optional `ActionsGateway.spec.agcResources` of the standard `corev1.ResourceRequirements` shape.
 It is an additive, per-key overlay of the platform default — the [Appendix A](appendix-a-capacity-slos.md) sizing (`requests {cpu: 500m, memory: 2Gi}`, `limits {cpu: 2, memory: 4Gi}`): the GMC stamps the default and replaces only the request/limit keys the tenant sets, so an unset field reproduces the default unchanged (non-breaking) and a value that sets one knob keeps the default for the rest.
@@ -370,7 +389,7 @@ Field movement, v1alpha1 → v2alpha1:
 | `RunnerGroup.spec.{runnerLabels,maxListeners,maxWorkers,priorityTiers, lifecycle}` | `RunnerSet.spec` (unchanged) |
 | `ActionsGateway.spec.proxy` | `EgressProxy` (kind) |
 | `ActionsGateway.spec.runnerGroups` | removed (explicit `RunnerSet` objects) |
-| — | `RunnerSet.spec.{gatewayRef,templateRef,proxyRef}`; `ActionsGateway.spec.{defaultProxyRef,defaultTemplateRef,agcResources,agcAutoscaling}` |
+| — | `RunnerSet.spec.{gatewayRef,templateRef,proxyRef,runnerGroup}`; `ActionsGateway.spec.{defaultProxyRef,defaultTemplateRef,defaultRunnerGroup,agcResources,agcAutoscaling}` |
 
 ## H.7. Reference integrity — runtime conditions, not admission
 

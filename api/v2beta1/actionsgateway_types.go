@@ -83,6 +83,26 @@ type ActionsGatewaySpec struct {
 	// +optional
 	DefaultTemplateRef *ObjectRef `json:"defaultTemplateRef,omitempty"`
 
+	// DefaultRunnerGroup names the GitHub runner group inherited by RunnerSets under
+	// this gateway that set no spec.runnerGroup of their own. This is GitHub's own
+	// grouping, not the deprecated v1alpha1 RunnerGroup CR. Optional: unset on both
+	// objects leaves the scale set in GitHub's default group.
+	//
+	// This is where a tenant's forge-side boundary is declared once. The runner group
+	// decides which repositories may target the tenant's runners, so a gateway whose
+	// sets all land in the default group is reachable by every repository that group
+	// admits, typically the whole organization. Resolved at runtime and fail-closed
+	// per set, exactly like an explicit spec.runnerGroup.
+	//
+	// GAG does not create runner groups or manage their repository access: the
+	// platform admin pre-creates the group at GitHub and scopes it to the tenant's
+	// repositories. See docs/operations/tenant-onboarding.md.
+	//
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	DefaultRunnerGroup string `json:"defaultRunnerGroup,omitempty"`
+
 	// AGCResources tunes the CPU/memory requests and limits stamped on this
 	// gateway's AGC control-plane container (Q171). It is an additive, per-key
 	// override of the platform default — the documented Appendix A sizing of

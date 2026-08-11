@@ -32,6 +32,7 @@ Two detection substrates are used:
 - [Posture scanning (preventive)](#posture-scanning-preventive)
   - [Manifest posture — polaris (automated, in CI)](#manifest-posture--polaris-automated-in-ci)
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
+- [Job intake: bind every tenant to a GitHub runner group](#job-intake-bind-every-tenant-to-a-github-runner-group)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
   - [Expressing GitHub egress by FQDN: the `egressPolicyMode` opt-in](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)
@@ -427,6 +428,28 @@ Triage the report against this operator's needs:
 - **Findings that don't apply** (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.
 
 The goal is **zero critical (`[FAIL]`) findings that this stack depends on** before the first production tenant (per [milestone-5.md](../plan/milestone-5.md) §3).
+
+## Job intake: bind every tenant to a GitHub runner group
+
+Everything else on this page bounds what a tenant's workers may reach.
+This bounds who may reach *them*, and it is the one control that lives at GitHub, outside anything the cluster can enforce.
+
+A runner set that names no GitHub runner group registers into the installation's **default** group, which in most organizations admits every repository.
+On a shared cluster that means any repository in the org can put a tenant's runner label in `runs-on` and have its job run in that tenant's namespace, against that tenant's quota, egressing from that tenant's proxy IPs.
+The pod isolation described above is untouched; what is unbounded is the intake.
+
+Two things to do, in this order, per tenant:
+
+1. **At GitHub**, create a runner group for the tenant and scope its repository access to that tenant's repositories.
+   GAG never creates a runner group and never edits one's access policy, so a group whose access is *All repositories* buys nothing over the default group.
+2. **In the cluster**, set `spec.defaultRunnerGroup` on the tenant's `ActionsGateway`.
+   Every `RunnerSet` under it inherits the group; a set may override with its own `spec.runnerGroup` to narrow further.
+
+A group name the installation does not have leaves the set `Ready=False`/`RunnerGroupNotFound` and registers no scale set, rather than falling back to the default group.
+That is deliberate: the fallback would widen the boundary at the moment the name was mistyped.
+
+Onboarding walkthrough and failure modes: [tenant onboarding](tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
+Threat-model rationale: [design 5.2](../design/05-security.md).
 
 ## Tenant egress posture & deliberate widening
 
