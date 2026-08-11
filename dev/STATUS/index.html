@@ -2835,12 +2835,12 @@
 <td>Seen 4/7 <code>make check</code> runs 2026-08-08/09 under Q733, 0/4 under <code>make scripts-test</code> alone, 0/5 standalone: needs full-check contention. The tree case waits 100×<code>sleep 0.1</code> for a <code>.launch</code> record. Q642/Q690's shape: bounds startup, not the subject.</td>
 </tr>
 <tr>
-<td><a id="Q703"></a>Q703</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">Gates die mid-run under <code>run-parallel</code>, pass standalone</a></td>
-<td><code>flake</code> <code>ci</code></td>
+<td><a id="Q785"></a>Q785</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/gothrottle/main.go">A failed throttle probe silently disables the go-throttle hook for that call</a></td>
+<td><code>bug</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Trigger fired 3× on 2026-08-08/09: <code>claude-go-throttle-hook-test</code> (exit 1, empty hook output) and <code>record-launch-test</code> (died after 6 assertions), both passing standalone. The second carries Q733's errexit prologue, so that fix does not close it.</td>
+<td>Measured under Q703: <code>throttlePrefix</code> returns "" both for "throttling is off" and for "a probe that could not run", so a failed probe silently drops the <code>deny</code> guarding an unthrottled <code>-race</code>.</td>
 </tr>
 <tr>
 <td><a id="Q741"></a>Q741</td>
@@ -3855,6 +3855,13 @@
 <td><code>flake</code> <code>tests</code> <code>security</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails on <code>main</code> with the CNI enforcer fingerprint <em>unchanged</em> across the probe, which the failure message states outright: a real isolation regression, not Q747's dead-enforcer lane artifact. → top of Queue, escalated.</td>
+</tr>
+<tr>
+<td><a id="Q703"></a>Q703</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh"><code>claude-go-throttle-hook-test</code> reads an empty hook decision under <code>make check</code>, passes standalone</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Event:</strong> it fails on <code>main</code> again. The message now names the silent path taken (<a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">trace</a>), so refile on that, not on the empty decision 14 paths share. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q690"></a>Q690</td>
