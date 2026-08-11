@@ -722,9 +722,12 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 	// Runnable so the handler is registered after the cache syncs.
 	podWaiter := provisioner.NewInformerPodWaiter(mgr.GetCache(),
 		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("podwaiter"))))
-	// Observe pod-creation latency (creation → runner container start) off the same
-	// pod events, once per pod, for the headline pod-startup SLO.
+	// Observe pod-creation latency (creation → runner container start) and worker
+	// pod lifetime off the same pod events, once per pod, for the headline
+	// pod-startup SLO and for cost attribution. Both tiers' pods reach the informer,
+	// which is what makes the series present on the scale-set tier too (Q713).
 	podWaiter.PodCreationLatency = m.PodCreationLatency
+	podWaiter.JobDuration = m.JobDuration
 	if err := mgr.Add(podWaiter); err != nil {
 		return nil, fmt.Errorf("add pod completion watcher: %w", err)
 	}
