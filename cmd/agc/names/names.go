@@ -38,10 +38,31 @@ const WorkerSAName = "actions-gateway-worker"
 //     rejection (the runner-version contract — see Q71/Q118 in docs/STATUS.md
 //     and the milestone-4 plan note).
 //
+// It describes the AGC's own virtual runner — the listener half of the protocol,
+// which the AGC implements regardless of which image a worker pod runs. The runner
+// version a tenant's spec.workerImage ships is a separate fact, detected per
+// RunnerGroup/RunnerSet and checked against MinRunnerVersion (Q715).
+//
 // It MUST equal the FROM tag in the root Dockerfile's `worker` stage; the
 // lockstep test in runner_version_test.go enforces that so a future bump cannot
 // drift.
 const RunnerVersion = "2.335.1"
+
+// MinRunnerVersion is the lowest actions/runner version GitHub accepts when a
+// runner registers. Below it, GitHub refuses the registration outright, so a worker
+// image shipping an older runner cannot take jobs.
+//
+// Measured 2026-08-11 against the GitHub Actions changelog of 2026-06-12,
+// "Minimum version enforcement timeline for self-hosted runners": GHEC runs
+// brownouts from 2026-08-24 to 2026-09-18 and enforces fully from 2026-09-25;
+// GHEC with data residency enforced from 2026-07-31; GHES is unaffected.
+//
+// This is the registration floor only. GitHub separately requires each new runner
+// release be installed within 30 days of publication to keep executing jobs — a
+// rolling floor no compiled-in constant can track, so an image at or above this
+// version is checkable-good, not guaranteed-current. Bump it alongside
+// RunnerVersion when GitHub publishes a new minimum.
+const MinRunnerVersion = "2.329.0"
 
 // WorkerImageRepo is the actions/runner image repository. It matches the ARC
 // gha-runner-scale-set default so tenants copy-pasting from ARC manifests see

@@ -243,6 +243,11 @@ func run() error {
 	payloadDir := envOr("PAYLOAD_SECRET_PATH", defaultPayloadPath)
 	runnerHome := envOr("RUNNER_HOME_DIR", defaultRunnerHome)
 
+	// Report the runner version this image ships before either mode branches, so a
+	// custom workerImage answers the question the AGC's image-reference check cannot
+	// (Q715).
+	logRunnerVersion(runnerHome)
+
 	// Scale-set mode (Q264 Option E): no payload to hand off — the pod runs the full
 	// runner, which pulls its own job through its own session. The wrapper keeps only
 	// its proxy-CA trust duty; the pipes handoff and Runner.Worker spawn below do not

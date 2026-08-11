@@ -46,6 +46,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
+- [Worker Image Runner Version](#worker-image-runner-version)
 - [Job-Lifecycle Events on a RunnerGroup / RunnerSet](#job-lifecycle-events-on-a-runnergroup--runnerset)
 - [Proxy Pool Not Scaling](#proxy-pool-not-scaling)
 - [Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap](#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap)
@@ -397,7 +398,7 @@ kubectl get pods -n <namespace> -l app=actions-gateway-controller \
 **Symptoms.** `kubectl get actionsgateway` shows a `RunnerGroupsDegraded=True` condition, or the `actions_gateway_runnergroups_degraded` gauge is `1`.
 The gateway infrastructure itself (proxy, AGC) may still be `Ready=True` — this condition rolls **child RunnerGroup** health up to the gateway so you don't have to inspect each group individually.
 
-**Cause.** One or more of the gateway's owned `RunnerGroup`s reports an *impairing* condition — `CredentialUnavailable` (the AGC can't obtain an installation token), `Degraded` (an unhealthy/unauthorized listener session), `RunnerVersionTooOld` (GitHub rejects the configured runner version), or `WorkersUnschedulable` (worker pods can't be scheduled).
+**Cause.** One or more of the gateway's owned `RunnerGroup`s reports an *impairing* condition — `CredentialUnavailable` (the AGC can't obtain an installation token), `Degraded` (an unhealthy/unauthorized listener session), `RunnerVersionTooOld` (the worker image ships a runner below GitHub's enforced minimum, or GitHub rejected the configured version outright; see [Worker Image Runner Version](#worker-image-runner-version)), or `WorkersUnschedulable` (worker pods can't be scheduled).
 Advisory capacity/throughput conditions (`WorkerQuotaPressure`/`WorkerQuotaExceeded`, `RateLimited`) are deliberately **not** rolled up here — they have their own signals. `RunnerGroupsDegraded` does **not** gate `Ready`: the gateway can keep serving healthy groups while one is impaired.
 
 **Diagnostics.**
@@ -1828,6 +1829,41 @@ kubectl get runnerset <name> -n <namespace> \
 
 ---
 
+## Worker Image Runner Version
+
+**Symptoms.** A `RunnerGroup` or `RunnerSet` reports `RunnerVersionTooOld` with reason `WorkerImageBelowMinimum` (`True`) or `WorkerImageVersionUnknown` (`Unknown`), and a `WorkerImageBelowMinimum` Warning event names both versions.
+Jobs may still be running normally: the condition is a prediction about GitHub's enforcement, not a report that something already broke.
+
+**What happened.** GitHub refuses to register a self-hosted runner below an enforced minimum version, `2.329.0` as of the 2026-06-12 changelog, and separately requires each new runner release be installed within 30 days of publication for the runner to keep executing jobs.
+Every reconcile, the AGC reads the runner version off the effective worker image reference (the set's `workerImage`, else the AGC's `WORKER_IMAGE`, else the digest-pinned built-in default) and compares it to that floor.
+It asks GitHub nothing, which is why the signal exists on a `ScaleSet` set: the scale-set protocol carries no runner version at session creation, so the listener there never sees the rejection that produces the `VersionTooOld` reason on the classic tier.
+
+Only the reference is read, so a tag that is not a runner version reports `Unknown` rather than a verdict. `Unknown` is deliberately not `False`: a custom image is exactly where a stale runner hides, and reporting "current" for an image nothing has checked would be worse than saying so.
+
+**A `True` verdict makes the set impaired**, so it rolls up into the gateway's `RunnerGroupsDegraded`/`RunnerSetsDegraded` condition. `Unknown` and `False` do not.
+
+**Resolution.**
+
+- **`WorkerImageBelowMinimum`**: build or pull a `workerImage` on runner `2.329.0` or later and update the spec.
+  Prefer both a tag and a digest (`myrepo/runner:2.335.1@sha256:…`): the digest is what pins the image, and the tag is what makes the version checkable.
+- **`WorkerImageVersionUnknown`**: either re-tag with the runner version the image ships, or read the version out of a worker pod directly.
+  The injected wrapper logs it once per pod, from the runner's own dependency manifest rather than from the tag:
+
+```bash
+kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
+# runner version detected version=2.335.1
+```
+
+`runner version not detected` in that log means the image does not carry `bin/Runner.Listener.deps.json` where the runner layout puts it: it is not `actions/runner`-derived, or the runner lives somewhere `RUNNER_HOME_DIR` does not point at.
+
+```bash
+# The verdict and its message for one set
+kubectl get runnerset <name> -n <namespace> \
+  -o jsonpath='{.status.conditions[?(@.type=="RunnerVersionTooOld")]}'
+```
+
+---
+
 ## Job-Lifecycle Events on a RunnerGroup / RunnerSet
 
 **What this is.** Beyond `WorkerPodStuckPending` (above), the AGC records `Warning` Kubernetes Events on the owning `RunnerGroup` (`v1alpha1`) or `RunnerSet` (`v2alpha1`) when a job-lifecycle transition fails terminally (Q170).
@@ -1842,6 +1878,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 |---|---|---|---|
 | `JobAcquisitionFailed` | Warning | A delivered job could not be acquired from GitHub (`acquirejob` failed); the job stays queued at GitHub for redelivery. | [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) |
 | `RunnerVersionTooOld` | Warning | Session creation was rejected permanently because the runner version is too old for GitHub. Also sets the `RunnerVersionTooOld` condition. | [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) |
+| `WorkerImageBelowMinimum` | Warning | The effective `workerImage` ships a runner below GitHub's enforced minimum, read at reconcile on both tiers and emitted once per transition, before GitHub rejects anything. Also sets the `RunnerVersionTooOld` condition. | [Worker Image Runner Version](#worker-image-runner-version) |
 | `SessionUnauthorized` | Warning | Session creation was rejected as unauthorized — the agent credentials are invalid or revoked. Also sets the `Degraded` condition. | [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration) |
 | `QuotaRetriesExhausted` | Warning | Worker pod creation was abandoned after exhausting the namespace `ResourceQuota` retry budget (`maxQuotaRetries`). | [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion) |
 | `WorkerPodCreateFailed` | Warning | The API server refused to create a worker pod (invalid name, admission webhook, pod-security policy). The note carries the API server's own message. No pod exists, so GitHub reports only that the runner lost communication. | ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created) |
@@ -3691,7 +3728,7 @@ On a `Classic`-protocol set the listener goroutines push the same conditions the
 | Condition | Reason | Meaning |
 | --- | --- | --- |
 | `RateLimited=True` | `SustainedRateLimit` | GitHub has answered message polling with 429 for over ten minutes. |
-| `RunnerVersionTooOld=True` | `VersionTooOld` | *(Classic only)* GitHub rejected the configured runner version at session creation — see the v1 guidance under [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs); the fix (update `workerImage`) is the same. This class cannot occur on a `ScaleSet` set: the scale-set protocol carries no runner version at session creation (the per-job JIT config is minted server-side). |
+| `RunnerVersionTooOld=True` | `VersionTooOld` | *(Classic only)* GitHub rejected the configured runner version at session creation — see the v1 guidance under [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs); the fix (update `workerImage`) is the same. This class cannot occur on a `ScaleSet` set: the scale-set protocol carries no runner version at session creation (the per-job JIT config is minted server-side). The reconciler's own reading of `workerImage` covers both tiers — see [Worker Image Runner Version](#worker-image-runner-version). |
 | `Degraded=True` | `Unauthorized` | A session call was rejected as unauthorized — the GitHub App / agent credentials are invalid or revoked. On a `ScaleSet` set this covers session create *and* the queue-token refresh, and a `SessionUnauthorized` Warning event names the rejected call. |
 
 All are advisory (abnormal-is-`True`) and do not gate `Ready`.

@@ -502,7 +502,27 @@ USER runner   # keep the non-root UID 1001 the AGC expects
 ```
 
 A working reference you can copy and extend lives at [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile) (built by [`scripts/dogfood/runner-build.sh`](../../scripts/dogfood/runner-build.sh)); it adds just enough to run a `make`-based Go CI. **It is a reference example, not an officially supported image** — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
-Keep the runner version in step with the default the AGC would otherwise inject (it is the version GitHub validates at session creation); a stale runner surfaces as the `RunnerGroup` `VersionTooOld` condition.
+Keep the runner version in step with the default the AGC would otherwise inject.
+GitHub refuses to register a runner below its enforced minimum, currently `2.329.0`, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.
+
+**Tag your image with the runner version it ships.** The AGC reads the runner version off the `workerImage` reference and reports the verdict as the `RunnerVersionTooOld` condition on the `RunnerGroup`/`RunnerSet`:
+
+| Condition | Reason | What it means |
+|---|---|---|
+| `True` | `WorkerImageBelowMinimum` | The tag names a runner version below GitHub's enforced minimum. Update `workerImage`; the set counts as impaired and rolls up to the gateway. |
+| `False` | `WorkerImageCurrent` | The tag names a version at or above the minimum. This checks the registration floor only; it does not prove the image is inside the 30-day window. |
+| `Unknown` | `WorkerImageVersionUnknown` | The reference names no runner version, so nothing has been checked: a digest-only ref, or a tag of your own such as `:v3-cuda`. Re-tag as `<something>:2.335.1` to get a verdict, or read the runner version from the worker pod's own log line (below). |
+
+A digest-only or custom tag is not a failure, just an unchecked one.
+The pinned-digest advice above still stands, and `myrepo/runner:2.335.1@sha256:…` satisfies both.
+
+**Reading the version a running worker actually shipped.** Whatever the tag says, the wrapper logs the runner version it found inside the image once per worker pod:
+
+```bash
+kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
+```
+
+`runner version detected version=2.335.1` is the real answer for a custom image; `runner version not detected` means the image is not `actions/runner`-derived in the expected layout.
 
 **Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block.
 Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default). `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
@@ -675,7 +695,8 @@ Onboarding is complete when:
 | `ActionsGateway` condition `AGCAvailable=False`, logs show `RSA key parse error` | Private key has trailing whitespace or incorrect PEM format | Recreate the Secret; ensure the key starts with `-----BEGIN RSA PRIVATE KEY-----` (PKCS#1) or `-----BEGIN PRIVATE KEY-----` (PKCS#8, RSA or Ed25519) and has no extra blank lines or spaces |
 | `HPA TARGETS: <unknown>` | `proxy.resources.requests.cpu` not set | Add `requests.cpu: "10m"` under `spec.proxy.resources.requests` |
 | Worker pods stuck `Pending` | `ResourceQuota` exhausted or no schedulable nodes | Check `kubectl describe resourcequota -n <namespace>` and node capacity |
-| `RunnerGroup` condition `VersionTooOld` | Worker image contains a runner version below GitHub's minimum | Update `workerImage` in the RunnerGroup spec |
+| `RunnerGroup`/`RunnerSet` condition `RunnerVersionTooOld=True`, reason `WorkerImageBelowMinimum` | The `workerImage` tag names a runner version below GitHub's enforced minimum | Update `workerImage` to a runner `2.329.0` or later |
+| `RunnerVersionTooOld=Unknown`, reason `WorkerImageVersionUnknown` | The `workerImage` reference names no runner version, so nothing was checked | Tag the image with the runner version it ships, or read the worker pod's `runner version detected` log line |
 | Test job stays queued in GitHub for >2 minutes | `active_sessions = 0` — listener goroutines are not running | Check AGC logs for credential or proxy errors |
 | HPA present but proxy doesn't scale up | `maxReplicas` too low or HPA metric is `<unknown>` | Check both the HPA spec and that `requests.cpu` is set |
 | Proxy stuck below `maxReplicas`; `FailedCreate ... exceeded quota` events | `proxy.maxReplicas` exceeds the namespace `ResourceQuota` | Check the `ProxyQuotaPressure` condition (`kubectl describe actionsgateway …`); raise the quota or lower `maxReplicas` |

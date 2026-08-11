@@ -115,6 +115,10 @@ const (
 	ReasonRunnerNameConflict      = apiconditions.ReasonRunnerNameConflict
 	ReasonWorkerCeilingReached    = apiconditions.ReasonWorkerCeilingReached
 	ReasonJobsProvisioning        = apiconditions.ReasonJobsProvisioning
+
+	ReasonWorkerImageBelowMinimum   = apiconditions.ReasonWorkerImageBelowMinimum
+	ReasonWorkerImageCurrent        = apiconditions.ReasonWorkerImageCurrent
+	ReasonWorkerImageVersionUnknown = apiconditions.ReasonWorkerImageVersionUnknown
 )
 
 // ImpairingConditionTypes returns the abnormal-is-True RunnerSet condition types that,

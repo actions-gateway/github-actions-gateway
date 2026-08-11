@@ -403,25 +403,44 @@ const (
 // RunnerGroup — referencing the agcv1alpha1 constants of the same values, pinned
 // by a value-parity test in cmd/agc) and the ScaleSet listener
 // (cmd/agc/internal/scalesetlistener, Q325). All are advisory (abnormal-is-True)
-// and do not gate Ready. RunnerVersionTooOld is classic-only: the scale-set
-// protocol carries no runner version at session creation (the per-job JIT config
-// is minted server-side), so that failure class cannot occur on the ScaleSet
-// path. The classic listener sets only the abnormal (True) states; the ScaleSet
-// listener also publishes the healthy (False) states and clears an abnormal
-// state when the session recovers.
+// and do not gate Ready. The classic listener sets only the abnormal (True) states;
+// the ScaleSet listener also publishes the healthy (False) states and clears an
+// abnormal state when the session recovers.
+//
+// RunnerVersionTooOld has two producers with different reasons (Q715). GitHub's own
+// rejection at session creation (VersionTooOld) is classic-only — the scale-set
+// protocol carries no runner version there, since the per-job JIT config is minted
+// server-side — so on its own it leaves the ScaleSet tier unable to report the
+// failure class at all. Both reconcilers therefore also publish the condition from
+// the worker image itself every reconcile (the WorkerImage* reasons below), which
+// needs no session and so covers both tiers.
 const (
 	// ConditionRateLimited is True when GitHub has been rate-limiting the set's
 	// sessions for a sustained period (abnormal-is-True).
 	ConditionRateLimited = "RateLimited"
-	// ConditionRunnerVersionTooOld is True when GitHub rejects the configured
-	// runner version as too old for session creation (abnormal-is-True).
+	// ConditionRunnerVersionTooOld is True when the runner version cannot serve
+	// jobs: GitHub rejected it at session creation, or the worker image ships one
+	// below GitHub's enforced minimum (abnormal-is-True).
 	ConditionRunnerVersionTooOld = "RunnerVersionTooOld"
 
 	// ReasonSustainedRateLimit is the RateLimited=True reason (message polling has
 	// been answered 429 for over ten minutes).
 	ReasonSustainedRateLimit = "SustainedRateLimit"
-	// ReasonVersionTooOld is the RunnerVersionTooOld=True reason.
+	// ReasonVersionTooOld is the RunnerVersionTooOld=True reason when GitHub itself
+	// rejected the session as too old (classic tier only).
 	ReasonVersionTooOld = "VersionTooOld"
+	// ReasonWorkerImageBelowMinimum is the RunnerVersionTooOld=True reason when the
+	// worker image's tag declares an actions/runner version below the enforced
+	// registration minimum (agc/names.MinRunnerVersion).
+	ReasonWorkerImageBelowMinimum = "WorkerImageBelowMinimum"
+	// ReasonWorkerImageCurrent is the RunnerVersionTooOld=False reason: the worker
+	// image declares a runner version at or above the enforced minimum.
+	ReasonWorkerImageCurrent = "WorkerImageCurrent"
+	// ReasonWorkerImageVersionUnknown is the RunnerVersionTooOld=Unknown reason: the
+	// worker image reference declares no runner version (digest-only, or a tag of
+	// the tenant's own), so nothing has been checked. Unknown rather than False —
+	// a custom image is where a stale runner hides.
+	ReasonWorkerImageVersionUnknown = "WorkerImageVersionUnknown"
 	// ReasonSessionUnauthorized is the Degraded=True reason pushed when session
 	// creation is rejected as unauthorized — the agent credentials are invalid or
 	// revoked.
