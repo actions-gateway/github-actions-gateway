@@ -138,8 +138,10 @@ There is deliberately **no date**. `v1.3.0` fixes *which* release removes these 
 1. **Migrate off `v1alpha1`.** Run [`gag-migrate`](migration-v1-to-v2.md), which also relabels the namespace markers and annotations onto the `actions-gateway.com/` spellings.
    Do this *before* upgrading: after removal the legacy spellings and the v1 finalizer names are no longer honored, and any remaining `v1alpha1` objects have no served version.
 2. **Move `v2alpha1` objects to `v2beta1`.** Re-apply them at `v2beta1` (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.
-3. **Replace Classic runner sets with `ScaleSet` sets.** One single-label `RunnerSet` per `runs-on` target, created fresh, since `acquisitionProtocol` is immutable.
-   Split any multi-label group into one set per label, and drop `maxListeners`, which `ScaleSet` ignores.
+3. **Replace Classic runner sets with `ScaleSet` sets.** Created fresh, since `acquisitionProtocol` is immutable.
+   The labels carry across as they are, since a `ScaleSet` set registers every `runnerLabel`, so a multi-label group does not have to be split.
+   Pick the *first* one deliberately: it names the scale set at GitHub and must be unique under the gateway.
+   Drop `maxListeners`, which `ScaleSet` ignores.
    See [tenant onboarding](tenant-onboarding.md#acquisition-protocol-v2alpha1-only).
 
 Until that release, no action is forced: run [`gag-migrate`](migration-v1-to-v2.md) when convenient, validate the v2 path, and decommission v1 at your own pace.

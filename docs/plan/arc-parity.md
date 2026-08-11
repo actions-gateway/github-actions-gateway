@@ -23,7 +23,6 @@ Measured against ARC `gha-runner-scale-set` 0.14.2 (released 2026-05-22) and the
 
 | Gap | Why it blocks a migration | Row | Release |
 |---|---|---|---|
-| **Multi-label scale sets**, ARC 0.14.0 (2026-03-19) | A workflow using `runs-on: [linux, gpu]` needs one edit per target. GAG admits exactly one label per runner set, CEL-rejected above one in `v2beta1`. This is the only gap that breaks the zero-edit migration claim, and it is also a v1 to v2 drop: `v1alpha1` set no ceiling, and the godoc's workaround of staying on a `v2alpha1` Classic set expires when `v2.0.0` removes it | [Q726](../STATUS.md#Q726) | 1.5 |
 | **Bound GitHub runner group** (`runnerGroup`) | The forge-side control over which repositories may target a runner set. GAG declares the binding and never wires it, so every scale set registers into the installation's default group | [Q712](../STATUS.md#Q712) | 1.5, gating |
 | **`containerMode: kubernetes`** | Runs `container:` and `services:` steps as separate pods on a provisioned volume. GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model | [Q727](../STATUS.md#Q727) | after 1.5 |
 | **GHES validated on a real appliance** | GAG serves GitHub Enterprise Server (GHES) gateways and marks both of its GHES capabilities untested against real hardware, so an enterprise evaluator has no evidence either way | [Q765](../STATUS.md#Q765) | unscheduled, needs an appliance |
@@ -53,8 +52,8 @@ Q719 is itself unscheduled.
 
 ARC parity is done when all of the following hold:
 
-1. **A workflow moves with no `.github/workflows` edit.** Today a single-name `runs-on` carries over unchanged and an array does not.
-   Q726 is the whole of this criterion.
+1. **A workflow moves with no `.github/workflows` edit.** ✅ Closed by Q726 (2026-08-11): a runner set registers every `runnerLabel` on its scale set, so a single-name `runs-on` and an array both carry over unchanged.
+   The first label names the scale set, which is the ARC scale-set name carried across.
 2. **Repository-scoped targeting is expressible.** A platform team can bind a runner set to a named GitHub runner group rather than the installation default (Q712).
 3. **`container:` and `services:` steps run without privilege**, or the docs state plainly and permanently that Docker-in-Docker under Kata is the supported answer and why (Q727 resolves either way; a documented decline is a valid outcome).
 4. **The GHES claims carry evidence.** Either a real-appliance validation, or the two capabilities keep their untested marker and the comparison says so (Q765).
@@ -75,7 +74,7 @@ That is deliberate: parity is about removing surprises for a migrating team, and
 
 The comparison surfaces may say GAG is an ARC alternative for shared, multi-tenant clusters, and that a single-name `runs-on` carries over unchanged.
 
-They may **not** claim a zero-edit migration without qualification while Q726 is open, and [migration-from-arc.md](../operations/migration-from-arc.md) must keep naming the array case.
+The zero-edit claim is now unqualified for `runs-on` shape, closed by Q726; on GitHub Enterprise Server below 3.21 it is still conditional on the `DistributedTask.AllowRunnerScaleSetCustomLabels` appliance flag, which [migration-from-arc.md](../operations/migration-from-arc.md) names.
 They may not claim GHES support is validated while Q765 is open; [features.md](../features.md) carries the untested marker on both GHES capabilities and it stays until an appliance run exists.
 
 ## Keeping this current

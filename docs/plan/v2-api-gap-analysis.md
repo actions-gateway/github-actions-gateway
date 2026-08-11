@@ -4,7 +4,8 @@
 The audit's own scope is therefore closed.
 One capability drop survives it:
 
-- **Multi-label runner sets** ([Q726](../STATUS.md#Q726)). `v1alpha1` sets `MinItems=1` with no ceiling; `v2beta1` CEL-enforces `size(self) == 1` because the single label doubles as the scale-set name.
+- **Multi-label runner sets** (Q726). ✅ Closed 2026-08-11. `v1alpha1` set `MinItems=1` with no ceiling; `v2beta1` CEL-enforced `size(self) == 1` because the single label doubled as the scale-set name.
+  The rule is gone: every label is registered on the scale set and the *first* one names it.
   Deliberate, and the field's godoc offers a migration path (stay on a `v2alpha1` Classic RunnerSet), but that path expires with `v2alpha1` at `v2.0.0` ([Q264](../STATUS.md#Q264)), which is what makes it permanent.
 
 A second one opened and closed inside the same release.

@@ -9,7 +9,7 @@ The good news up front: GAG was designed to make this migration cheap.
 The worker pod template is the **same Kubernetes type** ARC uses, so your pod spec transfers with no schema translation; job routing is the **same single-name model** ARC scale sets use, so your `runs-on` lines need no edit; and ARC and GAG can run **side by side** on the same cluster, so you migrate one scale set at a time and roll back by pointing `runs-on` back at the old name.
 
 **Scope.** This covers ARC's **scale-set mode** (the `AutoscalingRunnerSet` / `gha-runner-scale-set` chart — GitHub's current and recommended mode), and targets GAG's **v2 API** (`actions-gateway.com/v2beta1`), which is where new tenants onboard.
-Legacy ARC (`RunnerDeployment` + `HorizontalRunnerAutoscaler`) maps similarly, but its multi-label routing needs one extra step called out in [Job routing](#job-routing-a-11-map).
+Legacy ARC (`RunnerDeployment` + `HorizontalRunnerAutoscaler`) maps similarly, including its multi-label routing; see [Job routing](#job-routing-a-11-map).
 
 > **Do not migrate via GAG's v1 API.** The older single-CR `actions-gateway.github.com/v1alpha1` shape is **[deprecated](v1alpha1-deprecation.md)** and, more to the point here, it is *Classic-protocol only* — it would move you **off** the single-acquirer model your ARC scale sets already use.
 > Migrate straight to v2.
@@ -55,7 +55,8 @@ Unlike GAG's deprecated v1 shape, v2 puts **no one-gateway-per-namespace limit**
 | The `AutoscalingListener` pod (one per scale set) | a goroutine inside the shared per-gateway AGC pod | one always-on pod per scale set → ~12 KiB/goroutine in one shared pod; no per-listener cluster IP. |
 | `githubConfigUrl` | `ActionsGateway.spec.githubURL` | Same org / enterprise / repo URL form. **Immutable** in v2 — no accidental rebinding of a live gateway. |
 | `githubConfigSecret` (PAT **or** GitHub App) | `ActionsGateway.spec.credentials` | **GAG is GitHub-App-only — no Personal Access Token (PAT) path.** See [GitHub App setup](#1-create-the-github-app-secret). v2 also offers `type: WorkloadIdentity` to keep the signing key out of the cluster entirely. |
-| `runnerScaleSetName` / the name you put in `runs-on` | `RunnerSet.spec.runnerLabels` (exactly one label) | **Same model.** See [Job routing](#job-routing-a-11-map). |
+| `runnerScaleSetName` / the name you put in `runs-on` | `RunnerSet.spec.runnerLabels[0]` | **Same model.** The first label is the scale set's name. See [Job routing](#job-routing-a-11-map). |
+| `scaleSetLabels` (ARC 0.14.0+, the extra `runs-on` array targets) | the rest of `RunnerSet.spec.runnerLabels` | **Same model.** One list here instead of a name plus a list. |
 | `runnerGroup` (the GitHub runner-group name) | n/a | GAG registers a scale set per `RunnerSet`; there is no `runnerGroup` field. |
 | `spec.template` (pod template, a `PodTemplateSpec`) | `RunnerTemplate.spec.podTemplate` (the same `PodTemplateSpec`) | `resources`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints`, `runtimeClassName`, `securityContext`, `volumes`, init/sidecar containers transfer **one-to-one**. ARC inlines this per scale set; a `RunnerTemplate` is referenced by many `RunnerSet`s, so identical shapes are written once. |
 | runner container image (ARC default `ghcr.io/actions/actions-runner`) | `RunnerTemplate.spec.workerImage` (same image, or unset for the default) | **Drop-in.** See [Your runner image works unchanged](#your-runner-image-works-unchanged). |
@@ -84,30 +85,36 @@ The only requirement is that the image be `actions/runner`-derived (it must cont
 This is the section that used to carry a warning.
 Against GAG's v2 API it does not, and that is worth stating plainly because it is the difference between a migration that touches your workflows and one that does not.
 
-**ARC scale-set mode routes by the scale-set name.** A workflow targets a scale set with `runs-on: <runnerScaleSetName>` — a single name that equals the install name.
-Scale-set mode deliberately dropped the arbitrary multi-label matching legacy ARC `RunnerDeployment` had; the name *is* the selector.
+**ARC scale-set mode routes by the scale-set name, plus any extra labels.** A workflow targets a scale set with `runs-on: <runnerScaleSetName>`, and since ARC 0.14.0 also with an array matched against the scale set's `scaleSetLabels`.
 
-**GAG v2 routes the same way.** A `RunnerSet` declares **exactly one** `runnerLabels` entry, that label is the scale set's name at GitHub, and a workflow targets it with that one label in `runs-on`.
-So carrying your ARC scale-set name across as the label means **existing workflows route unchanged**:
+**GAG v2 routes the same way, from one list.** `spec.runnerLabels[0]` is the scale set's name; every entry after it is an additional match target.
+So both ARC shapes carry across unchanged:
 
 ```yaml
-# ARC:  runs-on: gpu-large   →   GAG: runs-on: gpu-large   (no edit)
+# ARC:  runs-on: gpu-large        →   GAG: runs-on: gpu-large        (no edit)
+# ARC:  runs-on: [linux, gpu]     →   GAG: runs-on: [linux, gpu]     (no edit)
 spec:
-  runnerLabels: ["gpu-large"]   # the ARC scale-set name, carried across verbatim
+  runnerLabels: ["gpu-large", "linux", "gpu"]   # ARC's scale-set name, then its scaleSetLabels
 ```
 
 Rules worth knowing:
 
-- **Exactly one label.** A set with two or more labels is rejected at admission — the scale set has one name, so it has one match target.
-- **Unique per gateway.** Two `RunnerSet`s under one `ActionsGateway` may not share their label; they would register the same scale-set name at GitHub and collide.
+- **The first label is the identity.** It names the scale set at GitHub, so reordering the list renames the scale set and orphans the old one.
+  Append rather than prepend.
+- **The first label is unique per gateway.** Two `RunnerSet`s under one `ActionsGateway` may not share `runnerLabels[0]`; they would register the same scale-set name and collide.
   Keeping your ARC names gives you uniqueness for free, since ARC already required distinct install names.
+  Later labels **may** overlap, and `linux` across every set is the normal shape; which set an ambiguous `runs-on` reaches is GitHub's decision.
+- **Labels are registered once, at creation.** Adding one to a live set does not register it; the set reports [`RunnerLabelsIncomplete`](troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete) instead of failing silently.
+  Declare the full list up front.
 - **No `self-hosted`.** Under the scale-set model `self-hosted` is not part of the match, exactly as in ARC scale-set mode.
   Do not add it.
 - **Labels are ≤ 256 chars** and may not contain whitespace or commas.
 
-> **Coming from legacy ARC (`RunnerDeployment` + multi-label `runs-on`)?** This is the one place your migration needs a workflow edit, and it is the same edit GitHub's own scale-set migration requires: multi-label matching does not exist in the scale-set model.
-> Split each `runs-on: [self-hosted, linux, gpu]` target into its own `RunnerSet` with a single descriptive label (`gpu-linux`), and update the workflows to `runs-on: gpu-linux`.
-> Migrate to ARC scale sets first if you would rather do that change under ARC.
+> **On GitHub Enterprise Server below 3.21**, more than one label per scale set needs the `DistributedTask.AllowRunnerScaleSetCustomLabels` feature flag, which a site admin enables on the appliance (it is on by default from 3.21).
+> Without it the appliance keeps only the name label and drops the rest silently.
+> GAG surfaces that as `RunnerLabelsIncomplete`, but the labels still will not match until the flag is on.
+
+> **Coming from legacy ARC (`RunnerDeployment` + multi-label `runs-on`)?** Your `runs-on` arrays carry across too: declare the same labels on one `RunnerSet`, with a distinctive one first to name its scale set.
 
 ---
 

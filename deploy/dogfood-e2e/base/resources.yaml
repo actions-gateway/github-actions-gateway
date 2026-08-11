@@ -42,10 +42,10 @@ spec:
   # Authored directly at v2beta1 — the graduated, served+storage front-door shape
   # (Q273) — deliberately UNLIKE scripts/dogfood/setup.sh (main dogfood), which
   # authors at v2alpha1 to exercise the conversion webhook. v2beta1 is ScaleSet-only
-  # and strips acquisitionProtocol + maxListeners (Q74 graduation / Q264 §5a): a
-  # runner set declares exactly ONE runnerLabel, which is both its runs-on target and
-  # the scale-set name registered at GitHub. e2e-{start,stop}.sh set GAG_E2E_RUNNER to
-  # this single label. (Q231)
+  # and strips acquisitionProtocol + maxListeners (Q74 graduation / Q264 §5a). One
+  # runnerLabel here, deliberately: it is both this tenant's runs-on target and the
+  # scale-set name registered at GitHub, and e2e-{start,stop}.sh set GAG_E2E_RUNNER
+  # to it. Q726 permits more, which this tenant has no use for. (Q231)
   runnerLabels: ["gag-ci-e2e"]
   maxWorkers: 2
   # NodeShare sizing (Q359 Phase 3). This tenant validates the profile the
