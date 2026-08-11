@@ -26,8 +26,9 @@
 #
 # Every assertion here reports the hook's GOTHROTTLE_DEBUG trace alongside its
 # own message (Q703). Without it a failure reads `got decision= reason=`, which
-# fourteen silent paths across the hook and the binary produce identically — the
-# symptom an occurrence under `run-parallel` left behind, and no mechanism.
+# every silent path across the hook and the binary produces identically — the
+# symptom an occurrence under `run-parallel` left behind, and no mechanism. The
+# gothrottle package comment counts those paths and names the trace's contract.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -75,8 +76,8 @@ field() {
 
 # diag OUT — what the hook actually produced, for a failure message (Q703).
 #
-# A missing decision is exit 0 with empty stdout, and fourteen silent paths
-# across the entry point and the binary share that one observable — which is why the
+# A missing decision is exit 0 with empty stdout, and every silent path across
+# the entry point and the binary shares that one observable — which is why the
 # 2026-08-08 occurrence, reported as `got decision= reason=`, named no
 # mechanism. The trace says which path ran; the raw stdout separates a hook that
 # printed nothing from one that printed something field() could not read, since
@@ -290,7 +291,7 @@ expect_unchanged 'non-go: cargo test        -> unchanged' \
 # --- Q703: the trace names the silent path, and stays off unless asked --------
 #
 # Silence is the whole failure contract, so an occurrence under load reports
-# `got decision= reason=` and nothing more — fourteen paths, one observable, no
+# `got decision= reason=` and nothing more: many paths, one observable, no
 # mechanism. Both directions matter for the same reason they do for the matcher:
 # a trace that stopped naming its site leaves the next occurrence as
 # unattributable as the last, and one that leaked into a real invocation would

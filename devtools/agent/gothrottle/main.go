@@ -67,11 +67,15 @@
 //
 // # Naming the silent path (Q703)
 //
-// That contract also makes a failure here unattributable. Nine paths in this
-// program and five in the entry-point script all produce one observable: exit
-// 0, empty stdout. The suite that fires the hook can only report `got decision=
-// reason=`, which is what a Q703 occurrence looked like — a symptom with
-// fourteen possible sources and no way to choose between them.
+// That contract also makes a failure here unattributable. Nine silent paths in
+// this program and five in the entry-point script all produce one observable:
+// exit 0, empty stdout. The suite that fires the hook can only report `got
+// decision= reason=`, which is what a Q703 occurrence looked like — a symptom
+// with no way to choose between its sources.
+//
+// This is the one place that counts them; the test suite and testing.md say
+// "every silent path" and point here, so adding one means editing this line
+// rather than finding six others that quote a number.
 //
 // GOTHROTTLE_DEBUG makes each site name itself on stderr. Stdout is untouched
 // either way, so the decision contract is unchanged and the variable is off in

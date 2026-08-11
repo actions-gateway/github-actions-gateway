@@ -217,7 +217,7 @@ Two safety nets cover that gap, both reusing `scripts/agent/local-throttle.sh` s
 The decision is [`devtools/agent/gothrottle`](../../devtools/agent/gothrottle), a Go program over a real shell parser (`mvdan.cc/sh`); the shell file is the entry point that resolves and execs it, and every failure path (no Go toolchain, a build error, an unparseable command) is silent, so the hook is never the reason a Bash call fails.
 It became Go for the same reason its sibling `pipedgate` did (Q708): 178 of the shell version's 423 lines hand-rolled a shell-grammar scanner, which is the parsing-density criterion in [technical-debt.md](technical-debt.md#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length).
 
-**Set `GOTHROTTLE_DEBUG` to find out why the hook said nothing.** Silence is the failure contract, and it is also why a failure here is unattributable: fourteen paths across the entry point and the binary end in exit 0 with empty stdout, so the suite could only ever report `got decision= reason=` (Q703).
+**Set `GOTHROTTLE_DEBUG` to find out why the hook said nothing.** Silence is the failure contract, and it is also why a failure here is unattributable: every silent path across the entry point and the binary ends in exit 0 with empty stdout, so the suite could only ever report `got decision= reason=` (Q703).
 With the variable set, each path names itself on stderr, and the probe that resolves the throttle prefix reports whether it *failed* or reported throttling *off*, which are otherwise the same empty string.
 Stdout is untouched either way, so the decision contract is unchanged; the suite sets it on every invocation and prints the trace with any failure.
 
