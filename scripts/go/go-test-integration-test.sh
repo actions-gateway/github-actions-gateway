@@ -61,6 +61,12 @@ chmod +x "$WORK/bin/go"
 # against the shim. GAG_HEAVY_BUILD_LOCK_HELD skips the machine-wide build
 # semaphore, which would otherwise re-exec the script behind a lock this suite
 # has no reason to contend for.
+#
+# GITHUB_ACTIONS is cleared rather than left alone: half these cases are about
+# what a LOCAL run prints, and this suite's own home is a CI job that exports it,
+# so inheriting it makes those cases assert the opposite of what they read. A
+# case that wants the CI behaviour sets it in its own env args, which land after
+# this one and win.
 rc=0
 argv=""
 run_gate() {
@@ -73,7 +79,7 @@ run_gate() {
 	done
 	: >"$ARGV_LOG"
 	rc=0
-	env PATH="$WORK/bin:$PATH" GAG_HEAVY_BUILD_LOCK_HELD=1 \
+	env PATH="$WORK/bin:$PATH" GAG_HEAVY_BUILD_LOCK_HELD=1 GITHUB_ACTIONS= \
 		STUB_OUT="$out" STUB_RC="$status" "${env_args[@]}" \
 		scripts/go/go-test-integration.sh "${script_args[@]}" \
 		>"$WORK/stdout" 2>"$WORK/stderr" || rc=$?
