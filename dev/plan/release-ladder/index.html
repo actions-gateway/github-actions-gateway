@@ -2667,7 +2667,7 @@ Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
 </tr>
 <tr>
 <td><strong>1.5</strong></td>
-<td><a href="../../STATUS/#Q712">Q712</a> runner-group binding, <a href="../../STATUS/#Q713">Q713</a> default-tier latency series, <a href="../../STATUS/#Q726">Q726</a> multi-label runner sets, plus the marketing reconciliation</td>
+<td><a href="../../STATUS/#Q712">Q712</a> runner-group binding, <a href="../../STATUS/#Q713">Q713</a> default-tier latency series, Q726 multi-label runner sets, plus the marketing reconciliation</td>
 <td><a href="../release-1.5/">release-1.5.md</a></td>
 </tr>
 <tr>
@@ -2684,8 +2684,8 @@ Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
 </table>
 <h2 id="why-16-exists-rather-than-folding-into-15">Why 1.6 exists rather than folding into 1.5<a class="headerlink" href="#why-16-exists-rather-than-folding-into-15" title="Permanent link">&para;</a></h2>
 <p><strong>Revised 2026-08-09.</strong> This section originally rested on two capability drops that go permanent at <code>v2.0.0</code>, and one of them closed while the page was being written: <a href="../arc-parity/">Q766</a> ported the abandoned-run recovery to the ScaleSet tier inside 1.4, so it is shipped rather than scheduled.
-The surviving one is <a href="../../STATUS/#Q726">Q726</a>, where <code>v1alpha1</code> puts no ceiling on <code>runnerLabels</code> while <code>v2beta1</code> enforces exactly one and the godoc's workaround is to stay on a <code>v2alpha1</code> Classic set, which <code>v2.0.0</code> removes.
-Q726 is <code>M</code> and is admitted to 1.5, so it needs no release of its own.</p>
+The surviving one was Q726, where <code>v1alpha1</code> put no ceiling on <code>runnerLabels</code> while <code>v2beta1</code> enforced exactly one and the godoc's workaround was to stay on a <code>v2alpha1</code> Classic set, which <code>v2.0.0</code> removes.
+Closed 2026-08-11: <code>v2beta1</code> registers every label, so the escape hatch is no longer load-bearing.</p>
 <p>So 1.6 is not the pre-2.0 repair slot any more.
 What justifies it is <a href="../../STATUS/#Q719">Q719</a> and <a href="../../STATUS/#Q727">Q727</a>, which are the last two <a href="../arc-parity/">ARC parity</a> gaps and cannot compress into 1.5: Q727 is <code>L</code> and strictly depends on Q719's <code>ReadWriteMany</code> validation, and 1.5 already carries three <code>M</code> items plus a marketing body of work.</p>
 <p>The soak argument is unchanged and still favours a separate minor. <code>v2-ga.md</code> Phase 1 requires no incompatible <code>v2beta1</code> shape change across at least two minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without restarting the clock.</p>
@@ -2733,7 +2733,7 @@ Deferred is not a graveyard here, it is a trigger list, and every row in it name
 <p><strong>Applied 2026-08-09.</strong> The seven punted items above moved to Deferred with the triggers this page names, and <a href="../../STATUS/#Q719">Q719</a> and <a href="../../STATUS/#Q727">Q727</a> now carry <code>1.6-gate</code>, which is what publishes the commitment where an adopter reads it.</p>
 <p>That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut. <code>release-1.6.md</code> gets written when 1.5 tags, on the same evidence the other release plans use.</p>
-<p>The one hard constraint the ladder does encode is <a href="../../STATUS/#Q726">Q726</a> landing before <code>v2.0.0</code>, since 2.0 removes the <code>v2alpha1</code> escape hatch its godoc points at.
+<p>The one hard constraint the ladder encoded — Q726 landing before <code>v2.0.0</code>, since 2.0 removes the <code>v2alpha1</code> escape hatch its godoc pointed at — is satisfied: it landed in 1.5.
 Its <code>1.5-gate</code> label is what enforces that, a release earlier than strictly required.</p>
 
 

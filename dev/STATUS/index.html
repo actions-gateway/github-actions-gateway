@@ -3211,6 +3211,22 @@
 <td>Declared at <code>scalesetlistener/listener.go:372</code>, resolved at <code>:690</code>, never set at the sole production call site, so every scale set lands in the default runner group — GitHub's authorization point for which repos may target a tenant's runners.</td>
 </tr>
 <tr>
+<td><a id="Q793"></a>Q793</td>
+<td><a href="../plan/archive/q726-multi-label-runner-sets/#drift-detected-never-patched">Measure whether a scale-set labels <code>PATCH</code> is honoured, and reconcile in place if it is</a></td>
+<td><code>feature</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q726 registers labels at create only, so appending one to a live set needs a fresh scale set. Whether the service honours a labels PATCH is unmeasured: ARC never patches, and Q712's group PATCH is stub-tested only. Probe before reconciling.</td>
+</tr>
+<tr>
+<td><a id="Q794"></a>Q794</td>
+<td><a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code> no longer needs to pin <code>acquisitionProtocol: Classic</code></a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>It writes Classic onto every set it emits, whose stated reason — keeping multi-label matching — Q726 removed. Now conservative rather than necessary, but flipping it changes a migrating tenant's protocol silently, so it is a decision, not a cleanup.</td>
+</tr>
+<tr>
 <td><a id="Q716"></a>Q716</td>
 <td><a href="../design/05-security/">Assert a worker pod cannot reach the cloud metadata server</a></td>
 <td><code>security</code> <code>tests</code></td>
@@ -3233,14 +3249,6 @@
 <td>🔲</td>
 <td>M</td>
 <td><code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds, never starts, and each claim spends a JIT record and holds a lock to <code>pendingPodDeadline</code>. Measured; the 1.4 DinD placeholder hits it.</td>
-</tr>
-<tr>
-<td><a id="Q726"></a>Q726</td>
-<td><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Multi-label runner sets for <code>runs-on</code> array targeting</a></td>
-<td><code>feature</code> <code>1.5-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>ARC added multi-label scale sets in 0.14.0 (2026-03-19); a <code>v2beta1</code> RunnerSet is CEL-rejected above one <code>runnerLabel</code>. A workflow using <code>runs-on: [linux, gpu]</code> needs an edit per target to migrate, reversing the zero-edit claim.</td>
 </tr>
 <tr>
 <td><a id="Q727"></a>Q727</td>
@@ -3857,6 +3865,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q797"></a>Q797</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/provisioning_test.go">Three GMC tenant-provisioning integration tests time out together under the full two-module race run</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> any of the three fails on <code>main</code>. First sighting 2026-08-11 (Q726 branch): all three timed out at 15s under <code>make test-integration</code>, then passed in isolation and on a package re-run. No mitigation shipped; a second sighting is the signal.</td>
+</tr>
 <tr>
 <td><a id="Q747"></a>Q747</td>
 <td><a href="../plan/q300-gmc-kindnet-e2e-flake/#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">e2e cross-tenant NetworkPolicy probe intermittently connects instead of being blocked</a></td>

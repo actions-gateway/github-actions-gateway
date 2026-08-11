@@ -3050,8 +3050,9 @@ Every resource is namespaced, none is cluster-scoped, and no <code>ResourceQuota
     There is no <code>ResourceQuota</code> field on any of these CRs.
     The single quota every runner set shares is <strong>platform-owned</strong>, set on the namespace by the platform admin, so it is a real cap the tenant cannot raise.
     Priority tiers decide who wins when it is contended.</li>
-<li>Exactly one label per runner set: it is the set's scale-set name at GitHub and its single <code>runs-on</code> match target (<code>runs-on: gpu</code>), unique across the sets under one gateway.
-    A single-name <code>runs-on</code> carries over from ARC unchanged; a workflow targeting an array needs one edit per target, covered in <a href="operations/migration-from-arc/">migrating from ARC</a>.</li>
+<li>Every label on a runner set is a <code>runs-on</code> match target, so a workflow can name it singly (<code>runs-on: gpu</code>) or as an array (<code>runs-on: [linux, gpu]</code>).
+    The <strong>first</strong> label additionally names the set's scale set at GitHub, and must be unique across the sets under one gateway.
+    Either <code>runs-on</code> shape carries over from ARC unchanged — see <a href="operations/migration-from-arc/">migrating from ARC</a>.</li>
 <li>The first 5 GPU pods get the higher-priority <code>PriorityClass</code>; the next tier bursts opportunistically; the final threshold caps total concurrency.
     The <code>priorityClassName</code> values must be on the platform's allowlist (a watched <code>PriorityClassAllowlist</code> CR, grown without a GMC restart; the <code>--allowed-priority-classes</code> flag remains the fail-safe baseline), and whether a tier preempts is set on the platform-owned <code>PriorityClass</code> object, so a tenant cannot name a class that evicts other tenants' pods.</li>
 </ol>

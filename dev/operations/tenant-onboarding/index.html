@@ -1950,15 +1950,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#job-acquisition-and-the-single-label-rule" class="md-nav__link">
+  <a href="#job-acquisition-and-how-labels-route" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Job acquisition, and the single-label rule
+        Job acquisition, and how labels route
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Job acquisition, and the single-label rule">
+    <nav class="md-nav" aria-label="Job acquisition, and how labels route">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3116,15 +3116,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#job-acquisition-and-the-single-label-rule" class="md-nav__link">
+  <a href="#job-acquisition-and-how-labels-route" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Job acquisition, and the single-label rule
+        Job acquisition, and how labels route
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Job acquisition, and the single-label rule">
+    <nav class="md-nav" aria-label="Job acquisition, and how labels route">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3984,7 +3984,7 @@ A gateway with no <code>spec.defaultProxyRef</code> and a <code>RunnerSet</code>
 <a id="__codelineno-25-28" name="__codelineno-25-28" href="#__codelineno-25-28"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-25-29" name="__codelineno-25-29" href="#__codelineno-25-29"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-25-30" name="__codelineno-25-30" href="#__codelineno-25-30"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-25-31" name="__codelineno-25-31" href="#__codelineno-25-31"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">gag-linux</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># exactly one label: this set&#39;s scale-set name and runs-on target</span>
+<a id="__codelineno-25-31" name="__codelineno-25-31" href="#__codelineno-25-31"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">gag-linux</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># the first label is this set&#39;s scale-set name and runs-on target</span>
 <a id="__codelineno-25-32" name="__codelineno-25-32" href="#__codelineno-25-32"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 <a id="__codelineno-25-33" name="__codelineno-25-33" href="#__codelineno-25-33"></a><span class="w">  </span><span class="c1"># no proxyRef / defaultProxyRef ⇒ direct egress</span>
 </code></pre></div>
@@ -4003,38 +4003,41 @@ A gateway with no <code>spec.defaultProxyRef</code> and a <code>RunnerSet</code>
 </ul>
 <p>To add attribution later, create an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on the gateway (every <code>RunnerSet</code> under it inherits the proxy unless it sets its own <code>proxyRef</code>).
 A <code>proxyRef</code>/<code>defaultProxyRef</code> that names a <strong>missing</strong> <code>EgressProxy</code> is treated as an error and fails closed (<code>Ready=False</code>/<code>ProxyNotFound</code>) — it does <strong>not</strong> silently fall back to direct egress; only an entirely-unset reference means direct.</p>
-<h3 id="job-acquisition-and-the-single-label-rule">Job acquisition, and the single-label rule<a class="headerlink" href="#job-acquisition-and-the-single-label-rule" title="Permanent link">&para;</a></h3>
+<h3 id="job-acquisition-and-how-labels-route">Job acquisition, and how labels route<a class="headerlink" href="#job-acquisition-and-how-labels-route" title="Permanent link">&para;</a></h3>
 <p>On <code>v2beta1</code> there is nothing to choose: every <code>RunnerSet</code> acquires jobs with the <strong>runner-scale-set message-queue protocol</strong> — one listener session per set, capacity-gated assignment, and a full-runner worker.
 It is the only protocol the graduated version serves, because it removes a many-acquirers job-assignment race the older classic protocol was subject to under high burst (validated end-to-end before the default flip, Q264).</p>
-<p>The rule that follows from it, and the one most likely to bite when you author a set by hand:</p>
+<p>The rules that follow from it, and the ones most likely to bite when you author a set by hand:</p>
 <ul>
-<li><strong>Exactly one <code>runnerLabel</code> per set.</strong> The scale set's name <em>is</em> its single <code>runs-on</code> match target at GitHub, so a set with two or more labels is rejected at admission.
+<li><strong>Every <code>runnerLabel</code> is a <code>runs-on</code> match target</strong>, so a workflow may name the set with a single label or with an array (<code>runs-on: [linux, gpu]</code>).
   Concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code> (advertised to GitHub as the scale set's capacity), not by a listener count.</li>
-<li><strong>Unique under one gateway.</strong> Two sets claiming the same label would register the same scale-set name at GitHub; the second is rejected.</li>
+<li><strong>The first label names the scale set</strong>, which makes it the set's identity at GitHub.
+  Reordering the list renames the scale set and orphans the old one, so append rather than prepend.</li>
+<li><strong>The first label is unique under one gateway.</strong> Two sets claiming the same <code>runnerLabels[0]</code> would register the same scale-set name at GitHub; the second is rejected.
+  Later labels may overlap freely.</li>
+<li><strong>Declare the full list up front.</strong> Labels are registered when the scale set is created and are not reconciled afterwards, so a label added to a live set never reaches GitHub — the set reports <a href="../troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete"><code>RunnerLabelsIncomplete</code></a> rather than failing silently.
+  On GitHub Enterprise Server below 3.21 the same condition covers an appliance that dropped the extra labels because <code>DistributedTask.AllowRunnerScaleSetCustomLabels</code> is off.</li>
 </ul>
-<p>This is the same single-name routing ARC scale sets use, so workflows migrating from ARC carry their <code>runs-on</code> lines across unedited — see <a href="../migration-from-arc/#job-routing-a-11-map">Migrating from ARC</a>.</p>
+<p>This is the same routing ARC scale sets use, so workflows migrating from ARC carry their <code>runs-on</code> lines across unedited — see <a href="../migration-from-arc/#job-routing-a-11-map">Migrating from ARC</a>.</p>
 <h4 id="acquisition-protocol-v2alpha1-only">Acquisition protocol: <code>v2alpha1</code> only<a class="headerlink" href="#acquisition-protocol-v2alpha1-only" title="Permanent link">&para;</a></h4>
 <p><code>v2alpha1</code> — served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp — carries a <code>spec.acquisitionProtocol</code> selector that <code>v2beta1</code> does not.
-It exists for one job: letting a tenant migrating off <code>v1alpha1</code> keep <strong>multi-label matching</strong>, which the scale-set model cannot express, until it is ready to split those groups up.</p>
+It exists to let a tenant migrating off <code>v1alpha1</code> keep the classic per-runner broker protocol its groups were registered under, until it is ready to move.
+(Multi-label matching used to be the reason and no longer is: the scale-set protocol registers every <code>runnerLabel</code>.)</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span><span class="w">   </span><span class="c1"># the field does not exist on v2beta1</span>
 <a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
 <a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">linux</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">  </span><span class="nt">acquisitionProtocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Classic</span><span class="w">       </span><span class="c1"># deprecated; required for a multi-label set</span>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">  </span><span class="nt">acquisitionProtocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Classic</span><span class="w">       </span><span class="c1"># deprecated; the classic per-runner broker protocol</span>
 <a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">self-hosted</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">linux</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">  </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">                   </span><span class="c1"># honored under Classic; ignored under ScaleSet</span>
 <a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 </code></pre></div>
 <ul>
-<li><strong>A new tenant should never need this.</strong> Author on <code>v2beta1</code> with one label per set. <code>Classic</code> is deprecated and, together with <code>v2alpha1</code> and <code>v1alpha1</code>, <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>spec.maxListeners</code> goes with it.</li>
-<li><strong><code>gag-migrate</code> writes <code>acquisitionProtocol: Classic</code></strong> onto every set it emits, so a migrated tenant's multi-label groups keep working unchanged.
-  Opting one into the scale-set protocol later means creating a fresh single-label set, not editing the old one — the field is <strong>immutable</strong>, because switching a live set's protocol is a re-registration storm.</li>
-<li><strong>Editing a Classic set works unqualified — except its labels.</strong> An unqualified <code>kubectl edit/patch/apply</code> addresses the <code>v2beta1</code> storage version, which is ScaleSet-only and takes exactly one <code>runnerLabel</code>.
-  That rule is <em>ratcheted</em>: it is only enforced on the <code>runnerLabels</code> you actually write, so editing any other field of a stored multi-label Classic set goes through untouched.
-  To change the <strong>labels</strong> of such a set, qualify the write to the version that admits the shape (<code>kubectl edit runnersets.v2alpha1.actions-gateway.com …</code>).
-  Ratcheting is on by default from Kubernetes 1.30; the v2 floor is 1.31, so every supported cluster has it.</li>
+<li><strong>A new tenant should never need this.</strong> Author on <code>v2beta1</code>, with as many labels per set as your workflows target. <code>Classic</code> is deprecated and, together with <code>v2alpha1</code> and <code>v1alpha1</code>, <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>spec.maxListeners</code> goes with it.</li>
+<li><strong><code>gag-migrate</code> writes <code>acquisitionProtocol: Classic</code></strong> onto every set it emits, so a migrated tenant's groups keep the protocol they were registered under.
+  Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is <strong>immutable</strong>, because switching a live set's protocol is a re-registration storm.</li>
+<li><strong>Editing a Classic set works unqualified, labels included.</strong> An unqualified <code>kubectl edit/patch/apply</code> addresses the <code>v2beta1</code> storage version, which admits the same multi-label shape.</li>
 </ul>
 <h3 id="starting-from-a-shipped-template">Starting from a shipped template<a class="headerlink" href="#starting-from-a-shipped-template" title="Permanent link">&para;</a></h3>
 <p>Before hand-authoring a <code>RunnerTemplate</code>, check whether one of the three shipped entries already fits. <code>kubectl apply -k deploy/templates/plain</code> gives a baseline worker; <code>kata-dind</code> and <code>privileged-dind</code> cover jobs that build container images.

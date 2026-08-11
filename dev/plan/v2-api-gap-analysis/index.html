@@ -2668,7 +2668,8 @@
 The audit's own scope is therefore closed.
 One capability drop survives it:</p>
 <ul>
-<li><strong>Multi-label runner sets</strong> (<a href="../../STATUS/#Q726">Q726</a>). <code>v1alpha1</code> sets <code>MinItems=1</code> with no ceiling; <code>v2beta1</code> CEL-enforces <code>size(self) == 1</code> because the single label doubles as the scale-set name.
+<li><strong>Multi-label runner sets</strong> (Q726). ✅ Closed 2026-08-11. <code>v1alpha1</code> set <code>MinItems=1</code> with no ceiling; <code>v2beta1</code> CEL-enforced <code>size(self) == 1</code> because the single label doubled as the scale-set name.
+  The rule is gone: every label is registered on the scale set and the <em>first</em> one names it.
   Deliberate, and the field's godoc offers a migration path (stay on a <code>v2alpha1</code> Classic RunnerSet), but that path expires with <code>v2alpha1</code> at <code>v2.0.0</code> (<a href="../../STATUS/#Q264">Q264</a>), which is what makes it permanent.</li>
 </ul>
 <p>A second one opened and closed inside the same release.

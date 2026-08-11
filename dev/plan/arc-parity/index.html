@@ -2691,12 +2691,6 @@ The corrections shipped; the <em>forward</em> half, deciding which gaps GAG clos
 </thead>
 <tbody>
 <tr>
-<td><strong>Multi-label scale sets</strong>, ARC 0.14.0 (2026-03-19)</td>
-<td>A workflow using <code>runs-on: [linux, gpu]</code> needs one edit per target. GAG admits exactly one label per runner set, CEL-rejected above one in <code>v2beta1</code>. This is the only gap that breaks the zero-edit migration claim, and it is also a v1 to v2 drop: <code>v1alpha1</code> set no ceiling, and the godoc's workaround of staying on a <code>v2alpha1</code> Classic set expires when <code>v2.0.0</code> removes it</td>
-<td><a href="../../STATUS/#Q726">Q726</a></td>
-<td>1.5</td>
-</tr>
-<tr>
 <td><strong>Bound GitHub runner group</strong> (<code>runnerGroup</code>)</td>
 <td>The forge-side control over which repositories may target a runner set. GAG declares the binding and never wires it, so every scale set registers into the installation's default group</td>
 <td><a href="../../STATUS/#Q712">Q712</a></td>
@@ -2733,8 +2727,8 @@ Q719 is itself unscheduled.</p>
 <h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <p>ARC parity is done when all of the following hold:</p>
 <ol>
-<li><strong>A workflow moves with no <code>.github/workflows</code> edit.</strong> Today a single-name <code>runs-on</code> carries over unchanged and an array does not.
-   Q726 is the whole of this criterion.</li>
+<li><strong>A workflow moves with no <code>.github/workflows</code> edit.</strong> ✅ Closed by Q726 (2026-08-11): a runner set registers every <code>runnerLabel</code> on its scale set, so a single-name <code>runs-on</code> and an array both carry over unchanged.
+   The first label names the scale set, which is the ARC scale-set name carried across.</li>
 <li><strong>Repository-scoped targeting is expressible.</strong> A platform team can bind a runner set to a named GitHub runner group rather than the installation default (Q712).</li>
 <li><strong><code>container:</code> and <code>services:</code> steps run without privilege</strong>, or the docs state plainly and permanently that Docker-in-Docker under Kata is the supported answer and why (Q727 resolves either way; a documented decline is a valid outcome).</li>
 <li><strong>The GHES claims carry evidence.</strong> Either a real-appliance validation, or the two capabilities keep their untested marker and the comparison says so (Q765).</li>
@@ -2752,7 +2746,7 @@ That is deliberate: parity is about removing surprises for a migrating team, and
 </ul>
 <h2 id="what-the-site-may-claim-today">What the site may claim today<a class="headerlink" href="#what-the-site-may-claim-today" title="Permanent link">&para;</a></h2>
 <p>The comparison surfaces may say GAG is an ARC alternative for shared, multi-tenant clusters, and that a single-name <code>runs-on</code> carries over unchanged.</p>
-<p>They may <strong>not</strong> claim a zero-edit migration without qualification while Q726 is open, and <a href="../../operations/migration-from-arc/">migration-from-arc.md</a> must keep naming the array case.
+<p>The zero-edit claim is now unqualified for <code>runs-on</code> shape, closed by Q726; on GitHub Enterprise Server below 3.21 it is still conditional on the <code>DistributedTask.AllowRunnerScaleSetCustomLabels</code> appliance flag, which <a href="../../operations/migration-from-arc/">migration-from-arc.md</a> names.
 They may not claim GHES support is validated while Q765 is open; <a href="../../features/">features.md</a> carries the untested marker on both GHES capabilities and it stays until an appliance run exists.</p>
 <h2 id="keeping-this-current">Keeping this current<a class="headerlink" href="#keeping-this-current" title="Permanent link">&para;</a></h2>
 <p>The inventory rots the same way the comparison table did, and for the same reason: ARC ships, and an undated claim silently becomes false rather than becoming visibly stale.

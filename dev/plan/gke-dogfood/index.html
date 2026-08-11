@@ -3510,7 +3510,7 @@ Attach an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on 
 <a id="__codelineno-20-67" name="__codelineno-20-67" href="#__codelineno-20-67"></a><span class="s">  templateRef:</span>
 <a id="__codelineno-20-68" name="__codelineno-20-68" href="#__codelineno-20-68"></a><span class="s">    name: default</span>
 <a id="__codelineno-20-69" name="__codelineno-20-69" href="#__codelineno-20-69"></a><span class="s">  # ScaleSet (the Q264 P5 default), stated explicitly so the tenant&#39;s protocol is</span>
-<a id="__codelineno-20-70" name="__codelineno-20-70" href="#__codelineno-20-70"></a><span class="s">  # readable here. The single runnerLabel is BOTH the scale set&#39;s name at GitHub and</span>
+<a id="__codelineno-20-70" name="__codelineno-20-70" href="#__codelineno-20-70"></a><span class="s">  # readable here. One runnerLabel, which is BOTH the scale set&#39;s name at GitHub and</span>
 <a id="__codelineno-20-71" name="__codelineno-20-71" href="#__codelineno-20-71"></a><span class="s">  # the workflows&#39; runs-on target, so it must match vars.GAG_RUNNER exactly (Part C2).</span>
 <a id="__codelineno-20-72" name="__codelineno-20-72" href="#__codelineno-20-72"></a><span class="s">  acquisitionProtocol: ScaleSet</span>
 <a id="__codelineno-20-73" name="__codelineno-20-73" href="#__codelineno-20-73"></a><span class="s">  runnerLabels: [&quot;gag-ci-scaleset&quot;]</span>
@@ -3581,7 +3581,8 @@ Two paths coexist:</p>
 <ul>
 <li>On <strong>push / pull_request</strong> (or a dispatch with <code>target_gag</code> unset/false): <code>github.event_name == 'workflow_dispatch' &amp;&amp; inputs.target_gag</code> is <code>false</code>, so the whole <code>&amp;&amp; … ||</code> expression short-circuits to the trailing <code>'ubuntu-latest'</code> — GitHub-hosted, exactly as before. <code>vars.GAG_RUNNER</code> is never consulted, so flipping it no longer affects these events.</li>
 <li>On a <strong>dispatch with <code>target_gag=true</code></strong>: the expression evaluates <code>fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"')</code>, giving the string <code>"gag-ci-scaleset"</code> (routes to GAG) when the variable is set, or <code>ubuntu-latest</code> when it is not.
-  Since Q399 this is a single JSON <em>string</em>, not an array: the runner set is ScaleSet-protocol and matches exactly one label, its own scale-set name.
+  Since Q399 this is a single JSON <em>string</em>, not an array: the runner set declares one label, its own scale-set name.
+  (Q726 lets a set carry more; this tenant still declares one.)
   It must stay identical to <code>spec.runnerLabels[0]</code> in B7.
   A mismatch leaves dispatched jobs queued at GitHub forever, unmatched.</li>
 </ul>

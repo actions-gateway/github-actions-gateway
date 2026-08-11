@@ -3043,8 +3043,10 @@ Gating on v2 maturity is what lets the commitment be concrete: you are never ask
 <li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, which also relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code> spellings.
    Do this <em>before</em> upgrading: after removal the legacy spellings and the v1 finalizer names are no longer honored, and any remaining <code>v1alpha1</code> objects have no served version.</li>
 <li><strong>Move <code>v2alpha1</code> objects to <code>v2beta1</code>.</strong> Re-apply them at <code>v2beta1</code> (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.</li>
-<li><strong>Replace Classic runner sets with <code>ScaleSet</code> sets.</strong> One single-label <code>RunnerSet</code> per <code>runs-on</code> target, created fresh, since <code>acquisitionProtocol</code> is immutable.
-   Split any multi-label group into one set per label, and drop <code>maxListeners</code>, which <code>ScaleSet</code> ignores.
+<li><strong>Replace Classic runner sets with <code>ScaleSet</code> sets.</strong> Created fresh, since <code>acquisitionProtocol</code> is immutable.
+   The labels carry across as they are, since a <code>ScaleSet</code> set registers every <code>runnerLabel</code>, so a multi-label group does not have to be split.
+   Pick the <em>first</em> one deliberately: it names the scale set at GitHub and must be unique under the gateway.
+   Drop <code>maxListeners</code>, which <code>ScaleSet</code> ignores.
    See <a href="../tenant-onboarding/#acquisition-protocol-v2alpha1-only">tenant onboarding</a>.</li>
 </ol>
 <p>Until that release, no action is forced: run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> when convenient, validate the v2 path, and decommission v1 at your own pace.</p>
