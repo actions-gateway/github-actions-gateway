@@ -1627,7 +1627,7 @@ Removing the real seconds took the suite from 11.4 s to 3.6 s, which is the same
 #### A throwaway load harness is a measuring instrument, so calibrate it
 
 Reproducing a load-sensitive flake means writing a scratch harness that generates load and samples the suite.
-It is throwaway code, which is exactly why it gets written without the checks the suite itself would get, and its two failure modes both produce **confident, wrong green**:
+It is throwaway code, which is exactly why it gets written without the checks the suite itself would get, and every failure mode below produces a **confident, wrong verdict**:
 
 - **The load never started.** Q690's first harness backgrounded its generators with `setsid`, which does not exist on macOS.
   All three generators died instantly, 40 samples passed against an idle machine, and the run looked like strong evidence of no flake.
@@ -1636,9 +1636,14 @@ It is throwaway code, which is exactly why it gets written without the checks th
   The gate died mid-run and reported a non-zero exit, and a sampled suite that had printed `all assertions passed` was recorded as a failure because `wait` returned non-zero.
   Both read as genuine red. **Scope a harness's cleanup to its own processes**, with a stop file the loops poll or a marker in the command line that the pattern anchors on, and never `pkill` a pattern that a real gate's own command line matches.
 
-- **The harness's own verdict was wrong.** Both failure modes above are about the load; this one is about the oracle, and it is the worst of the three because the samples are real and only the classification is broken.
+- **The harness's own verdict was wrong.** Both failure modes above are about the load; this one is about the oracle, and it is the worse kind because the samples are real and only the classification is broken.
   Q703's race probe reported 50 failures in 50 attempts, which read as a spectacular reproduction until the log showed every one was the probe passing `-exist-file /dev/null` to the checker, so every link in the file was dead.
   The rule is the same one that applies to any probe about to justify a decision: **include a case whose answer you already know, and disbelieve the harness when they disagree.** A 100% failure rate is as suspect as a 0% one.
+
+- **The subject changed under the harness.** The first three are about the load, the oracle, and the cleanup; this one is about the thing being measured, and it is the easiest to walk into because the harness runs for minutes while you keep working.
+  Q703's loop reported a hit on run 8 that was its own session's in-flight edit: a `trace()` call had been temporarily made unconditional to check that an assertion went red without it, and the loop caught that tree.
+  It reads as a reproduction, and it is the flake's own signature, so nothing about the log says otherwise. **Freeze the tree for a load run's duration, and discard every round that overlapped an edit to the subject**, including doc and comment edits, since the gates read those too.
+  Land the code first, then measure; the doc and backlog work that fills the wait is exactly the work a running gate does not decide ([run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)), so do that against a tree the harness is not sampling.
 
 The general rule is the one this whole section is about, turned on the instrument: a measurement you cannot show ran is not a measurement.
 Reconcile the harness's status against its output before believing either, and reconcile its verdict against a case you can check by hand.
