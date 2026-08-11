@@ -1625,6 +1625,32 @@ The same reasoning applies to the stubs themselves: each new assertion here was 
 
 Removing the real seconds took the suite from 11.4 s to 3.6 s, which is the same secondary effect Q471 reported: a test that stubs `sleep` does not wait for anything.
 
+#### A backstop shorter than the subject's own budget is not a backstop
+
+Sometimes the wait genuinely is on the signal and only the fallback is a guess.
+That fallback is still an assertion, and the question it has to answer is: **if this fires, has the subject done anything wrong?** When the number is smaller than what the subject is configured to spend, the answer is no, and the test reports a verdict it has no grounds for.
+
+`cmd/probe/abandoned_test.go` waited on the verdict channel, which is the right signal, behind a flat `time.After(20 * time.Second)`, at ten sites.
+Seven of them ran the probe with `PROBE_ABANDONED_WINDOW=30s`, and the probe's `observe()` loop is entitled to run to `t0 + window` before returning `NO-SIGNAL`.
+So the assertion expired ten seconds *inside* the window the same test had just configured, and `TestAbandonedProbe_Redispatched` duly failed on #1357 at 20.24 s under `-race`, green on rerun (Q761).
+Adding the delivery timeout and the bounded tails, the longest legitimate path is about 43 s: the bound was never generous, it was simply usually lucky.
+
+**Derive the backstop from the subject's own waits** rather than picking a round number beside them, and bind the two to one variable so they cannot drift:
+
+```go
+func verdictBudget(window time.Duration) time.Duration {
+	return 3 * (abandonedTestTimeout + window + abandonedTestJobTail + abandonedTestRerunWait)
+}
+```
+
+The multiplier is the only guess left, and it now covers scheduler delay alone, because every real wait is already in the sum.
+Say so in the failure text: "3x the 43.3s its own configuration can spend … so it is wedged, not slow" tells the next reader which of the two they are looking at, where "did not reach a verdict" told them nothing.
+
+The same reasoning retires an iteration cap. `record-launch-test.sh` waited `100 × sleep 0.1` for a launch record and `alloc-queue-id-test.sh` `1000 × sleep 0.01` for its eight-worker fleet, both failing with "within 10s" (Q752, Q706).
+Ten seconds is inside the measured startup distribution, not outside it: Q642 put shell startup at p99 469 ms with **0.45% still starting at 10 s**, so across a fleet roughly one run in 28 met the cap, and the suite blamed the subject for the scheduler.
+Where a blocking primitive exists, use it: the record-launch suite `wait`s on the wrapper, which waits on the run, so the run's own exit ends the wait with no clock in it at all.
+Where none does, keep polling the signal, add the *other* real outcome as its own exit (the wrapper dying without writing a record is a failure you can observe rather than infer), and push the cap far enough out that reaching it means broken rather than busy.
+
 #### A throwaway load harness is a measuring instrument, so calibrate it
 
 Reproducing a load-sensitive flake means writing a scratch harness that generates load and samples the suite.
