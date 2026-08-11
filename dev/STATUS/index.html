@@ -2819,22 +2819,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q761"></a>Q761</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/probe/abandoned_test.go"><code>TestAbandonedProbe_Redispatched</code> bounds a verdict on 20s of wall clock</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Failed on #1357 CI 2026-08-09 (<code>probe did not reach a verdict</code>, 20.24s under <code>-race</code>), green on rerun with no code change; <code>main</code> green across 8 runs. Three sites bound a channel receive on the clock. Q706/Q752 shape.</td>
-</tr>
-<tr>
-<td><a id="Q752"></a>Q752</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch-test.sh"><code>record-launch-test</code>'s 10s launch bound fails under the <code>make check</code> fan-out, passes standalone</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Seen 4/7 <code>make check</code> runs 2026-08-08/09 under Q733, 0/4 under <code>make scripts-test</code> alone, 0/5 standalone: needs full-check contention. The tree case waits 100×<code>sleep 0.1</code> for a <code>.launch</code> record. Q642/Q690's shape: bounds startup, not the subject.</td>
-</tr>
-<tr>
 <td><a id="Q790"></a>Q790</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate's <code>docs/STATUS.md</code> overlap exemption cannot fire on a row deletion</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -2899,12 +2883,12 @@
 <td><code>describe --format=value(currentNodeCount)</code> omits the field at zero, so empty reads as at-rest and a broken probe is indistinguishable. Hit 2026-08-09 just after a DNS outage. Use the unfiltered instance list plus an explicit probe-exit check.</td>
 </tr>
 <tr>
-<td><a id="Q706"></a>Q706</td>
-<td><a href="../development/testing/#two-clocks-in-one-assertion"><code>alloc-queue-id-test</code> bounds fleet startup on the wall clock</a></td>
-<td><code>tests</code> <code>retro</code></td>
+<td><a id="Q788"></a>Q788</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">A broker poll loop with no idle backoff spins when the server answers 202 at once</a></td>
+<td><code>debt</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Read 2026-08-05: <code>alloc-queue-id-test.sh:166</code> waits ~1000×<code>sleep 0.01</code> for the fleet, then fails <code>fleet startup</code>; it bounds the scheduler, not the subject. Q642 measured p99 469ms and 0.45% still starting at 10s. The last such site.</td>
+<td>Measured 2026-08-10: 20,216 <code>GET /message</code> in one 3.5s <code>-race</code> probe suite run, ~6k/s. <code>abandoned.go:543</code> and <code>goroutine.go:229</code> both <code>continue</code> on a nil message, pacing only on the broker's long poll; brokertest answers instantly, so both spin.</td>
 </tr>
 <tr>
 <td><a id="Q751"></a>Q751</td>
@@ -3876,6 +3860,27 @@
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> a run prints <code>ran out of its 10m budget</code> on <code>main</code> post-fix. Suites measure 197-220s (GMC) / 256-264s (AGC) solo, and the 324.5s excursion never reproduced (3 mechanisms refuted), so a breach is a real 2.7x. → top of Queue, escalated.</td>
+</tr>
+<tr>
+<td><a id="Q761"></a>Q761</td>
+<td><a href="../development/testing/#a-backstop-shorter-than-the-subjects-own-budget-is-not-a-backstop"><code>TestAbandonedProbe_Redispatched</code> bounds a verdict on 20s of wall clock</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> a verdict wait fails on <code>main</code> after the fix (each derives its bound from the probe's own timeout, window and tails). Proven by construction: the old 20s bound expired inside a 43.3s budget. → top of Queue, escalated.</td>
+</tr>
+<tr>
+<td><a id="Q752"></a>Q752</td>
+<td><a href="../development/testing/#a-backstop-shorter-than-the-subjects-own-budget-is-not-a-backstop"><code>record-launch-test</code>'s 10s launch bound fails under the <code>make check</code> fan-out, passes standalone</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> the tree case fails on <code>main</code> after the fix (the stop wait is now <code>wait</code> on the wrapper, no clock). Trigger unreproduced: 0/40 under load; a serial <code>make check</code> sample was discarded as tainted. → top of Queue, escalated.</td>
+</tr>
+<tr>
+<td><a id="Q789"></a>Q789</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id-test.sh"><code>alloc-queue-id-test</code>'s <code>gh</code> stub reads a git ref-lock collision as a broken fixture</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> the fleet fails <code>every concurrent allocator exits 0</code> on <code>main</code> after the fix (the stub maps <code>cannot lock ref</code> to the 422 the atomic API answers). Reproduced 2/20 then 1/20 under a 1,748 fork/s storm. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q690"></a>Q690</td>
