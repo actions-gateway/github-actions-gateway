@@ -2595,6 +2595,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#closing-a-row-what-else-moves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closing a row: what else moves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#search-before-you-file" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2979,6 +2990,22 @@ Isolation splits them regardless: the label lives in <code>docs/STATUS.md</code>
 There is none, and none is needed: <code>roadmapcheck</code> reads the <strong>working tree</strong>, not each commit in turn, so what <code>make check</code>, CI and the merge queue all judge is the pair together.
 Order the two commits however you like and check the tip.
 Only <code>status-isolation-check</code> reads commits individually, and it has no opinion about roadmap bullets.</p>
+<h2 id="closing-a-row-what-else-moves">Closing a row: what else moves<a class="headerlink" href="#closing-a-row-what-else-moves" title="Permanent link">&para;</a></h2>
+<p>Deleting a Queue row is the one backlog edit with reach outside <code>docs/STATUS.md</code>.
+The row is an anchor, a plan doc's last reference, and often a roadmap bullet's reason to exist, so removing it breaks things in files the closing change never opened.
+Every one of these is caught by a gate, and every one is cheaper to do up front than to diagnose from a gate failure pointing somewhere unexpected.</p>
+<p>Work through all four:</p>
+<ol>
+<li><strong>De-link the ID wherever the repo cites it.</strong> <code>grep -rn "STATUS.md#QNNN" docs/</code> finds every anchor that is now dead (<code>make doc-links</code>).
+   Rewrite them as a <strong>bare <code>QNNN</code></strong>, the form the Archive rows in <a href="../../plan/"><code>docs/plan/README.md</code></a> already use.
+   Keep the prose; only the link goes.</li>
+<li><strong>Delete the roadmap bullet, continuation lines included.</strong> A forward-looking bullet exists because the row does (<a href="#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">rule 7</a>), so it goes when the row does.
+   Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the <strong>previous</strong> bullet, whose word count then breaks the cap. <code>make roadmap-check</code> reports that as a violation on a bullet you never touched, which reads convincingly like a pre-existing failure.</li>
+<li><strong>Archive the plan doc if this was its last <code>STATUS.md</code> reference</strong>, per <a href="#archiving-completed-plan-docs">the protocol below</a>, whose step 4 is the one most often missed: dropping a level into <code>archive/</code> re-bases <strong>the moved doc's own outbound links</strong>, not just the links pointing at it.</li>
+<li><strong>Update the plan's <code>docs/plan/README.md</code> row</strong> in the same change, moving it to the Archive section.</li>
+</ol>
+<p>The cluster is wider than the docs tree: <a href="../../STATUS/#Q790">Q790</a> is the same shape in the merge tooling, where the <code>docs/STATUS.md</code> overlap exemption cannot fire on a row <em>deletion</em> because the driver yields conflict markers for delete-vs-edit of one row.
+When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.</p>
 <h2 id="search-before-you-file">Search before you file<a class="headerlink" href="#search-before-you-file" title="Permanent link">&para;</a></h2>
 <p>The rule used to be "grep the Queue and Deferred tables first", and it failed three times: <a href="https://github.com/actions-gateway/github-actions-gateway/pull/847">Q442</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/pull/893">Q456</a> both duplicated Q440, and <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1186">Q635</a> duplicated Q619.
 Every one satisfied the lint — a semantic duplicate is a well-formed row — and every one was filed mid-task, as a side effect of other work, exactly when the doc carrying the rule was not in context.
