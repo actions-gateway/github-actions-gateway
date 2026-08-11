@@ -3230,6 +3230,9 @@ That is a spec-sheet ratio, not a benchmark, so it does not hinge on framework o
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>worker_cost_per_job = (job_duration_seconds / 3600) × hourly_node_rate × resource_fraction
 </code></pre></div>
 <p>Where <code>resource_fraction</code> is the fraction of a node the pod's resource requests consume.</p>
+<p><code>job_duration_seconds</code> is the worker pod's own wall time on both acquisition tiers: creation to its last container finishing.
+That is why it can be multiplied by an hourly rate directly.
+Time spent before the pod exists (acquisition, Secret staging, a <code>spec.scaleUp</code> throttle wait) is outside the series because it is outside the bill.</p>
 <p><strong>Example — GPU job:</strong>
 - Job duration: 30 minutes (0.5 hr)
 - Node type: <code>p4d.24xlarge</code>, 8× A100, $32.77/hr

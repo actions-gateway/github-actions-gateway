@@ -2711,12 +2711,6 @@
 <p>Part of the <a href="../observability/">Observability</a> guide.
 The metrics referenced below are catalogued in the <a href="../observability-metrics/">Metrics reference</a>; to scrape them, see <a href="../observability-metrics-access/">Accessing metrics</a>.
 For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a>.</p>
-<blockquote>
-<p><strong>The duration and latency series are classic-only, so the rules built on them are silent on the default tier.</strong> <code>actions_gateway_pod_creation_latency_seconds</code> and <code>actions_gateway_job_duration_seconds</code> are observed only on the classic acquisition path.
-On a <code>ScaleSet</code> set, the default since P5, both are absent, so <code>ActionsGatewayPodCreationLatencyP99</code>, <code>ActionsGatewayPodCreationLatencyP95</code> and the four <code>actions_gateway:*</code> recording rules below never fire and their panels read blank.
-Treat that silence as a missing signal rather than a healthy one.
-Tracked by Q713; scope is catalogued in the <a href="../observability-metrics/">Metrics reference</a>.</p>
-</blockquote>
 <h2 id="symptom--metric-mapping">Symptom → Metric Mapping<a class="headerlink" href="#symptom--metric-mapping" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2730,7 +2724,7 @@ Tracked by Q713; scope is catalogued in the <a href="../observability-metrics/">
 <tr>
 <td>Jobs are slow to start</td>
 <td><code>pod_creation_latency_seconds</code> p95/p99</td>
-<td>SLO: p95 ≤ 15s, p99 ≤ 60s. <strong>Classic acquisition only</strong> (Q713), so on a <code>ScaleSet</code> set this row has no series to check</td>
+<td>SLO: p95 ≤ 15s, p99 ≤ 60s. Emitted on both acquisition tiers; observed when a pod's lifetime ends, so a burst of long jobs delays the signal rather than hiding it</td>
 </tr>
 <tr>
 <td>Jobs are randomly cancelled</td>

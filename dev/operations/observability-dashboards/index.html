@@ -2776,10 +2776,6 @@ Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording 
 </tbody>
 </table>
 <p><strong>Row 2 — Pod Creation Latency SLO</strong></p>
-<blockquote>
-<p>Every panel in this row is <strong>classic acquisition only</strong> (Q713). <code>pod_creation_latency_seconds</code> is not observed on the scale-set path, so on a <code>ScaleSet</code> set, the default tier since P5, all three read blank rather than green.
-A blank SLO gauge here is a missing series, not a met target.</p>
-</blockquote>
 <table>
 <thead>
 <tr>
@@ -2824,7 +2820,7 @@ A blank SLO gauge here is a missing series, not a met target.</p>
 <tr>
 <td>Job duration p50/p95</td>
 <td><code>actions_gateway:job_duration_seconds:p50/p95</code></td>
-<td>Time series. <strong>Classic acquisition only</strong> (Q713): <code>job_duration_seconds</code> is not observed on the scale-set path, so this panel is empty on a <code>ScaleSet</code> set</td>
+<td>Time series, both acquisition tiers. Worker pod lifetime, so it excludes the pre-creation staging a slow <code>acquirejob</code> or a <code>spec.scaleUp</code> throttle adds</td>
 </tr>
 <tr>
 <td>Disruption retries</td>
@@ -3174,7 +3170,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 <tr>
 <td>Pod creation p99 by namespace</td>
 <td><code>actions_gateway:pod_creation_latency_seconds:p99</code></td>
-<td>Time series. <strong>Classic acquisition only</strong> (Q713), so namespaces running <code>ScaleSet</code> sets contribute no series</td>
+<td>Time series, both acquisition tiers</td>
 </tr>
 </tbody>
 </table>

@@ -2994,6 +2994,7 @@ On a managed cloud they read real instance pricing automatically; on-prem or wit
   The <code>app.kubernetes.io/instance</code> breakdown lets you bill by runner shape if a tenant runs both cheap CPU and expensive GPU groups.</li>
 </ul>
 <p>Cross-check the allocation against GAG's own metrics for a sanity test: <code>actions_gateway_job_duration_seconds</code> (per <code>namespace</code>, <code>runner_group</code>) × the runner shape's GPU/CPU node fraction should land in the same ballpark as the <code>runner</code>-component allocation for that tenant.
+The series is worker pod lifetime on both acquisition tiers, so it is directly comparable to a cost tool's own pod-hours.
 A large divergence usually means oversized resource requests — the <a href="../../design/appendix-f-cost-model/#worker-resource-right-sizing">worker right-sizing lever</a> in Appendix F.</p>
 <hr />
 <p>← Back to <a href="../">Operations overview</a> · related: <a href="../observability/">Observability</a>, <a href="../../design/appendix-f-cost-model/">Appendix F — Cost model</a></p>

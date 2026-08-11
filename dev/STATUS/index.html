@@ -3286,9 +3286,9 @@
 <td><a id="Q724"></a>Q724</td>
 <td><a href="../operations/personas/#budget-owner">Budget-owner cost and utilization dashboard</a></td>
 <td><code>feature</code> <code>docs</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Two dashboards serve two of the five documented personas. <code>cost-attribution.md</code> maps namespaces to OpenCost/Kubecost for the budget owner, with no dashboard on top. Blocked by <a href="#Q713">Q713</a>: utilization panels need the missing series.</td>
+<td>Two dashboards serve two of the five documented personas. <code>cost-attribution.md</code> maps namespaces to OpenCost/Kubecost for the budget owner, with no dashboard on top. <code>job_duration_seconds</code> carries pod lifetime on both tiers, so the panels have data.</td>
 </tr>
 <tr>
 <td><a id="Q725"></a>Q725</td>
@@ -3305,14 +3305,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Every poll carries <code>totalAvailableJobs</code>; the listener stores the struct and <code>Status()</code> exports only assigned plus running. Export it as a gauge so an operator can answer why a job sits queued, the top demand signal.</td>
-</tr>
-<tr>
-<td><a id="Q713"></a>Q713</td>
-<td><a href="../plan/release-1.5/#q713--the-shipped-tier-emits-no-duration-or-latency-series">Emit job duration and pod-creation latency on the scale-set tier</a></td>
-<td><code>bug</code> <code>debt</code> <code>1.5-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>waitForCompletion</code> and the pod waiter run only in <code>provision()</code> (<code>provisioner.go:557</code>/<code>:583</code>); <code>ProvisionScaleSetWorker</code> registers neither, so the shipped tier emits both series empty: two SLOs, a critical alert and four recording rules read blank.</td>
 </tr>
 <tr>
 <td><a id="Q728"></a>Q728</td>

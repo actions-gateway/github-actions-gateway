@@ -2719,10 +2719,6 @@ The pill beside each title names the release it blocks, read from the backlog ra
   Kubernetes-side isolation is unaffected; what is unbounded is which repositories can send work to a tenant.</p>
 </li>
 <li>
-<p><strong><a href="../plan/release-1.5/#q713--the-shipped-tier-emits-no-duration-or-latency-series">Job duration and pod-creation latency on the default tier</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q713 --> Both series are emitted on the classic tier only, so on the scale-set tier that every new tenant runs, two Service Level Objectives, an alert, four recording rules, and panels in both shipped dashboards have no data.
-  Until it lands, expect those panels to read empty.</p>
-</li>
-<li>
 <p><strong><a href="../operations/tenant-onboarding/">Detect the runner version a tenant's worker image ships</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q715 --> The version GAG reports to GitHub is the pinned default, whatever <code>spec.workerImage</code> holds, and the too-old warning fires on the classic tier only.
   GitHub raises its enforced minimum on 2026-09-25, so a stale image fails with no prior signal.</p>
 </li>

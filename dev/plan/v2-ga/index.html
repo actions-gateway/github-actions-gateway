@@ -2739,7 +2739,7 @@ The phase table below is the real state.</p>
 <td>3</td>
 <td>Storage migration, then drop <code>v2alpha1</code>, <code>v1alpha1</code>, and classic</td>
 <td>M</td>
-<td>❌ Open (<a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a>); capability parity <strong>not cleared</strong>: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26) and Q766 closed the abandoned-run asymmetry inside 1.4, but <a href="../../STATUS/#Q713">Q713</a> is open, so the duration and latency series are still classic-only. See the <a href="#capability-parity-is-a-precondition-of-the-removal">parity table</a></td>
+<td>❌ Open (<a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a>); capability parity <strong>cleared</strong>: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the <a href="#capability-parity-is-a-precondition-of-the-removal">parity table</a></td>
 </tr>
 <tr>
 <td>4</td>
@@ -2882,8 +2882,8 @@ Dropping a served API version is a contract change operators can plan for; silen
 </tr>
 <tr>
 <td>Job duration and pod-creation latency (<code>job_duration_seconds</code>, <code>pod_creation_latency_seconds</code>)</td>
-<td>❌ <strong>Classic only.</strong> <code>JobDuration</code> is observed inside <code>provision()</code> (<code>provisioner.go:610</code>) and <code>PodCreationLatency</code> inside the pod waiter, and <code>ProvisionScaleSetWorker</code> reaches neither. Unlike the counters below there is no scale-set analog to substitute, so two Appendix A SLOs, a critical alert, four recording rules and panels on both shipped dashboards read blank on the default tier.</td>
-<td><strong>Open — gates the removal.</strong> <a href="../../STATUS/#Q713">Q713</a>, labelled <code>1.5-gate</code>. Reasoning: <a href="../release-1.5/#q713--the-shipped-tier-emits-no-duration-or-latency-series">release-1.5.md § Q713</a>.</td>
+<td>✅ <strong>Both tiers.</strong> Both are observed off the shared pod informer, which sees a scale-set worker pod and a classic one identically, so neither depends on the waiter a fire-and-forget provision never registers. <code>job_duration_seconds</code> is worker pod lifetime on both tiers, one span rather than one per tier.</td>
+<td><strong>Cleared</strong> by Q713 (2026-08-11).</td>
 </tr>
 <tr>
 <td>Poll-error rate observability (<code>message_poll_errors_total</code>)</td>
@@ -2907,8 +2907,8 @@ A claim about what GAG does is not verified until it names the acquisition tier 
 <p>One residual is worth knowing about but does not gate the removal, because classic shares it: a worker pod force-deleted with no grace period (or lost with its node) leaves no <code>Failed</code>/<code>Evicted</code> object and no chance for the runner to report, so neither tier recovers it.
 Q435 measured the adjacent orphan-reclaim question and <a href="../archive/q438-worker-lifetime-deadline/">Q438</a> closed its residual with a provision-time worker lifetime cap.</p>
 <p>Any further capability found to be classic-only before the cut joins this table and gates the same removal.</p>
-<p><strong>Two joined it after the audit, which is the rule working rather than failing.</strong> The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped classic-only, Q766 ported them, and no tag ever published the asymmetry.
-Q713 is open, so the table's verdict is <strong>not</strong> currently cleared: the duration and latency series are the one capability with no scale-set analog and no port.
+<p><strong>Three joined it after the audit, which is the rule working rather than failing.</strong> The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped classic-only, Q766 ported them, and no tag ever published the asymmetry.
+Q713 was the third and the longest-lived: the duration and latency series were the one capability with no scale-set analog to substitute, so it took a port rather than a caveat, and it closed 2026-08-11 by moving both observations onto the shared pod informer.
 Read the table, not this section's history, for the state of the gate.</p>
 <p>The audit's method has a known blind spot both instances share.
 It walked the tier seams once, in July, and a capability added to <code>provision()</code> afterwards is classic-only from birth without anything re-walking them.

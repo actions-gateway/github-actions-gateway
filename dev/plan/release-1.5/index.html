@@ -2579,10 +2579,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#q713--the-shipped-tier-emits-no-duration-or-latency-series" class="md-nav__link">
+  <a href="#q713--the-shipped-tier-emits-no-duration-or-latency-series--landed-2026-08-11" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Q713 — the shipped tier emits no duration or latency series
+        Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11
       
     </span>
   </a>
@@ -2661,10 +2661,10 @@
 <h1 id="release-15-milestone-definition">Release 1.5 Milestone Definition<a class="headerlink" href="#release-15-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
-Four gating Queue rows so far, labelled <code>1.5-gate</code>: <a href="../../STATUS/#Q712">Q712</a>, <a href="../../STATUS/#Q713">Q713</a>, and Q726, admitted 2026-08-09 from the candidate list below, plus <a href="../../STATUS/#Q715">Q715</a>, admitted the same day off an external date.</p>
+Four gating Queue rows so far, labelled <code>1.5-gate</code>: <a href="../../STATUS/#Q712">Q712</a>, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus <a href="../../STATUS/#Q715">Q715</a>, admitted the same day off an external date.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
-<p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both are defects in capabilities the project already claims, not new features.
+<p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
 That is what makes them release-gating: shipping another minor while either is open means shipping a claim the product does not honour.</p>
 <p>Q726 is the same shape read from the other side.
 It is the one <a href="../arc-parity/">ARC parity</a> gap that breaks the zero-edit migration claim the front door makes, so it gates for the same reason: the claim is published and the product does not honour it for a <code>runs-on</code> array.</p>
@@ -2677,12 +2677,16 @@ GAG's pod-level isolation is unaffected; what is unbounded is <em>who can cause 
 <p>Scope note, to be settled in the work rather than assumed: exploitability depends on the default group's repository-access configuration at GitHub, which GAG does not manage today.
 The row covers wiring the field, deciding whether the gateway should also assert group membership, and documenting what the platform admin still owns at GitHub.</p>
 <p>This is also the one place ARC is ahead on GAG's own core claim: its <code>gha-runner-scale-set</code> chart exposes <code>runnerGroup</code> as a first-class value.</p>
-<h3 id="q713--the-shipped-tier-emits-no-duration-or-latency-series">Q713 — the shipped tier emits no duration or latency series<a class="headerlink" href="#q713--the-shipped-tier-emits-no-duration-or-latency-series" title="Permanent link">&para;</a></h3>
-<p><code>waitForCompletion</code> and the pod waiter run only inside <code>provision()</code> (<code>cmd/agc/internal/provisioner/provisioner.go:557</code> and <code>:583</code>). <code>ProvisionScaleSetWorker</code> registers neither, and <code>v2beta1</code> is ScaleSet-only, so the tier every new tenant runs emits both series empty.</p>
-<p>The blast radius is entirely downstream and none of it is caveated (unlike <code>jobs_admission_rejected_total</code>, which <em>is</em> documented as classic-only): two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.</p>
-<p>The failure mode is worst-case for a pre-adoption project.
-The first external operator to apply the shipped <code>PrometheusRule</code> sees a product that looks broken, and <a href="../go-to-market/">go-to-market</a> §8 records that first impressions from cold traffic are one-shot.</p>
-<p>It also gates positioning work: every latency, utilization, or cost claim in the comparison material is unmeasurable until this lands, so no number-bearing claim should ship ahead of it.</p>
+<h3 id="q713--the-shipped-tier-emits-no-duration-or-latency-series--landed-2026-08-11">Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11<a class="headerlink" href="#q713--the-shipped-tier-emits-no-duration-or-latency-series--landed-2026-08-11" title="Permanent link">&para;</a></h3>
+<p><code>waitForCompletion</code> and the pod waiter ran only inside <code>provision()</code> (<code>cmd/agc/internal/provisioner/provisioner.go:557</code> and <code>:583</code>). <code>ProvisionScaleSetWorker</code> registered neither, and <code>v2beta1</code> is ScaleSet-only, so the tier every new tenant runs emitted both series empty.</p>
+<p>The blast radius was entirely downstream: two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.
+The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped <code>PrometheusRule</code> sees a product that looks broken, and <a href="../go-to-market/">go-to-market</a> §8 records that first impressions from cold traffic are one-shot.</p>
+<p><strong>How it was fixed.</strong> Both observations moved onto the shared pod informer, which sees a scale-set worker pod and a classic one identically.
+The latency observation had been gated behind a registered waiter, the thing a fire-and-forget provision never creates, so the tier seam was the gate itself rather than a missing call site.</p>
+<p>That made the span a decision rather than a detail, since the two tiers had no common "acquisition" moment to measure from. <code>job_duration_seconds</code> is now <strong>worker pod lifetime</strong> on both tiers: creation to the last container finishing, or to the deletion request for a worker removed mid-run.
+Every documented consumer of the series is cost attribution (<a href="../../design/appendix-f-cost-model/">appendix-f</a> multiplies it by an hourly node rate), and a pod is billed from creation, so the classic tier's old span was measuring the wrong thing: it charged the staging and <code>spec.scaleUp</code> throttle window during which no pod existed.
+Correcting it was therefore part of the fix rather than a follow-up.</p>
+<p>Two consequences worth keeping: observations fire once per pod when its lifetime ends, so a long job's latency observation arrives at completion rather than at start; and a pod already terminal when an AGC restarts and re-lists it is claimed without being re-observed, so a restart cannot spike either histogram with one duplicate per pod still inside <code>completedPodTTL</code>.</p>
 <h3 id="q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only">Q715 — the runner version reported to GitHub is a constant, and the too-old warning is classic-only<a class="headerlink" href="#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only" title="Permanent link">&para;</a></h3>
 <p>Two halves, and only together do they leave the shipped tier blind.</p>
 <p>The version sent at session creation is <code>BrokerConfig.RunnerVersion</code>, the pinned default the project ships (<code>cmd/agc/internal/agentpool/pool.go:467</code>, reached from <code>runner_shared.go:555</code>).
@@ -2712,7 +2716,7 @@ It touches no shipped artifact, so individual corrections can land continuously 
    Also the listener-footprint wording, which is substantively right but uses "cluster IP" to mean a pod IP, inviting a reader to check <code>Service</code> objects and conclude the table is wrong.</li>
 <li><strong>Under-claims.</strong> Nine capabilities shipped and appear only in <code>features.md</code>.
    The largest are no-PEM workload identity (the GitHub App private key never enters the cluster), the live-validated per-tenant egress IP result, and the durability programme whose motivating incident was five worker pods running 16 hours on 82 spot node-hours.</li>
-<li><strong>Structure.</strong> Q713 blocks any number-bearing claim, since the shipped tier emits no latency or duration series to measure.
+<li><strong>Structure.</strong> Q713 blocked any number-bearing claim, since the shipped tier emitted no latency or duration series to measure; it landed 2026-08-11, so latency and cost claims are now measurable on the default tier.
    Q712 blocks publishing tenant-isolation marketing, because the runner-group binding it would be claiming is unwired.</li>
 </ol>
 <p>The recurring form of this is now <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>, which asks the same three questions before every tag.

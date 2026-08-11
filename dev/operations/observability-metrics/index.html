@@ -2968,13 +2968,13 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_job_duration_seconds</code></td>
 <td>Histogram</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td>Wall time from <code>acquirejob</code> success to worker pod terminal phase. <strong>Classic acquisition only.</strong> The observation sits in <code>provision()</code>, which <code>ProvisionScaleSetWorker</code> never reaches, so the series is absent on a <code>ScaleSet</code> set. Unlike the classic-only counters above there is no scale-set analog to read instead (Q713), so the <code>actions_gateway:job_duration_seconds:p50</code> and <code>:p95</code> recording rules read blank on the default tier too.</td>
+<td>Worker pod wall time: creation to the last container finishing, or to the deletion request for a worker removed mid-run. <strong>Both acquisition tiers</strong>, observed off the shared pod informer (Q713). This is the span the <a href="../../design/appendix-f-cost-model/">cost model</a> bills against: a pod is charged from creation, not from the acquisition that preceded it, so the pre-creation staging and any <code>spec.scaleUp</code> throttle wait are deliberately outside it. A pod that never started a container is not observed: it ran no job and occupied no node time.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_pod_creation_latency_seconds</code></td>
 <td>Histogram</td>
 <td><code>namespace</code></td>
-<td>Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>. <strong>Classic acquisition only</strong>, recorded by the classic pod waiter that the scale-set path does not use, so the series is absent on a <code>ScaleSet</code> set and, unlike the counters above, has no scale-set analog (Q713). <code>ActionsGatewayPodCreationLatencyP99</code> and <code>ActionsGatewayPodCreationLatencyP95</code> therefore never fire on the default tier. A silent latency alert there means an absent series, not a healthy one.</td>
+<td>Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>. <strong>Both acquisition tiers</strong>, observed off the shared pod informer alongside <code>job_duration_seconds</code> (Q713). Both are emitted once per pod when its lifetime ends, so a long-running job contributes its latency observation only at completion. Neither is re-observed for pods already terminal when an AGC restarts and re-lists them.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_token_refreshes_total</code></td>
