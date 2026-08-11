@@ -1,11 +1,11 @@
 # Release 1.5 Milestone Definition
 
 > **Status: scope opening 2026-08-06.** [Release 1.4](release-1.4.md) is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
-> Four gating Queue rows so far, labelled `1.5-gate`: [Q712](../STATUS.md#Q712), [Q713](../STATUS.md#Q713), and Q726, admitted 2026-08-09 from the candidate list below, plus [Q715](../STATUS.md#Q715), admitted the same day off an external date.
+> Four gating Queue rows so far, labelled `1.5-gate`: [Q712](../STATUS.md#Q712), Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus [Q715](../STATUS.md#Q715), admitted the same day off an external date.
 
 ## Why these gate a release rather than riding along
 
-Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both are defects in capabilities the project already claims, not new features.
+Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
 That is what makes them release-gating: shipping another minor while either is open means shipping a claim the product does not honour.
 
 Q726 is the same shape read from the other side.
@@ -25,16 +25,21 @@ The row covers wiring the field, deciding whether the gateway should also assert
 
 This is also the one place ARC is ahead on GAG's own core claim: its `gha-runner-scale-set` chart exposes `runnerGroup` as a first-class value.
 
-### Q713 — the shipped tier emits no duration or latency series
+### Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11
 
-`waitForCompletion` and the pod waiter run only inside `provision()` (`cmd/agc/internal/provisioner/provisioner.go:557` and `:583`). `ProvisionScaleSetWorker` registers neither, and `v2beta1` is ScaleSet-only, so the tier every new tenant runs emits both series empty.
+`waitForCompletion` and the pod waiter ran only inside `provision()` (`cmd/agc/internal/provisioner/provisioner.go:557` and `:583`). `ProvisionScaleSetWorker` registered neither, and `v2beta1` is ScaleSet-only, so the tier every new tenant runs emitted both series empty.
 
-The blast radius is entirely downstream and none of it is caveated (unlike `jobs_admission_rejected_total`, which *is* documented as classic-only): two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.
+The blast radius was entirely downstream: two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.
+The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped `PrometheusRule` sees a product that looks broken, and [go-to-market](go-to-market.md) §8 records that first impressions from cold traffic are one-shot.
 
-The failure mode is worst-case for a pre-adoption project.
-The first external operator to apply the shipped `PrometheusRule` sees a product that looks broken, and [go-to-market](go-to-market.md) §8 records that first impressions from cold traffic are one-shot.
+**How it was fixed.** Both observations moved onto the shared pod informer, which sees a scale-set worker pod and a classic one identically.
+The latency observation had been gated behind a registered waiter, the thing a fire-and-forget provision never creates, so the tier seam was the gate itself rather than a missing call site.
 
-It also gates positioning work: every latency, utilization, or cost claim in the comparison material is unmeasurable until this lands, so no number-bearing claim should ship ahead of it.
+That made the span a decision rather than a detail, since the two tiers had no common "acquisition" moment to measure from. `job_duration_seconds` is now **worker pod lifetime** on both tiers: creation to the last container finishing, or to the deletion request for a worker removed mid-run.
+Every documented consumer of the series is cost attribution ([appendix-f](../design/appendix-f-cost-model.md) multiplies it by an hourly node rate), and a pod is billed from creation, so the classic tier's old span was measuring the wrong thing: it charged the staging and `spec.scaleUp` throttle window during which no pod existed.
+Correcting it was therefore part of the fix rather than a follow-up.
+
+Two consequences worth keeping: observations fire once per pod when its lifetime ends, so a long job's latency observation arrives at completion rather than at start; and a pod already terminal when an AGC restarts and re-lists it is claimed without being re-observed, so a restart cannot spike either histogram with one duplicate per pod still inside `completedPodTTL`.
 
 ### Q715 — the runner version reported to GitHub is a constant, and the too-old warning is classic-only
 
@@ -73,7 +78,7 @@ Three bodies of work, in dependency order:
    Also the listener-footprint wording, which is substantively right but uses "cluster IP" to mean a pod IP, inviting a reader to check `Service` objects and conclude the table is wrong.
 2. **Under-claims.** Nine capabilities shipped and appear only in `features.md`.
    The largest are no-PEM workload identity (the GitHub App private key never enters the cluster), the live-validated per-tenant egress IP result, and the durability programme whose motivating incident was five worker pods running 16 hours on 82 spot node-hours.
-3. **Structure.** Q713 blocks any number-bearing claim, since the shipped tier emits no latency or duration series to measure.
+3. **Structure.** Q713 blocked any number-bearing claim, since the shipped tier emitted no latency or duration series to measure; it landed 2026-08-11, so latency and cost claims are now measurable on the default tier.
    Q712 blocks publishing tenant-isolation marketing, because the runner-group binding it would be claiming is unwired.
 
 The recurring form of this is now [release.md § Pre-flight](../operations/release.md#1-pre-flight), which asks the same three questions before every tag.

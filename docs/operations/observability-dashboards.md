@@ -35,9 +35,6 @@ Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as
 
 **Row 2 — Pod Creation Latency SLO**
 
-> Every panel in this row is **classic acquisition only** (Q713). `pod_creation_latency_seconds` is not observed on the scale-set path, so on a `ScaleSet` set, the default tier since P5, all three read blank rather than green.
-> A blank SLO gauge here is a missing series, not a met target.
-
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | p95 latency | `actions_gateway:pod_creation_latency_seconds:p95` | Gauge (green <15s, yellow <60s, red >60s) |
@@ -49,7 +46,7 @@ Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Jobs acquired total | `increase(actions_gateway_jobs_acquired_total[1h])` | Bar chart by runner_group |
-| Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series. **Classic acquisition only** (Q713): `job_duration_seconds` is not observed on the scale-set path, so this panel is empty on a `ScaleSet` set |
+| Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series, both acquisition tiers. Worker pod lifetime, so it excludes the pre-creation staging a slow `acquirejob` or a `spec.scaleUp` throttle adds |
 | Disruption retries | `sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by acquisition tier (`classic`, `scaleset`) and cause (`eviction`, `preemption`, `deletion`, `abandoned`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work, `abandoned` rising means workers are not being scheduled at all before `pendingPodDeadline` reaps them — different investigations entirely |
 | Abandoned runs awaiting capacity | `sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))` | Stat or bar chart, split by acquisition tier since Q766 ported the recovery to `scaleset`. `expired` is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand |
 | Disruption budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
@@ -161,7 +158,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 | Active sessions by namespace | `sum by (namespace) (actions_gateway_active_sessions)` | Time series |
 | Jobs acquired/min by namespace (classic) | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60` | Time series |
 | Jobs assigned/min by namespace (scale-set) | `sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60` | Time series |
-| Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series. **Classic acquisition only** (Q713), so namespaces running `ScaleSet` sets contribute no series |
+| Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
 
 ## Dashboard Variables
 

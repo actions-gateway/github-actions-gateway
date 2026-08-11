@@ -94,6 +94,10 @@ worker_cost_per_job = (job_duration_seconds / 3600) × hourly_node_rate × resou
 
 Where `resource_fraction` is the fraction of a node the pod's resource requests consume.
 
+`job_duration_seconds` is the worker pod's own wall time on both acquisition tiers: creation to its last container finishing.
+That is why it can be multiplied by an hourly rate directly.
+Time spent before the pod exists (acquisition, Secret staging, a `spec.scaleUp` throttle wait) is outside the series because it is outside the bill.
+
 **Example — GPU job:**
 - Job duration: 30 minutes (0.5 hr)
 - Node type: `p4d.24xlarge`, 8× A100, $32.77/hr

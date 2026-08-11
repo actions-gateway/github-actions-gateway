@@ -71,10 +71,8 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Metrics reference](operations/observability-metrics.md)**: every Prometheus metric the GMC, AGC, and proxy export, scoped per tenant and runner group.
 - **[Fleet rollups for platform admins](operations/observability-metrics.md#full-metrics-reference)**: cross-tenant degraded, egress-stale, and quota gauges in a single pane.
 - **[Scraping setup](operations/observability-metrics-access.md)**: wiring the mutual-TLS metrics endpoints into your Prometheus.
-- **[Alerting and SLOs](operations/observability-alerting.md)** <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: ready-to-apply alert rules as code.
-  Two SLOs and one alert read duration and latency series the ScaleSet tier does not emit yet, so they have no data there ([roadmap](roadmap.md)).
-- **[Grafana dashboards](operations/observability-dashboards.md)** <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: a tenant dashboard and a platform dashboard, both as code.
-  Their duration and latency panels stay empty on the ScaleSet tier for the same reason.
+- **[Alerting and SLOs](operations/observability-alerting.md)**: ready-to-apply alert rules as code.
+- **[Grafana dashboards](operations/observability-dashboards.md)**: a tenant dashboard and a platform dashboard, both as code.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
 
 ## Install and day-2 operations

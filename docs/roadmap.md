@@ -25,9 +25,6 @@ The pill beside each title names the release it blocks, read from the backlog ra
 - **[Bind each runner set to a GitHub runner group](plan/release-1.5.md#q712--the-runner-group-binding-is-declared-and-never-wired)** <!-- q:Q712 --> The runner group is GitHub's own control over which repositories may target a runner set, and GAG does not set it today, so every scale set registers into the installation's default group.
   Kubernetes-side isolation is unaffected; what is unbounded is which repositories can send work to a tenant.
 
-- **[Job duration and pod-creation latency on the default tier](plan/release-1.5.md#q713--the-shipped-tier-emits-no-duration-or-latency-series)** <!-- q:Q713 --> Both series are emitted on the classic tier only, so on the scale-set tier that every new tenant runs, two Service Level Objectives, an alert, four recording rules, and panels in both shipped dashboards have no data.
-  Until it lands, expect those panels to read empty.
-
 - **[Detect the runner version a tenant's worker image ships](operations/tenant-onboarding.md)** <!-- q:Q715 --> The version GAG reports to GitHub is the pinned default, whatever `spec.workerImage` holds, and the too-old warning fires on the classic tier only.
   GitHub raises its enforced minimum on 2026-09-25, so a stale image fails with no prior signal.
 
