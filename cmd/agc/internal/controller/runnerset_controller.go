@@ -403,6 +403,12 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// opt-out. Advisory only — it never gates Ready.
 	r.setReapBlockingSidecarStatus(&rs, refs.template, refs.templateAnnotations)
 
+	// Judge the runner version the effective worker image ships against GitHub's
+	// enforced minimum (Q715). Advisory like the two above, and the only producer of
+	// RunnerVersionTooOld on the ScaleSet tier — the protocol carries no runner version
+	// at session creation, so the listener has no rejection to report.
+	r.setRunnerVersionStatus(&rs, refs.template)
+
 	// Surface the measured worker sizing recommendation and judge the template's
 	// ask against it (Q359 Phase 2). Advisory only — set before the protocol
 	// routing so both acquisition tiers persist it with their status writes.
@@ -895,6 +901,39 @@ func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2alpha1.RunnerSe
 	// event stream, not only in status.
 	if status == metav1.ConditionTrue && (prev == nil || prev.Status != metav1.ConditionTrue) {
 		r.recordEvent(rs, corev1.EventTypeWarning, reason, "Reconcile", msg)
+	}
+}
+
+// setRunnerVersionStatus judges the runner version this set's effective worker image
+// declares against GitHub's enforced registration minimum, and publishes the verdict
+// as RunnerVersionTooOld (Q715). It asks GitHub nothing, so it reports on the ScaleSet
+// tier too — where the acquisition protocol carries no runner version and the listener
+// therefore never sees the rejection that produces the classic tier's condition.
+//
+// A nil template means the references have not resolved; the image the set would run is
+// unknown, so nothing is published rather than judging the AGC-wide default the set may
+// never use.
+func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2alpha1.RunnerSet, template *v2alpha1.RunnerTemplateSpec) {
+	if template == nil || r.Provisioner == nil {
+		return
+	}
+	cond := runnercore.WorkerRunnerVersionCondition(
+		r.Provisioner.EffectiveWorkerImage(template.WorkerImage), rs.Generation)
+
+	prev := meta.FindStatusCondition(rs.Status.Conditions, cond.Type)
+	// The two producers of this condition report different facts through one type. A
+	// session-sourced VersionTooOld is GitHub rejecting agent.version, which is the
+	// AGC's own pinned names.RunnerVersion and says nothing about the worker image; a
+	// healthy image reading therefore does not refute it, and writing over it would
+	// drop a live rejection from status.
+	if prev != nil && prev.Status == metav1.ConditionTrue && prev.Reason == v2alpha1.ReasonVersionTooOld {
+		return
+	}
+	meta.SetStatusCondition(&rs.Status.Conditions, cond)
+	// Warn once on a genuine transition into too-old so the deadline lands in the event
+	// stream while there is still time to change the image.
+	if cond.Status == metav1.ConditionTrue && (prev == nil || prev.Status != metav1.ConditionTrue) {
+		r.recordEvent(rs, corev1.EventTypeWarning, cond.Reason, "Reconcile", cond.Message)
 	}
 }
 

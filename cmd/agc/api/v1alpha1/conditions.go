@@ -63,8 +63,18 @@ const (
 	// ReasonSustainedRateLimit is the RateLimited=True reason (message polling has
 	// been answered 429 for over ten minutes).
 	ReasonSustainedRateLimit = "SustainedRateLimit"
-	// ReasonVersionTooOld is the RunnerVersionTooOld=True reason.
+	// ReasonVersionTooOld is the RunnerVersionTooOld=True reason when GitHub itself
+	// rejected the session as too old (classic tier only).
 	ReasonVersionTooOld = "VersionTooOld"
+	// The reconciler's own reading of the worker image (Q715), published every
+	// reconcile without asking GitHub: ReasonWorkerImageBelowMinimum is
+	// RunnerVersionTooOld=True when the image's tag declares a runner version below
+	// names.MinRunnerVersion, ReasonWorkerImageCurrent is False when it declares one
+	// at or above it, and ReasonWorkerImageVersionUnknown is Unknown when the
+	// reference declares no version at all so nothing has been checked.
+	ReasonWorkerImageBelowMinimum   = "WorkerImageBelowMinimum"
+	ReasonWorkerImageCurrent        = "WorkerImageCurrent"
+	ReasonWorkerImageVersionUnknown = "WorkerImageVersionUnknown"
 	// ReasonSessionUnauthorized is the Degraded=True reason pushed when session
 	// creation is rejected as unauthorized — the agent credentials are invalid or
 	// revoked.

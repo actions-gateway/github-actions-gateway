@@ -27,8 +27,15 @@ func setScaleSetWorkerMode(pod *corev1.Pod) {
 // digest-pinned built-in default. Shared by buildPod and the version-label
 // computation so both agree on which image (hence which runner version) a pod runs.
 func (p *Provisioner) resolveWorkerImage(spec *ResolvedSpec) string {
-	if spec.WorkerImage != "" {
-		return spec.WorkerImage
+	return p.EffectiveWorkerImage(spec.WorkerImage)
+}
+
+// EffectiveWorkerImage resolves the same three-rung chain as resolveWorkerImage from
+// a bare per-owner override, for callers that hold a RunnerGroup/RunnerSet spec but
+// no ResolvedSpec — the reconcilers judging the image's runner version (Q715).
+func (p *Provisioner) EffectiveWorkerImage(workerImage string) string {
+	if workerImage != "" {
+		return workerImage
 	}
 	if p.DefaultWorkerImage != "" {
 		return p.DefaultWorkerImage

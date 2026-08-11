@@ -429,6 +429,11 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		r.recordEvent(&rg, corev1.EventTypeWarning, "WorkersUnschedulable", "Reconcile", unsched.message)
 	}
 
+	// Judge the runner version the effective worker image ships against GitHub's
+	// enforced minimum (Q715). Advisory, and it warns before GitHub's own rejection
+	// does — that one arrives only once sessions have already started failing.
+	r.setRunnerVersionStatus(&rg)
+
 	if err := r.Status().Update(ctx, &rg); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -691,6 +696,35 @@ done:
 // an actual status transition rather than being rewritten on every reconcile.
 func (r *RunnerGroupReconciler) mergeCondition(rg *v1alpha1.RunnerGroup, cond metav1.Condition) {
 	meta.SetStatusCondition(&rg.Status.Conditions, cond)
+}
+
+// setRunnerVersionStatus judges the runner version this group's effective worker image
+// declares against GitHub's enforced registration minimum, and publishes the verdict as
+// RunnerVersionTooOld (Q715). The classic listener sets the same condition when GitHub
+// rejects a session, which only happens once the version already stopped working; this
+// reads the image itself, so it warns ahead of that.
+func (r *RunnerGroupReconciler) setRunnerVersionStatus(rg *v1alpha1.RunnerGroup) {
+	if r.Provisioner == nil {
+		return
+	}
+	cond := runnercore.WorkerRunnerVersionCondition(
+		r.Provisioner.EffectiveWorkerImage(rg.Spec.WorkerImage), rg.Generation)
+
+	prev := meta.FindStatusCondition(rg.Status.Conditions, cond.Type)
+	// The two producers of this condition report different facts through one type. A
+	// session-sourced VersionTooOld is GitHub rejecting agent.version, which is the
+	// AGC's own pinned names.RunnerVersion and says nothing about the worker image; a
+	// healthy image reading therefore does not refute it, and writing over it would
+	// drop a live rejection from status.
+	if prev != nil && prev.Status == metav1.ConditionTrue && prev.Reason == v1alpha1.ReasonVersionTooOld {
+		return
+	}
+	r.mergeCondition(rg, cond)
+	// Warn once on a genuine transition into too-old so the deadline lands in the event
+	// stream while there is still time to change the image.
+	if cond.Status == metav1.ConditionTrue && (prev == nil || prev.Status != metav1.ConditionTrue) {
+		r.recordEvent(rg, corev1.EventTypeWarning, cond.Reason, "Reconcile", cond.Message)
+	}
 }
 
 func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, ready bool) {
