@@ -135,6 +135,12 @@ Each version is a full built copy under its own path on the `gh-pages` branch, a
 **Backports don't demote the site.** A patch cut for an older supported line (e.g. `v1.2.5` released *after* `v1.3.0`) publishes/updates its own `1.2.5` version but leaves `stable` on `1.3.0` — the deploy claims `stable` only when the pushed tag is the highest released version.
 That backport must be tagged off the release line, not off feature-ahead `main`; see [release.md § Patch releases and backports](../operations/release.md#patch-releases-and-backports).
 
+**A tag freezes what that version says, including its version pins.** This is the same trap the announce bar escaped by deriving its version ([§ The announce bar](#the-announce-bar)): anything wrong in the tag's tree publishes permanently under that version, and no later fix to `main` reaches it.
+The install pins are the case still paying for it.
+They can only be bumped *after* the tag exists, because `check-release-pins.sh` compares them for equality with the newest stable tag, so three of the four releases since `1.0.0` published the previous version's `helm install --version` as their landing page.
+The bump therefore lands twice: on `main`, and on a `release-X.Y` branch cut from the tag, which is then republished over the version via `workflow_dispatch` with `docs_ref`.
+The procedure is [release.md step 7](../operations/release.md#the-bump-on-main-does-not-reach-the-published-release).
+
 Pages source stays **"GitHub Actions"**: `mike` maintains the tree on `gh-pages`, and the `publish` job serves that whole tree as the Pages artifact. `--alias-type=copy` makes `stable/` a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.
 
 ### Seeding already-released versions
@@ -166,6 +172,9 @@ With `set_default` left off, the first two runs would produce a tree with no roo
 - *Dispatching from the tag doesn't work.* `workflow_dispatch` reads the workflow file **at the ref you dispatch on**, and a pre-versioning tag's `pages.yml` has neither these inputs nor `mike`.
   The run would reject the inputs, and its flat single-copy deploy would clobber the whole version tree.
 - *Omitting `docs_ref` publishes the wrong content.* `mike` builds the **current checkout**, so a seed dispatched from `main` without it would publish feature-ahead `main` as the released docs, reintroducing the "Available now" drift that Q387 and versioning exist to prevent.
+
+`docs_ref` takes a **tag or a branch**.
+The workflow fetches it into a private ref first, because `fetch-depth: 0` brings this ref's history and every tag but no other branch, and a branch name alone died with `invalid reference` (every seed before the post-tag pin republish named a tag, so nothing had exercised it).
 
 `docs_ref` restores that ref's `docs/` and `mkdocs.yml` over the working tree.
 Four things are deliberately **not** taken from the tag:
