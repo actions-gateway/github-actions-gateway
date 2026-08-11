@@ -3303,6 +3303,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-dogfood-suite-scopes-the-release-progress-stream-before-it-sources-anything" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A dogfood suite scopes the release progress stream before it sources anything
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-path-assembled-at-runtime-is-only-checked-by-running-the-script" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5166,6 +5177,18 @@ Teardown is the half worth asserting hardest: a drain that reports convergence i
 <p>This matters because the interesting assertion about a bring-up script is usually that a failure <em>aborts</em> it: that a failed readiness wait stops the run before it flips routing at a tenant that never came up.
 Written the first way, that test passes no matter what the script does — a false green in the same family as Q404 and Q432.
 Use the second form, and mutation-check it: break the abort (append <code>|| true</code> to the wait), confirm the assertion goes red, restore.</p>
+<h3 id="a-dogfood-suite-scopes-the-release-progress-stream-before-it-sources-anything">A dogfood suite scopes the release progress stream before it sources anything<a class="headerlink" href="#a-dogfood-suite-scopes-the-release-progress-stream-before-it-sources-anything" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/progress.sh"><code>lib/progress.sh</code></a> defaults <code>RELEASE_PROGRESS_FILE</code> and <code>RELEASE_STATUS_FILE</code> to repo-local paths that a live release-validation gate is actively writing.
+Any suite that sources a script reaching that library inherits the operator's own stream unless it says otherwise, and sourcing is the whole trigger: <code>e2e-run-watch.sh</code> pulls the library in, and <code>watch_run</code> records the run it parked on so the sentinel can tell a quiet leg from a wedge (Q630).
+So <code>e2e-run-watch-test.sh</code> appended three <code>owner/repo</code> run events to the real stream during the v1.4.0-rc.2 gate, repointing that stall check at a run that does not exist (Q777).
+The gate still passed, which is the part worth noticing: the damage was to the artifact a human was reading to decide whether the candidate was good.</p>
+<p>Set both variables to paths under the suite's own <code>$WORK</code> <strong>before</strong> the <code>source</code> line, as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-status-test.sh"><code>release-status-test.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel-test.sh"><code>release-sentinel-test.sh</code></a> do.
+The library defaults on <em>unset</em>, so an assignment after the source line is too late for anything that line already ran.
+Disabling the stream with <code>RELEASE_PROGRESS_FILE=</code> is not a substitute: <code>progress_init</code> removes <code>RELEASE_STATUS_FILE</code> whether or not the stream is on, so the live default stays reachable (Q786).
+Scope both even when the suite wants no stream at all.</p>
+<p>Then assert the positive, and name the path rather than the variable.
+An assertion that reads <code>"$RELEASE_PROGRESS_FILE"</code> passes exactly as well once the scoping is gone and the events went to the live stream, so it guards nothing; reading <code>"${WORK}/progress.jsonl"</code> goes red.
+Because <code>progress_run</code> and <code>progress_heartbeat</code> append only to a stream that already exists, a suite that wants that assertion has to call <code>progress_init</code> first.</p>
 <h3 id="a-path-assembled-at-runtime-is-only-checked-by-running-the-script">A path assembled at runtime is only checked by running the script<a class="headerlink" href="#a-path-assembled-at-runtime-is-only-checked-by-running-the-script" title="Permanent link">&para;</a></h3>
 <p>shellcheck resolves nothing: <code>"$(dirname "$0")/../fetch/download-verified.sh"</code> is a string to it, correct or not.
 So a suite that asserts only the <em>pure</em> half of a script — a regexp, a parser, a mapping — leaves the script itself unexecuted, and its runtime paths uncovered by every gate.

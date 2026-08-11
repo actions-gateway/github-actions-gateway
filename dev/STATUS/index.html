@@ -2851,20 +2851,20 @@
 <td>Measured 2026-08-08 on <code>origin/main</code> 70ec7925, alone: 324.5s vs <code>-timeout 5m</code>, panic, CredRotation red. Runs: 246s green, 315s, 326s. Whichever test holds the wall takes the blame, so the name moves. Split the package or raise the budget.</td>
 </tr>
 <tr>
-<td><a id="Q777"></a>Q777</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-run-watch-test.sh"><code>e2e-run-watch-test</code> writes into the live release-validation stream</a></td>
-<td><code>bug</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Sets <code>REPO=owner/repo</code> but never scopes <code>RELEASE_PROGRESS_FILE</code>/<code>RELEASE_STATUS_FILE</code>, so <code>progress_run</code> writes the defaults. Measured 2026-08-09: <code>make check</code> during the rc.2 gate injected 3 <code>owner/repo</code>/<code>42</code> events, breaking the Q630 stall check.</td>
-</tr>
-<tr>
 <td><a id="Q784"></a>Q784</td>
 <td><a href="../operations/release/#the-bump-on-main-does-not-reach-the-published-release">Gate that a published version dir names its own release</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Nothing compares the published <code>/X.Y.Z/</code> against <code>X.Y.Z</code>, so the landing page advertised the prior release's <code>helm --version</code> on 1.1.0, 1.2.0 and 1.4.0. Measured 2026-08-10. Step 7 republishes by hand; a curl+grep per version would catch a miss.</td>
+</tr>
+<tr>
+<td><a id="Q786"></a>Q786</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/progress.sh"><code>progress.sh</code> lets a test reach the live release stream defaults</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Every call site is scoped now (Q777), but nothing stops the next one: the defaults are the live paths, and <code>progress_init</code> removes <code>RELEASE_STATUS_FILE</code> even when the stream is off, so <code>RELEASE_PROGRESS_FILE=</code> is partial cover. Measured 2026-08-10.</td>
 </tr>
 <tr>
 <td><a id="Q781"></a>Q781</td>
