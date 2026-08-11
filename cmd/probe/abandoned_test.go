@@ -308,7 +308,7 @@ func startAbandonedRun(t *testing.T, window time.Duration, env map[string]string
 	}
 
 	overrides := map[string]string{
-		"PROBE_ABANDONED_TIMEOUT": "10s",
+		"PROBE_ABANDONED_TIMEOUT": abandonedTestTimeout.String(),
 		"PROBE_ABANDONED_WINDOW":  window.String(),
 	}
 	for k, v := range env {
@@ -321,8 +321,8 @@ func startAbandonedRun(t *testing.T, window time.Duration, env map[string]string
 	p := newAbandonedProbe(discardLogger(), cfg, staticTokenProvider{token: "install-token"},
 		rest.srv.URL, bs.HTTPClient(), bs.HTTPClient())
 	p.restPollInterval = 100 * time.Millisecond
-	p.rerunWait = 3 * time.Second
-	p.jobTailWait = 300 * time.Millisecond
+	p.rerunWait = abandonedTestRerunWait
+	p.jobTailWait = abandonedTestJobTail
 
 	// The fixture delivery for A. Session IDs are minted sequentially by the
 	// stub, and the probe opens A's session first.
@@ -342,34 +342,88 @@ func startAbandonedRun(t *testing.T, window time.Duration, env map[string]string
 	return bs, rest, verdictCh
 }
 
-// waitForCompleteJob blocks until the stub has served the abandoned completejob.
-func waitForCompleteJob(t *testing.T, bs *brokertest.Server) {
+// The probe waits every scenario below configures it with. Named so the bounds
+// the assertions wait under are derived from them rather than guessed at
+// separately — a bound that does not move when one of these does is a second
+// clock racing the subject's own.
+const (
+	abandonedTestTimeout   = 10 * time.Second       // PROBE_ABANDONED_TIMEOUT: the bound on awaitDelivery
+	abandonedTestRerunWait = 3 * time.Second        // the post-rerun watch for a redelivery
+	abandonedTestJobTail   = 300 * time.Millisecond // the post-conclusion job-record watch
+)
+
+// verdictBudget is how long a run configured with this observation window may
+// legitimately take to publish a verdict.
+//
+// The sum is every wait the longest path spends end to end: the delivery
+// timeout, then the window, then the bounded job tail and rerun watch a
+// CONCLUDED verdict adds. Trebling it leaves scheduler delay somewhere to go on
+// a loaded `-race` machine, so reaching the result means the probe is wedged
+// rather than slow.
+//
+// A flat bound is what this replaces, and the gap was not academic: seven
+// scenarios here run a 30s window behind a 20s bound, so the assertion expired
+// while the probe was still inside the window it had been configured with. It
+// fired on #1357 at 20.24s under `-race` and was green on rerun (Q761), which is
+// what a test clock shorter than the subject's own always eventually does.
+func verdictBudget(window time.Duration) time.Duration {
+	return 3 * (abandonedTestTimeout + window + abandonedTestJobTail + abandonedTestRerunWait)
+}
+
+// awaitVerdict blocks on the run goroutine's verdict, failing only once the
+// probe has overrun everything its own configuration can account for.
+func awaitVerdict(t *testing.T, verdictCh <-chan string, window time.Duration) string {
 	t.Helper()
-	deadline := time.After(10 * time.Second)
-	for bs.CompleteJobCalls() == 0 {
+	allowed := abandonedTestTimeout + window + abandonedTestJobTail + abandonedTestRerunWait
+	budget := verdictBudget(window)
+	select {
+	case verdict := <-verdictCh:
+		return verdict
+	case <-time.After(budget):
+		t.Fatalf("probe published no verdict in %s — 3x the %s its own configuration can spend "+
+			"(%s delivery timeout, %s window, %s of bounded tails), so it is wedged, not slow",
+			budget, allowed, abandonedTestTimeout, window, abandonedTestJobTail+abandonedTestRerunWait)
+		return ""
+	}
+}
+
+// awaitStubCall blocks until count reports the call reached a stub.
+//
+// Bounded by the probe's own delivery timeout rather than a flat guess: none of
+// these calls can be issued before the probe has taken a delivery, and the probe
+// gives that up at PROBE_ABANDONED_TIMEOUT, so a wait past a multiple of it is
+// the probe failing to get that far rather than the machine being slow.
+func awaitStubCall(t *testing.T, what string, count func() int64) {
+	t.Helper()
+	budget := 3 * abandonedTestTimeout
+	deadline := time.After(budget)
+	for count() == 0 {
 		select {
 		case <-deadline:
-			t.Fatal("completejob never reached the broker stub")
+			t.Fatalf("%s never reached the stub in %s (3x the probe's %s delivery timeout)",
+				what, budget, abandonedTestTimeout)
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
 }
 
+// waitForCompleteJob blocks until the stub has served the abandoned completejob.
+func waitForCompleteJob(t *testing.T, bs *brokertest.Server) {
+	t.Helper()
+	awaitStubCall(t, "completejob", func() int64 { return int64(bs.CompleteJobCalls()) })
+}
+
 func TestAbandonedProbe_Redispatched(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil, nil)
+	window := 30 * time.Second
+	bs, rest, verdictCh := startAbandonedRun(t, window, nil, nil)
 
 	waitForCompleteJob(t, bs)
 	// The re-dispatch: a fresh delivery reaches B's session after T0.
 	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-b"})
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictRedispatched {
-			t.Fatalf("verdict = %q, want %q", verdict, verdictRedispatched)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictRedispatched {
+		t.Fatalf("verdict = %q, want %q", verdict, verdictRedispatched)
 	}
 
 	// The measurement's own claim: the completion the stub saw is the Q628 call.
@@ -395,20 +449,16 @@ func TestAbandonedProbe_Redispatched(t *testing.T) {
 // run measured: the run concludes success while the job record never does.
 func TestAbandonedProbe_ConcludedRunLevel(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil, nil)
+	window := 30 * time.Second
+	bs, rest, verdictCh := startAbandonedRun(t, window, nil, nil)
 
 	waitForCompleteJob(t, bs)
 	// No redelivery; the run goes terminal while the job stays in_progress.
 	rest.jobStatus.Store(func() (string, string) { return "in_progress", "" })
 	rest.runStatus.Store(func() (string, string) { return "completed", "success" })
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictConcluded+"-run-success" {
-			t.Fatalf("verdict = %q, want %s-run-success", verdict, verdictConcluded)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictConcluded+"-run-success" {
+		t.Fatalf("verdict = %q, want %s-run-success", verdict, verdictConcluded)
 	}
 	if got := rest.cancels.Load(); got != 1 {
 		t.Errorf("cleanup cancels = %d, want 1 (409-tolerant cancel still issued)", got)
@@ -419,26 +469,15 @@ func TestAbandonedProbe_ConcludedRunLevel(t *testing.T) {
 // then walks away — no completejob on the wire.
 func TestAbandonedProbe_NoneSendsNoCompletion(t *testing.T) {
 	t.Parallel()
-	bs, _, verdictCh := startAbandonedRun(t, 2*time.Second, map[string]string{
+	window := 2 * time.Second
+	bs, _, verdictCh := startAbandonedRun(t, window, map[string]string{
 		"PROBE_ABANDONED_RESULT": "none",
 	}, nil)
 
-	deadline := time.After(10 * time.Second)
-	for bs.AcquireJobCalls() == 0 {
-		select {
-		case <-deadline:
-			t.Fatal("acquirejob never reached the broker stub")
-		case <-time.After(20 * time.Millisecond):
-		}
-	}
+	awaitStubCall(t, "acquirejob", func() int64 { return int64(bs.AcquireJobCalls()) })
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictNoSignal {
-			t.Fatalf("verdict = %q, want %q", verdict, verdictNoSignal)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictNoSignal {
+		t.Fatalf("verdict = %q, want %q", verdict, verdictNoSignal)
 	}
 	if got := bs.CompleteJobCalls(); got != 0 {
 		t.Errorf("completejob calls = %d, want 0 for result=none", got)
@@ -494,7 +533,8 @@ func TestObserve_SiblingRedeliveryFiltering(t *testing.T) {
 // and the re-queued job reaches the surviving listener.
 func TestAbandonedProbe_RerunCheck(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, map[string]string{
+	window := 30 * time.Second
+	bs, rest, verdictCh := startAbandonedRun(t, window, map[string]string{
 		"PROBE_ABANDONED_RESULT":      "failed",
 		"PROBE_ABANDONED_RERUN_CHECK": "true",
 	}, nil)
@@ -504,23 +544,11 @@ func TestAbandonedProbe_RerunCheck(t *testing.T) {
 	rest.runStatus.Store(func() (string, string) { return "completed", "failure" })
 
 	// Once the probe posts the rerun, re-queue the job to B's session.
-	deadline := time.After(10 * time.Second)
-	for rest.reruns.Load() == 0 {
-		select {
-		case <-deadline:
-			t.Fatal("rerun-failed-jobs never reached the REST stub")
-		case <-time.After(20 * time.Millisecond):
-		}
-	}
+	awaitStubCall(t, "rerun-failed-jobs", rest.reruns.Load)
 	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-a2"})
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictConcluded+"-run-failure" {
-			t.Fatalf("verdict = %q, want %s-run-failure", verdict, verdictConcluded)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictConcluded+"-run-failure" {
+		t.Fatalf("verdict = %q, want %s-run-failure", verdict, verdictConcluded)
 	}
 	req, ok := bs.LastCompleteJob()
 	if !ok {
@@ -539,7 +567,8 @@ func TestAbandonedProbe_RerunCheck(t *testing.T) {
 // verdict and cleans up.
 func TestAbandonedProbe_RerunRefused(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, map[string]string{
+	window := 30 * time.Second
+	bs, rest, verdictCh := startAbandonedRun(t, window, map[string]string{
 		"PROBE_ABANDONED_RESULT":      "failed",
 		"PROBE_ABANDONED_RERUN_CHECK": "true",
 	}, func(s *abandonedRESTStub) {
@@ -549,13 +578,8 @@ func TestAbandonedProbe_RerunRefused(t *testing.T) {
 	waitForCompleteJob(t, bs)
 	rest.runStatus.Store(func() (string, string) { return "completed", "failure" })
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictConcluded+"-run-failure" {
-			t.Fatalf("verdict = %q, want %s-run-failure", verdict, verdictConcluded)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictConcluded+"-run-failure" {
+		t.Fatalf("verdict = %q, want %s-run-failure", verdict, verdictConcluded)
 	}
 	if got := rest.reruns.Load(); got != 1 {
 		t.Errorf("rerun-failed-jobs calls = %d, want 1", got)
@@ -571,7 +595,8 @@ func TestAbandonedProbe_RerunRefused(t *testing.T) {
 // wire.
 func TestAbandonedProbe_ForceCancel(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, map[string]string{
+	window := 30 * time.Second
+	bs, rest, verdictCh := startAbandonedRun(t, window, map[string]string{
 		"PROBE_ABANDONED_RESULT":      "none",
 		"PROBE_ABANDONED_FORCECANCEL": "true",
 	}, func(s *abandonedRESTStub) {
@@ -581,13 +606,8 @@ func TestAbandonedProbe_ForceCancel(t *testing.T) {
 		})
 	})
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictConcluded+"-run-cancelled" {
-			t.Fatalf("verdict = %q, want %s-run-cancelled", verdict, verdictConcluded)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictConcluded+"-run-cancelled" {
+		t.Fatalf("verdict = %q, want %s-run-cancelled", verdict, verdictConcluded)
 	}
 	if got := rest.forceCancels.Load(); got != 1 {
 		t.Errorf("force-cancel calls = %d, want 1", got)
@@ -602,20 +622,16 @@ func TestAbandonedProbe_ForceCancel(t *testing.T) {
 // reaches its verdict.
 func TestAbandonedProbe_ForceCancelRefused(t *testing.T) {
 	t.Parallel()
-	_, rest, verdictCh := startAbandonedRun(t, 2*time.Second, map[string]string{
+	window := 2 * time.Second
+	_, rest, verdictCh := startAbandonedRun(t, window, map[string]string{
 		"PROBE_ABANDONED_RESULT":      "none",
 		"PROBE_ABANDONED_FORCECANCEL": "true",
 	}, func(s *abandonedRESTStub) {
 		s.forceCancelStatus.Store(int32(http.StatusConflict))
 	})
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictNoSignal {
-			t.Fatalf("verdict = %q, want %q after a refused force-cancel", verdict, verdictNoSignal)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictNoSignal {
+		t.Fatalf("verdict = %q, want %q after a refused force-cancel", verdict, verdictNoSignal)
 	}
 	if got := rest.forceCancels.Load(); got != 1 {
 		t.Errorf("force-cancel calls = %d, want 1", got)
@@ -624,35 +640,27 @@ func TestAbandonedProbe_ForceCancelRefused(t *testing.T) {
 
 func TestAbandonedProbe_ConcludedJobLevel(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil, nil)
+	window := 30 * time.Second
+	bs, rest, verdictCh := startAbandonedRun(t, window, nil, nil)
 
 	waitForCompleteJob(t, bs)
 	// No redelivery; instead the REST job goes terminal.
 	rest.jobStatus.Store(func() (string, string) { return "completed", "cancelled" })
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictConcluded+"-job-cancelled" {
-			t.Fatalf("verdict = %q, want %s-job-cancelled", verdict, verdictConcluded)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictConcluded+"-job-cancelled" {
+		t.Fatalf("verdict = %q, want %s-job-cancelled", verdict, verdictConcluded)
 	}
 }
 
 func TestAbandonedProbe_NoSignal(t *testing.T) {
 	t.Parallel()
-	bs, _, verdictCh := startAbandonedRun(t, 2*time.Second, nil, nil)
+	window := 2 * time.Second
+	bs, _, verdictCh := startAbandonedRun(t, window, nil, nil)
 
 	waitForCompleteJob(t, bs)
 	// Nothing happens on either channel; the window closes.
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictNoSignal {
-			t.Fatalf("verdict = %q, want %q", verdict, verdictNoSignal)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictNoSignal {
+		t.Fatalf("verdict = %q, want %q", verdict, verdictNoSignal)
 	}
 }
 
@@ -662,7 +670,8 @@ func TestAbandonedProbe_NoSignal(t *testing.T) {
 // record also exercises the startup stale-runner report.
 func TestAbandonedProbe_RecoversRunnerNameConflict(t *testing.T) {
 	t.Parallel()
-	bs, rest, verdictCh := startAbandonedRun(t, 30*time.Second, nil, func(s *abandonedRESTStub) {
+	window := 30 * time.Second
+	bs, rest, verdictCh := startAbandonedRun(t, window, nil, func(s *abandonedRESTStub) {
 		s.conflictOnce.Store(true)
 		s.runners.Store([]restRunner{{
 			ID: 55, Name: "gag-q645-abandoned-a", Status: "offline",
@@ -675,13 +684,8 @@ func TestAbandonedProbe_RecoversRunnerNameConflict(t *testing.T) {
 	waitForCompleteJob(t, bs)
 	bs.EnqueueJob("session-2", broker.RunnerJobRequestBody{RunnerRequestID: "req-b"})
 
-	select {
-	case verdict := <-verdictCh:
-		if verdict != verdictRedispatched {
-			t.Fatalf("verdict = %q, want %q after conflict recovery", verdict, verdictRedispatched)
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("probe did not reach a verdict")
+	if verdict := awaitVerdict(t, verdictCh, window); verdict != verdictRedispatched {
+		t.Fatalf("verdict = %q, want %q after conflict recovery", verdict, verdictRedispatched)
 	}
 	// Three deletes: the stale survivor, A at the recycle, B at cleanup.
 	if got := rest.deregistered.Load(); got != 3 {

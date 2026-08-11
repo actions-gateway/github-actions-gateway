@@ -99,18 +99,50 @@ pid_file="${WORKDIR}/grandchild.pid"
 "${SCRIPT}" bash "${WORKDIR}/tree.sh" "${pid_file}" >"${WORKDIR}/launch.log" 2>&1 &
 wrapper_pid=$!
 
-# Bounded, so the suite ends on its own if the launch never comes up.
+# Bounded on the subject, not on the clock. Two things end this wait and both
+# are signals: the record appears, or the wrapper exits without writing one —
+# and the wrapper is a child of this shell, so its death is observed rather than
+# inferred from elapsed time. The iteration cap is only a backstop for a wrapper
+# that wedges without exiting at all; at 120s it is far outside anything the
+# `make check` fan-out imposes, so reaching it means the launch is broken rather
+# than slow.
+#
+# The 10s cap it replaces sat inside that contention envelope: it failed 4 of 7
+# full-check runs while passing 5 of 5 standalone, which is a bound measuring
+# the machine instead of the subject (Q752, and testing.md § A backstop shorter
+# than the subject's own budget is not a backstop).
 record=""
-for _ in $(seq 1 100); do
+launch_gone=""
+for _ in $(seq 1 2400); do
 	if [[ -s "${pid_file}" ]]; then
-		record="$(find "${LAUNCH_RECORD_DIR}" -name '*.launch' 2>/dev/null | head -1)"
-		[[ -n "${record}" ]] && break
+		candidate="$(find "${LAUNCH_RECORD_DIR}" -name '*.launch' 2>/dev/null | head -1)"
+		# `stop` is the last field the launch writes, so a record carrying one is
+		# a whole record. Existence alone is not: the redirect creates the file
+		# before the fields land, and a poll landing inside that gap reads the
+		# early fields and empties the rest — which surfaces as an assertion on a
+		# WRONG value ("names what was launched: want 'bash', got ''") rather than
+		# as a missing record, so it reads like a broken subject. Caught here at
+		# 1/25 under a 1,605 fork/s storm; the wait this replaced polled half as
+		# often and merely hit it less.
+		if [[ -n "${candidate}" && -n "$(record_field "${candidate}" stop)" ]]; then
+			record="${candidate}"
+			break
+		fi
 	fi
-	sleep 0.1
+	# Checked after the record, and acted on one iteration later, so a wrapper
+	# that wrote its record and exited in the same instant is not read as a
+	# failure.
+	[[ -n "${launch_gone}" ]] && break
+	kill -0 "${wrapper_pid}" 2>/dev/null || launch_gone=yes
+	sleep 0.05
 done
 
 if [[ -z "${record}" ]]; then
-	echo "FAIL the launch wrote no record within 10s" >&2
+	if [[ -n "${launch_gone}" ]]; then
+		echo "FAIL the launch exited without writing a record" >&2
+	else
+		echo "FAIL the launch was still running but had written no record after 120s" >&2
+	fi
 	kill "${wrapper_pid}" 2>/dev/null || true
 	exit 1
 fi
@@ -134,17 +166,27 @@ check "so the stop command is a group kill" "kill -TERM -- -${run_pid}" \
 # handle. The grandchild is what proves the group form was necessary.
 eval "$(record_field "${record}" stop)"
 
+# The wrapper waits on the run, so reaping the wrapper IS the run's own signal
+# that it is gone. No clock, no guess about how long a loaded machine needs —
+# and it has to precede the checks below anyway, because the record is removed
+# by the wrapper's EXIT trap.
+wait "${wrapper_pid}" 2>/dev/null || true
+
+# The grandchild took the same group signal, but it is not a child of this
+# shell, so only polling can observe its reap. The cap backstops a grandchild
+# the group kill never reached: 120s is far past any reap delay, so reaching it
+# means the recorded stop command missed it — the failure this assertion exists
+# to catch.
 stopped=no
-for _ in $(seq 1 100); do
+for _ in $(seq 1 2400); do
 	if ! kill -0 "${grandchild}" 2>/dev/null && ! kill -0 "${run_pid}" 2>/dev/null; then
 		stopped=yes
 		break
 	fi
-	sleep 0.1
+	sleep 0.05
 done
 check "the recorded stop takes the run AND its children" yes "${stopped}"
 
-wait "${wrapper_pid}" 2>/dev/null || true
 check "the record is gone once the run ends" "" \
 	"$(find "${LAUNCH_RECORD_DIR}" -name '*.launch' 2>/dev/null)"
 
