@@ -3,6 +3,7 @@ package provisioner
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	dto "github.com/prometheus/client_model/go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -660,13 +660,42 @@ func TestInformerPodWaiter_DebugLogsOnCancel(t *testing.T) {
 // lifetime (creation → FinishedAt) is startedAfter + podRunFor.
 const podRunFor = 42 * time.Second
 
+// The duration histogram under test. One finite bucket, wide enough to hold
+// every lifetime these tests observe, so the rendered exposition expectHistogram
+// compares against stays short — the assertions are about the observations, not
+// the bucketing.
+const (
+	durationMetric = "test_job_duration_seconds"
+	durationHelp   = "Worker pod lifetime."
+	durationBucket = 1000
+)
+
 // newDurationHistogram returns an unregistered histogram with the production
 // label set, for asserting worker-pod lifetime observations in isolation.
 func newDurationHistogram() *prometheus.HistogramVec {
 	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "test_job_duration_seconds",
-		Buckets: []float64{1, 30, 60, 300},
+		Name:    durationMetric,
+		Help:    durationHelp,
+		Buckets: []float64{durationBucket},
 	}, []string{"namespace", "runner_group"})
+}
+
+// expectDuration asserts h holds exactly one series, for ns/owner, carrying
+// count observations totalling sum. It compares a rendered exposition because
+// that is how the rest of the repo asserts on metrics.
+func expectDuration(t *testing.T, h *prometheus.HistogramVec, ns, owner string, count int, sum float64) {
+	t.Helper()
+	labels := fmt.Sprintf("namespace=%q,runner_group=%q", ns, owner)
+	want := fmt.Sprintf(`# HELP %[1]s %[2]s
+# TYPE %[1]s histogram
+%[1]s_bucket{%[3]s,le="%[4]d"} %[5]d
+%[1]s_bucket{%[3]s,le="+Inf"} %[5]d
+%[1]s_sum{%[3]s} %[6]v
+%[1]s_count{%[3]s} %[5]d
+`, durationMetric, durationHelp, labels, durationBucket, count, sum)
+	if err := testutil.CollectAndCompare(h, strings.NewReader(want)); err != nil {
+		t.Fatalf("duration histogram: %v", err)
+	}
 }
 
 // newLatencyHistogram returns an unregistered histogram with the production
@@ -751,22 +780,6 @@ func TestInformerPodWaiter_PodCreationLatencySkippedWhenNeverStarted(t *testing.
 	}
 }
 
-// histSample returns the observation count and sum of the histogram series
-// carrying labels. It creates the series if absent, so it reports on a series
-// that exists; assert absence with testutil.CollectAndCount instead.
-func histSample(t *testing.T, h *prometheus.HistogramVec, labels ...string) (uint64, float64) {
-	t.Helper()
-	obs, err := h.GetMetricWithLabelValues(labels...)
-	if err != nil {
-		t.Fatalf("get histogram series %v: %v", labels, err)
-	}
-	var m dto.Metric
-	if err := obs.(prometheus.Metric).Write(&m); err != nil {
-		t.Fatalf("write histogram series %v: %v", labels, err)
-	}
-	return m.GetHistogram().GetSampleCount(), m.GetHistogram().GetSampleSum()
-}
-
 // The scale-set tier provisions fire-and-forget and registers no waiter, so a
 // scale-set worker pod resolves with an empty waiter set. Both histograms must
 // still be observed for it: hanging them off the waiter set is exactly what left
@@ -780,16 +793,12 @@ func TestInformerPodWaiter_ObservesScaleSetPodWithNoWaiter(t *testing.T) {
 	p.Labels[LabelAcquisitionProtocol] = AcquisitionProtocolScaleSet
 	w.onPodEvent(p, false)
 
-	if got, _ := histSample(t, w.PodCreationLatency, "ns"); got != 1 {
-		t.Fatalf("got %d latency observations for a scale-set pod, want 1", got)
+	if got := testutil.CollectAndCount(w.PodCreationLatency); got != 1 {
+		t.Fatalf("got %d latency series for a scale-set pod, want 1", got)
 	}
-	count, sum := histSample(t, w.JobDuration, "ns", "set-a")
-	if count != 1 {
-		t.Fatalf("got %d duration observations for a scale-set pod, want 1", count)
-	}
-	if want := (3*time.Second + podRunFor).Seconds(); sum != want {
-		t.Fatalf("got lifetime %vs, want %vs (creation → last container finish)", sum, want)
-	}
+	// Creation → last container finish, which is what makes the span the same one
+	// the classic tier reports.
+	expectDuration(t, w.JobDuration, "ns", "set-a", 1, (3*time.Second + podRunFor).Seconds())
 }
 
 // The runner_group label must come off the pod's own owner label, since a
@@ -802,9 +811,7 @@ func TestInformerPodWaiter_DurationCarriesOwnerFromPodLabel(t *testing.T) {
 	p.Labels = map[string]string{LabelRunnerGroup: "group-v1"}
 	w.onPodEvent(p, false)
 
-	if got, _ := histSample(t, w.JobDuration, "ns", "group-v1"); got != 1 {
-		t.Fatalf("got %d observations under the v1 owner label, want 1", got)
-	}
+	expectDuration(t, w.JobDuration, "ns", "group-v1", 1, (time.Second + podRunFor).Seconds())
 }
 
 // The tenant namespace holds the AGC's own pods too. A pod carrying no owner
@@ -837,9 +844,7 @@ func TestInformerPodWaiter_DurationObservedOncePerPod(t *testing.T) {
 	w.onPodEvent(p, false)
 	w.onPodEvent(p, false)
 
-	if got, _ := histSample(t, w.JobDuration, "ns", "set-a"); got != 1 {
-		t.Fatalf("got %d observations from three terminal events, want 1", got)
-	}
+	expectDuration(t, w.JobDuration, "ns", "set-a", 1, (time.Second + podRunFor).Seconds())
 }
 
 // A pod already terminal when the informer lists it finished before this process
@@ -881,13 +886,8 @@ func TestInformerPodWaiter_DurationOfPodDeletedMidRun(t *testing.T) {
 	p.DeletionTimestamp = &deletedAt
 	w.onPodDelete(p)
 
-	count, sum := histSample(t, w.JobDuration, "ns", "set-a")
-	if count != 1 {
-		t.Fatalf("got %d observations for a pod deleted mid-run, want 1", count)
-	}
-	if sum != 90 {
-		t.Fatalf("got lifetime %vs, want 90s (creation → deletion request)", sum)
-	}
+	// Creation → deletion request, since such a pod publishes no FinishedAt.
+	expectDuration(t, w.JobDuration, "ns", "set-a", 1, 90)
 }
 
 // A pod removed before any container started ran no job and occupied no node
