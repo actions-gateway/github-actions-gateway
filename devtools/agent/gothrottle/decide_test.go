@@ -239,10 +239,11 @@ func TestNoPrefixIsSilence(t *testing.T) {
 }
 
 // Silence is the failure contract, which is also what makes a failure here
-// unattributable: fourteen paths across the hook and this binary end in exit 0
-// with empty stdout, and a Q703 occurrence left nothing but that. The trace
-// names the path — the empty-prefix one above all, since it is the only silent
-// return a contended machine can reach part-way through a suite.
+// unattributable: every silent path across the hook and this binary ends in
+// exit 0 with empty stdout (the package comment counts them), and a Q703
+// occurrence left nothing but that. The trace names the path — the empty-prefix
+// one above all, since it is the only silent return a contended machine can
+// reach part-way through a suite.
 //
 // Both directions, for the reason the matcher asserts both: a trace that
 // stopped naming its site leaves the next occurrence as unattributable as the
