@@ -38,6 +38,7 @@ const (
 	ConditionSizingDrift                 = apiconditions.ConditionSizingDrift
 	ConditionSizingProfileOverridden     = apiconditions.ConditionSizingProfileOverridden
 	ConditionJobProvisionStalled         = apiconditions.ConditionJobProvisionStalled
+	ConditionRunnerLabelsIncomplete      = apiconditions.ConditionRunnerLabelsIncomplete
 )
 
 // Egress proxy mode (status.proxyMode) and RunnerSet template-resolution source
@@ -107,6 +108,8 @@ const (
 	ReasonCPULimitInjected        = apiconditions.ReasonCPULimitInjected
 	ReasonNoCPULimitInjected      = apiconditions.ReasonNoCPULimitInjected
 	ReasonAwaitingWorkerPods      = apiconditions.ReasonAwaitingWorkerPods
+	ReasonLabelsNotRegistered     = apiconditions.ReasonLabelsNotRegistered
+	ReasonLabelsRegistered        = apiconditions.ReasonLabelsRegistered
 	ReasonApplianceRangesRequired = apiconditions.ReasonApplianceRangesRequired
 	ReasonGitHubEgressAllowed     = apiconditions.ReasonGitHubEgressAllowed
 	ReasonRunnerNameConflict      = apiconditions.ReasonRunnerNameConflict

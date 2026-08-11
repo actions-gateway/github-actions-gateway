@@ -195,8 +195,9 @@ metadata:
 spec:
   gatewayRef:  { name: team-a-gateway }
   templateRef: { name: default }
-  # Exactly one label: it is this set's scale-set name at GitHub and its single
-  # runs-on match target (workflows say `runs-on: gpu`). Must be unique per gateway.
+  # Every label is a runs-on match target, so a workflow can say `runs-on: gpu` or
+  # `runs-on: [gpu, linux]`. The FIRST one is also this set's scale-set name at
+  # GitHub, so it must be unique per gateway — and reordering renames the scale set.
   runnerLabels: ["gpu"]
   # priorityClassName values must be on the platform-owned allowlist: a watched
   # PriorityClassAllowlist CR, grown without a GMC restart (the

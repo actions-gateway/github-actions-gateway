@@ -83,7 +83,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Label type for the scale set's single System label (its runs-on match target).
+// Label type for every one of the scale set's runs-on match targets. ARC sends System
+// for the name label and each extra label alike (measured against 0.14.0, Q726).
 const systemLabelType = "System"
 
 // defaultPollBackoff is how long the loop waits before retrying after a transient
@@ -366,9 +367,16 @@ type Config struct {
 	// the two-hop auth bootstrap, the admin-JWT refresh, and the egress-proxy-aware
 	// HTTP transports.
 	Client *scaleset.Client
-	// ScaleSetName is the scale set's name AND its single runs-on label (the tenant's
-	// single runnerLabel; CEL guarantees exactly one for a ScaleSet set).
+	// ScaleSetName is the scale set's name and its first runs-on label — the owning
+	// RunnerSet's runnerLabels[0]. It is the set's identity at GitHub: the scale set
+	// is looked up by it, and every runner record is named from it.
 	ScaleSetName string
+	// ExtraLabels are the owning RunnerSet's runnerLabels after the first. They are
+	// registered on the scale set alongside the name label so a workflow can target
+	// the set with an array (runs-on: [linux, gpu]); GitHub matches them the way it
+	// matches a plain self-hosted runner's labels (Q726). Empty is the single-label
+	// shape, which produces the create request this tier has always sent.
+	ExtraLabels []string
 	// RunnerGroupName is the runner group to place the scale set in. Empty resolves to
 	// GitHub's default group (id 1).
 	RunnerGroupName string
@@ -491,6 +499,11 @@ type Listener struct {
 
 	mu         sync.Mutex
 	scaleSetID int
+	// registeredLabels is what the server said the scale set carries, recorded when
+	// ensureScaleSet created or found it (Q726). It is the server's answer rather than
+	// the ask, which is the whole point: a GHES appliance that dropped the extra
+	// labels reports the shortfall here and nowhere else.
+	registeredLabels []string
 	// The three replay guards. Each answers a redelivered JobAssigned, and each is retired
 	// by retireGuards once every message carrying one for its job has been deleted — so
 	// they are bounded by the work still in the queue, not by the jobs the listener has
@@ -602,6 +615,15 @@ type Status struct {
 	AssignedJobs int
 	// RunningJobs is the server-authoritative totalRunningJobs from the last poll.
 	RunningJobs int
+	// RegisteredLabels are the label names the scale set carries at GitHub, as the
+	// server reported them when this Listener ensured the set — not what was asked
+	// for. The two differ whenever a GHES appliance below 3.21 dropped the labels past
+	// the first, or the scale set predates a label the owner has since appended, and
+	// the caller reports that difference (Q726).
+	//
+	// Nil means no observation — not ensured yet, or a response that did not carry
+	// labels — and a caller must publish nothing rather than a total shortfall.
+	RegisteredLabels []string
 }
 
 // Status returns the latest accounting snapshot.
@@ -609,9 +631,10 @@ func (l *Listener) Status() Status {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return Status{
-		ScaleSetID:   l.scaleSetID,
-		AssignedJobs: l.lastStats.TotalAssignedJobs,
-		RunningJobs:  l.lastStats.TotalRunningJobs,
+		ScaleSetID:       l.scaleSetID,
+		AssignedJobs:     l.lastStats.TotalAssignedJobs,
+		RunningJobs:      l.lastStats.TotalRunningJobs,
+		RegisteredLabels: append([]string(nil), l.registeredLabels...),
 	}
 }
 
@@ -675,15 +698,21 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 }
 
 // ensureScaleSet returns the id of the scale set named Config.ScaleSetName, creating
-// it (ephemeral, single System label = its name) if it does not yet exist. Reusing an
-// existing scale set is the restart-safe path: one scale-set object per group,
-// created once (§2.1).
+// it (ephemeral, one System label per declared runnerLabel) if it does not yet exist.
+// Reusing an existing scale set is the restart-safe path: one scale-set object per
+// group, created once (§2.1).
+//
+// Either way it records the label set the SERVER reports back, which is not always the
+// one asked for: a reused scale set predates any label appended since, and a GHES
+// appliance below 3.21 keeps only the name label and drops the rest with no error
+// (Q726). Nothing here corrects that — the caller reports the difference.
 func (l *Listener) ensureScaleSet(ctx context.Context) (int, error) {
 	existing, err := l.cfg.Client.GetRunnerScaleSetByName(ctx, l.cfg.ScaleSetName)
 	if err != nil {
 		return 0, err
 	}
 	if existing != nil {
+		l.recordRegisteredLabels(existing)
 		return existing.ID, nil
 	}
 	groupID := 1 // GitHub's default runner group
@@ -699,13 +728,53 @@ func (l *Listener) ensureScaleSet(ctx context.Context) (int, error) {
 	created, err := l.cfg.Client.CreateRunnerScaleSet(ctx, scaleset.RunnerScaleSet{
 		Name:          l.cfg.ScaleSetName,
 		RunnerGroupID: groupID,
-		Labels:        []scaleset.Label{{Name: l.cfg.ScaleSetName, Type: systemLabelType}},
+		Labels:        l.desiredLabels(),
 		RunnerSetting: &scaleset.RunnerSetting{Ephemeral: true},
 	})
 	if err != nil {
 		return 0, err
 	}
+	l.recordRegisteredLabels(created)
 	return created.ID, nil
+}
+
+// desiredLabels is the scale set's label set as this Listener asks for it: the name
+// label first, then each extra label, duplicates dropped — the composition ARC sends.
+// A duplicate would ask GitHub to hold one match target twice; the CRD does not
+// enforce uniqueness within runnerLabels, so one can reach here.
+func (l *Listener) desiredLabels() []scaleset.Label {
+	seen := map[string]bool{l.cfg.ScaleSetName: true}
+	out := []scaleset.Label{{Name: l.cfg.ScaleSetName, Type: systemLabelType}}
+	for _, name := range l.cfg.ExtraLabels {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, scaleset.Label{Name: name, Type: systemLabelType})
+	}
+	return out
+}
+
+// recordRegisteredLabels stores the label names ss carries, as the server reported
+// them.
+//
+// A response carrying NO labels records nothing rather than recording "carries
+// nothing". A scale set always has at least the name label — the name is a label — so
+// an empty list cannot be a scale set's true state; it means that response did not
+// carry labels. Whether every read route returns them is not something this repo has
+// measured, and reading a silent omission as a total shortfall would report every
+// declared label missing on a set that is working perfectly.
+func (l *Listener) recordRegisteredLabels(ss *scaleset.RunnerScaleSet) {
+	if len(ss.Labels) == 0 {
+		return
+	}
+	names := make([]string, 0, len(ss.Labels))
+	for _, lbl := range ss.Labels {
+		names = append(names, lbl.Name)
+	}
+	l.mu.Lock()
+	l.registeredLabels = names
+	l.mu.Unlock()
 }
 
 // sweepUnclaimedRunners deletes this scale set's registration records that no live

@@ -743,7 +743,7 @@ metadata: { name: linux, namespace: team-a }
 spec:
   gatewayRef:  { name: acme }
   templateRef: { name: default }
-  runnerLabels: [gag-linux]   # exactly one label: this set's scale-set name and runs-on target
+  runnerLabels: [gag-linux]   # the first label is this set's scale-set name and runs-on target
   maxWorkers: 50
   # no proxyRef / defaultProxyRef ⇒ direct egress
 ```
@@ -764,23 +764,29 @@ What you trade, and what you do **not**:
 To add attribution later, create an `EgressProxy` and set `spec.defaultProxyRef` on the gateway (every `RunnerSet` under it inherits the proxy unless it sets its own `proxyRef`).
 A `proxyRef`/`defaultProxyRef` that names a **missing** `EgressProxy` is treated as an error and fails closed (`Ready=False`/`ProxyNotFound`) — it does **not** silently fall back to direct egress; only an entirely-unset reference means direct.
 
-### Job acquisition, and the single-label rule
+### Job acquisition, and how labels route
 
 On `v2beta1` there is nothing to choose: every `RunnerSet` acquires jobs with the **runner-scale-set message-queue protocol** — one listener session per set, capacity-gated assignment, and a full-runner worker.
 It is the only protocol the graduated version serves, because it removes a many-acquirers job-assignment race the older classic protocol was subject to under high burst (validated end-to-end before the default flip, Q264).
 
-The rule that follows from it, and the one most likely to bite when you author a set by hand:
+The rules that follow from it, and the ones most likely to bite when you author a set by hand:
 
-- **Exactly one `runnerLabel` per set.** The scale set's name *is* its single `runs-on` match target at GitHub, so a set with two or more labels is rejected at admission.
+- **Every `runnerLabel` is a `runs-on` match target**, so a workflow may name the set with a single label or with an array (`runs-on: [linux, gpu]`).
   Concurrency is governed by `maxWorkers`/`priorityTiers` (advertised to GitHub as the scale set's capacity), not by a listener count.
-- **Unique under one gateway.** Two sets claiming the same label would register the same scale-set name at GitHub; the second is rejected.
+- **The first label names the scale set**, which makes it the set's identity at GitHub.
+  Reordering the list renames the scale set and orphans the old one, so append rather than prepend.
+- **The first label is unique under one gateway.** Two sets claiming the same `runnerLabels[0]` would register the same scale-set name at GitHub; the second is rejected.
+  Later labels may overlap freely.
+- **Declare the full list up front.** Labels are registered when the scale set is created and are not reconciled afterwards, so a label added to a live set never reaches GitHub — the set reports [`RunnerLabelsIncomplete`](troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete) rather than failing silently.
+  On GitHub Enterprise Server below 3.21 the same condition covers an appliance that dropped the extra labels because `DistributedTask.AllowRunnerScaleSetCustomLabels` is off.
 
-This is the same single-name routing ARC scale sets use, so workflows migrating from ARC carry their `runs-on` lines across unedited — see [Migrating from ARC](migration-from-arc.md#job-routing-a-11-map).
+This is the same routing ARC scale sets use, so workflows migrating from ARC carry their `runs-on` lines across unedited — see [Migrating from ARC](migration-from-arc.md#job-routing-a-11-map).
 
 #### Acquisition protocol: `v2alpha1` only
 
 `v2alpha1` — served as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp — carries a `spec.acquisitionProtocol` selector that `v2beta1` does not.
-It exists for one job: letting a tenant migrating off `v1alpha1` keep **multi-label matching**, which the scale-set model cannot express, until it is ready to split those groups up.
+It exists to let a tenant migrating off `v1alpha1` keep the classic per-runner broker protocol its groups were registered under, until it is ready to move.
+(Multi-label matching used to be the reason and no longer is: the scale-set protocol registers every `runnerLabel`.)
 
 ```yaml
 apiVersion: actions-gateway.com/v2alpha1   # the field does not exist on v2beta1
@@ -789,19 +795,16 @@ metadata: { name: linux, namespace: team-a }
 spec:
   gatewayRef:  { name: acme }
   templateRef: { name: default }
-  acquisitionProtocol: Classic       # deprecated; required for a multi-label set
+  acquisitionProtocol: Classic       # deprecated; the classic per-runner broker protocol
   runnerLabels: [self-hosted, linux]
   maxListeners: 10                   # honored under Classic; ignored under ScaleSet
   maxWorkers: 50
 ```
 
-- **A new tenant should never need this.** Author on `v2beta1` with one label per set. `Classic` is deprecated and, together with `v2alpha1` and `v1alpha1`, [removed at `v2.0.0`](v1alpha1-deprecation.md); `spec.maxListeners` goes with it.
-- **`gag-migrate` writes `acquisitionProtocol: Classic`** onto every set it emits, so a migrated tenant's multi-label groups keep working unchanged.
-  Opting one into the scale-set protocol later means creating a fresh single-label set, not editing the old one — the field is **immutable**, because switching a live set's protocol is a re-registration storm.
-- **Editing a Classic set works unqualified — except its labels.** An unqualified `kubectl edit/patch/apply` addresses the `v2beta1` storage version, which is ScaleSet-only and takes exactly one `runnerLabel`.
-  That rule is *ratcheted*: it is only enforced on the `runnerLabels` you actually write, so editing any other field of a stored multi-label Classic set goes through untouched.
-  To change the **labels** of such a set, qualify the write to the version that admits the shape (`kubectl edit runnersets.v2alpha1.actions-gateway.com …`).
-  Ratcheting is on by default from Kubernetes 1.30; the v2 floor is 1.31, so every supported cluster has it.
+- **A new tenant should never need this.** Author on `v2beta1`, with as many labels per set as your workflows target. `Classic` is deprecated and, together with `v2alpha1` and `v1alpha1`, [removed at `v2.0.0`](v1alpha1-deprecation.md); `spec.maxListeners` goes with it.
+- **`gag-migrate` writes `acquisitionProtocol: Classic`** onto every set it emits, so a migrated tenant's groups keep the protocol they were registered under.
+  Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is **immutable**, because switching a live set's protocol is a re-registration storm.
+- **Editing a Classic set works unqualified, labels included.** An unqualified `kubectl edit/patch/apply` addresses the `v2beta1` storage version, which admits the same multi-label shape.
 
 ### Starting from a shipped template
 

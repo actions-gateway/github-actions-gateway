@@ -496,7 +496,7 @@ spec:
   templateRef:
     name: default
   # ScaleSet (the Q264 P5 default), stated explicitly so the tenant's protocol is
-  # readable here. The single runnerLabel is BOTH the scale set's name at GitHub and
+  # readable here. One runnerLabel, which is BOTH the scale set's name at GitHub and
   # the workflows' runs-on target, so it must match vars.GAG_RUNNER exactly (Part C2).
   acquisitionProtocol: ScaleSet
   runnerLabels: ["gag-ci-scaleset"]
@@ -584,7 +584,8 @@ runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && 
 
 - On **push / pull_request** (or a dispatch with `target_gag` unset/false): `github.event_name == 'workflow_dispatch' && inputs.target_gag` is `false`, so the whole `&& … ||` expression short-circuits to the trailing `'ubuntu-latest'` — GitHub-hosted, exactly as before. `vars.GAG_RUNNER` is never consulted, so flipping it no longer affects these events.
 - On a **dispatch with `target_gag=true`**: the expression evaluates `fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"')`, giving the string `"gag-ci-scaleset"` (routes to GAG) when the variable is set, or `ubuntu-latest` when it is not.
-  Since Q399 this is a single JSON *string*, not an array: the runner set is ScaleSet-protocol and matches exactly one label, its own scale-set name.
+  Since Q399 this is a single JSON *string*, not an array: the runner set declares one label, its own scale-set name.
+  (Q726 lets a set carry more; this tenant still declares one.)
   It must stay identical to `spec.runnerLabels[0]` in B7.
   A mismatch leaves dispatched jobs queued at GitHub forever, unmatched.
 

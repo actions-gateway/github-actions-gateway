@@ -298,7 +298,7 @@ metadata: { name: linux, namespace: team-a }
 spec:
   gatewayRef:  { name: acme }
   templateRef: { name: default }   # kind defaults to RunnerTemplate; set kind: ClusterRunnerTemplate for a platform golden template
-  acquisitionProtocol: Classic     # multi-label ⇒ Classic (deprecated); the default is now ScaleSet (Q264 P5), which takes exactly one runnerLabel
+  acquisitionProtocol: Classic     # deprecated; the default is now ScaleSet (Q264 P5), which registers every runnerLabel (Q726)
   runnerLabels: [self-hosted, linux]
   maxListeners: 10
   maxWorkers: 50
@@ -416,7 +416,8 @@ The operator-facing Event reason vocabulary is tabulated in [troubleshooting.md]
 Because v2 `RunnerSet`s are not *owned* by the gateway (they only reference it via `spec.gatewayRef`, [§H.8](#h8-ownership-gc-and-deletion)), the binding is resolved by matching `gatewayRef.name` within the namespace — the same scoping the AGC applies server-side via its `spec.gatewayRef.name` field selector, not owner labels.
 A set is *impaired* (not serving jobs) on either of two axes: its `Ready` is `False` for a non-transient reason — a reference did not resolve or a provisioning step failed, anything but the benign startup `NoActiveSessions`, which is how v2 surfaces the reference/provisioning failures that had no standalone condition — **or** any of its abnormal-is-True impairing conditions is `True` (`v2alpha1.ImpairingConditionTypes()`: `Degraded`, `CredentialUnavailable`, `RunnerVersionTooOld`, `WorkersUnschedulable`).
 The second axis is load-bearing because the shared listener pushes `Degraded`/`RunnerVersionTooOld` onto the `RunnerSet` independently of `Ready` (Q330): a classic set whose sessions are all rejected as unauthorized converges to `Ready=NoActiveSessions` while `Degraded=True` sits on its own condition, so an `Ready`-only rollup would silently miss it.
-The advisory conditions (`RateLimited`, the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`, `JobProvisionStalled`) are excluded so the rollup does not flap on normal load.
+The advisory conditions (`RateLimited`, the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`, `JobProvisionStalled`, `RunnerLabelsIncomplete`) are excluded so the rollup does not flap on normal load. `RunnerLabelsIncomplete` (Q726) is excluded for a different reason from the rest: it does not flap at all, it simply is not an outage.
+The set serves every job targeting the labels that did register, and the ones that did not are a configuration mismatch for the tenant to fix.
 Like the v1 rollup it is advisory — it does **not** gate `Ready`, since the gateway's own AGC control plane can be healthy while one tenant's set is impaired.
 The GMC watches bound `RunnerSet`s (predicated on a change to a set's impaired signature, dropping high-frequency `activeSessions`/ `pendingJobs` churn) so a child's health change refreshes the parent promptly.
 

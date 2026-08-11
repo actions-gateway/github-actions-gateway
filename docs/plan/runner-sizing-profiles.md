@@ -249,7 +249,8 @@ declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale set's
 name is its single runs-on match target (Q264)
 ```
 
-The object is a `Classic` set with three `runnerLabels` — a shape v2alpha1 allows and v2beta1 does not.
+The object is a `Classic` set with three `runnerLabels` — a shape v2alpha1 allowed and v2beta1, at the time, did not.
+(Q726 has since removed the v2beta1 rule entirely; the transcript above is the state as measured.)
 Unqualified `kubectl` addresses the storage version (v2beta1), so the write was rejected even though the field being set had nothing to do with labels or protocol.
 Qualifying the resource worked:
 

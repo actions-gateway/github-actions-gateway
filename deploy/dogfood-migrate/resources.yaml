@@ -77,9 +77,9 @@ spec:
     # confirmation of Q465. If the AGC crash-loops with the error above, the fix
     # regressed — re-add `noProxyCIDRs: [34.118.224.0/20]` to unblock and reopen it.
   runnerGroups:
-    # Exactly ONE label, deliberately. v1 Classic permits many and v2beta1 ScaleSet
-    # permits exactly one, so a single-label v1 tenant migrates without the
-    # workflow's `runs-on` having to change — same label before and after.
+    # ONE label, deliberately: this tenant exists to prove a v1 group migrates
+    # without the workflow's `runs-on` having to change, so it keeps the same single
+    # label before and after. Q726 lifted the v2beta1 ceiling; the point stands.
     - runnerLabels: ["gag-migrate-v1"]
       maxListeners: 2
       maxWorkers: 1

@@ -214,7 +214,7 @@ LLMs answer from: GitHub issues/discussions, DEV Community, Medium, vendor compa
 |---|---|
 | [`alternatives.md`](../alternatives.md) router page | ✅ Shipped 2026-08-06. Four cases where something else wins, the location filter, the persona boundaries, and where GAG loses with attribution. |
 | [`why-gag.md`](../why-gag.md) "vs ARC" page | ✅ Exists. **Was not accurate**: 11 ARC-side cells were unverified and two had gone false at ARC 0.13.1 and 0.14.0. Corrected 2026-08-06 and now carries a dated measurement stamp. Re-measure per the [release pre-flight](../operations/release.md#1-pre-flight), not opportunistically. |
-| **ARC → GAG migration guide** | ✅ [migration-from-arc](../operations/migration-from-arc.md) (Q199): concept mapping, egress differences, gotchas, and a worked one-runner-group path. Q726 (multi-label `runs-on`) is a live migration blocker. |
+| **ARC → GAG migration guide** | ✅ [migration-from-arc](../operations/migration-from-arc.md) (Q199): concept mapping, egress differences, gotchas, and a worked one-runner-group path. Q726 (multi-label `runs-on`) closed 2026-08-11, so the guide no longer carries a workflow-edit caveat. |
 | README problem-first rewrite | Open. Claims were corrected 2026-08-06; the structure was not. Lead with the ARC pain, not the architecture, and note GitHub renders no CSS so it needs tables and bold lead-ins rather than the site's components. |
 | Blog: "Recovering stuck Actions jobs after pod eviction" | New. Maps to the strongest demand signal (§3). |
 | Blog: "Multi-tenant self-hosted runners with isolated egress" | New. Maps to ICP + EMU allow-list. |

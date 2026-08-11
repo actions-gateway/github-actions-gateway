@@ -15,6 +15,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -153,6 +154,8 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 		fmt.Sprintf("references resolved (template via %s); scale-set listener active (scaleSetID %d, %d job(s) assigned)",
 			refs.templateSource, st.ScaleSetID, st.AssignedJobs))
 
+	r.applyRunnerLabelsCondition(rs, st.RegisteredLabels)
+
 	// Worker-capacity conditions (Q303), identical to the classic path: the ScaleSet
 	// tier provisions the same worker pods (one per assigned job), so a namespace-quota
 	// or scheduling stall must surface here too rather than hiding behind rising
@@ -192,11 +195,12 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	// wiring carry over unchanged (the App token never reaches the worker; §4 security).
 	target := r.provisionerTarget(rs)
 
-	// The scale set's single runs-on label is its name (CEL guarantees exactly one
-	// runnerLabel for a ScaleSet set).
-	scaleSetName := ""
-	if len(rs.Spec.RunnerLabels) > 0 {
-		scaleSetName = rs.Spec.RunnerLabels[0]
+	// The first runs-on label names the scale set; the rest are registered on it as
+	// additional match targets (Q726).
+	scaleSetName := scaleSetNameOf(rs)
+	var extraLabels []string
+	if len(rs.Spec.RunnerLabels) > 1 {
+		extraLabels = rs.Spec.RunnerLabels[1:]
 	}
 
 	// Owner-bound sink for the listener's session-failure conditions and events
@@ -210,6 +214,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	l, err := scalesetlistener.New(scalesetlistener.Config{
 		Client:       ssClient,
 		ScaleSetName: scaleSetName,
+		ExtraLabels:  extraLabels,
 		OwnerName:    key.Namespace + "/" + key.Name,
 		// Asked before each assigned job's JIT config is minted, so a job the ceiling
 		// will reject registers no runner at GitHub (Q576). The ceiling verdict is
@@ -418,4 +423,70 @@ func (r *RunnerSetReconciler) stopScaleSetListener(key types.NamespacedName) {
 	}
 	h.cancel()
 	<-h.done
+}
+
+// applyRunnerLabelsCondition publishes RunnerLabelsIncomplete: whether the scale set at
+// GitHub carries every label the RunnerSet declares (Q726). registered is what the
+// server reported when the listener ensured the set.
+//
+// It is compared on every reconcile rather than once at listener start, because the two
+// ways the sets diverge arrive at different times. A GHES appliance below 3.21 drops the
+// labels past the first at creation; an operator appending a label diverges later, and
+// the listener does not restart for a spec change — the scale set is reused by name, so
+// nothing re-registers and the new label never reaches GitHub. Re-deriving the verdict
+// here catches the second the reconcile after the edit.
+//
+// Advisory: it never gates Ready. The set still serves every job targeting the labels
+// that did register, and a job targeting one that did not simply stays queued at GitHub,
+// which is a configuration mismatch for the operator to fix rather than an outage.
+//
+// A listener that has not ensured its scale set yet reports nil, which is not the same
+// claim as "the server returned no labels" and must not be published as a shortfall —
+// the condition is left untouched until there is an observation to publish.
+func (r *RunnerSetReconciler) applyRunnerLabelsCondition(rs *v2alpha1.RunnerSet, registered []string) {
+	if registered == nil {
+		return
+	}
+	have := make(map[string]bool, len(registered))
+	for _, l := range registered {
+		have[l] = true
+	}
+	var missing []string
+	for _, want := range rs.Spec.RunnerLabels {
+		if !have[want] {
+			missing = append(missing, want)
+		}
+	}
+
+	status, reason, msg := metav1.ConditionFalse, v2alpha1.ReasonLabelsRegistered,
+		fmt.Sprintf("scale set %q carries every declared runnerLabel", scaleSetNameOf(rs))
+	if len(missing) > 0 {
+		status, reason = metav1.ConditionTrue, v2alpha1.ReasonLabelsNotRegistered
+		msg = fmt.Sprintf(
+			"scale set %q does not carry runnerLabel(s) %v (registered: %v); jobs whose runs-on names them stay queued at GitHub. "+
+				"Labels are registered when the scale set is created and not reconciled after, and on GitHub Enterprise Server "+
+				"below 3.21 the appliance drops all but the name label unless a site admin enables "+
+				"DistributedTask.AllowRunnerScaleSetCustomLabels. See docs/operations/troubleshooting.md",
+			scaleSetNameOf(rs), missing, registered)
+	}
+
+	was := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionRunnerLabelsIncomplete)
+	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+		Type:               v2alpha1.ConditionRunnerLabelsIncomplete,
+		Status:             status,
+		Reason:             reason,
+		Message:            msg,
+		ObservedGeneration: rs.Generation,
+	})
+	if len(missing) > 0 && !was {
+		r.recordEvent(rs, corev1.EventTypeWarning, "RunnerLabelsNotRegistered", "EnsureScaleSet", "%s", msg)
+	}
+}
+
+// scaleSetNameOf is the scale set's name at GitHub: the RunnerSet's first runnerLabel.
+func scaleSetNameOf(rs *v2alpha1.RunnerSet) string {
+	if len(rs.Spec.RunnerLabels) == 0 {
+		return ""
+	}
+	return rs.Spec.RunnerLabels[0]
 }

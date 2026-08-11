@@ -17,21 +17,21 @@ const (
 	//
 	// As an API value, "Classic" is DEPRECATED as of Q264 P5 (2026-07-06): ScaleSet
 	// is now the default, and Classic remains a fully-functional explicit opt-in for
-	// one minor release (chiefly multi-label runner sets, which ScaleSet cannot
-	// express), then the classic machinery is removed at the v2beta1 graduation
-	// (Q264 §5a-U8). New runner sets should omit the field (defaulting to ScaleSet)
-	// or set it to ScaleSet; select Classic only to retain a classic-only capability
-	// during the migration window. (This is an API-surface deprecation, not a Go
-	// `Deprecated:` marker — the identifier is still used internally to implement
-	// classic support, so it deliberately avoids the machine-readable token.)
+	// one minor release, then the classic machinery is removed at the v2beta1
+	// graduation (Q264 §5a-U8). New runner sets should omit the field (defaulting to
+	// ScaleSet) or set it to ScaleSet; select Classic only to retain a classic-only
+	// capability during the migration window. Multi-label matching used to be that
+	// capability and no longer is — ScaleSet registers every runnerLabel as of Q726.
+	// (This is an API-surface deprecation, not a Go `Deprecated:` marker — the
+	// identifier is still used internally to implement classic support, so it
+	// deliberately avoids the machine-readable token.)
 	AcquisitionProtocolClassic = "Classic"
 	// AcquisitionProtocolScaleSet is the default: the runner-scale-set
 	// message-queue protocol (Q264 Option E) — one listener session per set,
 	// capacity-gated job assignment, and a full-runner (run.sh --jitconfig)
 	// worker. It removes the classic protocol's many-acquirers fan-out race by
-	// construction (Q224, validated clean-green in Q264 P4). The scale set's
-	// single runnerLabel is its runs-on match target, so a ScaleSet set must
-	// declare exactly one label (enforced by CEL).
+	// construction (Q224, validated clean-green in Q264 P4). Every runnerLabel is
+	// registered on the scale set, the first one naming it (Q726).
 	AcquisitionProtocolScaleSet = "ScaleSet"
 )
 
@@ -48,7 +48,6 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.completedPodTTL) || duration(self.completedPodTTL) >= duration('0s')",message="completedPodTTL must not be negative"
 // +kubebuilder:validation:XValidation:rule="!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline) >= duration('1s')",message="pendingPodDeadline must be at least 1s"
 // +kubebuilder:validation:XValidation:rule="!has(self.maxWorkerLifetime) || duration(self.maxWorkerLifetime) >= duration('0s')",message="maxWorkerLifetime must not be negative"
-// +kubebuilder:validation:XValidation:rule="self.acquisitionProtocol != 'ScaleSet' || size(self.runnerLabels) == 1",message="a ScaleSet-protocol runner set must declare exactly one runnerLabel: the scale set's name is its single runs-on match target (Q264)"
 type RunnerSetSpec struct {
 	// GatewayRef names the ActionsGateway that supplies this runner set's GitHub
 	// binding and control plane. Under multi-gateway-per-namespace each AGC
@@ -109,6 +108,13 @@ type RunnerSetSpec struct {
 	// run. Each label must be non-empty and contain no whitespace or commas (comma
 	// is the runs-on list separator).
 	//
+	// Both protocols match on the whole set, so a workflow may target a runner set
+	// with a single name or with an array (runs-on: [linux, gpu]). On a ScaleSet set
+	// the FIRST label is additionally the scale set's name at GitHub — its identity,
+	// held unique per gateway by the GMC's admission webhook, and renamed if the list
+	// is reordered (Q726). Classic sets have no scale-set object and no such
+	// distinction.
+	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:items:MaxLength=256
 	// +kubebuilder:validation:items:Pattern=`^[^,\s]+$`
@@ -120,22 +126,21 @@ type RunnerSetSpec struct {
 	// assignment, and a full-runner (run.sh --jitconfig) worker; it removes the
 	// classic protocol's many-acquirers fan-out race by construction. "Classic"
 	// (deprecated) is the per-runner broker protocol; select it only to retain a
-	// classic-only capability during the migration window — chiefly multi-label
-	// matching, which ScaleSet cannot express (see below).
+	// classic-only capability during the migration window.
 	//
-	// Because the default is ScaleSet and a ScaleSet set must declare exactly one
-	// runnerLabel, a runner set that omits this field must carry a single label; a
-	// multi-label set must set acquisitionProtocol: Classic explicitly. Existing
-	// sets are unaffected: the value is persisted at admission, so a set created
-	// while the default was Classic keeps Classic. (gag-migrate emits Classic
-	// explicitly, preserving v1 multi-label semantics on migration.)
+	// Multi-label matching was that capability until Q726 and no longer is: a
+	// ScaleSet set registers every runnerLabel on its scale set, so a multi-label
+	// set no longer has to pin Classic. Existing sets are unaffected: the value is
+	// persisted at admission, so a set created while the default was Classic keeps
+	// Classic, and gag-migrate still emits Classic explicitly so a migrating tenant's
+	// protocol never changes underneath it.
 	//
 	// It is immutable: switching a live set's protocol is a re-registration storm, so
 	// the value is frozen (§H.15 pattern) — create a new RunnerSet to change it.
 	// Starting immutable is compatible (relaxing it later is a non-breaking change;
-	// adding immutability later would be breaking). A ScaleSet set must declare exactly
-	// one runnerLabel (the scale set's name is its single runs-on target) — enforced by
-	// the spec-level CEL rule above and, for cross-set uniqueness, the GMC webhook.
+	// adding immutability later would be breaking). A ScaleSet set's first runnerLabel
+	// names its scale set, and the GMC webhook holds that name unique across the sets
+	// under one gateway.
 	// This field exists only on v2alpha1 as the per-set canary/rollback lever for the
 	// Q264 P3–P4 rollout; v2beta1 is ScaleSet-only and drops it (Q264 §5a-U7).
 	//

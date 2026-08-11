@@ -164,7 +164,7 @@ Rows marked <span class="gag-v2-badge">v2</span> need the `actions-gateway.com/v
     ARC moves, and an undated comparison rots into a false one. Two rows here
     changed at datable releases: 0.13.1 (2025-12-23) changed how a quota-blocked
     pod creation is retried, and 0.14.0 (2026-03-19) added multi-label scale
-    sets, which GAG does not have. If you are evaluating on a later ARC than the one
+    sets, which GAG matched in Q726. If you are evaluating on a later ARC than the one
     stamped above, re-check the column rather than trusting it, and
     [tell us what changed](https://github.com/actions-gateway/github-actions-gateway/issues).
 
@@ -191,8 +191,6 @@ Each gap below is tracked, and what closes it and when is on the [public roadmap
 - **A GitHub Support entitlement**, covering ARC installed via the official Helm charts, GitHub Enterprise Server 3.9 and later.
   GAG has none.
   Read the scope exclusions before relying on it: Kubernetes orchestration, policy application, and template customization are explicitly out of scope, which is much of what a multi-tenant platform team actually pages about.
-- **Multi-label scale sets** since 0.14.0.
-  A workflow using `runs-on: [linux, gpu]` needs one edit per target to move to GAG, which admits exactly one label per runner set.
 - **`containerMode: kubernetes`**, which runs `container:` and `services:` steps as separate pods with a provisioned volume.
   GAG runs one worker pod per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather than a non-privileged pod-per-step model.
 - **GitHub runner groups** (`runnerGroup`), the forge-side control over which repositories may target a runner set.

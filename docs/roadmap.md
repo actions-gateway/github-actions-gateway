@@ -28,9 +28,6 @@ The pill beside each title names the release it blocks, read from the backlog ra
 - **[Job duration and pod-creation latency on the default tier](plan/release-1.5.md#q713--the-shipped-tier-emits-no-duration-or-latency-series)** <!-- q:Q713 --> Both series are emitted on the classic tier only, so on the scale-set tier that every new tenant runs, two Service Level Objectives, an alert, four recording rules, and panels in both shipped dashboards have no data.
   Until it lands, expect those panels to read empty.
 
-- **[Multi-label runner sets for `runs-on` arrays](plan/arc-parity.md#where-arc-is-actually-ahead)** <!-- q:Q726 --> A runner set takes exactly one label today, so a workflow targeting `runs-on: [linux, gpu]` needs one edit per target to move here from Actions Runner Controller (ARC).
-  That is the one gap breaking the otherwise zero-edit migration.
-
 - **[Detect the runner version a tenant's worker image ships](operations/tenant-onboarding.md)** <!-- q:Q715 --> The version GAG reports to GitHub is the pinned default, whatever `spec.workerImage` holds, and the too-old warning fires on the classic tier only.
   GitHub raises its enforced minimum on 2026-09-25, so a stale image fails with no prior signal.
 

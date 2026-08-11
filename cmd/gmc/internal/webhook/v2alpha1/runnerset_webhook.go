@@ -122,11 +122,17 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alp
 	return nil, nil
 }
 
-// validateScaleSetLabelUniqueness rejects a ScaleSet-protocol RunnerSet whose single
+// validateScaleSetLabelUniqueness rejects a ScaleSet-protocol RunnerSet whose FIRST
 // runnerLabel is already claimed by another ScaleSet-protocol RunnerSet targeting the
-// same gateway in the same namespace. It is a no-op for Classic sets (which have no
-// scale-set object) and for any set that does not carry exactly one label (the
-// ScaleSet⇒exactly-one-label CRD CEL rule rejects those before this runs).
+// same gateway in the same namespace. The first label is the scale set's name at
+// GitHub, so two sets sharing it are two controllers driving one scale-set object.
+// It is a no-op for Classic sets, which have no scale-set object.
+//
+// Labels after the first are deliberately NOT checked. They are ordinary match
+// targets, so "linux" on a dozen sets is the expected shape, and which set an
+// ambiguous runs-on reaches is GitHub's decision rather than an admission-time
+// collision (Q726). For a single-label set this is the same comparison it has
+// always been.
 //
 // The check is fail-closed: if the sibling List errors, the request is rejected
 // rather than admitted on faith — admitting a possible collision is the failure mode
@@ -135,9 +141,8 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 	if rs.Spec.AcquisitionProtocol != agcv2alpha1.AcquisitionProtocolScaleSet {
 		return nil
 	}
-	if len(rs.Spec.RunnerLabels) != 1 {
-		// The CRD CEL rule (ScaleSet ⇒ size(runnerLabels) == 1) already rejects
-		// this; nothing to compare against a single label here.
+	if len(rs.Spec.RunnerLabels) == 0 {
+		// MinItems=1 rejects this before the webhook runs; nothing to compare.
 		return nil
 	}
 	if v.reader == nil {
@@ -165,11 +170,11 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 		if other.Spec.GatewayRef.Name != rs.Spec.GatewayRef.Name {
 			continue
 		}
-		if len(other.Spec.RunnerLabels) == 1 && other.Spec.RunnerLabels[0] == label {
+		if len(other.Spec.RunnerLabels) > 0 && other.Spec.RunnerLabels[0] == label {
 			return fmt.Errorf(
-				"ScaleSet runnerLabel %q is already used by RunnerSet %q under gateway %q in namespace %q; "+
-					"a ScaleSet set's runnerLabel is its scale-set name at GitHub, so two sets sharing it would collide — "+
-					"pick a distinct label",
+				"ScaleSet runnerLabels[0] %q is already used by RunnerSet %q under gateway %q in namespace %q; "+
+					"a ScaleSet set's FIRST runnerLabel is its scale-set name at GitHub, so two sets sharing it would collide — "+
+					"pick a distinct first label (later labels may overlap freely)",
 				label, other.Name, rs.Spec.GatewayRef.Name, rs.Namespace)
 		}
 	}

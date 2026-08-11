@@ -2155,6 +2155,64 @@ Both halves are required.
 
 ---
 
+## Jobs Targeting One of a Runner Set's Labels Never Start (`RunnerLabelsIncomplete`)
+
+**Symptoms.** A `RunnerSet` is `Ready=True` with an active listener, and jobs whose `runs-on` names its **first** label run normally, but jobs naming one of the later labels queue at GitHub forever and no worker pod is ever created.
+The set carries:
+
+```sh
+kubectl get runnerset <name> -n <ns> \
+  -o jsonpath='{range .status.conditions[?(@.type=="RunnerLabelsIncomplete")]}{.status} {.reason}: {.message}{"\n"}{end}'
+```
+
+```
+True LabelsNotRegistered: scale set "linux" does not carry runnerLabel(s) [gpu]
+(registered: [linux]); jobs whose runs-on names them stay queued at GitHub. ...
+```
+
+A `Warning` Event with reason `RunnerLabelsNotRegistered` is recorded on the set when the condition first goes `True`.
+
+**Likely cause.** The scale set at GitHub carries fewer labels than the runner set declares.
+Two ways in, and the condition message says which labels are affected either way:
+
+- **A label was appended to a live runner set.** The AGC finds an existing scale set by its name, the set's first `runnerLabel`, and reuses it untouched, so labels added afterwards are never registered.
+  Nothing errors; the new label simply matches nothing.
+- **GitHub Enterprise Server below 3.21.** Multiple labels per scale set need `DistributedTask.AllowRunnerScaleSetCustomLabels`, which is off by default on 3.18–3.20 and on by default from 3.21.
+  With it off the appliance keeps only the name label and **discards the rest without an error**, so the create looks entirely successful.
+
+**Resolution.**
+
+- **On GHES 3.18–3.20**, have a site admin enable the flag, then recreate the runner set:
+
+    ```sh
+    ghe-actions-console -s actions
+    # In the LightRail prompt:
+    Set-FeatureFlag -FeatureName DistributedTask.AllowRunnerScaleSetCustomLabels -State On
+    ```
+
+    Upstream documents the flag for 3.18 and later only, so on 3.17 and earlier treat multi-label as unavailable and declare one label per set until the appliance is upgraded.
+
+- **Otherwise, give the set a new scale set.** Labels are registered when the scale set is created and are not reconciled afterwards, and the AGC finds the scale set by name.
+  So neither editing `spec.runnerLabels` nor deleting and re-creating the `RunnerSet` under the same first label will add them: the second re-adopts the same scale set with the same old labels.
+
+    Two ways out, and both cost the old scale set:
+
+    - **Change `runnerLabels[0]` as well as adding the label.** A new name means a new scale set, registered with the full list.
+      Workflows naming the old first label must be updated, and the orphaned scale set stays at GitHub until removed there.
+    - **Delete the scale set at GitHub first**, then let the set re-register.
+      Deleting a `RunnerSet` does not delete its scale set, so this is a deliberate step in the GitHub UI or API.
+
+    Either way, drain the set first: jobs already assigned to the old scale set are not carried over.
+
+**Note on the first label.** It names the scale set, which makes it the set's identity.
+Reordering `runnerLabels` renames the scale set, leaving the old one orphaned at GitHub with any queued jobs still pointed at it.
+Append rather than prepend.
+
+**Why it does not gate `Ready`.** The set is still serving every job that targets the labels which *did* register, so it is a configuration mismatch rather than an outage.
+It is advisory, and deliberately not rolled into the gateway's `RunnerSetsDegraded` summary.
+
+---
+
 ## RateLimited Condition on ActionsGateway
 
 **Symptoms.** `kubectl get actionsgateway` shows a `RateLimited=True` condition. `actions_gateway_active_sessions` is at or near the per-installation budget.
@@ -3504,15 +3562,10 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 ## `RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)
 
 > Applies to the `v2alpha1` (`actions-gateway.com`) API. `acquisitionProtocol` selects how the AGC acquires jobs for a runner set: `ScaleSet` (**the default** as of Q264 P5 — the runner-scale-set message-queue protocol, Q264 Option E) or `Classic` (**deprecated** — the per-runner broker protocol).
-> Leaving the field unset selects `ScaleSet`, so a runner set that omits it must declare exactly one `runnerLabel`; a multi-label set must set `acquisitionProtocol: Classic` explicitly (see below).
+> Leaving the field unset selects `ScaleSet`.
+> Both protocols match on the whole `runnerLabels` set, so a multi-label set no longer has to pin `Classic`.
 
 **Symptoms.** Creating or updating a `RunnerSet` is rejected with one of:
-
-```
-The RunnerSet "linux" is invalid: spec: Invalid value: "object": a ScaleSet-protocol
-runner set must declare exactly one runnerLabel: the scale set's name is its single
-runs-on match target (Q264)
-```
 
 ```
 The RunnerSet "linux" is invalid: spec.acquisitionProtocol: Invalid value: "string":
@@ -3521,33 +3574,23 @@ protocol
 ```
 
 ```
-admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet runnerLabel
-"linux" is already used by RunnerSet "other-set" under gateway "gw" in namespace
-"tenant"; a ScaleSet set's runnerLabel is its scale-set name at GitHub, so two sets
-sharing it would collide — pick a distinct label
-```
-
-```
-The RunnerSet "linux" is invalid: spec.runnerLabels: Invalid value: "array": a v2beta1
-runner set must declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale
-set's name is its single runs-on match target (Q264)
+admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet
+runnerLabels[0] "linux" is already used by RunnerSet "other-set" under gateway "gw" in
+namespace "tenant"; a ScaleSet set's FIRST runnerLabel is its scale-set name at GitHub,
+so two sets sharing it would collide. Pick a distinct first label (later labels may
+overlap freely)
 ```
 
 **Likely cause & resolution.**
 
-- **Exactly one label (CRD CEL).** A `ScaleSet` set registers one scale-set object at GitHub whose *name is its single `runs-on` label* — there is no multi-label match like `Classic`.
-  Set exactly one entry in `spec.runnerLabels` (e.g. `["gpu-linux"]`).
-  A workflow targets it with that one label in `runs-on`.
-  - **Most common cause after the Q264 P5 default flip:** the set omits `acquisitionProtocol` (so it defaults to `ScaleSet`) but declares more than one label.
-    Either reduce it to a single label, or, to keep multi-label matching, set `acquisitionProtocol: Classic` explicitly (deprecated, and [removed at `v2.0.0`](v1alpha1-deprecation.md) with `v1alpha1` and `v2alpha1`).
-- **Exactly one label on the `v2beta1` storage version (CRD CEL).** The `spec.runnerLabels` variant of the message comes from `v2beta1`, which is ScaleSet-only and has no `acquisitionProtocol` field at all.
-  You see it when the write addressed `v2beta1` — either you authored a multi-label `v2beta1` set (fix: one label per set), or you edited the **labels** of a stored multi-label `Classic` set through an unqualified `kubectl edit/patch` (fix: qualify the write, `kubectl edit runnersets.v2alpha1.actions-gateway.com <name>`).
-  Editing any *other* field of such a set unqualified is fine: the rule is ratcheted, so it is enforced only against `runnerLabels` you actually change.
-- **Immutable (CRD CEL).** Switching a live set between `Classic` and `ScaleSet` is a full re-registration storm, so the field is frozen after creation.
-  To change it, create a **new** `RunnerSet` (with a distinct name and label) and delete the old one.
-- **Duplicate label under one gateway (GMC webhook).** Two `ScaleSet` sets targeting the same gateway may not share their single label, or they would register the same scale-set name at GitHub and collide.
-  Give each `ScaleSet` set a distinct label.
+- **Duplicate first label under one gateway (GMC webhook).** A `ScaleSet` set's **first** `runnerLabel` is the name of its scale-set object at GitHub, so two sets under one gateway may not share it: they would drive one scale set from two controllers.
+  Give each set a distinct *first* label.
+  Labels after the first are ordinary match targets and **may** be shared: `[gpu, linux]` and `[arm64, linux]` coexist happily, and a job asking for `runs-on: linux` alone reaches whichever GitHub picks.
   (Two `Classic` sets, or the same label under a *different* gateway or namespace, are unaffected — they register no colliding scale set.)
+- **Immutable (CRD CEL).** Switching a live set between `Classic` and `ScaleSet` is a full re-registration storm, so the field is frozen after creation.
+  To change it, create a **new** `RunnerSet` (with a distinct name and first label) and delete the old one.
+- **More than one label is no longer rejected.** Until Q726 a `ScaleSet` set had to declare exactly one `runnerLabel` and a multi-label set had to set `acquisitionProtocol: Classic`; both CEL rules are gone.
+  If you still see one of those messages, the cluster is running an older CRD than the controller; reapply the chart's CRDs.
 
 ---
 

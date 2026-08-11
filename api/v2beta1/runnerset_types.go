@@ -62,27 +62,29 @@ type RunnerSetSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	MaxWorkers *int32 `json:"maxWorkers,omitempty"`
 
-	// RunnerLabels is the label set matched against workflow runs-on values. v2beta1
-	// is ScaleSet-only, so exactly one label is required (enforced by the CEL rule on
-	// this field): the scale set's single runnerLabel is its runs-on match target,
-	// and the label doubles as the scale-set name registered at GitHub. Each label
-	// must be non-empty and contain no whitespace or commas (comma is the runs-on list
-	// separator). A workload needing multi-label matching must stay on a v2alpha1
-	// Classic RunnerSet during the deprecation window (Q264 §5a-U7).
+	// RunnerLabels is the label set matched against workflow runs-on values. Every
+	// label is registered on the scale set at GitHub, so a workflow may target the set
+	// with a single name (runs-on: linux) or with an array (runs-on: [linux, gpu]);
+	// the Actions Service matches a scale set's labels the way it matches a plain
+	// self-hosted runner's. Each label must be non-empty and contain no whitespace or
+	// commas (comma is the runs-on list separator).
 	//
-	// The single-label rule lives on THIS FIELD rather than on the spec, so CRD
-	// validation ratcheting (KEP-4008; on by default since Kubernetes 1.30, and the
-	// v2 floor is 1.31) suppresses it on an update that leaves runnerLabels
-	// untouched. A Classic multi-label set authored through v2alpha1 is STORED as a
-	// hub object that violates this rule, so a spec-level rule made every unqualified
-	// `kubectl edit/patch` of such a set fail on a field unrelated to labels (Q398).
-	// Ratcheting only forgives an unchanged value: creating a multi-label set through
-	// v2beta1, or editing a stored set's labels through v2beta1, is still rejected.
+	// The FIRST label is the scale set's name at GitHub, which makes it this set's
+	// identity: reordering the list renames the scale set, leaving the old one
+	// orphaned at GitHub, so treat runnerLabels[0] as stable and append rather than
+	// prepend. It is also the label the GMC's admission webhook holds unique across
+	// the runner sets under one gateway; later labels may overlap freely, and which
+	// set an ambiguous runs-on reaches is GitHub's decision.
+	//
+	// A GitHub Enterprise Server appliance below 3.21 accepts only the name label
+	// unless a site admin enables DistributedTask.AllowRunnerScaleSetCustomLabels,
+	// and it discards the rest without an error. The AGC compares the registered
+	// label set against this one and reports any shortfall as the advisory
+	// RunnerLabelsIncomplete condition (Q726).
 	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:items:MaxLength=256
 	// +kubebuilder:validation:items:Pattern=`^[^,\s]+$`
-	// +kubebuilder:validation:XValidation:rule="size(self) == 1",message="a v2beta1 runner set must declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale set's name is its single runs-on match target (Q264)"
 	RunnerLabels []string `json:"runnerLabels"`
 
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count

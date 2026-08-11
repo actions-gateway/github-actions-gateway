@@ -73,12 +73,20 @@ type AdminConnection struct {
 	Token string `json:"token"`
 }
 
-// Label is one runner-scale-set label. The scale set's single System label is its
-// only runs-on match target — there is no free-form multi-label list per scale set
-// (Q264 plan §2.1, the runs-on regression in §4).
+// Label is one runner-scale-set label — a runs-on match target. A scale set may carry
+// several: the first is its own name, and the rest are additional targets the Actions
+// Service matches the way it matches a plain self-hosted runner's labels. Measured
+// 2026-08-11 against ARC 0.14.0 (2026-03-19), which added them upstream in
+// actions/actions-runner-controller#4408; before that the name label was the only one,
+// which is what Q264 plan §2.1 recorded.
+//
+// A GitHub Enterprise Server appliance below 3.21 keeps only the name label unless a
+// site admin enables DistributedTask.AllowRunnerScaleSetCustomLabels, and drops the
+// rest with no error — so a caller that needs them must compare the returned label set
+// against the one it sent (Q726).
 type Label struct {
 	Name string `json:"name"`
-	Type string `json:"type"` // "System" for the scale set's own name label
+	Type string `json:"type"` // "System" for every runs-on match target
 }
 
 // RunnerSetting carries per-scale-set runner behaviour. GAG always registers
