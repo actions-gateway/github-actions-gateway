@@ -64,11 +64,13 @@ func Decide(cmd string, prefix func() string) *Decision {
 	if err != nil {
 		// A zsh-ism bash cannot parse, or a truncated string. Silence is the
 		// contract; the alternative is guessing from a half-parse.
+		trace("silent: parsing a %d-byte command: %v", len(cmd), err)
 		return nil
 	}
 
 	invs := findInvocations(f)
 	if len(invs) == 0 {
+		trace("silent: no command-position go build/test")
 		return nil
 	}
 	first := invs[0]
@@ -76,6 +78,7 @@ func Decide(cmd string, prefix func() string) *Decision {
 	// Read from the text preceding the first invocation, so a commit message
 	// naming taskpolicy cannot suppress a real throttle.
 	if alreadyThrottled(cmd[:first.offset]) {
+		trace("silent: already throttled")
 		return nil
 	}
 
@@ -86,9 +89,13 @@ func Decide(cmd string, prefix func() string) *Decision {
 	}
 
 	// An empty prefix means throttling is off (CI, headless, SSH, unsupported
-	// OS), so there is nothing to apply.
+	// OS), so there is nothing to apply. It also means a probe that could not
+	// run, which throttlePrefix traces apart: this is the one silent path a
+	// contended machine can reach mid-suite, and so the first thing a Q703
+	// occurrence has to rule in or out.
 	p := prefix()
 	if p == "" {
+		trace("silent: no throttle prefix")
 		return nil
 	}
 
@@ -100,6 +107,7 @@ func Decide(cmd string, prefix func() string) *Decision {
 		// rewritten and asked — the prompt keeps the user and the guards in the
 		// loop. A non-race form stays on the normal flow untouched.
 		if !race {
+			trace("silent: compound or wrapped, and carries no -race")
 			return nil
 		}
 		if len(invs) > 1 {

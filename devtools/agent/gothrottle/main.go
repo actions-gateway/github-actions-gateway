@@ -64,6 +64,19 @@
 // Every failure path is silent — a missing throttle script, an unparseable
 // command, a payload for another tool. A hook that runs on every Bash call must
 // never be the reason one fails.
+//
+// # Naming the silent path (Q703)
+//
+// That contract also makes a failure here unattributable. Nine paths in this
+// program and five in the entry-point script all produce one observable: exit
+// 0, empty stdout. The suite that fires the hook can only report `got decision=
+// reason=`, which is what a Q703 occurrence looked like — a symptom with
+// fourteen possible sources and no way to choose between them.
+//
+// GOTHROTTLE_DEBUG makes each site name itself on stderr. Stdout is untouched
+// either way, so the decision contract is unchanged and the variable is off in
+// every real hook invocation; claude-go-throttle-hook-test.sh sets it and
+// reports the trace with any failure.
 package main
 
 import (
@@ -106,22 +119,39 @@ func main() {
 	os.Exit(run(os.Args[1], os.Stdin, os.Stdout))
 }
 
+// traceEnv turns on the silent-path trace; traceOut is where it goes, a
+// variable so a test can read it back.
+const traceEnv = "GOTHROTTLE_DEBUG"
+
+var traceOut io.Writer = os.Stderr
+
+// trace names a silent path on stderr, and does nothing unless traceEnv is set.
+func trace(format string, args ...any) {
+	if os.Getenv(traceEnv) == "" {
+		return
+	}
+	_, _ = fmt.Fprintf(traceOut, "gothrottle: "+format+"\n", args...)
+}
+
 func run(throttlePath string, stdin io.Reader, stdout io.Writer) int {
 	raw, err := io.ReadAll(stdin)
 	if err != nil {
+		trace("silent: reading stdin: %v", err)
 		return 0
 	}
 	var p payload
 	if err := json.Unmarshal(raw, &p); err != nil {
+		trace("silent: parsing a %d-byte payload: %v", len(raw), err)
 		return 0
 	}
 	if p.ToolName != "Bash" || p.ToolInput.Command == "" {
+		trace("silent: tool_name=%q, command is %d bytes", p.ToolName, len(p.ToolInput.Command))
 		return 0
 	}
 
 	d := Decide(p.ToolInput.Command, func() string { return throttlePrefix(throttlePath) })
 	if d == nil {
-		return 0
+		return 0 // Decide has already named which of its paths it took.
 	}
 
 	var out hookOutput
@@ -132,6 +162,7 @@ func run(throttlePath string, stdin io.Reader, stdout io.Writer) int {
 		out.HookSpecificOutput.UpdatedInput = &updatedInput{Command: d.Command}
 	}
 	if err := json.NewEncoder(stdout).Encode(out); err != nil {
+		trace("silent: encoding a %q decision: %v", d.Permission, err)
 		return 0
 	}
 	return 0
@@ -145,14 +176,29 @@ const throttleTimeout = 5 * time.Second
 // throttlePrefix asks local-throttle.sh for the platform prefix. An empty
 // string — no such script, a non-zero exit, an unsupported OS, throttling off
 // in CI or over SSH — means there is nothing to apply.
+//
+// The two ways of arriving at empty are traced apart. "Throttling is off" is a
+// verdict the script reached; a probe that could not run at all — the timeout
+// above, a fork that failed under load, a signal — is not, and the whole
+// decision goes silent on it. That distinction is the one a Q703 occurrence
+// needs, and it is invisible from the outside.
 func throttlePrefix(path string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), throttleTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, "prefix") //nolint:gosec // G204: the path is this hook's own sibling script, passed by the entry point; no shell is involved
-	var stdout bytes.Buffer
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	start := time.Now()
 	if err := cmd.Run(); err != nil {
+		trace("throttle probe failed after %s: %s prefix: %v: %s",
+			time.Since(start).Round(time.Millisecond), path, err, strings.TrimSpace(stderr.String()))
 		return ""
 	}
-	return strings.TrimSpace(stdout.String())
+	p := strings.TrimSpace(stdout.String())
+	if p == "" {
+		trace("throttle probe reports throttling off after %s: %s prefix",
+			time.Since(start).Round(time.Millisecond), path)
+	}
+	return p
 }

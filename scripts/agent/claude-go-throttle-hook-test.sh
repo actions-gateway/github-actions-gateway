@@ -23,6 +23,11 @@
 # real unthrottled `-race` run freeze the GUI, which is the more expensive
 # error. Every must-not-match case below is paired with a must-match one built
 # from the same text.
+#
+# Every assertion here reports the hook's GOTHROTTLE_DEBUG trace alongside its
+# own message (Q703). Without it a failure reads `got decision= reason=`, which
+# fourteen silent paths across the hook and the binary produce identically — the
+# symptom an occurrence under `run-parallel` left behind, and no mechanism.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -49,17 +54,37 @@ if [[ -z "$PREFIX" ]]; then
 	exit 0
 fi
 
+# The hook's stderr from the most recent run_hook call. GOTHROTTLE_DEBUG makes
+# each silent path in the hook and the binary name itself there; nothing reads
+# it unless an assertion fails.
+TRACE_FILE="$(mktemp)"
+trap 'rm -f "$TRACE_FILE"' EXIT
+
 # run_hook CMD — feed CMD to the hook as a Bash PreToolUse payload, print stdout.
 run_hook() {
 	local cmd="$1"
 	jq -cn --arg c "$cmd" '{tool_name: "Bash", tool_input: {command: $c}}' \
-		| throttle_env "$HOOK"
+		| throttle_env GOTHROTTLE_DEBUG=1 "$HOOK" 2>"$TRACE_FILE"
 }
 
 # field OUT EXPR — read a jq path from the hook output (empty if absent/invalid).
 field() {
 	local out="$1" expr="$2"
 	printf '%s' "$out" | jq -r "$expr // empty" 2>/dev/null || true
+}
+
+# diag OUT — what the hook actually produced, for a failure message (Q703).
+#
+# A missing decision is exit 0 with empty stdout, and fourteen silent paths
+# across the entry point and the binary share that one observable — which is why the
+# 2026-08-08 occurrence, reported as `got decision= reason=`, named no
+# mechanism. The trace says which path ran; the raw stdout separates a hook that
+# printed nothing from one that printed something field() could not read, since
+# field() swallows jq's status and stderr alike.
+diag() {
+	local trace
+	trace="$(tr '\n' ';' <"$TRACE_FILE")"
+	printf 'raw-stdout=[%s] trace=[%s]' "$1" "${trace:-<none>}"
 }
 
 pass() { printf 'ok   %s\n' "$1"; }
@@ -74,7 +99,7 @@ expect_unchanged() {
 	local name="$1" cmd="$2" out
 	out="$(run_hook "$cmd")"
 	if [[ -z "$out" ]]; then pass "$name"; else
-		fail "$name: expected no output, got: $out"
+		fail "$name: expected no output; $(diag "$out")"
 	fi
 }
 
@@ -87,11 +112,11 @@ expect_decision() {
 	got_decision="$(field "$out" '.hookSpecificOutput.permissionDecision')"
 	got_cmd="$(field "$out" '.hookSpecificOutput.updatedInput.command')"
 	if [[ "$got_decision" != "$want_decision" ]]; then
-		fail "$name: want decision=$want_decision got=${got_decision:-<none>}"
+		fail "$name: want decision=$want_decision got=${got_decision:-<none>}; $(diag "$out")"
 		return
 	fi
 	if [[ -n "$want_cmd" && "$got_cmd" != "$want_cmd" ]]; then
-		fail "$name: want cmd=[$want_cmd] got=[$got_cmd]"
+		fail "$name: want cmd=[$want_cmd] got=[$got_cmd]; $(diag "$out")"
 		return
 	fi
 	pass "$name"
@@ -120,7 +145,7 @@ race_cmd="$(field "$race_out" '.hookSpecificOutput.updatedInput.command')"
 if [[ "$race_cmd" == *"$PREFIX go test -race"* ]]; then
 	pass 'safety: -race is throttled (prefix precedes go test -race)'
 else
-	fail "safety: -race not throttled by rewrite: [$race_cmd]"
+	fail "safety: -race not throttled by rewrite: [$race_cmd]; $(diag "$race_out")"
 fi
 
 # --- Q347: a -race form we cannot pin a single go token in is denied ----------
@@ -131,7 +156,7 @@ deny_reason="$(field "$deny_out" '.hookSpecificOutput.permissionDecisionReason')
 if [[ "$deny_decision" == "deny" && "$deny_reason" == *"more than one go build/test"* ]]; then
 	pass 'unrewritable: two go invocations -> deny with specific reason'
 else
-	fail "unrewritable: want deny w/ specific reason, got decision=$deny_decision reason=$deny_reason"
+	fail "unrewritable: want deny w/ specific reason, got decision=$deny_decision reason=$deny_reason; $(diag "$deny_out")"
 fi
 
 # --- Q624: text that only NAMES a go command is not an invocation -------------
@@ -204,7 +229,7 @@ if [[ "$race_after_decision" == "ask" &&
 	"$race_after_cmd" == *'Running `go test -race ./...` locally'* ]]; then
 	pass 'commit heredoc + real -race: ask, prefix outside the message'
 else
-	fail "commit heredoc + real -race: want ask w/ prefix only on the real go; got decision=$race_after_decision cmd=[$race_after_cmd]"
+	fail "commit heredoc + real -race: want ask w/ prefix only on the real go; got decision=$race_after_decision cmd=[$race_after_cmd]; $(diag "$race_after_out")"
 fi
 
 # Two genuine invocations still deny, even when a message mentions a third.
@@ -216,7 +241,7 @@ deny2_out="$(run_hook "$two_real_with_mention")"
 if [[ "$(field "$deny2_out" '.hookSpecificOutput.permissionDecision')" == "deny" ]]; then
 	pass 'two real invocations + a mention -> still deny'
 else
-	fail "two real invocations + a mention: want deny, got $deny2_out"
+	fail "two real invocations + a mention: want deny; $(diag "$deny2_out")"
 fi
 
 # --- Q696: a -race behind a wrapper is throttled, not skipped -----------------
@@ -261,6 +286,32 @@ expect_unchanged 'compound: legacy prefix     -> unchanged' \
 # A non-go command is not our concern.
 expect_unchanged 'non-go: cargo test        -> unchanged' \
 	'(cd rust && cargo test)'
+
+# --- Q703: the trace names the silent path, and stays off unless asked --------
+#
+# Silence is the whole failure contract, so an occurrence under load reports
+# `got decision= reason=` and nothing more — fourteen paths, one observable, no
+# mechanism. Both directions matter for the same reason they do for the matcher:
+# a trace that stopped naming its site leaves the next occurrence as
+# unattributable as the last, and one that leaked into a real invocation would
+# put text on the stderr of every Bash call in the session.
+
+run_hook '(cd rust && cargo test)' >/dev/null
+if grep -q 'no command-position go build/test' "$TRACE_FILE"; then
+	pass 'trace: names the silent path taken'
+else
+	fail "trace: want the silent path named, got: $(tr '\n' ';' <"$TRACE_FILE")"
+fi
+
+# Unset explicitly rather than via throttle_env: the variable is what this case
+# controls, and inheriting one from the caller would make it assert nothing.
+quiet_err="$(jq -cn '{tool_name: "Bash", tool_input: {command: "(cd rust && cargo test)"}}' \
+	| env -u CI -u GOTHROTTLE_DEBUG DISPLAY="${DISPLAY:-:0}" "$HOOK" 2>&1 >/dev/null)"
+if [[ -z "$quiet_err" ]]; then
+	pass 'trace: silent unless GOTHROTTLE_DEBUG is set'
+else
+	fail "trace: want no stderr with GOTHROTTLE_DEBUG unset, got: $quiet_err"
+fi
 
 if ((fails > 0)); then
 	printf '\nclaude-go-throttle-hook-test: %d failure(s)\n' "$fails" >&2
