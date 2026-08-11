@@ -2859,6 +2859,14 @@
 <td>Sets <code>REPO=owner/repo</code> but never scopes <code>RELEASE_PROGRESS_FILE</code>/<code>RELEASE_STATUS_FILE</code>, so <code>progress_run</code> writes the defaults. Measured 2026-08-09: <code>make check</code> during the rc.2 gate injected 3 <code>owner/repo</code>/<code>42</code> events, breaking the Q630 stall check.</td>
 </tr>
 <tr>
+<td><a id="Q784"></a>Q784</td>
+<td><a href="../operations/release/#the-bump-on-main-does-not-reach-the-published-release">Gate that a published version dir names its own release</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Nothing compares the published <code>/X.Y.Z/</code> against <code>X.Y.Z</code>, so the landing page advertised the prior release's <code>helm --version</code> on 1.1.0, 1.2.0 and 1.4.0. Measured 2026-08-10. Step 7 republishes by hand; a curl+grep per version would catch a miss.</td>
+</tr>
+<tr>
 <td><a id="Q781"></a>Q781</td>
 <td><a href="../operations/release/#writing-the-curated-notes">Automate the release scope-filter residue reconciliation</a></td>
 <td><code>debt</code> <code>ci</code> <code>retro</code></td>

@@ -3144,6 +3144,11 @@ Each version is a full built copy under its own path on the <code>gh-pages</code
 </ul>
 <p><strong>Backports don't demote the site.</strong> A patch cut for an older supported line (e.g. <code>v1.2.5</code> released <em>after</em> <code>v1.3.0</code>) publishes/updates its own <code>1.2.5</code> version but leaves <code>stable</code> on <code>1.3.0</code> — the deploy claims <code>stable</code> only when the pushed tag is the highest released version.
 That backport must be tagged off the release line, not off feature-ahead <code>main</code>; see <a href="../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a>.</p>
+<p><strong>A tag freezes what that version says, including its version pins.</strong> This is the same trap the announce bar escaped by deriving its version (<a href="#the-announce-bar">§ The announce bar</a>): anything wrong in the tag's tree publishes permanently under that version, and no later fix to <code>main</code> reaches it.
+The install pins are the case still paying for it.
+They can only be bumped <em>after</em> the tag exists, because <code>check-release-pins.sh</code> compares them for equality with the newest stable tag, so three of the four releases since <code>1.0.0</code> published the previous version's <code>helm install --version</code> as their landing page.
+The bump therefore lands twice: on <code>main</code>, and on a <code>release-X.Y</code> branch cut from the tag, which is then republished over the version via <code>workflow_dispatch</code> with <code>docs_ref</code>.
+The procedure is <a href="../../operations/release/#the-bump-on-main-does-not-reach-the-published-release">release.md step 7</a>.</p>
 <p>Pages source stays <strong>"GitHub Actions"</strong>: <code>mike</code> maintains the tree on <code>gh-pages</code>, and the <code>publish</code> job serves that whole tree as the Pages artifact. <code>--alias-type=copy</code> makes <code>stable/</code> a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.</p>
 <h3 id="seeding-already-released-versions">Seeding already-released versions<a class="headerlink" href="#seeding-already-released-versions" title="Permanent link">&para;</a></h3>
 <p><code>mike</code> only knows the versions it has deployed, so releases cut <strong>before</strong> this workflow landed aren't in the tree yet, and <strong>the site root has nothing to redirect to until some version claims the default</strong>: the apex domain 404s while every push still reports success.
@@ -3192,6 +3197,8 @@ With <code>set_default</code> left off, the first two runs would produce a tree 
   The run would reject the inputs, and its flat single-copy deploy would clobber the whole version tree.</li>
 <li><em>Omitting <code>docs_ref</code> publishes the wrong content.</em> <code>mike</code> builds the <strong>current checkout</strong>, so a seed dispatched from <code>main</code> without it would publish feature-ahead <code>main</code> as the released docs, reintroducing the "Available now" drift that Q387 and versioning exist to prevent.</li>
 </ul>
+<p><code>docs_ref</code> takes a <strong>tag or a branch</strong>.
+The workflow fetches it into a private ref first, because <code>fetch-depth: 0</code> brings this ref's history and every tag but no other branch, and a branch name alone died with <code>invalid reference</code> (every seed before the post-tag pin republish named a tag, so nothing had exercised it).</p>
 <p><code>docs_ref</code> restores that ref's <code>docs/</code> and <code>mkdocs.yml</code> over the working tree.
 Four things are deliberately <strong>not</strong> taken from the tag:</p>
 <table>
