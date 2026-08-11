@@ -224,6 +224,14 @@ const (
 	// ReasonNoActiveSessions — a RunnerSet's references all resolved but no
 	// listener goroutine is running yet (Ready=False until one comes up).
 	ReasonNoActiveSessions = "NoActiveSessions"
+	// ReasonRunnerGroupNotFound — spec.runnerGroup (or the gateway's
+	// defaultRunnerGroup) names a GitHub runner group the installation does not have,
+	// so the scale set cannot be registered where the operator asked (Ready=False).
+	// Fail-closed on purpose: the runner group is GitHub's authorization point for
+	// which repositories may target these runners, and the alternative — registering
+	// into the default group — silently widens that boundary to the whole
+	// installation (Q712).
+	ReasonRunnerGroupNotFound = "RunnerGroupNotFound"
 	// ReasonListenerActive — a RunnerSet's references resolved and at least one
 	// listener goroutine is running (Ready=True).
 	ReasonListenerActive = "ListenerActive"

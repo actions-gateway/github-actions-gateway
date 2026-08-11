@@ -193,7 +193,6 @@ Each gap below is tracked, and what closes it and when is on the [public roadmap
   Read the scope exclusions before relying on it: Kubernetes orchestration, policy application, and template customization are explicitly out of scope, which is much of what a multi-tenant platform team actually pages about.
 - **`containerMode: kubernetes`**, which runs `container:` and `services:` steps as separate pods with a provisioned volume.
   GAG runs one worker pod per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather than a non-privileged pod-per-step model.
-- **GitHub runner groups** (`runnerGroup`), the forge-side control over which repositories may target a runner set.
 - **GHES that is actually tested.** GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.
 
 The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API has only just reached beta (`v2beta1`, its first stability contract).

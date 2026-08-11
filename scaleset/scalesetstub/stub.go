@@ -48,6 +48,11 @@ import (
 // message delivery stays immediate and tests stay fast. Override with SetPollTimeout.
 const DefaultPollTimeout = time.Second
 
+// defaultStubGroupID is the runner group id every name resolves to until a test pins
+// the installation's groups with SetRunnerGroups. Deliberately not 1: a caller that
+// ignores the lookup and hardcodes GitHub's default group is then visible.
+const defaultStubGroupID = 7
+
 // jobState is the lifecycle of a queued job inside the stub.
 type jobState int
 
@@ -178,6 +183,10 @@ type Stub struct {
 	// dropExtraScaleSetLabels makes a create keep only the scale set's name label
 	// while set, without erroring — see DropExtraScaleSetLabels.
 	dropExtraScaleSetLabels bool
+	// runnerGroups, when non-nil, is the set of runner groups the installation has,
+	// by name → id; any other name resolves empty. Nil resolves every name — see
+	// SetRunnerGroups.
+	runnerGroups map[string]int
 	// failStaticAcquire makes the _apis/runtime acquirejobs route answer 404 while
 	// set, leaving the queue-host route working — see FailStaticAcquireRoute.
 	failStaticAcquire bool
@@ -496,10 +505,24 @@ func (s *Stub) SetRateLimitRemaining(n int) {
 
 // FailRunnerGroups makes the runnergroups lookup answer 500 while on, modelling a
 // backend that will not resolve a group by name — the lever for a caller's
-// fall-back-to-the-default-group path.
+// group-lookup error path.
 func (s *Stub) FailRunnerGroups(on bool) {
 	s.mu.Lock()
 	s.failRunnerGroups = on
+	s.mu.Unlock()
+}
+
+// SetRunnerGroups pins which runner groups exist, by name → id. While set, a lookup
+// of any other name answers the empty result the real backend gives for a group the
+// installation does not have — the lever for a caller that must fail closed rather
+// than fall back to the default group (Q712).
+//
+// Unset (the default) resolves EVERY name to defaultStubGroupID, which is what the
+// pre-Q712 suites assume: they name a group only to prove the id reaches the
+// scale-set create call.
+func (s *Stub) SetRunnerGroups(byName map[string]int) {
+	s.mu.Lock()
+	s.runnerGroups = byName
 	s.mu.Unlock()
 }
 
@@ -862,6 +885,20 @@ func (s *Stub) ScaleSetIDByName(name string) (int, bool) {
 	return 0, false
 }
 
+// ScaleSetGroupID returns the runner group id the scale set with the given id is
+// registered in, and whether that scale set exists. It is how a controller test reads
+// back the forge-side boundary the reconciler asked for (Q712) — the group is not
+// otherwise observable from outside the create/patch calls.
+func (s *Stub) ScaleSetGroupID(scaleSetID int) (int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.scaleSets[scaleSetID]
+	if ss == nil {
+		return 0, false
+	}
+	return ss.groupID, true
+}
+
 // HasActiveSession reports whether the scale set currently has a live message-queue
 // session. A test asserts it drops to false after the listener stops, proving the
 // session was deleted on shutdown (no leaked session).
@@ -1040,9 +1077,17 @@ func (s *Stub) handleRunnerGroups(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"message":"runner groups unavailable"}`, http.StatusInternalServerError)
 		return
 	}
+	id := defaultStubGroupID
+	if s.runnerGroups != nil {
+		var ok bool
+		if id, ok = s.runnerGroups[name]; !ok {
+			_ = json.NewEncoder(w).Encode(map[string]any{"count": 0, "value": []scaleset.RunnerGroup{}})
+			return
+		}
+	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"count": 1,
-		"value": []scaleset.RunnerGroup{{ID: 7, Name: name}},
+		"value": []scaleset.RunnerGroup{{ID: id, Name: name}},
 	})
 }
 

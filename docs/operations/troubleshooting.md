@@ -80,6 +80,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [`RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)
 - [`RunnerSet` Rejected: `nodeShare.allocatable` Declares Neither cpu Nor memory](#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory)
 - [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
+- [`RunnerSet` Stuck `Ready=False` With `RunnerGroupNotFound`](#runnerset-stuck-readyfalse-with-runnergroupnotfound)
 - [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
 - [`AGCAutoscalingUnavailable` — the VPA CRDs are not installed](#agcautoscalingunavailable--the-vpa-crds-are-not-installed)
 - [Multiple v2 gateways in one namespace: naming, scoping, prerequisites](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites)
@@ -3734,6 +3735,38 @@ On a `Classic`-protocol set the listener goroutines push the same conditions the
 All are advisory (abnormal-is-`True`) and do not gate `Ready`.
 The two protocols differ in recovery behaviour: the **classic** listener only sets the abnormal state (a stale `True` can outlive the episode until the goroutine restarts), while the **`ScaleSet`** listener also publishes the healthy state — `Degraded=False/SessionAuthorized` and `RateLimited=False/PollingHealthy` appear on every healthy `ScaleSet` set once its listener starts — and clears an abnormal condition as soon as the session recovers (a successful poll, token refresh, or session re-create).
 Listener-pushed conditions and events are recorded on the `RunnerSet` on its next reconcile, so they can lag the incident by up to one reconcile interval.
+
+---
+
+## `RunnerSet` Stuck `Ready=False` With `RunnerGroupNotFound`
+
+**Symptoms.** A `RunnerSet` never starts acquiring jobs, no scale set appears in the organization's Actions settings, and `kubectl describe runnerset <name>` shows:
+
+```
+Reason: RunnerGroupNotFound
+Message: scale-set listener failed to start: scalesetlistener: no such runner group at GitHub: "team-a"
+```
+
+**Likely cause.** The set's `spec.runnerGroup`, or its gateway's `spec.defaultRunnerGroup`, names a GitHub runner group the installation does not have.
+Unlike the `*NotFound` reasons above, the missing object is at **GitHub**, not in the cluster, so nothing in the namespace will make it resolve.
+
+The set registers **no** scale set while this holds, and that is deliberate.
+The runner group is GitHub's authorization point for which repositories may target these runners, so registering into the default group instead would widen the boundary the operator was narrowing, at exactly the moment they mistyped the name.
+
+**Resolution.**
+
+1. List the organization's runner groups (**Settings → Actions → Runner groups**) and compare the name.
+   It is case-sensitive and must match exactly, whitespace included.
+2. If the group does not exist, a platform administrator creates it and scopes its repository access to the tenant's repositories.
+   GAG never creates runner groups; see [tenant onboarding](tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
+3. Fix the name (or create the group) and the set self-heals on the next reconcile: no re-apply needed.
+
+**If the message says `resolve runner group` instead**, the lookup itself failed (a 5xx, a rate limit, a proxy fault) rather than returning an empty result.
+That is an outage, not a misconfiguration; the set retries with backoff and recovers on its own.
+
+**A group change on a live set is a listener restart.** Editing `runnerGroup` (or the gateway's `defaultRunnerGroup`) re-registers the scale set into the new group and restarts the set's listener, so the set stops acquiring for a moment while it re-opens its session.
+Worker pods already running their jobs are untouched.
+Clearing the field does **not** move the scale set back to the default group: widening the boundary stays an explicit act at GitHub.
 
 ---
 

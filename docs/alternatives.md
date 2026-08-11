@@ -79,7 +79,6 @@ Here is where GAG loses, and to whom. **No single alternative holds all of these
 | `container:`/`services:` without privilege | ARC, via `containerMode: kubernetes` | Q727 |
 | In-cluster cache | GitLab Runner, managed services. **Not ARC** | [worker cache backend](roadmap.md) |
 | GHES tested on a real appliance | ARC | [flagged untested](features.md); needs an operator with one |
-| Bound GitHub runner group | ARC, via `runnerGroup` | [Q712](roadmap.md), gating the next release |
 
 Two footnotes on that table.
 

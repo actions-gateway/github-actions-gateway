@@ -86,6 +86,11 @@ type scaleSetListenerHandle struct {
 	client *scaleset.Client
 	cancel context.CancelFunc
 	done   <-chan struct{}
+	// runnerGroup is the GitHub runner group this listener registered its scale set
+	// into, kept so a later reconcile can tell that the declared group changed. The
+	// group is read once, at registration, so without this a live listener holds the
+	// old boundary until the AGC restarts (Q712).
+	runnerGroup string
 }
 
 // scaleSetClientFor returns the scale-set client of the listener running for key, or
@@ -99,6 +104,18 @@ func (r *RunnerSetReconciler) scaleSetClientFor(key types.NamespacedName) *scale
 		return h.client
 	}
 	return nil
+}
+
+// scaleSetListenerRunnerGroup returns the runner group the listener running for key
+// registered its scale set into, and whether a listener is running at all. The empty
+// string is a meaningful value (GitHub's default group), hence the second result.
+func (r *RunnerSetReconciler) scaleSetListenerRunnerGroup(key types.NamespacedName) (string, bool) {
+	r.scaleSetListenersMu.Lock()
+	defer r.scaleSetListenersMu.Unlock()
+	if h, ok := r.scaleSetListeners[key]; ok {
+		return h.runnerGroup, true
+	}
+	return "", false
 }
 
 // reconcileScaleSetListener drives a ScaleSet-protocol RunnerSet: it ensures exactly
@@ -129,10 +146,18 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 	if err != nil {
 		// The session could not be opened (auth/registration error). Stop acquiring,
 		// surface it, and requeue — the referent watches or the next resync retry it.
+		//
+		// A declared runner group that GitHub does not have gets its own reason: it is
+		// operator misconfiguration of an isolation boundary, not a credential or
+		// registration fault, and the set stays unregistered until it is fixed (Q712).
+		reason := v2alpha1.ReasonNoActiveSessions
+		if errors.Is(err, scalesetlistener.ErrRunnerGroupNotFound) {
+			reason = v2alpha1.ReasonRunnerGroupNotFound
+		}
 		r.stopScaleSetListener(key)
 		r.recordEvent(rs, corev1.EventTypeWarning, "ScaleSetListenerStartFailed", "StartScaleSetListener",
 			"failed to start scale-set listener: %v", err)
-		r.setReadyCondition(rs, false, v2alpha1.ReasonNoActiveSessions,
+		r.setReadyCondition(rs, false, reason,
 			fmt.Sprintf("scale-set listener failed to start: %v", err))
 		rs.Status.ActiveSessions = 0
 		rs.Status.ActiveJobs = podCounts.active
@@ -179,6 +204,19 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 // deleted (stopScaleSetListener) or the manager shuts down (ctx cancel) — mirroring the
 // classic multiplexer's lifecycle.
 func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *slog.Logger, key types.NamespacedName, rs *v2alpha1.RunnerSet, refs *resolvedRefs) (*scaleSetListenerHandle, error) {
+	runnerGroup := resolveRunnerGroupName(rs, refs.gateway)
+
+	// The scale set's group is settled at registration, so re-registering it under a
+	// newly declared group means a fresh listener. Stopping the stale one here rather
+	// than waiting for the next AGC rollout is what makes narrowing the boundary take
+	// effect when the operator asks for it (Q712). Outside the lock: the stop waits for
+	// the poll loop to exit.
+	if group, ok := r.scaleSetListenerRunnerGroup(key); ok && group != runnerGroup {
+		log.Info("scale-set runner group changed; restarting the listener",
+			"from", group, "to", runnerGroup)
+		r.stopScaleSetListener(key)
+	}
+
 	r.scaleSetListenersMu.Lock()
 	defer r.scaleSetListenersMu.Unlock()
 	if h, ok := r.scaleSetListeners[key]; ok {
@@ -216,6 +254,9 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		ScaleSetName: scaleSetName,
 		ExtraLabels:  extraLabels,
 		OwnerName:    key.Namespace + "/" + key.Name,
+		// The forge-side authorization boundary: which repositories may target this
+		// set's runners (Q712).
+		RunnerGroupName: runnerGroup,
 		// Asked before each assigned job's JIT config is minted, so a job the ceiling
 		// will reject registers no runner at GitHub (Q576). The ceiling verdict is
 		// translated into the listener's own vocabulary; every other error travels
@@ -291,9 +332,25 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		cancel()
 		return nil, err
 	}
-	h := &scaleSetListenerHandle{listener: l, client: ssClient, cancel: cancel, done: done}
+	h := &scaleSetListenerHandle{
+		listener: l, client: ssClient, cancel: cancel, done: done, runnerGroup: runnerGroup,
+	}
 	r.scaleSetListeners[key] = h
 	return h, nil
+}
+
+// resolveRunnerGroupName returns the GitHub runner group a set's scale set belongs in:
+// the set's own spec.runnerGroup, else its gateway's defaultRunnerGroup, else empty
+// (GitHub's default group). Mirrors the templateRef/proxyRef inheritance chain (§H.4)
+// so a tenant declares its forge-side boundary once, on the gateway.
+func resolveRunnerGroupName(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) string {
+	if rs.Spec.RunnerGroup != "" {
+		return rs.Spec.RunnerGroup
+	}
+	if gw != nil {
+		return gw.Spec.DefaultRunnerGroup
+	}
+	return ""
 }
 
 // claimedRunnerNames returns the runner names stamped on this set's worker pods that

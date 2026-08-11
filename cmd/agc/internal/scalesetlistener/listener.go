@@ -87,6 +87,10 @@ import (
 // for the name label and each extra label alike (measured against 0.14.0, Q726).
 const systemLabelType = "System"
 
+// defaultRunnerGroupID is GitHub's default runner group, where a scale set lands when
+// no group is named.
+const defaultRunnerGroupID = 1
+
 // defaultPollBackoff is how long the loop waits before retrying after a transient
 // poll error (a non-401/404 error, or a rate-limit with no Retry-After). A healthy
 // long-poll blocks ~50s server-side, so this only paces the error path.
@@ -218,6 +222,16 @@ type Job struct {
 // a full ceiling, which is still full on the next delivery. A job rejected for capacity
 // is deferred onto the re-offer backoff instead (Q576).
 var ErrCapacityUnavailable = errors.New("scalesetlistener: no worker capacity for this job")
+
+// ErrRunnerGroupNotFound means Config.RunnerGroupName names a runner group the GitHub
+// installation does not have. Start fails with an error wrapping it so the owning
+// reconciler can report RunnerGroupNotFound rather than a generic session failure.
+//
+// Registering into the default group instead would be the convenient answer and the
+// wrong one: the runner group is GitHub's authorization point for which repositories
+// may target these runners, so the fallback silently widens the boundary the operator
+// asked for to the whole installation (Q712).
+var ErrRunnerGroupNotFound = errors.New("scalesetlistener: no such runner group at GitHub")
 
 // ProvisionFunc provisions one worker pod for an assigned job. It must be idempotent
 // per Job.JobID: a re-created session replays unacked JobAssigned messages, so the
@@ -377,8 +391,11 @@ type Config struct {
 	// matches a plain self-hosted runner's labels (Q726). Empty is the single-label
 	// shape, which produces the create request this tier has always sent.
 	ExtraLabels []string
-	// RunnerGroupName is the runner group to place the scale set in. Empty resolves to
-	// GitHub's default group (id 1).
+	// RunnerGroupName is the GitHub runner group to place the scale set in, from the
+	// owner's spec.runnerGroup or its gateway's defaultRunnerGroup. Empty leaves a new
+	// scale set in GitHub's default group and an existing one where it already is; a
+	// name that resolves moves an adopted scale set into it, and one that does not
+	// fails Start with ErrRunnerGroupNotFound rather than falling back (Q712).
 	RunnerGroupName string
 	// OwnerName identifies this listener on the session (e.g. "<gateway>/<runnerset>").
 	OwnerName string
@@ -697,33 +714,71 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 	return done, nil
 }
 
+// resolveRunnerGroup returns the runner group id the scale set must sit in, and
+// whether Config named one at all. An unnamed group reports (defaultRunnerGroupID,
+// false): a new scale set lands in GitHub's default group, and an existing one is
+// left wherever it is rather than being dragged into the default group by omission.
+//
+// A named group that does not resolve is an error, never the default group — see
+// ErrRunnerGroupNotFound.
+func (l *Listener) resolveRunnerGroup(ctx context.Context) (int, bool, error) {
+	if l.cfg.RunnerGroupName == "" {
+		return defaultRunnerGroupID, false, nil
+	}
+	id, ok, err := l.cfg.Client.ResolveRunnerGroup(ctx, l.cfg.RunnerGroupName)
+	if err != nil {
+		return 0, false, fmt.Errorf("resolve runner group %q: %w", l.cfg.RunnerGroupName, err)
+	}
+	if !ok {
+		return 0, false, fmt.Errorf("%w: %q", ErrRunnerGroupNotFound, l.cfg.RunnerGroupName)
+	}
+	return id, true, nil
+}
+
 // ensureScaleSet returns the id of the scale set named Config.ScaleSetName, creating
 // it (ephemeral, one System label per declared runnerLabel) if it does not yet exist.
 // Reusing an existing scale set is the restart-safe path: one scale-set object per
-// group, created once (§2.1).
+// group, created once (§2.1) — reconciled into Config.RunnerGroupName when one is
+// declared.
 //
 // Either way it records the label set the SERVER reports back, which is not always the
 // one asked for: a reused scale set predates any label appended since, and a GHES
 // appliance below 3.21 keeps only the name label and drops the rest with no error
-// (Q726). Nothing here corrects that — the caller reports the difference.
+// (Q726). Nothing here corrects that — the caller reports the difference. The runner
+// group is the one property an existing set IS reconciled on, because it is an
+// authorization boundary rather than a match target (Q712).
 func (l *Listener) ensureScaleSet(ctx context.Context) (int, error) {
+	groupID, pinned, err := l.resolveRunnerGroup(ctx)
+	if err != nil {
+		return 0, err
+	}
 	existing, err := l.cfg.Client.GetRunnerScaleSetByName(ctx, l.cfg.ScaleSetName)
 	if err != nil {
 		return 0, err
 	}
 	if existing != nil {
+		// From the GET, which carries labels; the group PATCH below is not a label
+		// observation and must not overwrite this one.
 		l.recordRegisteredLabels(existing)
+		if !pinned || existing.RunnerGroupID == groupID {
+			return existing.ID, nil
+		}
+		// Adoption carries the group the scale set was created in, so declaring
+		// runnerGroup on a set that already registered would otherwise leave the
+		// wider group in force with nothing reporting it (Q712). Reconciling it here
+		// is what makes the field mean the same thing on an existing set as on a new
+		// one.
+		if _, err := l.cfg.Client.UpdateRunnerScaleSet(ctx, existing.ID, scaleset.RunnerScaleSet{
+			Name:          existing.Name,
+			RunnerGroupID: groupID,
+		}); err != nil {
+			return 0, fmt.Errorf("move scale set %q into runner group %q: %w",
+				l.cfg.ScaleSetName, l.cfg.RunnerGroupName, err)
+		}
+		l.log.Info("scaleset: moved scale set into its declared runner group",
+			"scaleSet", l.cfg.ScaleSetName, "runnerGroup", l.cfg.RunnerGroupName,
+			"fromGroupID", existing.RunnerGroupID, "toGroupID", groupID)
 		return existing.ID, nil
-	}
-	groupID := 1 // GitHub's default runner group
-	if l.cfg.RunnerGroupName != "" {
-		id, ok, err := l.cfg.Client.ResolveRunnerGroup(ctx, l.cfg.RunnerGroupName)
-		if err != nil {
-			return 0, fmt.Errorf("resolve runner group %q: %w", l.cfg.RunnerGroupName, err)
-		}
-		if ok {
-			groupID = id
-		}
 	}
 	created, err := l.cfg.Client.CreateRunnerScaleSet(ctx, scaleset.RunnerScaleSet{
 		Name:          l.cfg.ScaleSetName,

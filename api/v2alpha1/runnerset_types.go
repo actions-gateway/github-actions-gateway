@@ -120,6 +120,31 @@ type RunnerSetSpec struct {
 	// +kubebuilder:validation:items:Pattern=`^[^,\s]+$`
 	RunnerLabels []string `json:"runnerLabels"`
 
+	// RunnerGroup names the GitHub runner group this set's scale set is registered
+	// into. This is GitHub's own grouping, not the deprecated v1alpha1 RunnerGroup
+	// CR. Unset means inherit the gateway's defaultRunnerGroup; both unset means
+	// GitHub's default group. It governs the scale-set registration, so it has no
+	// effect on a Classic set, which registers no scale set.
+	//
+	// The runner group is the forge-side authorization point for which repositories
+	// may target these runners. A scale set left in the default group is reachable
+	// by every repository that group admits, typically the whole organization, so a
+	// repository outside the tenant can name this set in runs-on and route work into
+	// its namespace, quota, and egress IP. Pod-level isolation is unaffected; what
+	// the group bounds is who can cause a job to run here.
+	//
+	// Resolved at runtime against GitHub, not at admission (§H.7), and fail-closed:
+	// a name no runner group matches leaves the set Ready=False/
+	// RunnerGroupNotFound rather than falling back to the default group, and a
+	// scale set already registered in a different group is moved into this one.
+	// The group's own repository access is configured at GitHub and is not managed
+	// by GAG. See docs/operations/tenant-onboarding.md.
+	//
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	RunnerGroup string `json:"runnerGroup,omitempty"`
+
 	// AcquisitionProtocol selects how the AGC acquires jobs for this runner set:
 	// "ScaleSet" (default, as of Q264 P5) is the runner-scale-set message-queue
 	// protocol (Q264 Option E) — one listener session per set, capacity-gated

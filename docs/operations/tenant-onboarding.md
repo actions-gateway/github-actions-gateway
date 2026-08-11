@@ -827,6 +827,53 @@ spec:
   Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is **immutable**, because switching a live set's protocol is a re-registration storm.
 - **Editing a Classic set works unqualified, labels included.** An unqualified `kubectl edit/patch/apply` addresses the `v2beta1` storage version, which admits the same multi-label shape.
 
+### Bind a runner set to a GitHub runner group
+
+Everything else on this page bounds what a tenant's workers may *do*.
+The GitHub **runner group** bounds who may cause them to *run*, and it is the one control that lives at GitHub rather than in the cluster.
+
+A runner group carries a repository-access policy: which repositories in the organization are allowed to send jobs to the runners in it.
+A runner set that names no group registers into the installation's **default** group, which typically admits every repository in the organization.
+On a shared cluster that means a repository outside the tenant can put the set's label in its `runs-on` and route its job into the tenant's namespace, quota, and egress IP.
+The worker pod is still isolated exactly as this page describes; what is unbounded is the intake.
+
+Declare the group once on the gateway, and every set under it inherits:
+
+```yaml
+apiVersion: actions-gateway.com/v2beta1
+kind: ActionsGateway
+metadata: { name: acme, namespace: team-a }
+spec:
+  githubURL: https://github.com/acme
+  defaultRunnerGroup: team-a          # every RunnerSet under this gateway
+```
+
+A set overrides it only when it needs a narrower policy of its own:
+
+```yaml
+apiVersion: actions-gateway.com/v2beta1
+kind: RunnerSet
+metadata: { name: gpu, namespace: team-a }
+spec:
+  gatewayRef:  { name: acme }
+  runnerLabels: [team-a-gpu]
+  runnerGroup: team-a-gpu             # wins over the gateway's defaultRunnerGroup
+```
+
+**What the platform admin still owns, at GitHub.** GAG never creates a runner group and never edits one's repository access.
+Before onboarding a tenant, create the group in the organization's Actions settings and scope its repository access to that tenant's repositories.
+GAG only registers the tenant's scale sets into the group you named; if the group admits every repository, so does the tenant's runner set.
+
+**Failure modes.**
+
+- A `runnerGroup`/`defaultRunnerGroup` naming a group the installation does not have leaves the set `Ready=False` with reason `RunnerGroupNotFound`, and it registers no scale set at all.
+  This is deliberate: falling back to the default group would widen the very boundary you were narrowing, at the moment you mistyped the name.
+  Check the spelling against the group list in the organization's Actions settings; the name is case-sensitive and must match exactly.
+- Adding or changing the group on a set that is already running re-registers its scale set into the new group and restarts its listener.
+  In-flight jobs finish; the set is briefly not acquiring new ones.
+- Removing the field does **not** move the scale set back to the default group.
+  An undeclared group leaves an existing scale set where it is, so widening the boundary is always an explicit act at GitHub.
+
 ### Starting from a shipped template
 
 Before hand-authoring a `RunnerTemplate`, check whether one of the three shipped entries already fits. `kubectl apply -k deploy/templates/plain` gives a baseline worker; `kata-dind` and `privileged-dind` cover jobs that build container images.

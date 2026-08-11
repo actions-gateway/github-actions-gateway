@@ -38,6 +38,8 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 
 ## Tenant isolation and egress
 
+- **[Bound GitHub runner group](operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: `runnerGroup`, or `defaultRunnerGroup` once on the gateway, registers a tenant's scale sets into a named group rather than the installation default, so only the repositories that group admits can route jobs in.
+  An unknown group fails the set closed.
 - **[Per-tenant egress IPs](design/network-architecture.md)**: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.
 - **[Standalone `EgressProxy`](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays `NetworkPolicy`-restricted.
 - **[Cross-namespace proxy sharing](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`.
