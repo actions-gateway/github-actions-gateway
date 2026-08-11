@@ -103,11 +103,21 @@ stub_gh() {
 		if err="$(git --git-dir="$FIXTURE_ORIGIN" update-ref "$ref" "$sha" "" 2>&1)"; then
 			exit 0
 		fi
-		# Only a name that is already taken is a collision. Anything else is a
-		# broken fixture, and reporting it as 422 would hand the allocator 25
-		# phantom collisions instead of an error — the same misreading claim()
-		# guards against for a network or auth failure.
-		if [[ "$err" == *'already exists'* ]]; then
+		# A name already taken is a collision, and so is one another worker is
+		# mid-claim on. `update-ref` takes a per-ref lock file, so a fleet racing
+		# the same candidate gets "cannot lock ref" where the real create-ref API,
+		# atomic server-side, answers 422 outright — this stub emulates an atomic
+		# operation with a non-atomic one, and that is the seam. Both answers mean
+		# somebody else has the name, and the allocator's response to either is to
+		# walk to the next ID.
+		#
+		# Anything ELSE is still a broken fixture: reporting that as 422 would hand
+		# the allocator 25 phantom collisions instead of an error, the same
+		# misreading claim() guards against for a network or auth failure.
+		#
+		# Measured 2026-08-10: 2 of 20 fleet runs under a 1,748 fork/s storm died
+		# on the lock and reported the allocator itself as broken.
+		if [[ "$err" == *'already exists'* || "$err" == *'cannot lock ref'* ]]; then
 			# gh renders a 422 body on stderr; claim() keys on this text.
 			printf 'gh: Reference already exists (HTTP 422)\n' >&2
 			exit 1
@@ -161,13 +171,21 @@ fleet() {
 		) &
 	done
 
+	# Bound on the signal the workers actually publish — their readiness files —
+	# with a cap only a fleet that never started can reach. The 10s cap this
+	# replaces was inside the distribution it was bounding: Q642 measured worker
+	# startup at p99 469ms but 0.45% still starting at 10s, so across FLEET
+	# workers roughly one run in 28 had a straggler past it, and the suite
+	# reported the scheduler as a subject failure (Q706, and testing.md § A
+	# backstop shorter than the subject's own budget is not a backstop). 300s is
+	# well outside it.
 	while ((ready < FLEET)); do
 		ready="$(find "$dir/out" -name 'ready.*' -type f | wc -l)"
-		((waited++ < 1000)) || {
-			bad 'fleet startup' "only $ready of $FLEET workers came up within 10s"
+		((waited++ < 6000)) || {
+			bad 'fleet startup' "only $ready of $FLEET workers came up in 300s — the fleet never started"
 			break
 		}
-		sleep 0.01
+		sleep 0.05
 	done
 
 	: >"$dir/out/go"
