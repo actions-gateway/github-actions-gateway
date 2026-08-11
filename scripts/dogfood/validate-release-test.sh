@@ -49,6 +49,11 @@ export RELEASE_LEASE_DIR
 # failed gate — a sentinel started afterwards would read it and report one.
 RELEASE_PROGRESS_FILE=""
 export RELEASE_PROGRESS_FILE
+# Scoped as well as disabled: progress_init removes RELEASE_STATUS_FILE whether
+# or not the stream is on, so disabling the stream alone leaves the live default
+# reachable from here (Q777).
+RELEASE_STATUS_FILE="${REPO_ROOT}/tmp/validate-release-test-status.$$.json"
+export RELEASE_STATUS_FILE
 # shellcheck source=scripts/dogfood/validate-release.sh
 source "${REPO_ROOT}/scripts/dogfood/validate-release.sh"
 
