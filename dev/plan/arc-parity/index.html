@@ -2691,12 +2691,6 @@ The corrections shipped; the <em>forward</em> half, deciding which gaps GAG clos
 </thead>
 <tbody>
 <tr>
-<td><strong>Bound GitHub runner group</strong> (<code>runnerGroup</code>)</td>
-<td>The forge-side control over which repositories may target a runner set. GAG declares the binding and never wires it, so every scale set registers into the installation's default group</td>
-<td><a href="../../STATUS/#Q712">Q712</a></td>
-<td>1.5, gating</td>
-</tr>
-<tr>
 <td><strong><code>containerMode: kubernetes</code></strong></td>
 <td>Runs <code>container:</code> and <code>services:</code> steps as separate pods on a provisioned volume. GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model</td>
 <td><a href="../../STATUS/#Q727">Q727</a></td>
@@ -2729,7 +2723,7 @@ Q719 is itself unscheduled.</p>
 <ol>
 <li><strong>A workflow moves with no <code>.github/workflows</code> edit.</strong> ✅ Closed by Q726 (2026-08-11): a runner set registers every <code>runnerLabel</code> on its scale set, so a single-name <code>runs-on</code> and an array both carry over unchanged.
    The first label names the scale set, which is the ARC scale-set name carried across.</li>
-<li><strong>Repository-scoped targeting is expressible.</strong> A platform team can bind a runner set to a named GitHub runner group rather than the installation default (Q712).</li>
+<li><strong>Repository-scoped targeting is expressible.</strong> ✅ Closed by Q712 (2026-08-11): <code>RunnerSet.spec.runnerGroup</code>, inheriting <code>ActionsGateway.spec.defaultRunnerGroup</code>, binds a set to a named GitHub runner group rather than the installation default, and fails the set closed rather than falling back to it.</li>
 <li><strong><code>container:</code> and <code>services:</code> steps run without privilege</strong>, or the docs state plainly and permanently that Docker-in-Docker under Kata is the supported answer and why (Q727 resolves either way; a documented decline is a valid outcome).</li>
 <li><strong>The GHES claims carry evidence.</strong> Either a real-appliance validation, or the two capabilities keep their untested marker and the comparison says so (Q765).</li>
 </ol>

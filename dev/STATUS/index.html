@@ -3187,14 +3187,6 @@
 <td>Phase 2 of the page-boundary split: the Queue is read top-down; the parked rows below are grepped on a trigger. Measured 2026-08-09: at 27,738 tokens it exceeds the 25,000 agent-read cap. Needs <code>check-roadmap.sh</code> a second path, rule 8 over two files.</td>
 </tr>
 <tr>
-<td><a id="Q712"></a>Q712</td>
-<td><a href="../plan/release-1.5/#q712--the-runner-group-binding-is-declared-and-never-wired">Pin each scale set to a named GitHub runner group</a></td>
-<td><code>security</code> <code>feature</code> <code>1.5-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Declared at <code>scalesetlistener/listener.go:372</code>, resolved at <code>:690</code>, never set at the sole production call site, so every scale set lands in the default runner group — GitHub's authorization point for which repos may target a tenant's runners.</td>
-</tr>
-<tr>
 <td><a id="Q793"></a>Q793</td>
 <td><a href="../plan/archive/q726-multi-label-runner-sets/#drift-detected-never-patched">Measure whether a scale-set labels <code>PATCH</code> is honoured, and reconcile in place if it is</a></td>
 <td><code>feature</code> <code>tests</code></td>
@@ -3209,6 +3201,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>It writes Classic onto every set it emits, whose stated reason — keeping multi-label matching — Q726 removed. Now conservative rather than necessary, but flipping it changes a migrating tenant's protocol silently, so it is a decision, not a cleanup.</td>
+</tr>
+<tr>
+<td><a id="Q791"></a>Q791</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/runnerset_webhook.go">Scale-set label uniqueness is namespace-scoped, so two tenants can claim one scale set</a></td>
+<td><code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>validateScaleSetLabelUniqueness</code> lists <code>client.InNamespace</code>, so two RunnerSets in different namespaces under one org may share a <code>runnerLabel</code>. A scale set is adopted by name, so the second AGC acquires the first tenant's jobs. Found wiring Q712.</td>
 </tr>
 <tr>
 <td><a id="Q716"></a>Q716</td>

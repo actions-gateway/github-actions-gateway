@@ -2715,10 +2715,6 @@ Every item here blocks a release tag, and nothing else appears in this section: 
 The pill beside each title names the release it blocks, read from the backlog rather than typed here, so it cannot outlive the commitment.</p>
 <ul>
 <li>
-<p><strong><a href="../plan/release-1.5/#q712--the-runner-group-binding-is-declared-and-never-wired">Bind each runner set to a GitHub runner group</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q712 --> The runner group is GitHub's own control over which repositories may target a runner set, and GAG does not set it today, so every scale set registers into the installation's default group.
-  Kubernetes-side isolation is unaffected; what is unbounded is which repositories can send work to a tenant.</p>
-</li>
-<li>
 <p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q719 --> Workers are storage-less by design and nothing validates a <code>ReadWriteMany</code> volume mounted into one, so the stance is undocumented rather than decided. <code>ReadWriteMany</code> is how jobs share files and what ARC's <code>containerMode: kubernetes</code> depends on, so it also matters to anyone migrating off that mode.
   Validation and a reference architecture come before any API.</p>
 </li>

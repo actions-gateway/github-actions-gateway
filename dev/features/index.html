@@ -2819,6 +2819,8 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 </ul>
 <h2 id="tenant-isolation-and-egress">Tenant isolation and egress<a class="headerlink" href="#tenant-isolation-and-egress" title="Permanent link">&para;</a></h2>
 <ul>
+<li><strong><a href="../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">Bound GitHub runner group</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: <code>runnerGroup</code>, or <code>defaultRunnerGroup</code> once on the gateway, registers a tenant's scale sets into a named group rather than the installation default, so only the repositories that group admits can route jobs in.
+  An unknown group fails the set closed.</li>
 <li><strong><a href="../design/network-architecture/">Per-tenant egress IPs</a></strong>: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Standalone <code>EgressProxy</code></a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays <code>NetworkPolicy</code>-restricted.</li>
 <li><strong><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Cross-namespace proxy sharing</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in <code>sharing.allowedNamespaces</code>.

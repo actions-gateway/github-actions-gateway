@@ -2587,6 +2587,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#job-intake-bind-every-tenant-to-a-github-runner-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job intake: bind every tenant to a GitHub runner group
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tenant-egress-posture--deliberate-widening" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3417,6 +3428,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#job-intake-bind-every-tenant-to-a-github-runner-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job intake: bind every tenant to a GitHub runner group
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tenant-egress-posture--deliberate-widening" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3867,6 +3889,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 <li><a href="#posture-scanning-preventive">Posture scanning (preventive)</a></li>
 <li><a href="#manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)</a></li>
 <li><a href="#cis-benchmark-posture--kube-bench-manual-pre-production">CIS-benchmark posture — kube-bench (manual, pre-production)</a></li>
+<li><a href="#job-intake-bind-every-tenant-to-a-github-runner-group">Job intake: bind every tenant to a GitHub runner group</a></li>
 <li><a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a></li>
 <li><a href="#managing-egress-at-scale">Managing egress at scale</a></li>
 <li><a href="#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">Expressing GitHub egress by FQDN: the <code>egressPolicyMode</code> opt-in</a></li>
@@ -4310,6 +4333,23 @@ Those are the province of the <a href="https://www.cisecurity.org/benchmark/kube
 <li><strong>Findings that don't apply</strong> (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.</li>
 </ul>
 <p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong> before the first production tenant (per <a href="../../plan/milestone-5/">milestone-5.md</a> §3).</p>
+<h2 id="job-intake-bind-every-tenant-to-a-github-runner-group">Job intake: bind every tenant to a GitHub runner group<a class="headerlink" href="#job-intake-bind-every-tenant-to-a-github-runner-group" title="Permanent link">&para;</a></h2>
+<p>Everything else on this page bounds what a tenant's workers may reach.
+This bounds who may reach <em>them</em>, and it is the one control that lives at GitHub, outside anything the cluster can enforce.</p>
+<p>A runner set that names no GitHub runner group registers into the installation's <strong>default</strong> group, which in most organizations admits every repository.
+On a shared cluster that means any repository in the org can put a tenant's runner label in <code>runs-on</code> and have its job run in that tenant's namespace, against that tenant's quota, egressing from that tenant's proxy IPs.
+The pod isolation described above is untouched; what is unbounded is the intake.</p>
+<p>Two things to do, in this order, per tenant:</p>
+<ol>
+<li><strong>At GitHub</strong>, create a runner group for the tenant and scope its repository access to that tenant's repositories.
+   GAG never creates a runner group and never edits one's access policy, so a group whose access is <em>All repositories</em> buys nothing over the default group.</li>
+<li><strong>In the cluster</strong>, set <code>spec.defaultRunnerGroup</code> on the tenant's <code>ActionsGateway</code>.
+   Every <code>RunnerSet</code> under it inherits the group; a set may override with its own <code>spec.runnerGroup</code> to narrow further.</li>
+</ol>
+<p>A group name the installation does not have leaves the set <code>Ready=False</code>/<code>RunnerGroupNotFound</code> and registers no scale set, rather than falling back to the default group.
+That is deliberate: the fallback would widen the boundary at the moment the name was mistyped.</p>
+<p>Onboarding walkthrough and failure modes: <a href="../tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">tenant onboarding</a>.
+Threat-model rationale: <a href="../../design/05-security/">design 5.2</a>.</p>
 <h2 id="tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening<a class="headerlink" href="#tenant-egress-posture--deliberate-widening" title="Permanent link">&para;</a></h2>
 <p><strong>The secure default is controller-managed and not opt-in.</strong> For every tenant, the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to exactly what the design requires: DNS to the cluster DNS service only, and all GitHub-bound traffic through the per-tenant egress proxy (whose source IPs are attributable).
 Worker pods cannot reach arbitrary destinations directly — that is the per-tenant egress-IP isolation property, and it is present automatically the moment a tenant is provisioned.

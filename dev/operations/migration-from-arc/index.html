@@ -3134,8 +3134,8 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 </tr>
 <tr>
 <td><code>runnerGroup</code> (the GitHub runner-group name)</td>
-<td>n/a</td>
-<td>GAG registers a scale set per <code>RunnerSet</code>; there is no <code>runnerGroup</code> field.</td>
+<td><code>RunnerSet.spec.runnerGroup</code>, or <code>ActionsGateway.spec.defaultRunnerGroup</code> for every set under one gateway</td>
+<td><strong>Same field, plus a per-gateway default.</strong> GAG fails the set closed (<code>RunnerGroupNotFound</code>) if the group does not exist, where ARC's chart leaves it to GitHub. See <a href="../tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">Runner groups</a>.</td>
 </tr>
 <tr>
 <td><code>spec.template</code> (pod template, a <code>PodTemplateSpec</code>)</td>

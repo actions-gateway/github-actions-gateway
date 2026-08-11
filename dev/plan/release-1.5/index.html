@@ -2568,10 +2568,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#q712--the-runner-group-binding-is-declared-and-never-wired" class="md-nav__link">
+  <a href="#q712--the-runner-group-binding-is-declared-and-never-wired--shipped" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Q712 — the runner-group binding is declared and never wired
+        Q712 — the runner-group binding is declared and never wired ✅ shipped
       
     </span>
   </a>
@@ -2661,22 +2661,33 @@
 <h1 id="release-15-milestone-definition">Release 1.5 Milestone Definition<a class="headerlink" href="#release-15-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
-Four gating Queue rows so far, labelled <code>1.5-gate</code>: <a href="../../STATUS/#Q712">Q712</a>, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date and <a href="#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only">shipped 2026-08-11</a>.</p>
+Four gating Queue rows so far, labelled <code>1.5-gate</code>: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
+All four shipped 2026-08-11.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
 <p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
 That is what makes them release-gating: shipping another minor while either is open means shipping a claim the product does not honour.</p>
 <p>Q726 is the same shape read from the other side.
 It is the one <a href="../arc-parity/">ARC parity</a> gap that breaks the zero-edit migration claim the front door makes, so it gates for the same reason: the claim is published and the product does not honour it for a <code>runs-on</code> array.</p>
-<h3 id="q712--the-runner-group-binding-is-declared-and-never-wired">Q712 — the runner-group binding is declared and never wired<a class="headerlink" href="#q712--the-runner-group-binding-is-declared-and-never-wired" title="Permanent link">&para;</a></h3>
-<p><code>RunnerGroupName</code> exists on the scale-set listener config (<code>cmd/agc/internal/scalesetlistener/listener.go:372</code>) and is resolved when non-empty (<code>:690</code>), but the sole production construction site in <code>cmd/agc/internal/controller/runnerset_scaleset.go</code> never sets it.
-Every scale set therefore registers into the installation's default runner group.</p>
+<h3 id="q712--the-runner-group-binding-is-declared-and-never-wired--shipped">Q712 — the runner-group binding is declared and never wired ✅ shipped<a class="headerlink" href="#q712--the-runner-group-binding-is-declared-and-never-wired--shipped" title="Permanent link">&para;</a></h3>
+<p><code>RunnerGroupName</code> exists on the scale-set listener config (<code>cmd/agc/internal/scalesetlistener/listener.go</code>) and is resolved when non-empty, but the sole production construction site in <code>cmd/agc/internal/controller/runnerset_scaleset.go</code> never set it.
+Every scale set therefore registered into the installation's default runner group.</p>
 <p>The GitHub runner group is the <strong>forge-side authorization point</strong> for which repositories may target which runners.
 With every tenant's scale set in one group, a repository outside a tenant can name that scale set in <code>runs-on</code> and route work into the tenant's namespace, quota, and egress IP.
 GAG's pod-level isolation is unaffected; what is unbounded is <em>who can cause a job to run there</em>.</p>
-<p>Scope note, to be settled in the work rather than assumed: exploitability depends on the default group's repository-access configuration at GitHub, which GAG does not manage today.
-The row covers wiring the field, deciding whether the gateway should also assert group membership, and documenting what the platform admin still owns at GitHub.</p>
-<p>This is also the one place ARC is ahead on GAG's own core claim: its <code>gha-runner-scale-set</code> chart exposes <code>runnerGroup</code> as a first-class value.</p>
+<p>This is also the one place ARC was ahead on GAG's own core claim: its <code>gha-runner-scale-set</code> chart exposes <code>runnerGroup</code> as a first-class value.</p>
+<p><strong>Two defects the row did not name, found by measuring before coding.</strong> Wiring the field alone would have shipped a boundary that looks declared and is not:</p>
+<ul>
+<li>The resolver <strong>fell back to the default group</strong> when the name did not resolve (<code>ok == false</code> kept <code>groupID = 1</code>), so a typo widened the boundary to the whole installation at exactly the moment the operator was narrowing it.</li>
+<li><code>ensureScaleSet</code> <strong>adopts an existing scale set by name without reading its group</strong>, so declaring <code>runnerGroup</code> on a set registered by an earlier run would have left the original group in force with nothing reporting it.</li>
+</ul>
+<p><strong>What shipped.</strong> <code>RunnerSet.spec.runnerGroup</code>, inheriting <code>ActionsGateway.spec.defaultRunnerGroup</code> when unset (the <code>templateRef</code>/<code>proxyRef</code> shape, so a tenant declares its boundary once on the gateway), both <code>v2alpha1</code> and <code>v2beta1</code>.
+An unresolvable name fails the set closed at <code>Ready=False</code>/<code>RunnerGroupNotFound</code> rather than falling back; an adopted scale set is moved into its declared group; and changing the declared group restarts the set's listener rather than waiting for an AGC rollout.
+An <strong>undeclared</strong> group still leaves an existing scale set where it is, so widening is always explicit.</p>
+<p><strong>The gateway-assertion question, settled.</strong> The gateway carries the group as an inherited default, not as an enforced ceiling.
+GAG does not create runner groups and does not manage their repository access, so there is nothing for it to assert <em>against</em>: a tenant naming a group only volunteers its own runners to that group's repositories, which costs the tenant and escalates nothing across tenants.
+What the platform admin still owns at GitHub is documented in <a href="../../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">tenant onboarding</a> and <a href="../../design/appendix-h-v2-api-decomposition/">appendix H</a>.</p>
+<p>Adjacent hole found while measuring, filed rather than fixed: the <code>RunnerSet</code> webhook's scale-set label-uniqueness guard is <strong>namespace-scoped</strong>, so two tenants under one GitHub org can claim one scale-set name across namespaces (<a href="../../STATUS/#Q791">Q791</a>).</p>
 <h3 id="q713--the-shipped-tier-emits-no-duration-or-latency-series--landed-2026-08-11">Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11<a class="headerlink" href="#q713--the-shipped-tier-emits-no-duration-or-latency-series--landed-2026-08-11" title="Permanent link">&para;</a></h3>
 <p><code>waitForCompletion</code> and the pod waiter ran only inside <code>provision()</code> (<code>cmd/agc/internal/provisioner/provisioner.go:557</code> and <code>:583</code>). <code>ProvisionScaleSetWorker</code> registered neither, and <code>v2beta1</code> is ScaleSet-only, so the tier every new tenant runs emitted both series empty.</p>
 <p>The blast radius was entirely downstream: two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.
@@ -2727,7 +2738,7 @@ It touches no shipped artifact, so individual corrections can land continuously 
 <li><strong>Under-claims.</strong> Nine capabilities shipped and appear only in <code>features.md</code>.
    The largest are no-PEM workload identity (the GitHub App private key never enters the cluster), the live-validated per-tenant egress IP result, and the durability programme whose motivating incident was five worker pods running 16 hours on 82 spot node-hours.</li>
 <li><strong>Structure.</strong> Q713 blocked any number-bearing claim, since the shipped tier emitted no latency or duration series to measure; it landed 2026-08-11, so latency and cost claims are now measurable on the default tier.
-   Q712 blocks publishing tenant-isolation marketing, because the runner-group binding it would be claiming is unwired.</li>
+   Q712 blocked publishing tenant-isolation marketing and landed the same day, so that claim is available too: state it as the runner-group <em>binding</em>, not as GAG controlling repository access, which stays the platform admin's at GitHub.</li>
 </ol>
 <p>The recurring form of this is now <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>, which asks the same three questions before every tag.
 1.5 is the first release to run it, and the backlog it produced is the reason the step exists.</p>
