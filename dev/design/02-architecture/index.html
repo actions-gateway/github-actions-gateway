@@ -3582,6 +3582,12 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td><code>POST /sessions</code> rejected: runner version too old (classic protocol only — the scale-set protocol carries no runner version)</td>
 </tr>
 <tr>
+<td><code>WorkerImageBelowMinimum</code></td>
+<td>Warning</td>
+<td>— (also the <code>RunnerVersionTooOld</code> condition)</td>
+<td>The effective worker image ships a runner below GitHub's enforced minimum, read at reconcile on both tiers. Emitted once per transition, ahead of any GitHub rejection (Q715)</td>
+</tr>
+<tr>
 <td><code>SessionUnauthorized</code></td>
 <td>Warning</td>
 <td>— (also the <code>Degraded</code> condition)</td>
@@ -3640,6 +3646,11 @@ Each upgrades on its own cadence.</p>
 </ul>
 <p>GitHub enforces a minimum runner version at session creation; tenants who let <code>workerImage</code> drift will start receiving <code>400 Bad Request</code> from <code>POST /sessions</code>.
 The session goroutine surfaces this as a <code>RunnerGroup</code> condition (see <a href="../07-test-plan/#71-unit-tests">§7.1</a>) so operators can detect the staleness without scraping pod logs.</p>
+<p>That rejection is classic-only, since the scale-set protocol carries no runner version at session creation, and it arrives only once the version has already stopped working.
+So both reconcilers independently read the runner version off the effective worker image reference each reconcile and publish the same <code>RunnerVersionTooOld</code> condition from it, with the <code>WorkerImage*</code> reasons: <code>True</code> below the enforced minimum, <code>False</code> at or above it, <code>Unknown</code> when the reference names no version and nothing has been checked.
+Two versions are in play and they answer different questions. <code>agent.version</code>, sent at session creation, is the AGC's own listener protocol version, and stays pinned to the version GAG implements: the AGC is the registered agent on the classic path, whatever image a worker pod runs.
+The worker image's runner version is what will execute the job, and is the one this condition reports.
+The injected wrapper logs it from the runner's own dependency manifest at worker startup, which is the only reading that holds for an image whose tag says nothing.</p>
 <hr />
 <p>← <a href="../01-executive-summary/">Executive Summary</a> | <a href="../">Back to index</a> | Next: <a href="../03-api-contracts/">API &amp; Data Contracts →</a></p>
 

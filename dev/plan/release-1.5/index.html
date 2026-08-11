@@ -2661,7 +2661,7 @@
 <h1 id="release-15-milestone-definition">Release 1.5 Milestone Definition<a class="headerlink" href="#release-15-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
-Four gating Queue rows so far, labelled <code>1.5-gate</code>: <a href="../../STATUS/#Q712">Q712</a>, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus <a href="../../STATUS/#Q715">Q715</a>, admitted the same day off an external date.</p>
+Four gating Queue rows so far, labelled <code>1.5-gate</code>: <a href="../../STATUS/#Q712">Q712</a>, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date and <a href="#q715--the-runner-version-reported-to-github-is-a-constant-and-the-too-old-warning-is-classic-only">shipped 2026-08-11</a>.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
 <p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
@@ -2698,6 +2698,16 @@ The consequence is still that no tier both knows the real version and can warn a
 <p><strong>What makes it gate rather than wait:</strong> GitHub raises the enforced minimum runner version on GHEC on 2026-09-25.
 On that date a tenant whose worker image is behind starts failing at GitHub, and GAG has told nobody, on the tier every new tenant runs.
 This is the only gating row here with a date it does not control, which is why it was admitted without going through the candidate list.</p>
+<p><strong>Shipped 2026-08-11.</strong> Two corrections to the framing above came out of measuring it.</p>
+<p>The runway is shorter than the row's date: GHEC runs brownouts from 2026-08-24 through 2026-09-18 before full enforcement on 2026-09-25 (<a href="https://github.blog/changelog/2026-06-12-github-actions-minimum-version-enforcement-timeline-for-self-hosted-runners/">changelog, 2026-06-12</a>).
+A brownout is a four-hour window, so the first symptom is intermittent — a job that fails at midday and works by evening reads as a flake, not a version problem, which is exactly what a named condition is for.
+The floor is <code>2.329.0</code> for registration, plus a rolling requirement that each release be installed within 30 days of publication to keep executing jobs; a compiled-in constant can hold the first and not the second, so <code>names.MinRunnerVersion</code> is documented as the registration floor only.</p>
+<p><code>agent.version</code> was left alone, against the row's own wording.
+There are two versions with different jobs: on the classic path the AGC <em>is</em> the registered agent, so <code>agent.version</code> describes the listener protocol the AGC implements and not whatever image a worker runs.
+Reporting the tenant's image version there would have GitHub refuse sessions for a listener that is current, converting a silent risk into an immediate outage.
+The fix adds the second number instead of changing the first: both reconcilers read the runner version off the effective worker image each reconcile and publish <code>RunnerVersionTooOld</code> from it (<code>WorkerImageBelowMinimum</code> / <code>WorkerImageCurrent</code> / <code>WorkerImageVersionUnknown</code>), which needs no session and so reaches the ScaleSet tier.</p>
+<p>What the image reference cannot answer, the worker now does: the upstream runner image carries no <code>RUNNER_VERSION</code> env var and no version label — its <code>org.opencontainers.image.version</code> is the Ubuntu base's <code>24.04</code> — but <code>bin/Runner.Listener.deps.json</code> names the real version, so the injected wrapper reads it and logs it once per pod.
+Reporting that reading back to the AGC, rather than only to <code>kubectl logs</code>, is deferred: it needs a channel out of the worker and a status field, and it reports nothing until a set's first job finishes.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>

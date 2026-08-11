@@ -2863,6 +2863,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/air-gapped-install/">Air-gapped install</a></strong>: relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.</li>
 <li><strong><a href="../operations/gitops/">GitOps install</a></strong>: declarative Argo CD <code>Application</code> and Flux <code>HelmRelease</code> examples, with the CustomResourceDefinition (CRD) pruning gotcha handled.</li>
 <li><strong><a href="../operations/upgrade/">Upgrade and rollback</a></strong>: versioned upgrade procedures and the rollback path for each release.</li>
+<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Runner-version drift warning</a></strong>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.</li>
 <li><strong><a href="../operations/backup-restore/">Backup and restore</a></strong>: backup posture and a recovery runbook, with a <a href="../operations/velero-backup-restore/">Velero-specific how-to</a>.</li>
 <li><strong><a href="../operations/troubleshooting/">Troubleshooting</a></strong>: symptom to diagnosis to remediation, organised by observable failure mode.</li>
 <li><strong><a href="../operations/runbook/">Production runbook</a></strong>: the operational procedures the platform team needs on call.</li>

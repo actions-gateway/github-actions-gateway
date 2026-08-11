@@ -3302,252 +3302,255 @@ The schemas below remain authoritative for the running <code>v1alpha1</code> API
 <a id="__codelineno-0-509" name="__codelineno-0-509" href="#__codelineno-0-509"></a><span class="w">    </span><span class="c1">//</span>
 <a id="__codelineno-0-510" name="__codelineno-0-510" href="#__codelineno-0-510"></a><span class="w">    </span><span class="c1">// GitHub enforces a minimum runner version at session creation time and</span>
 <a id="__codelineno-0-511" name="__codelineno-0-511" href="#__codelineno-0-511"></a><span class="w">    </span><span class="c1">// returns 400 Bad Request for versions below the threshold. Tenants are</span>
-<a id="__codelineno-0-512" name="__codelineno-0-512" href="#__codelineno-0-512"></a><span class="w">    </span><span class="c1">// responsible for keeping this image current.</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513" href="#__codelineno-0-513"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514" href="#__codelineno-0-514"></a><span class="w">    </span><span class="c1">// Omitting this field causes the AGC to use its operator-configured default.</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515" href="#__codelineno-0-515"></a><span class="w">    </span><span class="c1">// The compile-time constant DefaultWorkerImage in</span>
-<a id="__codelineno-0-516" name="__codelineno-0-516" href="#__codelineno-0-516"></a><span class="w">    </span><span class="c1">// cmd/agc/internal/provisioner/provisioner.go supplies the baseline value</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517" href="#__codelineno-0-517"></a><span class="w">    </span><span class="c1">// (currently the digest-pinned &quot;ghcr.io/actions/actions-runner:2.335.1@sha256:…&quot;,</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518" href="#__codelineno-0-518"></a><span class="w">    </span><span class="c1">// aligned with the ARC gha-runner-scale-set chart default). Its runner</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519" href="#__codelineno-0-519"></a><span class="w">    </span><span class="c1">// version is the single source of truth in cmd/agc/names (RunnerVersion),</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520" href="#__codelineno-0-520"></a><span class="w">    </span><span class="c1">// which also drives the GITHUB_RUNNER_VERSION the GMC injects so the AGC&#39;s</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521" href="#__codelineno-0-521"></a><span class="w">    </span><span class="c1">// agent.version matches the running runner binary. Operators override it via</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522" href="#__codelineno-0-522"></a><span class="w">    </span><span class="c1">// the WORKER_IMAGE environment variable (set by the GMC on the AGC</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523" href="#__codelineno-0-523"></a><span class="w">    </span><span class="c1">// Deployment); tenants can then override further per-RunnerGroup with this</span>
-<a id="__codelineno-0-524" name="__codelineno-0-524" href="#__codelineno-0-524"></a><span class="w">    </span><span class="c1">// field without affecting other groups.</span>
-<a id="__codelineno-0-525" name="__codelineno-0-525" href="#__codelineno-0-525"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-526" name="__codelineno-0-526" href="#__codelineno-0-526"></a><span class="w">    </span><span class="nx">WorkerImage</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;workerImage,omitempty&quot;`</span>
-<a id="__codelineno-0-527" name="__codelineno-0-527" href="#__codelineno-0-527"></a>
-<a id="__codelineno-0-528" name="__codelineno-0-528" href="#__codelineno-0-528"></a><span class="w">    </span><span class="c1">// MaxEvictionRetries is the maximum number of times the AGC will</span>
-<a id="__codelineno-0-529" name="__codelineno-0-529" href="#__codelineno-0-529"></a><span class="w">    </span><span class="c1">// automatically requeue a job after its worker pod is evicted (preemption</span>
-<a id="__codelineno-0-530" name="__codelineno-0-530" href="#__codelineno-0-530"></a><span class="w">    </span><span class="c1">// or OOM). On each eviction the AGC stops lock renewal — causing GitHub to</span>
-<a id="__codelineno-0-531" name="__codelineno-0-531" href="#__codelineno-0-531"></a><span class="w">    </span><span class="c1">// cancel the run — and then calls the GitHub rerun API to reschedule it.</span>
-<a id="__codelineno-0-532" name="__codelineno-0-532" href="#__codelineno-0-532"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-533" name="__codelineno-0-533" href="#__codelineno-0-533"></a><span class="w">    </span><span class="c1">// Set to 0 to disable automatic eviction retry entirely (useful for</span>
-<a id="__codelineno-0-534" name="__codelineno-0-534" href="#__codelineno-0-534"></a><span class="w">    </span><span class="c1">// GPU workloads where a failed job must be debugged before rerunning, or</span>
-<a id="__codelineno-0-535" name="__codelineno-0-535" href="#__codelineno-0-535"></a><span class="w">    </span><span class="c1">// for short CI jobs where a re-queue is cheaper to trigger manually).</span>
-<a id="__codelineno-0-536" name="__codelineno-0-536" href="#__codelineno-0-536"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-537" name="__codelineno-0-537" href="#__codelineno-0-537"></a><span class="w">    </span><span class="c1">// Retries are tracked per run ID and reset when the RunnerGroup is</span>
-<a id="__codelineno-0-538" name="__codelineno-0-538" href="#__codelineno-0-538"></a><span class="w">    </span><span class="c1">// reconciled. Once the budget is exhausted the eviction is logged and</span>
-<a id="__codelineno-0-539" name="__codelineno-0-539" href="#__codelineno-0-539"></a><span class="w">    </span><span class="c1">// the metric actions_gateway_eviction_retries_exhausted_total is</span>
-<a id="__codelineno-0-540" name="__codelineno-0-540" href="#__codelineno-0-540"></a><span class="w">    </span><span class="c1">// incremented but no further rerun attempt is made.</span>
-<a id="__codelineno-0-541" name="__codelineno-0-541" href="#__codelineno-0-541"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-542" name="__codelineno-0-542" href="#__codelineno-0-542"></a><span class="w">    </span><span class="c1">// Live on both acquisition tiers as of Q417. A RunnerGroup is always classic;</span>
-<a id="__codelineno-0-543" name="__codelineno-0-543" href="#__codelineno-0-543"></a><span class="w">    </span><span class="c1">// the same field on a ScaleSet-protocol RunnerSet is honored too, with the</span>
-<a id="__codelineno-0-544" name="__codelineno-0-544" href="#__codelineno-0-544"></a><span class="w">    </span><span class="c1">// eviction detected by the owning reconciler from the worker pod rather than</span>
-<a id="__codelineno-0-545" name="__codelineno-0-545" href="#__codelineno-0-545"></a><span class="w">    </span><span class="c1">// by a goroutine watching it. The budget is keyed by run ID alone, so the cap</span>
-<a id="__codelineno-0-546" name="__codelineno-0-546" href="#__codelineno-0-546"></a><span class="w">    </span><span class="c1">// is shared across tiers. See §4 Worker Pod Eviction and Auto-Retry.</span>
-<a id="__codelineno-0-547" name="__codelineno-0-547" href="#__codelineno-0-547"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-548" name="__codelineno-0-548" href="#__codelineno-0-548"></a><span class="w">    </span><span class="c1">// Defaults to 2 when omitted. This default is applied in-code by the AGC,</span>
-<a id="__codelineno-0-549" name="__codelineno-0-549" href="#__codelineno-0-549"></a><span class="w">    </span><span class="c1">// not via a CRD +kubebuilder:default marker.</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512" href="#__codelineno-0-512"></a><span class="w">    </span><span class="c1">// responsible for keeping this image current; the AGC reads the runner</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513" href="#__codelineno-0-513"></a><span class="w">    </span><span class="c1">// version off this reference each reconcile and reports it as the</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514" href="#__codelineno-0-514"></a><span class="w">    </span><span class="c1">// RunnerVersionTooOld condition, so carrying a version tag alongside the</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515" href="#__codelineno-0-515"></a><span class="w">    </span><span class="c1">// digest (&quot;…:2.335.1@sha256:abc…&quot;) is what makes the check possible.</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516" href="#__codelineno-0-516"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517" href="#__codelineno-0-517"></a><span class="w">    </span><span class="c1">// Omitting this field causes the AGC to use its operator-configured default.</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518" href="#__codelineno-0-518"></a><span class="w">    </span><span class="c1">// The compile-time constant DefaultWorkerImage in</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519" href="#__codelineno-0-519"></a><span class="w">    </span><span class="c1">// cmd/agc/internal/provisioner/provisioner.go supplies the baseline value</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520" href="#__codelineno-0-520"></a><span class="w">    </span><span class="c1">// (currently the digest-pinned &quot;ghcr.io/actions/actions-runner:2.335.1@sha256:…&quot;,</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521" href="#__codelineno-0-521"></a><span class="w">    </span><span class="c1">// aligned with the ARC gha-runner-scale-set chart default). Its runner</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522" href="#__codelineno-0-522"></a><span class="w">    </span><span class="c1">// version is the single source of truth in cmd/agc/names (RunnerVersion),</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523" href="#__codelineno-0-523"></a><span class="w">    </span><span class="c1">// which also drives the GITHUB_RUNNER_VERSION the GMC injects so the AGC&#39;s</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524" href="#__codelineno-0-524"></a><span class="w">    </span><span class="c1">// agent.version matches the running runner binary. Operators override it via</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525" href="#__codelineno-0-525"></a><span class="w">    </span><span class="c1">// the WORKER_IMAGE environment variable (set by the GMC on the AGC</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526" href="#__codelineno-0-526"></a><span class="w">    </span><span class="c1">// Deployment); tenants can then override further per-RunnerGroup with this</span>
+<a id="__codelineno-0-527" name="__codelineno-0-527" href="#__codelineno-0-527"></a><span class="w">    </span><span class="c1">// field without affecting other groups.</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528" href="#__codelineno-0-528"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-529" name="__codelineno-0-529" href="#__codelineno-0-529"></a><span class="w">    </span><span class="nx">WorkerImage</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;workerImage,omitempty&quot;`</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530" href="#__codelineno-0-530"></a>
+<a id="__codelineno-0-531" name="__codelineno-0-531" href="#__codelineno-0-531"></a><span class="w">    </span><span class="c1">// MaxEvictionRetries is the maximum number of times the AGC will</span>
+<a id="__codelineno-0-532" name="__codelineno-0-532" href="#__codelineno-0-532"></a><span class="w">    </span><span class="c1">// automatically requeue a job after its worker pod is evicted (preemption</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533" href="#__codelineno-0-533"></a><span class="w">    </span><span class="c1">// or OOM). On each eviction the AGC stops lock renewal — causing GitHub to</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534" href="#__codelineno-0-534"></a><span class="w">    </span><span class="c1">// cancel the run — and then calls the GitHub rerun API to reschedule it.</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535" href="#__codelineno-0-535"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-536" name="__codelineno-0-536" href="#__codelineno-0-536"></a><span class="w">    </span><span class="c1">// Set to 0 to disable automatic eviction retry entirely (useful for</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537" href="#__codelineno-0-537"></a><span class="w">    </span><span class="c1">// GPU workloads where a failed job must be debugged before rerunning, or</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538" href="#__codelineno-0-538"></a><span class="w">    </span><span class="c1">// for short CI jobs where a re-queue is cheaper to trigger manually).</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539" href="#__codelineno-0-539"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540" href="#__codelineno-0-540"></a><span class="w">    </span><span class="c1">// Retries are tracked per run ID and reset when the RunnerGroup is</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541" href="#__codelineno-0-541"></a><span class="w">    </span><span class="c1">// reconciled. Once the budget is exhausted the eviction is logged and</span>
+<a id="__codelineno-0-542" name="__codelineno-0-542" href="#__codelineno-0-542"></a><span class="w">    </span><span class="c1">// the metric actions_gateway_eviction_retries_exhausted_total is</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543" href="#__codelineno-0-543"></a><span class="w">    </span><span class="c1">// incremented but no further rerun attempt is made.</span>
+<a id="__codelineno-0-544" name="__codelineno-0-544" href="#__codelineno-0-544"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-545" name="__codelineno-0-545" href="#__codelineno-0-545"></a><span class="w">    </span><span class="c1">// Live on both acquisition tiers as of Q417. A RunnerGroup is always classic;</span>
+<a id="__codelineno-0-546" name="__codelineno-0-546" href="#__codelineno-0-546"></a><span class="w">    </span><span class="c1">// the same field on a ScaleSet-protocol RunnerSet is honored too, with the</span>
+<a id="__codelineno-0-547" name="__codelineno-0-547" href="#__codelineno-0-547"></a><span class="w">    </span><span class="c1">// eviction detected by the owning reconciler from the worker pod rather than</span>
+<a id="__codelineno-0-548" name="__codelineno-0-548" href="#__codelineno-0-548"></a><span class="w">    </span><span class="c1">// by a goroutine watching it. The budget is keyed by run ID alone, so the cap</span>
+<a id="__codelineno-0-549" name="__codelineno-0-549" href="#__codelineno-0-549"></a><span class="w">    </span><span class="c1">// is shared across tiers. See §4 Worker Pod Eviction and Auto-Retry.</span>
 <a id="__codelineno-0-550" name="__codelineno-0-550" href="#__codelineno-0-550"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-551" name="__codelineno-0-551" href="#__codelineno-0-551"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-552" name="__codelineno-0-552" href="#__codelineno-0-552"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Minimum=0</span>
-<a id="__codelineno-0-553" name="__codelineno-0-553" href="#__codelineno-0-553"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Maximum=10</span>
-<a id="__codelineno-0-554" name="__codelineno-0-554" href="#__codelineno-0-554"></a><span class="w">    </span><span class="nx">MaxEvictionRetries</span><span class="w"> </span><span class="o">*</span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;maxEvictionRetries,omitempty&quot;`</span>
-<a id="__codelineno-0-555" name="__codelineno-0-555" href="#__codelineno-0-555"></a>
-<a id="__codelineno-0-556" name="__codelineno-0-556" href="#__codelineno-0-556"></a><span class="w">    </span><span class="c1">// EvictionRetryDelay is how long the AGC waits after detecting a pod</span>
-<a id="__codelineno-0-557" name="__codelineno-0-557" href="#__codelineno-0-557"></a><span class="w">    </span><span class="c1">// eviction before calling the GitHub rerun API. A short delay avoids</span>
-<a id="__codelineno-0-558" name="__codelineno-0-558" href="#__codelineno-0-558"></a><span class="w">    </span><span class="c1">// hammering the API on thrashing workloads; the default of 5s is</span>
-<a id="__codelineno-0-559" name="__codelineno-0-559" href="#__codelineno-0-559"></a><span class="w">    </span><span class="c1">// sufficient for most cases.</span>
-<a id="__codelineno-0-560" name="__codelineno-0-560" href="#__codelineno-0-560"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-561" name="__codelineno-0-561" href="#__codelineno-0-561"></a><span class="w">    </span><span class="c1">// Accepts standard Go duration strings: &quot;5s&quot;, &quot;30s&quot;, &quot;2m&quot;. Values below</span>
-<a id="__codelineno-0-562" name="__codelineno-0-562" href="#__codelineno-0-562"></a><span class="w">    </span><span class="c1">// &quot;1s&quot; are rejected at admission. Defaults to &quot;5s&quot; when omitted; this</span>
-<a id="__codelineno-0-563" name="__codelineno-0-563" href="#__codelineno-0-563"></a><span class="w">    </span><span class="c1">// default is applied in-code by the AGC, not via a CRD +kubebuilder:default</span>
-<a id="__codelineno-0-564" name="__codelineno-0-564" href="#__codelineno-0-564"></a><span class="w">    </span><span class="c1">// marker.</span>
-<a id="__codelineno-0-565" name="__codelineno-0-565" href="#__codelineno-0-565"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-566" name="__codelineno-0-566" href="#__codelineno-0-566"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-567" name="__codelineno-0-567" href="#__codelineno-0-567"></a><span class="w">    </span><span class="nx">EvictionRetryDelay</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;evictionRetryDelay,omitempty&quot;`</span>
-<a id="__codelineno-0-568" name="__codelineno-0-568" href="#__codelineno-0-568"></a>
-<a id="__codelineno-0-569" name="__codelineno-0-569" href="#__codelineno-0-569"></a><span class="w">    </span><span class="c1">// MaxQuotaRetries controls how many times the AGC retries pod creation when</span>
-<a id="__codelineno-0-570" name="__codelineno-0-570" href="#__codelineno-0-570"></a><span class="w">    </span><span class="c1">// the namespace ResourceQuota is exhausted. Unlike eviction retry, the AGC</span>
-<a id="__codelineno-0-571" name="__codelineno-0-571" href="#__codelineno-0-571"></a><span class="w">    </span><span class="c1">// holds the job lock and retries in place — quota typically clears as other</span>
-<a id="__codelineno-0-572" name="__codelineno-0-572" href="#__codelineno-0-572"></a><span class="w">    </span><span class="c1">// jobs complete, so the acquired job is not lost. Once the budget is exhausted</span>
-<a id="__codelineno-0-573" name="__codelineno-0-573" href="#__codelineno-0-573"></a><span class="w">    </span><span class="c1">// the pod creation failure is returned and the job Secret is cleaned up.</span>
-<a id="__codelineno-0-574" name="__codelineno-0-574" href="#__codelineno-0-574"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-575" name="__codelineno-0-575" href="#__codelineno-0-575"></a><span class="w">    </span><span class="c1">// Set to 0 to disable quota retry entirely. When disabled, a quota-exceeded</span>
-<a id="__codelineno-0-576" name="__codelineno-0-576" href="#__codelineno-0-576"></a><span class="w">    </span><span class="c1">// error fails the provision call immediately without incrementing the</span>
-<a id="__codelineno-0-577" name="__codelineno-0-577" href="#__codelineno-0-577"></a><span class="w">    </span><span class="c1">// exhausted counter (disabled is a policy choice, not a budget failure).</span>
-<a id="__codelineno-0-578" name="__codelineno-0-578" href="#__codelineno-0-578"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-579" name="__codelineno-0-579" href="#__codelineno-0-579"></a><span class="w">    </span><span class="c1">// Defaults to 5 when omitted. This default is applied in-code by the AGC,</span>
-<a id="__codelineno-0-580" name="__codelineno-0-580" href="#__codelineno-0-580"></a><span class="w">    </span><span class="c1">// not via a CRD +kubebuilder:default marker.</span>
+<a id="__codelineno-0-551" name="__codelineno-0-551" href="#__codelineno-0-551"></a><span class="w">    </span><span class="c1">// Defaults to 2 when omitted. This default is applied in-code by the AGC,</span>
+<a id="__codelineno-0-552" name="__codelineno-0-552" href="#__codelineno-0-552"></a><span class="w">    </span><span class="c1">// not via a CRD +kubebuilder:default marker.</span>
+<a id="__codelineno-0-553" name="__codelineno-0-553" href="#__codelineno-0-553"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-554" name="__codelineno-0-554" href="#__codelineno-0-554"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-555" name="__codelineno-0-555" href="#__codelineno-0-555"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Minimum=0</span>
+<a id="__codelineno-0-556" name="__codelineno-0-556" href="#__codelineno-0-556"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Maximum=10</span>
+<a id="__codelineno-0-557" name="__codelineno-0-557" href="#__codelineno-0-557"></a><span class="w">    </span><span class="nx">MaxEvictionRetries</span><span class="w"> </span><span class="o">*</span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;maxEvictionRetries,omitempty&quot;`</span>
+<a id="__codelineno-0-558" name="__codelineno-0-558" href="#__codelineno-0-558"></a>
+<a id="__codelineno-0-559" name="__codelineno-0-559" href="#__codelineno-0-559"></a><span class="w">    </span><span class="c1">// EvictionRetryDelay is how long the AGC waits after detecting a pod</span>
+<a id="__codelineno-0-560" name="__codelineno-0-560" href="#__codelineno-0-560"></a><span class="w">    </span><span class="c1">// eviction before calling the GitHub rerun API. A short delay avoids</span>
+<a id="__codelineno-0-561" name="__codelineno-0-561" href="#__codelineno-0-561"></a><span class="w">    </span><span class="c1">// hammering the API on thrashing workloads; the default of 5s is</span>
+<a id="__codelineno-0-562" name="__codelineno-0-562" href="#__codelineno-0-562"></a><span class="w">    </span><span class="c1">// sufficient for most cases.</span>
+<a id="__codelineno-0-563" name="__codelineno-0-563" href="#__codelineno-0-563"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-564" name="__codelineno-0-564" href="#__codelineno-0-564"></a><span class="w">    </span><span class="c1">// Accepts standard Go duration strings: &quot;5s&quot;, &quot;30s&quot;, &quot;2m&quot;. Values below</span>
+<a id="__codelineno-0-565" name="__codelineno-0-565" href="#__codelineno-0-565"></a><span class="w">    </span><span class="c1">// &quot;1s&quot; are rejected at admission. Defaults to &quot;5s&quot; when omitted; this</span>
+<a id="__codelineno-0-566" name="__codelineno-0-566" href="#__codelineno-0-566"></a><span class="w">    </span><span class="c1">// default is applied in-code by the AGC, not via a CRD +kubebuilder:default</span>
+<a id="__codelineno-0-567" name="__codelineno-0-567" href="#__codelineno-0-567"></a><span class="w">    </span><span class="c1">// marker.</span>
+<a id="__codelineno-0-568" name="__codelineno-0-568" href="#__codelineno-0-568"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-569" name="__codelineno-0-569" href="#__codelineno-0-569"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-570" name="__codelineno-0-570" href="#__codelineno-0-570"></a><span class="w">    </span><span class="nx">EvictionRetryDelay</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;evictionRetryDelay,omitempty&quot;`</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571" href="#__codelineno-0-571"></a>
+<a id="__codelineno-0-572" name="__codelineno-0-572" href="#__codelineno-0-572"></a><span class="w">    </span><span class="c1">// MaxQuotaRetries controls how many times the AGC retries pod creation when</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573" href="#__codelineno-0-573"></a><span class="w">    </span><span class="c1">// the namespace ResourceQuota is exhausted. Unlike eviction retry, the AGC</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574" href="#__codelineno-0-574"></a><span class="w">    </span><span class="c1">// holds the job lock and retries in place — quota typically clears as other</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575" href="#__codelineno-0-575"></a><span class="w">    </span><span class="c1">// jobs complete, so the acquired job is not lost. Once the budget is exhausted</span>
+<a id="__codelineno-0-576" name="__codelineno-0-576" href="#__codelineno-0-576"></a><span class="w">    </span><span class="c1">// the pod creation failure is returned and the job Secret is cleaned up.</span>
+<a id="__codelineno-0-577" name="__codelineno-0-577" href="#__codelineno-0-577"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578" href="#__codelineno-0-578"></a><span class="w">    </span><span class="c1">// Set to 0 to disable quota retry entirely. When disabled, a quota-exceeded</span>
+<a id="__codelineno-0-579" name="__codelineno-0-579" href="#__codelineno-0-579"></a><span class="w">    </span><span class="c1">// error fails the provision call immediately without incrementing the</span>
+<a id="__codelineno-0-580" name="__codelineno-0-580" href="#__codelineno-0-580"></a><span class="w">    </span><span class="c1">// exhausted counter (disabled is a policy choice, not a budget failure).</span>
 <a id="__codelineno-0-581" name="__codelineno-0-581" href="#__codelineno-0-581"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-582" name="__codelineno-0-582" href="#__codelineno-0-582"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-583" name="__codelineno-0-583" href="#__codelineno-0-583"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Minimum=0</span>
-<a id="__codelineno-0-584" name="__codelineno-0-584" href="#__codelineno-0-584"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Maximum=20</span>
-<a id="__codelineno-0-585" name="__codelineno-0-585" href="#__codelineno-0-585"></a><span class="w">    </span><span class="nx">MaxQuotaRetries</span><span class="w"> </span><span class="o">*</span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;maxQuotaRetries,omitempty&quot;`</span>
-<a id="__codelineno-0-586" name="__codelineno-0-586" href="#__codelineno-0-586"></a>
-<a id="__codelineno-0-587" name="__codelineno-0-587" href="#__codelineno-0-587"></a><span class="w">    </span><span class="c1">// QuotaRetryDelay is the time to wait between pod creation retries when the</span>
-<a id="__codelineno-0-588" name="__codelineno-0-588" href="#__codelineno-0-588"></a><span class="w">    </span><span class="c1">// namespace ResourceQuota is exhausted. The default of 30s is chosen to give</span>
-<a id="__codelineno-0-589" name="__codelineno-0-589" href="#__codelineno-0-589"></a><span class="w">    </span><span class="c1">// a running job time to finish and free quota before the next attempt.</span>
-<a id="__codelineno-0-590" name="__codelineno-0-590" href="#__codelineno-0-590"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591" href="#__codelineno-0-591"></a><span class="w">    </span><span class="c1">// Accepts standard Go duration strings: &quot;30s&quot;, &quot;1m&quot;. Values below &quot;1s&quot; are</span>
-<a id="__codelineno-0-592" name="__codelineno-0-592" href="#__codelineno-0-592"></a><span class="w">    </span><span class="c1">// rejected at admission. Defaults to &quot;30s&quot; when omitted; this default is</span>
-<a id="__codelineno-0-593" name="__codelineno-0-593" href="#__codelineno-0-593"></a><span class="w">    </span><span class="c1">// applied in-code by the AGC, not via a CRD +kubebuilder:default marker.</span>
-<a id="__codelineno-0-594" name="__codelineno-0-594" href="#__codelineno-0-594"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-595" name="__codelineno-0-595" href="#__codelineno-0-595"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-596" name="__codelineno-0-596" href="#__codelineno-0-596"></a><span class="w">    </span><span class="nx">QuotaRetryDelay</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;quotaRetryDelay,omitempty&quot;`</span>
-<a id="__codelineno-0-597" name="__codelineno-0-597" href="#__codelineno-0-597"></a>
-<a id="__codelineno-0-598" name="__codelineno-0-598" href="#__codelineno-0-598"></a><span class="w">    </span><span class="c1">// CompletedPodTTL is how long a worker pod that has reached a terminal</span>
-<a id="__codelineno-0-599" name="__codelineno-0-599" href="#__codelineno-0-599"></a><span class="w">    </span><span class="c1">// phase (Succeeded, Failed, or Unknown) is retained before the AGC deletes</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600" href="#__codelineno-0-600"></a><span class="w">    </span><span class="c1">// it. Retention gives operators a window to inspect the pod of a failed</span>
-<a id="__codelineno-0-601" name="__codelineno-0-601" href="#__codelineno-0-601"></a><span class="w">    </span><span class="c1">// job (`kubectl logs`/`describe`) before it disappears; terminal pods</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602" href="#__codelineno-0-602"></a><span class="w">    </span><span class="c1">// consume no compute and no ResourceQuota. Set to &quot;0s&quot; to delete worker</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603" href="#__codelineno-0-603"></a><span class="w">    </span><span class="c1">// pods immediately on completion.</span>
-<a id="__codelineno-0-604" name="__codelineno-0-604" href="#__codelineno-0-604"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-605" name="__codelineno-0-605" href="#__codelineno-0-605"></a><span class="w">    </span><span class="c1">// Accepts standard Go duration strings: &quot;0s&quot;, &quot;5m&quot;, &quot;1h&quot;. Negative values</span>
-<a id="__codelineno-0-606" name="__codelineno-0-606" href="#__codelineno-0-606"></a><span class="w">    </span><span class="c1">// are rejected at admission. Defaults to &quot;5m&quot; when omitted.</span>
+<a id="__codelineno-0-582" name="__codelineno-0-582" href="#__codelineno-0-582"></a><span class="w">    </span><span class="c1">// Defaults to 5 when omitted. This default is applied in-code by the AGC,</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583" href="#__codelineno-0-583"></a><span class="w">    </span><span class="c1">// not via a CRD +kubebuilder:default marker.</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584" href="#__codelineno-0-584"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-585" name="__codelineno-0-585" href="#__codelineno-0-585"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-586" name="__codelineno-0-586" href="#__codelineno-0-586"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Minimum=0</span>
+<a id="__codelineno-0-587" name="__codelineno-0-587" href="#__codelineno-0-587"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Maximum=20</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588" href="#__codelineno-0-588"></a><span class="w">    </span><span class="nx">MaxQuotaRetries</span><span class="w"> </span><span class="o">*</span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;maxQuotaRetries,omitempty&quot;`</span>
+<a id="__codelineno-0-589" name="__codelineno-0-589" href="#__codelineno-0-589"></a>
+<a id="__codelineno-0-590" name="__codelineno-0-590" href="#__codelineno-0-590"></a><span class="w">    </span><span class="c1">// QuotaRetryDelay is the time to wait between pod creation retries when the</span>
+<a id="__codelineno-0-591" name="__codelineno-0-591" href="#__codelineno-0-591"></a><span class="w">    </span><span class="c1">// namespace ResourceQuota is exhausted. The default of 30s is chosen to give</span>
+<a id="__codelineno-0-592" name="__codelineno-0-592" href="#__codelineno-0-592"></a><span class="w">    </span><span class="c1">// a running job time to finish and free quota before the next attempt.</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593" href="#__codelineno-0-593"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594" href="#__codelineno-0-594"></a><span class="w">    </span><span class="c1">// Accepts standard Go duration strings: &quot;30s&quot;, &quot;1m&quot;. Values below &quot;1s&quot; are</span>
+<a id="__codelineno-0-595" name="__codelineno-0-595" href="#__codelineno-0-595"></a><span class="w">    </span><span class="c1">// rejected at admission. Defaults to &quot;30s&quot; when omitted; this default is</span>
+<a id="__codelineno-0-596" name="__codelineno-0-596" href="#__codelineno-0-596"></a><span class="w">    </span><span class="c1">// applied in-code by the AGC, not via a CRD +kubebuilder:default marker.</span>
+<a id="__codelineno-0-597" name="__codelineno-0-597" href="#__codelineno-0-597"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-598" name="__codelineno-0-598" href="#__codelineno-0-598"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-599" name="__codelineno-0-599" href="#__codelineno-0-599"></a><span class="w">    </span><span class="nx">QuotaRetryDelay</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;quotaRetryDelay,omitempty&quot;`</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600" href="#__codelineno-0-600"></a>
+<a id="__codelineno-0-601" name="__codelineno-0-601" href="#__codelineno-0-601"></a><span class="w">    </span><span class="c1">// CompletedPodTTL is how long a worker pod that has reached a terminal</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602" href="#__codelineno-0-602"></a><span class="w">    </span><span class="c1">// phase (Succeeded, Failed, or Unknown) is retained before the AGC deletes</span>
+<a id="__codelineno-0-603" name="__codelineno-0-603" href="#__codelineno-0-603"></a><span class="w">    </span><span class="c1">// it. Retention gives operators a window to inspect the pod of a failed</span>
+<a id="__codelineno-0-604" name="__codelineno-0-604" href="#__codelineno-0-604"></a><span class="w">    </span><span class="c1">// job (`kubectl logs`/`describe`) before it disappears; terminal pods</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605" href="#__codelineno-0-605"></a><span class="w">    </span><span class="c1">// consume no compute and no ResourceQuota. Set to &quot;0s&quot; to delete worker</span>
+<a id="__codelineno-0-606" name="__codelineno-0-606" href="#__codelineno-0-606"></a><span class="w">    </span><span class="c1">// pods immediately on completion.</span>
 <a id="__codelineno-0-607" name="__codelineno-0-607" href="#__codelineno-0-607"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-608" name="__codelineno-0-608" href="#__codelineno-0-608"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-609" name="__codelineno-0-609" href="#__codelineno-0-609"></a><span class="w">    </span><span class="nx">CompletedPodTTL</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;completedPodTTL,omitempty&quot;`</span>
-<a id="__codelineno-0-610" name="__codelineno-0-610" href="#__codelineno-0-610"></a>
-<a id="__codelineno-0-611" name="__codelineno-0-611" href="#__codelineno-0-611"></a><span class="w">    </span><span class="c1">// PendingPodDeadline is the maximum time a worker pod may remain Pending</span>
-<a id="__codelineno-0-612" name="__codelineno-0-612" href="#__codelineno-0-612"></a><span class="w">    </span><span class="c1">// (measured from its creation) before the AGC deletes it, releasing the</span>
-<a id="__codelineno-0-613" name="__codelineno-0-613" href="#__codelineno-0-613"></a><span class="w">    </span><span class="c1">// concurrency-ceiling slot the stuck pod was holding. Pending pods get</span>
-<a id="__codelineno-0-614" name="__codelineno-0-614" href="#__codelineno-0-614"></a><span class="w">    </span><span class="c1">// stuck on unpullable images or unschedulable constraints; deleting one</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615" href="#__codelineno-0-615"></a><span class="w">    </span><span class="c1">// resolves its session goroutine and frees the listener for the next job.</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616" href="#__codelineno-0-616"></a><span class="w">    </span><span class="c1">// Each reap emits a WorkerPodStuckPending Warning Event on the</span>
-<a id="__codelineno-0-617" name="__codelineno-0-617" href="#__codelineno-0-617"></a><span class="w">    </span><span class="c1">// RunnerGroup. Raise this on clusters where legitimate scheduling can be</span>
-<a id="__codelineno-0-618" name="__codelineno-0-618" href="#__codelineno-0-618"></a><span class="w">    </span><span class="c1">// slow (e.g. autoscaled GPU node pools).</span>
-<a id="__codelineno-0-619" name="__codelineno-0-619" href="#__codelineno-0-619"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-620" name="__codelineno-0-620" href="#__codelineno-0-620"></a><span class="w">    </span><span class="c1">// Accepts standard Go duration strings: &quot;10m&quot;, &quot;1h&quot;. Values below &quot;1s&quot;</span>
-<a id="__codelineno-0-621" name="__codelineno-0-621" href="#__codelineno-0-621"></a><span class="w">    </span><span class="c1">// are rejected at admission. Defaults to &quot;10m&quot; when omitted.</span>
+<a id="__codelineno-0-608" name="__codelineno-0-608" href="#__codelineno-0-608"></a><span class="w">    </span><span class="c1">// Accepts standard Go duration strings: &quot;0s&quot;, &quot;5m&quot;, &quot;1h&quot;. Negative values</span>
+<a id="__codelineno-0-609" name="__codelineno-0-609" href="#__codelineno-0-609"></a><span class="w">    </span><span class="c1">// are rejected at admission. Defaults to &quot;5m&quot; when omitted.</span>
+<a id="__codelineno-0-610" name="__codelineno-0-610" href="#__codelineno-0-610"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-611" name="__codelineno-0-611" href="#__codelineno-0-611"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612" href="#__codelineno-0-612"></a><span class="w">    </span><span class="nx">CompletedPodTTL</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;completedPodTTL,omitempty&quot;`</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613" href="#__codelineno-0-613"></a>
+<a id="__codelineno-0-614" name="__codelineno-0-614" href="#__codelineno-0-614"></a><span class="w">    </span><span class="c1">// PendingPodDeadline is the maximum time a worker pod may remain Pending</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615" href="#__codelineno-0-615"></a><span class="w">    </span><span class="c1">// (measured from its creation) before the AGC deletes it, releasing the</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616" href="#__codelineno-0-616"></a><span class="w">    </span><span class="c1">// concurrency-ceiling slot the stuck pod was holding. Pending pods get</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617" href="#__codelineno-0-617"></a><span class="w">    </span><span class="c1">// stuck on unpullable images or unschedulable constraints; deleting one</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618" href="#__codelineno-0-618"></a><span class="w">    </span><span class="c1">// resolves its session goroutine and frees the listener for the next job.</span>
+<a id="__codelineno-0-619" name="__codelineno-0-619" href="#__codelineno-0-619"></a><span class="w">    </span><span class="c1">// Each reap emits a WorkerPodStuckPending Warning Event on the</span>
+<a id="__codelineno-0-620" name="__codelineno-0-620" href="#__codelineno-0-620"></a><span class="w">    </span><span class="c1">// RunnerGroup. Raise this on clusters where legitimate scheduling can be</span>
+<a id="__codelineno-0-621" name="__codelineno-0-621" href="#__codelineno-0-621"></a><span class="w">    </span><span class="c1">// slow (e.g. autoscaled GPU node pools).</span>
 <a id="__codelineno-0-622" name="__codelineno-0-622" href="#__codelineno-0-622"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-623" name="__codelineno-0-623" href="#__codelineno-0-623"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-624" name="__codelineno-0-624" href="#__codelineno-0-624"></a><span class="w">    </span><span class="nx">PendingPodDeadline</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;pendingPodDeadline,omitempty&quot;`</span>
-<a id="__codelineno-0-625" name="__codelineno-0-625" href="#__codelineno-0-625"></a>
-<a id="__codelineno-0-626" name="__codelineno-0-626" href="#__codelineno-0-626"></a><span class="w">    </span><span class="c1">// MaxWorkerLifetime is the maximum time a worker pod may be active on its</span>
-<a id="__codelineno-0-627" name="__codelineno-0-627" href="#__codelineno-0-627"></a><span class="w">    </span><span class="c1">// node, applied as the pod&#39;s activeDeadlineSeconds. It is the backstop for</span>
-<a id="__codelineno-0-628" name="__codelineno-0-628" href="#__codelineno-0-628"></a><span class="w">    </span><span class="c1">// a worker whose job ended while the AGC was down: such a pod is</span>
-<a id="__codelineno-0-629" name="__codelineno-0-629" href="#__codelineno-0-629"></a><span class="w">    </span><span class="c1">// indistinguishable in cluster state from one running a long job, so no</span>
-<a id="__codelineno-0-630" name="__codelineno-0-630" href="#__codelineno-0-630"></a><span class="w">    </span><span class="c1">// AGC-side reconciliation can reclaim it and only a deadline stamped when</span>
-<a id="__codelineno-0-631" name="__codelineno-0-631" href="#__codelineno-0-631"></a><span class="w">    </span><span class="c1">// the pod is created bounds it. Because the KUBELET enforces</span>
-<a id="__codelineno-0-632" name="__codelineno-0-632" href="#__codelineno-0-632"></a><span class="w">    </span><span class="c1">// activeDeadlineSeconds, the cap holds even while the AGC is unavailable —</span>
-<a id="__codelineno-0-633" name="__codelineno-0-633" href="#__codelineno-0-633"></a><span class="w">    </span><span class="c1">// which is exactly the failure it exists for, and why a reaper-side</span>
-<a id="__codelineno-0-634" name="__codelineno-0-634" href="#__codelineno-0-634"></a><span class="w">    </span><span class="c1">// deadline would not do.</span>
-<a id="__codelineno-0-635" name="__codelineno-0-635" href="#__codelineno-0-635"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-636" name="__codelineno-0-636" href="#__codelineno-0-636"></a><span class="w">    </span><span class="c1">// Applies to BOTH acquisition tiers: the cap is stamped in buildPod, which</span>
-<a id="__codelineno-0-637" name="__codelineno-0-637" href="#__codelineno-0-637"></a><span class="w">    </span><span class="c1">// classic provision() and scale-set ProvisionScaleSetWorker share.</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623" href="#__codelineno-0-623"></a><span class="w">    </span><span class="c1">// Accepts standard Go duration strings: &quot;10m&quot;, &quot;1h&quot;. Values below &quot;1s&quot;</span>
+<a id="__codelineno-0-624" name="__codelineno-0-624" href="#__codelineno-0-624"></a><span class="w">    </span><span class="c1">// are rejected at admission. Defaults to &quot;10m&quot; when omitted.</span>
+<a id="__codelineno-0-625" name="__codelineno-0-625" href="#__codelineno-0-625"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-626" name="__codelineno-0-626" href="#__codelineno-0-626"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-627" name="__codelineno-0-627" href="#__codelineno-0-627"></a><span class="w">    </span><span class="nx">PendingPodDeadline</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;pendingPodDeadline,omitempty&quot;`</span>
+<a id="__codelineno-0-628" name="__codelineno-0-628" href="#__codelineno-0-628"></a>
+<a id="__codelineno-0-629" name="__codelineno-0-629" href="#__codelineno-0-629"></a><span class="w">    </span><span class="c1">// MaxWorkerLifetime is the maximum time a worker pod may be active on its</span>
+<a id="__codelineno-0-630" name="__codelineno-0-630" href="#__codelineno-0-630"></a><span class="w">    </span><span class="c1">// node, applied as the pod&#39;s activeDeadlineSeconds. It is the backstop for</span>
+<a id="__codelineno-0-631" name="__codelineno-0-631" href="#__codelineno-0-631"></a><span class="w">    </span><span class="c1">// a worker whose job ended while the AGC was down: such a pod is</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632" href="#__codelineno-0-632"></a><span class="w">    </span><span class="c1">// indistinguishable in cluster state from one running a long job, so no</span>
+<a id="__codelineno-0-633" name="__codelineno-0-633" href="#__codelineno-0-633"></a><span class="w">    </span><span class="c1">// AGC-side reconciliation can reclaim it and only a deadline stamped when</span>
+<a id="__codelineno-0-634" name="__codelineno-0-634" href="#__codelineno-0-634"></a><span class="w">    </span><span class="c1">// the pod is created bounds it. Because the KUBELET enforces</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635" href="#__codelineno-0-635"></a><span class="w">    </span><span class="c1">// activeDeadlineSeconds, the cap holds even while the AGC is unavailable —</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636" href="#__codelineno-0-636"></a><span class="w">    </span><span class="c1">// which is exactly the failure it exists for, and why a reaper-side</span>
+<a id="__codelineno-0-637" name="__codelineno-0-637" href="#__codelineno-0-637"></a><span class="w">    </span><span class="c1">// deadline would not do.</span>
 <a id="__codelineno-0-638" name="__codelineno-0-638" href="#__codelineno-0-638"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-639" name="__codelineno-0-639" href="#__codelineno-0-639"></a><span class="w">    </span><span class="c1">// A pod killed this way lands in Failed with reason DeadlineExceeded, is</span>
-<a id="__codelineno-0-640" name="__codelineno-0-640" href="#__codelineno-0-640"></a><span class="w">    </span><span class="c1">// reaped under reason &quot;lifetime_exceeded&quot;, and emits a</span>
-<a id="__codelineno-0-641" name="__codelineno-0-641" href="#__codelineno-0-641"></a><span class="w">    </span><span class="c1">// WorkerPodLifetimeExceeded Warning Event. Jobs declaring a</span>
-<a id="__codelineno-0-642" name="__codelineno-0-642" href="#__codelineno-0-642"></a><span class="w">    </span><span class="c1">// `timeout-minutes` above the cap are killed mid-run, so raise it for a</span>
-<a id="__codelineno-0-643" name="__codelineno-0-643" href="#__codelineno-0-643"></a><span class="w">    </span><span class="c1">// group that legitimately runs longer.</span>
-<a id="__codelineno-0-644" name="__codelineno-0-644" href="#__codelineno-0-644"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-645" name="__codelineno-0-645" href="#__codelineno-0-645"></a><span class="w">    </span><span class="c1">// The default is 12h — 2x GitHub&#39;s own 360-minute default job timeout. The</span>
-<a id="__codelineno-0-646" name="__codelineno-0-646" href="#__codelineno-0-646"></a><span class="w">    </span><span class="c1">// job&#39;s real timeout is NOT available to derive from: no field on the</span>
-<a id="__codelineno-0-647" name="__codelineno-0-647" href="#__codelineno-0-647"></a><span class="w">    </span><span class="c1">// scale-set JobAssigned message carries it (measured, see</span>
-<a id="__codelineno-0-648" name="__codelineno-0-648" href="#__codelineno-0-648"></a><span class="w">    </span><span class="c1">// plan/archive/q438-worker-lifetime-deadline.md), so the cap is anchored to the</span>
-<a id="__codelineno-0-649" name="__codelineno-0-649" href="#__codelineno-0-649"></a><span class="w">    </span><span class="c1">// default every job gets rather than invented.</span>
-<a id="__codelineno-0-650" name="__codelineno-0-650" href="#__codelineno-0-650"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-651" name="__codelineno-0-651" href="#__codelineno-0-651"></a><span class="w">    </span><span class="c1">// An activeDeadlineSeconds set explicitly on spec.podTemplate takes</span>
-<a id="__codelineno-0-652" name="__codelineno-0-652" href="#__codelineno-0-652"></a><span class="w">    </span><span class="c1">// precedence and is never overwritten. Set to &quot;0s&quot; to disable the cap.</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653" href="#__codelineno-0-653"></a><span class="w">    </span><span class="c1">// Negative values are rejected at admission. Defaults to &quot;12h&quot; when omitted.</span>
-<a id="__codelineno-0-654" name="__codelineno-0-654" href="#__codelineno-0-654"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-655" name="__codelineno-0-655" href="#__codelineno-0-655"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-656" name="__codelineno-0-656" href="#__codelineno-0-656"></a><span class="w">    </span><span class="nx">MaxWorkerLifetime</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;maxWorkerLifetime,omitempty&quot;`</span>
-<a id="__codelineno-0-657" name="__codelineno-0-657" href="#__codelineno-0-657"></a><span class="p">}</span>
-<a id="__codelineno-0-658" name="__codelineno-0-658" href="#__codelineno-0-658"></a>
-<a id="__codelineno-0-659" name="__codelineno-0-659" href="#__codelineno-0-659"></a><span class="c1">// WorkerPodTemplate is a corev1.PodTemplateSpec that defines the pod configuration</span>
-<a id="__codelineno-0-660" name="__codelineno-0-660" href="#__codelineno-0-660"></a><span class="c1">// for ephemeral worker pods. Using the standard Kubernetes type gives tenants full</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661" href="#__codelineno-0-661"></a><span class="c1">// access to familiar pod fields — init containers, sidecars, volumes, volume mounts,</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662" href="#__codelineno-0-662"></a><span class="c1">// security contexts, scheduling constraints, etc. — without requiring them to learn</span>
-<a id="__codelineno-0-663" name="__codelineno-0-663" href="#__codelineno-0-663"></a><span class="c1">// a custom schema. IDE completion, kubectl explain, and all standard Kubernetes</span>
-<a id="__codelineno-0-664" name="__codelineno-0-664" href="#__codelineno-0-664"></a><span class="c1">// tooling work against this field as normal.</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665" href="#__codelineno-0-665"></a><span class="c1">//</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666" href="#__codelineno-0-666"></a><span class="c1">// # Controller-enforced invariants</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667" href="#__codelineno-0-667"></a><span class="c1">//</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668" href="#__codelineno-0-668"></a><span class="c1">// A small set of fields are reserved by the AGC and overwritten unconditionally</span>
-<a id="__codelineno-0-669" name="__codelineno-0-669" href="#__codelineno-0-669"></a><span class="c1">// after merging the tenant template. Tenants must not set these fields; attempting</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670" href="#__codelineno-0-670"></a><span class="c1">// to do so is rejected at admission by CRD CEL validation rules:</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671" href="#__codelineno-0-671"></a><span class="c1">//</span>
-<a id="__codelineno-0-672" name="__codelineno-0-672" href="#__codelineno-0-672"></a><span class="c1">//   - spec.serviceAccountName          — always set to the AGC-managed worker SA</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673" href="#__codelineno-0-673"></a><span class="c1">//   - spec.automountServiceAccountToken — always set to false</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674" href="#__codelineno-0-674"></a><span class="c1">//   - spec.hostPID / spec.hostNetwork / spec.hostIPC — always false; these break the</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675" href="#__codelineno-0-675"></a><span class="c1">//     pod isolation model the rest of the design depends on regardless of policy posture</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676" href="#__codelineno-0-676"></a><span class="c1">//   - containers[name=runner].env entries for ACTIONS_RUNTIME_TOKEN, HTTP_PROXY,</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677" href="#__codelineno-0-677"></a><span class="c1">//     HTTPS_PROXY, NO_PROXY — always injected by the AGC; tenant values are overwritten</span>
-<a id="__codelineno-0-678" name="__codelineno-0-678" href="#__codelineno-0-678"></a><span class="c1">//</span>
-<a id="__codelineno-0-679" name="__codelineno-0-679" href="#__codelineno-0-679"></a><span class="c1">// All other security constraints — privileged containers, hostPath volumes,</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680" href="#__codelineno-0-680"></a><span class="c1">// capabilities, sysctls, allowed registries, etc. — are the responsibility of the</span>
-<a id="__codelineno-0-681" name="__codelineno-0-681" href="#__codelineno-0-681"></a><span class="c1">// cluster&#39;s admission policy engine (e.g. Kyverno, OPA Gatekeeper). The AGC does</span>
-<a id="__codelineno-0-682" name="__codelineno-0-682" href="#__codelineno-0-682"></a><span class="c1">// not duplicate general-purpose policy enforcement; it only guards the invariants</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683" href="#__codelineno-0-683"></a><span class="c1">// it depends on for correct operation.</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684" href="#__codelineno-0-684"></a><span class="c1">//</span>
-<a id="__codelineno-0-685" name="__codelineno-0-685" href="#__codelineno-0-685"></a><span class="c1">// # Merge order</span>
-<a id="__codelineno-0-686" name="__codelineno-0-686" href="#__codelineno-0-686"></a><span class="c1">//</span>
-<a id="__codelineno-0-687" name="__codelineno-0-687" href="#__codelineno-0-687"></a><span class="c1">// The AGC builds the worker pod by starting from the tenant&#39;s PodTemplateSpec and</span>
-<a id="__codelineno-0-688" name="__codelineno-0-688" href="#__codelineno-0-688"></a><span class="c1">// then overwriting the reserved fields listed above. Overwrites happen last so that</span>
-<a id="__codelineno-0-689" name="__codelineno-0-689" href="#__codelineno-0-689"></a><span class="c1">// no code path allows a tenant value to survive into the final pod spec.</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690" href="#__codelineno-0-690"></a><span class="kd">type</span><span class="w"> </span><span class="nx">WorkerPodTemplate</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">corev1</span><span class="p">.</span><span class="nx">PodTemplateSpec</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691" href="#__codelineno-0-691"></a>
-<a id="__codelineno-0-692" name="__codelineno-0-692" href="#__codelineno-0-692"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerGroupStatus</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693" href="#__codelineno-0-693"></a><span class="w">    </span><span class="c1">// Conditions contains the current observed conditions of the runner group.</span>
-<a id="__codelineno-0-694" name="__codelineno-0-694" href="#__codelineno-0-694"></a><span class="w">    </span><span class="c1">// Known condition types: Ready, Degraded, RateLimited, RunnerVersionTooOld,</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695" href="#__codelineno-0-695"></a><span class="w">    </span><span class="c1">// CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded,</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696" href="#__codelineno-0-696"></a><span class="w">    </span><span class="c1">// WorkersUnschedulable. The type and reason strings are exported as consts from</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697" href="#__codelineno-0-697"></a><span class="w">    </span><span class="c1">// the AGC api package (cmd/agc/api/v1alpha1/conditions.go).</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698" href="#__codelineno-0-698"></a><span class="w">    </span><span class="c1">//   CredentialUnavailable — abnormal-is-true (Q156); true when the AGC cannot</span>
-<a id="__codelineno-0-699" name="__codelineno-0-699" href="#__codelineno-0-699"></a><span class="w">    </span><span class="c1">//                         obtain a GitHub App installation token to manage the</span>
-<a id="__codelineno-0-700" name="__codelineno-0-700" href="#__codelineno-0-700"></a><span class="w">    </span><span class="c1">//                         group&#39;s agents (reason TokenUnavailable). Set before</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701" href="#__codelineno-0-701"></a><span class="w">    </span><span class="c1">//                         the reconcile&#39;s early return so it is never stale, in</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702" href="#__codelineno-0-702"></a><span class="w">    </span><span class="c1">//                         addition to the TokenUnavailable Event; cleared</span>
-<a id="__codelineno-0-703" name="__codelineno-0-703" href="#__codelineno-0-703"></a><span class="w">    </span><span class="c1">//                         (reason CredentialAvailable) once a token is obtained.</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704" href="#__codelineno-0-704"></a><span class="w">    </span><span class="c1">//   WorkerQuotaPressure — advisory WARNING (Q82); true when worker pods</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705" href="#__codelineno-0-705"></a><span class="w">    </span><span class="c1">//                         cannot scale to the configured ceiling (maxWorkers /</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706" href="#__codelineno-0-706"></a><span class="w">    </span><span class="c1">//                         max priorityTier threshold) within the namespace</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707" href="#__codelineno-0-707"></a><span class="w">    </span><span class="c1">//                         ResourceQuota headroom (hard − used).</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708" href="#__codelineno-0-708"></a><span class="w">    </span><span class="c1">//   WorkerQuotaExceeded — advisory ERROR (Q82); true when the namespace</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709" href="#__codelineno-0-709"></a><span class="w">    </span><span class="c1">//                         ResourceQuota cannot admit even one more worker pod.</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710" href="#__codelineno-0-710"></a><span class="w">    </span><span class="c1">//                         Supersedes the warning. While it holds, the admission</span>
-<a id="__codelineno-0-711" name="__codelineno-0-711" href="#__codelineno-0-711"></a><span class="w">    </span><span class="c1">//                         gate declines new deliveries on the same live headroom</span>
-<a id="__codelineno-0-712" name="__codelineno-0-712" href="#__codelineno-0-712"></a><span class="w">    </span><span class="c1">//                         check (#784), counted as</span>
-<a id="__codelineno-0-713" name="__codelineno-0-713" href="#__codelineno-0-713"></a><span class="w">    </span><span class="c1">//                         jobs_admission_rejected_total{reason=&quot;quota&quot;} — so the</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714" href="#__codelineno-0-714"></a><span class="w">    </span><span class="c1">//                         next job is left queued at GitHub rather than claimed</span>
-<a id="__codelineno-0-715" name="__codelineno-0-715" href="#__codelineno-0-715"></a><span class="w">    </span><span class="c1">//                         and then rejected at pod creation. Distinct from Q59&#39;s</span>
-<a id="__codelineno-0-716" name="__codelineno-0-716" href="#__codelineno-0-716"></a><span class="w">    </span><span class="c1">//                         configured-ceiling backpressure (reason=&quot;ceiling&quot;),</span>
-<a id="__codelineno-0-717" name="__codelineno-0-717" href="#__codelineno-0-717"></a><span class="w">    </span><span class="c1">//                         which is normal load-shedding to a sibling.</span>
-<a id="__codelineno-0-718" name="__codelineno-0-718" href="#__codelineno-0-718"></a><span class="w">    </span><span class="c1">//   WorkersUnschedulable — abnormal-is-true, impairing (Q157); true when worker</span>
-<a id="__codelineno-0-719" name="__codelineno-0-719" href="#__codelineno-0-719"></a><span class="w">    </span><span class="c1">//                         pods sit Pending past the scheduling grace (half</span>
-<a id="__codelineno-0-720" name="__codelineno-0-720" href="#__codelineno-0-720"></a><span class="w">    </span><span class="c1">//                         pendingPodDeadline) because the scheduler cannot place</span>
-<a id="__codelineno-0-721" name="__codelineno-0-721" href="#__codelineno-0-721"></a><span class="w">    </span><span class="c1">//                         them — PodScheduled=False/Unschedulable: no matching</span>
-<a id="__codelineno-0-722" name="__codelineno-0-722" href="#__codelineno-0-722"></a><span class="w">    </span><span class="c1">//                         node, affinity, or untolerated taints. Distinct from</span>
-<a id="__codelineno-0-723" name="__codelineno-0-723" href="#__codelineno-0-723"></a><span class="w">    </span><span class="c1">//                         the WorkerQuota ladder: a quota rejection blocks pod</span>
-<a id="__codelineno-0-724" name="__codelineno-0-724" href="#__codelineno-0-724"></a><span class="w">    </span><span class="c1">//                         admission so no pod exists, so the two never both fire</span>
-<a id="__codelineno-0-725" name="__codelineno-0-725" href="#__codelineno-0-725"></a><span class="w">    </span><span class="c1">//                         for one cause. Rolls up into the gateway&#39;s</span>
-<a id="__codelineno-0-726" name="__codelineno-0-726" href="#__codelineno-0-726"></a><span class="w">    </span><span class="c1">//                         RunnerGroupsDegraded; exported as the gauge</span>
-<a id="__codelineno-0-727" name="__codelineno-0-727" href="#__codelineno-0-727"></a><span class="w">    </span><span class="c1">//                         actions_gateway_workers_unschedulable.</span>
-<a id="__codelineno-0-728" name="__codelineno-0-728" href="#__codelineno-0-728"></a><span class="w">    </span><span class="c1">// The listType=map / listMapKey=type markers let server-side apply merge</span>
-<a id="__codelineno-0-729" name="__codelineno-0-729" href="#__codelineno-0-729"></a><span class="w">    </span><span class="c1">// conditions by type instead of treating the slice as atomic.</span>
-<a id="__codelineno-0-730" name="__codelineno-0-730" href="#__codelineno-0-730"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-731" name="__codelineno-0-731" href="#__codelineno-0-731"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-732" name="__codelineno-0-732" href="#__codelineno-0-732"></a><span class="w">    </span><span class="c1">// +listType=map</span>
-<a id="__codelineno-0-733" name="__codelineno-0-733" href="#__codelineno-0-733"></a><span class="w">    </span><span class="c1">// +listMapKey=type</span>
-<a id="__codelineno-0-734" name="__codelineno-0-734" href="#__codelineno-0-734"></a><span class="w">    </span><span class="nx">Conditions</span><span class="w"> </span><span class="p">[]</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Condition</span><span class="w"> </span><span class="s">`json:&quot;conditions,omitempty&quot;`</span>
-<a id="__codelineno-0-735" name="__codelineno-0-735" href="#__codelineno-0-735"></a>
-<a id="__codelineno-0-736" name="__codelineno-0-736" href="#__codelineno-0-736"></a><span class="w">    </span><span class="c1">// ActiveSessions is the number of currently open long-poll sessions</span>
-<a id="__codelineno-0-737" name="__codelineno-0-737" href="#__codelineno-0-737"></a><span class="w">    </span><span class="c1">// managed by this RunnerGroup.</span>
-<a id="__codelineno-0-738" name="__codelineno-0-738" href="#__codelineno-0-738"></a><span class="w">    </span><span class="nx">ActiveSessions</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;activeSessions&quot;`</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739" href="#__codelineno-0-739"></a>
-<a id="__codelineno-0-740" name="__codelineno-0-740" href="#__codelineno-0-740"></a><span class="w">    </span><span class="c1">// ActiveJobs is the number of worker pods currently in the Running phase</span>
-<a id="__codelineno-0-741" name="__codelineno-0-741" href="#__codelineno-0-741"></a><span class="w">    </span><span class="c1">// (a job is actively executing). Derived from the worker pod phase count</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742" href="#__codelineno-0-742"></a><span class="w">    </span><span class="c1">// during each reconcile; updated on pod phase-change events. The v2alpha1</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743" href="#__codelineno-0-743"></a><span class="w">    </span><span class="c1">// RunnerSet carries the same field. See also PendingJobs.</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744" href="#__codelineno-0-744"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745" href="#__codelineno-0-745"></a><span class="w">    </span><span class="nx">ActiveJobs</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;activeJobs,omitempty&quot;`</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746" href="#__codelineno-0-746"></a>
-<a id="__codelineno-0-747" name="__codelineno-0-747" href="#__codelineno-0-747"></a><span class="w">    </span><span class="c1">// PendingJobs is the number of worker pods currently in the Pending phase</span>
-<a id="__codelineno-0-748" name="__codelineno-0-748" href="#__codelineno-0-748"></a><span class="w">    </span><span class="c1">// (a job has been acquired and a pod spawned, but the pod is not yet</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749" href="#__codelineno-0-749"></a><span class="w">    </span><span class="c1">// running). A sustained non-zero count signals scheduling pressure —</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750" href="#__codelineno-0-750"></a><span class="w">    </span><span class="c1">// check WorkersUnschedulable, events, and node/image constraints. Pods</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751" href="#__codelineno-0-751"></a><span class="w">    </span><span class="c1">// that remain Pending past pendingPodDeadline are reaped by the</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752" href="#__codelineno-0-752"></a><span class="w">    </span><span class="c1">// controller. The v2alpha1 RunnerSet carries the same field.</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753" href="#__codelineno-0-753"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754" href="#__codelineno-0-754"></a><span class="w">    </span><span class="nx">PendingJobs</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;pendingJobs,omitempty&quot;`</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755" href="#__codelineno-0-755"></a>
-<a id="__codelineno-0-756" name="__codelineno-0-756" href="#__codelineno-0-756"></a><span class="w">    </span><span class="nx">ObservedGeneration</span><span class="w"> </span><span class="kt">int64</span><span class="w"> </span><span class="s">`json:&quot;observedGeneration,omitempty&quot;`</span>
-<a id="__codelineno-0-757" name="__codelineno-0-757" href="#__codelineno-0-757"></a><span class="p">}</span>
+<a id="__codelineno-0-639" name="__codelineno-0-639" href="#__codelineno-0-639"></a><span class="w">    </span><span class="c1">// Applies to BOTH acquisition tiers: the cap is stamped in buildPod, which</span>
+<a id="__codelineno-0-640" name="__codelineno-0-640" href="#__codelineno-0-640"></a><span class="w">    </span><span class="c1">// classic provision() and scale-set ProvisionScaleSetWorker share.</span>
+<a id="__codelineno-0-641" name="__codelineno-0-641" href="#__codelineno-0-641"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642" href="#__codelineno-0-642"></a><span class="w">    </span><span class="c1">// A pod killed this way lands in Failed with reason DeadlineExceeded, is</span>
+<a id="__codelineno-0-643" name="__codelineno-0-643" href="#__codelineno-0-643"></a><span class="w">    </span><span class="c1">// reaped under reason &quot;lifetime_exceeded&quot;, and emits a</span>
+<a id="__codelineno-0-644" name="__codelineno-0-644" href="#__codelineno-0-644"></a><span class="w">    </span><span class="c1">// WorkerPodLifetimeExceeded Warning Event. Jobs declaring a</span>
+<a id="__codelineno-0-645" name="__codelineno-0-645" href="#__codelineno-0-645"></a><span class="w">    </span><span class="c1">// `timeout-minutes` above the cap are killed mid-run, so raise it for a</span>
+<a id="__codelineno-0-646" name="__codelineno-0-646" href="#__codelineno-0-646"></a><span class="w">    </span><span class="c1">// group that legitimately runs longer.</span>
+<a id="__codelineno-0-647" name="__codelineno-0-647" href="#__codelineno-0-647"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-648" name="__codelineno-0-648" href="#__codelineno-0-648"></a><span class="w">    </span><span class="c1">// The default is 12h — 2x GitHub&#39;s own 360-minute default job timeout. The</span>
+<a id="__codelineno-0-649" name="__codelineno-0-649" href="#__codelineno-0-649"></a><span class="w">    </span><span class="c1">// job&#39;s real timeout is NOT available to derive from: no field on the</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650" href="#__codelineno-0-650"></a><span class="w">    </span><span class="c1">// scale-set JobAssigned message carries it (measured, see</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651" href="#__codelineno-0-651"></a><span class="w">    </span><span class="c1">// plan/archive/q438-worker-lifetime-deadline.md), so the cap is anchored to the</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652" href="#__codelineno-0-652"></a><span class="w">    </span><span class="c1">// default every job gets rather than invented.</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653" href="#__codelineno-0-653"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-654" name="__codelineno-0-654" href="#__codelineno-0-654"></a><span class="w">    </span><span class="c1">// An activeDeadlineSeconds set explicitly on spec.podTemplate takes</span>
+<a id="__codelineno-0-655" name="__codelineno-0-655" href="#__codelineno-0-655"></a><span class="w">    </span><span class="c1">// precedence and is never overwritten. Set to &quot;0s&quot; to disable the cap.</span>
+<a id="__codelineno-0-656" name="__codelineno-0-656" href="#__codelineno-0-656"></a><span class="w">    </span><span class="c1">// Negative values are rejected at admission. Defaults to &quot;12h&quot; when omitted.</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657" href="#__codelineno-0-657"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658" href="#__codelineno-0-658"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-659" name="__codelineno-0-659" href="#__codelineno-0-659"></a><span class="w">    </span><span class="nx">MaxWorkerLifetime</span><span class="w"> </span><span class="o">*</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Duration</span><span class="w"> </span><span class="s">`json:&quot;maxWorkerLifetime,omitempty&quot;`</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660" href="#__codelineno-0-660"></a><span class="p">}</span>
+<a id="__codelineno-0-661" name="__codelineno-0-661" href="#__codelineno-0-661"></a>
+<a id="__codelineno-0-662" name="__codelineno-0-662" href="#__codelineno-0-662"></a><span class="c1">// WorkerPodTemplate is a corev1.PodTemplateSpec that defines the pod configuration</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663" href="#__codelineno-0-663"></a><span class="c1">// for ephemeral worker pods. Using the standard Kubernetes type gives tenants full</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664" href="#__codelineno-0-664"></a><span class="c1">// access to familiar pod fields — init containers, sidecars, volumes, volume mounts,</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665" href="#__codelineno-0-665"></a><span class="c1">// security contexts, scheduling constraints, etc. — without requiring them to learn</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666" href="#__codelineno-0-666"></a><span class="c1">// a custom schema. IDE completion, kubectl explain, and all standard Kubernetes</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667" href="#__codelineno-0-667"></a><span class="c1">// tooling work against this field as normal.</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668" href="#__codelineno-0-668"></a><span class="c1">//</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669" href="#__codelineno-0-669"></a><span class="c1">// # Controller-enforced invariants</span>
+<a id="__codelineno-0-670" name="__codelineno-0-670" href="#__codelineno-0-670"></a><span class="c1">//</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671" href="#__codelineno-0-671"></a><span class="c1">// A small set of fields are reserved by the AGC and overwritten unconditionally</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672" href="#__codelineno-0-672"></a><span class="c1">// after merging the tenant template. Tenants must not set these fields; attempting</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673" href="#__codelineno-0-673"></a><span class="c1">// to do so is rejected at admission by CRD CEL validation rules:</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674" href="#__codelineno-0-674"></a><span class="c1">//</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675" href="#__codelineno-0-675"></a><span class="c1">//   - spec.serviceAccountName          — always set to the AGC-managed worker SA</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676" href="#__codelineno-0-676"></a><span class="c1">//   - spec.automountServiceAccountToken — always set to false</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677" href="#__codelineno-0-677"></a><span class="c1">//   - spec.hostPID / spec.hostNetwork / spec.hostIPC — always false; these break the</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678" href="#__codelineno-0-678"></a><span class="c1">//     pod isolation model the rest of the design depends on regardless of policy posture</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679" href="#__codelineno-0-679"></a><span class="c1">//   - containers[name=runner].env entries for ACTIONS_RUNTIME_TOKEN, HTTP_PROXY,</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680" href="#__codelineno-0-680"></a><span class="c1">//     HTTPS_PROXY, NO_PROXY — always injected by the AGC; tenant values are overwritten</span>
+<a id="__codelineno-0-681" name="__codelineno-0-681" href="#__codelineno-0-681"></a><span class="c1">//</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682" href="#__codelineno-0-682"></a><span class="c1">// All other security constraints — privileged containers, hostPath volumes,</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683" href="#__codelineno-0-683"></a><span class="c1">// capabilities, sysctls, allowed registries, etc. — are the responsibility of the</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684" href="#__codelineno-0-684"></a><span class="c1">// cluster&#39;s admission policy engine (e.g. Kyverno, OPA Gatekeeper). The AGC does</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685" href="#__codelineno-0-685"></a><span class="c1">// not duplicate general-purpose policy enforcement; it only guards the invariants</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686" href="#__codelineno-0-686"></a><span class="c1">// it depends on for correct operation.</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687" href="#__codelineno-0-687"></a><span class="c1">//</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688" href="#__codelineno-0-688"></a><span class="c1">// # Merge order</span>
+<a id="__codelineno-0-689" name="__codelineno-0-689" href="#__codelineno-0-689"></a><span class="c1">//</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690" href="#__codelineno-0-690"></a><span class="c1">// The AGC builds the worker pod by starting from the tenant&#39;s PodTemplateSpec and</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691" href="#__codelineno-0-691"></a><span class="c1">// then overwriting the reserved fields listed above. Overwrites happen last so that</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692" href="#__codelineno-0-692"></a><span class="c1">// no code path allows a tenant value to survive into the final pod spec.</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693" href="#__codelineno-0-693"></a><span class="kd">type</span><span class="w"> </span><span class="nx">WorkerPodTemplate</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">corev1</span><span class="p">.</span><span class="nx">PodTemplateSpec</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694" href="#__codelineno-0-694"></a>
+<a id="__codelineno-0-695" name="__codelineno-0-695" href="#__codelineno-0-695"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerGroupStatus</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-696" name="__codelineno-0-696" href="#__codelineno-0-696"></a><span class="w">    </span><span class="c1">// Conditions contains the current observed conditions of the runner group.</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697" href="#__codelineno-0-697"></a><span class="w">    </span><span class="c1">// Known condition types: Ready, Degraded, RateLimited, RunnerVersionTooOld,</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698" href="#__codelineno-0-698"></a><span class="w">    </span><span class="c1">// CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded,</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699" href="#__codelineno-0-699"></a><span class="w">    </span><span class="c1">// WorkersUnschedulable. The type and reason strings are exported as consts from</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700" href="#__codelineno-0-700"></a><span class="w">    </span><span class="c1">// the AGC api package (cmd/agc/api/v1alpha1/conditions.go).</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701" href="#__codelineno-0-701"></a><span class="w">    </span><span class="c1">//   CredentialUnavailable — abnormal-is-true (Q156); true when the AGC cannot</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702" href="#__codelineno-0-702"></a><span class="w">    </span><span class="c1">//                         obtain a GitHub App installation token to manage the</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703" href="#__codelineno-0-703"></a><span class="w">    </span><span class="c1">//                         group&#39;s agents (reason TokenUnavailable). Set before</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704" href="#__codelineno-0-704"></a><span class="w">    </span><span class="c1">//                         the reconcile&#39;s early return so it is never stale, in</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705" href="#__codelineno-0-705"></a><span class="w">    </span><span class="c1">//                         addition to the TokenUnavailable Event; cleared</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706" href="#__codelineno-0-706"></a><span class="w">    </span><span class="c1">//                         (reason CredentialAvailable) once a token is obtained.</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707" href="#__codelineno-0-707"></a><span class="w">    </span><span class="c1">//   WorkerQuotaPressure — advisory WARNING (Q82); true when worker pods</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708" href="#__codelineno-0-708"></a><span class="w">    </span><span class="c1">//                         cannot scale to the configured ceiling (maxWorkers /</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709" href="#__codelineno-0-709"></a><span class="w">    </span><span class="c1">//                         max priorityTier threshold) within the namespace</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710" href="#__codelineno-0-710"></a><span class="w">    </span><span class="c1">//                         ResourceQuota headroom (hard − used).</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711" href="#__codelineno-0-711"></a><span class="w">    </span><span class="c1">//   WorkerQuotaExceeded — advisory ERROR (Q82); true when the namespace</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712" href="#__codelineno-0-712"></a><span class="w">    </span><span class="c1">//                         ResourceQuota cannot admit even one more worker pod.</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713" href="#__codelineno-0-713"></a><span class="w">    </span><span class="c1">//                         Supersedes the warning. While it holds, the admission</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714" href="#__codelineno-0-714"></a><span class="w">    </span><span class="c1">//                         gate declines new deliveries on the same live headroom</span>
+<a id="__codelineno-0-715" name="__codelineno-0-715" href="#__codelineno-0-715"></a><span class="w">    </span><span class="c1">//                         check (#784), counted as</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716" href="#__codelineno-0-716"></a><span class="w">    </span><span class="c1">//                         jobs_admission_rejected_total{reason=&quot;quota&quot;} — so the</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717" href="#__codelineno-0-717"></a><span class="w">    </span><span class="c1">//                         next job is left queued at GitHub rather than claimed</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718" href="#__codelineno-0-718"></a><span class="w">    </span><span class="c1">//                         and then rejected at pod creation. Distinct from Q59&#39;s</span>
+<a id="__codelineno-0-719" name="__codelineno-0-719" href="#__codelineno-0-719"></a><span class="w">    </span><span class="c1">//                         configured-ceiling backpressure (reason=&quot;ceiling&quot;),</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720" href="#__codelineno-0-720"></a><span class="w">    </span><span class="c1">//                         which is normal load-shedding to a sibling.</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721" href="#__codelineno-0-721"></a><span class="w">    </span><span class="c1">//   WorkersUnschedulable — abnormal-is-true, impairing (Q157); true when worker</span>
+<a id="__codelineno-0-722" name="__codelineno-0-722" href="#__codelineno-0-722"></a><span class="w">    </span><span class="c1">//                         pods sit Pending past the scheduling grace (half</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723" href="#__codelineno-0-723"></a><span class="w">    </span><span class="c1">//                         pendingPodDeadline) because the scheduler cannot place</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724" href="#__codelineno-0-724"></a><span class="w">    </span><span class="c1">//                         them — PodScheduled=False/Unschedulable: no matching</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725" href="#__codelineno-0-725"></a><span class="w">    </span><span class="c1">//                         node, affinity, or untolerated taints. Distinct from</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726" href="#__codelineno-0-726"></a><span class="w">    </span><span class="c1">//                         the WorkerQuota ladder: a quota rejection blocks pod</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727" href="#__codelineno-0-727"></a><span class="w">    </span><span class="c1">//                         admission so no pod exists, so the two never both fire</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728" href="#__codelineno-0-728"></a><span class="w">    </span><span class="c1">//                         for one cause. Rolls up into the gateway&#39;s</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729" href="#__codelineno-0-729"></a><span class="w">    </span><span class="c1">//                         RunnerGroupsDegraded; exported as the gauge</span>
+<a id="__codelineno-0-730" name="__codelineno-0-730" href="#__codelineno-0-730"></a><span class="w">    </span><span class="c1">//                         actions_gateway_workers_unschedulable.</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731" href="#__codelineno-0-731"></a><span class="w">    </span><span class="c1">// The listType=map / listMapKey=type markers let server-side apply merge</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732" href="#__codelineno-0-732"></a><span class="w">    </span><span class="c1">// conditions by type instead of treating the slice as atomic.</span>
+<a id="__codelineno-0-733" name="__codelineno-0-733" href="#__codelineno-0-733"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734" href="#__codelineno-0-734"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735" href="#__codelineno-0-735"></a><span class="w">    </span><span class="c1">// +listType=map</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736" href="#__codelineno-0-736"></a><span class="w">    </span><span class="c1">// +listMapKey=type</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737" href="#__codelineno-0-737"></a><span class="w">    </span><span class="nx">Conditions</span><span class="w"> </span><span class="p">[]</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Condition</span><span class="w"> </span><span class="s">`json:&quot;conditions,omitempty&quot;`</span>
+<a id="__codelineno-0-738" name="__codelineno-0-738" href="#__codelineno-0-738"></a>
+<a id="__codelineno-0-739" name="__codelineno-0-739" href="#__codelineno-0-739"></a><span class="w">    </span><span class="c1">// ActiveSessions is the number of currently open long-poll sessions</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740" href="#__codelineno-0-740"></a><span class="w">    </span><span class="c1">// managed by this RunnerGroup.</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741" href="#__codelineno-0-741"></a><span class="w">    </span><span class="nx">ActiveSessions</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;activeSessions&quot;`</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742" href="#__codelineno-0-742"></a>
+<a id="__codelineno-0-743" name="__codelineno-0-743" href="#__codelineno-0-743"></a><span class="w">    </span><span class="c1">// ActiveJobs is the number of worker pods currently in the Running phase</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744" href="#__codelineno-0-744"></a><span class="w">    </span><span class="c1">// (a job is actively executing). Derived from the worker pod phase count</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745" href="#__codelineno-0-745"></a><span class="w">    </span><span class="c1">// during each reconcile; updated on pod phase-change events. The v2alpha1</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746" href="#__codelineno-0-746"></a><span class="w">    </span><span class="c1">// RunnerSet carries the same field. See also PendingJobs.</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747" href="#__codelineno-0-747"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748" href="#__codelineno-0-748"></a><span class="w">    </span><span class="nx">ActiveJobs</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;activeJobs,omitempty&quot;`</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749" href="#__codelineno-0-749"></a>
+<a id="__codelineno-0-750" name="__codelineno-0-750" href="#__codelineno-0-750"></a><span class="w">    </span><span class="c1">// PendingJobs is the number of worker pods currently in the Pending phase</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751" href="#__codelineno-0-751"></a><span class="w">    </span><span class="c1">// (a job has been acquired and a pod spawned, but the pod is not yet</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752" href="#__codelineno-0-752"></a><span class="w">    </span><span class="c1">// running). A sustained non-zero count signals scheduling pressure —</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753" href="#__codelineno-0-753"></a><span class="w">    </span><span class="c1">// check WorkersUnschedulable, events, and node/image constraints. Pods</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754" href="#__codelineno-0-754"></a><span class="w">    </span><span class="c1">// that remain Pending past pendingPodDeadline are reaped by the</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755" href="#__codelineno-0-755"></a><span class="w">    </span><span class="c1">// controller. The v2alpha1 RunnerSet carries the same field.</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756" href="#__codelineno-0-756"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757" href="#__codelineno-0-757"></a><span class="w">    </span><span class="nx">PendingJobs</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;pendingJobs,omitempty&quot;`</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758" href="#__codelineno-0-758"></a>
+<a id="__codelineno-0-759" name="__codelineno-0-759" href="#__codelineno-0-759"></a><span class="w">    </span><span class="nx">ObservedGeneration</span><span class="w"> </span><span class="kt">int64</span><span class="w"> </span><span class="s">`json:&quot;observedGeneration,omitempty&quot;`</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760" href="#__codelineno-0-760"></a><span class="p">}</span>
 </code></pre></div>
 <hr />
 <h2 id="32-github-app-credentials-secret-schema">3.2. GitHub App Credentials Secret Schema<a class="headerlink" href="#32-github-app-credentials-secret-schema" title="Permanent link">&para;</a></h2>
