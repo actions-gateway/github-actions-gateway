@@ -100,12 +100,24 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
-    # Must exceed both suite budgets plus their builds, or a hung suite is killed
-    # by THIS timeout first — which reports a cancelled job and no goroutine dump,
-    # the one failure shape that says less than the panic it pre-empts. Two 10m
-    # budgets plus setup and the -race builds is ~24m worst case; a normal run is
-    # ~12m (measured 2026-08-10).
-    timeout-minutes: 30
+    # One job per module. The two suites are separate go.work modules with
+    # separate envtest clusters and no shared state, so running them in one job
+    # only serialized them: 308s (GMC) then 284s (AGC) inside a 617s job,
+    # measured 2026-08-12. As a matrix the tier costs max() instead of sum().
+    #
+    # fail-fast is off because each entry is an independent verdict — cancelling
+    # AGC because GMC failed would hide whether the change broke one tier or both,
+    # which is the first thing triage needs.
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [gmc, agc]
+    # Must exceed the suite budget plus its build, or a hung suite is killed by
+    # THIS timeout first — which reports a cancelled job and no goroutine dump,
+    # the one failure shape that says less than the panic it pre-empts. One 10m
+    # budget plus setup and the -race build is ~15m worst case; a normal entry is
+    # ~6m (measured 2026-08-12).
+    timeout-minutes: 20
     # ENVTEST_K8S_VERSION pins the Kubernetes API-server version the integration
     # tier tests against. Single-sourced here (the cache key + the `use` below both
     # read it) and kept in lockstep with the same pin in cmd/{gmc,agc}/Makefile by
@@ -116,6 +128,12 @@ jobs:
     # selector. The ".x" patch wildcard lets setup-envtest pick the newest patch.
     env:
       ENVTEST_K8S_VERSION: 1.35.x
+      # The module this entry tests, as a directory under cmd/. Surfaced as an
+      # env var rather than interpolated into the run: script below, matching the
+      # KIND_CNI handling in e2e-reusable.yml — a matrix value is workflow-authored
+      # rather than attacker-supplied, but keeping every ${{ }} out of run: bodies
+      # means no reviewer has to re-derive that for each one.
+      MODULE: ${{ matrix.module }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -135,10 +153,8 @@ jobs:
       # the budget is one number here and in both module Makefiles, and a breach
       # annotates the step with "the suite ran out of time" instead of leaving
       # the panic to blame whichever test held the wall (Q741).
-      - name: Run GMC integration tests
-        run: scripts/go/go-test-integration.sh cmd/gmc -v -count=1 ./internal/controller/integration/...
-      - name: Run AGC integration tests
-        run: scripts/go/go-test-integration.sh cmd/agc -v -count=1 ./internal/controller/integration/...
+      - name: Run ${{ matrix.module }} integration tests
+        run: scripts/go/go-test-integration.sh "cmd/${MODULE}" -v -count=1 ./internal/controller/integration/...
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`integration-test-gate`) required in the branch ruleset — never the

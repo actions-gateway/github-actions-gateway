@@ -1820,6 +1820,12 @@ make -C cmd/agc test-integration   # AGC only
 make -C cmd/gmc test-integration   # GMC only
 ```
 
+**In CI the two modules are a matrix, one job each,** so the tier costs the slower suite rather than their sum.
+They had shared a job, which serialized them at 308s (GMC) then 284s (AGC) inside a 617s job (measured 2026-08-12); as a matrix that is roughly 333s.
+Two consequences when reading a run: the check names are `integration-test (gmc)` and `integration-test (agc)` rather than a single `integration-test`, and `fail-fast` is off, so a failure in one still lets the other report.
+Whether a change broke one module or both is usually the first thing triage needs, and one aggregated red could not answer it.
+The required check is still the single `integration-test-gate`, which passes only when every matrix entry succeeded or skipped.
+
 `RUN=` narrows a module's run to matching test names.
 It is passed straight to `go test -run`, so the full regexp syntax works:
 
@@ -1845,8 +1851,9 @@ Unit tests (`make test` / `go test ./...`) do **not** require envtest — the in
 ### The envtest suite budget
 
 `go test -timeout` gives each suite a wall-clock budget.
-It is **10m**, single-sourced in [`scripts/go/go-test-integration.sh`](../../scripts/go/go-test-integration.sh), which both module Makefiles and both CI steps run through.
+It is **10m**, single-sourced in [`scripts/go/go-test-integration.sh`](../../scripts/go/go-test-integration.sh), which both module Makefiles and the matrixed CI step run through.
 The budget is per test *binary*, so each module's suite gets its own.
+That is also why the CI job's own `timeout-minutes` is 20 rather than 30: one entry now carries one 10m budget plus setup and the `-race` build, and the job timeout has to stay above that or it kills a hung suite before the suite's own timeout can produce the goroutine dump.
 
 Every run reports what it spent:
 

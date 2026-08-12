@@ -3,7 +3,8 @@
 # Run one module's envtest-backed integration suite, and report the suite's own
 # wall clock against the budget `-timeout` gives it.
 # Backs `make -C cmd/agc test-integration`, `make -C cmd/gmc test-integration`
-# and the two `go test` steps in .github/workflows/integration-test.yml.
+# and the matrixed `go test` step in .github/workflows/integration-test.yml,
+# which runs one entry per module so the two suites overlap instead of queueing.
 #
 # Usage: scripts/go/go-test-integration.sh <module-dir> [go test args...]
 #   <module-dir>  a go.work module holding an envtest suite: cmd/agc | cmd/gmc.
