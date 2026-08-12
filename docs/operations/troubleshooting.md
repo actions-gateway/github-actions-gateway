@@ -3096,12 +3096,17 @@ kubectl logs -n <namespace> <worker-pod> --tail=50
 ```
 
 **Resolution.**
-- **To reclaim the capacity now, delete the worker pod.** `kubectl delete pod -n <namespace> <worker-pod>` terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
-  The run is already cancelled, so nothing is lost.
+- **Deleting the worker pod reclaims the capacity, and re-queues the job you cancelled.** `kubectl delete pod -n <namespace> <worker-pod>` terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
+  Only reach for it when you cancelled to free the slot rather than to stop the work.
 
-  > A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC asks GitHub to re-run the run's failed jobs.
-  > Whether GitHub honours that for a run concluded `cancelled` is unmeasured — see [Q595](../STATUS.md#Q595).
-  > If you are cancelling to *stop* the work rather than to free a slot, prefer waiting the pod out.
+  > **The delete undoes the cancel.** A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC asks GitHub to re-run the run's failed jobs.
+  > GitHub honours that for a `cancelled` conclusion: the `rerun-failed-jobs` call is accepted and the job is re-queued, where a `success` conclusion refuses it with a 403 (measured live 2026-08-05, [the Q683 measurement](../plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05)).
+  > Nothing in the gateway deletes a cancelled run's pod, which is why the deletion mark is trusted as a disruption signal; this remedy is the one case where an operator produces that mark deliberately.
+  > It applies on ScaleSet too: the tier's own reclaim carries the `actions-gateway.com/deletion-reason` stamp and is excluded, while a hand-delete carries no stamp and takes the recovery path.
+  > Each re-run spends one slot of the run's shared `maxEvictionRetries` budget (default 2, max 10), so a repeated cancel-then-delete cycle is bounded, ending in an `EvictionRetriesExhausted` warning Event on the owner.
+  > Whether recovery should read the run's conclusion before re-running is [Q811](../STATUS.md#Q811).
+- **If you cancelled to stop the work, leave the pod alone** and wait it out, or bound it with `maxWorkerLifetime` below.
+  There is no way today to free the slot *and* keep the run cancelled: the delete re-queues the job, and the new attempt has to be cancelled in turn.
 - **Bound the worst case with `maxWorkerLifetime`** on the runner group, which caps how long any worker — cancelled or not — can hold its slot.
 - Do **not** expect a lower `completedPodTTL` or `pendingPodDeadline` to help: both act on pods that have already stopped or never started, and this pod is running.
 
