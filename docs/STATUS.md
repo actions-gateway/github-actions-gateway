@@ -48,6 +48,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Capacity-aware job intake](plan/capacity-aware-intake.md) | `feature` | ✅ |
 | [Markdown gates on a real parser](plan/markdown-gates-parser.md) | `milestone` `ci` `debt` | ✅ |
 | [Release 1.4](plan/release-1.4.md) | `milestone` | ✅ |
+| [Release 1.5](plan/release-1.5.md) | `milestone` | ⚠️ |
 
 ---
 
@@ -57,6 +58,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q801"></a>Q801 | [Reconcile the marketing surfaces, starting with an unverified state for the comparison table](plan/release-1.5.md#the-scoping-question-settled) | `docs` `ci` `1.5-gate` | 🔲 | M | Measured 2026-08-11: 15 of 17 comparison rows carry no ARC version and no date, and two have already gone false. Settled: a competitor cell renders a verdict only with both, else unverified. Gate the rule, then date the cells. |
 | <a id="Q798"></a>Q798 | [`roadmap-check`'s word cap reports a deleted bullet's orphan against the previous bullet](../scripts/docs/check-roadmap.sh) | `ci` `debt` `retro` | 🔲 | S | Deleting a bullet and leaving its indented continuation attaches it to the bullet above, whose cap then breaks. Hit 2026-08-11 closing Q726: accurate message, innocent bullet, reads as pre-existing. Name the line range, or flag the orphan. |
 | <a id="Q799"></a>Q799 | [Route `docs/roadmap.md` through an ID-keyed merge driver](../.gitattributes) | `ci` `debt` `retro` | 🔲 | S | Each gate PR deletes its own `<!-- q:QNNN -->` bullet and de-links its own anchor, so two conflict by construction: Q715's was queue-evicted 3x in a session, each a rebase and a gate cycle. `STATUS.md` and `plan/README.md` merged clean. |
 | <a id="Q790"></a>Q790 | [piped-gate's `docs/STATUS.md` overlap exemption cannot fire on a row deletion](../.claude/piped-gate-guard.json) | `ci` `debt` `retro` | 🔲 | S | Measured 2026-08-10: `overlap_ignore` discounts `docs/STATUS.md` as row-ID resolved, but [the driver](../scripts/docs/git-merge-status-test.sh) yields markers for delete-vs-edit of one row. #1384 left #1383 dirty; every flake-row move is that shape. |

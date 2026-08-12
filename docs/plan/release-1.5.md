@@ -111,8 +111,29 @@ Three bodies of work, in dependency order:
 The recurring form of this is now [release.md § Pre-flight](../operations/release.md#1-pre-flight), which asks the same three questions before every tag.
 1.5 is the first release to run it, and the backlog it produced is the reason the step exists.
 
-## Open question for scoping
+## The scoping question, settled
 
 Whether the comparison table keeps its verdict-table shape at all.
-The 2026-08-06 review traced the 11 undated cells to the format: a green-check/red-X table needs a definite cell in every row, and the working notes it was built from had marked most competitor-side facts as unverified.
+The 2026-08-06 review traced the undated cells to the format: a green-check/red-X table needs a definite cell in every row, and the working notes it was built from had marked most competitor-side facts as unverified.
 The format had nowhere to put "we believe this but have not checked it", so unverified became a red X. Patching cells does not fix that; either every competitor-side cell carries a version and a date, or the page stops rendering competitor claims as verdicts.
+
+**Settled 2026-08-11: the table keeps its shape and gains a third state.** A competitor-side cell carries a verdict only when it also carries an ARC version and a measurement date; without both it renders as unverified.
+Tracked as [Q801](../STATUS.md#Q801).
+
+Measured the same day, which is what makes this a format decision rather than a cleanup: **15 of the 17 comparison rows carry neither an ARC version nor a date.** Only two do.
+Dating them is the work either way, so the question is only what the page asserts while that is outstanding.
+
+The argument is the asymmetry between the two ways of being wrong.
+Two cells have already gone false at datable upstream releases, and a reader who checks one and finds it wrong has no reason to trust the other sixteen; the page's whole value is that a sceptical evaluator can spot-check it.
+An unverified cell costs nothing by comparison, and next to cells that do carry a version and a date it reads as rigour rather than as a gap.
+
+It also makes the debt visible instead of hidden.
+Today an unmeasured claim and a measured one are indistinguishable on the page, so staleness accumulates silently; under the third state an expiring cell degrades to unverified rather than to wrong.
+That turns [release.md § Pre-flight](../operations/release.md#1-pre-flight) from "re-verify everything" into "re-check what went stale", and the rule is mechanical enough to gate: no version and date, no verdict.
+
+Not chosen, and why.
+Dating all 15 first keeps the strongest-looking page but blocks every correction behind one large measurement pass, and leaves the format unable to express doubt the next time ARC moves.
+Dropping the verdicts entirely cannot go false, but it gives up the at-a-glance comparison on the page most likely to be read by somebody evaluating alternatives.
+
+One caveat on the record: this was decided from the markup and the row counts, not from the rendered page at a real viewport.
+If the unverified state reads badly in practice, that is a design finding worth acting on rather than a decision to relitigate.
