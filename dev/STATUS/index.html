@@ -2872,14 +2872,6 @@
 <td>Every worker deletes its own row, so batch PRs conflict on GitHub's merge, which runs no driver (<a href="../plan/merge-queue/">why</a>). 4 of 12 churned: 2-3 rebases at 16-20 min each, against 1 CI failure in 205 runs. Serializing is the lever.</td>
 </tr>
 <tr>
-<td><a id="Q808"></a>Q808</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code> wall clock is set by lint, not the unit tests</a></td>
-<td><code>ci</code> <code>speed</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12: the 221s wall is <code>lint</code> (159s golangci-lint), with unit-test 200s and coverage 178s beside it, so shortening tests alone buys ~0. Flat profile: target lint or skip. Biggest test package is <code>agc/internal/scalesetlistener</code>, 62.6s.</td>
-</tr>
-<tr>
 <td><a id="Q781"></a>Q781</td>
 <td><a href="../operations/release/#writing-the-curated-notes">Automate the release scope-filter residue reconciliation</a></td>
 <td><code>debt</code> <code>ci</code> <code>retro</code></td>
@@ -2920,28 +2912,12 @@
 <td>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge. Q742 ratchets the em-dash ceiling; this covers the other 4 gates and any later ratchet. Needs Q574's paths-filter <code>changes</code> job.</td>
 </tr>
 <tr>
-<td><a id="Q750"></a>Q750</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#re-check-concurrent-work-before-opening">The broken-main exception duplicates one fix across every in-flight session</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Decided 2026-08-08: a main fix never rides in an unrelated PR. Search for a standalone fix; wait and rebase if one is open, own it if none is. The claim is a draft PR, which the Q668 hook reads. Measured: 4 sessions fixed one overrun; 2 collided.</td>
-</tr>
-<tr>
 <td><a id="Q754"></a>Q754</td>
 <td><a href="../design/appendix-d-alternatives-considered/#d9-forgemt-and-account-per-tenant-runner-platforms">D.9 and alternatives.md call account-per-tenant ForgeMT's model, which its own docs do not</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Its boundary is IAM/OIDC role scope, labels, and GitHub App scope, with the account layout left to the operator and an EC2 lane for VM isolation. The disagreement is real; re-derive both trade-off bullets from it, and re-date the star count.</td>
-</tr>
-<tr>
-<td><a id="Q760"></a>Q760</td>
-<td><a href="../plan/gpu-and-accelerated-ci/">The GPU plan calls AMD the same shape of problem as TPUs and Gaudi; the cost model disagrees</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>AMD has no gVisor support and no Kata path (Kata's kernel build rejects the vendor), so isolated AMD CI means VM-per-job via VFIO: a different product shape, not a bigger one. Appendix F sells its memory-per-dollar without that caveat.</td>
 </tr>
 <tr>
 <td><a id="Q755"></a>Q755</td>

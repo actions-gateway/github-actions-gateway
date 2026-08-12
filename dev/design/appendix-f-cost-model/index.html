@@ -3188,13 +3188,16 @@ That is a spec-sheet ratio, not a benchmark, so it does not hinge on framework o
 </tbody>
 </table>
 <p>On memory per dollar, AMD Instinct's larger HBM stacks land it roughly <strong>2–3× ahead</strong> of same-tier NVIDIA — and because one high-memory Instinct GPU can often do the work of several smaller cards, that advantage compounds under this system's per-job model as <strong>fewer worker pods and fewer GPU-hours per job</strong>, not just a lower hourly rate.</p>
-<p>Two caveats keep this a fair comparison rather than a thumb on the scale:</p>
+<p>Three caveats keep this a fair comparison rather than a thumb on the scale:</p>
 <ul>
 <li><strong>It is a memory claim, not a compute claim.</strong> Throughput per dollar ($ per token/sec, or per wall-clock job) is what ultimately decides cost, and it depends on your workload and on ROCm/kernel maturity for your framework.
   Measure it on your own jobs; we make no generic compute-per-dollar claim.</li>
 <li><strong>Use the rate you can actually get.</strong> MI355X here uses the low end of its volatile range ($3.00); at Oracle's $8.60/GPU-hr on-demand it is ≈ $0.030/GB-HBM-hr — level with H100.
   Same-tier, current-quote comparisons are the only honest ones.
   Sources: <a href="https://getdeploying.com/gpus/nvidia-h100">getdeploying H100</a>, <a href="https://getdeploying.com/gpus/nvidia-h200">H200</a>, and the AMD Instinct sources cited above.</li>
+<li><strong>The Instinct rates buy an unsandboxed worker.</strong> Both isolation runtimes this system supports are NVIDIA-only today: gVisor's GPU support is <code>nvproxy</code>, with no AMD or ROCm path, and Kata's kernel packaging accepts only <code>intel</code> and <code>nvidia</code> as its GPU vendor, so there is no packaged guest kernel that drives an Instinct card (measured 2026-08-12 against <a href="https://gvisor.dev/docs/user_guide/gpu/">gVisor GPU support</a> at release <code>release-20260803.0</code> and Kata <a href="https://github.com/kata-containers/kata-containers/blob/4d1e78da2f7d5ff6616d5674510a134556a1e97d/tools/packaging/kernel/build-kernel.sh"><code>build-kernel.sh</code></a> at <code>4d1e78d</code>, its current <code>main</code> state after the 4.0.0 release).
+  So the memory-per-dollar advantage applies to a trusted fleet running workers on the default <code>runc</code>, and untrusted multi-tenant AMD CI is not a supported configuration at any price.
+  <a href="../appendix-b-worker-isolation/">Appendix B</a> is the isolation menu those rates are spent under; the GPU plan works the constraint through in <a href="../../plan/gpu-and-accelerated-ci/#the-collision-with-the-security-goal">GPU and Accelerated CI</a>.</li>
 </ul>
 <hr />
 <h2 id="f1-per-job-cost-breakdown">F.1. Per-Job Cost Breakdown<a class="headerlink" href="#f1-per-job-cost-breakdown" title="Permanent link">&para;</a></h2>
