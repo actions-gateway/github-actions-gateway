@@ -123,7 +123,7 @@ Each keeps its `scripts/` entry point, per [`scripts/README.md`](../../scripts/R
 
 ### Out of scope, deliberately
 
-[`git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) and [`merge-table-rows.awk`](../../scripts/lib/merge-table-rows.awk) stay as they are, as does the [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) sibling.
+[`git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) stay as they are, as does the [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) sibling.
 A merge driver must reconstruct the file **line for line**, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.
 Rewriting it onto goldmark would be actively wrong, not merely unnecessary.
 

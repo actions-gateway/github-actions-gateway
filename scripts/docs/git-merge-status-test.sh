@@ -95,7 +95,7 @@ merge_repo() {
 	repo="$(plain_repo "$1")"
 	mkdir -p "$repo/scripts/lib" "$repo/scripts/docs"
 	cp "$DRIVER" "$repo/scripts/docs/git-merge-status.sh"
-	cp "$REPO_ROOT/scripts/lib/merge-table-rows.awk" "$repo/scripts/lib/"
+	cp "$REPO_ROOT/scripts/lib/merge-keyed-records.awk" "$repo/scripts/lib/"
 	cp "$REPO_ROOT/scripts/lib/merge-driver-common.sh" "$repo/scripts/lib/"
 	chmod +x "$repo/scripts/docs/git-merge-status.sh"
 	(cd "$repo" && ./scripts/docs/git-merge-status.sh --install >/dev/null)

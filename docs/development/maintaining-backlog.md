@@ -20,8 +20,8 @@ The repo vendors the skill's tooling so the rules hold for every contributor, wi
   Advisory: it never blocks a filing.
   [How it is calibrated](#search-before-you-file).
 - [`scripts/docs/git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous.
-  Its sibling [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) does the same for [`docs/plan/README.md`](../plan/README.md), keyed on the plan path.
-  One `make merge-driver` per clone installs both; a no-op until then.
+  Its siblings [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) and [`git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) do the same for [`docs/plan/README.md`](../plan/README.md), keyed on the plan path, and for [`docs/roadmap.md`](../roadmap.md), keyed on each bullet's backlog annotation.
+  One `make merge-driver` per clone installs all three; a no-op until then.
   [Details below](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
 - [`scripts/docs/next-task.sh`](../../scripts/docs/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready 🔲 Queue row, for starting a fresh session on the next task.
 - [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP).
@@ -230,8 +230,26 @@ Two things differ from the `STATUS.md` driver:
 
 Everything else is the Queue driver's behaviour: a row changed on both sides, a row deleted on one side and edited on the other, one plan filed twice with different text, rows reordered on both sides, a row whose first cell is not a link, and a side that added or removed a whole table all fall back to the plain three-way merge and its conflict markers.
 
-`make merge-driver` installs both drivers.
-Neither is required: until you run it the `.gitattributes` lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.
+### And for `docs/roadmap.md`
+
+The public roadmap is bound to the backlog one bullet at a time: each forward-looking bullet carries a `<!-- q:QN -->` annotation naming the rows behind it, and shipping the work deletes the bullet.
+That makes every gate PR the same edit in the same two sections.
+Measured on `docs/roadmap.md` at 61cf54e7b: two branches each deleting their own bullet from the near-term list conflict under a plain three-way merge, while the same two deletions ten bullets apart merge clean.
+[Q715](https://github.com/actions-gateway/github-actions-gateway/pull/1392)'s PR was evicted from the merge queue three times in one session on exactly that shape.
+
+[`scripts/docs/git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) decides the bullets by that **annotation**, normalized to a comma-joined ID list.
+The key is not a new convention either: `devtools/docs/roadmapcheck` already parses the same comment, so the driver and the gate cannot disagree about what a bullet is.
+
+Two things differ from the other two drivers:
+
+- **A bullet spans several lines**, which the shared record rules do not model, so each one is encoded onto a single line and decoded after the merge.
+- **The blank lines between bullets are held beside the records, not inside them.** Fold the trailing blank into a bullet and deleting a list's last bullet reads as an *edit* of its neighbour, which then collides with the other side deleting that neighbour: the exact merge the driver exists to resolve.
+
+A run of bullets is only merged this way when every bullet in it is annotated, so an ordinary bulleted paragraph elsewhere on the page keeps git's own merge.
+Everything else is the Queue driver's behaviour, plus a whole-page check that no binding ended up on two bullets.
+
+`make merge-driver` installs all three drivers.
+None is required: until you run it the `.gitattributes` lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.
 
 ## Resolving a `STATUS.md`-only conflict: verify cheap, push now
 

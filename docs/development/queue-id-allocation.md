@@ -112,7 +112,7 @@ Revisit if outside contributors need to see and claim work; that is the one thin
 It resolves the Queue table by ID set-semantics during merge and rebase, which is where the pain is, and keeps the whole existing tooling stack.
 It needs a one-time `git config` per clone (`make merge-driver`; git will not let `.gitattributes` configure a driver, since that would be remote code execution on clone) and degrades to ordinary conflict markers both when unconfigured and whenever the resolution is not certain.
 It does not help GitHub's server-side squash-merge.
-The same `make merge-driver` installs a [sibling for `docs/plan/README.md`](maintaining-backlog.md#the-same-treatment-for-docsplanreadmemd), which has the same contention keyed on the plan path (Q611).
+The same `make merge-driver` installs a [sibling for `docs/plan/README.md`](maintaining-backlog.md#the-same-treatment-for-docsplanreadmemd), which has the same contention keyed on the plan path (Q611), and [one for `docs/roadmap.md`](maintaining-backlog.md#and-for-docsroadmapmd), keyed on each bullet's backlog annotation (Q799).
 
 **One file per item** (`docs/queue/Q423.md`).
 The permanent answer to row conflicts, since adds and removes become file creates and deletes, which cannot conflict.

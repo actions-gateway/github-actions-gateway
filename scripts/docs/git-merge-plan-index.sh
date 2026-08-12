@@ -3,7 +3,8 @@
 # git-merge-plan-index.sh — a git merge driver for docs/plan/README.md that
 # resolves its index tables by plan path, and falls back to ordinary conflict
 # markers for anything it is not certain about. The docs/STATUS.md sibling is
-# scripts/docs/git-merge-status.sh; both share scripts/lib/merge-table-rows.awk.
+# scripts/docs/git-merge-status.sh and the docs/roadmap.md one is
+# git-merge-roadmap.sh; all three share scripts/lib/merge-keyed-records.awk.
 #
 # WHY. The plan index has STATUS.md's contention without STATUS.md's tooling.
 # Every plan doc that lands adds one long row, every archival moves one to the
@@ -56,7 +57,7 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROWS_AWK="$SCRIPT_DIR/../lib/merge-table-rows.awk"
+ROWS_AWK="$SCRIPT_DIR/../lib/merge-keyed-records.awk"
 
 DRIVER_NAME='planindex'
 DRIVER_LOG='merge-plan-index'

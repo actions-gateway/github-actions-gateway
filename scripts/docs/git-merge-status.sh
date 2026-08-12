@@ -19,8 +19,9 @@
 # change. Row order is reconstructed from whichever side reordered. Everything
 # outside those rows — the header, the Progress table, the Deferred table — is
 # merged exactly as git would have merged it, with no set-semantics applied.
-# The rules and the ordering rebuild live in scripts/lib/merge-table-rows.awk;
-# docs/plan/README.md gets the same treatment from git-merge-plan-index.sh.
+# The rules and the ordering rebuild live in scripts/lib/merge-keyed-records.awk;
+# docs/plan/README.md gets the same treatment from git-merge-plan-index.sh, and
+# docs/roadmap.md from git-merge-roadmap.sh.
 #
 # WHAT IT REFUSES TO DO. Any uncertainty ends the same way: re-run the plain
 # three-way merge and leave its conflict markers. A row changed on both sides, a
@@ -57,7 +58,7 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROWS_AWK="$SCRIPT_DIR/../lib/merge-table-rows.awk"
+ROWS_AWK="$SCRIPT_DIR/../lib/merge-keyed-records.awk"
 
 DRIVER_NAME='backlog'
 DRIVER_LOG='merge-status'
