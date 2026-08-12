@@ -2912,14 +2912,6 @@
 <td>Its boundary is IAM/OIDC role scope, labels, and GitHub App scope, with the account layout left to the operator and an EC2 lane for VM isolation. The disagreement is real; re-derive both trade-off bullets from it, and re-date the star count.</td>
 </tr>
 <tr>
-<td><a id="Q755"></a>Q755</td>
-<td><a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">D.3 reads as though ARC cannot express scheduling priority at all, and its template can</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>AutoscalingRunnerSetSpec.Template</code> is a full PodTemplateSpec, so <code>priorityClassName</code> is settable per scale set. The real gaps are sharper: ordering yes, reserved floor no (needs per-index variation), shared ceiling no.</td>
-</tr>
-<tr>
 <td><a id="Q758"></a>Q758</td>
 <td><a href="../design/appendix-b-worker-isolation/#b2-operational-cost">The AWS nested-virt framing predates EC2 shipping it on virtual instances</a></td>
 <td><code>docs</code></td>
