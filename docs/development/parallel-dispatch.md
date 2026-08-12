@@ -217,8 +217,11 @@ So the prompt carries only what the skill and the Queue row cannot:
 - **The item** and the model to run on ([Model selection](#model-selection)); a fresh worker cannot run `model-advisor` interactively.
 - **The dispatcher's worktree name**, which is how the worker addresses it to report its PR (`dispatch-worker` skill §8).
   A session cannot look up its own name, so the dispatcher has to state it and the worker resolves it through `ListAgents`.
-- **What the dispatcher measured, and when.** The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying *where the row is stale* saves it implementing a fixed defect.
+- **What the dispatcher measured, and when.** The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying *where the row is stale* saves it implementing a fixed defect. **Say what you did not measure with the same care.** A prompt's claims read as settled where a row's read as claims, because the prompt says a session checked, and the worker then builds on them rather than testing them.
+  Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing *open*, on the call immediately before `gh pr merge --squash`.
+  Mark an unverified claim as unverified, or leave it out.
 - **The trap worth naming** — the tempting wrong fix, the control the test needs, the decision the row leaves open.
+  A trap is a claim too, and the most load-bearing one in the prompt, since it tells the worker what *not* to look at.
 - **Contention** with work in flight, by file.
 
 A prompt that fits in a few lines is one a maintainer can scan a whole wave of.
@@ -381,6 +384,11 @@ Whatever the message asserts about a PR, a branch, or `main` may have changed by
 So state the condition that invalidates the instruction, not just the instruction.
 Measured 2026-08-09: a message asked a session to rebase onto an open PR's branch, that PR merged before the session acted, and the instruction had to be chased with a correction.
 "Rebase onto X, or onto `main` if X has already merged when you read this" costs one clause and needs no chasing.
+
+**A message asserting a mechanism carries its measurement, or says it has none.** The paragraph above is about state going stale; this is about a claim that was never true, and it travels further, because the receiving session acts on a message the way it acts on a Queue row while nothing in the channel marks the difference.
+Q805 produced it in both directions within an hour: a chip forwarded the row's fail-closed claim as verified, and the worker, having spent the session correcting exactly that, then sent the dispatcher an unmeasured mechanism of its own that a third session refuted.
+The asymmetry is the tell — a claim is easy to hold to the standard in the file you are editing and easy to drop in the message you are sending, though only the message gets acted on with no diff to review.
+Send the command you ran and its output, or write that the mechanism is unverified.
 
 ### What we deliberately don't build (and why)
 
