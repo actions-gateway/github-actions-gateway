@@ -163,6 +163,11 @@ Before escalating, run the search you would run before filing, and say what it r
 The cheap version is to pass the title you would have used to `make queue-id`, which prints its candidates to stderr and claims an ID you can throw away.
 Naming the near-miss rows is what lets the reader tell a genuinely new class from the half that is already tracked.
 
+**A clean `make queue-id` is not an all-clear, because the matcher is lexical and a duplicate is semantic.** It keys on shared content words and the Item link, [calibrated below](#what-it-keys-on-and-why) against three pairs that had both.
+Two rows describing one page's defect in different vocabulary share neither.
+Q835 was filed on 2026-08-12 after `make queue-id` returned no candidates at all; reading the Queue by hand found Q832, filed the same day, measuring a third cause of the same undercount on the same page.
+The search narrows the set worth reading, and reading is still what recognises the duplicate.
+
 ### What it keys on, and why
 
 From the three pairs, not from a guess about what similarity means here:
