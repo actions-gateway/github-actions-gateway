@@ -78,8 +78,9 @@ Exception: a Go build-/codegen-time tool may be added to the vendored `tools/` m
    If any answer is no, finish the work first — don't open a PR to "get feedback" on something you know is incomplete.
    If the task is too ambiguous to judge review-readiness, say so and ask.
 
-   **Once CI attaches, confirm the path-gated heavy gates actually RAN — green is not enough.** A PR opened docs-only then given code can show all-green/`CLEAN` while integration/e2e/security never tested it; never treat such a PR as ready or merge it.
-   Put code in the PR's first push to avoid it; if a gate is missing, `gh pr close <n> && gh pr reopen <n>` to force it.
+   **Once CI attaches, confirm the path-gated heavy gates actually RAN — green is not enough.** A PR opened docs-only then given code can show all-green/`CLEAN` while integration/security never tested it; never treat such a PR as ready or merge it.
+   Put code in the PR's first push to avoid it; if a gate is missing, `gh pr close <n> && gh pr reopen <n>` to force it. **Exception: both e2e lanes are merge-group-only (Q675), so their heavy jobs never run on a PR and only the `e2e-gate`/`e2e-calico-gate` contexts report.** An absent e2e run on a PR is expected, not a symptom: don't chase it, and don't read the green gate as the suite having run.
+   Get an earlier verdict from `make e2e` or a `workflow_dispatch`.
    Verify/fix: [`docs/development/testing.md`](docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
 
 6. **After a PR merges, or a substantial task finishes — offer a retrospective** (the `session-retro` skill), then act on whatever the user picks.

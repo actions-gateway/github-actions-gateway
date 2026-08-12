@@ -5,6 +5,7 @@
 **Approach:** adopt GitHub's merge queue on `main`.
 The queue constructs each candidate merge result and runs the required checks on *that* (the `merge_group` event), so the jointly-red hazard the manual freshness rule guards against is checked by machine, once per batch, instead of by every session rebasing and re-running CI on every push.
 Decision approved 2026-08-03: adopt, and keep e2e per-PR (sessions keep early signal while iterating; the queue run is the authoritative combined check).
+Revised 2026-08-12 by the Phase 3 re-measure below: e2e is now merge-group-only, because the early signal was measurably not worth its multiplier.
 
 ## Status
 
@@ -12,7 +13,7 @@ Decision approved 2026-08-03: adopt, and keep e2e per-PR (sessions keep early si
 |---|---|
 | 1. `merge_group` triggers on the 9 required-check workflows | ✅ #1256, merged 2026-08-03 |
 | 2. Activation: add the `merge_queue` rule to the `default-protect` ruleset | ✅ 2026-08-03 — rule live, verified by GET after PUT; queue-era process-doc rewrite in the same change as this row |
-| 3. Re-measure after ~1 week; decide follow-ups | 💤 deferred, trigger ~2026-08-10 ([STATUS.md Deferred](../STATUS.md#deferred)) |
+| 3. Re-measure after ~1 week; decide follow-ups | ✅ 2026-08-12 — re-measured, e2e demoted to merge-group-only; the other three candidates declined |
 
 ## The measurement (2026-08-03)
 
@@ -80,10 +81,35 @@ Rollback: delete the `merge_queue` rule from the ruleset; behavior reverts to di
 
 ## Phase 3: re-measure, then decide
 
-Re-run the same measurements after ~1 week of queue operation (e2e runs per branch, cancelled-run fraction, merge latency).
-Candidates *if* the numbers say the constraint is still CI churn, recorded here so they aren't re-derived, not committed to:
+### The re-measurement (2026-08-12)
 
-- Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time).
+Same three measurements as 2026-08-03, over the last 200 `e2e-test.yml` runs:
+
+| Measurement | 2026-08-03 | 2026-08-12 | |
+|---|---|---|---|
+| Branches needing ≥2 e2e runs | 18 of 51 (35%), worst 5 | 23 of 57 (40%), worst 9 | worse |
+| Runs cancelled mid-flight | 10 of 50 (20%) | 8 of 200 (4%) | much better |
+| Median PR open→merge | — | 45 min (p25 22, p75 131, max 878) | |
+
+The queue removed the cancellation churn it was adopted to remove, and did not touch per-branch redo, which got slightly worse.
+The e2e volume split explains why: of those 200 runs, 116 (58%) were `pull_request`, 57 `merge_group`, 25 push, 2 dispatch.
+Every one of the 116 was a second verdict on a commit the queue would validate again, and the branches that pushed repeatedly paid for it repeatedly.
+
+Two supporting numbers, from the same window: e2e failed on 1% of runs (2 of 200), and CI execution accounts for only ~5% of PR open→merge latency.
+Full workings in [ci-wait-time-analysis.md](ci-wait-time-analysis.md).
+
+### The decision
+
+**Adopted: demote e2e to merge-group-only** (both lanes), implemented by gating each heavy job on `github.event_name == 'merge_group'` so a pull request leaves it skipped and the `gate` job still reports its required check.
+That removes 58% of e2e runs and takes the PR-side critical path from ~870s to ~630s (`integration-test`, the next longest).
+The trade-off the candidate named is accepted on the 1% failure rate: an e2e break now costs a queue kickback on roughly 1 push in 100, against ~4 minutes saved on the other 99.
+
+**Declined, all three, and not merely deferred again:** the STATUS.md-contention candidates (per-item backlog files, GitHub Issues + Projects, split status PRs + `pr-deps-gate`) all address the cost of a *kickback*, and the measured kickback driver was cancellation churn, which the queue already fixed at 20% → 4%.
+Revisit only if that fraction climbs.
+
+The candidate list as recorded on 2026-08-03:
+
+- Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time). **Adopted 2026-08-12.**
 - `docs/STATUS.md` contention (77% of commits) still forces manual conflict resolution before a PR can enqueue; a per-item-file backlog format would remove it structurally, but is a large format change touching the backlog skill and lint, and only worth it if post-queue measurement shows it binding.
 - GitHub Issues + a Projects board would also zero the conflicts, but trades them for a sync problem: today a Queue row is deleted in the same PR that ships the work (atomic with the code, reviewable in the diff, greppable in one file, and the bare-Q-ID anchor fabric across docs and code depends on it), while an issue close is a separate mutation that can drift from code state.
   Priority ordering is also weaker through `gh` (Projects v2 positions are drag-first, not CLI-first).

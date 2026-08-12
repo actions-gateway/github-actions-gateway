@@ -5,9 +5,9 @@ Every number here came from `gh` against this repo on 2026-08-12; nothing is inf
 
 ## Status
 
-Analysis complete.
-No code change made yet, and the direction is still open.
-See [Options](#options).
+Analysis complete, and Option 1 shipped.
+Q675's re-measure ran on these numbers and demoted e2e to merge-group-only on both lanes; the decision and the re-measurement table live in [merge-queue.md](merge-queue.md#phase-3-re-measure-then-decide).
+Options 2 through 5 remain open and un-started.
 
 ## Finding 1: CI execution is 5% of PR latency
 
