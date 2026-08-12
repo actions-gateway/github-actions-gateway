@@ -527,6 +527,7 @@ func (p *abandonedProbe) startObserver(ctx context.Context, sess *brokerSession)
 			if ctx.Err() != nil {
 				return
 			}
+			polledAt := time.Now()
 			msg, err := sess.bc.GetMessage(ctx, sess.sessionID)
 			if err != nil {
 				if ctx.Err() != nil {
@@ -541,6 +542,9 @@ func (p *abandonedProbe) startObserver(ctx context.Context, sess *brokerSession)
 				continue
 			}
 			if msg == nil {
+				if !broker.PaceEmptyPoll(ctx, time.Since(polledAt)) {
+					return
+				}
 				continue
 			}
 			if msg.MessageType != "RunnerJobRequest" {
@@ -819,6 +823,7 @@ func (p *abandonedProbe) awaitDelivery(ctx context.Context, sess *brokerSession)
 	deadline, cancel := context.WithTimeout(ctx, p.cfg.Timeout)
 	defer cancel()
 	for {
+		polledAt := time.Now()
 		msg, err := sess.bc.GetMessage(deadline, sess.sessionID)
 		if err != nil {
 			if deadline.Err() != nil {
@@ -827,7 +832,9 @@ func (p *abandonedProbe) awaitDelivery(ctx context.Context, sess *brokerSession)
 			return nil, 0, fmt.Errorf("poll for delivery: %w", err)
 		}
 		if msg == nil {
-			if deadline.Err() != nil {
+			// The floor keeps a broker that answers 202 at once from spinning this
+			// wait into a request storm; the deadline still bounds it either way.
+			if !broker.PaceEmptyPoll(deadline, time.Since(polledAt)) {
 				return nil, 0, fmt.Errorf("no RunnerJobRequest within %s — was the fixture workflow dispatched?", p.cfg.Timeout)
 			}
 			continue

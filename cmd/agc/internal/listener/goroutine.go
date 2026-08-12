@@ -107,6 +107,7 @@ func Run(ctx context.Context, cfg Config) error {
 			return nil
 		}
 
+		polledAt := time.Now()
 		msg, pollErr := cfg.Broker.GetMessage(ctx, sessionID)
 		if pollErr != nil {
 			if ctx.Err() != nil {
@@ -229,13 +230,8 @@ func Run(ctx context.Context, cfg Config) error {
 		if msg == nil {
 			// 202 — no job queued.
 			consecutiveEmpty++
-			if consecutiveEmpty >= cfg.IdleThreshold {
-				if cfg.IsLastPoller == nil || !cfg.IsLastPoller() {
-					// One per idle listener exit — high-cardinality per-session noise,
-					// so Debug (Q87, Theme D).
-					log.Debug("idle shutdown: consecutive empty polls reached threshold", "count", consecutiveEmpty)
-					return nil // idle exit; Multiplexer will not restart this one
-				}
+			if !keepPollingAfterEmpty(ctx, cfg, log, consecutiveEmpty, time.Since(polledAt)) {
+				return nil // idle exit or cancellation; Multiplexer will not restart this one
 			}
 			continue
 		}
@@ -298,4 +294,23 @@ func Run(ctx context.Context, cfg Config) error {
 			cfg.SetPolling(true)
 		}
 	}
+}
+
+// keepPollingAfterEmpty resolves a 202: it decides idle shutdown, then paces the
+// empty path so a server that did not actually hold the poll cannot spin the
+// loop (broker.MinPollInterval). elapsed is how long the poll itself took, so a
+// real long-poll already outlasts the floor and waits for nothing. It reports
+// whether to poll again; false is an idle exit or a cancelled context.
+//
+// The floor is applied after the idle decision, never before it, so it can
+// neither delay nor suppress an idle exit (Q152).
+func keepPollingAfterEmpty(ctx context.Context, cfg Config, log *slog.Logger,
+	consecutiveEmpty int, elapsed time.Duration) bool {
+	if consecutiveEmpty >= cfg.IdleThreshold && (cfg.IsLastPoller == nil || !cfg.IsLastPoller()) {
+		// One per idle listener exit — high-cardinality per-session noise, so
+		// Debug (Q87, Theme D).
+		log.Debug("idle shutdown: consecutive empty polls reached threshold", "count", consecutiveEmpty)
+		return false
+	}
+	return broker.PaceEmptyPoll(ctx, elapsed)
 }

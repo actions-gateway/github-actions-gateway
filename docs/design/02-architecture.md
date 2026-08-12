@@ -188,6 +188,8 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   Idle shutdown: a listener goroutine that receives more than a configurable number of consecutive empty `202` responses (default: 50, matching the GitHub runner client's anomaly threshold) and is not the last *poller* for its RunnerGroup calls `DELETE /sessions/{id}` to deregister and exits.
   "Last poller" counts only goroutines currently long-polling for work — a sibling busy executing a job (inside the job handler) does not count, so the group never drains to zero pollers and stops acquiring jobs while a single in-flight job runs (Q152).
   The RunnerGroup controller ensures at least one listener goroutine is always running, restarting it if it exits unexpectedly.
+  Empty polls are also floored at 100 ms apart (`broker.MinPollInterval`, Q788), so a backend that declines to hold the long poll (a GHES tenant with a short window, an intermediary that terminates it) cannot spin the loop into a request storm GitHub's rate limiter would answer instead.
+  The floor costs nothing against a backend that does hold the poll, and it is applied after the idle accounting so it can neither delay nor suppress an idle shutdown.
 
   **Reconcile triggers.** Besides reconciling on `RunnerGroup` spec changes, the controller watches the worker Pods its provisioner creates (filtered by the `actions-gateway/runner-group` label, reusing the shared Pod informer).
   A worker-Pod create (job acquired), terminal-phase transition, eviction, or delete re-triggers a reconcile, so `status.activeSessions` and any listener-pushed conditions refresh promptly off the most operationally visible signal — pod churn — rather than going stale until the next spec change or the cache resync.

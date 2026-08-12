@@ -39,6 +39,7 @@ type Server struct {
 	completeJobCount   atomic.Int64
 	lastCompleteJob    atomic.Value // broker.CompleteJobRequest of the most recent completejob
 	msgCounter         atomic.Int64
+	getMessageCount    atomic.Int64
 
 	// Fan-out job-accounting model (Q260). Off by default so existing tests are
 	// unaffected; EnableFanoutAccounting turns it on. It models the one property
@@ -247,6 +248,14 @@ func (s *Server) AcquireJobCalls() int {
 // the AcquireJob round-trip completed and its context is safe to cancel (Q258).
 func (s *Server) AcknowledgeCalls() int {
 	return int(s.ackCount.Load())
+}
+
+// GetMessageCalls returns the number of GET /message polls served. The stub
+// answers 202 at once rather than holding the poll, so a caller with no pacing
+// of its own shows up here as a request storm — the rate a poll-loop test
+// measures against.
+func (s *Server) GetMessageCalls() int {
+	return int(s.getMessageCount.Load())
 }
 
 // RenewJobCalls returns the number of times /renewjob was called.
@@ -589,6 +598,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionID := r.URL.Query().Get("sessionId")
+	s.getMessageCount.Add(1)
 
 	// Fan-out accounting (Q260): hand the next pending fan-out delivery to whichever
 	// session polls, one per poll. Takes precedence over the per-session queue so a
