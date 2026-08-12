@@ -3040,14 +3040,6 @@
 <td>Measured 2026-08-05: none of the 20 alerts reference <code>worker_capacity_declined</code>, <code>jobs_admission_rejected_total</code>, or <code>scaleset_capacity_withheld</code>, so a gated set throttling intake is invisible. Q658 settled that <code>AwaitingProbe</code> alone must not alert.</td>
 </tr>
 <tr>
-<td><a id="Q704"></a>Q704</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/exporter.py">Preview series below 1/WAIT render as permanent flat zeros</a></td>
-<td><code>docs</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-05: at WAIT=660, <code>int(rate*elapsed)</code> truncates to 0 for 5 rates under 0.002, so 6 series never move. "Quota retries (1h)" is empty in the shipped shot. Same class as Q651.</td>
-</tr>
-<tr>
 <td><a id="Q701"></a>Q701</td>
 <td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on">No doc records how to hold the scale-set poll loop out of its own poll</a></td>
 <td><code>tests</code> <code>docs</code> <code>retro</code></td>
