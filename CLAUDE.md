@@ -126,6 +126,7 @@ The habits that avoid most prompts:
   Detail: testing.md § Resource auto-throttle.
 - **piped-gate** *denies* when a command whose exit status is the answer (`make`, `go build/test`, a `scripts/` gate, `git pull`/`push`/`rebase`/`merge`/`commit`) is piped into a filter, when a command reads `$PIPESTATUS` (bash-only; empty in zsh), or when a **backgrounded** call ends in something that drops the gate's status (an `echo`, a `||` fallback, a trailing `&`). Fix: `cmd > tmp/out.log 2>&1; echo "EXIT=$?"`, then grep the file — plus `rc=$?; echo "EXIT=$rc"; exit $rc` when backgrounded.
   It also denies at two repo-state moments: a `git push` whose moved base overlaps this branch's own files (Q665; rebase and re-run the gate, or a queue kickback finds it), and a `gh pr create` whose files an open PR already changes (Q668; read that PR).
+  Both discount the merge-driver-owned files, but the push check only while `git merge-tree` says the merge resolves, so a `docs/STATUS.md`-only branch can still be told it is dirty (Q790).
   Break-glass for a case the rule reads wrong: re-run prefixed `PIPED_GATE_OVERRIDE=<reason>`, and file a Queue row if the rule itself is the defect.
   Both probes fail silent, so offline costs a missed catch and never a block.
   Gate list and settings: `.claude/piped-gate-guard.json`.

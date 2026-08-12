@@ -114,7 +114,7 @@ Work through all four:
 3. **Archive the plan doc if this was its last `STATUS.md` reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
 4. **Update the plan's `docs/plan/README.md` row** in the same change, moving it to the Archive section.
 
-The cluster is wider than the docs tree: [Q790](../STATUS.md#Q790) is the same shape in the merge tooling, where the `docs/STATUS.md` overlap exemption cannot fire on a row *deletion* because the driver yields conflict markers for delete-vs-edit of one row.
+The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where piped-gate's `docs/STATUS.md` overlap exemption discounted the path unconditionally and so stayed silent on exactly the row *deletion* the driver refuses to resolve: a row deleted on one side and edited on the other.
 When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.
 
 ## Search before you file

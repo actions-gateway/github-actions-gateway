@@ -14,7 +14,7 @@
     "^make([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+-n([[:space:]]|$)"
   ],
   "base_ref": "origin/main",
-  "_overlap_ignore_comment": "Paths a file overlap discounts. These two are the merge-driver-owned files (.gitattributes): nearly every branch edits them, so counting them would make both overlap checks fire always, and their conflicts are resolved by row ID rather than reviewed.",
+  "_overlap_ignore_comment": "Paths a file overlap discounts. These two are the merge-driver-owned files (.gitattributes): nearly every branch edits them, so counting them would make both overlap checks fire always, and most of their conflicts are resolved by row ID rather than reviewed. Not all of them — the driver refuses on a row deleted on one side and edited on the other, and on any conflict outside the Queue rows, which is what a flake row moving to Deferred leaves. So the `git push` check discounts these paths only while the merge really resolves, asking `git merge-tree` when one of them is in both change sets (Q790); `gh pr create` discounts them flatly, because the other PR's head is not a local ref and that check is about duplicated work rather than conflicts.",
   "overlap_ignore": [
     "docs/STATUS.md",
     "docs/plan/README.md"

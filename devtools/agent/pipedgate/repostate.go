@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -35,6 +36,9 @@ type Repo interface {
 	BaseGained() ([]string, error)
 	// OpenPRs returns the open pull requests whose head is not this branch.
 	OpenPRs() ([]PR, error)
+	// MergeConflicts returns the paths merging the base into this branch leaves
+	// conflicted, empty when the merge is clean.
+	MergeConflicts() ([]string, error)
 }
 
 // PR is one open pull request and the paths it changes.
@@ -78,17 +82,69 @@ func staleBaseWarning(reg *compiled, repo Repo) string {
 		return ""
 	}
 	overlap := intersect(mine, gained, reg.overlapIgnore)
-	if len(overlap) == 0 {
+	dirty := conflictingIgnored(repo, reg, mine, gained)
+	if len(overlap) == 0 && len(dirty) == 0 {
 		return ""
 	}
-	return "`git push` — " + reg.baseRef + " has moved and changed " + files(len(overlap)) +
-		" this branch also changes: " + joinPaths(overlap, 5) + ". A stale base on its own is benign, " +
+	all := append(append([]string{}, overlap...), dirty...)
+	sort.Strings(all)
+
+	msg := "`git push` — " + reg.baseRef + " has moved and changed " + files(len(all)) +
+		" this branch also changes: " + joinPaths(all, 5) + ". "
+	if len(dirty) > 0 {
+		msg += "Merging " + reg.baseRef + " already leaves " + joinPaths(dirty, 2) +
+			" conflicted, so the discount that normally covers the merge-driver-owned files does not " +
+			"apply here: this branch is dirty now, not at kickback time. "
+	}
+	return msg + "A stale base on its own is benign, " +
 		"because the merge queue validates the candidate merge — but an overlap is where a kickback costs " +
 		"a full check cycle that a local re-run would have caught first. Rebase onto " + reg.baseRef +
 		" and re-run the gate; if the overlap cannot affect it, re-run this push prefixed with " +
 		overrideVar + "=<reason>. Read from the local " +
 		reg.baseRef + " ref, so it under-reports until you fetch. " +
 		"See CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open."
+}
+
+// conflictingIgnored returns the discounted paths this merge would actually
+// leave conflicted (Q790).
+//
+// The discount reads docs/STATUS.md as row-ID resolved, and the driver usually
+// does resolve it — but it refuses on a row deleted on one side and edited on
+// the other, and on any conflict outside the Queue rows, which is what a flake
+// row moving to Deferred § Flake watch writes. #1383 changed docs/STATUS.md and
+// nothing else, #1384 landed under it, and the check that exists to catch that
+// stayed silent because the only overlapping path was discounted.
+//
+// The verdict is git's own rather than a second reading of the tables here, so
+// nothing can drift from the driver: `git merge-tree` runs whatever merge this
+// clone would run — the custom driver where `make merge-driver` installed one,
+// the plain three-way merge where it did not.
+//
+// It runs only when a discounted path is in both change sets, which keeps its
+// cost off every other push: measured 2026-08-11 on this repo, 70-100 ms across
+// a 20-commit divergence, against ~5 ms for the two `git diff`s beside it.
+func conflictingIgnored(repo Repo, reg *compiled, mine, gained []string) []string {
+	discounted := make(map[string]bool, len(reg.overlapIgnore))
+	for _, p := range intersect(mine, gained, nil) {
+		if reg.overlapIgnore[p] {
+			discounted[p] = true
+		}
+	}
+	if len(discounted) == 0 {
+		return nil
+	}
+	conflicts, err := repo.MergeConflicts()
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, p := range conflicts {
+		if discounted[p] {
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // prOverlapWarning warns when an open PR already changes files this branch
@@ -191,6 +247,59 @@ func (r execRepo) BaseGained() ([]string, error) {
 	return r.lines(gitTimeout, "git", "diff", "--name-only", "HEAD..."+r.baseRef)
 }
 
+// MergeConflicts asks git what merging the base into this branch leaves
+// conflicted. `--write-tree` is the only mode there is: it writes the merged
+// blobs and trees as unreferenced objects that `git gc` prunes, and moves no
+// ref, so a PreToolUse hook running it changes nothing the session can see.
+//
+// Exit 1 is the answer rather than a failure — it means "merged, with
+// conflicts". It is also what an unresolvable ref exits, the ambiguity
+// scripts/agent/pr-requeue-eligible.sh resolves by verifying the ref separately;
+// here stdout separates them, because every merge that ran prints at least the
+// tree OID and a ref that would not resolve prints nothing (measured on git
+// 2.55.0, 2026-08-11). A merge that cannot be measured has to reach the caller
+// as an error, never as an empty conflict set that reads like a clean merge.
+func (r execRepo) MergeConflicts() ([]string, error) {
+	out, err := r.output(gitTimeout, "git", "merge-tree", "--write-tree", "-z", "HEAD", r.baseRef)
+	if err != nil {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 || len(out) == 0 {
+			return nil, err
+		}
+	}
+	return parseMergeTree(out), nil
+}
+
+// parseMergeTree reads `git merge-tree --write-tree -z`: the merged tree's OID,
+// then one `<mode> <oid> <stage>\t<path>` record per conflicted stage, then an
+// empty record ahead of the informational messages. Captured from git 2.55.0 on
+// 2026-08-11. A clean merge prints the OID and nothing else, so the loop ends on
+// its first record.
+func parseMergeTree(raw []byte) []string {
+	recs := bytes.Split(raw, []byte{0})
+	if len(recs) < 2 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var out []string
+	for _, rec := range recs[1:] {
+		if len(rec) == 0 {
+			break
+		}
+		tab := bytes.IndexByte(rec, '\t')
+		if tab < 0 {
+			continue
+		}
+		path := string(rec[tab+1:])
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		out = append(out, path)
+	}
+	return out
+}
+
 func (r execRepo) OpenPRs() ([]PR, error) {
 	branch, err := r.lines(gitTimeout, "git", "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
@@ -243,10 +352,10 @@ func (r execRepo) output(timeout time.Duration, name string, args ...string) ([]
 	cmd.Dir = r.dir
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-	return stdout.Bytes(), nil
+	// Returned alongside the error, because `git merge-tree` reports its answer
+	// on stdout with a non-zero status.
+	err := cmd.Run()
+	return stdout.Bytes(), err
 }
 
 func (r execRepo) lines(timeout time.Duration, name string, args ...string) ([]string, error) {
