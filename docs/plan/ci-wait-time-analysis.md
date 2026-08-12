@@ -22,6 +22,20 @@ Below `integration-test` the next three sit within ~50s of each other and **swap
 That is a flat profile, not a queue behind one slow stage.
 Cutting any one of them alone moves the workflow's wall clock by roughly nothing.
 
+### The docs-only profile is a different shape
+
+The table above is a change touching Go, so every tier ran.
+That is not the common case: of the 300 commits before 2026-08-12, **143 were docs-only** and 84 touched any `.go` file at all.
+A docs-only PR skips every Go tier.
+Measured on PR #1423, `unit-test`, `integration-test`, both e2e lanes, `coverage`, `trivy` and `govulncheck` all report `skipping` in 0s, so its wall clock is set entirely by the docs-content gates.
+
+There the profile was sharp rather than flat, and the pole was `doc-links` at **169s against a next-longest of 21s**.
+Effectively all of it was one shared shell helper. `select_present_files` deduped candidates by globbing an accumulating string, O(N^2) in the candidate count, and `check-doc-links.sh` feeds it a bare `git_candidates`: the whole tree, 13,830 paths, 90% of them `vendor/`.
+The Go checker it gates was never the cost: 0.17s to check 6,390 links across 271 files, against 38s to build the file list.
+
+Keying the seen-set took the oracle build to 0.54s and `make doc-links` end to end from 37.9s to 1.21s locally, output byte-identical.
+The gate is also one of `make check`'s 30 concurrent fast gates, so the same fix lands in the local loop.
+
 ## Rounds already run
 
 | Round | Scope | Outcome |
@@ -31,7 +45,7 @@ Cutting any one of them alone moves the workflow's wall clock by roughly nothing
 | [merge-queue.md](merge-queue.md) | Adopt the queue; Phase 3 then demoted e2e to merge-group-only | Done, all three phases |
 | Integration matrix (#1416) | GMC and AGC ran back to back in one job | 617s to 392s, measured |
 
-## Four traps, one per wasted attempt
+## Five traps, one per wasted attempt
 
 1. **The critical path is `max()` across parallel workflows, not any one job.** `e2e` and `e2e-calico` were separate workflows on the same event, so they ran concurrently, and calico was the *longer* lane (870s against 804s) on ~70% of branches.
    A proposal to trim 104s of chart checks off the kindnet lane would have saved ~0, because calico simply became the pole.
@@ -43,6 +57,8 @@ Cutting any one of them alone moves the workflow's wall clock by roughly nothing
    There is no parallelism work left in the suite; the lever round 2 left open is a larger runner.
 4. **CI execution is about 5% of PR open-to-merge latency.** Any round of this work has a low ceiling on the thing that actually matters, so size the effort accordingly.
    Details under [the latency split](#the-latency-split) below.
+5. **A profile belongs to one event class, and the class you sampled may not be the one you wait on most.** The table above is a full-tier PR; docs-only PRs are the more common shape here and had a sharp pole where the full-tier profile is flat.
+   Sample the class before concluding either way: "no constraint" measured on the wrong class reads exactly like "no constraint".
 
 ## What is left
 
