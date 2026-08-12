@@ -1009,6 +1009,10 @@ md-reflow-diff: $(MDREFLOW) ## Print the reflow diff without writing
 # paragraph not reflow", and it is how the residue figures in
 # documentation-standards.md are re-derived rather than recalled. Records go to
 # stderr; the redirect keeps them in order with the check's own report.
+.PHONY: md-reflow-coverage
+md-reflow-coverage: ## Report the share of prose sitting at a sentence boundary (ARGS=-v lists the residue)
+	@scripts/docs/md-reflow-coverage.sh $(ARGS)
+
 .PHONY: md-reflow-explain
 md-reflow-explain: $(MDREFLOW) ## Name every paragraph mdreflow declines, with its reason code
 	$(MDREFLOW) --explain --check . 2>&1
