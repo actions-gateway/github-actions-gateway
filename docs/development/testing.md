@@ -1142,6 +1142,28 @@ The shape they share: the probe exits 0 with a plausible value, and nothing in t
 When a probe's answer is about to decide something, run the gate itself.
 When the gate is too slow for the loop, keep the probe but give it a case whose answer you already know, and disbelieve it when the two disagree.
 
+### A correct check can pass without looking at what was wrong
+
+The section above is about running the wrong instrument.
+This one is about running the right one and still learning nothing: the check is sound, its answer is correct, and what it validates sits *adjacent* to what actually broke.
+Nothing in a pass announces the gap, because the pass is not a mistake.
+
+**A gate built for exactly this staleness missed an instance of it.** `check-plan-index.sh`'s third invariant (Q800) requires a `QNNN` in a plan's Status cell to be a link while its Queue row lives and bare once the row is gone, so a closing row cannot leave a cell claiming live work.
+The `release-1.3.md` cell read `❌ Open — one gate left from the pre-release API review, Q484`. `Q484` is bare and its row was gone, so the invariant held and `make plan-index-check` passed, on `main`, every day for the nine days after `v1.3.0` shipped as a final release (Q802).
+The gate reads the *form of an ID*; the staleness was in the prose around it.
+
+**The same shape at the tool level: a refusal whose stated reason is not the one it has.** `pr-requeue-eligible.sh --confirm` fails closed on a verdict record it cannot parse, which is right.
+Against a record written before #1431 changed the format it reports `the recorded assessment was ''` (Q828), which describes a corrupt or missing file.
+The actual condition is a version skew between the assess and the confirm, and it sends the reader to repair the wrong thing.
+
+So when you build or trust a check:
+
+- **Ask what it would still pass on**, then check whether the thing you care about is in that set.
+  A gate named for a class covers one mechanism inside that class, and its name is what makes the rest of the class feel guarded.
+- **Say in the script what it does not read.** `check-plan-index.sh` already scopes itself to "Column 3 only" and says why, which is the right instinct one level too high: within that column it validates IDs, not the sentences containing them.
+- **A fail-closed refusal must name the condition it actually detected**, not the symptom the parse produced.
+  "Unrecognised record format" routes the reader at a migration; "was ''" routes them at a corrupt file they do not have.
+
 ### Check for a committed capture before booking a live measurement
 
 "Measure it" does not always mean "run it".
