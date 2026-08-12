@@ -1056,6 +1056,9 @@ Two shortcuts recur and both produce confident-but-wrong diagnoses:
   Recover the original with `gh run view <id> --attempt N --log`, and — since an empty result is only evidence of absence once the command is known to have run — grep for a string you *know* that log contains before reading any emptiness as a finding.
   Q648 was only findable this way: the attribution banner it turns on was present in attempt 1 and absent from the post-re-run view.
   Capture the evidence **before** spending the re-run where you can.
+- **Waiting out a matrix to read a leg that already failed.** `gh run view --job <id> --log-failed` refuses while the *run* is in progress ("logs will be available when it is complete"), so one slow leg withholds every finished leg's log, and pr-sentinel's captured excerpt reads `(no failed-step log available for run <id>)` for the same reason. `gh api "repos/<owner>/<repo>/actions/jobs/<id>/logs"` reads a completed job's log immediately, whatever its run is doing; get the ids from `gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .databaseId'`.
+  Measured 2026-08-12 on run `31622300898`, job `94201728982`: `--log-failed` answered `run 31622300898 is still in progress; logs will be available when it is complete` while that job had read `completed failure` for minutes and `trivy (proxy, 1)` was still `in_progress`; `gh api` returned the job's 1,639-line log in the same minute, naming a syft download that exhausted its retry budget against a release-CDN `503`.
+  Reach for it whenever a red job's cause decides what you do next, rather than treating the wait as unavoidable.
 
 ### The status you report is a claim too
 
