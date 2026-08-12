@@ -1907,8 +1907,12 @@ A double that answers "nothing to deliver" instantly turns any polling client in
   Before this landed (Q287) an idle scale-set listener polled the stub ~5,000×/s; it is now ~1/s.
 - [`test/fakegithub`](../../test/fakegithub/) — long-polls job delivery for the same reason (Q148, where an instantly-returning fake collapsed the listener pool: replacement listeners idle-exited in milliseconds).
 
-The AGC's scale-set listener also enforces its own floor (`minPollInterval`) between two consecutive polls that deliver nothing, so a *real* backend that declines to hold the poll cannot spin it either.
+Every poll loop also enforces its own floor between two consecutive polls that deliver nothing, so a *real* backend that declines to hold the poll cannot spin it either: `broker.MinPollInterval` (100 ms) on the v1 broker loops, and the scale-set listener's own `minPollInterval`.
 That is defense in depth, not a substitute — a double that does not long-poll still distorts every timing assertion around it.
+[`broker/brokertest`](../../broker/brokertest/) is the one double that still answers 202 at once, which is why the floor is what holds the v1 poll rate down against it: measured 2026-08-11, a single listener polled it at 9,472 req/s before the floor and 9.3 req/s after (`cmd/agc/internal/listener/pollrate_q788_test.go`, Q788).
+
+An idle threshold configured in polls is therefore a **time** budget, not a spin count: `IdleThreshold: N` against a non-blocking double is roughly `N × 100 ms` of session life.
+A test that waits for burst goroutines to drain has to size N against its own `Eventually` budget.
 
 ### The broker doubles share one protocol core
 

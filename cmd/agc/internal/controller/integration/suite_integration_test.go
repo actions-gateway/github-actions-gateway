@@ -257,10 +257,12 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (*controller.
 			RunnerOS:      "linux",
 			UseV2Flow:     true,
 			HTTPClient:    brokerStub.HTTPClient(),
-			// Idle threshold for burst goroutines. Session detection polls at 1ms
-			// so 500 polls (~50ms on CI) is enough to reliably catch new sessions
-			// before they idle-shut.
-			IdleThreshold: 500,
+			// Idle threshold for burst goroutines, expressed against the empty-poll
+			// floor (broker.MinPollInterval, 100ms — Q788): 20 polls is ~2s of life,
+			// long enough for session detection polling at 1ms to catch a new session
+			// and short enough for the drain assertions to see it go. The old 500 was
+			// calibrated against an unpaced loop, where it bought ~50ms.
+			IdleThreshold: 20,
 			// Short renew interval so integration tests can verify RenewJob is called.
 			RenewJobInterval: 50 * time.Millisecond,
 			// Guarded Q260 Option A; off unless a test opts in.
