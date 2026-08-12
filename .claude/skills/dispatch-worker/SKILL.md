@@ -131,6 +131,11 @@ Run it **before** rebasing, because it measures the conflict set the rebase is a
 It says `ELIGIBLE` only when a human enqueued the PR before, it is open and not a draft, it is not currently queued, and the conflicts fall solely in the merge-driver-owned files (`docs/STATUS.md`, `docs/plan/README.md`, `docs/roadmap.md`).
 A conflict anywhere else changes what the maintainer reviewed, so it prints `WAKE:` with the reason and you hand back instead.
 
+Running it is also the only chance to record *why* the PR was evicted: the rebase heals the branch, after which the same probe reports a clean merge.
+It prints a `measured: git merge-tree --write-tree <base_oid> <head_oid>` line and appends the same to the `tmp/requeue/<pr>.verdict` record.
+
+**Quote that line when you hand back or report**, so a later disagreement about the conflict set can be re-run instead of argued.
+
 Then rebase, `make check`, push, relaunch the watcher, and once CI is green:
 
 ```bash

@@ -32,6 +32,15 @@
 # a missing or stale record fails closed to "wake the maintainer", which is the
 # safe direction when a session loses context mid-flight.
 #
+# That assessment is also the only contemporaneous record of *why* the queue
+# evicted a PR (Q810). The rebase heals the branch, and the same probe against
+# current refs then reports a clean merge, so a later read can neither confirm
+# nor refute what the worker measured. `--assess` therefore records the two
+# commits it merged, not just its verdict: `git merge-tree --write-tree
+# <base_oid> <head_oid>` re-derives the conflict set from those objects at any
+# later time, whatever the branches have since become. The record stays in the
+# gitignored tmp/ tree — session-local evidence, not a registry to reconcile.
+#
 # Usage:
 #   pr-requeue-eligible.sh --assess  <pr>   # before rebasing; records a verdict
 #   pr-requeue-eligible.sh --confirm <pr>   # after CI is green; gates the enqueue
@@ -96,9 +105,45 @@ fi
 
 VERDICT_FILE="$STATE_DIR/$PR.verdict"
 
-# wake REASON — not eligible. Always exit 1; the caller hands back to a human.
+# The commits the probe merged. Empty until it runs, so a refusal that
+# short-circuits ahead of it records a `-` rather than a stale OID.
+PROBE_BASE_OID=""
+PROBE_HEAD_OID=""
+
+# record VERDICT REASON [CONFLICT_PATH...] — append the assessment as one
+# key/value per line, so `--confirm` can read it back and a human can read it
+# at all. A record starts at its `verdict` line and runs to the next one.
+#
+# Appended rather than overwritten: a second assessment that refuses before it
+# probes would otherwise erase the measurement the first one took, which is the
+# eviction's only evidence. `--confirm` reads the last record, so the fail-closed
+# reading of the current state is unchanged by keeping the earlier ones.
+record() {
+	local verdict="$1" reason="$2" path
+	shift 2
+	mkdir -p "$STATE_DIR"
+	{
+		printf 'verdict %s\n' "$verdict"
+		printf 'at %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		printf 'base %s\n' "$base"
+		printf 'base_oid %s\n' "${PROBE_BASE_OID:--}"
+		printf 'head_oid %s\n' "${PROBE_HEAD_OID:--}"
+		printf 'reason %s\n' "$reason"
+		for path in "$@"; do
+			printf 'conflict %s\n' "$path"
+		done
+	} >>"$VERDICT_FILE"
+}
+
+# wake REASON [CONFLICT_PATH...] — not eligible. Always exit 1; the caller hands
+# back to a human. The refusal is recorded too: an absent file cannot tell "the
+# assessment never ran" from "it ran and refused", and both `--confirm` and
+# whoever reads the eviction afterwards need that apart.
 wake() {
 	printf 'WAKE: %s\n' "$1"
+	if [[ "$MODE" == "assess" ]]; then
+		record WAKE "$@"
+	fi
 	exit 1
 }
 
@@ -146,28 +191,38 @@ human_enqueued() {
 	((n > 0))
 }
 
-# conflicting_paths BASE — the files that conflict merging BASE into HEAD with
-# the repo's merge drivers disabled. Disabled deliberately: the drivers are
-# per-clone config that GitHub's servers never run, so this measures what the
-# merge queue will see, not what this clone can quietly resolve.
+# resolve_probe_commits BASE — pin both sides of the probe to an OID, so what
+# gets recorded is re-runnable: a ref pair is not a measurement anyone can
+# repeat, because `origin/<base>` and HEAD have both moved by the time the
+# question is asked. merge-tree exits 1 both when it finds conflicts and when a
+# ref does not resolve ("origin/x - not something we can merge"), so the base is
+# verified here rather than left to the probe's status.
 #
-# merge-tree exits 1 both when it finds conflicts and when a ref does not
-# resolve ("origin/x - not something we can merge"), so its status cannot tell a
-# real result from a probe that never ran — and a probe that never ran yields no
-# CONFLICT lines, which reads as a clean merge and hands back ELIGIBLE. The ref
-# is therefore verified first, and the output is required to open with the
-# merged tree's OID, which merge-tree prints only when it actually merged.
-conflicting_paths() {
-	local out rc=0
-	if ! git rev-parse --verify --quiet "$1^{commit}" >/dev/null; then
+# Separate from conflicting_paths because that runs in a command substitution,
+# where an assignment to either global would die with the subshell.
+resolve_probe_commits() {
+	if ! PROBE_BASE_OID="$(git rev-parse --verify --quiet "$1^{commit}")"; then
 		printf 'pr-requeue-eligible.sh: %s does not resolve to a commit\n' "$1" >&2
 		return 2
 	fi
+	PROBE_HEAD_OID="$(git rev-parse HEAD)"
+}
+
+# conflicting_paths — the files that conflict merging the resolved base into
+# HEAD with the repo's merge drivers disabled. Disabled deliberately: the
+# drivers are per-clone config that GitHub's servers never run, so this measures
+# what the merge queue will see, not what this clone can quietly resolve.
+#
+# A probe that never ran yields no CONFLICT lines, which reads as a clean merge
+# and hands back ELIGIBLE. The output is therefore required to open with the
+# merged tree's OID, which merge-tree prints only when it actually merged.
+conflicting_paths() {
+	local out rc=0
 	out=$(git -c merge.backlog.driver=false -c merge.planindex.driver=false \
-		merge-tree --write-tree "$1" HEAD 2>&1) || rc=$?
+		merge-tree --write-tree "$PROBE_BASE_OID" "$PROBE_HEAD_OID" 2>&1) || rc=$?
 	if ((rc > 1)) || [[ ! "$(head -n 1 <<<"$out")" =~ ^[0-9a-f]{40}$ ]]; then
-		printf 'pr-requeue-eligible.sh: merge-tree against %s did not run (rc=%s): %s\n' \
-			"$1" "$rc" "$out" >&2
+		printf 'pr-requeue-eligible.sh: merge-tree of %s into %s did not run (rc=%s): %s\n' \
+			"$PROBE_BASE_OID" "$PROBE_HEAD_OID" "$rc" "$out" >&2
 		return 2
 	fi
 	awk '/^CONFLICT/ { if (match($0, / in .+$/)) print substr($0, RSTART + 4) }' <<<"$out" |
@@ -192,7 +247,23 @@ read -r state is_draft base <<<"$(gh_pr --json state,isDraft,baseRefName \
 if [[ "$MODE" == "confirm" ]]; then
 	[[ -f "$VERDICT_FILE" ]] ||
 		wake "no recorded assessment for PR $PR; re-enqueue only follows an --assess that ran before the rebase"
-	read -r recorded_verdict recorded_base <"$VERDICT_FILE"
+	# Last record wins: the file accumulates every assessment, and only the most
+	# recent one describes the state a re-enqueue would act on.
+	recorded_verdict="" recorded_base="" recorded_base_oid="-" recorded_head_oid="-"
+	recorded_conflicts=()
+	while read -r key value; do
+		case "$key" in
+		verdict)
+			recorded_verdict="$value"
+			recorded_base="" recorded_base_oid="-" recorded_head_oid="-"
+			recorded_conflicts=()
+			;;
+		base) recorded_base="$value" ;;
+		base_oid) recorded_base_oid="$value" ;;
+		head_oid) recorded_head_oid="$value" ;;
+		conflict) recorded_conflicts+=("$value") ;;
+		esac
+	done <"$VERDICT_FILE"
 	[[ "$recorded_verdict" == "ELIGIBLE" ]] ||
 		wake "the recorded assessment was '$recorded_verdict', not ELIGIBLE"
 	[[ "$recorded_base" == "$base" ]] ||
@@ -200,6 +271,10 @@ if [[ "$MODE" == "confirm" ]]; then
 	in_queue && wake "the PR is already in the merge queue; nothing to restore"
 	human_enqueued || wake "no human has enqueued this PR, so there is nothing to restore"
 	printf "ELIGIBLE: re-enqueue restores the maintainer's own earlier enqueue\n"
+	# Repeat the assessment's measurement so the transcript that carries the
+	# enqueue also carries what it rests on, rebase or no rebase since.
+	printf 'measured: git merge-tree --write-tree %s %s\n' "$recorded_base_oid" "$recorded_head_oid"
+	printf 'conflicts: %s\n' "${recorded_conflicts[*]:-none}"
 	exit 0
 fi
 
@@ -213,29 +288,37 @@ human_enqueued || wake "no human has enqueued this PR, so a re-enqueue would be 
 # cannot be resolved is reported, rather than a raw `git fetch` fatal.
 git fetch origin "$base" --quiet 2>/dev/null || true
 probe_rc=0
-conflicts="$(conflicting_paths "origin/$base")" || probe_rc=$?
+resolve_probe_commits "origin/$base" || probe_rc=$?
+if ((probe_rc == 0)); then
+	probed="$(conflicting_paths)" || probe_rc=$?
+fi
 if ((probe_rc != 0)); then
 	printf 'pr-requeue-eligible.sh: could not measure the conflict set; refusing to guess\n' >&2
 	exit 2
 fi
 
-not_owned=""
+conflicts=()
+not_owned=()
 while IFS= read -r path; do
 	[[ -n "$path" ]] || continue
-	is_driver_owned "$path" || not_owned+="$path "
-done <<<"$conflicts"
+	conflicts+=("$path")
+	is_driver_owned "$path" || not_owned+=("$path")
+done <<<"$probed"
 
-if [[ -n "$not_owned" ]]; then
-	mkdir -p "$STATE_DIR"
-	printf 'WAKE %s\n' "$base" >"$VERDICT_FILE"
-	wake "the rebase resolves conflicts outside the merge-driver-owned files: ${not_owned% }"
+# Printed before the verdict, so the wake that reports the conflict carries the
+# re-runnable measurement whichever way it goes.
+printf 'measured: git merge-tree --write-tree %s %s\n' "$PROBE_BASE_OID" "$PROBE_HEAD_OID"
+printf 'conflicts: %s\n' "${conflicts[*]:-none}"
+
+if ((${#not_owned[@]} > 0)); then
+	wake "the rebase resolves conflicts outside the merge-driver-owned files: ${not_owned[*]}" \
+		"${conflicts[@]}"
 fi
 
-mkdir -p "$STATE_DIR"
-printf 'ELIGIBLE %s\n' "$base" >"$VERDICT_FILE"
-if [[ -n "$conflicts" ]]; then
-	joined="$(tr '\n' ' ' <<<"$conflicts")"
-	printf 'ELIGIBLE: conflicts confined to merge-driver-owned files (%s)\n' "${joined% }"
+if ((${#conflicts[@]} > 0)); then
+	record ELIGIBLE "conflicts confined to merge-driver-owned files" "${conflicts[@]}"
+	printf 'ELIGIBLE: conflicts confined to merge-driver-owned files (%s)\n' "${conflicts[*]}"
 else
+	record ELIGIBLE "the rebase resolves no conflicts at all"
 	printf 'ELIGIBLE: the rebase resolves no conflicts at all\n'
 fi

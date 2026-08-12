@@ -402,6 +402,25 @@ Healing is the worker's job — the dispatcher only steps in when a worker is go
 - **Semantic / code conflicts** go back to a worker: spawn a small resolve chip that takes over the PR branch, rebases onto `main`, resolves with full judgment, re-runs the gate, and force-pushes with lease.
   The dispatcher does not hand-edit code conflicts on another session's branch.
 
+### The heal destroys the evidence, so the wake records it
+
+A rebase is the fix and the erasure at once.
+Afterwards the branch merges clean, so `git merge-tree origin/main HEAD` reports no conflict whatever the eviction was about.
+Ask later why the PR was evicted, or whether the worker and the dispatcher saw the same thing, and there is no answer left to read.
+That is not hypothetical: a dispatcher's post-hoc read once contradicted a worker's contemporaneous `--assess`, and by then neither could be confirmed (Q810).
+
+The capture therefore belongs on the wake that reports the conflict, not on a later sweep, and the hook for it was already there.
+[`pr-requeue-eligible.sh --assess`](../../scripts/agent/pr-requeue-eligible.sh) runs before the rebase and had measured all of this already, then kept only its verdict.
+It now appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OIDs it merged, and the paths that conflicted.
+
+- **A ref pair is not a measurement**, because both refs move.
+  The OIDs make the probe re-runnable: `git merge-tree --write-tree <base_oid> <head_oid>` re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
+  That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.
+- **Refusals are recorded too**, so an absent record means the assessment never ran rather than ran-and-refused.
+  Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.
+- **It is not a registry.** `tmp/` is gitignored and session-local; nothing reconciles it and no gate reads it.
+  It is evidence for whoever asks, and it expires with the worktree.
+
 ## PR-watcher requirements
 
 The pr-sentinel background watcher (the primary self-heal mechanism above) is the reference implementation of these; the requirements are why it is shaped the way it is.
