@@ -989,6 +989,34 @@ Two things to avoid:
 - **Don't "fix" a snippet by dropping quotes** and relying on splitting — that is the bash reading, and it silently does the wrong thing under zsh.
 - **Don't reach for zsh's `${=VAR}`** (its explicit split-this operator) in anything shared. It is zsh-only: bash rejects it with `${=FLAGS}: bad substitution`, converting a portable command into one that fails for half the team.
 
+#### Sourcing a `scripts/` helper unpins it
+
+The shebang pins a script's shell when the file is **executed**. `source` bypasses it, and that is the difference the sentence at the top of this section hides: `source scripts/lib/common.sh` from the Bash tool defines those functions in **zsh**, so calling one runs bash code under a shell that reads parts of it differently.
+Sourcing is the natural way to probe a single helper without running a whole gate, which is exactly what makes it a trap.
+
+The declarations that diverge quietly are the ones a rewrite reaches for: `local -A`, `[[ -v arr[key] ]]`, and array subscripts generally.
+Measured while rewriting `select_present_files` (#1434): a version that dedupes correctly under bash silently stopped deduping when probed this way, and the probe reported a pass.
+
+Run the probe under bash, so the shell matches the shebang:
+
+```sh
+cat > tmp/probe.bash <<'PROBE'
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit
+source scripts/lib/common.sh
+echo "shell: $BASH_VERSION"
+# exercise the helper here
+PROBE
+bash tmp/probe.bash
+```
+
+Printing `$BASH_VERSION` inside the probe is the cheap proof it ran where you think: under zsh that expands to empty.
+
+**The other half of that near-miss was the comparison, not the shell.** Old and new agreed byte for byte across 13,830 real paths, which proved nothing about de-duplication, because that input contains no duplicates.
+An equivalence check is evidence only when its input can exercise the branch you changed, so feed it a case whose answer you already know.
+Same principle as [A bulk mechanical change proves itself by reconciliation](#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query).
+
 ## Picking the right test tier
 
 Prefer the narrowest tier that can actually *observe* the bug class — but no narrower:
