@@ -399,6 +399,18 @@ Healing is the worker's job — the dispatcher only steps in when a worker is go
 
 - **Doc-only / trivial conflicts** the dispatcher can resolve directly (a small helper that rebases the PR branch onto `origin/main` in a throwaway worktree and force-pushes with lease works well).
   The `docs/STATUS.md` [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) runs during rebase too, so Queue-row conflicts usually resolve on their own, as do the `docs/plan/README.md` and `docs/roadmap.md` ones.
+- **A by-hand `merge-tree` in a driver-installed clone answers a different question than GitHub's merge.** `.gitattributes` is committed, but the `merge.<name>.driver` command it names is per-clone config that `make merge-driver` installs, and GitHub never runs it.
+  So a probe run in a clone that has the drivers reads *resolved*, while the queue sees the raw conflict.
+  Measured 2026-08-12 on two PRs: drivers on, `exit 0`; drivers off, `exit 1` naming `docs/STATUS.md`.
+  Measure the way [`pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) does, with each driver disabled, or a survey of "is this really conflicting" reads clean for every instance:
+
+  ```bash
+  git -c merge.backlog.driver=false -c merge.planindex.driver=false \
+      -c merge.roadmap.driver=false -c merge.scriptindex.driver=false \
+      -c merge.gatelists.driver=false \
+      merge-tree --write-tree origin/main <head>
+  ```
+
 - **Semantic / code conflicts** go back to a worker: spawn a small resolve chip that takes over the PR branch, rebases onto `main`, resolves with full judgment, re-runs the gate, and force-pushes with lease.
   The dispatcher does not hand-edit code conflicts on another session's branch.
 
