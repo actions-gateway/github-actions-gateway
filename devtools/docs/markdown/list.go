@@ -33,6 +33,15 @@ type ListItem struct {
 	HasLink bool
 	// Line is the 1-based source line the item starts on.
 	Line int
+	// EndLine is the 1-based source line the item ends on. It exceeds Line
+	// whenever the item's prose wraps or it carries a second block, which is
+	// what a gate measuring an item has to name to be checkable by hand.
+	EndLine int
+	// ParagraphLines holds the 1-based start line of each block-level
+	// paragraph the item contains, in source order. Prose that wraps is one
+	// paragraph however many lines it spans, so more than one entry means a
+	// blank line separates two blocks inside the item.
+	ParagraphLines []int
 }
 
 // TopLevelListItems returns, in source order, the items of every list that is a
@@ -55,7 +64,13 @@ func (d *Document) TopLevelListItems() []ListItem {
 }
 
 func (d *Document) listItem(n *ast.ListItem) ListItem {
-	item := ListItem{Text: d.inlineText(n), Lead: d.leadStrong(n), Line: d.nodeLine(n)}
+	item := ListItem{
+		Text:           d.inlineText(n),
+		Lead:           d.leadStrong(n),
+		Line:           d.nodeLine(n),
+		ParagraphLines: d.paragraphLines(n),
+	}
+	item.EndLine = item.Line
 	collect := func(seg text.Segment) {
 		raw := strings.TrimSpace(string(seg.Value(d.Source)))
 		if strings.HasPrefix(raw, "<!--") {
@@ -83,8 +98,24 @@ func (d *Document) listItem(n *ast.ListItem) ListItem {
 	})
 	if start, stop := d.rawRange(n); start >= 0 {
 		item.Raw = string(d.Source[start:stop])
+		item.EndLine = d.Line(stop - 1)
 	}
 	return item
+}
+
+// paragraphLines reports where each of an item's block-level paragraphs
+// starts. A tight list carries its prose in a TextBlock and a loose one in a
+// Paragraph; both are the same block to a caller counting them. Nested lists,
+// fences and tables are other kinds of block and are not counted.
+func (d *Document) paragraphLines(n *ast.ListItem) []int {
+	var lines []int
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		switch c.Kind() {
+		case ast.KindParagraph, ast.KindTextBlock:
+			lines = append(lines, d.nodeLine(c))
+		}
+	}
+	return lines
 }
 
 // rawRange returns the byte range a node's own text occupies in Source, or

@@ -542,6 +542,10 @@ Two things move with that: a `<!-- q:QN -->` written inside a code fence is an e
 The line-matching `awk` ran a bullet's span to the next bullet or heading, so 19 words of the paragraph between two roadmap sections were charged to the bullet above them.
 Every count fell by 5 to 24 words on the roadmap and by exactly 1 on `features.md`, which is the `- ` marker the old counter spent; nothing crossed either cap under either counter, so the port changed no verdict.
 
+**A word cap measures a list item, which swallows more than a bullet looks like.** Deleting a bullet and leaving its indented continuation lines behind attaches them to the bullet above, so the cap breaks on words that are not that bullet's own: an accurate finding against an innocent bullet, which reads as pre-existing debt rather than as the deletion that caused it.
+Rule 12 reports the stray paragraph at its own line and names the bullet it landed on, and both caps state the line span they counted, so a count that disagrees with the bullet on screen can be reconciled without re-parsing the page.
+The two capped pages use no multi-paragraph bullets; the grid cards on `index.md` and `why-gag.md` do, and are checked for badges alone.
+
 CI runs the same script from [`status-lint.yml`](../../.github/workflows/status-lint.yml) — alongside the `STATUS.md` format lint and under the same `status-lint-gate` required check — rather than from `unit-test.yml`, which path-ignores docs.
 That placement is load-bearing: the drift arrives on docs-only PRs, which never trigger the Go suite.
 
