@@ -182,6 +182,34 @@ expect usage-no-mode 2 "$STATUS_REPO" 42
 expect usage-bad-pr 2 "$STATUS_REPO" --assess not-a-number
 expect usage-unknown-arg 2 "$STATUS_REPO" --assess 42 --bogus
 
+# DRIVER_OWNED is what the whole policy turns on, and it is a hand-maintained
+# list whose only guard was a comment saying to keep it in step with
+# .gitattributes. Reconciled here in BOTH directions: a path that gains a
+# `merge=` attribute and not an entry silently narrows the discount, and an
+# entry with no attribute silently widens it — which is a session merging
+# something the maintainer did not sign off on. Q799 added the third driver and
+# this list did not notice; piped-gate's overlap_ignore caught its own half only
+# because TestShippedRegistryCarriesRepoStateSettings does exactly this.
+attributed="$(awk '
+	/^[ \t]*#/ { next }
+	/merge=/ { print $1 }
+' "$REPO_ROOT/.gitattributes" | sort)"
+listed="$(awk '
+	/^DRIVER_OWNED=\(/ { inside = 1; next }
+	inside && /^\)/ { exit }
+	inside { gsub(/[ \t]/, ""); if ($0 != "") print }
+' "$CHECKER" | sort)"
+if [[ -z "$attributed" ]]; then
+	printf 'FAIL %-26s .gitattributes lists no merge-driver-owned paths\n' driver-owned-source >&2
+	fails=$((fails + 1))
+elif [[ "$attributed" == "$listed" ]]; then
+	printf 'ok   %-26s matches .gitattributes (%s)\n' driver-owned-reconciled "$(tr '\n' ' ' <<<"$listed")"
+else
+	printf 'FAIL %-26s DRIVER_OWNED and .gitattributes disagree\n  .gitattributes: %s\n  DRIVER_OWNED:   %s\n' \
+		driver-owned-reconciled "$(tr '\n' ' ' <<<"$attributed")" "$(tr '\n' ' ' <<<"$listed")" >&2
+	fails=$((fails + 1))
+fi
+
 if ((fails > 0)); then
 	printf '\n%d pr-requeue-eligible assertion(s) failed\n' "$fails" >&2
 	exit 1
