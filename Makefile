@@ -374,6 +374,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
                  ci/gate-list-test ci/shellcheck-scripts-test \
                  ci/check-errexit-prologue-test ci/check-tools-test \
+                 ci/git-merge-gate-lists-test docs/git-merge-script-index-test \
                  ci/check-uses-pinned-test ci/run-parallel-test \
                  ci/check-template-library-test \
                  docs/backlog-metrics-test docs/check-doc-links-test \
@@ -448,10 +449,12 @@ hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 # cloning (scripts/dev/setup.sh does it for you); repo-local, never --global, and
 # shared with every linked worktree.
 .PHONY: merge-driver
-merge-driver: ## Install the docs/STATUS.md, docs/plan/README.md and docs/roadmap.md merge drivers (conflicts resolve by row key)
+merge-driver: ## Install the repo's merge drivers (registry conflicts resolve by row key, not line position)
 	scripts/docs/git-merge-status.sh --install
 	scripts/docs/git-merge-plan-index.sh --install
 	scripts/docs/git-merge-roadmap.sh --install
+	scripts/docs/git-merge-script-index.sh --install
+	scripts/ci/git-merge-gate-lists.sh --install
 
 # Diagnose the local toolchain: report which required/e2e/extended CLI tools are
 # missing or installed-but-not-on-PATH, with per-OS install and PATH-fix hints.
