@@ -2936,6 +2936,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The launch record">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-pr-sentinel-watcher-is-the-exception-no-wrapper-no-redirect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pr-sentinel watcher is the exception: no wrapper, no redirect
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -4592,6 +4609,22 @@ Reading a record is not recall, which is the whole point: the fields are there a
 <p>Two constraints come with it.
 The run must not read stdin, because a background process group that reads the terminal takes SIGTTIN and stops, which is why the example redirects to a log, the shape a background run wants anyway.
 And the wrapper owns the run: killing the wrapper stops the run, because a live process whose record has just been deleted is the state the record exists to prevent.</p>
+<h5 id="the-pr-sentinel-watcher-is-the-exception-no-wrapper-no-redirect">The pr-sentinel watcher is the exception: no wrapper, no redirect<a class="headerlink" href="#the-pr-sentinel-watcher-is-the-exception-no-wrapper-no-redirect" title="Permanent link">&para;</a></h5>
+<p>Both halves of the shape above break the PR watcher, so it is the one long background run that goes neither through <code>record-launch.sh</code> nor into a log.
+Launch it as the bare three tokens the pr-sentinel nudge prints, <code>bash "&lt;absolute path&gt;" &lt;PR&gt;</code>, as a background task; <a href="../parallel-dispatch/#primary-the-pr-sentinel-background-watcher">parallel-dispatch.md</a> has the rest of the launch-form rules.
+Measured 2026-08-11 against pr-sentinel 0.8.0 (<code>scripts/pr-sentinel-stop-hook.py</code>, <code>scripts/pr-sentinel-guard.py</code>):</p>
+<ul>
+<li><strong>A redirect is the silent one.</strong> The stop hook learns each watcher's output file from the <code>&lt;output-file&gt;</code> field of the harness task-notification and reads that file directly, accepting a <code>PR-SENTINEL EVENT: ready</code>/<code>closed</code>/<code>blocked</code> marker only above the first CI-log excerpt banner.
+  That marker is the entire handoff signal; the notification's status is read only as "the task exited", never for its value.
+  A backgrounded command whose stdout is redirected leaves that file <strong>empty</strong> (measured: zero bytes, while the notification still reports <code>completed</code>, exit code 0), so the report lands in the log and the hook sees no handoff.
+  The watcher is then no longer live and the PR is still owned and unconcluded, so the stop is blocked again over a PR the watcher already reported green.
+  Reading the log afterwards does not recover it: the hook's only fallback is a transcript read of the task output file's own path, not of wherever the report was sent.</li>
+<li><strong>A foreground launch is not recorded at all.</strong> The hook counts a watcher launch only on a Bash call carrying <code>run_in_background</code>, so a foreground run leaves the PR with no watcher on record however the run itself goes.</li>
+<li><strong>A wrapper or a redirect also costs the auto-approval.</strong> The guard auto-allows only a single simple command of exactly three tokens whose <code>argv[0]</code> is <code>bash</code>, carrying no operator, redirect, substitution, or glob, so either one drops the launch to the base Bash permission prompt, where an unattended worker stalls with its PR unwatched.
+  Foregrounding does not: the guard reads the command string alone, so a foreground launch is auto-approved and still invisible to the stop hook.</li>
+</ul>
+<p>Skipping the wrapper costs nothing here.
+The launch record exists to keep a compute-heavy run killable after a compaction drops its task id, and a watcher that sleeps between polls is neither worth reclaiming nor something to kill by pattern.</p>
 <h3 id="ad-hoc-shell-varies-dont-rely-on-word-splitting">Ad-hoc shell varies: don't rely on word-splitting<a class="headerlink" href="#ad-hoc-shell-varies-dont-rely-on-word-splitting" title="Permanent link">&para;</a></h3>
 <p>Committed scripts under <code>scripts/</code> are <code>#!/usr/bin/env bash</code> and follow <a href="../bash-style/">bash-style.md</a>, so their behaviour is pinned by the shebang. <strong>Ad-hoc commands are not pinned</strong> — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images.
 Check yours with <code>echo $0</code> rather than assuming.</p>

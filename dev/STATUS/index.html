@@ -2840,14 +2840,6 @@
 <td>Each gate PR deletes its own <code>&lt;!-- q:QNNN --&gt;</code> bullet and de-links its own anchor, so two conflict by construction: Q715's was queue-evicted 3x in a session, each a rebase and a gate cycle. <code>STATUS.md</code> and <code>plan/README.md</code> merged clean.</td>
 </tr>
 <tr>
-<td><a id="Q790"></a>Q790</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate's <code>docs/STATUS.md</code> overlap exemption cannot fire on a row deletion</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-10: <code>overlap_ignore</code> discounts <code>docs/STATUS.md</code> as row-ID resolved, but <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status-test.sh">the driver</a> yields markers for delete-vs-edit of one row. #1384 left #1383 dirty; every flake-row move is that shape.</td>
-</tr>
-<tr>
 <td><a id="Q800"></a>Q800</td>
 <td><a href="../plan/">Gate a plan index status cell that names Queue rows which no longer exist</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -2886,14 +2878,6 @@
 <td>🔲</td>
 <td>M</td>
 <td>No <code>api-surface-since.sh</code> counterpart for Event reasons. A v1.4.0 regex matching only <code>Event(obj, type, reason)</code> missed the <code>recordEvent(type, reason, action)</code> shape and returned a false no-change, caught by a positive control. Needs a self-test.</td>
-</tr>
-<tr>
-<td><a id="Q778"></a>Q778</td>
-<td><a href="../development/testing/#the-launch-record">Document the pr-sentinel watcher launch form the stop hook requires</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The stop hook reads the watcher task output file, so <code>&gt; tmp/x.log</code> leaves it at <code>EXIT=0</code> with no terminal marker, and a foreground launch is not recorded. Measured 2026-08-09: repeated blocks on merged PRs, an upstream issue drafted then withdrawn.</td>
 </tr>
 <tr>
 <td><a id="Q779"></a>Q779</td>
