@@ -89,9 +89,9 @@ That is a real bug class for a repo whose security posture is secure-by-default,
 
 ## Finding 5: Q675 is due, and these measurements are its inputs
 
-[Q675](../STATUS.md#Q675) defers the merge-queue Phase 3 re-measure behind an event trigger of "~1 week of queue operation, on/after 2026-08-10".
-That trigger has fired.
-Its first recorded candidate is:
+Q675 deferred the merge-queue Phase 3 re-measure behind an event trigger of "~1 week of queue operation, on/after 2026-08-10".
+That trigger fired, the re-measure ran on the numbers above, and the row is closed.
+Its first recorded candidate was:
 
 > Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time).
 
@@ -112,8 +112,7 @@ At a 1% e2e failure rate, the trade the candidate names, paying a queue kickback
 
 Ordered by return per unit of risk.
 
-1. **Work [Q675](../STATUS.md#Q675).** Its trigger has fired and the failure-rate inputs are measured above.
-   The merge-group-only candidate is the one lever aimed at session wait, and it is already a recorded, reviewed option rather than new scope.
+1. ~~**Work Q675.**~~ **Shipped 2026-08-12.** Both e2e lanes are merge-group-only; the decision and the re-measurement table are in [merge-queue.md](merge-queue.md#phase-3-re-measure-then-decide).
 2. **Enable auto-merge.** A repo setting plus arming PRs at review time.
    Addresses Finding 1, the only finding worth ~59% of PR latency.
    No validation change: same nine required checks, same merge queue, same kickback.
