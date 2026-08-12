@@ -18,17 +18,25 @@
 # entry point, so the gate map stays in scripts/. What it derives and what it
 # cannot see is in that program's package comment.
 #
+# --notes is the same classification read for the release notes: the commits a
+# release publishes, and the residue that reaches no released artifact. The
+# notes used to be enumerated by a scope allow-list, which admitted commits by
+# their scope string and silently dropped every scope nobody had listed.
+#
 # Usage:
 #   scripts/release/semver-floor.sh [FROM] [TO]
+#   scripts/release/semver-floor.sh [FROM] [TO] --notes
 #   scripts/release/semver-floor.sh --check-sources
 #
 # FROM defaults to the highest stable (non-RC) `v*` tag; TO defaults to
 # `origin/main`, falling back to HEAD.
 #
-# Reporting mode never fails: the floor is an input to the release decision in
-# docs/operations/release.md § When to cut, not a verdict on it. --check-sources
-# IS a gate — it exits non-zero when publish.yml has grown a release artifact
-# the derivation does not cover, which is the one way this can go quietly wrong.
+# Both reporting modes never fail: the floor is an input to the release decision
+# in docs/operations/release.md § When to cut, and the notes enumeration is an
+# input to § Writing the curated notes — neither is a verdict on one.
+# --check-sources IS a gate — it exits non-zero when publish.yml has grown a
+# release artifact the derivation does not cover, which is the one way this can
+# go quietly wrong.
 
 set -euo pipefail
 shopt -s inherit_errexit
@@ -38,7 +46,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 DEVTOOLS_DIR="$SCRIPT_DIR/../../devtools"
 
-args=()
+# Flags and positionals are collected apart so an option may sit on either side
+# of FROM/TO. Folding them into one list loses whichever trails the positionals.
+flags=()
+positional=()
 for arg in "$@"; do
     case "$arg" in
     -h | --help)
@@ -46,25 +57,37 @@ for arg in "$@"; do
         exit 0
         ;;
     --check-sources)
-        args+=("-check-sources")
+        flags+=("-check-sources")
+        ;;
+    --notes)
+        flags+=("-notes")
         ;;
     -*)
         echo "semver-floor: unknown option: $arg" >&2
         exit 2
         ;;
     *)
-        args+=("$arg")
+        positional+=("$arg")
         ;;
     esac
 done
 
+if ((${#positional[@]} > 2)); then
+    echo "semver-floor: expected at most FROM and TO, got ${#positional[@]}" >&2
+    exit 2
+fi
+
 # Positional FROM/TO become the program's flags, so the program stays usable on
 # its own without reproducing this script's argument shape.
-if ((${#args[@]} > 0)) && [[ "${args[0]}" != -* ]]; then
-    from="${args[0]}"
-    to="${args[1]:-}"
-    args=("-from" "$from")
-    [[ -n "$to" ]] && args+=("-to" "$to")
+args=()
+if ((${#positional[@]} > 0)); then
+    args+=("-from" "${positional[0]}")
+fi
+if ((${#positional[@]} > 1)); then
+    args+=("-to" "${positional[1]}")
+fi
+if ((${#flags[@]} > 0)); then
+    args+=("${flags[@]}")
 fi
 
 # Built and exec'd rather than `go run` for the same reason check-em-dash.sh is:

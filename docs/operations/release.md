@@ -611,39 +611,29 @@ Read for consequence, not for keywords.
 If a wrong path fails silently, say so loudly.
 State which of the two you mean.
 
-**Enumerate from the commit log, filtered to what ships.** Conventional Commit subjects are already terse diagnoses, so they need only the prefix and Q-ID removed:
+**Enumerate from the commit log, classified by the paths each commit touched.** Conventional Commit subjects are already terse diagnoses, so they need only the prefix and Q-ID removed:
 
 ```bash
-git log --format='%s' <prev-tag>..HEAD \
-  | grep -E '^(feat|fix)\((agc|gmc|proxy|worker|api|scaleset|chart|broker|wrapper|admission|provisioner|metrics|scalesetlistener|migrate|observability)\)'
+scripts/release/semver-floor.sh <prev-tag> HEAD --notes
 ```
 
-**That scope list is a guess, so reconcile what it dropped — never just run it.** An allow-list silently omits any scope nobody thought of, and the result still looks like a complete list.
-Print the residue and read every scope in it:
-
-```bash
-git log --format='%s' <prev-tag>..HEAD | grep -E '^(feat|fix)' > /tmp/all
-# ...run the filter above into /tmp/kept, then:
-grep -vxF -f /tmp/kept /tmp/all | sed -E 's/^((feat|fix)\([^)]*\)).*/\1/' | sort | uniq -c | sort -rn
-```
-
-`v1.3.0`'s first pass kept 57 of 132 and dropped **seven shipping fixes**: two `fix(scalesetlistener)` (the pattern had `scaleset`, which does not match it), a compound `fix(agc,gmc)`, three `fix(migrate)` for the shipped `gag-migrate` binary, and one `fix(observability)`.
-Nothing in the output said so.
-The last three scopes above were added only after that reconciliation — assume the list is still incomplete for the next release.
-
-Exclude the `ci`, `dogfood`, `test`, `docs`, and `build` scopes, which ship in no image or chart.
-Say in the notes that you excluded them, so a reader does not read hundreds of commits as the user-visible change count.
+Two lists come back and they sum to the window's `feat`/`fix`/`perf` count: **Ships** is the enumeration to curate, **Residue** is every commit reaching no released artifact.
+A commit is admitted by the files it changed, checked against the surface `publish.yml` packages, so no scope string admits or excludes anything.
+The sum is the reconciliation: a commit cannot leave one list without arriving in the other.
 Keep the trailing `(#NNNN)`: GitHub auto-links a bare `#NNNN` in a release body, so every line becomes traceable for free.
+Say in the notes that dev tooling, CI, and docs are excluded, so a reader does not read hundreds of commits as the user-visible change count.
 
-**Passing the scope filter does not make a commit shippable — check the paths.** The filter matches a scope string, and scopes are reused. `v1.3.0` listed "Attribute usage rows to the machine that measured them" as a feature; the commit is `feat(metrics)` and touches only `claude-usage/`, the Claude Code usage tooling, because that module and the product's Prometheus metrics share a scope.
-Assert the paths for every cited PR instead of reading the subjects:
+**The scope allow-list this replaced failed in both directions, and its output showed neither.** It matched `^(feat|fix)\(<scope>\)` against a hand-maintained list of scopes, which silently omits any scope nobody thought of.
+At `v1.3.0` the first pass kept 57 of 132 and dropped **seven shipping fixes**: two `fix(scalesetlistener)` (the pattern had `scaleset`, which does not match it), a compound `fix(agc,gmc)`, three `fix(migrate)` for the shipped `gag-migrate` binary, and one `fix(observability)`.
+At `v1.4.0` it kept 15 of 58 and got one wrong each way: it dropped the scopeless `feat:` carrying Q166, a headline feature that matched nothing because it has no scope at all, and it kept a `feat(metrics)` touching only `claude-usage/`, because that module and the product's Prometheus metrics share a scope.
+Paths settle all nine, and `--notes` puts each on the correct side of both windows.
 
-```bash
-git show --stat --format='' --name-only <sha> \
-  | grep -qE '^(api|broker|cmd|githubapp|scaleset|charts)/' || echo "NOT PRODUCT"
-```
-
-It was one entry in 64, and no amount of re-reading the list would have found it.
+**Read the residue anyway.
+A release publishes things no image and no chart carries.** The surface is derived from `publish.yml`, so it sees only what that pipeline packages, and an artifact published any other way is invisible to it.
+The runner template library (Q554) was one of `v1.4.0`'s three headline features and ships as `deploy/templates/`; it lands in the residue, not in Ships.
+So the residue is ordered rather than dumped: commits that also changed `docs/operations/` come first, an added page ahead of an edited one, because [doc-update-matrix.md](../development/doc-update-matrix.md) requires an operator-visible change to land there.
+At `v1.4.0` that ranks Q554 first of 43: ten rows carry the flag and thirty-three do not.
+Read the ten, and treat the rest as dev tooling only after the flag has had its say.
 
 **Cite the commit that did the work, not the one that filed it.** A Q-numbered backlog row and its implementation have near-identical subjects, so a `docs(plan)` commit reads exactly like the fix. `v1.3.0` cited #988 — `docs(plan): file and scope Q507` — under the label of #1008, the gate itself; a reader clicking through would have landed on a planning row.
 Resolve each number to its title before shipping, and look for the same work cited twice under two numbers.
@@ -763,7 +753,7 @@ None of these is a substitute for reading the notes — but each one caught a de
 | Fold counts | recount every `<summary>` against its bullets, counting the noun the label names | a count that drifted during curation |
 | Enumerations | reconcile each surface fold against the tag-to-tag diff **both ways** | a name listed that no longer exists, or shipped and never listed |
 | Citations resolve | `gh pr view <n> --json title` for each `#NNNN` | a planning commit cited as the implementation |
-| Citations ship | `git show --stat --name-only <sha>` against product paths | a non-product commit listed as a feature |
+| Citations ship | check each cited commit against the **Ships** list from `semver-floor.sh --notes` | a non-product commit listed as a feature |
 | Anchors | resolve every site URL against a built `site/`, **with one planted bad anchor** | a heading that moved, and a checker that silently resolves nothing |
 | Rendering | `gh api -X POST /markdown -f mode=gfm` | hard-wrapped `<br>`s, alerts that did not render, literal `[!` |
 | Published body | re-fetch and `diff` against the file | an edit made on the Release and not in the repo |

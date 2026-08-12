@@ -22,9 +22,26 @@
 //
 // The one thing here that can silently rot is gated instead — see CheckSources.
 //
+// # Two readings of one classification
+//
+// -notes emits the same classification as the release notes need it: the
+// shipping commits to curate, and the residue that reaches no released
+// artifact. It replaces a hand-written scope allow-list in release.md that
+// admitted commits by their scope string, which fails in both directions —
+// across v1.2.0..v1.3.0 it dropped seven shipping fixes whose scopes nobody had
+// listed, and at v1.4.0 it dropped the scopeless `feat:` carrying Q166 while
+// keeping a `feat(metrics)` that touched only the usage tooling.
+//
+// Paths close that whole class. What they cannot close is an artifact a release
+// publishes outside an image or chart, which is why the residue is printed
+// rather than summarised: v1.4.0's runner template library (Q554) is a headline
+// feature living in deploy/templates/, and no surface derived from publish.yml
+// will ever see it. See notes.go for the signal that raises it to the top.
+//
 // Usage:
 //
 //	semverfloor [-from REF] [-to REF]
+//	semverfloor [-from REF] [-to REF] -notes
 //	semverfloor -check-sources
 package main
 
@@ -43,16 +60,17 @@ func main() {
 		from         = flag.String("from", "", "start of the window (default: the newest stable v* tag)")
 		to           = flag.String("to", "", "end of the window (default: origin/main, else HEAD)")
 		checkSources = flag.Bool("check-sources", false, "assert the release surface derivation still matches publish.yml; exit 1 if not")
+		notes        = flag.Bool("notes", false, "enumerate the window for the release notes, with the residue path-classified")
 	)
 	flag.Parse()
 
-	if err := run(*from, *to, *checkSources); err != nil {
+	if err := run(*from, *to, *checkSources, *notes); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "semverfloor:", err)
 		os.Exit(1)
 	}
 }
 
-func run(from, to string, checkSources bool) error {
+func run(from, to string, checkSources, notes bool) error {
 	root, err := repoRoot()
 	if err != nil {
 		return err
@@ -96,6 +114,11 @@ func run(from, to string, checkSources bool) error {
 		return err
 	}
 	r := Classify(commits, surface, gitNarrower{root: root})
+	if notes {
+		n := EnumerateNotes(r, gitPager{root: root})
+		reportNotes(os.Stdout, from, to, commits, surface, sources, n, checkOperatorDocs(root))
+		return nil
+	}
 	report(os.Stdout, from, to, commits, surface, sources, r)
 	return nil
 }
