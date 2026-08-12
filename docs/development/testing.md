@@ -298,6 +298,11 @@ Q343 concluded from that there was "no supported knob to share test results acro
 - **Do not promote it to a global `GOFLAGS`.** [`cmd/gmc/test/e2e`](../../cmd/gmc/test/e2e/e2e_suite_test.go) resolves the v2 CRD chart directory from `runtime.Caller(0)`, which a trimmed path breaks.
   The unit tier does no such thing, and the release images already build with `-trimpath`.
 - **Two cosmetic consequences.** Adopting the flag changes the build-cache keys, so the first unit run after it lands recompiles from scratch once, machine-wide.
+- **A test that reads a repo file outside its own module keeps its cached result when that file changes**, so the package prints `(cached)` and green while the thing it asserts on is broken.
+  Measured 2026-08-11 on `devtools/agent/pipedgate`, whose `TestShippedRegistryCarriesRepoStateSettings` reconciles `.claude/piped-gate-guard.json` against the repo-root `.gitattributes`: appending a line to `.gitattributes` and re-running left it `(cached)`.
+  Q799 shipped a `.gitattributes` entry without its registry half that way: `make check` green locally, `coverage` red in CI on a cold cache.
+  This bites the `devtools/` gates hardest, because they are exactly the ones that read repo-root config as data.
+  Run the package with `-count=1` (or `go clean -testcache` in that module) whenever the change under test is a file the test *reads* rather than one it compiles.
   And a failing test's stack frames read as module-relative paths (`github.com/actions-gateway/…/listener.go:42`) rather than absolute ones, so they are no longer click-to-open in some terminals.
 
 What a fresh worktree still pays, and why it stays:
@@ -1393,6 +1398,11 @@ It costs one edit and one run.
   Q624 first stubbed a whole word-classification branch to `true` and took 22 of 22 red, which discriminated nothing; flipping the single condition that made command position load-bearing took exactly one assertion red, which is the answer.
 - **Read the failure, not just the colour.** Red for the wrong reason (a compile error, a fixture that no longer builds, an unrelated timeout) is not evidence.
   The test must fail on the assertion that names the behaviour.
+- **A green after the deletion can mean the assertion cannot see the defect class**, not that the mechanism is unnecessary, and the two look identical.
+  Ask what an assertion actually observes before believing it: one that compares a *set* of keys is blind to ordering, spacing, formatting and everything else the surrounding bytes carry.
+  Q799 deleted the mechanism that holds a roadmap bullet's blank lines outside the merged record, a defect already reproduced by hand, and the suite stayed green, because every assertion compared the surviving bullet IDs and none compared the rendered page.
+  Two byte-exact whole-file comparisons made the same deletion red.
+  The fix is generally to assert on the artifact the defect damages, not on a projection of it.
 - **Round-trip it.** Restore the mechanism and confirm green in the same sitting, so the check cannot end with a half-reverted tree.
 - **Assert that the deletion applied**, when a script drives it rather than your hands.
   A mutation that matched nothing leaves the mechanism intact, so the test passes and reads as "this assertion does not bite", which is the exact conclusion the check exists to rule out, reached backwards.
