@@ -93,7 +93,9 @@ PAGES=(
 	"operations/gitops/"
 )
 
-WORK_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tmp/verify-published-docs"
+# Per-process, because the trap below removes the whole directory: a fixed path
+# lets one run delete the pages another is still reading.
+WORK_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tmp/verify-published-docs.$$"
 mkdir -p "$WORK_DIR"
 trap 'rm -rf "$WORK_DIR"' EXIT INT TERM
 

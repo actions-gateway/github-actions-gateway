@@ -60,6 +60,8 @@ path="${url#http://site}"
 path="${path%/}"
 src="$STUB_SITE_ROOT${path}/index.html"
 [[ -f "$src" ]] || exit 22
+# Stretches a run out so the concurrency case below actually overlaps.
+[[ "${STUB_CURL_DELAY:-0}" != 0 ]] && sleep "$STUB_CURL_DELAY"
 cp "$src" "$dest"
 STUB
 chmod +x "$FIXTURE_DIR/curl"
@@ -256,6 +258,63 @@ rm -rf "$STUB_SITE_ROOT/1.4.0/operations/upgrade"
 run v1.4.0
 expect_rc 'an unreachable page fails' 1
 expect_says 'the unreachable page is named' 'cannot read http://site/1.4.0/operations/upgrade/'
+
+# --- two runs at once -------------------------------------------------------
+
+# The script removes its whole work directory on exit, so a fixed path lets one
+# run delete the pages another is still reading — which is not hypothetical: a
+# manual verification overlapping this suite reported four unreachable pages and
+# a missing <article> on fixtures that were fine. Both verdicts must survive.
+site concurrent_good
+good_version_dir 1.4.0
+alias_pages 1.4.0
+good_root="$STUB_SITE_ROOT"
+
+site concurrent_stale
+good_version_dir 1.3.0
+mkdir -p "$STUB_SITE_ROOT/1.4.0"
+cp -R "$STUB_SITE_ROOT/1.3.0/." "$STUB_SITE_ROOT/1.4.0/"
+alias_pages 1.4.0
+stale_root="$STUB_SITE_ROOT"
+
+# run_bg SITE_ROOT NAME — start one run, recording its output and exit code.
+run_bg() {
+	local root="$1" name="$2"
+	(
+		local rc=0
+		CURL="$FIXTURE_DIR/curl" STUB_SITE_ROOT="$root" STUB_CURL_DELAY=0.05 \
+			"$SCRIPT" --base http://site v1.4.0 > "$FIXTURE_DIR/$name.out" 2>&1 || rc=$?
+		echo "$rc" > "$FIXTURE_DIR/$name.rc"
+	) &
+}
+
+run_bg "$good_root" good
+run_bg "$stale_root" stale
+wait
+
+expect_file_rc() {
+	local name="$1" want="$2" got
+	got="$(< "$FIXTURE_DIR/$name.rc")"
+	if [[ "$got" == "$want" ]]; then
+		pass "concurrent run: $name (rc=$got)"
+	else
+		fail "concurrent run: $name" \
+			"want rc=$want got rc=$got; output:"$'\n'"$(< "$FIXTURE_DIR/$name.out")"
+	fi
+}
+
+expect_file_rc good 0
+expect_file_rc stale 1
+
+# The overlap must not manufacture a fetch or render failure on either side.
+for name in good stale; do
+	if grep -qE 'cannot read|no <article> element' "$FIXTURE_DIR/$name.out"; then
+		fail "concurrent run: $name reads its own fixtures" \
+			"output:"$'\n'"$(< "$FIXTURE_DIR/$name.out")"
+	else
+		pass "concurrent run: $name reads its own fixtures"
+	fi
+done
 
 if ((fails > 0)); then
 	echo "verify-published-docs-test: ${fails} assertion(s) failed" >&2
