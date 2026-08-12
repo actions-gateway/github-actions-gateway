@@ -1,0 +1,179 @@
+# gate-lists.mk — the gate and suite lists `make check` derives from.
+#
+# These live in their own file because they are a registry: every PR that adds
+# a gate or a suite appends one entry, so two such PRs collide on adjacent
+# lines by construction. .gitattributes routes this file to the `gatelists`
+# merge driver, which merges the entries as a set rather than by line position
+# (scripts/ci/git-merge-gate-lists.sh, installed per clone by `make
+# merge-driver`).
+#
+# Routing is per file, so the routed file has to be one that is wholly
+# driver-owned. Keeping these lists in the Makefile would have routed the whole
+# Makefile, and piped-gate discounts a driver-owned path when it weighs branch
+# overlap, which would have quietly discounted every ordinary Makefile change
+# with it.
+
+# The one-command pre-review gate. Run this before requesting review or opening a
+# PR: gofmt + golangci-lint, STATUS.md format lint, shellcheck over scripts/, and
+# the (plain) unit tests — the fast local loop. The CI `unit-test` job runs the
+# same unit tests but under the race detector (`make test-race`); that heavier
+# run stays out of `check` so the dev gate doesn't become an unthrottled `-race`
+# run. A green `make check` covers the lint and unit-test logic; reproduce the
+# race gate with `make test-race` when a change touches concurrency. The slower
+# security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
+# separate too.
+#
+# The cheap gates below take no heavy-build slot and are independent of each
+# other, so they run concurrently (~50s serial -> ~15s) and report first: a
+# STATUS.md format slip should not wait out the unit suite to tell you. They go
+# through scripts/ci/run-parallel.sh rather than `make -j` because macOS ships GNU
+# make 3.81, which has no `-O` output sync — `-j` would interleave two failing
+# gates' output unreadably, while run-parallel.sh labels every line with its
+# gate. The heavy phases stay sequential after them: each takes a machine-wide
+# slot of its own (serialize_heavy_build), so overlapping them would just queue
+# on the semaphore. build-tags-check runs first of the three — a compile break
+# should not wait out lint and the suite.
+#
+# These two variables are the single source of truth for what `make check` runs.
+# `make list-gates` renders them with each gate's own `##` description, so the
+# docs name that target instead of transcribing the list (Q649) — the same
+# reason STATUS_GATES exists below. `gate-lists-check` reconciles the recipe,
+# the .PHONY declarations and the doc pointer against them.
+CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
+                    plan-index-check no-plan-refs-check \
+                    go-version-check license-header-check conflict-markers-check \
+                    v2-api-sync-check path-filters-check gate-lists-check shellcheck \
+                    errexit-prologue-check \
+                    actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
+                    codegen-check api-reference-check scripts-test claude-usage-test \
+                    doc-links release-pins-check em-dash-check page-density-check \
+                    script-docs-check semver-floor-sources-check template-library-check \
+                    md-reflow-check
+
+CHECK_HEAVY_GATES := build-tags-check lint cover-check
+
+# The complete set of gates a docs/STATUS.md-only change can fail, so a backlog
+# edit can be verified in seconds instead of waiting out the full `make check`:
+#   lint-backlog          the format rules
+#   status-isolation-check a commit on this branch carries the backlog plus something else
+#   roadmap-check         a row changed table or vanished while a roadmap bullet still names it
+#   plan-index-check      the last Queue row citing a plan went away, so archival is owed
+#   conflict-markers-check a marker survived an Edit-based conflict resolution
+#   doc-links             a #QN anchor or plan link broke while rows moved
+#   em-dash-check         a Notes cell pushed the file over its baseline ceiling
+#   page-density-check    an admonition run in the prose above the tables
+# status-isolation-check reads the branch's commits rather than its diff, which
+# is why it belongs here rather than only in CI: the fast path exists for the
+# hurried resolve-and-push, which is exactly when an --amend lands on the wrong
+# HEAD (Q652). It is git-only and costs milliseconds.
+# Every entry is also in CHECK_FAST_GATES, so this is a strict subset of `make
+# check` and never a second opinion. Completeness is the half that had no
+# enforcement: em-dash-check scans `*.md` and page-density-check `docs/*.md`, both
+# had been missing since they were written, and this comment called the list
+# complete anyway (Q749). `gate-lists-check` now derives the answer from the
+# pathspec each gate's script hands git, so a new docs-wide gate cannot omit
+# itself. The list lives as a variable, and the docs point at the target rather
+# than transcribing it, because a hand-copied list is what drifted first:
+# docs/development/maintaining-backlog.md named three of them and called that the
+# complete set, so a `docs/STATUS.md` change that parked a row shipped a PR red
+# on roadmap-check.
+STATUS_GATES := lint-backlog status-isolation-check roadmap-check plan-index-check \
+                 conflict-markers-check doc-links em-dash-check page-density-check
+
+# Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
+# express — the tags-only release signing-identity regexp (Q124), the
+# validate-cluster preflight decision helpers (CNI classification + K8s version
+# parsing, Q184, plus the bounded metrics-server retry against faked probes —
+# a still-converging addon must not warn, an absent one still must, Q397), the
+# dogfood gate's e2e run resolution (an in-flight run must
+# not abort the gate after the billable scale-up), the go-lint change-scoping
+# decision (which modules a diff makes golangci-lint cover), the build-tag
+# coverage guard (a new tag must fail the gate, not silently skip files), that a
+# pinned download never writes bytes it did not verify (Q433), the shellcheck
+# gate's own file selection (an untracked-but-present script must be linted,
+# Q432), the errexit-prologue gate, whose own failure mode is the one it exists
+# to catch — a rule that stopped matching would pass every script in silence, so
+# both directions are asserted and an empty selection must go red (Q733),
+# the dogfood worker-drain gate (an unreadable cluster must never read
+# as idle and let a teardown strand worker nodes, Q434), the on-demand e2e
+# tenant bring-up (its readiness wait is the bring-up's whole verdict and both
+# directions are silent: an undersized system pool leaves the AGC Pending, so a
+# healthy cluster reads as a timeout, and a wait whose failure did not abort
+# would point repo-wide e2e routing at a tenant that never came up, Q578), and
+# the CI path-filter
+# gate (a workspace module missing from a filter must fail, since the gate it
+# would skip reports green either way, Q429), the image-pull retry schedule
+# (exponential, jittered and capped, so concurrent CI callers cannot retry in
+# lockstep and an unreachable registry still fails on a bounded budget, Q460),
+# the cluster-autoscaler patch resolver updatecli runs unattended (it must stay
+# inside the pinned Kubernetes minor and never downgrade, or the weekly bump
+# manufactures the very version skew the drift gate exists to catch, Q483),
+# the release gate's ownership lease, which is the sole trigger for tearing down
+# a prod-classified cluster the running process never scaled up — a live gate or
+# a hand-run debugging session read as orphaned deletes work in progress, which
+# is worse than the leak it exists to stop (Q640),
+# the release-validation status renderer and the sentinel that wakes a session
+# from it (both directions are silent: a failure attributed to the wrong phase
+# sends a diagnosis the wrong way, and a sentinel that never fires leaves a
+# wedged hour-long gate unnoticed — the wake itself is asserted live, against a
+# stream that transitions under a running watcher, Q616),
+# and the throttle instruments'
+# parsers (iostat/powermetrics/vm_stat text -> the numbers a throttle decision
+# rests on, Q447 — the measurement paths are macOS-only and one needs root, but
+# the parsers are text-to-number and run here). Lightweight pure-bash checks;
+# part of `check` and the CI shellcheck job.
+#
+# The suites are independent and each isolates its own scratch state (mktemp -d,
+# or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
+# run-parallel.sh keeps a failure attributable to its suite.
+#
+# This variable is the single source of truth for what `make scripts-test` runs,
+# so adding a suite is one edit here. `make list-script-tests` renders it, which
+# is why the target's `##` help names that target instead of enumerating: the
+# enumeration it replaced was 1,399 characters that every suite-adding PR
+# rewrote — two of them conflicted by construction (#1243 vs #1239) — and it had
+# already drifted to 50 names for 55 suites (Q671). `gate-lists-check`
+# reconciles this list against the scripts/**/*-test.sh files on disk, both ways.
+SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
+                 agent/claude-piped-gate-hook-test \
+                 agent/foreground-guard-patterns-test \
+                 agent/pr-requeue-eligible-test agent/record-launch-test \
+                 agent/pr-mergeability-watch-test \
+                 agent/qos-cluster-probe-test agent/validate-throttle-test \
+                 ci/check-conflict-markers-test ci/check-dep-advisory-test \
+                 ci/check-path-filters-test ci/dependabot-rebase-stale-test \
+                 ci/gate-list-test ci/shellcheck-scripts-test \
+                 ci/check-errexit-prologue-test ci/check-tools-test \
+                 ci/git-merge-gate-lists-test \
+                 docs/git-merge-script-index-test \
+                 ci/check-uses-pinned-test ci/run-parallel-test \
+                 ci/check-template-library-test \
+                 docs/backlog-metrics-test docs/check-doc-links-test \
+                 docs/check-em-dash-test docs/check-page-density-test \
+                 docs/check-release-links-test \
+                 docs/check-release-pins-test \
+                 docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
+                 docs/check-plan-index-test docs/check-script-docs-test \
+                 docs/alloc-queue-id-test docs/check-status-isolation-test \
+                 docs/find-duplicate-rows-test \
+                 docs/git-merge-plan-index-test docs/git-merge-roadmap-test \
+                 docs/git-merge-status-test \
+                 docs/lint-backlog-test \
+                 docs/release-gates-hook-test docs/release-version-hook-test \
+                 docs/source-links-hook-test \
+                 dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
+                 dogfood/nodes-test \
+                 dogfood/start-test dogfood/e2e-start-test dogfood/e2e-stop-test \
+                 dogfood/delete-test dogfood/e2e-run-watch-test \
+                 dogfood/release-status-test dogfood/release-sentinel-test \
+                 dogfood/lease-test \
+                 e2e/e2e-github-cleanup-test e2e/e2e-report-summary-test \
+                 e2e/progress-watch-test e2e/validate-cluster-test \
+                 fetch/download-verified-test fetch/pull-image-with-retry-test \
+                 go/check-codegen-drift-test go/check-v2-api-sync-test \
+                 go/coverage-test go/go-lint-scope-test go/go-test-run-filter-test \
+                 go/go-test-integration-test \
+                 go/go-vet-tags-test go/go-work-tidy-test \
+                 release/download-cosign-test release/release-delta-test \
+                 release/verify-release-test release/verify-published-docs-test \
+                 updatecli/latest-cluster-autoscaler-patch-test
