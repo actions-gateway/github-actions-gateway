@@ -7,7 +7,8 @@ Every number here came from `gh` against this repo on 2026-08-12; nothing is inf
 
 Analysis complete, and Option 1 shipped.
 Q675's re-measure ran on these numbers and demoted e2e to merge-group-only on both lanes; the decision and the re-measurement table live in [merge-queue.md](merge-queue.md#phase-3-re-measure-then-decide).
-Options 2 through 5 remain open and un-started.
+Options 2 through 4 remain open and un-started.
+Finding 1's segment, the largest one, is owned by separate in-flight work and is not an option here.
 
 ## Finding 1: CI execution is 5% of PR latency
 
@@ -28,6 +29,9 @@ The gate is that enqueueing is the maintainer's action taken after review ([para
 The landing decision therefore cannot be made until after CI is already green, which forces review latency and CI time into series.
 
 `reviewDecision` is empty on every PR sampled and the ruleset requires no approving review, so the gate is the enqueue action itself, not a review step.
+
+**This segment is owned elsewhere and this doc proposes no mechanism for it.** Closing it is in flight in separate work, on the attention side rather than by relaxing the enqueue gate, so do not scope an auto-merge change from the numbers above.
+They are recorded here because they set the scale of every other finding: anything that shortens CI is working on the 5%.
 
 ## Finding 2: the critical path is `max(kindnet, calico)`
 
@@ -113,15 +117,11 @@ At a 1% e2e failure rate, the trade the candidate names, paying a queue kickback
 Ordered by return per unit of risk.
 
 1. ~~**Work Q675.**~~ **Shipped 2026-08-12.** Both e2e lanes are merge-group-only; the decision and the re-measurement table are in [merge-queue.md](merge-queue.md#phase-3-re-measure-then-decide).
-2. **Enable auto-merge.** A repo setting plus arming PRs at review time.
-   Addresses Finding 1, the only finding worth ~59% of PR latency.
-   No validation change: same nine required checks, same merge queue, same kickback.
-   Collapses the tail, not the median.
-3. **Larger e2e runner.** The lever round 2 left open, unchanged by this analysis.
+2. **Larger e2e runner.** The lever round 2 left open, unchanged by this analysis.
    Elevate rather than exploit: it costs money on a public repo.
-4. **Narrow the calico lane.** Takes ~420s off the longer lane, but retires the full-product-under-enforcement gate described in Finding 4.
+3. **Narrow the calico lane.** Takes ~420s off the longer lane, but retires the full-product-under-enforcement gate described in Finding 4.
    Not recommended without a replacement for that coverage.
-5. **Split the kindnet chart checks into a parallel job.** Takes ~104s off the kindnet lane, but saves ~0 while calico is the critical path (Finding 2).
+4. **Split the kindnet chart checks into a parallel job.** Takes ~104s off the kindnet lane, but saves ~0 while calico is the critical path (Finding 2).
    Only worth doing once calico is shorter than kindnet, and it adds a job plus a required status check to a workflow with documented wedging history (Q363).
 
 Not on the list: re-tuning `--procs` or the suite's parallel phase.
