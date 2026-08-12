@@ -248,7 +248,8 @@ The local-gate window varies by an order of magnitude across the machines this r
 **A hook asks about the overlap at the push itself** (Q665), because the rule above is read before the gate starts and the push happens after it.
 It fires only when what `main` gained overlaps the files this branch changes. `main` takes ~47 merges a day, so "the base moved" alone is true at nearly every push and would be accepted without reading.
 It reads the local `origin/main` ref and never fetches, so it under-reports until you do, and it stays silent when the probe fails.
-The merge-driver-owned files are discounted.
+The merge-driver-owned files are discounted, but only while the merge really resolves them, which the hook settles by asking `git merge-tree` rather than by assuming (Q790).
+The driver refuses on a row deleted on one side and edited on the other, the shape every flake-row move takes, and a branch whose only changed file is `docs/STATUS.md` can be `DIRTY` on that alone.
 
 Whatever happens, verify what actually landed **by content, not SHA** — see below.
 

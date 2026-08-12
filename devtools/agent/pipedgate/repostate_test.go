@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,14 +17,26 @@ type fakeRepo struct {
 	branchFiles []string
 	baseGained  []string
 	openPRs     []PR
+	conflicts   []string
 	branchErr   error
 	baseErr     error
 	prErr       error
+	mergeErr    error
+	// mergeCalls counts MergeConflicts calls, so a test can assert the merge
+	// probe is skipped rather than merely harmless.
+	mergeCalls *int
 }
 
 func (r fakeRepo) BranchFiles() ([]string, error) { return r.branchFiles, r.branchErr }
 func (r fakeRepo) BaseGained() ([]string, error)  { return r.baseGained, r.baseErr }
 func (r fakeRepo) OpenPRs() ([]PR, error)         { return r.openPRs, r.prErr }
+
+func (r fakeRepo) MergeConflicts() ([]string, error) {
+	if r.mergeCalls != nil {
+		*r.mergeCalls++
+	}
+	return r.conflicts, r.mergeErr
+}
 
 var errProbe = errors.New("probe failed")
 
@@ -108,6 +121,51 @@ func TestRepoStateWarnings(t *testing.T) {
 			cmd:  "git push -u origin HEAD",
 			repo: fakeRepo{branchFiles: []string{"docs/STATUS.md", "Makefile"}, baseGained: []string{"docs/STATUS.md", "Makefile"}},
 			warn: true,
+		},
+		// Q790, both directions. The discount holds only while the merge really
+		// resolves: the driver refuses on a row deleted on one side and edited on
+		// the other, which is what every flake-row move looks like, and #1383 was
+		// left dirty by #1384 with docs/STATUS.md as its only changed file.
+		{
+			name: "a driver-owned overlap the merge leaves conflicted",
+			cmd:  "git push -u origin HEAD",
+			repo: fakeRepo{
+				branchFiles: []string{"docs/STATUS.md"},
+				baseGained:  []string{"docs/STATUS.md"},
+				conflicts:   []string{"docs/STATUS.md"},
+			},
+			warn:   true,
+			substr: "dirty now, not at kickback time",
+		},
+		// The other direction, and the one that makes dropping the entry the wrong
+		// fix: nearly every branch edits the backlog, so a discount that stopped
+		// holding for a resolvable merge would fire on nearly every push.
+		{
+			name: "a driver-owned overlap the merge resolves stays discounted",
+			cmd:  "git push -u origin HEAD",
+			repo: fakeRepo{
+				branchFiles: []string{"docs/STATUS.md"},
+				baseGained:  []string{"docs/STATUS.md"},
+				conflicts:   []string{"cmd/agc/run.go"},
+			},
+		},
+		// A conflict in a path this branch does not change is someone else's, and
+		// merge-tree reports the whole merge rather than the discounted paths.
+		{
+			name: "a conflict outside the discounted paths is not re-admitted",
+			cmd:  "git push -u origin HEAD",
+			repo: fakeRepo{
+				branchFiles: driverOwned,
+				baseGained:  driverOwned,
+				conflicts:   []string{"README.md"},
+			},
+		},
+		// `git merge-tree` exits 1 both for conflicts and for an unresolvable ref,
+		// so an unmeasurable merge has to keep the discount rather than guess.
+		{
+			name: "a failed merge probe keeps the discount",
+			cmd:  "git push -u origin HEAD",
+			repo: fakeRepo{branchFiles: driverOwned, baseGained: driverOwned, mergeErr: errProbe},
 		},
 		// No origin/main, a shallow clone, no git at all.
 		{
@@ -244,6 +302,162 @@ func TestRepoStateWarnings(t *testing.T) {
 				t.Fatalf("reason missing %q\nreason: %s", tc.substr, got)
 			}
 		})
+	}
+}
+
+// The merge probe is the expensive half of the push check — 70-100 ms against
+// ~5 ms for the two `git diff`s — so it must not run when there is nothing
+// discounted for it to re-admit. Asserting the call count, not just the verdict,
+// is what keeps a later refactor from making every push pay for it.
+func TestMergeProbeRunsOnlyForDiscountedOverlap(t *testing.T) {
+	reg := shippedRegistry(t)
+
+	cases := []struct {
+		name string
+		repo fakeRepo
+		want int
+	}{
+		{
+			name: "no discounted path in either set",
+			repo: fakeRepo{branchFiles: []string{"Makefile"}, baseGained: []string{"Makefile"}},
+		},
+		{
+			name: "discounted on one side only",
+			repo: fakeRepo{branchFiles: []string{"docs/STATUS.md"}, baseGained: []string{"Makefile"}},
+		},
+		{
+			name: "discounted on both sides",
+			repo: fakeRepo{branchFiles: []string{"docs/STATUS.md"}, baseGained: []string{"docs/STATUS.md"}},
+			want: 1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			repo := tc.repo
+			repo.mergeCalls = &calls
+			Decide("git push -u origin HEAD", false, reg, repo)
+			if calls != tc.want {
+				t.Errorf("MergeConflicts called %d times, want %d", calls, tc.want)
+			}
+		})
+	}
+
+	// `gh pr create` has no content to check — the other PR's head is not a local
+	// ref, and a PreToolUse hook must not fetch — so it never pays for the probe.
+	calls := 0
+	repo := fakeRepo{
+		branchFiles: []string{"docs/STATUS.md"},
+		openPRs:     []PR{{Number: 1, Files: []string{"docs/STATUS.md"}}},
+		conflicts:   []string{"docs/STATUS.md"},
+		mergeCalls:  &calls,
+	}
+	if got := Decide("gh pr create --fill", false, reg, repo); got != "" {
+		t.Errorf("want silence for a backlog-only PR overlap, got: %s", got)
+	}
+	if calls != 0 {
+		t.Errorf("gh pr create ran the merge probe %d times", calls)
+	}
+}
+
+// The `git merge-tree --write-tree -z` output shape, captured from git 2.55.0 on
+// 2026-08-11 against a synthetic delete-vs-edit of one Queue row.
+func TestParseMergeTree(t *testing.T) {
+	nul := "\x00"
+	tree := "813bfd88a205af3b8a276fb2f98b56183cf310ab"
+
+	// A clean merge prints the tree OID and nothing else.
+	if got := parseMergeTree([]byte(tree + nul)); len(got) != 0 {
+		t.Errorf("clean merge = %v, want no conflicts", got)
+	}
+	// An unresolvable ref exits 1 with no output at all.
+	if got := parseMergeTree(nil); len(got) != 0 {
+		t.Errorf("empty output = %v, want no conflicts", got)
+	}
+
+	// Three stages of one path, then the empty record, then the messages — which
+	// also name the path and must not be read as conflicts of their own.
+	raw := tree + nul +
+		"100644 69bc260a 1\tdocs/STATUS.md" + nul +
+		"100644 b671dca3 2\tdocs/STATUS.md" + nul +
+		"100644 bf2c188e 3\tdocs/STATUS.md" + nul +
+		"100644 aa11bb22 2\tMakefile" + nul +
+		"100644 cc33dd44 3\tMakefile" + nul +
+		nul +
+		"1" + nul + "docs/STATUS.md" + nul + "CONFLICT (contents)" + nul +
+		"CONFLICT (content): Merge conflict in docs/STATUS.md\n" + nul
+
+	got := parseMergeTree([]byte(raw))
+	want := []string{"docs/STATUS.md", "Makefile"}
+	if len(got) != len(want) {
+		t.Fatalf("parseMergeTree = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("parseMergeTree[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// The captured bytes above are a fixture, and a fixture cannot notice git
+// changing its output. This runs the real probe against a real repository, in
+// all three states it has to tell apart: conflicted, clean, and unmeasurable.
+func TestExecRepoMergeConflicts(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	run("init", "-q", "-b", "main", ".")
+	run("config", "user.email", "t@example.com")
+	run("config", "user.name", "t")
+	write("base\n")
+	run("add", "f.txt")
+	run("commit", "-qm", "base")
+	run("checkout", "-q", "-b", "side")
+	write("side\n")
+	run("commit", "-qam", "side")
+	run("checkout", "-q", "main")
+	write("main\n")
+	run("commit", "-qam", "main")
+	run("checkout", "-q", "side")
+
+	repo := execRepo{dir: dir, baseRef: "main"}
+	got, err := repo.MergeConflicts()
+	if err != nil {
+		t.Fatalf("MergeConflicts: %v", err)
+	}
+	if len(got) != 1 || got[0] != "f.txt" {
+		t.Errorf("conflicted merge = %v, want [f.txt]", got)
+	}
+
+	// A clean merge: the branch is an ancestor of the base, so there is nothing
+	// to resolve. Exit 0, and the OID alone on stdout.
+	run("checkout", "-q", "main")
+	run("checkout", "-q", "-B", "side", "main~1")
+	if got, err = repo.MergeConflicts(); err != nil || len(got) != 0 {
+		t.Errorf("clean merge = %v, %v; want no conflicts and no error", got, err)
+	}
+
+	// An unresolvable base exits 1 with no output, the same status a conflicted
+	// merge exits. It must reach the caller as an error so the discount holds,
+	// never as an empty conflict set that reads like a clean merge.
+	if got, err = (execRepo{dir: dir, baseRef: "no-such-ref"}).MergeConflicts(); err == nil {
+		t.Errorf("unresolvable base = %v, want an error", got)
 	}
 }
 

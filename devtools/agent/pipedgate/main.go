@@ -87,12 +87,18 @@
 //     not reveal.
 //
 // Both discount the merge-driver-owned files (overlap_ignore in the registry):
-// nearly every PR edits docs/STATUS.md, and a conflict there is resolved by row
-// ID rather than reviewed.
+// nearly every PR edits docs/STATUS.md, and most conflicts there are resolved by
+// row ID rather than reviewed. Most, not all — the driver refuses on a row
+// deleted on one side and edited on the other — so the push check holds the
+// discount only while the merge really resolves, and asks `git merge-tree` when
+// one of those paths is in both change sets (Q790). The create check cannot: the
+// other PR's head is not a local ref and a hook must not fetch, and duplicated
+// work rather than a conflict is what it is looking for.
 //
 // These are the only checks that cost a subprocess, and they run only after the
-// parse finds their trigger at command position — two `git diff`s for the push,
-// one `gh pr list` round trip for the create. Both probes fail silent on any
+// parse finds their trigger at command position — two `git diff`s for the push
+// plus one `git merge-tree` when a discounted path is in both change sets, one
+// `gh pr list` round trip for the create. Both probes fail silent on any
 // error, which is what offline, an expired or rate-limited gh token, a shallow
 // clone, and a missing origin/main all reduce to; `git` is bounded at 3 s and
 // `gh` at 5 s so a dead network costs a pause rather than a stall. The base is
