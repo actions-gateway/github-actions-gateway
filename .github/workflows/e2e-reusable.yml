@@ -708,26 +708,45 @@ jobs:
           echo "=== events (last 200) ==="
           kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -200
           echo
-          echo "=== CNI dataplane health (Q300: a starved kube-network-policies enforcer"
-          echo "    times out allowed traffic and leaves fresh NetworkPolicies unenforced) ==="
-          kubectl get pods -n kube-system -l app=kindnet -o wide
-          echo "--- restart attribution (Q747: kindnetd runs kube-network-policies with FailOpen, so"
-          echo "    its nftables rules carry 'queue flags bypass' — while no process is bound to the"
-          echo "    nfqueue EVERY packet is accepted and NetworkPolicy is not enforced on that node."
-          echo "    A nonzero RESTARTS on the node hosting a spec's pods is the first thing to read"
-          echo "    when a connection that should have been blocked succeeded; LAST_REASON says why"
-          echo "    the enforcer died, which the Q747 dump could not answer) ---"
+          echo "=== CNI dataplane health (Q300: a starved NetworkPolicy enforcer times out"
+          echo "    allowed traffic and leaves fresh NetworkPolicies unenforced) ==="
+          # Both lanes' enforcers, the same two selectors as the suite's own dump in
+          # cmd/gmc/test/utils/cni_enforcer.go. That one is authoritative because it fires
+          # at failure time; this one covers the case where the suite process died before
+          # its AfterEach could run — the same two-probe split as the runner-egress check
+          # above. It read only app=kindnet until Q809, which is the lane where the
+          # enforcement negatives self-SKIP: on calico, the lane that actually asserts
+          # them, three failures across main and two queue entries captured no enforcer
+          # state at all.
           cs='.status.containerStatuses[0]'
-          kubectl get pods -n kube-system -l app=kindnet -o "custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,RESTARTS:${cs}.restartCount,STARTED:${cs}.state.running.startedAt,LAST_REASON:${cs}.lastState.terminated.reason,LAST_EXIT:${cs}.lastState.terminated.exitCode,LAST_FINISHED:${cs}.lastState.terminated.finishedAt"
-          echo "--- kindnet previous-container logs (only source for a crash-looped enforcer's fatal) ---"
-          kubectl logs -n kube-system -l app=kindnet --tail=60 --prefix --previous
+          for sel in app=kindnet k8s-app=calico-node; do
+            pods=$(kubectl get pods -n kube-system -l "$sel" -o name)
+            [[ -z "$pods" ]] && continue
+            echo "--- enforcer pods ($sel) ---"
+            kubectl get pods -n kube-system -l "$sel" -o wide
+            echo "--- restart attribution ($sel): a nonzero RESTARTS on the node hosting a spec's"
+            echo "    pods is the first thing to read when a connection that should have been"
+            echo "    blocked succeeded; LAST_REASON says why the enforcer died ---"
+            kubectl get pods -n kube-system -l "$sel" -o "custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,RESTARTS:${cs}.restartCount,STARTED:${cs}.state.running.startedAt,LAST_REASON:${cs}.lastState.terminated.reason,LAST_EXIT:${cs}.lastState.terminated.exitCode,LAST_FINISHED:${cs}.lastState.terminated.finishedAt"
+            echo "--- previous-container logs ($sel; only source for a crash-looped enforcer's fatal) ---"
+            kubectl logs -n kube-system -l "$sel" --tail=60 --prefix --previous
+            for pod in $pods; do
+              echo "--- ${pod} cpu.stat (nr_throttled/nr_periods = CFS throttle ratio) ---"
+              kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/cpu.stat
+              echo "--- ${pod} memory.current / memory.max (bring-up raises kind's 50Mi kindnet ceiling; Q747) ---"
+              kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.max
+              echo "--- ${pod} memory.events (nonzero 'high'/'max' = enforcer stalled on memory pressure) ---"
+              kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/memory.events
+            done
+            echo "--- logs ($sel; NetworkPolicy programming/verdict lag shows here; --since spans"
+            echo "    the whole suite so the failing spec's window is covered, not just the tail) ---"
+            kubectl logs -n kube-system -l "$sel" --since=30m --tail=-1 --prefix
+          done
+          # kindnet only: kindnetd runs kube-network-policies with FailOpen, so its nftables
+          # rules carry 'queue flags bypass' — while no process is bound to the nfqueue EVERY
+          # packet is accepted and NetworkPolicy is not enforced on that node. Calico programs
+          # its rules into the kernel and binds no nfqueue, so this read says nothing there.
           for pod in $(kubectl get pods -n kube-system -l app=kindnet -o name); do
-            echo "--- ${pod} cpu.stat (nr_throttled/nr_periods = CFS throttle ratio) ---"
-            kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/cpu.stat
-            echo "--- ${pod} memory.current / memory.max (bring-up raises kind's 50Mi ceiling; Q747) ---"
-            kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.max
-            echo "--- ${pod} memory.events (nonzero 'high'/'max' = enforcer stalled on memory pressure) ---"
-            kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/memory.events
             echo "--- ${pod} nfnetlink_queue (queue_dropped/user_dropped > 0 = verdicts overflowed; with"
             echo "    the bypass flag an overflowed packet is ACCEPTED, i.e. NetworkPolicy fails open."
             echo "    These belong to the queue INSTANCE, not the boot: an enforcer restart destroys and"
@@ -735,9 +754,6 @@ jobs:
             echo "    above — check that column before reading a zero as 'no overflow this run', Q747) ---"
             kubectl exec -n kube-system "${pod#pod/}" -- cat /proc/net/netfilter/nfnetlink_queue
           done
-          echo "--- kindnet logs (NetworkPolicy programming/verdict lag shows here; --since spans the"
-          echo "    whole suite so the failing spec's window is covered, not just the dump-time tail) ---"
-          kubectl logs -n kube-system -l app=kindnet --since=30m --tail=-1 --prefix
 
       - name: Delete kind cluster
         if: always()
