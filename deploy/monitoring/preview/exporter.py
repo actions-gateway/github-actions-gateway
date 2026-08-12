@@ -34,6 +34,16 @@ SCALESETS = [
 # populated without implying every set carries the condition.
 GATED_SCALESETS = {("team-a", "gpu-a100"), ("team-b", "cpu-standard")}
 
+# The harness renders a 10-minute window (render.sh FROM=now-10m) after WAIT=660s
+# of accumulation, so a counter's whole visible life is a few hundred seconds. A
+# rate below 1/WAIT never reaches its first integer and plots as a flat zero for
+# the entire render; a rate just above it plots as one step. Neither reads as a
+# live system, and both look like real data (Q704). Floor every synthetic counter
+# rate at a handful of events per window. A deliberate zero (a healthy error
+# counter) stays a literal 0 and does not go through counter_total.
+RENDER_WINDOW = 600.0
+MIN_COUNTER_RATE = 6.0 / RENDER_WINDOW
+
 POD_BUCKETS = [0.5, 1, 2.5, 5, 10, 15, 30, 60, 120, 300]   # +Inf appended
 JOB_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 PROXY_BUCKETS = [0.1, 0.5, 1, 5, 10, 60, 300, 1800, 3600, 21600]
@@ -59,6 +69,22 @@ def wavy_total(base_rate, elapsed, seed=0.0, amp=0.4, period=300.0):
     w = (2.0 * math.pi) / period
     total = base_rate * (elapsed + (amp / w) * (math.sin(w * elapsed + seed) - math.sin(seed)))
     return int(max(0.0, total))
+
+
+def counter_total(rate, elapsed, seed=0.0):
+    """wavy_total for an event counter, rejecting a rate that cannot render.
+
+    Raises rather than emitting a series the render window can only show as a
+    flat line. render() is called once before serving, so a sub-floor rate fails
+    at startup instead of shipping a screenshot that looks populated.
+    """
+    if rate < MIN_COUNTER_RATE:
+        raise ValueError(
+            f"counter rate {rate} is below {MIN_COUNTER_RATE:g}/s: fewer than "
+            f"{MIN_COUNTER_RATE * RENDER_WINDOW:g} events across the "
+            f"{RENDER_WINDOW:g}s render window renders flat"
+        )
+    return wavy_total(rate, elapsed, seed=seed)
 
 
 def hist_lines(name, labels_prefix, buckets, total_rate, center_idx, elapsed):
@@ -95,18 +121,18 @@ def render():
 
     for ns, rg in TENANTS:
         rate = {"gpu-a100": 0.12, "cpu-standard": 0.7, "gpu-2x": 0.05}.get(rg, 0.2)
-        acquired = wavy_total(rate, elapsed, seed=hash((ns, rg)) % 7)
+        acquired = counter_total(rate, elapsed, seed=hash((ns, rg)) % 7)
         L.append(f'actions_gateway_jobs_acquired_total{{namespace="{ns}",runner_group="{rg}"}} {acquired}')
 
     for ns in NAMESPACES:
-        L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="already_claimed"}} {int(0.01 * elapsed)}')
-        L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="delivery_window_expired"}} {int(0.002 * elapsed)}')
+        L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="already_claimed"}} {counter_total(0.05, elapsed)}')
+        L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="delivery_window_expired"}} {counter_total(0.01, elapsed)}')
         # GetMessage errors by reason (excludes empty polls / session expiry).
-        L.append(f'actions_gateway_message_poll_errors_total{{namespace="{ns}",reason="timeout"}} {int(0.003 * elapsed)}')
-        L.append(f'actions_gateway_message_poll_errors_total{{namespace="{ns}",reason="rate_limited"}} {int(0.0005 * elapsed)}')
+        L.append(f'actions_gateway_message_poll_errors_total{{namespace="{ns}",reason="timeout"}} {counter_total(0.06, elapsed)}')
+        L.append(f'actions_gateway_message_poll_errors_total{{namespace="{ns}",reason="rate_limited"}} {counter_total(0.01, elapsed)}')
         # renewjob teardowns: definitive lock loss (Q254).
-        L.append(f'actions_gateway_renew_job_teardowns_total{{namespace="{ns}",reason="job_not_found"}} {int(0.0008 * elapsed)}')
-        L.append(f'actions_gateway_token_refreshes_total{{namespace="{ns}"}} {int(0.0003 * elapsed) + 1}')
+        L.append(f'actions_gateway_renew_job_teardowns_total{{namespace="{ns}",reason="job_not_found"}} {counter_total(0.01, elapsed)}')
+        L.append(f'actions_gateway_token_refreshes_total{{namespace="{ns}"}} {counter_total(0.02, elapsed)}')
         L.append(f'actions_gateway_token_refresh_errors_total{{namespace="{ns}"}} 0')
         L.append(f'actions_gateway_renew_job_errors_total{{namespace="{ns}"}} 0')
         L.append(f'actions_gateway_ip_range_updates_total{{namespace="{ns}"}} 1')
@@ -116,24 +142,24 @@ def render():
     for ns, rg in TENANTS:
         # job duration: center idx 6 (~64-128s)
         L += hist_lines("actions_gateway_job_duration_seconds", f'namespace="{ns}",runner_group="{rg}"', JOB_BUCKETS, 0.3, 6, elapsed)
-        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}"}} {int(0.002 * elapsed)}')
+        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.02, elapsed)}')
         L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}"}} 0')
-        L.append(f'actions_gateway_quota_retries_total{{namespace="{ns}",runner_group="{rg}"}} {int(0.001 * elapsed)}')
+        L.append(f'actions_gateway_quota_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.01, elapsed)}')
         L.append(f'actions_gateway_quota_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}"}} 0')
         # single-use JIT agent recycling: routine post-job recycles, no errors
-        L.append(f'actions_gateway_agent_recycles_total{{namespace="{ns}",runner_group="{rg}",trigger="post_job"}} {int(0.15 * elapsed)}')
+        L.append(f'actions_gateway_agent_recycles_total{{namespace="{ns}",runner_group="{rg}",trigger="post_job"}} {counter_total(0.15, elapsed)}')
         L.append(f'actions_gateway_agent_recycle_errors_total{{namespace="{ns}",runner_group="{rg}"}} 0')
         # worker-pod reaper: routine completed_ttl cleanup, occasional pending_deadline.
         # The real counter always carries all four labels; runner_set is empty on the
         # classic tier and non-empty only on scale-set reaps (Q514).
-        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",runner_set="",reason="completed_ttl"}} {int(0.14 * elapsed)}')
-        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",runner_set="",reason="pending_deadline"}} {int(0.0002 * elapsed)}')
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",runner_set="",reason="completed_ttl"}} {counter_total(0.14, elapsed)}')
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",runner_set="",reason="pending_deadline"}} {counter_total(0.01, elapsed)}')
         # broker OAuth token-propagation retries during recycle churn (Q267)
-        L.append(f'actions_gateway_broker_token_propagation_retries_total{{namespace="{ns}",runner_group="{rg}"}} {int(0.004 * elapsed)}')
+        L.append(f'actions_gateway_broker_token_propagation_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.02, elapsed)}')
         # fan-out safety trio (Q260 / Q266): benign steady rates during bursts
-        L.append(f'actions_gateway_jobs_duplicate_delivery_total{{namespace="{ns}",runner_group="{rg}"}} {int(0.006 * elapsed)}')
-        L.append(f'actions_gateway_abandoned_delivery_completions_total{{namespace="{ns}",runner_group="{rg}",outcome="completed"}} {int(0.006 * elapsed)}')
-        L.append(f'actions_gateway_fanout_loser_recycle_deferred_total{{namespace="{ns}",runner_group="{rg}",outcome="winner_concluded"}} {int(0.006 * elapsed)}')
+        L.append(f'actions_gateway_jobs_duplicate_delivery_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.03, elapsed)}')
+        L.append(f'actions_gateway_abandoned_delivery_completions_total{{namespace="{ns}",runner_group="{rg}",outcome="completed"}} {counter_total(0.03, elapsed)}')
+        L.append(f'actions_gateway_fanout_loser_recycle_deferred_total{{namespace="{ns}",runner_group="{rg}",outcome="winner_concluded"}} {counter_total(0.03, elapsed)}')
         # tenant health-condition gauges all healthy (0)
         L.append(f'actions_gateway_worker_quota_pressure{{namespace="{ns}",runner_group="{rg}"}} 0')
         L.append(f'actions_gateway_worker_quota_exceeded{{namespace="{ns}",runner_group="{rg}"}} 0')
@@ -145,12 +171,12 @@ def render():
     # split mostly-succeeded by result.
     for ns, rs in SCALESETS:
         rate = {"gpu-a100": 0.12, "cpu-standard": 0.7}.get(rs, 0.2)
-        assigned = wavy_total(rate, elapsed, seed=hash((ns, rs)) % 7)
+        assigned = counter_total(rate, elapsed, seed=hash((ns, rs)) % 7)
         provisioned = int(assigned * 0.98)
         completed = int(provisioned * 0.95)
         L.append(f'actions_gateway_scaleset_jobs_assigned_total{{namespace="{ns}",runner_set="{rs}"}} {assigned}')
         L.append(f'actions_gateway_scaleset_jobs_provisioned_total{{namespace="{ns}",runner_set="{rs}"}} {provisioned}')
-        L.append(f'actions_gateway_scaleset_provision_errors_total{{namespace="{ns}",runner_set="{rs}"}} {int(0.002 * elapsed)}')
+        L.append(f'actions_gateway_scaleset_provision_errors_total{{namespace="{ns}",runner_set="{rs}"}} {counter_total(0.01, elapsed)}')
         L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="succeeded"}} {int(completed * 0.9)}')
         L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="failed"}} {int(completed * 0.08)}')
         L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="canceled"}} {int(completed * 0.02)}')
@@ -164,8 +190,8 @@ def render():
         # is what joins them to the runner_set-labelled gauges above (Q514/Q651).
         # orphaned_running is the scale-set-specific reason: a worker that registered
         # but never received its job.
-        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="completed_ttl"}} {int(0.12 * elapsed)}')
-        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="orphaned_running"}} {int(0.005 * elapsed)}')
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="completed_ttl"}} {counter_total(0.12, elapsed)}')
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="orphaned_running"}} {counter_total(0.012, elapsed)}')
         # Opt-in capacity gate healthy: condition False with the reason that says the
         # gate evaluated and found room, not the latched AwaitingProbe (Q512/Q643).
         if (ns, rs) in GATED_SCALESETS:
@@ -177,8 +203,8 @@ def render():
     # that here: emit one proxy series per namespace, labelled with it.
     for ns in NAMESPACES:
         L.append(f'actions_gateway_proxy_connections_active{{namespace="{ns}"}} {max(0, int(8 + jitter(3, 4)))}')
-        L.append(f'actions_gateway_proxy_connections_total{{namespace="{ns}"}} {int(0.5 * elapsed)}')
-        L.append(f'actions_gateway_proxy_dial_errors_total{{namespace="{ns}"}} {int(0.001 * elapsed)}')
+        L.append(f'actions_gateway_proxy_connections_total{{namespace="{ns}"}} {counter_total(0.5, elapsed)}')
+        L.append(f'actions_gateway_proxy_dial_errors_total{{namespace="{ns}"}} {counter_total(0.01, elapsed)}')
         # tunnel duration: center idx 5 (~60s)
         L += hist_lines("actions_gateway_proxy_tunnel_duration_seconds", f'namespace="{ns}"', PROXY_BUCKETS, 0.5, 5, elapsed)
 
@@ -194,7 +220,7 @@ def render():
     # controller-runtime built-ins: healthy reconcile throughput, no errors.
     for c in CONTROLLERS:
         L.append(f'controller_runtime_reconcile_errors_total{{controller="{c}"}} 0')
-        L.append(f'controller_runtime_reconcile_total{{controller="{c}",result="success"}} {int(0.2 * elapsed)}')
+        L.append(f'controller_runtime_reconcile_total{{controller="{c}",result="success"}} {counter_total(0.2, elapsed)}')
 
     return ("\n".join(L) + "\n").encode()
 
@@ -218,4 +244,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    render()  # crash now on a counter rate the render window cannot show (Q704)
     HTTPServer(("0.0.0.0", 9100), Handler).serve_forever()
