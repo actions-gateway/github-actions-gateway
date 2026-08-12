@@ -2832,14 +2832,6 @@
 <td>Measured 2026-08-11: 15 of 17 comparison rows carry no ARC version and no date, and two have already gone false. Settled: a competitor cell renders a verdict only with both, else unverified. Gate the rule, then date the cells.</td>
 </tr>
 <tr>
-<td><a id="Q798"></a>Q798</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-roadmap.sh"><code>roadmap-check</code>'s word cap reports a deleted bullet's orphan against the previous bullet</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Deleting a bullet and leaving its indented continuation attaches it to the bullet above, whose cap then breaks. Hit 2026-08-11 closing Q726: accurate message, innocent bullet, reads as pre-existing. Name the line range, or flag the orphan.</td>
-</tr>
-<tr>
 <td><a id="Q799"></a>Q799</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.gitattributes">Route <code>docs/roadmap.md</code> through an ID-keyed merge driver</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -2878,14 +2870,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Nothing compares the published <code>/X.Y.Z/</code> against <code>X.Y.Z</code>, so the landing page advertised the prior release's <code>helm --version</code> on 1.1.0, 1.2.0 and 1.4.0. Measured 2026-08-10. Step 7 republishes by hand; a curl+grep per version would catch a miss.</td>
-</tr>
-<tr>
-<td><a id="Q786"></a>Q786</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/progress.sh"><code>progress.sh</code> lets a test reach the live release stream defaults</a></td>
-<td><code>debt</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Every call site is scoped now (Q777), but nothing stops the next one: the defaults are the live paths, and <code>progress_init</code> removes <code>RELEASE_STATUS_FILE</code> even when the stream is off, so <code>RELEASE_PROGRESS_FILE=</code> is partial cover. Measured 2026-08-10.</td>
 </tr>
 <tr>
 <td><a id="Q781"></a>Q781</td>
