@@ -1,8 +1,8 @@
 {
   "provenance": {
-    "snapshot_date": "2026-08-03",
+    "snapshot_date": "2026-08-12",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 240,
+    "transcript_files_read": 395,
     "snapshot_host": "mac-2",
     "hosts": [
       "mac-1",
@@ -14,7 +14,7 @@
     "token_dedup": "(message.id, requestId)",
     "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
     "first_measured_date": "2026-05-19",
-    "last_measured_date": "2026-08-03",
+    "last_measured_date": "2026-08-12",
     "first_project_date": "2026-05-16",
     "growth_chart_baseline": {
       "tokens": 10000000,
@@ -46,13 +46,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8202979,
-      "output": 70047460,
-      "cache_creation": 343145712,
-      "cache_read": 17852193171,
-      "assistant_msgs": 96848,
-      "user_msgs": 108508,
-      "headline_input_output_cachecreation": 421396151
+      "input": 8309287,
+      "output": 85926833,
+      "cache_creation": 449262477,
+      "cache_read": 24461072240,
+      "assistant_msgs": 122754,
+      "user_msgs": 136947,
+      "headline_input_output_cachecreation": 543498597
     },
     "estimated": {
       "input": 6559,
@@ -64,15 +64,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8209538,
-      "output": 70526396,
-      "cache_creation": 345155137,
-      "cache_read": 17919712014,
-      "assistant_msgs": 97590,
-      "user_msgs": 109369,
-      "headline_input_output_cachecreation": 423891071,
-      "grand_total_incl_cache_read": 18343603085,
-      "cache_reuse_ratio": 51.92
+      "input": 8315846,
+      "output": 86405769,
+      "cache_creation": 451271902,
+      "cache_read": 24528591083,
+      "assistant_msgs": 123496,
+      "user_msgs": 137808,
+      "headline_input_output_cachecreation": 545993517,
+      "grand_total_incl_cache_read": 25074584600,
+      "cache_reuse_ratio": 54.35
     }
   },
   "by_model": {
@@ -84,7 +84,7 @@
     "Other": {
       "headline": 0,
       "output": 0,
-      "messages": 164
+      "messages": 190
     },
     "Opus 4.7": {
       "headline": 16947491,
@@ -102,14 +102,14 @@
       "messages": 44636
     },
     "Fable 5": {
-      "headline": 37084788,
-      "output": 5498574,
-      "messages": 7321
+      "headline": 43213353,
+      "output": 6310772,
+      "messages": 8356
     },
     "Opus 5": {
-      "headline": 123922151,
-      "output": 18665266,
-      "messages": 31983
+      "headline": 239896032,
+      "output": 33732441,
+      "messages": 56828
     }
   },
   "by_host": {
@@ -132,34 +132,34 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 138957,
-      "output": 18085297,
-      "cache_creation": 102409371,
-      "cache_read": 6715801886,
-      "assistant_msgs": 30257,
-      "user_msgs": 34205,
-      "headline_input_output_cachecreation": 120633625
+      "input": 245265,
+      "output": 33964670,
+      "cache_creation": 208526136,
+      "cache_read": 13324680955,
+      "assistant_msgs": 56163,
+      "user_msgs": 62644,
+      "headline_input_output_cachecreation": 242736071
     }
   },
   "sessions": {
     "bucket_minutes": 10,
     "first_date": "2026-07-26",
-    "last_date": "2026-08-03",
-    "session_days": 272,
-    "peak_concurrent": 13,
-    "mean_concurrent": 2.99,
-    "hours_using_claude": 95.8,
-    "session_hours": 286.5,
-    "parallel_share_pct": 71,
+    "last_date": "2026-08-12",
+    "session_days": 468,
+    "peak_concurrent": 16,
+    "mean_concurrent": 3.03,
+    "hours_using_claude": 183.5,
+    "session_hours": 556.8,
+    "parallel_share_pct": 67,
     "note": "Concurrency needs session-level transcripts, which no earlier CSV preserved, so the series starts at the first day whose transcripts survive rather than at the first project day. It is never estimated."
   },
   "head_snapshot": {
-    "go_code": 96031,
-    "go_comments": 34794,
-    "markdown_nonblank": 60436,
-    "yaml_handwritten": 11383,
-    "yaml_generated": 131197,
-    "tests": 1876,
-    "commits": 1654
+    "go_code": 111933,
+    "go_comments": 39869,
+    "markdown_nonblank": 50059,
+    "yaml_handwritten": 12217,
+    "yaml_generated": 131442,
+    "tests": 2111,
+    "commits": 1863
   }
 }
