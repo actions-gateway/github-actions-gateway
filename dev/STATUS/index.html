@@ -2960,14 +2960,6 @@
 <td><code>AutoscalingRunnerSetSpec.Template</code> is a full PodTemplateSpec, so <code>priorityClassName</code> is settable per scale set. The real gaps are sharper: ordering yes, reserved floor no (needs per-index variation), shared ceiling no.</td>
 </tr>
 <tr>
-<td><a id="Q756"></a>Q756</td>
-<td><a href="../design/appendix-b-worker-isolation/#b2-operational-cost">Appendix B's overhead figures are unscoped, and the CI-relevant cost is a configuration question</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Kata's <code>+1-3s</code> is a QEMU number (Firecracker boots in ~125ms); the gVisor memory and startup figures are uncited. Add prose, not a table row: no rigorous current head-to-head exists, and devmapper vs virtio-fs swings more than the runtime does.</td>
-</tr>
-<tr>
 <td><a id="Q758"></a>Q758</td>
 <td><a href="../design/appendix-b-worker-isolation/#b2-operational-cost">The AWS nested-virt framing predates EC2 shipping it on virtual instances</a></td>
 <td><code>docs</code></td>

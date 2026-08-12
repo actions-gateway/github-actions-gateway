@@ -2792,8 +2792,8 @@ Those should be enforced <em>regardless</em> of the runtime choice.</p>
 <tr>
 <td>Pod startup latency overhead</td>
 <td>Baseline</td>
-<td>+ 50–200ms</td>
-<td>+ 1–3s (VM boot)</td>
+<td>Sentry process start</td>
+<td>Guest kernel boot (see <a href="#b2-operational-cost">B.2</a>)</td>
 </tr>
 <tr>
 <td>Compatible workflows</td>
@@ -2832,13 +2832,13 @@ Those should be enforced <em>regardless</em> of the runtime choice.</p>
 </tr>
 <tr>
 <td>Per-pod memory overhead</td>
-<td>~10–30 MiB (Sentry process)</td>
-<td>~50–150 MiB (guest kernel + agent)</td>
+<td>Sentry process</td>
+<td>Guest kernel + agent; the shipped <code>kata</code> RuntimeClass reserves <code>160Mi</code></td>
 </tr>
 <tr>
 <td>Per-pod CPU overhead</td>
-<td>~3–10% syscall-heavy, near 0% compute-heavy</td>
-<td>~1–5% in steady state, larger startup cost</td>
+<td>Syscall interception, so syscall-heavy jobs pay most and compute-bound jobs pay little</td>
+<td>Near-native in steady state; the RuntimeClass reserves <code>250m</code>, and the real cost is at boot and on I/O crossing the virtio boundary</td>
 </tr>
 <tr>
 <td>Debugging</td>
@@ -2847,6 +2847,17 @@ Those should be enforced <em>regardless</em> of the runtime choice.</p>
 </tr>
 </tbody>
 </table>
+<p><strong>How to read these tables.</strong> Neither is a benchmark of this system.
+No rigorous, current head-to-head of <code>runc</code>, gVisor and Kata is cited here, and the figures that circulate are taken on some other kernel, hypervisor and storage path than the one an operator will run.
+Nothing in the gVisor column has been exercised on a cluster here at all (Q15, above).
+Read both tables as mechanism, and measure your own configuration before budgeting against <a href="../appendix-a-capacity-slos/">Appendix A</a>'s startup SLO.</p>
+<p>One figure is ours.
+On the dogfood configuration (GKE <code>1.35.5-gke.1241004</code>, Ubuntu 24.04, <code>c2-standard-4</code> nested-virt, Kata 3.32.0 with QEMU) the Q226 spike measured the micro-VM boot at roughly 2s over <code>runc</code>, with <code>kind create cluster</code> at 58s cold and 43s warm inside the guest (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>).
+That is a QEMU number, not a property of Kata: the hypervisor is pluggable, and the lighter ones (Cloud Hypervisor, Firecracker) exist because QEMU's device model is the expensive part of the boot.
+The repo ships a stable <code>kata</code> alias onto the <code>kata-qemu</code> handler so the hypervisor can be retargeted without editing pod specs, and that object carries the pod overhead the scheduler reserves (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runtimeclass.yaml"><code>deploy/kata-ci/runtimeclass.yaml</code></a>).</p>
+<p>For a CI workload the runtime is rarely the dominant cost anyway.
+How the sandbox surfaces the worker's writable storage swings image pull and build time more than the boot does, and the same decision governs whether the workload runs at all: Kata surfaces an <code>emptyDir</code> as virtiofs, on which Docker cannot use <code>overlay2</code> and silently falls back to <code>vfs</code>, while a raw block device passed into the guest restores native <code>overlay2</code> (<a href="../../operations/kata-dind-workloads/">Running DinD workloads under Kata</a>).
+Settle the storage path first; the runtime's boot cost is the smaller question.</p>
 <hr />
 <h2 id="b3-when-to-opt-in">B.3. When to Opt In<a class="headerlink" href="#b3-when-to-opt-in" title="Permanent link">&para;</a></h2>
 <p><strong>Strong reasons to enable a sandboxed runtime:</strong></p>
