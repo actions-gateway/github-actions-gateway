@@ -64,8 +64,9 @@ The gate is also one of `make check`'s 30 concurrent fast gates, so the same fix
 
 1. **Larger e2e/CI runner.** The lever round 2 identified and deliberately left: both of its poles were CPU-bound on a 4-vCPU `ubuntu-latest` and both scaled close to linearly, and `vars.GAG_E2E_RUNNER` already routes the job when set, so it is a config decision rather than a code change.
    It is the one remaining item with real headroom, and it costs money on a public repo.
-2. **Q808, the flat profile above.** Filed rather than acted on.
-   If it is ever worth attacking, the target is whichever of the three is the pole *that week*, and `lint` carries 159s of golangci-lint.
+2. **The flat profile above, on a full-tier PR.** Q808 was filed for it and is closed, but #1425 closed only the docs-only half: `lint` no longer runs on a STATUS.md-only PR, which is why that class now costs ~25s of `unit-test.yml` instead of 172s.
+   On a PR that does touch Go the three still sit within 50s of each other, unattacked.
+   If it is ever worth attacking, the target is whichever is the pole *that week*, and `lint` carries 159s of golangci-lint.
 3. **Re-derive the chart-check split before scoping it.** An earlier version of this doc listed splitting the kindnet lane's three chart checks (104s) into a parallel job, and scored it ~0 because calico ran beside it on PRs.
    That premise died with Q675: e2e is merge-queue-only now, so the question is whether 104s off a queue entry is worth a new job and a new required status check in a workflow with documented wedging history (Q363).
    Do not carry the old score forward.
