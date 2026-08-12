@@ -85,7 +85,7 @@ Q571 hit exactly this when `lint-backlog.sh` moved into `scripts/docs/`; `--no-v
 Repoint a worktree's own copy with `git config --worktree core.hooksPath .githooks`.
 Note the repo-level value in `.git/config` is shared by every worktree, so `make hooks` there fixes all of them at once — but a `config.worktree` entry outranks it and has to be cleared per worktree.
 
-`make merge-driver` is a per-clone `git config` that makes `docs/STATUS.md` conflicts resolve by backlog row ID, and `docs/plan/README.md` conflicts by plan path, instead of by line position — both files are high-contention and their conflicts are usually an artifact of two rows being adjacent, not a real disagreement.
+`make merge-driver` is a per-clone `git config` that makes `docs/STATUS.md` conflicts resolve by backlog row ID, `docs/plan/README.md` conflicts by plan path, and `docs/roadmap.md` conflicts by each bullet's `<!-- q:QN -->` backlog annotation, instead of by line position — all three files are high-contention and their conflicts are usually an artifact of two rows being adjacent, not a real disagreement.
 Git will not let a tracked file define a merge driver's command, so this half cannot be committed.
 It is genuinely optional: without it, git uses its built-in three-way merge, and with it anything ambiguous still gets ordinary conflict markers.
 Details: [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position). **The config stores the driver script's path**, so a clone that installed it before the script moved to `scripts/docs/` has a dead path — re-run `make merge-driver`.

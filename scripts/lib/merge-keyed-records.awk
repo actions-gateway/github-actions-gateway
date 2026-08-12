@@ -1,24 +1,30 @@
-# merge-table-rows.awk — three-way merge of one Markdown table's data rows by
-# key set-semantics. Driven by scripts/docs/git-merge-status.sh (docs/STATUS.md's
-# Queue table) and scripts/docs/git-merge-plan-index.sh (docs/plan/README.md's
-# index tables); see those scripts' headers for the why, and
-# docs/development/queue-id-allocation.md for the conflict classes this exists
-# to absorb.
+# merge-keyed-records.awk — three-way merge of one block of keyed Markdown
+# records by key set-semantics. Driven by scripts/docs/git-merge-status.sh
+# (docs/STATUS.md's Queue table), scripts/docs/git-merge-plan-index.sh
+# (docs/plan/README.md's index tables) and scripts/docs/git-merge-roadmap.sh
+# (docs/roadmap.md's annotated bullets); see those scripts' headers for the why,
+# and docs/development/queue-id-allocation.md for the conflict classes this
+# exists to absorb.
 #
-#   awk -v key_mode=anchor -f merge-table-rows.awk BASE.rows OURS.rows THEIRS.rows
+#   awk -v key_mode=anchor -f merge-keyed-records.awk BASE OURS THEIRS
 #
-# Each input holds only one table's data rows, already split out by the caller.
+# One record per line, and each input holds only one block of them, already
+# split out by the caller. A record that spans several source lines is the
+# caller's problem: git-merge-roadmap.sh encodes a whole bullet onto one line
+# and decodes the merged result, so nothing here has to know that.
 #
-# key_mode selects how a row's stable key is read from its first cell, which is
-# the only file-specific knowledge here:
+# key_mode selects how a record's stable key is read, which is the only
+# file-specific knowledge here:
 #
-#   anchor  the `<a id="QN"></a>QN` backlog anchor (default)
-#   link    a Markdown link's target, e.g. `[foo.md](foo.md)` -> `foo.md`
+#   anchor  the `<a id="QN"></a>QN` backlog anchor in cell 1 (default)
+#   link    a Markdown link's target in cell 1, e.g. `[foo.md](foo.md)` -> `foo.md`
+#   marker  the `<!-- q:QN[,QM…] -->` backlog annotations on a `- ` bullet,
+#           normalized to a comma-joined ID list
 #
-# Either way the key comes from cell 1 alone, so an escaped `\|` in a later cell
-# cannot shift it.
+# The two table modes read cell 1 alone, so an escaped `\|` in a later cell
+# cannot shift the key.
 #
-# Exit 0: the merged row block is on stdout and the result is certain.
+# Exit 0: the merged record block is on stdout and the result is certain.
 # Exit 2: the merge is NOT certain; a one-line reason is on stderr and the
 #         caller must fall back to ordinary conflict markers. Silence beats a
 #         guess here — a wrongly resolved row loses backlog state, whereas a
@@ -41,18 +47,20 @@
 # reordered, that is uncertain.
 
 function fail(msg) {
-	printf "merge-table-rows: %s\n", msg > "/dev/stderr"
+	printf "merge-keyed-records: %s\n", msg > "/dev/stderr"
 }
 
 function side_name(s) {
 	return (s == 0) ? "base" : ((s == 1) ? "ours" : "theirs")
 }
 
-# row_id LINE — the key this row belongs to, or "" when the line is not a
-# well-formed row. Dispatches on key_mode; the empty return is what makes an
-# unparseable row a fallback rather than a guess.
+# row_id LINE — the key this record belongs to, or "" when the line is not a
+# well-formed record. Dispatches on key_mode; the empty return is what makes an
+# unparseable record a fallback rather than a guess.
 function row_id(line) {
-	return (key_mode == "link") ? row_key_link(line) : row_key_anchor(line)
+	if (key_mode == "link") return row_key_link(line)
+	if (key_mode == "marker") return row_key_marker(line)
+	return row_key_anchor(line)
 }
 
 # row_key_anchor LINE — the backlog ID. Mirrors scripts/docs/lint-backlog.sh's
@@ -93,6 +101,38 @@ function row_key_link(line,    n, f, cell, target) {
 	return target
 }
 
+# row_key_marker LINE — the backlog IDs a docs/roadmap.md bullet is bound to,
+# comma-joined in source order. Mirrors devtools/docs/roadmapcheck's annotRE and
+# its comma split, so the driver and the gate read the same annotation: a bullet
+# whose binding the checker cannot parse is one this cannot key either.
+#
+# Every annotation on the bullet contributes, because roadmapcheck reads them
+# all. The payload class excludes SEP as well as `-`, so a truncated `<!--` can
+# never reach across the encoded line break into the next bullet's annotation.
+function row_key_marker(line,    rest, annot, m, ids, n, f, i, out) {
+	if (line !~ /^- /) return ""
+	annot = "<!--[ \t]*q:[^-" SEP "]*-->"
+	rest = line
+	ids = ""
+	while (match(rest, annot)) {
+		m = substr(rest, RSTART, RLENGTH)
+		rest = substr(rest, RSTART + RLENGTH)
+		sub(/^<!--[ \t]*q:/, "", m)
+		sub(/-->$/, "", m)
+		ids = ids "," m
+	}
+	gsub(/[ \t]/, "", ids)
+	n = split(ids, f, ",")
+	out = ""
+	for (i = 1; i <= n; i++) {
+		if (f[i] == "") continue
+		# An ID the backlog itself would not recognize is not a key.
+		if (f[i] !~ /^Q[0-9]+$/) return ""
+		out = (out == "") ? f[i] : out "," f[i]
+	}
+	return out
+}
+
 # seq_equal A NA B NB — 1 when the two 1-indexed ID sequences are identical.
 function seq_equal(a, na, b, nb,    i) {
 	if (na != nb) return 0
@@ -112,13 +152,18 @@ function push(id) {
 
 BEGIN {
 	if (ARGC != 4) {
-		fail("usage: awk -f merge-table-rows.awk BASE OURS THEIRS")
+		fail("usage: awk -f merge-keyed-records.awk BASE OURS THEIRS")
 		exit 2
 	}
 
-	# --- read the three row blocks -------------------------------------------
+	# The line separator inside an encoded multi-line record. Named here rather
+	# than written as an escape because awk's handling of `\001` in a regex
+	# literal is not portable.
+	SEP = sprintf("%c", 1)
+
+	# --- read the three record blocks ----------------------------------------
 	# Read explicitly rather than through awk's main loop: awk skips a
-	# zero-length file entirely, so an empty table on one side would shift every
+	# zero-length file entirely, so an empty block on one side would shift every
 	# later file's side index.
 	for (s = 0; s <= 2; s++) {
 		file = ARGV[s + 1]
@@ -127,11 +172,11 @@ BEGIN {
 			if (line ~ /^[ \t]*$/) continue
 			id = row_id(line)
 			if (id == "") {
-				fail(sprintf("%s: not a well-formed table row: %.60s", side_name(s), line))
+				fail(sprintf("%s: not a well-formed record: %.60s", side_name(s), line))
 				exit 2
 			}
 			if ((s SUBSEP id) in text) {
-				fail(sprintf("%s: %s appears twice in the table", side_name(s), id))
+				fail(sprintf("%s: %s appears twice in the block", side_name(s), id))
 				exit 2
 			}
 			text[s, id] = line

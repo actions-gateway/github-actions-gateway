@@ -19,12 +19,13 @@
 #      This is what makes a re-enqueue a restoration rather than a decision.
 #   3. It is not in the queue right now, so this cannot double-enqueue.
 #   4. The rebase it is about to take resolves conflicts ONLY in the files the
-#      repo's merge drivers own (docs/STATUS.md, docs/plan/README.md). A
-#      conflict in code, tests or workflows is a human's to read, because the
-#      rebase changes what the maintainer approved. Backlog rows are the
-#      exception the maintainer signed off on: `status-isolation-check` keeps
-#      them in their own commit, so the reviewed code is untouched by that
-#      resolution, and lint-backlog/roadmap-check gate the result.
+#      repo's merge drivers own (docs/STATUS.md, docs/plan/README.md,
+#      docs/roadmap.md). A conflict in code, tests or workflows is a human's
+#      to read, because the rebase changes what the maintainer approved.
+#      Backlog rows are the exception the maintainer signed off on:
+#      `status-isolation-check` keeps them in their own commit, so the reviewed
+#      code is untouched by that resolution, and lint-backlog/roadmap-check
+#      gate the result.
 #
 # Check 4 has to run BEFORE the rebase, but the enqueue happens after it and
 # after CI. So `--assess` records its verdict and `--confirm` reads it back:
@@ -50,6 +51,7 @@ cd "$REPO_ROOT"
 DRIVER_OWNED=(
 	docs/STATUS.md
 	docs/plan/README.md
+	docs/roadmap.md
 )
 
 STATE_DIR="tmp/requeue"

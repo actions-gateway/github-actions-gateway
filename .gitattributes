@@ -18,3 +18,10 @@ docs/STATUS.md merge=backlog
 # opt-in for the same reason, via the same `make merge-driver`; without it git
 # falls back to its built-in three-way merge and this line is a no-op.
 docs/plan/README.md merge=planindex
+
+# And the public roadmap, keyed on each bullet's `<!-- q:QN -->` backlog
+# annotation. Shipping a gated item deletes its bullet, so two gate PRs in the
+# same window delete adjacent bullets and conflict by construction. Per-clone
+# and opt-in for the same reason, via the same `make merge-driver`; without it
+# git falls back to its built-in three-way merge and this line is a no-op.
+docs/roadmap.md merge=roadmap

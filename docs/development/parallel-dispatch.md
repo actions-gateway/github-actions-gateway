@@ -322,7 +322,7 @@ The real need is preventing two workers from implementing the **same** Queue ite
   PRs stay self-contained and the Queue stays current as they merge.
 - **Self-healing absorbs the churn.** When a sibling merges, the trivial STATUS.md conflict is resolved by the worker's `git rebase origin/main` step — and usually before that, by the [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position), which decides the Queue table by row ID.
   Picking from the top makes every worker's deletion adjacent to the next one's, which is precisely what a line-position merge cannot absorb.
-  The same `make merge-driver` installs the [plan-index driver](maintaining-backlog.md#the-same-treatment-for-docsplanreadmemd), which does the same for `docs/plan/README.md`, where a dispatch batch that files or archives several plans collides the same way.
+  The same `make merge-driver` installs the [plan-index driver](maintaining-backlog.md#the-same-treatment-for-docsplanreadmemd), which does the same for `docs/plan/README.md`, where a dispatch batch that files or archives several plans collides the same way, and the [roadmap driver](maintaining-backlog.md#and-for-docsroadmapmd), for a batch whose items each delete their own roadmap bullet.
   One-time, per clone.
 
 The earlier rule was "the dispatcher owns the coordination files."
@@ -370,7 +370,7 @@ This was investigated end to end; recording the conclusions so they are not reli
 Healing is the worker's job — the dispatcher only steps in when a worker is gone or stuck.
 
 - **Doc-only / trivial conflicts** the dispatcher can resolve directly (a small helper that rebases the PR branch onto `origin/main` in a throwaway worktree and force-pushes with lease works well).
-  The `docs/STATUS.md` [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) runs during rebase too, so Queue-row conflicts usually resolve on their own, as does the `docs/plan/README.md` one.
+  The `docs/STATUS.md` [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) runs during rebase too, so Queue-row conflicts usually resolve on their own, as do the `docs/plan/README.md` and `docs/roadmap.md` ones.
 - **Semantic / code conflicts** go back to a worker: spawn a small resolve chip that takes over the PR branch, rebases onto `main`, resolves with full judgment, re-runs the gate, and force-pushes with lease.
   The dispatcher does not hand-edit code conflicts on another session's branch.
 

@@ -128,7 +128,7 @@ scripts/agent/pr-requeue-eligible.sh --assess <pr>
 ```
 
 Run it **before** rebasing, because it measures the conflict set the rebase is about to resolve.
-It says `ELIGIBLE` only when a human enqueued the PR before, it is open and not a draft, it is not currently queued, and the conflicts fall solely in the merge-driver-owned files (`docs/STATUS.md`, `docs/plan/README.md`).
+It says `ELIGIBLE` only when a human enqueued the PR before, it is open and not a draft, it is not currently queued, and the conflicts fall solely in the merge-driver-owned files (`docs/STATUS.md`, `docs/plan/README.md`, `docs/roadmap.md`).
 A conflict anywhere else changes what the maintainer reviewed, so it prints `WAKE:` with the reason and you hand back instead.
 
 Then rebase, `make check`, push, relaunch the watcher, and once CI is green:
