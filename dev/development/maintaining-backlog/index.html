@@ -2667,6 +2667,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#and-for-docsroadmapmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        And for docs/roadmap.md
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2901,8 +2912,8 @@ The repo vendors the skill's tooling so the rules hold for every contributor, wi
   Advisory: it never blocks a filing.
   <a href="#search-before-you-file">How it is calibrated</a>.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>scripts/docs/git-merge-status.sh</code></a> — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous.
-  Its sibling <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> does the same for <a href="../../plan/"><code>docs/plan/README.md</code></a>, keyed on the plan path.
-  One <code>make merge-driver</code> per clone installs both; a no-op until then.
+  Its siblings <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap.sh"><code>git-merge-roadmap.sh</code></a> do the same for <a href="../../plan/"><code>docs/plan/README.md</code></a>, keyed on the plan path, and for <a href="../../roadmap/"><code>docs/roadmap.md</code></a>, keyed on each bullet's backlog annotation.
+  One <code>make merge-driver</code> per clone installs all three; a no-op until then.
   <a href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">Details below</a>.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/next-task.sh"><code>scripts/docs/next-task.sh</code></a> — prints a kickoff prompt (or <code>--title</code>) for the top ready 🔲 Queue row, for starting a fresh session on the next task.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/backlog-metrics.sh"><code>scripts/docs/backlog-metrics.sh</code></a> — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP).
@@ -3130,8 +3141,22 @@ That key is not a new convention: <a href="https://github.com/actions-gateway/gi
   Per-table merges cannot see that pair, which one branch archiving a plan while another relocates it produces.</li>
 </ul>
 <p>Everything else is the Queue driver's behaviour: a row changed on both sides, a row deleted on one side and edited on the other, one plan filed twice with different text, rows reordered on both sides, a row whose first cell is not a link, and a side that added or removed a whole table all fall back to the plain three-way merge and its conflict markers.</p>
-<p><code>make merge-driver</code> installs both drivers.
-Neither is required: until you run it the <code>.gitattributes</code> lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.</p>
+<h3 id="and-for-docsroadmapmd">And for <code>docs/roadmap.md</code><a class="headerlink" href="#and-for-docsroadmapmd" title="Permanent link">&para;</a></h3>
+<p>The public roadmap is bound to the backlog one bullet at a time: each forward-looking bullet carries a <code>&lt;!-- q:QN --&gt;</code> annotation naming the rows behind it, and shipping the work deletes the bullet.
+That makes every gate PR the same edit in the same two sections.
+Measured on <code>docs/roadmap.md</code> at 61cf54e7b: two branches each deleting their own bullet from the near-term list conflict under a plain three-way merge, while the same two deletions ten bullets apart merge clean.
+<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1392">Q715</a>'s PR was evicted from the merge queue three times in one session on exactly that shape.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap.sh"><code>scripts/docs/git-merge-roadmap.sh</code></a> decides the bullets by that <strong>annotation</strong>, normalized to a comma-joined ID list.
+The key is not a new convention either: <code>devtools/docs/roadmapcheck</code> already parses the same comment, so the driver and the gate cannot disagree about what a bullet is.</p>
+<p>Two things differ from the other two drivers:</p>
+<ul>
+<li><strong>A bullet spans several lines</strong>, which the shared record rules do not model, so each one is encoded onto a single line and decoded after the merge.</li>
+<li><strong>The blank lines between bullets are held beside the records, not inside them.</strong> Fold the trailing blank into a bullet and deleting a list's last bullet reads as an <em>edit</em> of its neighbour, which then collides with the other side deleting that neighbour: the exact merge the driver exists to resolve.</li>
+</ul>
+<p>A run of bullets is only merged this way when every bullet in it is annotated, so an ordinary bulleted paragraph elsewhere on the page keeps git's own merge.
+Everything else is the Queue driver's behaviour, plus a whole-page check that no binding ended up on two bullets.</p>
+<p><code>make merge-driver</code> installs all three drivers.
+None is required: until you run it the <code>.gitattributes</code> lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.</p>
 <h2 id="resolving-a-statusmd-only-conflict-verify-cheap-push-now">Resolving a <code>STATUS.md</code>-only conflict: verify cheap, push now<a class="headerlink" href="#resolving-a-statusmd-only-conflict-verify-cheap-push-now" title="Permanent link">&para;</a></h2>
 <p>Because every session edits <code>docs/STATUS.md</code>, rebase and merge conflicts on it are routine — fewer with the merge driver installed, never zero.
 When the conflict is <strong>confined to <code>docs/STATUS.md</code></strong>, re-running the full <code>make check</code> before pushing is not just unnecessary — it is what causes the <em>next</em> conflict.</p>

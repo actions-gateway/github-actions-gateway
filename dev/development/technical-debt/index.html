@@ -3042,7 +3042,7 @@ The two look alike from the outside, so the decision needs a test that reads the
 </ul>
 <p>Parsing structured text is necessary but not sufficient.
 A script that must reproduce its input <strong>byte for byte</strong> is worse off with an abstract syntax tree, which discards exactly the fidelity it depends on.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-table-rows.awk"><code>merge-table-rows.awk</code></a> parse Markdown tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for line, conflict-marker fallback included.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> parse Markdown tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for line, conflict-marker fallback included.</p>
 <h4 id="worked-examples">Worked examples<a class="headerlink" href="#worked-examples" title="Permanent link">&para;</a></h4>
 <p>Line counts measured 2026-08-03 with <code>wc -l</code>.
 The <a href="../../plan/markdown-gates-parser/">Q612 survey</a> and the Queue row that asked for this section cited 235, 601, and 790; all three scripts have drifted since.</p>
