@@ -244,9 +244,9 @@ The file holds full 40-character commit hashes because that is all `git blame` p
 ### Pushing to a PR that is already open
 
 Prefer putting everything in the first push — but "never push again" is too strong, and the reason matters.
-Every merge goes through the **merge queue** (`gh pr merge --squash` enqueues; the queue validates the candidate merge and lands it), so the old race (a direct squash-merge overtaking a just-pushed commit and stranding it) cannot happen: a push to a queued PR **dequeues** it instead, and the PR re-enters the queue after its checks rerun on the new head.
+Every merge goes through the **merge queue** (`gh pr merge --squash` enqueues; the queue validates the candidate merge and lands it), so the old race (a direct squash-merge overtaking a just-pushed commit and stranding it) cannot happen: while a PR is queued, a push to its branch is **rejected** (`GH006 ... Branches that are queued for merging cannot be updated`, measured 2026-08-12), so the candidate the queue is validating cannot change under it.
 
-The cost of a push is therefore CI and queue position, not a stranded commit.
+The cost of a push to a PR that is *not* queued is therefore CI and queue position, not a stranded commit.
 On a docs-only PR the gates are seconds, so an amend is cheap; on a Go change a push restarts `integration-test` and the security scans, roughly ten minutes, and sends the PR to the back of the queue, where it then pays the e2e lanes for the first time.
 Weigh that before pushing a nicety onto a PR that is otherwise done.
 
@@ -256,7 +256,9 @@ Weigh that before pushing a nicety onto a PR that is otherwise done.
 gh pr view <n> --json state,mergeStateStatus --jq '{state,mergeStateStatus}'
 ```
 
-`OPEN` is safe to push (including `QUEUED` — the push dequeues and re-validates; do it deliberately, not accidentally).
+`OPEN` is safe to push, with one exception: a `QUEUED` PR **rejects** the push.
+Wait for the queue to land or evict it, then push; never dequeue to make room for your own push, because the enqueue was a human's decision and dropping it silently revokes their merge authority.
+This bites hardest when a maintainer enqueues while you are mid-rebase, so the rejection arrives on a heal you were asked to perform.
 A state you read ten minutes ago is not the state you are pushing into.
 
 `MERGED` is the state worth naming separately, because the push *appears to work*.
