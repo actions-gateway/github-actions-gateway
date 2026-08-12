@@ -2893,8 +2893,8 @@ Each has inline ✓ markers per item.</p>
 </tr>
 <tr>
 <td><a href="ci-wait-time-analysis/">ci-wait-time-analysis.md</a></td>
-<td>Where session wait actually goes: CI execution vs post-green idle, the <code>max(kindnet, calico)</code> critical path, and why the suite's parallel phase is not the target</td>
-<td>ⓘ Reference measurements. Finds CI execution is 5% of PR latency and the landing decision ~59%; supplied the inputs for Q675's Phase 3 decision (e2e demoted to merge-group-only, <a href="merge-queue/#phase-3-re-measure-then-decide">merge-queue.md</a>). Its remaining options are open, not committed</td>
+<td><strong>Start here before scoping CI or test-tier speed work.</strong> Dated current-state table, an index of the rounds already run, the four traps that cost an attempt each, and what is left</td>
+<td>ⓘ Standing reference, not a work item. Records that CI execution is 5% of PR latency, that the tiers below <code>integration-test</code> are a flat profile rather than a queue, and that the suite's parallel phase was measured healthy at 4.5× in round 2. Keep the current-state table dated when a round lands</td>
 </tr>
 </tbody>
 </table>
