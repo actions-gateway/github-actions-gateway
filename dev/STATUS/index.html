@@ -2904,6 +2904,14 @@
 <td>Measured 2026-08-12: <code>doc-links</code> sat at 161s in CI, 38s locally, unseen through three CI-speed rounds, because 30 fast gates run concurrently and the runner labels output without timing it. Emit per-label wall time; <code>run-parallel-test.sh</code> pins it.</td>
 </tr>
 <tr>
+<td><a id="Q832"></a>Q832</td>
+<td><a href="../roadmap/">Roadmap bullets lose sentence-per-line coverage, because mdreflow declines every <code>q:</code> marker</a></td>
+<td><code>ci</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12 on mdreflow v0.1.7: 21 markers, 21 declined paragraphs, one-to-one. <code>roadmapcheck</code> asserts annotations, IDs, placement and word caps, never line breaks, so a hand-wrapped bullet passes every gate. Arrives with #1462.</td>
+</tr>
+<tr>
 <td><a id="Q813"></a>Q813</td>
 <td><a href="../operations/in-runner-image-builds/#approach-5--kata-containers-micro-vm-dind-no-privileged-container">Approach 5's GCP nested-virt family list contradicts the API-measured one</a></td>
 <td><code>docs</code></td>
@@ -3070,6 +3078,14 @@
 <td>🔲</td>
 <td>S</td>
 <td><code>[file.md](file.md) § Heading</code> renders like the anchored form but nothing checks the section name: verbatim when written, silently wrong after a rename. 11 in the tree vs 1,051 anchored.</td>
+</tr>
+<tr>
+<td><a id="Q833"></a>Q833</td>
+<td><a href="../development/documentation-standards/#measuring-the-residue">The md-reflow residue figure is hand-derived, and nothing in the repo re-derives it</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>make md-reflow-explain</code> names each declined paragraph, but the count of interior lines not ending at a sentence boundary still needs a throwaway script. Ship the counter beside <code>check-em-dash.sh</code>, or cite only what <code>--explain</code> emits.</td>
 </tr>
 <tr>
 <td><a id="Q740"></a>Q740</td>

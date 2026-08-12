@@ -3054,8 +3054,11 @@ It also made the chips themselves unreviewable, which matters because the chip l
 <li><strong>The item</strong> and the model to run on (<a href="#model-selection">Model selection</a>); a fresh worker cannot run <code>model-advisor</code> interactively.</li>
 <li><strong>The dispatcher's worktree name</strong>, which is how the worker addresses it to report its PR (<code>dispatch-worker</code> skill §8).
   A session cannot look up its own name, so the dispatcher has to state it and the worker resolves it through <code>ListAgents</code>.</li>
-<li><strong>What the dispatcher measured, and when.</strong> The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying <em>where the row is stale</em> saves it implementing a fixed defect.</li>
-<li><strong>The trap worth naming</strong> — the tempting wrong fix, the control the test needs, the decision the row leaves open.</li>
+<li><strong>What the dispatcher measured, and when.</strong> The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying <em>where the row is stale</em> saves it implementing a fixed defect. <strong>Say what you did not measure with the same care.</strong> A prompt's claims read as settled where a row's read as claims, because the prompt says a session checked, and the worker then builds on them rather than testing them.
+  Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing <em>open</em>, on the call immediately before <code>gh pr merge --squash</code>.
+  Mark an unverified claim as unverified, or leave it out.</li>
+<li><strong>The trap worth naming</strong> — the tempting wrong fix, the control the test needs, the decision the row leaves open.
+  A trap is a claim too, and the most load-bearing one in the prompt, since it tells the worker what <em>not</em> to look at.</li>
 <li><strong>Contention</strong> with work in flight, by file.</li>
 </ul>
 <p>A prompt that fits in a few lines is one a maintainer can scan a whole wave of.
@@ -3196,6 +3199,10 @@ Whatever the message asserts about a PR, a branch, or <code>main</code> may have
 So state the condition that invalidates the instruction, not just the instruction.
 Measured 2026-08-09: a message asked a session to rebase onto an open PR's branch, that PR merged before the session acted, and the instruction had to be chased with a correction.
 "Rebase onto X, or onto <code>main</code> if X has already merged when you read this" costs one clause and needs no chasing.</p>
+<p><strong>A message asserting a mechanism carries its measurement, or says it has none.</strong> The paragraph above is about state going stale; this is about a claim that was never true, and it travels further, because the receiving session acts on a message the way it acts on a Queue row while nothing in the channel marks the difference.
+Q805 produced it in both directions within an hour: a chip forwarded the row's fail-closed claim as verified, and the worker, having spent the session correcting exactly that, then sent the dispatcher an unmeasured mechanism of its own that a third session refuted.
+The asymmetry is the tell — a claim is easy to hold to the standard in the file you are editing and easy to drop in the message you are sending, though only the message gets acted on with no diff to review.
+Send the command you ran and its output, or write that the mechanism is unverified.</p>
 <h3 id="what-we-deliberately-dont-build-and-why">What we deliberately don't build (and why)<a class="headerlink" href="#what-we-deliberately-dont-build-and-why" title="Permanent link">&para;</a></h3>
 <p>This was investigated end to end; recording the conclusions so they are not relitigated:</p>
 <ul>
