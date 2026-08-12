@@ -2848,14 +2848,6 @@
 <td>Three times across 1.4 and 1.5: the cell named rows that had landed. The rollup only changes when the last row closes, and that worker cannot tell it was the last. A cell naming a QNNN absent from the Queue is stale by construction, so gate it.</td>
 </tr>
 <tr>
-<td><a id="Q785"></a>Q785</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/gothrottle/main.go">A failed throttle probe silently disables the go-throttle hook for that call</a></td>
-<td><code>bug</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured under Q703: <code>throttlePrefix</code> returns "" both for "throttling is off" and for "a probe that could not run", so a failed probe silently drops the <code>deny</code> guarding an unthrottled <code>-race</code>.</td>
-</tr>
-<tr>
 <td><a id="Q784"></a>Q784</td>
 <td><a href="../operations/release/#the-bump-on-main-does-not-reach-the-published-release">Gate that a published version dir names its own release</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -2902,14 +2894,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-08 under Q733: 170 <code>scripts/</code> files now need <code>inherit_errexit</code> (bash 4.4+), stock macOS ships 3.2 at <code>/bin/bash</code>, and <code>check-tools.sh</code> checks no bash version. The 3 hooks fail open, the rest die confusingly. New required-tier prereq.</td>
-</tr>
-<tr>
-<td><a id="Q749"></a>Q749</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>STATUS_GATES</code> claims to be complete and omits two gates a STATUS.md change can fail</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Comment calls it the complete set a STATUS.md-only change can fail, but STATUS.md has an em-dash ceiling (39, at 32) and page-density scans <code>docs/*.md</code>; neither is listed. <code>gate-lists-check</code> checks only the subset direction, so nothing catches it.</td>
 </tr>
 <tr>
 <td><a id="Q742"></a>Q742</td>
@@ -3865,7 +3849,7 @@
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh"><code>claude-go-throttle-hook-test</code> reads an empty hook decision under <code>make check</code>, passes standalone</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
-<td><strong>Event:</strong> it fails on <code>main</code> again. The message names the silent path (<a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">trace</a>); refile on that, not the shared empty decision. <a href="#Q785">Q785</a> is what it measured. → top of Queue.</td>
+<td><strong>Event:</strong> it fails on <code>main</code> again. The message names the silent path (<a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">trace</a>); refile on that, not the shared empty decision. Its probe fail-open is closed. → top of Queue.</td>
 </tr>
 <tr>
 <td><a id="Q741"></a>Q741</td>
