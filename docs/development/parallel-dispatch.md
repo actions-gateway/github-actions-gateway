@@ -425,14 +425,18 @@ It now appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OI
 - **A by-hand `merge-tree` in a driver-installed clone answers a different question than GitHub's merge.** `.gitattributes` is committed, but the `merge.<name>.driver` command it names is per-clone config that `make merge-driver` installs, and GitHub never runs it.
   So a probe run in a clone that has the drivers reads *resolved*, while the queue sees the raw conflict.
   Measured 2026-08-12 on two PRs: drivers on, `exit 0`; drivers off, `exit 1` naming `docs/STATUS.md`.
-  Measure the way [`pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) does, with each driver disabled, or a survey of "is this really conflicting" reads clean for every instance:
+  Disable every declared driver when you probe by hand, or a survey of "is this really conflicting" reads clean for every instance:
 
   ```bash
   git -c merge.backlog.driver=false -c merge.planindex.driver=false \
       -c merge.roadmap.driver=false -c merge.scriptindex.driver=false \
       -c merge.gatelists.driver=false \
-      merge-tree --write-tree origin/main <head>
+      merge-tree --write-tree <base_oid> <head_oid>
   ```
+
+  Take the names from `.gitattributes`, which is the only place they are declared, and disable **all** of them rather than the ones the conflict seems to involve.
+  Two traps sit here, both measured 2026-08-12 and both silent. **A misspelled driver name fails open**: git ignores the unknown config key, runs the driver anyway, and exits 0, so a probe written against a guessed name (`merge.status` for `docs/STATUS.md`, whose driver is `backlog`) produces byte-identical output to no probe at all. **The driver writes to stderr**, and its advisory line names the file it resolved, so a reader scanning the combined output for a path finds one and reports a conflict list from chatter that says the opposite.
+  Read the stage lines only (`^[0-9]{6} <sha> [123]`); a run with no conflict prints the merged tree OID and nothing else.
 
 - **"Same file" and "different sections" both predict badly; diff context is what decides.** Two hunks in one file merge cleanly when they are further apart than the three lines of context around each, and conflict when they are not, whatever the document structure says.
   Measured 2026-08-12 on one file in one batch: two edits to adjacent rows of a Markdown table conflicted, while two edits to sections 180 lines apart rebased as a pure line offset.
