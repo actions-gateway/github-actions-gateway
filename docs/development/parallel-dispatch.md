@@ -420,6 +420,11 @@ Healing is the worker's job — the dispatcher only steps in when a worker is go
       merge-tree --write-tree origin/main <head>
   ```
 
+- **"Same file" and "different sections" both predict badly; diff context is what decides.** Two hunks in one file merge cleanly when they are further apart than the three lines of context around each, and conflict when they are not, whatever the document structure says.
+  Measured 2026-08-12 on one file in one batch: two edits to adjacent rows of a Markdown table conflicted, while two edits to sections 180 lines apart rebased as a pure line offset.
+  A dispatcher reasoning from "they touch different cells" got the first one wrong and would have got the second one right by luck.
+  Measure the pair rather than predicting it, and say which you did when you tell a worker.
+
 - **Semantic / code conflicts** go back to a worker: spawn a small resolve chip that takes over the PR branch, rebases onto `main`, resolves with full judgment, re-runs the gate, and force-pushes with lease.
   The dispatcher does not hand-edit code conflicts on another session's branch.
 
