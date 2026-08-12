@@ -100,9 +100,13 @@ mkdir -p "$WORK_DIR"
 trap 'rm -rf "$WORK_DIR"' EXIT INT TERM
 
 # fetch URL DEST — retrieve a page, or fail with the URL that could not be read.
+# --retry-all-errors because -f turns a 503 into a plain non-zero exit that
+# --retry alone leaves alone, and Pages serves them: one 503 mid-run is what
+# first showed this reporting an unreachable page as a stale pin.
 fetch() {
 	local url="$1" dest="$2"
-	if ! "$CURL" -fsSL --max-time 30 --retry 3 --retry-delay 2 -o "$dest" "$url"; then
+	if ! "$CURL" -fsSL --max-time 30 --retry 3 --retry-delay 2 --retry-all-errors \
+		-o "$dest" "$url"; then
 		printf 'verify-published-docs: cannot read %s\n' "$url" >&2
 		return 1
 	fi
@@ -139,7 +143,11 @@ article_text() {
 	' "$1"
 }
 
+# A page this run could not read or parse is unproven, not wrong. Both exit 1 —
+# an unverified republish is not a pass — but the summary must not report a
+# transient 503 as a stale pin and send someone re-cutting a release branch.
 fail=0
+unchecked=0
 total=0
 
 for page in "${PAGES[@]}"; do
@@ -149,13 +157,13 @@ for page in "${PAGES[@]}"; do
 	text="$WORK_DIR/page.txt"
 
 	fetch "$url" "$html" || {
-		fail=1
+		unchecked=1
 		continue
 	}
 	if ! article_text "$html" > "$text"; then
 		printf 'verify-published-docs: %s: no <article> element — the page did not render, or\n' "$label" >&2
 		printf '                      the theme changed and this scan now reads nothing.\n' >&2
-		fail=1
+		unchecked=1
 		continue
 	fi
 
@@ -195,7 +203,9 @@ if ((check_stable)); then
 	# wrong alongside /1.4.0/. The alias page names the version dir it serves in
 	# its canonical link; the root is a meta refresh to the alias.
 	html="$WORK_DIR/stable.html"
-	if fetch "$BASE_URL/stable/" "$html"; then
+	if ! fetch "$BASE_URL/stable/" "$html"; then
+		unchecked=1
+	else
 		canonical="$(awk 'match($0, /rel="canonical" href="[^"]*"/) {
 			s = substr($0, RSTART, RLENGTH); sub(/.*href="/, "", s); sub(/"$/, "", s); print s; exit }' "$html")"
 		if [[ "${canonical%/}" == "$BASE_URL/$version" ]]; then
@@ -205,12 +215,12 @@ if ((check_stable)); then
 				"${canonical:-<no canonical link>}" "$BASE_URL" "$version" >&2
 			fail=1
 		fi
-	else
-		fail=1
 	fi
 
 	html="$WORK_DIR/root.html"
-	if fetch "$BASE_URL/" "$html"; then
+	if ! fetch "$BASE_URL/" "$html"; then
+		unchecked=1
+	else
 		target="$(awk 'match(tolower($0), /url=[^"'"'"' >]+/) {
 			s = substr($0, RSTART + 4, RLENGTH - 4); print s; exit }' "$html")"
 		if [[ "${target%/}" == "stable" ]]; then
@@ -221,8 +231,6 @@ if ((check_stable)); then
 			printf '                      root does not reach the current release.\n' >&2
 			fail=1
 		fi
-	else
-		fail=1
 	fi
 fi
 
@@ -230,6 +238,13 @@ if ((fail)); then
 	printf '\nverify-published-docs: the published docs for %s do not advertise %s.\n' "$version" "$version" >&2
 	printf "Landing the pin bump on \`main\` does not reach them — republish from the release\n" >&2
 	printf 'branch, per docs/operations/release.md#the-bump-on-main-does-not-reach-the-published-release.\n' >&2
+	exit 1
+fi
+
+if ((unchecked)); then
+	printf '\nverify-published-docs: could not read every page, so %s is UNVERIFIED — this says\n' "$version" >&2
+	printf 'nothing about whether the republish worked. Re-run; the pages named above are the\n' >&2
+	printf 'ones to watch.\n' >&2
 	exit 1
 fi
 

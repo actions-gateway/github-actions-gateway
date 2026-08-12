@@ -250,6 +250,8 @@ printf '<!doctype html><html><body><p>--version 1.4.0</p></body></html>\n' \
 run v1.4.0
 expect_rc 'a page with no <article> fails' 1
 expect_says 'the missing article is named' 'no <article> element'
+expect_says 'an unrenderable page reports UNVERIFIED' 'is UNVERIFIED'
+expect_silent_about 'an unrenderable page is not called a stale pin' 'do not advertise'
 
 site missing
 good_version_dir 1.4.0
@@ -258,6 +260,24 @@ rm -rf "$STUB_SITE_ROOT/1.4.0/operations/upgrade"
 run v1.4.0
 expect_rc 'an unreachable page fails' 1
 expect_says 'the unreachable page is named' 'cannot read http://site/1.4.0/operations/upgrade/'
+
+# A page this run could not read is unproven, not wrong. Reporting it as a stale
+# pin sends a release engineer re-cutting a branch over a transient 503, which is
+# how a real /1.4.0/ run failed while the site was serving one.
+expect_says 'an unreadable page reports UNVERIFIED' 'is UNVERIFIED'
+expect_silent_about 'an unreadable page is not called a stale pin' 'do not advertise'
+
+# A genuine mismatch alongside an unreadable page still reports the mismatch:
+# "unverified" must not mask a pin this run did read and found wrong.
+site mixed
+good_version_dir 1.3.0
+mkdir -p "$STUB_SITE_ROOT/1.4.0"
+cp -R "$STUB_SITE_ROOT/1.3.0/." "$STUB_SITE_ROOT/1.4.0/"
+alias_pages 1.4.0
+rm -rf "$STUB_SITE_ROOT/1.4.0/operations/upgrade"
+run v1.4.0
+expect_rc 'a mismatch alongside an unreadable page fails' 1
+expect_says 'the mismatch is still reported' 'do not advertise'
 
 # --- two runs at once -------------------------------------------------------
 
