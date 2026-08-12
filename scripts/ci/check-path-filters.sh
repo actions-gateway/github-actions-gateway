@@ -82,7 +82,6 @@ WORKSPACE_FILTERS=(
 # gate on changes that cannot affect it. Reasons are per-entry because the reason
 # is the whole content of the decision.
 NARROW_FILTERS=(
-	'unit-test.yml:status'            # docs/STATUS.md and its linter
 	'unit-test.yml:scripts'           # the scripts/ + hooks/ trees shellcheck and scripts-test gate
 	'unit-test.yml:vendor'            # only what determines committed vendor/ contents
 	'unit-test.yml:modules'           # the module files, the import graph (Q545), and the tidy scripts
