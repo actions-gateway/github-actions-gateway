@@ -2880,14 +2880,6 @@
 <td><code>describe --format=value(currentNodeCount)</code> omits the field at zero, so empty reads as at-rest and a broken probe is indistinguishable. Hit 2026-08-09 just after a DNS outage. Use the unfiltered instance list plus an explicit probe-exit check.</td>
 </tr>
 <tr>
-<td><a id="Q788"></a>Q788</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">A broker poll loop with no idle backoff spins when the server answers 202 at once</a></td>
-<td><code>debt</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-10: 20,216 <code>GET /message</code> in one 3.5s <code>-race</code> probe suite run, ~6k/s. <code>abandoned.go:543</code> and <code>goroutine.go:229</code> both <code>continue</code> on a nil message, pacing only on the broker's long poll; brokertest answers instantly, so both spin.</td>
-</tr>
-<tr>
 <td><a id="Q751"></a>Q751</td>
 <td><a href="../development/bash-style/#set--e-stops-at-a-command-substitution">Nothing declares the bash 4.4+ floor <code>inherit_errexit</code> makes load-bearing</a></td>
 <td><code>debt</code> <code>tests</code></td>
@@ -3510,6 +3502,14 @@
 <td>🚫</td>
 <td>S</td>
 <td>The squash mints a SHA that exists only once the reflow PR lands, so the file ships naming its pre-merge one. On git 2.55.0 that is a silent no-op, not an error.</td>
+</tr>
+<tr>
+<td><a id="Q804"></a>Q804</td>
+<td><a href="../development/testing/#test-doubles-must-long-poll"><code>brokertest</code> answers <code>GET /message</code> 202 at once instead of long-polling</a></td>
+<td><code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The one double that does not hold the poll, against this repo's own rule. Q788's client floor caps the spin at 10 req/s, so what remains is the timing-window distortion the rule is about; <code>scalesettest</code> is the shape to copy (wake on queue change).</td>
 </tr>
 </tbody>
 </table>
