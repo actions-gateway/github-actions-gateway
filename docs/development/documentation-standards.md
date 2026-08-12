@@ -189,6 +189,13 @@ Two edges keep the rule from swallowing every sentence in the docset:
 - **Specified is not observed.** Where upstream publishes normative text (an RFC grammar, a documented status code, a CRD field's own godoc), link that text and stop: the spec is its own citation.
   The rule bites on behavior learned by reading upstream source or by inference, which is most of what this system depends on, and is where all four claims above came from.
 
+### A credit claim cites the issue, not the release notes
+
+Saying an upstream fix was reported here is an attribution rather than a behavior claim, so a measurement does not settle it.
+The record does: `gh api repos/<owner>/<repo>/issues/<n> --jq .user.login`, one call per issue.
+Release notes group fixes by theme and not by who found them, which is what makes the wrong reading easy. mdreflow v0.1.7's notes credit [#37](https://github.com/jbeda/mdreflow/issues/37) to this repo and describe [#39](https://github.com/jbeda/mdreflow/issues/39) and [#41](https://github.com/jbeda/mdreflow/issues/41) as fuzz-found in the next breath; the second two are upstream's own, and reading the section as one narrative credits all three here.
+Getting it wrong takes credit for someone else's work in a file that outlives the session, and no gate can see it.
+
 ### A restated default is a claim with no gate
 
 A flag or field default restated away from its wiring is the in-repo case the "our own behavior" exemption does not cover: no test reads comments, so a wrong one stays green forever.
