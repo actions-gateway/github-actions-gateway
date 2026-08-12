@@ -1086,6 +1086,30 @@ Each is a claim about state, and each has a cheap way of being wrong:
 The failure mode these share is reporting a conclusion from a signal that does not carry it.
 The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.
 
+### The probe is not the gate
+
+The rules above are about reading a signal correctly.
+This one is about reading the right instrument.
+A hand-rolled probe standing in for a gate answers a slightly different question, and its answer looks exactly like the gate's.
+
+Five instances measured across 2026-08-11 and 2026-08-12, in one session:
+
+- **A hand-rolled count is not the gate's count.** `grep -o '—' file | wc -l` returned 81 where `make em-dash-check` reported 69, because the gate counts prose and excludes code spans, headings and link text.
+  The raw number happened to be higher; had it come in under the ceiling, a clean result would have been read off an instrument measuring something else.
+- **A bare linter is not the gated linter.** `shellcheck <files>` reported 16 findings that `make shellcheck` does not, because the gate passes `-x` so a sourced file is followed.
+  Acting on them would have "fixed" seven correctly-used variables in each of two scripts.
+- **A top-level run is not the run the suite gets.** A suite that reads a value off `make`'s stdout passed locally and failed on CI: under `make scripts-test` it runs as a sub-make, where GNU make writes `Entering directory ...` to stdout and those words land in the value.
+  Reproduce it with `make -w`, suppress it with `--no-print-directory`.
+- **A cached test result is not a test run, and the cache cannot see what the change touched.** Go keys its test cache on package inputs.
+  A file the package *reads* but does not import, `.gitattributes` here, is not one of them, so no edit to it can invalidate the entry: `make check` reported `ok ... (cached)` for the one package the change broke, and only a cold CI run caught it.
+  When a change alters a file a test reads rather than compiles, re-run that package with `-count=1` before believing the gate.
+- **An anchored search for a check name is not the check list.** `gh pr checks` filtered on `^integration` and `^e2e` reported those gates absent when they were present as `integration-test` and `e2e / e2e`.
+  Concluding they had been skipped would have forced a needless close-and-reopen of the PR.
+
+The shape they share: the probe exits 0 with a plausible value, and nothing in the result announces that it answered a different question.
+When a probe's answer is about to decide something, run the gate itself.
+When the gate is too slow for the loop, keep the probe but give it a case whose answer you already know, and disbelieve it when the two disagree.
+
 ### Check for a committed capture before booking a live measurement
 
 "Measure it" does not always mean "run it".
