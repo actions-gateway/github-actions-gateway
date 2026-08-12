@@ -2832,14 +2832,6 @@
 <td>Measured 2026-08-12: 3 of 100 runs failed in one 3h window (main, and the pr-1405/pr-1415 queue entries), each a different calico-gated enforcement negative, and each evicted its PR. Q747's enforcer dump greps <code>app=kindnet</code>, so calico dumps nothing.</td>
 </tr>
 <tr>
-<td><a id="Q806"></a>Q806</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml"><code>anchore/sbom-action</code> downloads syft with no retry, so a transient fetch fails the security scan</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12: <code>trivy (proxy, 1)</code> failed on <code>main</code> (480f79d1a) and on #1406, both <code>HTTP status=000</code> fetching syft v1.42.3; <code>main</code> passed 8m later unchanged. The action's installer has no retry, and <code>scripts/fetch/</code> wraps this class.</td>
-</tr>
-<tr>
 <td><a id="Q803"></a>Q803</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>cmd/proxy</code> coverage is nondeterministic, and its floor has no headroom to absorb it</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -2952,12 +2944,12 @@
 <td>Safe to gate on only if no other actor waits on that signal to make capacity appear: it generalises to any admission controller above an autoscaler. Evaluate promoting to why-gag.md or the under-claims list; keep the table.</td>
 </tr>
 <tr>
-<td><a id="Q595"></a>Q595</td>
-<td><a href="../operations/troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">The cancel runbook's manual pod delete may re-run the job GitHub cancelled</a></td>
-<td><code>bug</code> <code>docs</code></td>
+<td><a id="Q811"></a>Q811</td>
+<td><a href="../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">Graceful-deletion recovery cannot see a cancel, so a hand-deleted worker re-runs a cancelled run</a></td>
+<td><code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>A hand-deleted worker matches <code>externallyDeletedBeforeTerminal</code> (source-read, unmeasured), so Q502 calls <code>rerun-failed-jobs</code> for a run an operator deliberately stopped. Measure whether GitHub honours it for a <code>cancelled</code> conclusion.</td>
+<td><code>externallyDeletedBeforeTerminal</code> cannot see a cancel: the runbook's delete supplies the mark, and a <code>cancelled</code> conclusion accepts <code>rerun-failed-jobs</code> (measured 2026-08-05). Both tiers take it.</td>
 </tr>
 <tr>
 <td><a id="Q631"></a>Q631</td>
@@ -3807,6 +3799,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q806"></a>Q806</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">A transient syft download fails the SBOM step in the security scan and the release publish</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Event:</strong> an SBOM step fails on <code>main</code> fetching syft after the fix. Both workflows now pull the pinned tarball via <code>download-verified.sh</code> (5 retries, <code>--retry-all-errors</code>, digest-gated), so the budget ran out, not one denial. → top of Queue.</td>
+</tr>
 <tr>
 <td><a id="Q797"></a>Q797</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/provisioning_test.go">Three GMC tenant-provisioning integration tests time out together under the full two-module race run</a></td>

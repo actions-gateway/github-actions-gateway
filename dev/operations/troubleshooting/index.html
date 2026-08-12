@@ -7606,12 +7606,17 @@ The composed chain has not been observed end to end for a job with a live worker
 <a id="__codelineno-123-9" name="__codelineno-123-9" href="#__codelineno-123-9"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
 </code></pre></div>
 <p><strong>Resolution.</strong>
-- <strong>To reclaim the capacity now, delete the worker pod.</strong> <code>kubectl delete pod -n &lt;namespace&gt; &lt;worker-pod&gt;</code> terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
-  The run is already cancelled, so nothing is lost.</p>
+- <strong>Deleting the worker pod reclaims the capacity, and re-queues the job you cancelled.</strong> <code>kubectl delete pod -n &lt;namespace&gt; &lt;worker-pod&gt;</code> terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
+  Only reach for it when you cancelled to free the slot rather than to stop the work.</p>
 <blockquote>
-<p>A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC asks GitHub to re-run the run's failed jobs.
-Whether GitHub honours that for a run concluded <code>cancelled</code> is unmeasured — see <a href="../../STATUS/#Q595">Q595</a>.
-If you are cancelling to <em>stop</em> the work rather than to free a slot, prefer waiting the pod out.
+<p><strong>The delete undoes the cancel.</strong> A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC asks GitHub to re-run the run's failed jobs.
+GitHub honours that for a <code>cancelled</code> conclusion: the <code>rerun-failed-jobs</code> call is accepted and the job is re-queued, where a <code>success</code> conclusion refuses it with a 403 (measured live 2026-08-05, <a href="../../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>).
+Nothing in the gateway deletes a cancelled run's pod, which is why the deletion mark is trusted as a disruption signal; this remedy is the one case where an operator produces that mark deliberately.
+It applies on ScaleSet too: the tier's own reclaim carries the <code>actions-gateway.com/deletion-reason</code> stamp and is excluded, while a hand-delete carries no stamp and takes the recovery path.
+Each re-run spends one slot of the run's shared <code>maxEvictionRetries</code> budget (default 2, max 10), so a repeated cancel-then-delete cycle is bounded, ending in an <code>EvictionRetriesExhausted</code> warning Event on the owner.
+Whether recovery should read the run's conclusion before re-running is <a href="../../STATUS/#Q811">Q811</a>.
+- <strong>If you cancelled to stop the work, leave the pod alone</strong> and wait it out, or bound it with <code>maxWorkerLifetime</code> below.
+  There is no way today to free the slot <em>and</em> keep the run cancelled: the delete re-queues the job, and the new attempt has to be cancelled in turn.
 - <strong>Bound the worst case with <code>maxWorkerLifetime</code></strong> on the runner group, which caps how long any worker — cancelled or not — can hold its slot.
 - Do <strong>not</strong> expect a lower <code>completedPodTTL</code> or <code>pendingPodDeadline</code> to help: both act on pods that have already stopped or never started, and this pod is running.</p>
 </blockquote>
