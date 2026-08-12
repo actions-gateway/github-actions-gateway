@@ -36,7 +36,10 @@
 # table could not be located or holds no body rows — an empty scan cannot tell
 # "every cell is stamped" from "my parser no longer sees the table".
 #
-# Runs under `make comparison-stamps-check` (part of `make check`).
+# Runs under `make comparison-stamps-check`, in `make check` and the doc-links.yml
+# CI workflow, so local and CI verdicts match. The CI half is load-bearing rather
+# than belt-and-braces: unit-test.yml path-ignores docs, so without a job there a
+# cell losing its stamp would reach no gate on a PR at all.
 # Assertions: scripts/docs/check-comparison-stamps-test.sh.
 
 set -euo pipefail

@@ -71,6 +71,19 @@ jobs:
       - name: em-dash density (make em-dash-check)
         run: make em-dash-check
 
+  # Hold why-gag.md's competitor column to the version-and-date rule (Q801).
+  # It belongs here rather than in unit-test.yml for the same reason em-dash
+  # does: its only input is a Markdown page, and unit-test.yml path-ignores
+  # docs, so a cell that lost its stamp would reach no gate there. Its own job
+  # so an unstamped verdict and a dead link are separate verdicts on the PR.
+  comparison-stamps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: competitor verdicts carry a version and date (make comparison-stamps-check)
+        run: make comparison-stamps-check
+
   # Hold scripts/README.md to the scripts/ tree (Q688). It belongs here for the
   # same reason gate-lists does: its two inputs are a doc and the scripts/ tree,
   # and this is the only workflow whose triggers cover both — unit-test.yml
