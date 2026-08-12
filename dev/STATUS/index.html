@@ -2864,14 +2864,6 @@
 <td>Measured 2026-08-12 on #1431: <code>--assess</code> refuses at <code>human_enqueued</code>, ahead of the probe, so it records <code>base_oid -</code>. Q810 captures a queue eviction only, not an ordinary DIRTY wake (<a href="../development/parallel-dispatch/#conflict-policy">the class</a>).</td>
 </tr>
 <tr>
-<td><a id="Q781"></a>Q781</td>
-<td><a href="../operations/release/#writing-the-curated-notes">Automate the release scope-filter residue reconciliation</a></td>
-<td><code>debt</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>release.md calls the scope allow-list a guess needing a manual residue read. On v1.4.0 it kept 15 of 58 <code>feat</code>/<code>fix</code> and dropped Q166 (scopeless <code>feat:</code>) and Q554 (<code>feat(deploy)</code>), two of three headline features. Emit the residue path-classified.</td>
-</tr>
-<tr>
 <td><a id="Q780"></a>Q780</td>
 <td><a href="../operations/release/#writing-the-curated-notes">Enumerate Kubernetes Event reasons mechanically for the release notes</a></td>
 <td><code>debt</code> <code>ci</code> <code>retro</code></td>
@@ -3789,6 +3781,13 @@
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> an SBOM step fails on <code>main</code> fetching syft after the fix. Both workflows now pull the pinned tarball via <code>download-verified.sh</code> (5 retries, <code>--retry-all-errors</code>, digest-gated), so the budget ran out, not one denial. → top of Queue.</td>
+</tr>
+<tr>
+<td><a id="Q820"></a>Q820</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh"><code>git-merge-plan-index-test</code> dies on a temp-file error under the parallel scripts-test runner</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Event:</strong> it fails on <code>main</code>. First sighting 2026-08-12 under <code>make check</code>: git printed <code>unable to create temporary file</code>, rc=128; it passed standalone right after. Sibling sessions run <code>make check</code> concurrently here: suspect host temp pressure.</td>
 </tr>
 <tr>
 <td><a id="Q797"></a>Q797</td>
