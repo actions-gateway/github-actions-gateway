@@ -86,9 +86,9 @@ Do **not** try to auto-start headless worker sessions with a "skip all permissio
 The safety classifier blocks it, and it is the less-secure path regardless.
 The small cost of chips — one click to start each — is the correct trade.
 
-> One decision to settle **before** spawning: do not design the run around `send_message`-ing a worker mid-run to nudge it (see [Coordination channels](#coordination-channels)).
-> Treat cross-session messaging as best-effort, not a control channel — a worker running unattended may not act on a message until re-engaged.
-> Design for the worker to finish the job itself (next section) rather than relying on re-engagement.
+> One decision to settle **before** spawning: a worker must be able to finish its job without being nudged (next section).
+> Cross-session messaging does reach an idle worker and drive a turn (measured; see [Coordination channels](#coordination-channels)), so it is a usable channel, but its **timing** is not guaranteed.
+> Design the run so a message that arrives late, or not at all, costs a delay rather than a stall.
 
 ## The worker contract (self-healing)
 
@@ -124,6 +124,12 @@ The nudge re-resolves the path on every push, so it stays correct across plugin 
 An unattended worker stalls there, and the PR spends the rest of its life unwatched — which is how self-healing silently stops happening.
 Tune the watcher through the `env` block in `.claude/settings.json` (the watcher reads its knobs from the environment at launch) so the command stays auto-approved — that is where this repo sets `PR_SENTINEL_TIMEOUT` to 6 h.
 The stock 1 h budget expires under a batch, where the heavy gates queue behind each other, and each expiry costs a `timeout` wake plus a relaunch the worker has to still be alive to perform.
+
+**`PR_SENTINEL_WATCH_UNTIL` stays at the plugin default, `ready`,** so a worker's watcher exits when its PR goes green.
+The alternative, `closed`, keeps polling through to merge and covers the [post-`ready` gap](#the-post-ready-gap) inside the same watcher.
+We do not use it, for a reason outside the plugin: a running background task makes a session's status indicator read as busy, which hides the PR status the maintainer scans the session list for.
+Under `closed` every worker in a batch shows as busy from its first push until its PR merges, including the whole review window, when its watcher has nothing left to do.
+Setting `ready` narrows "busy" to "actually working", and moves the green-to-merged window onto the dispatcher, which is where the [post-`ready` gap](#the-post-ready-gap) already assigned it.
 
 The watcher sleeps between polls (zero idle tokens) and reads **only GitHub-controlled check results and mergeable state — never the PR body, review comments, or issue comments**.
 It covers **both** post-PR failure modes in one mechanism, exiting with a single event the moment the session must act:
@@ -175,13 +181,18 @@ That only holds for PRs whose watcher is still running — see [the post-`ready`
 
 A PR that reported `ready` has no watcher, but it is still **open** — it sits through the dispatcher's scope review and merge ordering, and a sibling merge in that window silently turns it `DIRTY` with nothing left to wake.
 Relaunching pr-sentinel does not close this gap (it would spin on `ready`; see the event list above).
-Two things that do:
+The gap belongs to the **dispatcher**, which covers it two ways:
 
-- **The dispatcher re-checks mergeability at the merge step** — baseline, no moving parts, and the merge step is already where it looks at the PR.
+- **A mergeability-only background watch per handed-off PR.** This is [fallback 1](#fallback-1-a-self-managed-background-watcher) narrowed to one field: sleep → `gh pr view <n> --json mergeStateStatus` → exit on `DIRTY`/`BEHIND` or on the PR closing.
+  Unlike a pr-sentinel relaunch it sleeps between polls, so it does not spin, and unlike a full watcher it carries no CI output, so a batch of them does not fill the dispatcher's context with logs it does not own.
+  On `DIRTY` the dispatcher wakes the owning worker (see [Coordination channels](#coordination-channels)); the worker rebases, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
+- **A mergeability re-check at the merge step**, as the backstop for the above.
+  No moving parts, and the merge step is already where the dispatcher looks at the PR.
   A stale `ready` is caught there and routed by [conflict policy](#conflict-policy).
-- **A mergeability-only background watch**, for review queues long enough that the above is too late.
-  This is [fallback 1](#fallback-1-a-self-managed-background-watcher) narrowed to one field: sleep → `gh pr view <n> --json mergeStateStatus` → exit on `DIRTY`/`BEHIND` or on the PR closing.
-  Unlike a pr-sentinel relaunch it sleeps between polls, so it does not spin.
+
+**Why the dispatcher and not the worker.** The natural alternative is to leave the worker's own watcher running to merge (`PR_SENTINEL_WATCH_UNTIL=closed`), which covers the same window with no messaging at all.
+It costs the session list: a running background task reads as a busy session, so every worker in a batch looks busy from its first push until merge, and the PR status the maintainer actually wants to scan is hidden behind it for the whole review window.
+Splitting the watch at `ready` puts each half where its output belongs, with CI failures staying in the session that owns the PR.
 
 ### The worker prompt carries the delta, not the contract
 
@@ -194,6 +205,8 @@ It also made the chips themselves unreviewable, which matters because the chip l
 So the prompt carries only what the skill and the Queue row cannot:
 
 - **The item** and the model to run on ([Model selection](#model-selection)); a fresh worker cannot run `model-advisor` interactively.
+- **The dispatcher's worktree name**, which is how the worker addresses it to report its PR (`dispatch-worker` skill §8).
+  A session cannot look up its own name, so the dispatcher has to state it and the worker resolves it through `ListAgents`.
 - **What the dispatcher measured, and when.** The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying *where the row is stale* saves it implementing a fixed defect.
 - **The trap worth naming** — the tempting wrong fix, the control the test needs, the decision the row leaves open.
 - **Contention** with work in flight, by file.
@@ -233,7 +246,8 @@ For each task, in priority order and respecting the concurrency cap:
 3. **Report it ready.
    Do not merge and do not enqueue** (see [the merge model](#the-merge-model)).
    Re-check mergeability as you report: a `CLEAN` PR goes stale when a sibling lands.
-4. Advance: spawn the next task in that stream.
+4. **Start a mergeability-only watch on it**, because its own watcher exited at `ready` and the PR now sits open through review (see [the post-`ready` gap](#the-post-ready-gap)).
+5. Advance: spawn the next task in that stream.
 
 Keep a small written tracker (a scratch file in the gitignored `tmp/`) of task → chip → PR → state, plus the decisions made.
 It is cheap and makes the run auditable and resumable.
@@ -343,11 +357,14 @@ In practice the coordination is carried by built-in mechanisms — no shared mai
   Read-only and not permission-gated.
 - **PR + PR comments = worker → dispatcher results and escalation.** A green+mergeable PR is the "done" signal; the safety-valve PR comment is the "stuck" signal.
 - **Self-healing is the spine.** Workers launch the pr-sentinel background watcher, which wakes them on both CI failures and merge conflicts, so the dispatcher rarely needs to touch a running worker.
-- **`send_message` = rare, reactive nudge only.** Best-effort and unattended-gated, so never the control path.
-  In practice it has been used only to relay a specific CI-failure fix to a worker that failed to self-heal.
-  The autonomous loop must not depend on it (see [the worker contract](#the-worker-contract-self-healing)).
+- **Worker → dispatcher announcement = PR ownership.** On every `gh pr create`, and again on `ready`, the worker messages the dispatcher its Q-ID, PR number, branch, and the literal pr-sentinel watcher path from its nudge (`dispatch-worker` skill §8).
+  This is the only authoritative ownership record.
+  The dispatcher can otherwise only infer it from the branch name, which carries the session name **just** for the branch the worktree was created on: a worker's second PR, or a worktree it did not create, drops out of that inference with no symptom.
+  The watcher path is likewise unobtainable any other way, because the dispatcher never runs `gh pr create` and so never receives a nudge.
+- **`send_message` = dispatcher → worker wake, and rare nudges.** A message does reach an idle worker and drive a turn: measured 2026-08-11, two trials, 16 s and about 20 s from send to read, the second after 25 to 35 minutes of idle with no other event in the turn.
+  Its **timing** is what is not guaranteed, so it carries wakes and nudges, never a deadline.
 
-**A message describing repo state carries its own expiry, or it arrives wrong.** `send_message` queues rather than delivers: the target processes it after its in-flight turn, which can be many minutes later.
+**A message describing repo state carries its own expiry, or it arrives wrong.** Delivery is prompt but its latency is not bounded: an idle target is woken within seconds, while a busy one processes the message only after its in-flight turn, which can be many minutes later.
 Whatever the message asserts about a PR, a branch, or `main` may have changed by then, and the sender is the one who knows the state is volatile.
 So state the condition that invalidates the instruction, not just the instruction.
 Measured 2026-08-09: a message asked a session to rebase onto an open PR's branch, that PR merged before the session acted, and the instruction had to be chased with a correction.
@@ -403,7 +420,9 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 - [ ] Everyone clear that the **maintainer** merges and enqueues — no agent does ([the merge model](#the-merge-model)).
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
 - [ ] Watcher launched **bare** (no inline `VAR=…` prefix, or the auto-allow lapses into a prompt) and relaunched after every actionable wake.
-- [ ] Post-`ready` conflict window covered — dispatcher re-checks mergeability at the merge step (see [the post-`ready` gap](#the-post-ready-gap)).
+- [ ] `PR_SENTINEL_WATCH_UNTIL` left at `ready`, so a worker goes idle at green and its session stops reading as busy.
+- [ ] Each spawn prompt names the **dispatcher's worktree**, so the worker can address it (`dispatch-worker` skill §8).
+- [ ] Post-`ready` conflict window covered — dispatcher runs a mergeability-only watch per handed-off PR, and re-checks mergeability at the merge step (see [the post-`ready` gap](#the-post-ready-gap)).
 - [ ] No-secrets boundary set; credential-dependent items excluded up front.
 - [ ] Cleanup plan for leftover worktrees/branches at the end.
 
@@ -412,7 +431,7 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 - **Adding self-healing late.** The first several PRs were hand-rebased and needed dedicated fix/resolve chips.
   Make self-healing the default from task #1.
 - **Treating `ready` as "this PR is now safe".** A handed-off PR still sits open through scope review — the exact window a sibling merge breaks it — with no watcher left.
-  Re-check mergeability at the merge step ([the post-`ready` gap](#the-post-ready-gap)).
+  Start the dispatcher's mergeability-only watch on it, and re-check at the merge step ([the post-`ready` gap](#the-post-ready-gap)).
   The tempting fix — relaunching pr-sentinel on `ready` — does **not** work: it re-reports `ready` at once and the relaunch loop spins without sleeping.
   Measured, not assumed: the first draft of this doc shipped that rule and PR #892 span on it immediately.
 - **Decorating the watcher launch with an env prefix.** It costs the launch its auto-allow (the plugin matches a three-token command), so every relaunch prompts and an unattended worker stops relaunching.
@@ -430,4 +449,9 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 - **Burning a session in an active `gh pr checks --watch` loop.** It pins the main thread so you cannot iterate while CI runs.
   Launch the pr-sentinel background watcher instead — one watcher wakes the session on CI failures **and** merge conflicts, and its `PreToolUse` hook denies the foreground `--watch` outright.
   Reserve any active polling for the rare fallback where neither the plugin nor a background task is available.
+- **Watching to merge instead of to green.** `PR_SENTINEL_WATCH_UNTIL=closed` looks like strictly more coverage, and it does close the post-`ready` gap inside the worker's own watcher.
+  What it costs is the session list: a live background task makes a session read as busy, so every worker shows busy from first push until merge and hides its PR status for the whole review window, exactly when the maintainer is scanning for it.
+  Split the watch at `ready` instead ([the post-`ready` gap](#the-post-ready-gap)).
+- **Inferring PR ownership from the branch name.** It matches the session name only for the branch the worktree was created on, so a worker's second PR or a borrowed worktree drops out of the map silently.
+  Have the worker announce every PR it opens ([Coordination channels](#coordination-channels)).
 - **Conflating auto-fix with auto-merge.** Delegate fixes; gate merges.
