@@ -183,9 +183,17 @@ A PR that reported `ready` has no watcher, but it is still **open** — it sits 
 Relaunching pr-sentinel does not close this gap (it would spin on `ready`; see the event list above).
 The gap belongs to the **dispatcher**, which covers it two ways:
 
-- **A mergeability-only background watch per handed-off PR.** This is [fallback 1](#fallback-1-a-self-managed-background-watcher) narrowed to one field: sleep → `gh pr view <n> --json mergeStateStatus` → exit on `DIRTY`/`BEHIND` or on the PR closing.
-  Unlike a pr-sentinel relaunch it sleeps between polls, so it does not spin, and unlike a full watcher it carries no CI output, so a batch of them does not fill the dispatcher's context with logs it does not own.
-  On `DIRTY` the dispatcher wakes the owning worker (see [Coordination channels](#coordination-channels)); the worker rebases, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
+- **A mergeability-only background watch per handed-off PR**, launched as a background task:
+
+  ```bash
+  scripts/agent/pr-mergeability-watch.sh <pr>
+  ```
+
+  It is [fallback 1](#fallback-1-a-self-managed-background-watcher) narrowed to two fields, `state` and `mergeStateStatus`.
+  It never reads the PR body or any comment stream, so nothing a third party can write reaches the session that acts on its exit.
+  It carries no CI output, so a batch of them does not fill the dispatcher's context with logs for failures the owning worker is fixing.
+  And it sleeps between polls, which a pr-sentinel relaunch on `ready` cannot.
+  On `conflict` the dispatcher wakes the owning worker (see [Coordination channels](#coordination-channels)); the worker rebases, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
 - **A mergeability re-check at the merge step**, as the backstop for the above.
   No moving parts, and the merge step is already where the dispatcher looks at the PR.
   A stale `ready` is caught there and routed by [conflict policy](#conflict-policy).
@@ -246,7 +254,7 @@ For each task, in priority order and respecting the concurrency cap:
 3. **Report it ready.
    Do not merge and do not enqueue** (see [the merge model](#the-merge-model)).
    Re-check mergeability as you report: a `CLEAN` PR goes stale when a sibling lands.
-4. **Start a mergeability-only watch on it**, because its own watcher exited at `ready` and the PR now sits open through review (see [the post-`ready` gap](#the-post-ready-gap)).
+4. **Start `scripts/agent/pr-mergeability-watch.sh <pr>` on it as a background task**, because its own watcher exited at `ready` and the PR now sits open through review (see [the post-`ready` gap](#the-post-ready-gap)).
 5. Advance: spawn the next task in that stream.
 
 Keep a small written tracker (a scratch file in the gitignored `tmp/`) of task → chip → PR → state, plus the decisions made.
@@ -422,7 +430,7 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 - [ ] Watcher launched **bare** (no inline `VAR=…` prefix, or the auto-allow lapses into a prompt) and relaunched after every actionable wake.
 - [ ] `PR_SENTINEL_WATCH_UNTIL` left at `ready`, so a worker goes idle at green and its session stops reading as busy.
 - [ ] Each spawn prompt names the **dispatcher's worktree**, so the worker can address it (`dispatch-worker` skill §8).
-- [ ] Post-`ready` conflict window covered — dispatcher runs a mergeability-only watch per handed-off PR, and re-checks mergeability at the merge step (see [the post-`ready` gap](#the-post-ready-gap)).
+- [ ] Post-`ready` conflict window covered — dispatcher runs `scripts/agent/pr-mergeability-watch.sh` per handed-off PR, and re-checks mergeability at the merge step (see [the post-`ready` gap](#the-post-ready-gap)).
 - [ ] No-secrets boundary set; credential-dependent items excluded up front.
 - [ ] Cleanup plan for leftover worktrees/branches at the end.
 

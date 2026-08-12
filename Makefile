@@ -368,6 +368,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  agent/claude-piped-gate-hook-test \
                  agent/foreground-guard-patterns-test \
                  agent/pr-requeue-eligible-test agent/record-launch-test \
+                 agent/pr-mergeability-watch-test \
                  agent/qos-cluster-probe-test agent/validate-throttle-test \
                  ci/check-conflict-markers-test ci/check-dep-advisory-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
