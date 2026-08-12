@@ -27,24 +27,38 @@ mkdir -p "$FIXTURE_DIR/bin"
 trap 'rm -rf "$FIXTURE_DIR"' EXIT INT TERM
 
 # A `gh` stub that answers from the environment. Each branch prints exactly what
-# the real invocation prints after gh's own --jq has run.
+# the real invocation prints after gh's own --jq has run, including the node id
+# the queue query selects so that a read which happened is distinguishable from
+# one that did not.
+#
+# Two failure knobs, because the checker has to tell them apart from a measured
+# answer and from each other: GH_FAIL names a read that exits non-zero with
+# nothing on stdout (a transport failure), GH_SILENT one that exits 0 with
+# nothing on stdout (the 2026-08-11 shape, an empty read reported as success).
 cat >"$FIXTURE_DIR/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+read_kind=""
 case "$1 ${2-}" in
-"pr view")
-	printf '%s\t%s\t%s\n' "${GH_STATE:-OPEN}" "${GH_DRAFT:-false}" "${GH_BASE:-main}"
-	;;
-"api graphql")
-	printf '%s\n' "${GH_QUEUE_ENTRY:-}"
-	;;
-"api "*)
-	printf '%s\n' "${GH_ENQUEUE_COUNT:-0}"
-	;;
+"pr view") read_kind=view ;;
+"api graphql") read_kind=graphql ;;
+"api "*) read_kind=timeline ;;
 *)
 	printf 'gh stub: unhandled: %s\n' "$*" >&2
 	exit 1
 	;;
+esac
+if [[ "${GH_FAIL:-}" == "$read_kind" ]]; then
+	printf 'gh stub: simulated transport failure\n' >&2
+	exit 1
+fi
+if [[ "${GH_SILENT:-}" == "$read_kind" ]]; then
+	exit 0
+fi
+case "$read_kind" in
+view) printf '%s\t%s\t%s\n' "${GH_STATE:-OPEN}" "${GH_DRAFT:-false}" "${GH_BASE:-main}" ;;
+graphql) printf '%s %s\n' "${GH_NODE_ID:-PR_kwTEST}" "${GH_QUEUE_ENTRY:-none}" ;;
+timeline) printf '%s\n' "${GH_ENQUEUE_COUNT:-0}" ;;
 esac
 STUB
 chmod +x "$FIXTURE_DIR/bin/gh"
@@ -136,7 +150,8 @@ field() {
 	awk -v k="$2" '$1 == k { v = $2 } END { print v }' "$1/state/42.verdict"
 }
 
-export GH_ENQUEUE_COUNT=1 GH_QUEUE_ENTRY="" GH_STATE=OPEN GH_DRAFT=false GH_BASE=main
+export GH_ENQUEUE_COUNT=1 GH_QUEUE_ENTRY=none GH_STATE=OPEN GH_DRAFT=false GH_BASE=main
+export GH_FAIL="" GH_SILENT="" GH_NODE_ID=PR_kwTEST
 
 # The healthy case first: without it every refusal below proves nothing.
 STATUS_REPO="$(new_repo status-conflict status)"
@@ -174,13 +189,70 @@ assert_eq refuse-records-no-oid "$(field "$NEVER_REPO" base_oid)" -
 
 # Already queued: re-enqueueing would double-add.
 QUEUED_REPO="$(new_repo already-queued status)"
-GH_QUEUE_ENTRY='{"state":"QUEUED"}' expect refuse-already-queued 1 "$QUEUED_REPO" --assess 42
+GH_QUEUE_ENTRY=QUEUED expect refuse-already-queued 1 "$QUEUED_REPO" --assess 42
 assert_output refuse-already-queued 'already in the merge queue'
 
 CLOSED_REPO="$(new_repo not-open status)"
 GH_STATE=MERGED expect refuse-not-open 1 "$CLOSED_REPO" --assess 42
 DRAFT_REPO="$(new_repo draft status)"
 GH_DRAFT=true expect refuse-draft 1 "$DRAFT_REPO" --assess 42
+
+# A read that did not happen is not a measured answer (Q805). Each of these
+# three reads leaves an empty string behind, and every check downstream of one
+# reads emptiness as a finding: no state as "not OPEN", no queue entry as "not
+# queued", no timeline as "nobody enqueued it". Exit 2, not 1: a WAKE records a
+# reason, and a reason no read supports is the history the rebase then makes
+# unfalsifiable. Both shapes are covered per read, since a transport failure and
+# an empty success arrive as different statuses and the same output.
+#
+# On their own repo, because an unmeasurable assessment is recorded like a
+# refusal and would otherwise land on the ELIGIBLE record the confirm cases
+# below read.
+UNREADABLE_REPO="$(new_repo unreadable status)"
+for failing in view graphql timeline; do
+	GH_FAIL="$failing" expect "unmeasurable-fail-$failing" 2 "$UNREADABLE_REPO" --assess 42
+	assert_output "unmeasurable-fail-$failing" 'refusing to guess'
+	GH_SILENT="$failing" expect "unmeasurable-empty-$failing" 2 "$UNREADABLE_REPO" --assess 42
+	assert_output "unmeasurable-empty-$failing" 'refusing to guess'
+done
+
+# Recorded, so that a later reader can tell a read that could not be taken from
+# an assessment that never ran (Q810). The first read is the one that fails
+# before the base is even known, so the record carries `-` for it rather than
+# failing on an unset variable.
+assert_eq unmeasurable-records-verdict "$(field "$UNREADABLE_REPO" verdict)" UNMEASURABLE
+GH_FAIL=view expect unmeasurable-before-base 2 "$UNREADABLE_REPO" --assess 42
+assert_eq unmeasurable-records-no-base "$(field "$UNREADABLE_REPO" base)" -
+
+# gh's --jq prints nothing for a JSON null, so "not queued" and "never read"
+# are the same empty answer at that layer and the query selects the PR's node id
+# to tell them apart. An answer without one is a read that did not land, however
+# gh exited.
+GH_NODE_ID=- expect unmeasurable-queue-no-id 2 "$UNREADABLE_REPO" --assess 42
+assert_output unmeasurable-queue-no-id 'refusing to guess'
+
+# `--confirm` re-reads both live probes before enqueueing, so it needs the same
+# refusal: this is the path that runs `gh pr merge` on a 0.
+GH_FAIL=graphql expect unmeasurable-confirm 2 "$STATUS_REPO" --confirm 42
+assert_output unmeasurable-confirm 'refusing to guess'
+
+# `gh api --paginate` runs its --jq per page and prints one count per page, so
+# past 100 timeline events the count arrives multi-line. Read as one number that
+# is an arithmetic syntax error, and it surfaced as "no human enqueued this PR"
+# with nothing wrong at all. The pages are summed: a human enqueue on page two
+# still counts, and pages that are all zero still refuse.
+PAGED_REPO="$(new_repo paged-timeline status)"
+GH_ENQUEUE_COUNT=$'0\n1\n0' expect paged-timeline-sums 0 "$PAGED_REPO" --assess 42
+PAGED_ZERO_REPO="$(new_repo paged-timeline-zero status)"
+GH_ENQUEUE_COUNT=$'0\n0\n0' expect paged-timeline-zero 1 "$PAGED_ZERO_REPO" --assess 42
+assert_output paged-timeline-zero 'no human has enqueued'
+
+# A non-numeric answer is not a count. gh prints its errors on stderr, but a
+# body that parses as text rather than a number has to refuse rather than be
+# coerced to 0 by the arithmetic.
+GH_ENQUEUE_COUNT='unexpected end of JSON input' \
+	expect unmeasurable-timeline-garbage 2 "$UNREADABLE_REPO" --assess 42
+assert_output unmeasurable-timeline-garbage 'refusing to guess'
 
 # --confirm fails closed. A session that lost its assessment must wake a human
 # rather than fall back to enqueueing.

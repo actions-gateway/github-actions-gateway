@@ -283,6 +283,7 @@ This is the key design decision; get it right up front.
   The queue evicts a PR when something merges ahead of it and dirties the branch, and that eviction is mechanical — it says nothing about whether the change should land, because the maintainer already answered that by enqueueing.
   A worker may rebase and re-enqueue **only** when [`scripts/agent/pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) says so, which requires a prior human enqueue, an open non-draft PR, no current queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned files.
   A conflict anywhere else changes what was reviewed, so it wakes the maintainer instead.
+  A read the checker could not take is a third answer, not a refusal: it exits 2 naming what it could not measure, because a `gh` failure otherwise reads as a measured "not OPEN", "not queued", or "nobody enqueued it", and that reason is what a later reader has instead of the eviction.
   A **first** enqueue is still never an agent's to make.
 - **What the dispatcher owes at handoff**, so the review is cheap rather than a re-derivation: which heavy gates ran and on which head SHA, what the scope review found, and the mergeability state as of *now*.
 

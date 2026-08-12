@@ -41,13 +41,21 @@
 # later time, whatever the branches have since become. The record stays in the
 # gitignored tmp/ tree — session-local evidence, not a registry to reconcile.
 #
+# Every probe has to tell a measured negative from a read that never happened,
+# because a failed `gh` leaves an empty string and every check reads emptiness
+# as an answer: no state as "not OPEN", no queue entry as "not queued", no
+# timeline as "nobody enqueued it". The verdict then carries a reason no read
+# supports, and that reason is the only account of the eviction that outlives
+# the rebase. So an unmeasurable probe exits 2 rather than deciding (Q805).
+#
 # Usage:
 #   pr-requeue-eligible.sh --assess  <pr>   # before rebasing; records a verdict
 #   pr-requeue-eligible.sh --confirm <pr>   # after CI is green; gates the enqueue
 # Options (for the test suite; all default to the real thing):
 #   --state-dir PATH   where verdicts are recorded (default tmp/requeue)
 #   --repo OWNER/NAME  the repo to query
-# Exit: 0 eligible, 1 not eligible (reason on stdout), 2 usage error.
+# Exit: 0 eligible, 1 not eligible (reason on stdout), 2 usage error or a probe
+# that could not run (reason on stderr).
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -125,7 +133,7 @@ record() {
 	{
 		printf 'verdict %s\n' "$verdict"
 		printf 'at %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-		printf 'base %s\n' "$base"
+		printf 'base %s\n' "${base:--}"
 		printf 'base_oid %s\n' "${PROBE_BASE_OID:--}"
 		printf 'head_oid %s\n' "${PROBE_HEAD_OID:--}"
 		printf 'reason %s\n' "$reason"
@@ -147,6 +155,22 @@ wake() {
 	exit 1
 }
 
+# unmeasurable WHAT — the probe could not run, so there is no answer to report.
+# Exit 2, matching the merge probe: 1 means a check was made and refused, and a
+# refusal is a record of why. Reporting an unread probe as a refusal writes a
+# reason nothing measured, which the rebase then makes unfalsifiable.
+#
+# Recorded like a refusal, for the reason wake() records one: an absent file
+# would say the assessment never ran. The first read happens before the base is
+# known, so a record taken from it carries `-` there.
+unmeasurable() {
+	printf 'pr-requeue-eligible.sh: could not measure %s; refusing to guess\n' "$1" >&2
+	if [[ "$MODE" == "assess" ]]; then
+		record UNMEASURABLE "$1"
+	fi
+	exit 2
+}
+
 gh_pr() {
 	if [[ -n "$REPO" ]]; then
 		gh pr view "$PR" --repo "$REPO" "$@"
@@ -165,29 +189,59 @@ gh_api() {
 
 # in_queue — true when GitHub reports a live merge-queue entry. `gh pr view`
 # exposes no queue field at all (checked against gh's --json list), so this is
-# the GraphQL one; it is null for a PR that is not queued.
+# the GraphQL one; mergeQueueEntry is null for a PR that is not queued.
+#
+# gh's --jq prints *nothing* for a JSON null, where `jq -r` prints the string
+# (measured against a live unqueued PR), so the answer this read gives for a PR
+# outside the queue is indistinguishable from the answer it gives when it never
+# ran. The PR's node id is therefore selected alongside the state: a successful
+# read always carries one, the way merge-tree's tree OID marks a merge that
+# actually happened below.
 in_queue() {
-	local owner_repo entry
-	owner_repo="${REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+	local owner_repo answer node_id queue_state
+	if [[ -n "$REPO" ]]; then
+		owner_repo="$REPO"
+	else
+		owner_repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)" ||
+			unmeasurable "which repo PR $PR belongs to"
+	fi
 	# shellcheck disable=SC2016 # $owner/$name/$pr are GraphQL variables, not shell
-	entry=$(gh api graphql \
+	answer=$(gh api graphql \
 		-f owner="${owner_repo%%/*}" -f name="${owner_repo#*/}" -F pr="$PR" \
 		-f query='query($owner:String!,$name:String!,$pr:Int!){
 			repository(owner:$owner,name:$name){
-				pullRequest(number:$pr){ mergeQueueEntry { state } }
+				pullRequest(number:$pr){ id mergeQueueEntry { state } }
 			}
-		}' --jq '.data.repository.pullRequest.mergeQueueEntry')
-	[[ -n "$entry" && "$entry" != "null" ]]
+		}' --jq '.data.repository.pullRequest
+			| "\(.id // "-") \(.mergeQueueEntry.state // "none")"') ||
+		unmeasurable "whether PR $PR is in the merge queue"
+	node_id="${answer%% *}"
+	queue_state="${answer#* }"
+	[[ "$answer" == *" "* && -n "$node_id" && "$node_id" != "-" ]] ||
+		unmeasurable "whether PR $PR is in the merge queue: the query answered '$answer'"
+	[[ "$queue_state" != "none" ]]
 }
 
 # human_enqueued — true when a non-bot actor has added this PR to the queue.
 # GitHub marks app actors with type "Bot"; the merge queue's own bot removals
 # are irrelevant here, only additions count.
+#
+# `--paginate` runs the --jq filter per page and prints one count per page
+# (measured: a 290-event timeline answers "100 100 90"), so the counts are
+# summed rather than read as a number. Unsummed, a PR past 100 timeline events
+# fed `((n > 0))` a multi-line value, which is an arithmetic syntax error and
+# reports as "no human enqueued this PR" on a healthy network.
 human_enqueued() {
-	local n
-	n=$(gh_api "issues/$PR/timeline" --paginate \
+	local pages n
+	pages=$(gh_api "issues/$PR/timeline" --paginate \
 		--jq '[.[] | select(.event == "added_to_merge_queue")
-		        | select((.actor.type // "User") != "Bot")] | length')
+		        | select((.actor.type // "User") != "Bot")] | length') ||
+		unmeasurable "whether a human enqueued PR $PR"
+	# An unread timeline leaves this empty, and empty is 0 in arithmetic, which
+	# is the same answer as a PR nobody ever enqueued.
+	[[ "$pages" =~ ^[0-9]+([[:space:]]+[0-9]+)*$ ]] ||
+		unmeasurable "whether a human enqueued PR $PR: the timeline read answered '$pages'"
+	n=$(awk '{ total += $1 } END { print total + 0 }' <<<"$pages")
 	((n > 0))
 }
 
@@ -238,8 +292,16 @@ is_driver_owned() {
 	return 1
 }
 
-read -r state is_draft base <<<"$(gh_pr --json state,isDraft,baseRefName \
-	--jq '[.state, (.isDraft|tostring), .baseRefName] | @tsv')"
+# A `read` takes the status of the read, not of the substitution feeding it, so
+# a failed `gh pr view` leaves all three fields empty and the first check below
+# refuses with "the PR is , not OPEN", a verdict on a PR nobody looked at.
+# Measured 2026-08-11 under a transient TLS failure.
+pr_fields=$(gh_pr --json state,isDraft,baseRefName \
+	--jq '[.state, (.isDraft|tostring), .baseRefName] | @tsv') ||
+	unmeasurable "PR $PR's state"
+read -r state is_draft base <<<"$pr_fields"
+[[ -n "$state" && -n "$is_draft" && -n "$base" ]] ||
+	unmeasurable "PR $PR's state: the read answered '$pr_fields'"
 
 [[ "$state" == "OPEN" ]] || wake "the PR is $state, not OPEN"
 [[ "$is_draft" == "false" ]] || wake "the PR is a draft"
@@ -293,8 +355,7 @@ if ((probe_rc == 0)); then
 	probed="$(conflicting_paths)" || probe_rc=$?
 fi
 if ((probe_rc != 0)); then
-	printf 'pr-requeue-eligible.sh: could not measure the conflict set; refusing to guess\n' >&2
-	exit 2
+	unmeasurable "the conflict set"
 fi
 
 conflicts=()
