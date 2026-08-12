@@ -2856,14 +2856,6 @@
 <td>No <code>api-surface-since.sh</code> counterpart for Event reasons. A v1.4.0 regex matching only <code>Event(obj, type, reason)</code> missed the <code>recordEvent(type, reason, action)</code> shape and returned a false no-change, caught by a positive control. Needs a self-test.</td>
 </tr>
 <tr>
-<td><a id="Q779"></a>Q779</td>
-<td><a href="../operations/release/#validate-the-release-candidate-on-dogfood">A safe cluster-at-rest check for the release teardown</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>describe --format=value(currentNodeCount)</code> omits the field at zero, so empty reads as at-rest and a broken probe is indistinguishable. Hit 2026-08-09 just after a DNS outage. Use the unfiltered instance list plus an explicit probe-exit check.</td>
-</tr>
-<tr>
 <td><a id="Q751"></a>Q751</td>
 <td><a href="../development/bash-style/#set--e-stops-at-a-command-substitution">Nothing declares the bash 4.4+ floor <code>inherit_errexit</code> makes load-bearing</a></td>
 <td><code>debt</code> <code>tests</code></td>
@@ -3086,6 +3078,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a compaction. Candidate seam: foreground-guard <code>hint</code>, unverified.</td>
+</tr>
+<tr>
+<td><a id="Q805"></a>Q805</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>pr-requeue-eligible.sh</code> reports a failed probe as a verdict</a></td>
+<td><code>bug</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-11 under a transient TLS failure: an empty <code>gh pr view</code> read printed <code>the PR is , not OPEN</code>; <code>in_queue</code> then claimed an entry it lacked. <code>conflicting_paths</code> refuses to guess; these do not. Fails closed. Pairs with <a href="#Q694">Q694</a>.</td>
 </tr>
 <tr>
 <td><a id="Q694"></a>Q694</td>

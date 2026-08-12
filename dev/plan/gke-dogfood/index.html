@@ -3993,8 +3993,11 @@ All subcommands are idempotent and safe to re-run.</p>
 <a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>scripts/dogfood/ops.sh<span class="w"> </span>agc-bounce<span class="w"> </span><span class="o">[</span>ci<span class="p">|</span>e2e<span class="o">]</span><span class="w">        </span><span class="c1"># roll-restart the CI (default) or e2e AGC + wait</span>
 <a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a>scripts/dogfood/ops.sh<span class="w"> </span>debug-pod<span class="w"> </span><span class="o">[</span>--kata<span class="o">]</span><span class="w">         </span><span class="c1"># interactive shell pod on the e2e pool (bisecting)</span>
 <a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a>scripts/dogfood/ops.sh<span class="w"> </span>kvm-check<span class="w"> </span><span class="o">[</span>&lt;node&gt;<span class="o">]</span><span class="w">         </span><span class="c1"># verify /dev/kvm on the e2e node(s)</span>
+<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a>scripts/dogfood/ops.sh<span class="w"> </span>at-rest<span class="w">                    </span><span class="c1"># is anything still billing? 0 at rest, 1 not, 2 unreadable</span>
 </code></pre></div>
 <p><code>kata-install</code> reuses exactly the install logic <code>e2e-setup.sh</code> runs (both source <code>scripts/dogfood/lib/kata.sh</code>), so it re-applies the DaemonSet + RuntimeClass without re-running the full billable one-time setup. <code>debug-pod</code>/<code>kvm-check</code> target the <code>e2e</code> pool, which autoscales from 0 — scale a node up first (<code>ops.sh pool-scale e2e 1</code>) or run them during an in-flight e2e session.</p>
+<p><code>at-rest</code> is the read-only one: it answers "did the teardown actually land" by counting the project's Compute Engine instances, and reports an unreadable project as <code>UNKNOWN</code> (exit 2) rather than as zero.
+Reading <code>currentNodeCount</code> off the cluster object cannot make that distinction, because gcloud prints the same empty string for a cluster at 0 nodes and for a projection that resolved to nothing (<a href="../../operations/release/#confirming-the-cluster-is-actually-at-rest">release.md</a>, Q779).</p>
 <h2 id="operations-quick-reference">Operations quick-reference<a class="headerlink" href="#operations-quick-reference" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -4035,6 +4038,10 @@ All subcommands are idempotent and safe to re-run.</p>
 <tr>
 <td>Recurring maintenance + debug ops (pool resize, kata reinstall, AGC bounce, debug pod, <code>/dev/kvm</code> check)</td>
 <td><code>scripts/dogfood/ops.sh &lt;subcommand&gt;</code></td>
+</tr>
+<tr>
+<td>Confirm nothing is still billing after a stop, a delete, or a killed release gate</td>
+<td><code>scripts/dogfood/ops.sh at-rest</code></td>
 </tr>
 </tbody>
 </table>
