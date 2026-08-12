@@ -138,6 +138,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q735"></a>Q735 | [Narrow the semver floor past test files in released package dirs](../devtools/release/semverfloor/narrow.go) | `debt` | 🔲 | S | Distinct from Q705 (comment-only): `go list -deps` reports directories, so a `_test.go` beside compiled source reads as shipped. Measured 2026-08-08: 2 of 68 raising commits in v1.2.0..v1.3.0 ship only `_test.go`, both `fix`, so no verdict flips. |
 | <a id="Q783"></a>Q783 | [Re-point `.git-blame-ignore-revs` at the squashed reflow commit](../CONTRIBUTING.md#skip-the-reflow-commit-in-git-blame) | `docs` | 🚫 | S | The squash mints a SHA that exists only once the reflow PR lands, so the file ships naming its pre-merge one. On git 2.55.0 that is a silent no-op, not an error. |
 | <a id="Q804"></a>Q804 | [`brokertest` answers `GET /message` 202 at once instead of long-polling](development/testing.md#test-doubles-must-long-poll) | `tests` `debt` | 🔲 | S | The one double that does not hold the poll, against this repo's own rule. Q788's client floor caps the spin at 10 req/s, so what remains is the timing-window distortion the rule is about; `scalesettest` is the shape to copy (wake on queue change). |
+| <a id="Q824"></a>Q824 | [A docs reformat moves the tokens-per-line metric](../claude-usage/README.md) | `debt` `docs` | 🔲 | S | `git_metrics` counts the current tree, so the 2026-08-09 reflow cut Markdown 67.6k to 49.0k and lifted tokens/line ~8% on no extra spend. Cumulative diff additions would be reformat-proof. |
 
 ---
 

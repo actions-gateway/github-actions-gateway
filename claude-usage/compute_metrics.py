@@ -79,6 +79,12 @@ PRO_TO_MAX = "2026-05-23"
 # role) — recorded in provenance and drawn on the by-model chart.
 MAX_5X_TO_20X = "2026-07-05"
 
+# Date every tracked doc reflowed to sentence-per-line. Annotation-only, like
+# MAX_5X_TO_20X, but about the git series rather than the token one: unwrapping
+# hard-wrapped paragraphs cut ~18.6k non-blank Markdown lines without deleting a
+# word, so `md` steps down here for a reason no reader could infer from the CSV.
+DOCS_REFLOW = "2026-08-09"
+
 # Bucket width for session concurrency. Wide enough that a session waiting on a
 # build or a test run still counts as in flight, narrow enough that two sessions
 # worked on hours apart never collide.
@@ -725,6 +731,9 @@ def main():
                                  "note": "published day-7 Bluesky post values; the growth chart plots growth vs these"},
             "pro_to_max_date": PRO_TO_MAX,
             "max_5x_to_20x_date": MAX_5X_TO_20X,
+            "docs_reflow_date": DOCS_REFLOW,
+            "docs_reflow_note": ("every tracked doc reflowed to sentence-per-line; the `md` "
+                                 "series steps down ~18.6k lines here with no words removed"),
         },
         "estimation": {
             "method": "per-commit Pro-era rate x commits authored that day",
