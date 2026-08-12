@@ -66,13 +66,18 @@ run_merge() {
 # broken continuation shows up as a parse failure rather than a passing string
 # comparison. `make --eval` is not available on the make shipped with macOS, so
 # a wrapper makefile includes the file under test.
+#
+# --no-print-directory is load-bearing, not tidiness. Under `make scripts-test`
+# this suite is a sub-make, and GNU make then writes "Entering directory ..." to
+# stdout, whose words land in the entry list and fail every set comparison. It
+# passed locally at top level and failed on CI for exactly that reason.
 entries_of() {
 	local file="$1" var="$2"
 	# The `$(...)` here is Make's expansion syntax and must reach the generated
 	# makefile literally, so the single quotes are the point.
 	# shellcheck disable=SC2016
 	printf 'include %s\n__l:\n\t@echo $(%s)\n' "$file" "$var" >"$FIXTURE_DIR/wrap.mk"
-	make -f "$FIXTURE_DIR/wrap.mk" __l 2>"$FIXTURE_DIR/make.err" | tr ' ' '\n' | sed '/^$/d' | sort
+	make --no-print-directory -f "$FIXTURE_DIR/wrap.mk" __l 2>"$FIXTURE_DIR/make.err" | tr ' ' '\n' | sed '/^$/d' | sort
 }
 
 expect_set() {
