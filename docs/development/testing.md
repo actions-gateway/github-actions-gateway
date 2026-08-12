@@ -924,7 +924,8 @@ Measured 2026-08-11 against pr-sentinel 0.8.0 (`scripts/pr-sentinel-stop-hook.py
   The watcher is then no longer live and the PR is still owned and unconcluded, so the stop is blocked again over a PR the watcher already reported green.
   Reading the log afterwards does not recover it: the hook's only fallback is a transcript read of the task output file's own path, not of wherever the report was sent.
 - **A foreground launch is not recorded at all.** The hook counts a watcher launch only on a Bash call carrying `run_in_background`, so a foreground run leaves the PR with no watcher on record however the run itself goes.
-- **Either shape also costs the auto-approval.** The guard auto-allows only a single simple command of exactly three tokens carrying no operator, redirect, substitution, or glob, so a lone `>` drops the launch to the base Bash permission prompt, where an unattended worker stalls with its PR unwatched.
+- **A wrapper or a redirect also costs the auto-approval.** The guard auto-allows only a single simple command of exactly three tokens whose `argv[0]` is `bash`, carrying no operator, redirect, substitution, or glob, so either one drops the launch to the base Bash permission prompt, where an unattended worker stalls with its PR unwatched.
+  Foregrounding does not: the guard reads the command string alone, so a foreground launch is auto-approved and still invisible to the stop hook.
 
 Skipping the wrapper costs nothing here.
 The launch record exists to keep a compute-heavy run killable after a compaction drops its task id, and a watcher that sleeps between polls is neither worth reclaiming nor something to kill by pattern.
