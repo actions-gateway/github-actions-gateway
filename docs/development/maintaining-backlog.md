@@ -402,6 +402,23 @@ State roughly how often the condition holds in the tree as it stands, or say the
 
 This is the same reason a gate's own tests assert both directions ([testing.md](testing.md#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query)): a gate that cannot go red is unfalsifiable, and a gate that cannot stay green is unshippable.
 
+### One investigation, two rows: say which one owns the measurement
+
+A reproduce campaign that pins a flake often measures the production defect underneath it, and the result is two rows: the test fix and the product fix.
+They get filed minutes apart, out of one run, by someone holding all of it at once, which is exactly why neither row records that the other exists.
+
+**Each row names the other, and one of them owns the measurement.** The owner is the row whose Notes or linked doc hold the run itself: the counts, the date, the correlation.
+The other cites it by ID instead of restating the figure, because a bare number with no provenance reads as a second, independent measurement, and a later session cannot tell that both rows rest on one campaign.
+
+Q685 and Q689 were one window seen from two sides.
+Q685's campaign correlated 60 stops taken at maximum pressure: the 4 taken before the delete all replayed, the 56 taken after it did not.
+That single correlation established both the test's bad wait and the production window the test was landing in.
+Q689 was filed carrying "4/60 graceful stops" with nothing naming where the 60 came from, Q685's flake-watch row named no successor, and the correlation itself sat in a parenthetical inside Q685's [testing.md paragraph](testing.md#synchronize-on-the-signal-you-assert-on).
+Q685 gained the pointer only in the commit that closed Q689, so it was missing for the whole window in which Q689 was open work someone might pick up; the Q689 retro records a dispatcher having to ask which row owned the number.
+
+**Nothing gates this, and the obvious proxy does not transfer.** The linter can see a `(#QN)` link that resolves to no row (rule 5); it cannot see a relationship nobody stated.
+The nearest rule that does exist is [`check-plan-index`](../../scripts/docs/check-plan-index.sh)'s linked-iff-live check on `plan/README.md` Status cells (Q800), and extending it to Queue Notes cells would still miss this omission while breaking rows that are correct: measured on 2026-08-12 it fires on six, incidental mentions of the "distinct from Q695's alert gap" shape, each of which would then spend link characters against the 250-character cap.
+
 ## Flake fixes go first
 
 When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item **and move it to the top of the Queue** before continuing other work.
@@ -416,6 +433,8 @@ Exceptions: a flake rooted in an outside service that hasn't recurred (file, don
 Sweep it in the fixing PR and state what the sweep found, "nothing" included: a stated empty sweep is evidence, while an unstated one is indistinguishable from not having looked.
 Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later [Q685](../STATUS.md#Q685) was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
 That one never flaked: its positive assertion held whether or not the listener ever observed the completion, so waiting for CI would never have surfaced it.
+
+**A campaign that pins a flake often measures a production defect too.** File both rows, cross-link them, and [say which one owns the measurement](#one-investigation-two-rows-say-which-one-owns-the-measurement).
 
 **Once the mitigation ships, move the row to [Flake watch](../STATUS.md#flake-watch)** — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always `**Event:** recurs on main after the fix`, and on recurrence the row returns to the **top** of the Queue, escalated (the first mitigation didn't hold).
 Keeping the row (rather than closing it) preserves the memory that a fix was already attempted, so a second occurrence reads as a recurrence, not a fresh find.
