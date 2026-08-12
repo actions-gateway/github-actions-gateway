@@ -218,6 +218,40 @@ A healthy leg finishes in 25–33 minutes; raise the variable rather than removi
 
 The gate also checks every local tool it needs up front — including the pinned `cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to `.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run before it spends anything, not 25 minutes in.
 
+##### The gate reserves the e2e pool's CPU budget
+
+**The gate's two legs compete for one project-wide CPU quota, so it caps the CI side before routing.** Its deploy leg routes CI to GAG, whose `workers` pool autoscales to 8 `e2-standard-4` nodes out of the same `CPUS_ALL_REGIONS` budget the e2e leg then needs 2 `n2-standard-8` nodes from.
+When the budget cannot cover both, the e2e pool is what loses, and the autoscaler reports it as a bare `FailedScaleUp: GCE quota exceeded` that names no quota.
+Two `v1.3.0-rc.5` runs died there, 25 minutes in.
+
+Before it spends anything the gate now reads the live limit, takes the e2e and system pools' ceilings off it, and derives what is left for `workers`.
+It prints the arithmetic:
+
+```text
+Reserving the e2e pool's CPU budget before CI can compete for it...
+  CPUS_ALL_REGIONS: 64 vCPU, 0 already in use
+  reserved: default-pool 2xe2-standard-2 = 4 vCPU, e2e 2xn2-standard-8 = 16 vCPU
+  leaves workers 11 node(s) of e2-standard-4
+```
+
+**Most runs print that and change nothing.** At today's 64-vCPU limit the reservation leaves room for more `workers` nodes than the pool is configured to run, so no cap is applied.
+It binds only when the budget has shrunk relative to the cluster, and then the gate holds the `workers` autoscale ceiling down for its own window and restores it in teardown.
+CI queues behind the cap instead of starving the e2e leg.
+
+**A preflight failure means free capacity, not a bigger quota.** Raising the limit moves the collision rather than removing it.
+The usual cause is that something is still up from earlier work, most often the manually sized benchmark pool:
+
+```bash
+PROJECT=… CLUSTER=… ZONE=… scripts/dogfood/ops.sh at-rest
+```
+
+```bash
+PROJECT=… CLUSTER=… ZONE=… scripts/dogfood/ops.sh pool-scale workers-od 0
+```
+
+If teardown could not restore the ceiling it says so and prints the `gcloud container clusters update` that puts it back.
+A ceiling left low throttles everyone's CI, so run it.
+
 ##### A killed gate is reclaimed by the next one
 
 **Self-cleaning covers most endings, not all of them.** Bash runs the teardown trap on Ctrl-C and on an ordinary `kill`, so those tear the cluster back down. `kill -9`, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).
@@ -356,7 +390,7 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
    (same for `e2e-calico.yml`).
    Only that dispatched run lands on the RC's GAG-provisioned runners; every concurrent PR and merge keeps its normal hosted runners.
-   Do **not** reach for the repo-wide `GAG_E2E_RUNNER` variable here — flipping it routes every e2e job in the window, and a caught job wedged main CI when the teardown deleted the AGC under it (2026-07-31; the variable remains only as an `E2E_ROUTE_VAR=1` opt-in for a standing dogfood soak). **Node contention:** the on-demand e2e AGC (~500m CPU) does not fit on the single `e2-standard-2` system node beside the always-on CI AGCs (the CI AGC goes `Pending`/`Insufficient cpu`), so temporarily add a system node (e.g. scale `default-pool` to 2) for the duration of the e2e leg and scale it back after.
+   Do **not** reach for the repo-wide `GAG_E2E_RUNNER` variable here — flipping it routes every e2e job in the window, and a caught job wedged main CI when the teardown deleted the AGC under it (2026-07-31; the variable remains only as an `E2E_ROUTE_VAR=1` opt-in for a standing dogfood soak). **Node contention:** the on-demand e2e AGC (~500m CPU) does not fit on the single `e2-standard-2` system node beside the always-on CI AGCs (the CI AGC goes `Pending`/`Insufficient cpu`), so temporarily add a system node (e.g. scale `default-pool` to 2) for the duration of the e2e leg and scale it back after. **CPU budget:** running the legs by hand skips the reservation the gate applies, so if the e2e pool reports `FailedScaleUp` here, read [the reservation section above](#the-gate-reserves-the-e2e-pools-cpu-budget) rather than the family quotas.
    Require the matrix **green** — this is GAG running its own CI end-to-end on the RC images.
 3. **Smoke the signed v2 CRD asset.** Download the RC release's `actions-gateway-crds-v2.yaml` + `.cosign.bundle`, `cosign verify-blob` against the publish identity (step 3 below), `kubectl apply --server-side` it, and assert the five v2 CRDs register — the helm-free install path operators actually use.
 4. **Assert the sizing profiles actuated.** A profile that silently falls back to `Static` still provisions a healthy pod and still runs the matrix green, so without this leg every other check reports success while the release's headline feature sits inert. `sizing_leg` treats the two profiles differently on purpose:

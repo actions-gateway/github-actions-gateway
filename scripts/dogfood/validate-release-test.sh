@@ -245,6 +245,140 @@ else
 	echo "ok   a non-executable cosign fails the preflight"
 fi
 
+# --- Q631: the e2e pool's CPU budget is reserved before CI can compete for it -
+#
+# The gate is its own competitor: the deploy leg routes CI to GAG, whose
+# `workers` pool autoscales out of the same project-wide CPUS_ALL_REGIONS budget
+# the e2e leg then needs 16 vCPU from. When the budget cannot cover both, the
+# autoscaler refuses the e2e scale-up as a bare FailedScaleUp that names no
+# quota, ~25 minutes in and with a full cluster cycle already paid for. Two
+# v1.3.0-rc.5 runs died there.
+#
+# quota-test.sh owns the arithmetic; this owns the composition — which numbers
+# feed it, that the cap is applied only when it binds, and that the ceiling is
+# always put back. The lib readers are stubbed rather than gcloud, so a case is
+# a set of live values rather than a gcloud format string.
+
+PROJECT=p ZONE=z CLUSTER=c
+GCLOUD_LOG="${WORKDIR}/quota-gcloud.log"
+gke_get_credentials_and_verify() { :; }
+
+# The live values the stubbed readers below serve. Globals rather than closed-
+# over locals: a bash function body is re-read at call time, so a `local` set
+# while defining it is long gone by then.
+FAKE_BUDGET=""
+FAKE_USED=""
+FAKE_SYSTEM_NODES=""
+FAKE_WORKERS_MAX=""
+
+global_cpu_budget() { echo "${FAKE_BUDGET} ${FAKE_USED}"; }
+required_system_nodes() { echo "${FAKE_SYSTEM_NODES}"; }
+pool_machine_type() {
+	case "$1" in
+		default-pool) echo "e2-standard-2" ;;
+		e2e) echo "n2-standard-8" ;;
+		workers) echo "e2-standard-4" ;;
+	esac
+}
+pool_autoscaling() {
+	case "$1" in
+		e2e) printf '0\t2\n' ;;
+		workers) printf '0\t%s\n' "${FAKE_WORKERS_MAX}" ;;
+	esac
+}
+set_pool_autoscale_max() { echo "set $*" >>"${GCLOUD_LOG}"; }
+
+# stub_quota BUDGET USED SYSTEM_NODES WORKERS_MAX — model the live cluster the
+# preflight reads. Machine types are the real ones: e2-standard-2 system,
+# n2-standard-8 e2e (max 2), e2-standard-4 workers.
+stub_quota() {
+	FAKE_BUDGET="$1"
+	FAKE_USED="$2"
+	FAKE_SYSTEM_NODES="$3"
+	FAKE_WORKERS_MAX="$4"
+	: >"${GCLOUD_LOG}"
+	WORKERS_MAX_CAP=""
+	WORKERS_MAX_RESTORE=""
+}
+
+# Today's live shape (measured 2026-08-12): a 64-vCPU limit, nothing in use, two
+# always-on tenants. 64 - 4 system - 16 e2e = 44, which is 11 e2-standard-4
+# nodes — more than the pool's configured 8, so nothing is capped. A gate that
+# throttled CI here would be reserving capacity nobody is contending for.
+stub_quota 64 0 2 8
+quota_preflight >/dev/null
+check "today's budget derives an 11-node ceiling" 11 "${WORKERS_MAX_CAP}"
+reserve_cpu_budget >/dev/null
+check "a ceiling that already fits is not touched" "" "$(cat "${GCLOUD_LOG}")"
+check "an untouched ceiling leaves nothing to restore" "" "${WORKERS_MAX_RESTORE}"
+
+# The rc.5 shape: the same cluster against the 32-vCPU limit that killed two
+# runs. The reservation now binds — `workers` is held at 3 nodes so the e2e
+# pool's 16 vCPU stays available.
+stub_quota 32 0 2 8
+quota_preflight >/dev/null
+check "the old 32-vCPU limit derives a 3-node ceiling" 3 "${WORKERS_MAX_CAP}"
+reserve_cpu_budget >/dev/null
+check "a binding cap is applied to the workers pool" "set workers 0 3" "$(cat "${GCLOUD_LOG}")"
+check "a binding cap records the ceiling to restore" "0 8" "${WORKERS_MAX_RESTORE}"
+
+# ...and teardown puts it back. A ceiling left low outlives the gate and
+# throttles everyone's CI.
+: >"${GCLOUD_LOG}"
+restore_cpu_budget >/dev/null
+check "teardown restores the configured ceiling" "set workers 0 8" "$(cat "${GCLOUD_LOG}")"
+check "a completed restore is not repeated" "" "${WORKERS_MAX_RESTORE}"
+
+# A restore that cannot reach gcloud must not abort teardown before the lease is
+# released — stranded billable nodes cost more than a throttled CI pool — but it
+# must say so, and name the command that fixes it.
+stub_quota 32 0 2 8
+quota_preflight >/dev/null
+reserve_cpu_budget >/dev/null
+set_pool_autoscale_max() { return 1; }
+restore_rc=0
+restore_out="$(restore_cpu_budget 2>&1)" || restore_rc=$?
+check "a failed restore does not fail teardown" 0 "${restore_rc}"
+check_contains "a failed restore names the fix" "--max-nodes=8" "${restore_out}"
+set_pool_autoscale_max() { echo "set $*" >>"${GCLOUD_LOG}"; }
+
+# A third always-on tenant grows the system pool (lib/pool.sh derives one node
+# per tenant AGC), which comes out of the same budget: 32 - 6 - 16 = 10, two
+# worker nodes rather than three.
+stub_quota 32 0 3 8
+quota_preflight >/dev/null
+check "a third tenant's system node comes out of the workers share" 2 "${WORKERS_MAX_CAP}"
+
+# A benchmark pool left up after a campaign is the realistic way the budget
+# shrinks under an otherwise unchanged gate: 4x e2-standard-4 workers-od is
+# 16 vCPU of `used`, which the preflight reads live rather than predicting.
+stub_quota 64 16 2 8
+quota_preflight >/dev/null
+check "capacity already in use is taken off the workers share" 7 "${WORKERS_MAX_CAP}"
+
+# Nothing left for CI at all — the system and e2e pools consume the budget
+# exactly. Fail here, where failure is free, rather than after the deploy. The
+# remedy is to free capacity, not to raise the limit: a bigger number moves the
+# collision rather than removing it.
+stub_quota 20 0 2 8
+preflight_rc=0
+preflight_out="$(quota_preflight 2>&1)" || preflight_rc=$?
+check "a budget that cannot cover both legs fails the preflight" 1 "${preflight_rc}"
+check_contains "the failure names the quota" "CPUS_ALL_REGIONS" "${preflight_out}"
+check_contains "the failure says to free capacity, not raise the limit" \
+	"Free capacity before raising the limit" "${preflight_out}"
+
+# An unreadable quota is not an unlimited one: the gate refuses rather than
+# deploying blind on the constraint that starves it.
+stub_quota 64 0 2 8
+global_cpu_budget() { return 1; }
+preflight_rc=0
+preflight_out="$(quota_preflight 2>&1)" || preflight_rc=$?
+check "an unreadable quota fails the preflight" 1 "${preflight_rc}"
+check_contains "the unreadable-quota error says why it will not proceed" \
+	"will not run blind" "${preflight_out}"
+global_cpu_budget() { echo "${FAKE_BUDGET} ${FAKE_USED}"; }
+
 # --- The sizing-profile leg: the gate must be able to FAIL on a dead profile ---
 #
 # The whole point of sizing_leg is that a profile which silently falls back to
