@@ -2960,6 +2960,11 @@ Consequences an operator should know:
   Its job never ran to a reportable end, so there is no failed job for `rerun-failed-jobs` to act on; detection requires a recorded container exit that the deletion preceded, which such a pod does not have.
   It is recovered by the `abandoned` path instead, which force-cancels the run first: see [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 - **A cancelled run is never re-run.** Nothing in the gateway deletes a cancelled run's pod, so it carries no mark.
+- **A small fraction of drains lose the window entirely** (scale-set tier only).
+  The pod is the disruption's only record, and the kubelet removes it once the container's exit is published — so if the AGC's claim lands after that, nothing recovers the run and no later reconcile can.
+  It is reported rather than silent: `actions_gateway_eviction_recovery_evidence_lost_total{cause="deletion"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded on the `RunnerSet`.
+  Those runs need a manual re-run.
+  A sustained rate means the AGC is not reaching the window — check whether it is CPU-starved or its work queue is backlogged, not whether the policy or role is wrong.
 - **The first re-run call may be refused.** GitHub's conclusion on this path takes 15–26s while `evictionRetryDelay` defaults to 5s, so the first `rerun-failed-jobs` can land while the run is still in progress and be answered `403 This workflow is already running`.
   The Q503 retry loop absorbs that — the re-run is retried on a 30s pace until accepted — so no action is needed; see [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) for the loop's own failure modes.
 
@@ -2990,9 +2995,15 @@ kubectl logs -n <namespace> <worker-pod> --previous \
 # The AGC logs the decision explicitly, with the cause.
 kubectl logs -n <namespace> deploy/<agc-deployment> \
   | grep -E 'worker pod disrupted; scheduling auto-retry|disruption auto-retry'
+
+# Scale-set tier: whether a disruption was found and then lost because the pod went
+# away before the claim landed. Names the pod, so it maps to the run that needs a
+# manual re-run.
+kubectl logs -n <namespace> deploy/<agc-deployment> \
+  | grep 'disruption was lost before it could be claimed'
 ```
 
-If a drain of running workers produced no re-run, check whether the pods carried the `actions-gateway.com/deletion-reason` stamp (then the AGC deleted them, not your drain), whether the run's retry budget was already spent (`eviction_retries_exhausted_total`), and — scale-set tier only — whether the AGC was down across the teardown window or the pods carried no run identity (see [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run), whose scale-set failure modes apply to drains identically).
+If a drain of running workers produced no re-run, check whether the pods carried the `actions-gateway.com/deletion-reason` stamp (then the AGC deleted them, not your drain), whether the run's retry budget was already spent (`eviction_retries_exhausted_total`), and — scale-set tier only — whether the AGC was down across the teardown window, lost the pod before it could claim it (`eviction_recovery_evidence_lost_total`), or the pods carried no run identity (see [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run), whose scale-set failure modes apply to drains identically).
 
 **Resolution / how to drain safely.**
 - **Prefer a quiet window anyway.** The re-run restarts each interrupted job from the beginning, so a drain mid-job still costs the work done so far — and each interrupted run spends re-run budget. `kubectl get pods -n <namespace> -l app.kubernetes.io/managed-by=actions-gateway-controller` on the target node shows what a drain would interrupt; an empty result is the free moment.
@@ -3028,6 +3039,9 @@ Expected behaviour is one automatic re-run per preempted run.
    This one has no workaround, and is a property of the signal rather than a bug: the scheduler *deletes* its victim, so unlike an evicted pod — which sits in `Failed` until the reaper takes it — a preempted pod is readable only until its grace period expires (30s by default).
    An AGC restarting across that window never sees the marker, and the displaced run needs a manual re-run.
    The classic tier is unaffected: its provisioning goroutine is already watching the pod, and if that goroutine is gone the session is gone with it.
+5. **The AGC saw the victim but lost it before claiming it** (scale-set tier only).
+   The same window as (4), missed by a margin rather than entirely: the recovery scan reads pods from the informer cache and claims them through the live API, so a pod removed in between yields a claim that finds nothing. `actions_gateway_eviction_recovery_evidence_lost_total{cause="preemption"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded.
+   A manual re-run is required, and a sustained rate points at AGC responsiveness — CPU starvation or a backlogged work queue — rather than at the role or the policy.
 
 **Diagnostics.**
 
