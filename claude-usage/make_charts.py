@@ -45,12 +45,18 @@ CHARTS = os.path.join(HERE, "charts")
 
 PRO_TO_MAX = date(2026, 5, 23)
 MAX_5X_TO_20X = date(2026, 7, 5)  # Max 5x -> Max 20x plan upgrade
+# Every tracked doc reflowed to sentence-per-line (#1357). Unwrapping hard-wrapped
+# paragraphs cut ~18.6k non-blank Markdown lines without deleting a word, so the
+# lines denominator steps down here and the cost-per-line ratio steps up.
+DOCS_REFLOW = date(2026, 8, 9)
 
 # Event markers. A plan upgrade raises the ceiling on what one machine can spend;
-# a machine starting changes which machine is doing the measuring. Different
-# causes, so different styling.
+# a machine starting changes which machine is doing the measuring; a reflow moves
+# the lines series with no change in what was spent. Different causes, so
+# different styling — and the reflow is drawn only on the charts it distorts.
 PLAN_STYLE = ("#222", "--")
 MACHINE_STYLE = ("#005E44", (0, (5, 2, 1, 2)))
+REFLOW_STYLE = ("#5B5B5B", (0, (1, 1.8)))
 
 # Okabe–Ito colourblind-safe palette.
 OI = {
@@ -137,6 +143,19 @@ def event_label(ax, x, y, label, col, yc="data"):
                 ha="left", va="bottom", fontsize=9.5, fontweight="bold",
                 color=col, zorder=6,
                 path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
+
+
+def reflow_marker(axes, label_ax, y=0.01):
+    """Mark the sentence-per-line reflow across ``axes``, labelled on ``label_ax``.
+
+    Only the lines and cost-per-line charts call this. The reformat changed the
+    denominator, not the spend, so marking it on a token chart would invite the
+    reading that it cost or saved something.
+    """
+    col, ls = REFLOW_STYLE
+    for a in axes:
+        a.axvline(DOCS_REFLOW, color=col, ls=ls, lw=1.6, zorder=5)
+    event_label(label_ax, DOCS_REFLOW, y, "docs reflow", col, yc="axes fraction")
 
 
 def stagger_labels(fig, texts, step):
@@ -398,6 +417,7 @@ def chart_tokens_per_line():
                     ha="center", fontsize=8.5, fontweight="bold", color=gold,
                     path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
 
+    reflow_marker((ax, axb), axb)
     fig.text(0.012, 0.008, "generated CRD YAML, binaries & lockfiles excluded · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
     save(fig, "tokens_per_line")  # save() crops with bbox_inches="tight"
@@ -447,6 +467,7 @@ def chart_tokens_vs_lines():
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    reflow_marker((ax,), ax)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False, fontsize=10)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -572,6 +593,7 @@ def chart_overview():
         for a in (a1, a2, a3):
             a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=5)
         event_label(a1, ev_date, 0.01, label, col, yc="axes fraction")
+    reflow_marker((a1, a2, a3), a1)
     for a in (a1, a2):
         plt.setp(a.get_xticklabels(), visible=False)
 

@@ -24,7 +24,9 @@
       "note": "published day-7 Bluesky post values; the growth chart plots growth vs these"
     },
     "pro_to_max_date": "2026-05-23",
-    "max_5x_to_20x_date": "2026-07-05"
+    "max_5x_to_20x_date": "2026-07-05",
+    "docs_reflow_date": "2026-08-09",
+    "docs_reflow_note": "every tracked doc reflowed to sentence-per-line; the `md` series steps down ~18.6k lines here with no words removed"
   },
   "estimation": {
     "method": "per-commit Pro-era rate x commits authored that day",
@@ -46,13 +48,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8309287,
-      "output": 85926833,
-      "cache_creation": 449262477,
-      "cache_read": 24461072240,
-      "assistant_msgs": 122754,
-      "user_msgs": 136947,
-      "headline_input_output_cachecreation": 543498597
+      "input": 8311095,
+      "output": 86403696,
+      "cache_creation": 451176217,
+      "cache_read": 24750469457,
+      "assistant_msgs": 123710,
+      "user_msgs": 137930,
+      "headline_input_output_cachecreation": 545891008
     },
     "estimated": {
       "input": 6559,
@@ -64,15 +66,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8315846,
-      "output": 86405769,
-      "cache_creation": 451271902,
-      "cache_read": 24528591083,
-      "assistant_msgs": 123496,
-      "user_msgs": 137808,
-      "headline_input_output_cachecreation": 545993517,
-      "grand_total_incl_cache_read": 25074584600,
-      "cache_reuse_ratio": 54.35
+      "input": 8317654,
+      "output": 86882632,
+      "cache_creation": 453185642,
+      "cache_read": 24817988300,
+      "assistant_msgs": 124452,
+      "user_msgs": 138791,
+      "headline_input_output_cachecreation": 548385928,
+      "grand_total_incl_cache_read": 25366374228,
+      "cache_reuse_ratio": 54.76
     }
   },
   "by_model": {
@@ -107,9 +109,9 @@
       "messages": 8356
     },
     "Opus 5": {
-      "headline": 239896032,
-      "output": 33732441,
-      "messages": 56828
+      "headline": 242288443,
+      "output": 34209304,
+      "messages": 57784
     }
   },
   "by_host": {
@@ -132,13 +134,13 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 245265,
-      "output": 33964670,
-      "cache_creation": 208526136,
-      "cache_read": 13324680955,
-      "assistant_msgs": 56163,
-      "user_msgs": 62644,
-      "headline_input_output_cachecreation": 242736071
+      "input": 247073,
+      "output": 34441533,
+      "cache_creation": 210439876,
+      "cache_read": 13614078172,
+      "assistant_msgs": 57119,
+      "user_msgs": 63627,
+      "headline_input_output_cachecreation": 245128482
     }
   },
   "sessions": {
@@ -147,19 +149,19 @@
     "last_date": "2026-08-12",
     "session_days": 468,
     "peak_concurrent": 16,
-    "mean_concurrent": 3.03,
-    "hours_using_claude": 183.5,
-    "session_hours": 556.8,
-    "parallel_share_pct": 67,
+    "mean_concurrent": 3.07,
+    "hours_using_claude": 184.0,
+    "session_hours": 564.3,
+    "parallel_share_pct": 68,
     "note": "Concurrency needs session-level transcripts, which no earlier CSV preserved, so the series starts at the first day whose transcripts survive rather than at the first project day. It is never estimated."
   },
   "head_snapshot": {
     "go_code": 111933,
     "go_comments": 39869,
-    "markdown_nonblank": 50059,
+    "markdown_nonblank": 50065,
     "yaml_handwritten": 12217,
     "yaml_generated": 131442,
     "tests": 2111,
-    "commits": 1863
+    "commits": 1866
   }
 }
