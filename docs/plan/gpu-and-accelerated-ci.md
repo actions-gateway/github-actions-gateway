@@ -47,6 +47,13 @@ That is a statement about coverage boundaries, not a claim that gVisor is unsafe
 **Kata covers the driver and asks for hardware you control.** NVIDIA documents the Kata passthrough path as needing hardware virtualization and Access Control Services (ACS) enabled in BIOS, IOMMU groups, *no* NVIDIA driver installed on the host (the GPU binds to `vfio-pci` instead), and every GPU on the node assigned to one Kata VM. vGPU is unsupported, containerd only, and "support for Kata Containers is limited to the implementation described on this page" ([NVIDIA GPU Operator](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/deploy-kata-containers.html), fetched 2026-08-08).
 A managed node pool exposes none of those knobs, which is why [appendix-b](../design/appendix-b-worker-isolation.md) rates device passthrough as limited under a micro-VM.
 
+**Both paths are NVIDIA-shaped, which makes AMD a different problem rather than a bigger one.** gVisor's GPU support is `nvproxy`: it "supports running most CUDA applications on preselected versions of NVIDIA's open source driver", and there is no AMD or ROCm path in it.
+Kata's kernel packaging takes a GPU vendor flag that accepts only `intel` and `nvidia`, dying with "GPU vendor only support intel and nvidia" on anything else, and its own passthrough guide still reads "PLACE HOLDER: for other GPU vendors (e.g., AMD, Intel)" ([gVisor GPU support](https://gvisor.dev/docs/user_guide/gpu/), [Kata `build-kernel.sh`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kernel/build-kernel.sh), [Kata GPU passthrough](https://github.com/kata-containers/kata-containers/blob/main/docs/use-cases/GPU-passthrough-and-Kata.md), all fetched 2026-08-12).
+So an isolated AMD worker is not the NVIDIA work with a different device plugin.
+It is raw VFIO passthrough into a guest kernel no upstream project builds, which is a driver stack GAG would own rather than a configuration it would document.
+That is worth stating because [appendix-f](../design/appendix-f-cost-model.md#comparing-accelerators-memory-per-dollar-not-dollars-per-gpu-hour) rates Instinct 2–3× ahead of NVIDIA on memory per dollar.
+The rate is real; what nobody ships is an isolation runtime to spend it under, so the same appendix now carries the caveat next to the table.
+
 The consequence is a positioning constraint, not just an engineering one.
 The strongest audience for GAG's security story and the strongest audience for its GPU story are the same people, and on managed cloud they still have to choose between a sandbox that stops at the driver and a VM boundary they cannot configure.
 On-premises and reserved hardware is where both hold at once, which is also where the [location filter](../alternatives.md#location-location-location) already removes most of the competition.
@@ -86,7 +93,8 @@ Each demonstrated rather than argued:
   Not without the isolation review [caching-and-worker-storage.md](caching-and-worker-storage.md) reframes for the cache.
 - **Cloud GPU under Kata.** Not a gap to close, a platform fact to state: the BIOS, host-driver, and whole-GPU-per-guest requirements above are not knobs a managed node pool exposes.
   It reopens if a managed cloud offers Kata with GPU passthrough, or if gVisor gains meaningful coverage of the NVIDIA driver surface.
-- **Non-NVIDIA accelerators as a first target.** TPUs, Gaudi, and AMD are the same shape of problem and none of them has a workload asking.
+- **Non-NVIDIA accelerators as a first target.** None of TPUs, Gaudi, or AMD has a workload asking.
+  They are not one problem either: AMD is the only one the cost model actively recommends, and it is the one with no isolation runtime at all, per the section above.
 - **Benchmarking against managed GPU CI.** Those services do not run on hardware you already own, which is the entire premise here.
 
 ## What the site may claim today
