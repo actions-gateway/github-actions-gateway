@@ -31,8 +31,11 @@ RELEASE_PROGRESS_FILE="${RELEASE_PROGRESS_FILE-${PROGRESS_REPO_ROOT}/tmp/release
 
 # RELEASE_STATUS_FILE — the rendered status object. Derived from the stream and
 # rewritten atomically after every event, so a reader never sees a half-written
-# object. Set empty to disable; the stream is unaffected.
-RELEASE_STATUS_FILE="${RELEASE_STATUS_FILE-${PROGRESS_REPO_ROOT}/tmp/release-validation-status.json}"
+# object. Defaults beside the stream rather than to a fixed path, so a suite
+# that points RELEASE_PROGRESS_FILE at its own scratch dir scopes this too, and
+# an empty stream leaves no live path reachable at all (Q786). Set empty to
+# disable this file alone; the stream is unaffected.
+RELEASE_STATUS_FILE="${RELEASE_STATUS_FILE-${RELEASE_PROGRESS_FILE:+$(dirname "${RELEASE_PROGRESS_FILE}")/release-validation-status.json}}"
 
 # Heartbeat text relayed into the status object is capped here. It originates in
 # a GitHub Actions job log, so it is data an agent reads, not a line this repo
@@ -42,10 +45,12 @@ RELEASE_HEARTBEAT_MAX_CHARS="${RELEASE_HEARTBEAT_MAX_CHARS:-200}"
 
 # progress_init — start a fresh stream and status for this run.
 progress_init() {
-	if [[ -n "${RELEASE_PROGRESS_FILE}" ]]; then
-		mkdir -p "$(dirname "${RELEASE_PROGRESS_FILE}")" 2>/dev/null || return 0
-		: >"${RELEASE_PROGRESS_FILE}" 2>/dev/null || true
-	fi
+	# No stream, nothing to initialize — including the status file, which a
+	# disabled stream can no longer refresh either (progress_status_write).
+	# Removing it here regardless would reach a path the caller opted out of.
+	[[ -n "${RELEASE_PROGRESS_FILE}" ]] || return 0
+	mkdir -p "$(dirname "${RELEASE_PROGRESS_FILE}")" 2>/dev/null || return 0
+	: >"${RELEASE_PROGRESS_FILE}" 2>/dev/null || true
 	# A status file left by the previous run would otherwise read as this one's
 	# until the first event lands.
 	[[ -n "${RELEASE_STATUS_FILE}" ]] && rm -f "${RELEASE_STATUS_FILE}" 2>/dev/null

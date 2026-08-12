@@ -295,7 +295,8 @@ jq . tmp/release-validation-status.json
 `gate` is `preflight` (settling the e2e lane, nothing spent yet), `running`, `passed`, or `failed`; `phase`, `elapsed`, `phaseElapsed` and `idle` say where and for how long; `runRepo`/`runId` name the dispatched e2e run, which is what makes a quiet leg checkable against GitHub rather than only against the stream; `heartbeat` carries the newest relayed spec line — absent for a whole leg when GitHub will not serve the job log, which is a fetch problem and not a stalled run; `failure` names the phase that broke — the one that broke first, not the teardown that followed it. `scripts/dogfood/release-status.sh [stream-file]` renders the same object from any stream, including one whose gate process is gone. `RELEASE_STATUS_FILE=` disables the file.
 
 Underneath it, each phase transition is appended as one JSON line to `tmp/release-validation-progress.jsonl` — the stream both renderers read, and inspectable directly (`tail -f`) without disturbing the run.
-Set `RELEASE_PROGRESS_FILE=` to disable both files; the gate's own output is unaffected.
+Point `RELEASE_PROGRESS_FILE` elsewhere to move both files, since the status object defaults to `release-validation-status.json` beside the stream, or set `RELEASE_PROGRESS_FILE=` to disable both.
+The gate's own output is unaffected either way.
 
 ##### Running it in your own terminal instead
 

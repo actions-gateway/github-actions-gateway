@@ -1708,10 +1708,9 @@ Any suite that sources a script reaching that library inherits the operator's ow
 So `e2e-run-watch-test.sh` appended three `owner/repo` run events to the real stream during the v1.4.0-rc.2 gate, repointing that stall check at a run that does not exist (Q777).
 The gate still passed, which is the part worth noticing: the damage was to the artifact a human was reading to decide whether the candidate was good.
 
-Set both variables to paths under the suite's own `$WORK` **before** the `source` line, as [`release-status-test.sh`](../../scripts/dogfood/release-status-test.sh) and [`release-sentinel-test.sh`](../../scripts/dogfood/release-sentinel-test.sh) do.
-The library defaults on *unset*, so an assignment after the source line is too late for anything that line already ran.
-Disabling the stream with `RELEASE_PROGRESS_FILE=` is not a substitute: `progress_init` removes `RELEASE_STATUS_FILE` whether or not the stream is on, so the live default stays reachable (Q786).
-Scope both even when the suite wants no stream at all.
+Set `RELEASE_PROGRESS_FILE` to a path under the suite's own `$WORK` **before** the `source` line, as [`release-status-test.sh`](../../scripts/dogfood/release-status-test.sh) and [`release-sentinel-test.sh`](../../scripts/dogfood/release-sentinel-test.sh) do.
+The library defaults on *unset*, so an assignment after the source line is too late for anything that line already ran. `RELEASE_STATUS_FILE` defaults beside the stream rather than to a fixed path, so that one assignment scopes both, and `RELEASE_PROGRESS_FILE=` leaves no live path reachable at all for a suite that wants no stream (Q786).
+Set `RELEASE_STATUS_FILE` as well when the suite wants it somewhere other than the stream's own directory; both suites above name it explicitly, which is also the clearer thing to read.
 
 Then assert the positive, and name the path rather than the variable.
 An assertion that reads `"$RELEASE_PROGRESS_FILE"` passes exactly as well once the scoping is gone and the events went to the live stream, so it guards nothing; reading `"${WORK}/progress.jsonl"` goes red.

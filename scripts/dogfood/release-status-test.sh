@@ -54,6 +54,31 @@ want_absent() {
 	fi
 }
 
+want_present() {
+	local name="$1" path="$2"
+	if [[ -e "$path" ]]; then
+		ok "$name" "present"
+	else
+		bad "$name" "$path was removed"
+	fi
+}
+
+# status_default_for [STREAM] — the RELEASE_STATUS_FILE a fresh source picks
+# with only the stream set; with no argument, neither is set, which is the
+# operator's own case. Runs in a subshell because the library defaults at source
+# time and this suite already sourced it with both pointed at $WORK.
+# shellcheck disable=SC2016 # the inner shell is what must expand these, not this one
+status_default_for() {
+	local lib="${REPO_ROOT}/scripts/dogfood/lib/progress.sh"
+	if (($# == 0)); then
+		env -u RELEASE_STATUS_FILE -u RELEASE_PROGRESS_FILE \
+			bash -c 'source "$1"; printf %s "${RELEASE_STATUS_FILE}"' _ "$lib"
+	else
+		env -u RELEASE_STATUS_FILE RELEASE_PROGRESS_FILE="$1" \
+			bash -c 'source "$1"; printf %s "${RELEASE_STATUS_FILE}"' _ "$lib"
+	fi
+}
+
 # field NAME — one field of the current status object, rendered at a pinned now.
 field() {
 	RELEASE_STATUS_NOW="${NOW}" progress_status_json | jq -r --arg f "$1" '.[$f] // "null" | tostring'
@@ -159,6 +184,22 @@ progress_heartbeat '[e2e t+00:30] 1/73 specs'
 want_absent 'no stream, no heartbeat file' "$RELEASE_PROGRESS_FILE"
 
 echo
+echo '== the status file defaults beside the stream, so scoping one scopes both =='
+# Both defaults name paths a live gate is writing. A suite that scopes only
+# RELEASE_PROGRESS_FILE would inherit the operator's real status file and
+# progress_init would unlink it, so the default is derived from the stream
+# rather than fixed (Q786). Every suite here scopes both already, which is why
+# these run a fresh source instead of asserting on the sourced state: a test
+# that reads this suite's own variables passes no matter what the library does.
+want_eq 'a scoped stream scopes the status file' \
+	"${WORK}/release-validation-status.json" "$(status_default_for "${WORK}/progress.jsonl")"
+want_eq 'an empty stream leaves no status path to reach' '' "$(status_default_for '')"
+# The unscoped path is the one release.md documents and validate-release.sh
+# prints to the operator; deriving it must land on exactly that path.
+want_eq 'the operator default is unchanged' \
+	"${REPO_ROOT}/tmp/release-validation-status.json" "$(status_default_for)"
+
+echo
 echo '== disabling the stream disables the status file with it =='
 saved_progress="$RELEASE_PROGRESS_FILE"
 saved_status="$RELEASE_STATUS_FILE"
@@ -167,6 +208,13 @@ RELEASE_STATUS_FILE="${WORK}/should-not-exist.json"
 progress_init
 progress_event gate start v0.0.0
 want_absent 'no status file when the stream is off' "$RELEASE_STATUS_FILE"
+# Absence alone cannot tell "never written" from "written then deleted", and it
+# was the delete that reached the live default. So plant one first: with the
+# stream off, progress_init must leave a status file it was told not to manage.
+RELEASE_STATUS_FILE="${WORK}/opted-out.json"
+echo '{"gate":"running"}' >"$RELEASE_STATUS_FILE"
+progress_init
+want_present 'progress_init does not unlink an opted-out status file' "$RELEASE_STATUS_FILE"
 RELEASE_PROGRESS_FILE="$saved_progress"
 RELEASE_STATUS_FILE="$saved_status"
 
