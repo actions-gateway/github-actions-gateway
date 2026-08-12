@@ -64,13 +64,16 @@ Comparing current-generation parts at the **same cloud tier** (specialty/neoclou
 
 On memory per dollar, AMD Instinct's larger HBM stacks land it roughly **2–3× ahead** of same-tier NVIDIA — and because one high-memory Instinct GPU can often do the work of several smaller cards, that advantage compounds under this system's per-job model as **fewer worker pods and fewer GPU-hours per job**, not just a lower hourly rate.
 
-Two caveats keep this a fair comparison rather than a thumb on the scale:
+Three caveats keep this a fair comparison rather than a thumb on the scale:
 
 - **It is a memory claim, not a compute claim.** Throughput per dollar ($ per token/sec, or per wall-clock job) is what ultimately decides cost, and it depends on your workload and on ROCm/kernel maturity for your framework.
   Measure it on your own jobs; we make no generic compute-per-dollar claim.
 - **Use the rate you can actually get.** MI355X here uses the low end of its volatile range ($3.00); at Oracle's $8.60/GPU-hr on-demand it is ≈ $0.030/GB-HBM-hr — level with H100.
   Same-tier, current-quote comparisons are the only honest ones.
   Sources: [getdeploying H100](https://getdeploying.com/gpus/nvidia-h100), [H200](https://getdeploying.com/gpus/nvidia-h200), and the AMD Instinct sources cited above.
+- **The Instinct rates buy an unsandboxed worker.** Both isolation runtimes this system supports are NVIDIA-only today: gVisor's GPU support is `nvproxy`, with no AMD or ROCm path, and Kata's kernel packaging accepts only `intel` and `nvidia` as its GPU vendor, so there is no packaged guest kernel that drives an Instinct card (measured 2026-08-12 against [gVisor GPU support](https://gvisor.dev/docs/user_guide/gpu/) at release `release-20260803.0` and Kata [`build-kernel.sh`](https://github.com/kata-containers/kata-containers/blob/4d1e78da2f7d5ff6616d5674510a134556a1e97d/tools/packaging/kernel/build-kernel.sh) at `4d1e78d`, its current `main` state after the 4.0.0 release).
+  So the memory-per-dollar advantage applies to a trusted fleet running workers on the default `runc`, and untrusted multi-tenant AMD CI is not a supported configuration at any price.
+  [Appendix B](appendix-b-worker-isolation.md) is the isolation menu those rates are spent under; the GPU plan works the constraint through in [GPU and Accelerated CI](../plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal).
 
 ---
 
