@@ -61,3 +61,11 @@ Common knobs (environment variables):
   Same: `./render.sh shot` rolls the exporter and re-renders.
 
 The synthetic metric names and labels are kept in lockstep with the real registrations (see the [Full Metrics Reference](../../../docs/operations/observability-metrics.md#full-metrics-reference)); if a metric's name or labels change in the controllers, update `exporter.py` to match so the preview stays faithful.
+
+### Adding a counter to `exporter.py`
+
+Emit it through `counter_total()`, not a hand-rolled `int(rate * elapsed)`.
+A counter only ever lives for `WAIT` seconds and is only ever shown across the `FROM` window, so a rate below `1/WAIT` never reaches its first integer: the series renders as a flat line that looks exactly like a real metric sitting at zero, and a `barchart` of `increase()` over it renders empty. `counter_total()` refuses a rate below `MIN_COUNTER_RATE` (a handful of events per render window) and `render.sh` sees the exporter crash on startup rather than producing a screenshot that looks populated.
+
+A counter that is *meant* to read zero, such as a healthy error counter, stays a literal `0` and skips `counter_total()`.
+That zero is a deliberate statement about a healthy system; the floor exists to stop an accidental one from impersonating it.
