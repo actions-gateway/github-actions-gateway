@@ -333,6 +333,29 @@ Two mechanics make the follow-through safe once the base lands:
   Nothing is wrong with your branch.
   Do the `--onto` rebase and push, and the next run computes a real merge-base.
 
+### When `main` is broken
+
+A red gate on your branch is not yours until it fails on the base too ([how to tell](docs/development/testing.md#the-status-you-report-is-a-claim-too)).
+Once it does, the fix gets its own PR.
+It never rides inside an unrelated one, however one-line it is and however completely it blocks your own gate.
+
+**Search before writing it.** One `gh pr list` is the whole search, and an open PR fixing it means the work is claimed.
+Wait for that PR to merge and rebase onto `main`; stack on its branch per [When new work blocks an open PR](#when-new-work-blocks-an-open-pr) only if you cannot wait.
+Do not write a second fix: both land on the same line, and one of you takes a conflict for nothing.
+
+**Own it if nobody has,** and claim it by opening the PR as a **draft** the moment the branch carries the fix, before you have finished verifying it.
+The draft is what makes the search above work. `gh pr list --state open` includes drafts, so the next blocked session finds it, and the `gh pr create` overlap check (Q668) names it to that session without anyone having to look.
+An issue would not: the check reads open PRs.
+Take it out of draft when it is genuinely ready.
+
+The obligation carries as much weight as the prohibition.
+A rule that only forbids embedding the fix leaves nobody obliged to write it, so every blocked session declines in turn and `main` stays red, which is worse than the duplication it replaced.
+Search-then-claim yields exactly one fixer, because the second session to look finds the first one's PR.
+
+Measured 2026-08-08, when `main` went over this file's own em-dash ceiling: four sessions each wrote a one-line fix, two of them editing the same line with different wording.
+Two landed, #1351 cutting one em-dash inside a PR about a pre-commit hook and #1353 cutting two more as a PR of its own, so an overrun that needed one fix got two.
+The guidance at the time asked for exactly that, telling every blocked PR to carry the fix as though one session sees the breakage at a time.
+
 ### A conflict inside a section your change deletes
 
 Deleting or replacing a section makes conflicts in it **semantic, not textual**.

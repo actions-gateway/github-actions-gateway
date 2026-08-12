@@ -70,7 +70,8 @@ Exception: a Go build-/codegen-time tool may be added to the vendored `tools/` m
    - `make check` is green (plus any heavier tier the change warranted — integration/e2e, `make test-race`, `make vulncheck`, `make trivy-scan`).
    - The diff matches the design intent, is well tested, and has no stray debug code, TODOs, or unrelated changes.
    - Every doc per step 3 is updated (design **and** operator-facing), and `docs/STATUS.md` reflects the completed work.
-   - The PR is scoped to one concern — unrelated work goes in its own PR. **Exception: a fix for a broken `main` that blocks this PR's own gate belongs in it** — you cannot get green without it — called out in the description.
+   - The PR is scoped to one concern; unrelated work goes in its own PR, **including a fix for a broken `main`**, however completely it blocks this PR's gate.
+     Search for a standalone fix first (`gh pr list`), wait and rebase if one is open, own it in a **draft** PR if none is ([CONTRIBUTING.md](CONTRIBUTING.md#when-main-is-broken)).
    - The description explains *what* changed and *why*, references Queue items by bare ID (`Q44`, never `#44`), and notes how it was tested.
    - **Concurrent work re-checked just now**, not at session start, in both halves: `git fetch origin main && git log --oneline HEAD..origin/main` for what *merged* under you (rebase when it touches your own gate), and `gh pr list` for an open PR whose files or gates overlap yours (duplicated or mutually-invalidating work). **Fetch first**: `git diff HEAD...origin/main` compares against a local ref, so without it a moved base reads as clean.
      The jointly-red case is machine-checked at merge time by the merge queue, so there is no pre-merge freshness check: enqueue and let the queue arbitrate ([CONTRIBUTING.md](CONTRIBUTING.md#re-check-concurrent-work-before-opening)).
