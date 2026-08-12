@@ -3838,7 +3838,7 @@ The constraint is a <strong>global, project-wide</strong> CPU limit that default
 <tr>
 <td><code>default-pool</code></td>
 <td><code>e2-standard-2</code></td>
-<td>2</td>
+<td>2 (derived, manual)</td>
 <td>4</td>
 </tr>
 <tr>
@@ -3854,6 +3854,12 @@ The constraint is a <strong>global, project-wide</strong> CPU limit that default
 <td>16</td>
 </tr>
 <tr>
+<td><code>workers-od</code></td>
+<td><code>e2-standard-4</code></td>
+<td>0 at rest (manual)</td>
+<td>0</td>
+</tr>
+<tr>
 <td></td>
 <td></td>
 <td></td>
@@ -3862,9 +3868,16 @@ The constraint is a <strong>global, project-wide</strong> CPU limit that default
 </tbody>
 </table>
 <p>With <code>workers</code> at 7 nodes the project sits at 4 + 28 = 32/32, and the e2e pool's scale-up is refused for want of 8. <strong>The gate can therefore starve itself</strong>: its deploy phase routes CI to GAG, scaling <code>workers</code> out of the same global budget the e2e leg then needs.
-Raised to <strong>64</strong> on 2026-08-03 (approved immediately), covering the 52 ceiling plus headroom for spot replacement and GKE surge.</p>
+Raised to <strong>64</strong> on 2026-08-03 (approved immediately), covering the 52 ceiling plus headroom for spot replacement and GKE surge.
+Re-measured 2026-08-12: still 64, and the pool shapes above are unchanged.</p>
+<p><strong>Two of those four ceilings move without anyone editing this table</strong>, which is why the fit is not a fact to record once. <code>default-pool</code> is derived per run from the deployed always-on tenants (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/pool.sh">lib/pool.sh</a>), so a third tenant adds 2 vCPU; <code>workers-od</code> is sized by hand for a benchmark campaign and only <em>usually</em> returned to 0, so four nodes left up is 16 vCPU that puts the ceiling at 68 against a 64 limit.</p>
+<p><strong>So the competition is capped rather than out-run</strong> (Q631).
+Raising the limit again moves the collision instead of removing it: any new ceiling is one benchmark pool or one tenant away from being reached. <code>validate-release.sh</code> therefore takes the e2e and system pools' ceilings off the <em>live</em> budget before it routes CI, and holds <code>workers</code> to what is left.
+The arithmetic is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/quota.sh">lib/quota.sh</a>, the operator-facing behaviour in <a href="../../operations/release/#the-gate-reserves-the-e2e-pools-cpu-budget">release.md</a>.
+At today's 64 the reservation leaves room for 11 <code>workers</code> nodes against a configured 8, so it changes nothing; at the old 32 it would have held <code>workers</code> at 3 and the e2e pool would have got its 16 vCPU.</p>
 <p><strong>Read the API's error, not the autoscaler's event.</strong> <code>FailedScaleUp</code> never names the quota. <code>gcloud container clusters resize</code> returns a 429 whose body does: <code>resource "CPUS_ALL_REGIONS": request requires '8.0' and is short '8.0'</code>.
-Chasing the family quotas instead cost this release two runs and three wrong diagnoses.</p>
+Chasing the family quotas instead cost this release two runs and three wrong diagnoses.
+Regional <code>CPUS</code> and <code>N2_CPUS</code> are both 200 on this project (measured 2026-08-12), so neither can be the refusal.</p>
 <p><strong>Why N2 and not C2.</strong> Separate from the above: the regional <code>C2_CPUS</code> default is 8, one node of this shape, and a request to raise it was <strong>denied</strong> on 2026-07-31 — while an identical 8→16 ask for <code>IN_USE_ADDRESSES</code> was approved 33 minutes earlier, so the size of the ask was not the discriminator. <code>N2_CPUS</code> defaults to 200 and n2 is this pool's original family, so it is already proven here.
 Note this alone would not have fixed anything; the global limit was the real blocker.</p>
 <h3 id="f1-run-the-one-time-setup-script">F1. Run the one-time setup script<a class="headerlink" href="#f1-run-the-one-time-setup-script" title="Permanent link">&para;</a></h3>

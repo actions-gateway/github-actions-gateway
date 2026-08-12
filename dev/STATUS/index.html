@@ -2952,14 +2952,6 @@
 <td><code>externallyDeletedBeforeTerminal</code> cannot see a cancel: the runbook's delete supplies the mark, and a <code>cancelled</code> conclusion accepts <code>rerun-failed-jobs</code> (measured 2026-08-05). Both tiers take it.</td>
 </tr>
 <tr>
-<td><a id="Q631"></a>Q631</td>
-<td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">The release gate starves itself: routed CI and the e2e leg draw on one global CPU budget</a></td>
-<td><code>dogfood</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
-</tr>
-<tr>
 <td><a id="Q682"></a>Q682</td>
 <td><a href="../plan/q645-abandoned-completion/#the-remedy">Measure sibling <code>skipped</code> completion semantics live (Q260 fan-out)</a></td>
 <td><code>tests</code></td>
