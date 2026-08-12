@@ -46,6 +46,8 @@
 //     live row, and its bullet links an `operations/` page.
 //  11. Both of those badges sit on a bullet below the page's first section
 //     heading, where rules 9 and 10 can reach them.
+//  12. A capped bullet holds one paragraph. A blank line splits it in two, and
+//     what a reader sees as a bullet is then measured over both.
 //
 // Rules 7 and 8 reconcile the one promise this page makes with a date attached.
 // A release gate lives in STATUS.md as an `X.Y-gate` label, meaning the row
@@ -68,6 +70,16 @@
 // They belong here rather than in a gate of their own because they ask the same
 // question rules 2 and 7 ask — does this page's claim still agree with the
 // backlog — of a different rendering of it.
+//
+// Rule 12 exists because rules 5 and 6 measure a Markdown list item, and an
+// item swallows more than a reader thinks. Deleting a bullet and leaving its
+// indented continuation lines behind attaches them to the bullet above, whose
+// cap then breaks on words that are not its own: an accurate finding against an
+// innocent bullet, which reads as pre-existing debt rather than as the deletion
+// that caused it (Q798). Naming the stray paragraph is what makes it a fixable
+// finding, and the caps report the line span they measured for the same reason.
+// The two pages this reaches use no multi-paragraph bullets; the grid cards on
+// docs/index.md and docs/why-gag.md do, and are checked for badges alone.
 //
 // A hand-typed version means a gating verb followed by a numbered release:
 // "Gating the 1.5 release", "so it gates the 1.5 release". Naming a version
@@ -207,8 +219,10 @@ func run(cfg config, findings, summary io.Writer) int {
 		}
 		if b.words > maxFeatureWords {
 			c.report(featuresName, b.line, fmt.Sprintf(
-				"%q is %d words (max %d). Move the detail into the linked doc.", b.label, b.words, maxFeatureWords))
+				"%q is %d words (max %d), counted over %s. Move the detail into the linked doc.",
+				b.label, b.words, maxFeatureWords, b.span()))
 		}
+		c.checkOrphan(featuresName, b)
 	}
 
 	current, ok := parseRelease(cfg.release)
@@ -250,6 +264,20 @@ func (c *checker) report(file string, line int, msg string) {
 	c.failed = true
 }
 
+// checkOrphan is rule 12. It is reported at the stray paragraph rather than at
+// the bullet, because that is the line the edit goes on and the bullet above it
+// is innocent.
+func (c *checker) checkOrphan(file string, b bullet) {
+	if len(b.paraLines) < 2 {
+		return
+	}
+	for _, line := range b.paraLines[1:] {
+		c.report(file, line, fmt.Sprintf(
+			"a second paragraph inside the bullet at line %d (%q), so its word count is measured over %s. Deleting a bullet without its indented continuation lines leaves them attached to the bullet above. Delete them too, or unindent them into a paragraph of their own.",
+			b.line, b.label, b.span()))
+	}
+}
+
 // checkRoadmapBullet applies rules 1-6 and 8 to one bullet, recording in bound
 // every live Q-ID it names so rule 7 can find the gated rows nothing names.
 func (c *checker) checkRoadmapBullet(file string, b bullet, bound map[string]bool) {
@@ -259,9 +287,10 @@ func (c *checker) checkRoadmapBullet(file string, b bullet, bound map[string]boo
 	}
 	if b.words > maxRoadmapWords {
 		c.report(file, b.line, fmt.Sprintf(
-			"%q is %d words (max %d). Say what is missing, what changes, and what it waits on — the rest belongs in the linked doc.",
-			b.label, b.words, maxRoadmapWords))
+			"%q is %d words (max %d), counted over %s. Say what is missing, what changes, and what it waits on — the rest belongs in the linked doc.",
+			b.label, b.words, maxRoadmapWords, b.span()))
 	}
+	c.checkOrphan(file, b)
 	if len(b.ids) == 0 {
 		c.report(file, b.line, fmt.Sprintf(
 			"%q has no <!-- q:QN --> annotation. Name the backlog row(s) behind it so this bullet fails when they ship.", b.label))
@@ -463,11 +492,25 @@ func contains(haystack []string, needle string) bool {
 type bullet struct {
 	section string
 	line    int
+	endLine int
 	label   string
 	words   int
 	hasLink bool
 	ids     []string
 	claims  []string
+	// paraLines is where each of the bullet's block-level paragraphs starts.
+	// More than one is rule 12's finding.
+	paraLines []int
+}
+
+// span renders the source lines a bullet's word count was taken over, so a
+// count that disagrees with the bullet a reader sees can be reconciled without
+// re-deriving which lines it read.
+func (b bullet) span() string {
+	if b.endLine <= b.line {
+		return fmt.Sprintf("line %d", b.line)
+	}
+	return fmt.Sprintf("lines %d-%d", b.line, b.endLine)
 }
 
 // roadmapBullets returns the top-level bullets of the two gated sections.
@@ -543,11 +586,13 @@ var (
 
 func newBullet(doc *markdown.Document, item markdown.ListItem) bullet {
 	b := bullet{
-		line:    item.Line,
-		label:   item.Lead,
-		words:   len(strings.Fields(item.Text)),
-		hasLink: item.HasLink,
-		claims:  releaseClaims(item.Text),
+		line:      item.Line,
+		endLine:   item.EndLine,
+		label:     item.Lead,
+		words:     len(strings.Fields(item.Text)),
+		hasLink:   item.HasLink,
+		claims:    releaseClaims(item.Text),
+		paraLines: item.ParagraphLines,
 	}
 	if b.label == "" {
 		b.label = item.Text

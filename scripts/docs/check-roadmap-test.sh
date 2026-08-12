@@ -194,6 +194,61 @@ expect "a bullet spanning line breaks is counted whole" 1 \
     "$(roadmap "- **Near thing.** <!-- q:Q1 --> [d](plan/t.md) $wrapped_head" "  $wrapped_tail" -- "$EXPL")" \
     "$(status "Q1" "Q2")" 'the rest belongs in the linked doc'
 
+# --- Rule 12: the orphan a deleted bullet leaves behind. --------------------
+#
+# Deleting a bullet and leaving its indented continuation attaches the
+# continuation to the bullet above, which the caps then measure as part of it.
+# Hit 2026-08-11 closing Q726: the cap message was accurate, the bullet it named
+# was innocent, and nothing pointed at the line that had actually changed.
+
+# Sized past the 60-word roadmap cap on its own, so this fixture reproduces
+# both halves of the Q726 sighting: the cap breaking, and nothing saying why.
+orphan="$(printf 'orphan %.0s' $(seq 1 62))"
+ORPHANED="$(roadmap "$NEAR" '' "  $orphan" -- "$EXPL")"
+
+expect "an orphaned continuation is named" 1 \
+    "$ORPHANED" "$(status "Q1" "Q2")" 'a second paragraph inside the bullet at line'
+
+# The finding lands on the orphan's own line, not the innocent bullet's. The
+# roadmap fixture opens its near-term section at line 9, so the bullet is line 9
+# and the stray paragraph two lines below it.
+expect "the orphan finding names its own line" 1 \
+    "$ORPHANED" "$(status "Q1" "Q2")" 'roadmap.md:11:'
+
+# ...and the cap finding it fires alongside says which lines it counted, so a
+# 67-word count against a 5-word bullet can be reconciled without a parser.
+expect "the cap finding names the span it read" 1 \
+    "$ORPHANED" "$(status "Q1" "Q2")" 'counted over lines 9-11'
+
+# The negative control that matters most: a bullet whose prose merely wraps is
+# one paragraph however many lines it spans. Without this, rule 12 would fire on
+# every multi-line bullet on the real page.
+expect "a wrapped bullet is not an orphan" 0 \
+    "$(roadmap '- **Near thing.** <!-- q:Q1 --> Body text runs on' '  and ends here. [d](plan/t.md)' -- "$EXPL")" \
+    "$(status "Q1" "Q2")"
+
+# Unindented prose after a bullet is a paragraph of the page, not of the item,
+# so it is neither counted against the bullet nor reported as an orphan.
+expect "prose after a bullet is not an orphan" 0 \
+    "$(roadmap "$NEAR" '' 'A page paragraph, flush left.' -- "$EXPL")" "$(status "Q1" "Q2")"
+
+# A fenced block inside a bullet is a block but not a paragraph. It is how this
+# page documents the annotation format, so counting blocks rather than
+# paragraphs would fail the page for explaining itself.
+expect "a fence inside a bullet is not an orphan" 1 \
+    "$(roadmap '- **Near thing.** Body text. [d](plan/t.md)' '' '  ```' '  - **Example.** <!-- q:Q1 --> How to annotate.' '  ```' -- "$EXPL")" \
+    "$(status "Q1" "Q2")" 'has no <!-- q:QN --> annotation'
+
+# The features page is capped the same way and drifts the same way.
+FEATURES_FILE="$(features orphan \
+    '- **[A linked capability](operations/runbook.md)** — one clause.' \
+    '' \
+    '  A stray paragraph left by a deleted capability.')"
+expect "an orphan on the features page" 1 \
+    "$(roadmap "$NEAR" -- "$EXPL")" "$(status "Q1" "Q2")" \
+    'a second paragraph inside the bullet at line'
+FEATURES_FILE="$WORKDIR/features-clean.md"
+
 # Format drift on either side is a hard error (rc 2), never a silent pass.
 printf '# Roadmap\n\n## Something Else\n\n- **Orphan.** Body. [d](plan/t.md)\n' >"$WORKDIR/no-sections.md"
 expect "roadmap headings renamed" 2 \

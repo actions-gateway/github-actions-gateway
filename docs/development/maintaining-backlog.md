@@ -110,7 +110,7 @@ Work through all four:
    Rewrite them as a **bare `QNNN`**, the form the Archive rows in [`docs/plan/README.md`](../plan/README.md) already use.
    Keep the prose; only the link goes.
 2. **Delete the roadmap bullet, continuation lines included.** A forward-looking bullet exists because the row does ([rule 7](#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)), so it goes when the row does.
-   Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the **previous** bullet, whose word count then breaks the cap. `make roadmap-check` reports that as a violation on a bullet you never touched, which reads convincingly like a pre-existing failure.
+   Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the **previous** bullet, whose word count then breaks the cap. `make roadmap-check` names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.
 3. **Archive the plan doc if this was its last `STATUS.md` reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
 4. **Update the plan's `docs/plan/README.md` row** in the same change, moving it to the Archive section.
 

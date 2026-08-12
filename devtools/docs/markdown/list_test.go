@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -46,6 +47,56 @@ func TestListItemDestinations(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("destination %d: want %q, got %q", i, want[i], got[i])
+		}
+	}
+}
+
+// Deleting a bullet and leaving its indented continuation behind attaches the
+// continuation to the bullet above as a second paragraph, silently widening
+// what any gate measuring that item reads. ParagraphLines and EndLine are what
+// let a gate say so instead of reporting an inflated count against an innocent
+// bullet (Q798).
+func TestListItemSpanAndParagraphs(t *testing.T) {
+	const src = "# Roadmap\n\n## Section\n\n" +
+		"- **A bullet.** Its prose wraps\n" +
+		"  onto a second line.\n" +
+		"\n" +
+		"  An orphaned continuation, left by the deleted bullet below.\n" +
+		"\n" +
+		"- **Another bullet.** One line.\n"
+
+	items := Parse([]byte(src)).TopLevelListItems()
+	if len(items) != 2 {
+		t.Fatalf("want 2 items, got %d", len(items))
+	}
+
+	if got, want := items[0].ParagraphLines, []int{5, 8}; !slices.Equal(got, want) {
+		t.Errorf("first item ParagraphLines = %v, want %v", got, want)
+	}
+	if items[0].Line != 5 || items[0].EndLine != 8 {
+		t.Errorf("first item spans %d-%d, want 5-8", items[0].Line, items[0].EndLine)
+	}
+
+	// The control: a bullet holding nothing but wrapped prose is one paragraph,
+	// so the orphan signal is the blank line and not the line count.
+	if got, want := items[1].ParagraphLines, []int{10}; !slices.Equal(got, want) {
+		t.Errorf("second item ParagraphLines = %v, want %v", got, want)
+	}
+	if items[1].Line != 10 || items[1].EndLine != 10 {
+		t.Errorf("second item spans %d-%d, want 10-10", items[1].Line, items[1].EndLine)
+	}
+}
+
+// A tight list holds its prose in a TextBlock rather than a Paragraph, and a
+// caller counting an item's blocks must not read that as zero.
+func TestListItemParagraphsInTightList(t *testing.T) {
+	items := Parse([]byte("- One.\n- Two.\n")).TopLevelListItems()
+	if len(items) != 2 {
+		t.Fatalf("want 2 items, got %d", len(items))
+	}
+	for i, item := range items {
+		if len(item.ParagraphLines) != 1 {
+			t.Errorf("item %d: ParagraphLines = %v, want one entry", i, item.ParagraphLines)
 		}
 	}
 }
