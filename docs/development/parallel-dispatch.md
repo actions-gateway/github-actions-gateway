@@ -158,8 +158,9 @@ Avoid it on public repos; reserve it for cases where neither the plugin nor a ba
 ### What stays true in every case
 
 - **"Green" means the code-exercising gates actually ran** — not merely that no check is red.
-  A path-gated workflow that was skipped reports *no* check, so a PR that opened docs-only (e.g. a `docs/STATUS.md` row) and later had code pushed can show all-green/`CLEAN` while build, lint, integration, e2e, and the security scans never tested the code.
+  A path-gated workflow that was skipped reports *no* check, so a PR that opened docs-only (e.g. a `docs/STATUS.md` row) and later had code pushed can show all-green/`CLEAN` while build, lint, integration, and the security scans never tested the code.
   Before declaring the PR ready, verify the relevant gates ran (`gh pr checks <n>`, `gh run list --commit <sha>`) and `gh pr close <n> && gh pr reopen <n>` to force them if they were skipped.
+  The e2e lanes are exempt: they are merge-group-only (Q675), so they never run on a PR and their absence there is expected rather than a skipped gate.
   See [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
 - **Never merge or enqueue.** A green + mergeable PR is handed to the dispatcher, which hands it to the maintainer (see [the merge model](#the-merge-model)).
 - **Relaunch the watcher after every actionable wake** — `check_failure`, `conflict`/`behind`, `timeout`, `error`.
@@ -227,7 +228,8 @@ Record the per-task model choice in the `tmp/` tracker alongside task → chip �
 For each task, in priority order and respecting the concurrency cap:
 
 1. Spawn the worker chip with a self-contained prompt.
-2. When its PR reaches **green + mergeable**, first **confirm the code-exercising gates actually ran** — green/`CLEAN` is not enough if a path-gated workflow was skipped (a PR opened docs-only then given code can show all-green while build / lint / integration / e2e / security-scan never tested it; `gh pr checks <n>` + `gh run list --commit <sha>`, and close→reopen to force them — see [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran)).
+2. When its PR reaches **green + mergeable**, first **confirm the code-exercising gates actually ran** — green/`CLEAN` is not enough if a path-gated workflow was skipped (a PR opened docs-only then given code can show all-green while build / lint / integration / security-scan never tested it; `gh pr checks <n>` + `gh run list --commit <sha>`, and close→reopen to force them — see [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran)).
+   Do not expect an e2e run among them: both lanes are merge-group-only (Q675), so the e2e verdict arrives on the queue entry, and a kickback there is the worker's to heal like any other.
    Then **review the diff for scope** — is it doing exactly the task, with no stray changes, no weakened gate, no security default regressed?
    Green CI does not prove this.
 3. **Report it ready.

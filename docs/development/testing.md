@@ -2472,7 +2472,11 @@ The judgement half is not automatable and remains yours: for the deliberately na
 The same applies in reverse to a gate that names files individually (`manifest-validate.sh`'s `standalone_manifests`): adding a path there means adding its directory to the filter.
 
 **Verify before declaring a PR review-ready and before merging it:** confirm the gates that exercise the change actually executed **on the PR's head commit** — green is not enough if a gate was skipped, and *no red checks* is not the same as *the checks ran*.
-For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `e2e`, `security-scan` (trivy + govulncheck), and `manifest-validate`:
+For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `security-scan` (trivy + govulncheck), and `manifest-validate`:
+
+**`e2e` and `e2e-calico` are not on that list, by design (Q675).** Both lanes are merge-group-only, so on a pull request their heavy jobs are *always* skipped and only the `e2e-gate` / `e2e-calico-gate` contexts report.
+An absent e2e run on a PR is therefore the expected state and not a symptom: do not close/reopen chasing one, and do not read the green gate as evidence the suite ran.
+The e2e verdict for a change arrives on its queue entry; to get one earlier, run `make e2e` locally or dispatch the workflow.
 
 ```bash
 gh pr view <n> --json headRefOid --jq .headRefOid   # the SHA every check must be attached to
@@ -2532,9 +2536,14 @@ The reviewer's tell: a PR whose "how it was tested" names only the specs it adde
 The cluster/image/test plumbing for the e2e suite lives in one reusable workflow, [`.github/workflows/e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) (`workflow_call`, parameterized by a `kind_cni` input).
 Two callers drive it so a kind bump, image-tag change, or flake mitigation is made once and both lanes inherit it:
 
-- **[`e2e-test.yml`](../../.github/workflows/e2e-test.yml)** — the per-PR / push-to-main leg, `kind_cni: kindnet`.
-  Path-gated (skips PRs touching no e2e-relevant files) and `cancel-in-progress` on PRs.
+- **[`e2e-test.yml`](../../.github/workflows/e2e-test.yml)** — the merge-queue / push-to-main leg, `kind_cni: kindnet`.
+  Path-gated (skips queue entries touching no e2e-relevant files) and `cancel-in-progress` on PRs.
   This is the merge gate.
+
+  **It does not run on a pull request (Q675).** The queue validates the candidate merge result, so a per-PR run only bought a second verdict on the same commit: 58% of e2e runs were `pull_request` events, and 40% of branches paid two or more of them (worst: 9) as later pushes superseded earlier ones.
+  On a PR the heavy job is skipped and `e2e-gate` still reports green, so the required check is satisfied and the PR can enqueue.
+  What this costs: an e2e break now surfaces as a queue kickback rather than at push time, accepted against a measured 1% e2e failure rate over 200 runs.
+  Iterating locally is unchanged: `make e2e` with `SUITE`/`RUN` is still the way to exercise a spec before pushing, and `workflow_dispatch` still runs the full lane on demand.
 
 **Infrastructure image caching.** External images that the kind *nodes* would otherwise pull on every run — a recurring flake source under registry rate limits and a latency cost on the critical path — are pre-pulled on the runner (cached via `actions/cache`, retried) and seeded onto the nodes so the in-cluster pull is a local hit.
 This covers, on **both** legs, the `curlimages/curl` test image (mirrored into the local registry), the **cert-manager** controller/webhook/cainjector images (pre-pulled + `kind load`ed before `make apply-cert-manager`, whose rollout is then waited on), and the **metrics-server** image (pre-pulled + `kind load`ed before the suite runs, since the suite applies the pinned `components.yaml` itself in `setupMetricsServer` — Q150); and on the **Calico** lane, the Calico CNI images (see below).
@@ -2577,10 +2586,12 @@ Getting it wrong the other way is just as costly — a verdict of `BLOCKED` on a
   The full suite runs on both CNIs — these specs simply activate under Calico: the two `TenantProvisioning` egress negatives (`WorkloadEgressBlockedToNonProxyPod`, `WorkerCannotReachK8sAPI`), `ProxyConnectWorks` (which runs on both but is only truly enforced here), and the two `ManagerMetricsNP` specs (Q83).
   No per-lane spec selection is needed — the suite's runtime `egressEnforcingCNI()` self-skip does the routing.
 
-  **When it runs:** **per-PR (and on push to main) only when the diff touches NetworkPolicy/proxy code** — the GMC (`cmd/gmc/**`, which generates the tenant + manager policies and the proxy), the egress proxy (`cmd/proxy/**`), the chart's policy templates (`charts/actions-gateway/**`), or the CNI/cluster plumbing (`scripts/e2e/**`, `scripts/fetch/**`, `scripts/lib/**`, `Makefile`, the two e2e workflows — the script groups held identical to `e2e-test.yml`'s by [assertion 4](#the-path-filter-gate) of the path-filter gate).
-  PRs that cannot regress enforcement stay on the fast kindnet leg and pay no Calico cost.
+  **When it runs:** **at merge-queue time (and on push to main) only when the diff touches NetworkPolicy/proxy code** — the GMC (`cmd/gmc/**`, which generates the tenant + manager policies and the proxy), the egress proxy (`cmd/proxy/**`), the chart's policy templates (`charts/actions-gateway/**`), or the CNI/cluster plumbing (`scripts/e2e/**`, `scripts/fetch/**`, `scripts/lib/**`, `Makefile`, the two e2e workflows — the script groups held identical to `e2e-test.yml`'s by [assertion 4](#the-path-filter-gate) of the path-filter gate).
+  Queue entries that cannot regress enforcement skip this lane entirely and pay no Calico cost.
   The path filter is the *sole* automatic gate (there is no nightly catch-all), so it deliberately errs toward the components that produce or police the enforced traffic. **Trigger it manually** any time from the Actions tab → *e2e (calico)* → *Run workflow* (`workflow_dispatch`).
-  Because it triggers on the PR's own files, a change to the lane itself (or to NP/proxy code) is validated on that PR rather than only post-merge.
+
+  Like the kindnet lane it is queue-time rather than per-PR (Q675), and for the same reason plus one of its own: it was the *longer* of the two lanes (870s against kindnet's 804s) and ran on roughly 70% of PR branches, so it set the PR-side critical path rather than kindnet.
+  A change to the lane itself is therefore validated on the queue entry rather than on the PR, which is the one review affordance the demotion gives up; dispatch it manually when editing this workflow.
 
   **It gates merge via its `gate` job.** The workflow triggers on every PR (no top-level path filter) and skips the expensive Calico leg internally via the `changes` job, so a non-matching PR still reports a green `e2e-calico-gate` — the required-check-safe pattern (see [required-status-checks.md](../plan/archive/required-status-checks.md)).
 

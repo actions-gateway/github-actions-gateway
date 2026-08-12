@@ -114,9 +114,15 @@ jobs:
   # covers them (Q119).
   e2e:
     needs: [changes]
-    # Always run on push to main and on dispatch; skip on PRs where no
-    # e2e-relevant files changed.
-    if: needs.changes.outputs.e2e == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Queue-time, not per-PR (Q675). The queue runs this on the candidate merge
+    # result, which is the authoritative check, so a per-PR run was a duplicate
+    # verdict: 58% of e2e runs were pull_request events, and 40% of branches paid
+    # two or more as later pushes superseded them (worst: 9). Push to main and
+    # dispatch still run directly. On a PR this job is skipped, which `e2e-gate`
+    # accepts — the required check still reports, so the PR can still enqueue.
+    # Trade-off, accepted on a measured 1% e2e failure rate: an e2e break now
+    # surfaces as a queue kickback rather than at push time.
+    if: (needs.changes.outputs.e2e == 'true' && github.event_name == 'merge_group') || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/e2e-reusable.yml
     permissions:
       contents: read

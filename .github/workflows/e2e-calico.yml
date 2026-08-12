@@ -124,7 +124,11 @@ jobs:
 
   e2e-calico:
     needs: [changes]
-    if: needs.changes.outputs.calico == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Queue-time, not per-PR — same reasoning and the same accepted trade-off as
+    # the kindnet lane (Q675, see e2e-test.yml). This lane is the longer of the
+    # two (870s vs 804s) and runs on ~70% of PR branches, so it set the PR-side
+    # critical path that the demotion removes.
+    if: (needs.changes.outputs.calico == 'true' && github.event_name == 'merge_group') || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/e2e-reusable.yml
     permissions:
       contents: read

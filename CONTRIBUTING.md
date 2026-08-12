@@ -156,8 +156,10 @@ To see what it covers, ask the target rather than a list in a doc — `make list
 `make check` runs exactly what `.github/workflows/unit-test.yml` runs, so a green `make check` means a green unit-test workflow — run it locally to avoid burning CI.
 The slower security gates (`make vulncheck`, `make trivy-scan`) and the integration/e2e tiers are kept separate so this loop stays fast; run them when your change warrants it.
 
-**Before merging, confirm CI actually tested the code.** Most heavy gates (integration, e2e, security scans, manifest-validate) are path-gated; a PR that was **opened as docs-only and later had code pushed** can leave those workflows *skipped* while still showing all-green and mergeable — shipping untested code to `main`.
+**Before merging, confirm CI actually tested the code.** Most heavy gates (integration, security scans, manifest-validate) are path-gated; a PR that was **opened as docs-only and later had code pushed** can leave those workflows *skipped* while still showing all-green and mergeable — shipping untested code to `main`.
 Avoid it by putting code in the PR's first push, and verify with `gh pr checks <n>` / `gh run list` that the relevant gates ran (close+reopen the PR to force them if they were skipped).
+Both e2e lanes are the exception: they run at merge-queue time only, so an absent e2e run on a PR is expected rather than a skipped gate.
+Run `make e2e` locally when you want that verdict before the queue gives it.
 See [`docs/development/testing.md`](docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
 
 ## Linting
@@ -245,7 +247,7 @@ Prefer putting everything in the first push — but "never push again" is too st
 Every merge goes through the **merge queue** (`gh pr merge --squash` enqueues; the queue validates the candidate merge and lands it), so the old race (a direct squash-merge overtaking a just-pushed commit and stranding it) cannot happen: a push to a queued PR **dequeues** it instead, and the PR re-enters the queue after its checks rerun on the new head.
 
 The cost of a push is therefore CI and queue position, not a stranded commit.
-On a docs-only PR the gates are seconds, so an amend is cheap; on one that runs the full e2e matrix a push restarts a quarter-hour of checks and sends the PR to the back of the queue.
+On a docs-only PR the gates are seconds, so an amend is cheap; on a Go change a push restarts `integration-test` and the security scans, roughly ten minutes, and sends the PR to the back of the queue, where it then pays the e2e lanes for the first time.
 Weigh that before pushing a nicety onto a PR that is otherwise done.
 
 **The practical guard is a check immediately before the push, not a rule of thumb:**
