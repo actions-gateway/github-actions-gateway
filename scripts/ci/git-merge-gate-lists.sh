@@ -62,6 +62,11 @@
 # no access to a clone's config — so it removes the rebase cost, not the
 # merge-queue one.
 #
+# One consequence worth knowing: the PR that *adds* a routing line cannot
+# benefit from it. git reads .gitattributes from the base during a rebase, so
+# the routing is not in effect for the commit that introduces it, and that
+# first rebase resolves by hand. Measured 2026-08-11 landing this driver.
+#
 # Usage (as configured by --install; git substitutes the placeholders):
 #   git-merge-gate-lists.sh %O %A %B %L %P %S %X %Y
 #     %O base   %A ours (the result is written here)   %B theirs

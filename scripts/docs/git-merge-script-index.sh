@@ -3,8 +3,8 @@
 # git-merge-script-index.sh — a git merge driver for scripts/README.md that
 # resolves its per-group tables by script path, and falls back to ordinary
 # conflict markers for anything it is not certain about. The siblings are
-# scripts/docs/git-merge-status.sh and scripts/docs/git-merge-plan-index.sh; all
-# three share scripts/lib/merge-table-rows.awk.
+# scripts/docs/git-merge-status.sh, git-merge-plan-index.sh and
+# git-merge-roadmap.sh; all four share scripts/lib/merge-keyed-records.awk.
 #
 # WHY. scripts/README.md is a registry every new gated script must edit:
 # check-script-docs.sh fails a script that has no row, so a PR adding one has no
@@ -51,6 +51,11 @@
 # no access to a clone's config — so it removes the rebase cost, not the
 # merge-queue one.
 #
+# One consequence worth knowing: the PR that *adds* a routing line cannot
+# benefit from it. git reads .gitattributes from the base during a rebase, so
+# the routing is not in effect for the commit that introduces it, and that
+# first rebase resolves by hand. Measured 2026-08-11 landing this driver.
+#
 # Usage (as configured by --install; git substitutes the placeholders):
 #   git-merge-script-index.sh %O %A %B %L %P %S %X %Y
 #     %O base   %A ours (the result is written here)   %B theirs
@@ -60,7 +65,7 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROWS_AWK="$SCRIPT_DIR/../lib/merge-table-rows.awk"
+ROWS_AWK="$SCRIPT_DIR/../lib/merge-keyed-records.awk"
 
 DRIVER_NAME='scriptindex'
 DRIVER_LOG='merge-script-index'
