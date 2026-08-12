@@ -380,7 +380,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
-                 docs/check-script-docs-test \
+                 docs/check-plan-index-test docs/check-script-docs-test \
                  docs/alloc-queue-id-test docs/check-status-isolation-test \
                  docs/find-duplicate-rows-test \
                  docs/git-merge-plan-index-test docs/git-merge-roadmap-test \
@@ -675,7 +675,9 @@ roadmap-check: ## Fail when docs/roadmap.md names backlog rows that shipped or m
 	scripts/docs/check-roadmap.sh
 
 # Catches the "closed plan never archived" drift that makes docs/plan/README.md
-# read as stale. Rationale + the ⓘ exemption live in the script header.
+# read as stale, and the narrower case where the plan stays but its Status cell
+# still names rows that closed (Q800). Rationale + the ⓘ exemption live in the
+# script header.
 .PHONY: plan-index-check
 plan-index-check: ## Assert active plans in docs/plan/README.md are still STATUS-referenced (else archive them)
 	scripts/docs/check-plan-index.sh

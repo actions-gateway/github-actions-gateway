@@ -109,6 +109,8 @@ Work through all four:
 1. **De-link the ID wherever the repo cites it.** `grep -rn "STATUS.md#QNNN" docs/` finds every anchor that is now dead (`make doc-links`).
    Rewrite them as a **bare `QNNN`**, the form the Archive rows in [`docs/plan/README.md`](../plan/README.md) already use.
    Keep the prose; only the link goes.
+   In an active plan's Status cell the de-link is gated rather than tidy: `make plan-index-check` requires a live row to be linked and a closed one to be bare, so the anchor dying is what puts the cell in front of someone (Q800).
+   Re-read the whole cell while you are there, since it is a rollup no individual row owns.
 2. **Delete the roadmap bullet, continuation lines included.** A forward-looking bullet exists because the row does ([rule 7](#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)), so it goes when the row does.
    Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the **previous** bullet, whose word count then breaks the cap. `make roadmap-check` names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.
 3. **Archive the plan doc if this was its last `STATUS.md` reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
