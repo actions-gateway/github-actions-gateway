@@ -58,13 +58,9 @@ Rejected for the cost above.
   when `priorityClassName` is not in the allowlist. Error names the offending
   class **and** the permitted set, e.g.
   `runnerGroups[0].priorityTiers[1]: priorityClassName "evil-preempt" is not in the platform allowlist [runner-standard runner-opportunistic]`.
-- Residual (documented, not coded here): a tenant with *direct* `runnergroups`
-  RBAC bypasses the ActionsGateway webhook. RunnerGroup authoring is a
-  GMC-ServiceAccount path guarded by `tenant-resource-guard`; tenants are not
-  expected to hold direct `runnergroups` create. A `ValidatingAdmissionPolicy` on
-  `runnergroups` (defense-in-depth, like the GMC-SA guards) is a possible future
-  enhancement — note in appendix-g, do not build now (keeps scope contained and
-  matches scope item 2: "GMC validating webhook and/or CEL").
+- Residual (documented, not coded here): a tenant with *direct* `runnergroups` RBAC bypasses the ActionsGateway webhook.
+  RunnerGroup authoring is a GMC-ServiceAccount path guarded by `tenant-resource-guard`; tenants are not expected to hold direct `runnergroups` create.
+  A `ValidatingAdmissionPolicy` on `runnergroups` (defense-in-depth, like the GMC-SA guards) is a possible future enhancement — note in appendix-g, do not build now (keeps scope contained and matches scope item 2: "GMC validating webhook and/or CEL").
 
 ### preemptionPolicy guidance (secure-by-default, operational)
 - Even an *allowlisted* class with `preemptionPolicy: PreemptLowerPriority` preempts cross-tenant (PriorityClasses are global).

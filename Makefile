@@ -1004,6 +1004,15 @@ md-reflow-check: $(MDREFLOW) ## Report Markdown that is not sentence-per-line; w
 md-reflow-diff: $(MDREFLOW) ## Print the reflow diff without writing
 	$(MDREFLOW) --diff .
 
+# Not a gate, and not in CHECK_FAST_GATES: a declined paragraph is a correct
+# outcome, so --explain never changes the exit code. It answers "why will this
+# paragraph not reflow", and it is how the residue figures in
+# documentation-standards.md are re-derived rather than recalled. Records go to
+# stderr; the redirect keeps them in order with the check's own report.
+.PHONY: md-reflow-explain
+md-reflow-explain: $(MDREFLOW) ## Name every paragraph mdreflow declines, with its reason code
+	$(MDREFLOW) --explain --check . 2>&1
+
 .PHONY: cosign
 cosign: $(COSIGN) ## Download pinned cosign (COSIGN_VERSION) into .build/
 
