@@ -41,7 +41,7 @@ Those should be enforced *regardless* of the runtime choice.
 | Concern | gVisor | Kata Containers |
 | --- | --- | --- |
 | Node-level installation | runsc binary + containerd plugin | Kata runtime + nested-virt-capable kernel |
-| Cloud compatibility | Most clouds support runsc on standard nodes | Requires nested-virt or bare-metal nodes (e.g. AWS bare-metal, GCP nested-virt families) |
+| Cloud compatibility | Most clouds support runsc on standard nodes | Requires nested-virt-capable nodes: selected virtual machine families on AWS and GCP, or bare metal ([current families](../operations/kata-dind-workloads.md#prerequisite--nested-virtualization-nodes)) |
 | Per-pod memory overhead | Sentry process | Guest kernel + agent; the shipped `kata` RuntimeClass reserves `160Mi` |
 | Per-pod CPU overhead | Syscall interception, so syscall-heavy jobs pay most and compute-bound jobs pay little | Near-native in steady state; the RuntimeClass reserves `250m`, and the real cost is at boot and on I/O crossing the virtio boundary |
 | Debugging | `kubectl exec` works; some debugger tools incompatible | `kubectl exec` works through Kata agent; kernel-debug tools constrained |
