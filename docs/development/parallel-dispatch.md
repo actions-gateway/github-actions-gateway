@@ -413,6 +413,11 @@ The capture therefore belongs on the wake that reports the conflict, not on a la
 [`pr-requeue-eligible.sh --assess`](../../scripts/agent/pr-requeue-eligible.sh) runs before the rebase and had measured all of this already, then kept only its verdict.
 It now appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OIDs it merged, and the paths that conflicted.
 
+**On an ordinary `DIRTY` wake it captures nothing, so take the measurement by hand first.** The eligibility checks run before the probe, and the first of them is whether a human has ever enqueued the PR.
+A worker healing its own not-yet-enqueued PR is the common case and fails that check, so `--assess` refuses and records a verdict carrying no OIDs and no conflict set — the measurement the capture exists to preserve, lost on exactly the wake that prompted it (Q814, hit independently by two workers on 2026-08-12).
+Until the ordering changes, run the drivers-off `merge-tree` below yourself **before** rebasing.
+It is the same command the checker would have run, and the rebase is the only deadline: afterwards the branch merges clean and there is nothing left to measure.
+
 - **A by-hand `merge-tree` in a driver-installed clone answers a different question than GitHub's merge.** `.gitattributes` is committed, but the `merge.<name>.driver` command it names is per-clone config that `make merge-driver` installs, and GitHub never runs it.
   So a probe run in a clone that has the drivers reads *resolved*, while the queue sees the raw conflict.
   Measured 2026-08-12 on two PRs: drivers on, `exit 0`; drivers off, `exit 1` naming `docs/STATUS.md`.
