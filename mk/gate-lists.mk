@@ -48,7 +48,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
                     script-docs-check semver-floor-sources-check template-library-check \
-                    md-reflow-check
+                    md-reflow-check comparison-stamps-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -148,7 +148,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/git-merge-script-index-test \
                  ci/check-uses-pinned-test ci/run-parallel-test \
                  ci/check-template-library-test \
-                 docs/backlog-metrics-test docs/check-doc-links-test \
+                 docs/backlog-metrics-test docs/check-comparison-stamps-test \
+                 docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
