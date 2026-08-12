@@ -121,6 +121,21 @@ assert_output() {
 	fi
 }
 
+assert_eq() {
+	if [[ "$2" == "$3" ]]; then
+		printf 'ok   %-26s %s\n' "$1" "$2"
+	else
+		printf 'FAIL %-26s want %s got %s\n' "$1" "$3" "$2" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# field DIR KEY — the last value recorded for KEY in PR 42's verdict file. Last
+# rather than first: the file accumulates one record per assessment.
+field() {
+	awk -v k="$2" '$1 == k { v = $2 } END { print v }' "$1/state/42.verdict"
+}
+
 export GH_ENQUEUE_COUNT=1 GH_QUEUE_ENTRY="" GH_STATE=OPEN GH_DRAFT=false GH_BASE=main
 
 # The healthy case first: without it every refusal below proves nothing.
@@ -144,16 +159,28 @@ expect refuse-mixed-conflict 1 "$BOTH_REPO" --assess 42
 assert_output refuse-mixed-conflict 'scripts/thing.sh'
 
 # Never a first enqueue: with no human enqueue on record there is nothing to
-# restore, and enqueueing would be an agent deciding to merge.
-GH_ENQUEUE_COUNT=0 expect refuse-never-enqueued 1 "$STATUS_REPO" --assess 42
+# restore, and enqueueing would be an agent deciding to merge. On its own repo,
+# because a refusal is recorded now and would otherwise land on the ELIGIBLE
+# record the confirm cases below read.
+NEVER_REPO="$(new_repo never-enqueued status)"
+GH_ENQUEUE_COUNT=0 expect refuse-never-enqueued 1 "$NEVER_REPO" --assess 42
 assert_output refuse-never-enqueued 'no human has enqueued'
 
+# A refusal taken before the probe still leaves a record, so a later reader can
+# tell "assessed and refused" from "never assessed" — and the OIDs it could not
+# measure read as `-` rather than as a stale pair.
+assert_eq refuse-records-verdict "$(field "$NEVER_REPO" verdict)" WAKE
+assert_eq refuse-records-no-oid "$(field "$NEVER_REPO" base_oid)" -
+
 # Already queued: re-enqueueing would double-add.
-GH_QUEUE_ENTRY='{"state":"QUEUED"}' expect refuse-already-queued 1 "$STATUS_REPO" --assess 42
+QUEUED_REPO="$(new_repo already-queued status)"
+GH_QUEUE_ENTRY='{"state":"QUEUED"}' expect refuse-already-queued 1 "$QUEUED_REPO" --assess 42
 assert_output refuse-already-queued 'already in the merge queue'
 
-GH_STATE=MERGED expect refuse-not-open 1 "$STATUS_REPO" --assess 42
-GH_DRAFT=true expect refuse-draft 1 "$STATUS_REPO" --assess 42
+CLOSED_REPO="$(new_repo not-open status)"
+GH_STATE=MERGED expect refuse-not-open 1 "$CLOSED_REPO" --assess 42
+DRAFT_REPO="$(new_repo draft status)"
+GH_DRAFT=true expect refuse-draft 1 "$DRAFT_REPO" --assess 42
 
 # --confirm fails closed. A session that lost its assessment must wake a human
 # rather than fall back to enqueueing.
@@ -171,6 +198,51 @@ assert_output confirm-after-wake "was 'WAKE'"
 # measured against a different branch.
 GH_BASE=release expect refuse-confirm-base-moved 1 "$STATUS_REPO" --confirm 42
 assert_output refuse-confirm-base-moved 'base changed'
+
+# The records accumulate and the LAST one governs (Q810). Overwriting instead
+# would let a refusal that never probed erase the measurement the eviction rests
+# on; reading anything but the last would let a stale ELIGIBLE authorise an
+# enqueue the current state refuses.
+LAST_REPO="$(new_repo last-record-wins status)"
+expect last-record-first-assess 0 "$LAST_REPO" --assess 42
+GH_QUEUE_ENTRY='{"state":"QUEUED"}' expect last-record-second-assess 1 "$LAST_REPO" --assess 42
+assert_eq last-record-kept-both \
+	"$(grep -c '^verdict ' "$LAST_REPO/state/42.verdict")" 2
+expect last-record-confirm-refuses 1 "$LAST_REPO" --confirm 42
+assert_output last-record-confirm-refuses "was 'WAKE'"
+
+# The point of the whole record (Q810): once the branch heals, the conflict is
+# unreconstructable from the refs — but the two OIDs the assessment recorded
+# still re-derive it. Without this the eviction's cause dies with the rebase,
+# and a dispatcher's later read cannot be reconciled with the worker's.
+HEAL_REPO="$(new_repo heal-erases-conflict status)"
+expect heal-assess 0 "$HEAL_REPO" --assess 42
+assert_output heal-assess 'measured: git merge-tree --write-tree'
+heal_base_oid="$(field "$HEAL_REPO" base_oid)"
+heal_head_oid="$(field "$HEAL_REPO" head_oid)"
+assert_eq heal-records-conflict "$(field "$HEAL_REPO" conflict)" docs/STATUS.md
+
+(
+	cd "$HEAL_REPO"
+	printf 'row one reconciled by the rebase\n' >docs/STATUS.md
+	git add docs/STATUS.md
+	git commit -qm heal
+	git rebase -q origin/main >/dev/null 2>&1 || {
+		printf 'row one reconciled by the rebase\n' >docs/STATUS.md
+		git add docs/STATUS.md
+		GIT_EDITOR=true git rebase --continue >/dev/null 2>&1
+	}
+)
+
+post_heal="$(cd "$HEAL_REPO" && git merge-tree --write-tree origin/main HEAD | grep -c '^CONFLICT' || true)"
+assert_eq heal-hides-conflict "$post_heal" 0
+
+# merge-tree exits 1 on a conflict, which is the expected answer here, so the
+# pipeline's status is not the assertion — its output is.
+replayed="$(cd "$HEAL_REPO" &&
+	git merge-tree --write-tree "$heal_base_oid" "$heal_head_oid" |
+	awk '/^CONFLICT/ && match($0, / in .+$/) { print substr($0, RSTART + 4) }')" || true
+assert_eq heal-replay-reconstructs "$replayed" docs/STATUS.md
 
 # A probe that cannot run must not read as "found no conflicts". Pointing the
 # base at a ref that does not resolve is the cheapest way to break it, and the
