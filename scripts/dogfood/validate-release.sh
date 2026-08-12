@@ -22,6 +22,12 @@
 #     vars.GAG_E2E_RUNNER is never touched: the repo-wide flip used to catch
 #     other sessions' PRs and merges mid-window, and a caught job wedged main
 #     CI when teardown deleted the AGC under it (2026-07-31 incident).
+#   * The two legs compete for one project-wide CPU quota, so the e2e pool's
+#     ceiling is reserved out of the live budget before CI is routed and the
+#     `workers` ceiling is capped to what is left (Q631). Without it the deploy
+#     leg's CI traffic can hold the budget the e2e leg then cannot get, which
+#     the autoscaler reports as an unnamed FailedScaleUp — two v1.3.0-rc.5 runs
+#     died that way. Teardown puts the ceiling back.
 #
 # Idempotent: every underlying script is idempotent (guarded creates,
 # apply/upsert, --ignore-not-found), so a re-run after a partial failure is
@@ -93,6 +99,10 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 source "${REPO_ROOT}/scripts/dogfood/lib/progress.sh"
 # shellcheck source=scripts/dogfood/lib/lease.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/lease.sh"
+# shellcheck source=scripts/dogfood/lib/pool.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/pool.sh"
+# shellcheck source=scripts/dogfood/lib/quota.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/quota.sh"
 
 SCRIPT_DIR="${REPO_ROOT}/scripts/dogfood"
 APP_ID_DEFAULT="3752347"
@@ -145,6 +155,22 @@ E2E_RESOLVED_RUN_ID=""
 # sets it BEFORE any billable work; crd_smoke only consumes it.
 COSIGN_BIN=""
 
+# The three node pools that draw on the project's global CPU budget. workers-od
+# is deliberately absent: it is manually sized and at 0 between benchmark
+# campaigns, so whatever it is holding is already in the quota's `used` reading
+# rather than in a ceiling this gate can predict.
+SYSTEM_POOL="default-pool"
+WORKERS_POOL="workers"
+E2E_POOL="e2e"
+
+# WORKERS_MAX_CAP is the `workers` autoscale ceiling this run may use, derived
+# by quota_preflight. WORKERS_MAX_RESTORE holds "MIN MAX" of the pool's own
+# configured autoscaling, set only when reserve_cpu_budget actually lowered the
+# ceiling — teardown restores it, and an empty value means there is nothing to
+# undo.
+WORKERS_MAX_CAP=""
+WORKERS_MAX_RESTORE=""
+
 # Poll interval for the in-flight waits (run settle + rerun transition).
 E2E_POLL_INTERVAL=15
 
@@ -182,10 +208,137 @@ resolve_installation_id() {
 # cluster before setup.sh (the e2e window sizing lives in e2e-start.sh).
 scale_system_pool() {
 	local nodes="$1"
-	echo "Scaling system pool (default-pool) to ${nodes} node(s)..."
+	echo "Scaling system pool (${SYSTEM_POOL}) to ${nodes} node(s)..."
 	gcloud container clusters resize "${CLUSTER}" \
 		--project="${PROJECT}" \
-		--node-pool=default-pool --num-nodes="${nodes}" --zone="${ZONE}" --quiet
+		--node-pool="${SYSTEM_POOL}" --num-nodes="${nodes}" --zone="${ZONE}" --quiet
+}
+
+# quota_preflight — reserve the e2e and system pools' CPU ceilings out of the
+# project's global budget and derive what is left for `workers`, into
+# WORKERS_MAX_CAP. Runs BEFORE anything billable, like preflight_cosign.
+#
+# The gate is its own competitor (Q631): deploy_leg routes CI to GAG, whose
+# `workers` pool autoscales out of the same CPUS_ALL_REGIONS budget e2e_leg then
+# needs 16 vCPU from. When the budget cannot cover both, the e2e pool is the leg
+# that loses — the autoscaler reports FailedScaleUp, names no quota, and the
+# gate dies ~25 minutes in with a full cluster cycle already paid for. Two
+# v1.3.0-rc.5 runs went that way.
+#
+# Reading the budget live rather than assuming today's 64 is the point of the
+# check: the limit has already moved once, and the ceilings on the other side of
+# the arithmetic move whenever a pool is resized or a tenant is added.
+quota_preflight() {
+	# Pinned fail-closed for required_system_nodes below, which reads the
+	# deployed tenant AGCs off the active context.
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+
+	echo "Reserving the e2e pool's CPU budget before CI can compete for it..."
+	local budget limit used
+	budget="$(global_cpu_budget)" || {
+		echo "error: could not read ${GLOBAL_CPU_QUOTA_METRIC} for ${PROJECT}." >&2
+		echo "  The gate will not run blind on it: this is the quota that starves the e2e" >&2
+		echo "  leg, and it is refused by the autoscaler as an unnamed FailedScaleUp." >&2
+		return 1
+	}
+	read -r limit used <<<"${budget}"
+
+	local sys_type sys_vcpu sys_nodes e2e_type e2e_vcpu e2e_max workers_type workers_vcpu
+	sys_type="$(pool_machine_type "${SYSTEM_POOL}")"
+	sys_vcpu="$(machine_type_vcpu "${sys_type}")"
+	sys_nodes="$(required_system_nodes)"
+	e2e_type="$(pool_machine_type "${E2E_POOL}")"
+	e2e_vcpu="$(machine_type_vcpu "${e2e_type}")"
+	local e2e_autoscaling e2e_min
+	e2e_autoscaling="$(pool_autoscaling "${E2E_POOL}")"
+	read -r e2e_min e2e_max <<<"${e2e_autoscaling}"
+	if [[ -z "${e2e_max}" ]]; then
+		echo "error: node pool ${E2E_POOL} reports no autoscale ceiling (min '${e2e_min}')." >&2
+		echo "  Its ceiling is what this gate reserves, so there is nothing to reserve and" >&2
+		echo "  the e2e leg would compete with CI for the budget unguarded." >&2
+		return 1
+	fi
+	workers_type="$(pool_machine_type "${WORKERS_POOL}")"
+	workers_vcpu="$(machine_type_vcpu "${workers_type}")"
+
+	local sys_reserve=$((sys_nodes * sys_vcpu)) e2e_reserve=$((e2e_max * e2e_vcpu))
+	local cap
+	cap="$(reserved_pool_max "${limit}" "${used}" "$((sys_reserve + e2e_reserve))" "${workers_vcpu}")"
+
+	echo "  ${GLOBAL_CPU_QUOTA_METRIC}: ${limit} vCPU, ${used} already in use"
+	echo "  reserved: ${SYSTEM_POOL} ${sys_nodes}x${sys_type} = ${sys_reserve} vCPU," \
+		"${E2E_POOL} ${e2e_max}x${e2e_type} = ${e2e_reserve} vCPU"
+	echo "  leaves ${WORKERS_POOL} ${cap} node(s) of ${workers_type}"
+
+	if ((cap < 1)); then
+		echo "error: ${GLOBAL_CPU_QUOTA_METRIC} (${limit} vCPU, ${used} in use) does not cover the" >&2
+		echo "  system pool and the e2e pool, so CI would have no worker capacity at all and" >&2
+		echo "  the e2e leg would still be at risk." >&2
+		echo "  Free capacity before raising the limit — a bigger number moves the collision" >&2
+		echo "  rather than removing it. Usually something is still up:" >&2
+		echo "    scripts/dogfood/ops.sh at-rest" >&2
+		echo "    scripts/dogfood/ops.sh pool-scale workers-od 0" >&2
+		return 1
+	fi
+	WORKERS_MAX_CAP="${cap}"
+}
+
+# reserve_cpu_budget — hold the `workers` autoscale ceiling down to what
+# quota_preflight left it, and record what to put back. Called after setup.sh
+# (which creates the pool at its full ceiling) and BEFORE start.sh routes CI:
+# once CI is routed the autoscaler grows the pool within seconds, and lowering
+# the ceiling under running nodes drains live jobs instead of preventing them.
+#
+# A no-op in the ordinary case, which is the intended shape. At today's 64-vCPU
+# budget the reservation leaves room for more `workers` nodes than the pool is
+# configured to run, so nothing is touched; the cap binds only when the budget
+# has shrunk relative to the cluster, which is exactly when the gate used to
+# starve itself.
+reserve_cpu_budget() {
+	# quota_preflight always runs first in main(); this is the guard against a
+	# future caller reordering them, since an empty cap would resize the pool to
+	# nothing rather than skip the cap.
+	[[ -n "${WORKERS_MAX_CAP}" ]] || {
+		echo "error: no CPU reservation was derived — quota_preflight must run first." >&2
+		return 1
+	}
+
+	local autoscaling min configured
+	autoscaling="$(pool_autoscaling "${WORKERS_POOL}")"
+	read -r min configured <<<"${autoscaling}"
+	if [[ -z "${configured}" ]]; then
+		echo "  ${WORKERS_POOL} is not autoscaled — no ceiling to cap."
+		return 0
+	fi
+	if ((WORKERS_MAX_CAP >= configured)); then
+		echo "  ${WORKERS_POOL} max ${configured} already fits the reservation — leaving it alone."
+		return 0
+	fi
+
+	echo "Capping ${WORKERS_POOL} at ${WORKERS_MAX_CAP} node(s) for this run (configured max ${configured})..."
+	echo "  CI queues behind the cap instead of starving the e2e leg out of the budget."
+	set_pool_autoscale_max "${WORKERS_POOL}" "${min}" "${WORKERS_MAX_CAP}"
+	WORKERS_MAX_RESTORE="${min} ${configured}"
+}
+
+# restore_cpu_budget — put the `workers` ceiling back. Runs in teardown AFTER
+# the stop scripts: restoring it first would let the autoscaler grow the pool
+# again in the middle of their drain. Best-effort, because a ceiling left low
+# throttles CI throughput while a skipped lease release strands billable nodes,
+# and teardown must always reach the release.
+restore_cpu_budget() {
+	[[ -n "${WORKERS_MAX_RESTORE}" ]] || return 0
+	local min max
+	read -r min max <<<"${WORKERS_MAX_RESTORE}"
+	echo "Restoring ${WORKERS_POOL} autoscale max to ${max}..."
+	if ! set_pool_autoscale_max "${WORKERS_POOL}" "${min}" "${max}"; then
+		echo "warning: ${WORKERS_POOL} is still capped at ${WORKERS_MAX_CAP} nodes, which throttles CI." >&2
+		echo "  Put it back with:" >&2
+		echo "    gcloud container clusters update ${CLUSTER} --project=${PROJECT} --zone=${ZONE} \\" >&2
+		echo "      --node-pool=${WORKERS_POOL} --enable-autoscaling --min-nodes=${min} --max-nodes=${max}" >&2
+		return 0
+	fi
+	WORKERS_MAX_RESTORE=""
 }
 
 # deploy_leg — bring the system pool up, deploy the RC + tenant, route CI to GAG.
@@ -201,6 +354,10 @@ deploy_leg() {
 
 	echo "Deploying RC ${GAG_IMAGE_TAG} to dogfood (setup.sh)..."
 	bash "${SCRIPT_DIR}/setup.sh"
+
+	# Between setup and routing: setup.sh creates `workers` at its full ceiling,
+	# and start.sh below is what lets CI start consuming it.
+	reserve_cpu_budget
 
 	echo "Routing CI to GAG + completing GMC/AGC rollout (start.sh)..."
 	bash "${SCRIPT_DIR}/start.sh"
@@ -573,6 +730,7 @@ teardown() {
 	echo "=== Teardown (self-cleaning; runs on success and failure) ==="
 	bash "${SCRIPT_DIR}/e2e-stop.sh" || echo "e2e-stop failed — continuing teardown" >&2
 	bash "${SCRIPT_DIR}/stop.sh" || echo "stop failed — continuing teardown" >&2
+	restore_cpu_budget || echo "restoring the workers ceiling failed — continuing teardown" >&2
 	[[ -n "${WORKDIR}" ]] && rm -rf "${WORKDIR}"
 	# Release LAST, after the scripts that take the cluster down: the lease is
 	# the claim that this run still owns billable state, so dropping it earlier
@@ -716,6 +874,10 @@ main() {
 	# leak instead of ending it. Also the point where a second concurrent gate
 	# is refused, cheaply and before the wait below.
 	reclaim_orphaned_gate
+
+	# After the reclaim, because that is what releases an orphaned run's nodes
+	# and so decides how much of the CPU budget is already spoken for.
+	quota_preflight
 
 	# Settle the e2e lane BEFORE the trap arms and before anything billable: a
 	# collision with an in-flight run must not cost a cluster cycle.

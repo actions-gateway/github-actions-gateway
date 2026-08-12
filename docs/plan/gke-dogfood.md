@@ -824,16 +824,26 @@ The constraint is a **global, project-wide** CPU limit that defaults to **32**, 
 
 | Pool | Machine | Max nodes | vCPU |
 |---|---|---|---|
-| `default-pool` | `e2-standard-2` | 2 | 4 |
+| `default-pool` | `e2-standard-2` | 2 (derived, manual) | 4 |
 | `workers` | `e2-standard-4` | 8 (autoscale max) | 32 |
 | `e2e` | `n2-standard-8` | 2 (autoscale max) | 16 |
+| `workers-od` | `e2-standard-4` | 0 at rest (manual) | 0 |
 | | | | **52 worst case** |
 
 With `workers` at 7 nodes the project sits at 4 + 28 = 32/32, and the e2e pool's scale-up is refused for want of 8. **The gate can therefore starve itself**: its deploy phase routes CI to GAG, scaling `workers` out of the same global budget the e2e leg then needs.
 Raised to **64** on 2026-08-03 (approved immediately), covering the 52 ceiling plus headroom for spot replacement and GKE surge.
+Re-measured 2026-08-12: still 64, and the pool shapes above are unchanged.
+
+**Two of those four ceilings move without anyone editing this table**, which is why the fit is not a fact to record once. `default-pool` is derived per run from the deployed always-on tenants ([lib/pool.sh](../../scripts/dogfood/lib/pool.sh)), so a third tenant adds 2 vCPU; `workers-od` is sized by hand for a benchmark campaign and only *usually* returned to 0, so four nodes left up is 16 vCPU that puts the ceiling at 68 against a 64 limit.
+
+**So the competition is capped rather than out-run** (Q631).
+Raising the limit again moves the collision instead of removing it: any new ceiling is one benchmark pool or one tenant away from being reached. `validate-release.sh` therefore takes the e2e and system pools' ceilings off the *live* budget before it routes CI, and holds `workers` to what is left.
+The arithmetic is in [lib/quota.sh](../../scripts/dogfood/lib/quota.sh), the operator-facing behaviour in [release.md](../operations/release.md#the-gate-reserves-the-e2e-pools-cpu-budget).
+At today's 64 the reservation leaves room for 11 `workers` nodes against a configured 8, so it changes nothing; at the old 32 it would have held `workers` at 3 and the e2e pool would have got its 16 vCPU.
 
 **Read the API's error, not the autoscaler's event.** `FailedScaleUp` never names the quota. `gcloud container clusters resize` returns a 429 whose body does: `resource "CPUS_ALL_REGIONS": request requires '8.0' and is short '8.0'`.
 Chasing the family quotas instead cost this release two runs and three wrong diagnoses.
+Regional `CPUS` and `N2_CPUS` are both 200 on this project (measured 2026-08-12), so neither can be the refusal.
 
 **Why N2 and not C2.** Separate from the above: the regional `C2_CPUS` default is 8, one node of this shape, and a request to raise it was **denied** on 2026-07-31 — while an identical 8→16 ask for `IN_USE_ADDRESSES` was approved 33 minutes earlier, so the size of the ask was not the discriminator. `N2_CPUS` defaults to 200 and n2 is this pool's original family, so it is already proven here.
 Note this alone would not have fixed anything; the global limit was the real blocker.
