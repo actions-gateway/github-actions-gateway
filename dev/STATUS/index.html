@@ -3048,20 +3048,12 @@
 <td>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a compaction. Candidate seam: foreground-guard <code>hint</code>, unverified.</td>
 </tr>
 <tr>
-<td><a id="Q805"></a>Q805</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>pr-requeue-eligible.sh</code> reports a failed probe as a verdict</a></td>
-<td><code>bug</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-11 under a transient TLS failure: an empty <code>gh pr view</code> read printed <code>the PR is , not OPEN</code>; <code>in_queue</code> then claimed an entry it lacked. <code>conflicting_paths</code> refuses to guess; these do not. Fails closed. Pairs with <a href="#Q694">Q694</a>.</td>
-</tr>
-<tr>
 <td><a id="Q694"></a>Q694</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible-test.sh"><code>pr-requeue-eligible</code>'s timeline and GraphQL reads are untested behind the <code>gh</code> stub</a></td>
 <td><code>tests</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>The checker gates an unattended merge, but the stub returns post-<code>--jq</code> text, so a malformed <code>--jq</code> in <code>human_enqueued</code> or <code>in_queue</code> fails as a live crash, not a red suite. Only <code>gh pr view</code>'s read has run against a real PR.</td>
+<td>The checker gates an unattended merge, but the stub returns post-<code>--jq</code> text, so a malformed <code>--jq</code> in <code>human_enqueued</code> or <code>in_queue</code> fails as a live crash, not a red suite. All three reads ran live in Q805; the suite still cannot see them.</td>
 </tr>
 <tr>
 <td><a id="Q816"></a>Q816</td>

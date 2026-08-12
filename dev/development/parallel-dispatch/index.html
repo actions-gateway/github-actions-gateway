@@ -3113,6 +3113,7 @@ It is cheap and makes the run auditable and resumable.</p>
   The queue evicts a PR when something merges ahead of it and dirties the branch, and that eviction is mechanical — it says nothing about whether the change should land, because the maintainer already answered that by enqueueing.
   A worker may rebase and re-enqueue <strong>only</strong> when <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>scripts/agent/pr-requeue-eligible.sh</code></a> says so, which requires a prior human enqueue, an open non-draft PR, no current queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned files.
   A conflict anywhere else changes what was reviewed, so it wakes the maintainer instead.
+  A read the checker could not take is a third answer, not a refusal: it exits 2 naming what it could not measure, because a <code>gh</code> failure otherwise reads as a measured "not OPEN", "not queued", or "nobody enqueued it", and that reason is what a later reader has instead of the eviction.
   A <strong>first</strong> enqueue is still never an agent's to make.</li>
 <li><strong>What the dispatcher owes at handoff</strong>, so the review is cheap rather than a re-derivation: which heavy gates ran and on which head SHA, what the scope review found, and the mergeability state as of <em>now</em>.</li>
 </ul>
