@@ -3011,6 +3011,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-probe-is-not-the-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The probe is not the gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#check-for-a-committed-capture-before-booking-a-live-measurement" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4781,6 +4792,27 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
 </ul>
 <p>The failure mode these share is reporting a conclusion from a signal that does not carry it.
 The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.</p>
+<h3 id="the-probe-is-not-the-gate">The probe is not the gate<a class="headerlink" href="#the-probe-is-not-the-gate" title="Permanent link">&para;</a></h3>
+<p>The rules above are about reading a signal correctly.
+This one is about reading the right instrument.
+A hand-rolled probe standing in for a gate answers a slightly different question, and its answer looks exactly like the gate's.</p>
+<p>Five instances measured across 2026-08-11 and 2026-08-12, in one session:</p>
+<ul>
+<li><strong>A hand-rolled count is not the gate's count.</strong> <code>grep -o '—' file | wc -l</code> returned 81 where <code>make em-dash-check</code> reported 69, because the gate counts prose and excludes code spans, headings and link text.
+  The raw number happened to be higher; had it come in under the ceiling, a clean result would have been read off an instrument measuring something else.</li>
+<li><strong>A bare linter is not the gated linter.</strong> <code>shellcheck &lt;files&gt;</code> reported 16 findings that <code>make shellcheck</code> does not, because the gate passes <code>-x</code> so a sourced file is followed.
+  Acting on them would have "fixed" seven correctly-used variables in each of two scripts.</li>
+<li><strong>A top-level run is not the run the suite gets.</strong> A suite that reads a value off <code>make</code>'s stdout passed locally and failed on CI: under <code>make scripts-test</code> it runs as a sub-make, where GNU make writes <code>Entering directory ...</code> to stdout and those words land in the value.
+  Reproduce it with <code>make -w</code>, suppress it with <code>--no-print-directory</code>.</li>
+<li><strong>A cached test result is not a test run, and the cache cannot see what the change touched.</strong> Go keys its test cache on package inputs.
+  A file the package <em>reads</em> but does not import, <code>.gitattributes</code> here, is not one of them, so no edit to it can invalidate the entry: <code>make check</code> reported <code>ok ... (cached)</code> for the one package the change broke, and only a cold CI run caught it.
+  When a change alters a file a test reads rather than compiles, re-run that package with <code>-count=1</code> before believing the gate.</li>
+<li><strong>An anchored search for a check name is not the check list.</strong> <code>gh pr checks</code> filtered on <code>^integration</code> and <code>^e2e</code> reported those gates absent when they were present as <code>integration-test</code> and <code>e2e / e2e</code>.
+  Concluding they had been skipped would have forced a needless close-and-reopen of the PR.</li>
+</ul>
+<p>The shape they share: the probe exits 0 with a plausible value, and nothing in the result announces that it answered a different question.
+When a probe's answer is about to decide something, run the gate itself.
+When the gate is too slow for the loop, keep the probe but give it a case whose answer you already know, and disbelieve it when the two disagree.</p>
 <h3 id="check-for-a-committed-capture-before-booking-a-live-measurement">Check for a committed capture before booking a live measurement<a class="headerlink" href="#check-for-a-committed-capture-before-booking-a-live-measurement" title="Permanent link">&para;</a></h3>
 <p>"Measure it" does not always mean "run it".
 Before scheduling a Tier C run, a dogfood dispatch, or anything else that costs a credential and a wall-clock hour, check whether the repo already holds a <strong>recorded observation</strong> of the same interface. <code>cmd/probe</code> exists to capture exactly that, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/testdata/README.md"><code>testdata/README.md</code></a> documents what each capture contains.</p>
