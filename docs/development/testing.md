@@ -711,6 +711,9 @@ It fails when:
   This is what keeps `make list-gates` complete: a gate wired straight into the recipe would run on every `make check` without ever being listed;
 - a target is declared `.PHONY` twice — the bulk block that used to restate 53 target names at the top of the `Makefile`, and that every gate-adding branch conflicted on, cannot come back;
 - `STATUS_GATES` stops being a subset of `CHECK_FAST_GATES`, so `make status-gates` — the seconds-long verify for a `docs/STATUS.md`-only edit — stays a strict subset of the full gate rather than a second opinion;
+- a fast gate *outside* `STATUS_GATES` selects `docs/STATUS.md`, which is the direction that had no enforcement: `em-dash-check` and `page-density-check` both scanned the file for as long as they had existed, while the comment above the variable called the list complete (Q749).
+  Membership is derived from the pathspec each gate's script hands git, the same question the gate itself asks.
+  A gate whose recipe runs no `scripts/` file has no derivable file set and declares instead, with a `# status-scope: none` comment and its reason directly above its `.PHONY`, as `md-reflow-check` does;
 - `SCRIPTS_TESTS` and the `scripts/**/*-test.sh` files on disk name different sets.
   A suite written but never listed is the failure worth catching: `make scripts-test` reports green having never run it, so the assertions it carries are disarmed while looking armed.
   The reverse, a listed suite with no file, fails the fan-out on a missing path.

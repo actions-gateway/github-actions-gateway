@@ -153,19 +153,25 @@ gate-lists-check: ## Fail when `make check`'s gate and suite lists disagree with
 #   plan-index-check      the last Queue row citing a plan went away, so archival is owed
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
 #   doc-links             a #QN anchor or plan link broke while rows moved
+#   em-dash-check         a Notes cell pushed the file over its baseline ceiling
+#   page-density-check    an admonition run in the prose above the tables
 # status-isolation-check reads the branch's commits rather than its diff, which
 # is why it belongs here rather than only in CI: the fast path exists for the
 # hurried resolve-and-push, which is exactly when an --amend lands on the wrong
 # HEAD (Q652). It is git-only and costs milliseconds.
 # Every entry is also in CHECK_FAST_GATES, so this is a strict subset of `make
-# check` and never a second opinion — `gate-lists-check` enforces the subset. It
-# lives as a variable, and the docs point at the target rather than transcribing
-# the list, because a hand-copied list is what drifted before:
-# docs/development/maintaining-backlog.md named three of these five and called
-# that the complete set, so a `docs/STATUS.md` change that parked a row shipped
-# a PR red on roadmap-check.
+# check` and never a second opinion. Completeness is the half that had no
+# enforcement: em-dash-check scans `*.md` and page-density-check `docs/*.md`, both
+# had been missing since they were written, and this comment called the list
+# complete anyway (Q749). `gate-lists-check` now derives the answer from the
+# pathspec each gate's script hands git, so a new docs-wide gate cannot omit
+# itself. The list lives as a variable, and the docs point at the target rather
+# than transcribing it, because a hand-copied list is what drifted first:
+# docs/development/maintaining-backlog.md named three of them and called that the
+# complete set, so a `docs/STATUS.md` change that parked a row shipped a PR red
+# on roadmap-check.
 STATUS_GATES := lint-backlog status-isolation-check roadmap-check plan-index-check \
-                 conflict-markers-check doc-links
+                 conflict-markers-check doc-links em-dash-check page-density-check
 
 .PHONY: status-gates
 status-gates: ## Every gate a docs/STATUS.md-only change can fail — the seconds-long verify for a backlog edit
@@ -1122,6 +1128,11 @@ ginkgo: $(GINKGO) ## Build ginkgo into .build/
 md-reflow: $(MDREFLOW) ## Reflow tracked Markdown prose to one sentence per line
 	$(MDREFLOW) .
 
+# status-scope: none — .mdreflow.yaml excludes docs/STATUS.md (table-shaped, and
+# reflow would fight its merge driver), so a backlog edit cannot fail this gate
+# and STATUS_GATES leaves it out. The declaration is what gate-lists-check reads:
+# this recipe runs a Go tool rather than a scripts/ file, so its file set is not
+# derivable from a git pathspec.
 .PHONY: md-reflow-check
 md-reflow-check: $(MDREFLOW) ## Report Markdown that is not sentence-per-line; writes nothing
 	$(MDREFLOW) --check .

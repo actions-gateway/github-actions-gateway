@@ -5,7 +5,9 @@
 # injects one defect into a healthy fixture and requires a failure: a gate that
 # runs without a .PHONY or a `##` line, a heavy phase in the recipe that is not in
 # CHECK_HEAVY_GATES, a gate hand-wired into the fan-out line, a target declared
-# .PHONY twice, a STATUS_GATES member outside CHECK_FAST_GATES, a doc that
+# .PHONY twice, a STATUS_GATES member outside CHECK_FAST_GATES, a fast gate that
+# scans docs/STATUS.md while STATUS_GATES omits it, a gate whose file set is
+# neither derivable nor declared, a doc that
 # stopped pointing at the list targets, and a scripts/ suite on disk that
 # SCRIPTS_TESTS omits — the one whose symptom is a green `make scripts-test` that
 # never ran it. Reading the Makefile predicts these; only running the checker
@@ -35,19 +37,37 @@ mkdir -p "$SCRIPTS/one" "$SCRIPTS/go"
 touch "$SCRIPTS/one/first-test.sh" "$SCRIPTS/one/second-test.sh" "$SCRIPTS/go/go-test.sh"
 SUITES='one/first-test one/second-test'
 
+# The gate scripts the STATUS_GATES-completeness rule reads. Their pathspecs are
+# resolved against the real repo, which is the point: `docs/*.md` selects
+# docs/STATUS.md there, so the wide gate below is scoped the way em-dash-check
+# and page-density-check are.
+printf "git_candidates '*.go' | select_present_files\n" >"$SCRIPTS/one/alpha.sh"
+printf "git_candidates '*.go' ':!:vendor/*' | select_present_files\n" >"$SCRIPTS/one/beta.sh"
+printf "git_candidates 'docs/*.md' | select_present_files\n" >"$SCRIPTS/one/wide.sh"
+
 fails=0
 
-# write_makefile PATH [EXTRA_LINE] [FANOUT_SUFFIX] — a fixture with two fast
-# gates and two heavy ones declared, whose `check:` recipe fans out over
-# CHECK_FAST_GATES and then runs heavy-one only. Recipe lines need real tabs, so
-# they are emitted rather than written inline.
+# write_makefile PATH [EXTRA_LINE] [FANOUT_SUFFIX] [BETA_RECIPE] [BETA_MARKER] —
+# a fixture with two fast gates and two heavy ones declared, whose `check:` recipe
+# fans out over CHECK_FAST_GATES and then runs heavy-one only. Recipe lines need
+# real tabs, so they are emitted rather than written inline. beta's recipe and the
+# comment above its .PHONY are the two inputs the STATUS_GATES-completeness rule
+# reads: which files it selects, and whether it declares itself out of scope.
 # shellcheck disable=SC2016 # the recipe body is make source text, not shell expansions
 write_makefile() {
 	local path="$1" extra="${2-}" fanout_suffix="${3-}" target
+	local beta_recipe="${4-scripts/one/beta.sh}" beta_marker="${5-}"
 	{
 		for target in alpha beta heavy-one heavy-two; do
+			if [[ "$target" == beta && -n "$beta_marker" ]]; then
+				printf '%s\n' "$beta_marker"
+			fi
 			printf '.PHONY: %s\n%s: ## %s does a thing\n' "$target" "$target" "$target"
-			printf '\ttrue\n\n'
+			case "$target" in
+			alpha) printf '\tscripts/one/alpha.sh\n\n' ;;
+			beta) printf '\t%s\n\n' "$beta_recipe" ;;
+			*) printf '\ttrue\n\n' ;;
+			esac
 		done
 		printf '%s\n' "$extra"
 		printf 'CHECK_FAST_GATES := alpha beta\n'
@@ -90,6 +110,10 @@ write_makefile "$MK"
 # shellcheck disable=SC2016 # the suffix is make source text appended to the fan-out line
 write_makefile "$FIXTURE_DIR/Makefile.wired" '' ' "gamma:$(MAKE) gamma"'
 write_makefile "$FIXTURE_DIR/Makefile.dupe" '.PHONY: alpha beta'
+write_makefile "$FIXTURE_DIR/Makefile.wide" '' '' 'scripts/one/wide.sh'
+write_makefile "$FIXTURE_DIR/Makefile.opaque" '' '' 'true'
+write_makefile "$FIXTURE_DIR/Makefile.marked" '' '' 'true' \
+	'# status-scope: none - beta reads no Markdown'
 
 # expect_check NAME WANT_RC ARGS... — a --check run over the healthy fixture,
 # with ARGS appended. The parser takes the last occurrence of an option, so a
@@ -129,6 +153,25 @@ assert_output duplicate-phony 'more than once'
 expect_check status-gates-not-subset 1 --fast 'alpha beta' --heavy 'heavy-one' \
 	--status 'alpha heavy-one'
 assert_output status-gates-not-subset 'heavy-one'
+
+# And the direction rule 4 cannot see: a fast gate that scans docs/STATUS.md
+# while STATUS_GATES omits it. This is Q749's defect — em-dash-check and
+# page-density-check both selected the file from the day each was written — so
+# the fixture gate is scoped the same way, through a `docs/*.md` pathspec.
+expect_check status-gates-incomplete 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--status 'alpha' --makefile "$FIXTURE_DIR/Makefile.wide"
+assert_output status-gates-incomplete 'docs/STATUS.md'
+assert_output status-gates-incomplete beta
+expect_check status-gates-complete 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--status 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.wide"
+
+# A gate running no scripts/ file has no pathspec to derive from, so it must say
+# which side it is on rather than being assumed out of scope.
+expect_check status-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--status 'alpha' --makefile "$FIXTURE_DIR/Makefile.opaque"
+assert_output status-scope-underivable 'status-scope'
+expect_check status-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--status 'alpha' --makefile "$FIXTURE_DIR/Makefile.marked"
 
 # The doc has to keep naming both targets rather than re-transcribing the lists.
 expect_check doc-lost-pointer 1 --fast 'alpha beta' --heavy 'heavy-one' --doc "$STALE_DOC"

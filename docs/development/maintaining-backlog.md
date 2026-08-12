@@ -257,12 +257,12 @@ Shrinking the verify step from ~6 minutes to a few seconds is what breaks the lo
 4. Commit and push **immediately**.
    Do not wait on `make check`.
 
-`make check` adds nothing here: its remaining targets (unit tests, coverage, `golangci-lint`, `shellcheck`, chart drift, Go version) read no Markdown, and CI runs the full gate on the pushed branch regardless. `status-gates` is the complete set a `STATUS.md`-only diff can fail — `lint-backlog` for the format rules, `roadmap-check` for a row that changed table or vanished while a [roadmap](../roadmap.md) bullet still names it, `plan-index-check` for a plan whose last citing row went away, `conflict-markers-check` for a marker that survived the resolution, and `doc-links` for a link or anchor broken while rows moved.
-Every one is also in `make check`, so this is a strict subset and never a second opinion.
+`make check` adds nothing here: no gate it runs beyond these reads `docs/STATUS.md`, and CI runs the full gate on the pushed branch regardless. `status-gates` is the complete set a `STATUS.md`-only diff can fail, and every member is also in `make check`, so this is a strict subset and never a second opinion.
 
 **Run the target, don't transcribe its contents.** This list used to be spelled out here as three `make` targets, and it was wrong: `roadmap-check` and `plan-index-check` both read Queue membership and both can fail on a `STATUS.md`-only diff.
 A grooming pass that parked a row followed the three-target list, went green locally, and opened a PR red on `roadmap-check`.
-The set now lives in the `STATUS_GATES` variable in the [`Makefile`](../../Makefile), so there is one copy to keep true.
+The set now lives in the `STATUS_GATES` variable in the [`Makefile`](../../Makefile), whose comment names each member and what it catches, so there is one copy to keep true.
+Transcribing is not the only way it drifts: `em-dash-check` and `page-density-check` both scan the file and were both missing from the variable while its comment called the list complete (Q749), so `make gate-lists-check` now derives membership from the pathspec each gate hands git and fails when a fast gate that scans `docs/STATUS.md` is left out.
 
 **When it does not apply:** if the conflict touches *any* other file — code, a plan doc, another page under `docs/` — this is a normal conflict.
 Resolve it and run the full `make check` (plus whatever heavier tier the change warrants) before pushing.

@@ -38,6 +38,14 @@
 #      set, modulo NON_SUITE_TESTS below. A suite on disk but not in the variable
 #      never runs — a disarmed gate that reports green — and one in the variable
 #      but not on disk fails the fan-out on a missing file.
+#   7. STATUS_GATES is complete, not only a subset: no fast gate outside it
+#      selects docs/STATUS.md. Rule 4 alone let em-dash-check and
+#      page-density-check scan the file from the day each was written while the
+#      list called itself complete, so `make status-gates` reported a green
+#      `make check` would not (Q749). The derivation is the pathspec git is
+#      handed, the same question the gate itself asks. A gate that runs no
+#      scripts/ file has no derivable file set and declares instead, with a
+#      `# status-scope: none` comment directly above its .PHONY.
 #
 # Usage:
 #   gate-list.sh --list        --fast '<names>' --heavy '<names>'
@@ -57,6 +65,7 @@ cd "$REPO_ROOT"
 MAKEFILE="Makefile"
 DOC="docs/development/testing.md"
 SCRIPTS_DIR="scripts"
+STATUS_FILE="docs/STATUS.md"
 MODE=""
 FAST=""
 HEAVY=""
@@ -194,6 +203,66 @@ disk_suites() {
 	done < <(find "$SCRIPTS_DIR" -type f -name '*-test.sh') | sort
 }
 
+# The scripts/ files a gate's recipe runs, resolved under SCRIPTS_DIR so a
+# fixture tree can stand in for the real one.
+gate_scripts() {
+	joined_makefile | awk -v target="$1" -v dir="$SCRIPTS_DIR" '
+		$0 ~ "^" target ":" { in_rule = 1; next }
+		in_rule && $0 !~ /^\t/ { in_rule = 0 }
+		in_rule {
+			rest = $0
+			while (match(rest, /scripts\/[A-Za-z0-9_.\/-]+\.sh/)) {
+				path = substr(rest, RSTART, RLENGTH)
+				sub(/^scripts/, dir, path)
+				print path
+				rest = substr(rest, RSTART + RLENGTH)
+			}
+		}
+	'
+}
+
+# The pathspecs a script selects files with. Only what it hands git counts: a
+# gate reads the file set git returns, so a path named anywhere else — a message,
+# a comment, a fixture — is not scope. \047 is the single quote.
+selection_pathspecs() {
+	awk '
+		{
+			line = $0
+			sub(/^[ \t]*#.*$/, "", line)
+			if (line !~ /git_candidates|git ls-files/) next
+			if (line ~ /(git_candidates|git ls-files)[ \t]+\.([ \t]|$)/) print "."
+			rest = line
+			while (match(rest, /\047[^\047]*\047/)) {
+				spec = substr(rest, RSTART + 1, RLENGTH - 2)
+				rest = substr(rest, RSTART + RLENGTH)
+				if (spec != "" && substr(spec, 1, 1) != ":") print spec
+			}
+		}
+	' "$1"
+}
+
+# Whether a pathspec selects the backlog file. Command substitution rather than a
+# pipe into `grep -q`: grep exits on the first match, and the SIGPIPE that sends
+# upstream becomes a 141 under pipefail that reads as "not selected".
+selects_status_file() {
+	local listed
+	listed="$(git ls-files -- "$1")" || return 1
+	grep -qx -- "$STATUS_FILE" <<<"$listed"
+}
+
+# Whether the comment block directly above a target's .PHONY declares it out of
+# STATUS.md scope. Adjacency is the point: the reason belongs at the declaration.
+status_scope_none() {
+	joined_makefile | awk -v target="$1" '
+		/^#/ { if ($0 ~ /status-scope:[ \t]*none/) marked = 1; next }
+		/^\.PHONY:/ {
+			for (i = 2; i <= NF; i++) if ($i == target && marked) hit = 1
+		}
+		{ marked = 0 }
+		END { exit(hit ? 0 : 1) }
+	'
+}
+
 if [[ "$MODE" == "list-suites" ]]; then
 	suite_n=$(wc -w <<<"$SUITES" | tr -d ' ')
 	printf 'make scripts-test runs %d scripts/ suites, concurrently.\n' "$suite_n"
@@ -321,6 +390,34 @@ missing="$(comm -23 <(printf '%s\n' "$want_suites") <(printf '%s\n' "$have_suite
 if [[ -n "$missing" ]]; then
 	fail "these SCRIPTS_TESTS entries have no $SCRIPTS_DIR/<name>.sh on disk: $(tr '\n' ' ' <<<"$missing")"
 fi
+
+# 7. The other direction on STATUS_GATES: a fast gate left out of it must be one
+# a $STATUS_FILE-only change cannot fail. Rule 4 could only see the members.
+status_names="$(tr ' ' '\n' <<<"$STATUS" | grep -v '^$' || true)"
+for gate in $FAST; do
+	if grep -qx -- "$gate" <<<"$status_names"; then
+		continue
+	fi
+	scanned=0
+	flagged=0
+	while IFS= read -r script; do
+		[[ -f "$script" ]] || continue
+		scanned=1
+		while IFS= read -r spec; do
+			[[ -n "$spec" ]] || continue
+			((flagged == 0)) || continue
+			if selects_status_file "$spec"; then
+				flagged=1
+				fail "gate '$gate' selects $STATUS_FILE (pathspec '$spec' in $script) but STATUS_GATES omits it, so \`make status-gates\` reports a green \`make check\` would not
+       add it to STATUS_GATES, or narrow the pathspec"
+			fi
+		done < <(selection_pathspecs "$script")
+	done < <(gate_scripts "$gate")
+	if ((scanned == 0)) && ! status_scope_none "$gate"; then
+		fail "gate '$gate' runs no $SCRIPTS_DIR/ file, so whether a $STATUS_FILE-only change can fail it is not derivable
+       add it to STATUS_GATES, or declare \`# status-scope: none\` with the reason directly above its .PHONY"
+	fi
+done
 
 if ((fails > 0)); then
 	printf '\n%d gate-list check(s) failed. The source of truth is CHECK_FAST_GATES +\n' "$fails" >&2
