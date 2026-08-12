@@ -424,24 +424,29 @@ It now appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OI
 
 **On an ordinary `DIRTY` wake it captures nothing, so take the measurement by hand first.** The eligibility checks run before the probe, and the first of them is whether a human has ever enqueued the PR.
 A worker healing its own not-yet-enqueued PR is the common case and fails that check, so `--assess` refuses and records a verdict carrying no OIDs and no conflict set — the measurement the capture exists to preserve, lost on exactly the wake that prompted it (Q814, hit independently by two workers on 2026-08-12).
-Until the ordering changes, run the drivers-off `merge-tree` below yourself **before** rebasing.
+Until the ordering changes, run the driverless-clone `merge-tree` below yourself **before** rebasing.
 It is the same command the checker would have run, and the rebase is the only deadline: afterwards the branch merges clean and there is nothing left to measure.
 
-- **A by-hand `merge-tree` in a driver-installed clone answers a different question than GitHub's merge.** `.gitattributes` is committed, but the `merge.<name>.driver` command it names is per-clone config that `make merge-driver` installs, and GitHub never runs it.
-  So a probe run in a clone that has the drivers reads *resolved*, while the queue sees the raw conflict.
-  Measured 2026-08-12 on two PRs: drivers on, `exit 0`; drivers off, `exit 1` naming `docs/STATUS.md`.
-  Disable every declared driver when you probe by hand, or a survey of "is this really conflicting" reads clean for every instance:
+- **`-c merge.<name>.driver=false` does not emulate a driverless merge, it fabricates conflicts.** The value is a *command line*, so `false` runs `/usr/bin/false`, which exits non-zero, and git records a conflict for every driver-owned path both sides touched without ever attempting the built-in three-way merge. `true` and other no-ops fail the opposite way: they exit 0 having written nothing, so the merge silently keeps *ours* and every probe reads clean.
+  Measured 2026-08-12 against GitHub as the control, on two PRs it reported `CLEAN`: `driver=false` gave `rc=1`, `driver=true` gave `rc=0`, and a bare clone with no driver configured gave `rc=0`, matching GitHub.
+  There is no `-c` form that unsets a driver, so a clone that has run `make merge-driver` cannot answer this question at all.
+
+- **Ask GitHub whether a branch is dirty, and use a driverless clone only for the conflict set.** `gh pr view <n> --json mergeStateStatus` is the server's own verdict rather than a model of it, and it costs one call.
+  When you need the *paths* rather than the verdict, take them where no driver is configured:
 
   ```bash
-  git -c merge.backlog.driver=false -c merge.planindex.driver=false \
-      -c merge.roadmap.driver=false -c merge.scriptindex.driver=false \
-      -c merge.gatelists.driver=false \
-      merge-tree --write-tree <base_oid> <head_oid>
+  git clone --quiet --bare . /tmp/nodrv        # or any clone that never ran make merge-driver
+  git --git-dir=/tmp/nodrv fetch --quiet "$(pwd)" <base_oid> <head_oid>
+  git --git-dir=/tmp/nodrv merge-tree --write-tree <base_oid> <head_oid>
   ```
 
-  Take the names from `.gitattributes`, which is the only place they are declared, and disable **all** of them rather than the ones the conflict seems to involve.
-  Two traps sit here, both measured 2026-08-12 and both silent. **A misspelled driver name fails open**: git ignores the unknown config key, runs the driver anyway, and exits 0, so a probe written against a guessed name (`merge.status` for `docs/STATUS.md`, whose driver is `backlog`) produces byte-identical output to no probe at all. **The driver writes to stderr**, and its advisory line names the file it resolved, so a reader scanning the combined output for a path finds one and reports a conflict list from chatter that says the opposite.
-  Read the stage lines only (`^[0-9]{6} <sha> [123]`); a run with no conflict prints the merged tree OID and nothing else.
+  [`pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) uses the `driver=false` form, and its comment claims to measure "what the merge queue will see".
+  It does not; it measures which driver-owned files both sides touched, a superset.
+  That is conservative for its own `ELIGIBLE` rule, which discounts those paths anyway, so it cannot manufacture a false `ELIGIBLE` — but read as "does this branch need a heal" it is a false positive every time a branch and `main` both touch `docs/STATUS.md`.
+
+  Two further traps made the `-c` form look like it was working, both measured 2026-08-12 and both silent. **A misspelled driver name fails open**: git ignores the unknown config key, runs the real driver anyway, and exits 0, so a probe written against a guessed name (`merge.status` for `docs/STATUS.md`, whose driver is `backlog`) produces byte-identical output to no probe at all.
+  Together with the fabricated conflicts above, that is a probe whose two spellings are wrong in opposite directions and neither of which is ever an error. **The driver writes to stderr**, and its advisory line names the file it resolved, so a reader scanning the combined output for a path finds one and reports a conflict list assembled from chatter that says the opposite.
+  Read the stage lines only (`^[0-9]{6} <sha> [123]`) whichever way you probe; a run with no conflict prints the merged tree OID and nothing else.
 
 - **Driver-owned does not mean auto-resolving.
   It means resolved *by key*.** A keyed merge still conflicts when both sides change the same key, and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) refuses rather than guessing in three enumerated cases: changed differently on both sides, deleted on one side and changed on the other, and the same new ID added on both sides with different text.
