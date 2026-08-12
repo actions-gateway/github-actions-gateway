@@ -30,7 +30,7 @@ Those should be enforced *regardless* of the runtime choice.
 | Container-to-host kernel exploit | Direct kernel surface | Sandboxed user-space kernel (Sentry) | Hardware-virtualized guest kernel |
 | Syscall surface exposed to workload | Full host kernel | ~250 syscalls, intercepted | Full guest kernel (isolated VM) |
 | Cross-pod kernel-level interference | Shared kernel | Per-pod Sentry | Per-pod VM |
-| Pod startup latency overhead | Baseline | + 50–200ms | + 1–3s (VM boot) |
+| Pod startup latency overhead | Baseline | Sentry process start | Guest kernel boot (see [B.2](#b2-operational-cost)) |
 | Compatible workflows | All | Most (some syscalls unimplemented) | All |
 | GPU / device passthrough | Native | Limited | Possible but complex |
 
@@ -42,9 +42,23 @@ Those should be enforced *regardless* of the runtime choice.
 | --- | --- | --- |
 | Node-level installation | runsc binary + containerd plugin | Kata runtime + nested-virt-capable kernel |
 | Cloud compatibility | Most clouds support runsc on standard nodes | Requires nested-virt or bare-metal nodes (e.g. AWS bare-metal, GCP nested-virt families) |
-| Per-pod memory overhead | ~10–30 MiB (Sentry process) | ~50–150 MiB (guest kernel + agent) |
-| Per-pod CPU overhead | ~3–10% syscall-heavy, near 0% compute-heavy | ~1–5% in steady state, larger startup cost |
+| Per-pod memory overhead | Sentry process | Guest kernel + agent; the shipped `kata` RuntimeClass reserves `160Mi` |
+| Per-pod CPU overhead | Syscall interception, so syscall-heavy jobs pay most and compute-bound jobs pay little | Near-native in steady state; the RuntimeClass reserves `250m`, and the real cost is at boot and on I/O crossing the virtio boundary |
 | Debugging | `kubectl exec` works; some debugger tools incompatible | `kubectl exec` works through Kata agent; kernel-debug tools constrained |
+
+**How to read these tables.** Neither is a benchmark of this system.
+No rigorous, current head-to-head of `runc`, gVisor and Kata is cited here, and the figures that circulate are taken on some other kernel, hypervisor and storage path than the one an operator will run.
+Nothing in the gVisor column has been exercised on a cluster here at all (Q15, above).
+Read both tables as mechanism, and measure your own configuration before budgeting against [Appendix A](appendix-a-capacity-slos.md)'s startup SLO.
+
+One figure is ours.
+On the dogfood configuration (GKE `1.35.5-gke.1241004`, Ubuntu 24.04, `c2-standard-4` nested-virt, Kata 3.32.0 with QEMU) the Q226 spike measured the micro-VM boot at roughly 2s over `runc`, with `kind create cluster` at 58s cold and 43s warm inside the guest ([`deploy/kata-ci/runner-pod.yaml`](../../deploy/kata-ci/runner-pod.yaml)).
+That is a QEMU number, not a property of Kata: the hypervisor is pluggable, and the lighter ones (Cloud Hypervisor, Firecracker) exist because QEMU's device model is the expensive part of the boot.
+The repo ships a stable `kata` alias onto the `kata-qemu` handler so the hypervisor can be retargeted without editing pod specs, and that object carries the pod overhead the scheduler reserves ([`deploy/kata-ci/runtimeclass.yaml`](../../deploy/kata-ci/runtimeclass.yaml)).
+
+For a CI workload the runtime is rarely the dominant cost anyway.
+How the sandbox surfaces the worker's writable storage swings image pull and build time more than the boot does, and the same decision governs whether the workload runs at all: Kata surfaces an `emptyDir` as virtiofs, on which Docker cannot use `overlay2` and silently falls back to `vfs`, while a raw block device passed into the guest restores native `overlay2` ([Running DinD workloads under Kata](../operations/kata-dind-workloads.md)).
+Settle the storage path first; the runtime's boot cost is the smaller question.
 
 ---
 
