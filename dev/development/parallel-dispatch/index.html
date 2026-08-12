@@ -2791,6 +2791,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Conflict policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-heal-destroys-the-evidence-so-the-wake-records-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The heal destroys the evidence, so the wake records it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3196,6 +3213,23 @@ Measured 2026-08-09: a message asked a session to rebase onto an open PR's branc
   The <code>docs/STATUS.md</code> <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a> runs during rebase too, so Queue-row conflicts usually resolve on their own, as do the <code>docs/plan/README.md</code> and <code>docs/roadmap.md</code> ones.</li>
 <li><strong>Semantic / code conflicts</strong> go back to a worker: spawn a small resolve chip that takes over the PR branch, rebases onto <code>main</code>, resolves with full judgment, re-runs the gate, and force-pushes with lease.
   The dispatcher does not hand-edit code conflicts on another session's branch.</li>
+</ul>
+<h3 id="the-heal-destroys-the-evidence-so-the-wake-records-it">The heal destroys the evidence, so the wake records it<a class="headerlink" href="#the-heal-destroys-the-evidence-so-the-wake-records-it" title="Permanent link">&para;</a></h3>
+<p>A rebase is the fix and the erasure at once.
+Afterwards the branch merges clean, so <code>git merge-tree origin/main HEAD</code> reports no conflict whatever the eviction was about.
+Ask later why the PR was evicted, or whether the worker and the dispatcher saw the same thing, and there is no answer left to read.
+That is not hypothetical: a dispatcher's post-hoc read once contradicted a worker's contemporaneous <code>--assess</code>, and by then neither could be confirmed (Q810).</p>
+<p>The capture therefore belongs on the wake that reports the conflict, not on a later sweep, and the hook for it was already there.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>pr-requeue-eligible.sh --assess</code></a> runs before the rebase and had measured all of this already, then kept only its verdict.
+It now appends what it measured to <code>tmp/requeue/&lt;pr&gt;.verdict</code>: the two commit OIDs it merged, and the paths that conflicted.</p>
+<ul>
+<li><strong>A ref pair is not a measurement</strong>, because both refs move.
+  The OIDs make the probe re-runnable: <code>git merge-tree --write-tree &lt;base_oid&gt; &lt;head_oid&gt;</code> re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
+  That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.</li>
+<li><strong>Refusals are recorded too</strong>, so an absent record means the assessment never ran rather than ran-and-refused.
+  Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.</li>
+<li><strong>It is not a registry.</strong> <code>tmp/</code> is gitignored and session-local; nothing reconciles it and no gate reads it.
+  It is evidence for whoever asks, and it expires with the worktree.</li>
 </ul>
 <h2 id="pr-watcher-requirements">PR-watcher requirements<a class="headerlink" href="#pr-watcher-requirements" title="Permanent link">&para;</a></h2>
 <p>The pr-sentinel background watcher (the primary self-heal mechanism above) is the reference implementation of these; the requirements are why it is shaped the way it is.
