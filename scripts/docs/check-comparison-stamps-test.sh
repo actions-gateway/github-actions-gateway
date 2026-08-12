@@ -137,6 +137,13 @@ table "$WORK/escapedpipe.md" \
     "| Quota safety | $NO<br><span class=\"gag-cont\">\`a \\| b\`</span>$STAMP | $YES |"
 check "a cell holding an escaped pipe is still parsed" 0 "$WORK/escapedpipe.md"
 
+# The pipe is parked on a sentinel to survive the split and restored after. The
+# split is what the case above proves; that the restore happened shows only in
+# the text the gate quotes back, so plant the pipe where a finding must print it.
+table "$WORK/pipeinname.md" "| Runs \\| fails | $NO | $YES |"
+check "  and an escaped pipe in the capability still fails for the right reason" 1 "$WORK/pipeinname.md"
+saw "  and the finding quotes the pipe unescaped" '"Runs \| fails"'
+
 # --- the silent passes, which must not be silent ---------------------------
 
 cat >"$WORK/notable.md" <<'EOF'
