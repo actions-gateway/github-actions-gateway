@@ -1,6 +1,10 @@
 # Release 1.3 Milestone Definition
 
-> **Status: no gating Queue row remains — both 2026-07-31 gates closed the same day they were filed.** Q550 and Q551 came out of the `v1.3.0-rc.2` validation window, where the RC gate's dispatched e2e job was wedged by the AGC itself: provisioning leaked runner registrations at GitHub (reap never deregistered them, and names derive from the job ID, so retries 409 against their own leftovers — Q550), and after four attempts the listener dropped the job permanently with no retry, condition, or Event (Q551).
+> **1.3 SHIPPED — 2026-08-03.** `v1.3.0` is published off `main` as a final release, carrying the signed `actions-gateway-crds-v2.yaml` bundle, the `gag-migrate` binaries for five platforms, and `SHA256SUMS` with its cosign bundle; the notes are in [docs/releases/v1.3.0.md](../releases/v1.3.0.md).
+> The Definition of Done is satisfied: every gating row closed, and `validate-release.sh v1.3.0-rc.5` passed on the dogfood cluster ([verdict](#the-rc5-validation-verdict-2026-08-03)).
+> The paragraphs below record the history that got there.
+>
+> **No gating Queue row remained: both 2026-07-31 gates closed the same day they were filed.** Q550 and Q551 came out of the `v1.3.0-rc.2` validation window, where the RC gate's dispatched e2e job was wedged by the AGC itself: provisioning leaked runner registrations at GitHub (reap never deregistered them, and names derive from the job ID, so retries 409 against their own leftovers — Q550), and after four attempts the listener dropped the job permanently with no retry, condition, or Event (Q551).
 > Both were availability bugs in the scale-set listener an ordinary tenant could hit — any burst of provisioning failures (quota, stockout, admission) starts the same cycle — so they gated the tag rather than riding the backlog.
 >
 > **Q550** ([plan](archive/q550-runner-registration-leak.md)) made the worker pod the record of its own registration: it carries the runner name, the reaper deregisters that record before deleting the pod, and a listener start sweeps records no live pod claims. **Q551** kept the skip that stops one stuck assignment wedging the batch, but now holds the job and re-offers it on a backoff, surfacing the stall as `JobProvisionStalled` plus a deferred-jobs gauge.
@@ -13,7 +17,7 @@
 >
 > **The last gates to clear were all API-shape questions**, which is the pattern worth noticing: once the capability work landed, this release's residual risk was not anything unfinished but surface about to be frozen — cheap to fix until the tag, a conversion shim or a version bump afterwards.
 >
-> **The tag is still not cut.** The Definition of Done also requires the release-candidate dogfood validation in [operations/release.md](../operations/release.md), which can only run against the actual RC image and is deliberately not tracked as a Queue row.
+> **At that point the tag was not yet cut.** The Definition of Done also requires the release-candidate dogfood validation in [operations/release.md](../operations/release.md), which can only run against the actual RC image and is deliberately not tracked as a Queue row.
 > Residuals deferred out of 1.3 are under [Explicitly out of scope](#explicitly-out-of-scope).
 >
 > **Superseded 2026-08-03: `v1.3.0-rc.5`'s dogfood validation PASSED, and the ledger has no gating row left.** Exit 0 in 30m07s: the e2e matrix green on GAG runners (73/73 specs), both sizing profiles `Active`, the `NodeShare` derived value confirmed on a live worker at 1500m — which rc.4's pass could not check — and the signed v2 CRD artifact verified and registered.
