@@ -205,6 +205,10 @@ def render():
         L.append(f'actions_gateway_proxy_connections_active{{namespace="{ns}"}} {max(0, int(8 + jitter(3, 4)))}')
         L.append(f'actions_gateway_proxy_connections_total{{namespace="{ns}"}} {counter_total(0.5, elapsed)}')
         L.append(f'actions_gateway_proxy_dial_errors_total{{namespace="{ns}"}} {counter_total(0.01, elapsed)}')
+        # Opt-in CONNECT allowlist denials, the tenant dashboard's SSRF signal (Q242).
+        # Held below the ProxyConnectDenied alert's 0.1/s threshold so the preview
+        # shows the panel populated without the stack rendering a firing alert.
+        L.append(f'actions_gateway_proxy_connect_denied_total{{namespace="{ns}"}} {counter_total(0.02, elapsed)}')
         # tunnel duration: center idx 5 (~60s)
         L += hist_lines("actions_gateway_proxy_tunnel_duration_seconds", f'namespace="{ns}"', PROXY_BUCKETS, 0.5, 5, elapsed)
 
