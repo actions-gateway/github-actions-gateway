@@ -1,18 +1,66 @@
-# CI wait-time analysis
+# CI speed: what is measured, and what has already been tried
 
-Measurements behind the question "how do we spend less time waiting for CI tests".
-Every number here came from `gh` against this repo on 2026-08-12; nothing is inferred from workflow source.
+Read this before scoping any work on CI or test-tier speed.
+Three rounds have already run, and the traps below are the ones that cost time in each of them.
+Every number here is dated and names where it came from; nothing is inferred from workflow source.
 
-## Status
+## Current state
 
-Analysis complete, and Option 1 shipped.
-Q675's re-measure ran on these numbers and demoted e2e to merge-group-only on both lanes; the decision and the re-measurement table live in [merge-queue.md](merge-queue.md#phase-3-re-measure-then-decide).
-Options 2 through 4 remain open and un-started.
-Finding 1's segment, the largest one, is owned by separate in-flight work and is not an option here.
+Measured 2026-08-12 on PR #1416's head commit, a change touching Go, workflows and docs, so every tier ran:
 
-## Finding 1: CI execution is 5% of PR latency
+| Check | Wall |
+|---|---|
+| `integration-test (agc)` | **392s** (the pole) |
+| `integration-test (gmc)` | 342s |
+| `unit-test` | 235s |
+| `lint` | 213s |
+| `coverage` | 186s |
 
-Across the 12 most recently merged PRs:
+The e2e lanes are absent because they no longer run on pull requests (Q675); their cost moved to the merge-queue entry, where it is paid once per merge instead of once per push.
+
+Below `integration-test` the next three sit within ~50s of each other and **swap order between runs**: an earlier sample the same day had `lint` at 221s above `unit-test` at 200s.
+That is a flat profile, not a queue behind one slow stage.
+Cutting any one of them alone moves the workflow's wall clock by roughly nothing.
+
+## Rounds already run
+
+| Round | Scope | Outcome |
+|---|---|---|
+| [e2e-tests-speed.md](e2e-tests-speed.md) | Ginkgo parallelism, port-per-process, suite structure | Done, §1 to §18 |
+| [e2e-ci-speed-round-2.md](e2e-ci-speed-round-2.md) | The image bake (~570s of contended compile) and the suite's `Serial` tail (150s, over half the suite wall) | Done, both poles shipped |
+| [merge-queue.md](merge-queue.md) | Adopt the queue; Phase 3 then demoted e2e to merge-group-only | Done, all three phases |
+| Integration matrix (#1416) | GMC and AGC ran back to back in one job | 617s to 392s, measured |
+
+## Four traps, one per wasted attempt
+
+1. **The critical path is `max()` across parallel workflows, not any one job.** `e2e` and `e2e-calico` were separate workflows on the same event, so they ran concurrently, and calico was the *longer* lane (870s against 804s) on ~70% of branches.
+   A proposal to trim 104s of chart checks off the kindnet lane would have saved ~0, because calico simply became the pole.
+   On #1402 the two lanes finished 6 seconds apart; on #1401 calico finished 375s after kindnet.
+2. **A flat profile means there is no constraint, and the honest answer is "nothing here".** See the current-state table: three checks within 50s that reorder run to run.
+   Manufacturing a target out of the nominally-largest one produces work that measures as zero.
+3. **Do not derive suite parallelism from spec-time ÷ wall.** That ratio mixes compile, the parallel phase and the `Serial` tail, and reads about 2.77× against `--procs 6`, which looks like ~295s of headroom.
+   Round 2 measured the parallel phase properly at **4.5×** and recorded it as healthy.
+   There is no parallelism work left in the suite; the lever round 2 left open is a larger runner.
+4. **CI execution is about 5% of PR open-to-merge latency.** Any round of this work has a low ceiling on the thing that actually matters, so size the effort accordingly.
+   Details under [the latency split](#the-latency-split) below.
+
+## What is left
+
+1. **Larger e2e/CI runner.** The lever round 2 identified and deliberately left: both of its poles were CPU-bound on a 4-vCPU `ubuntu-latest` and both scaled close to linearly, and `vars.GAG_E2E_RUNNER` already routes the job when set, so it is a config decision rather than a code change.
+   It is the one remaining item with real headroom, and it costs money on a public repo.
+2. **Q808, the flat profile above.** Filed rather than acted on.
+   If it is ever worth attacking, the target is whichever of the three is the pole *that week*, and `lint` carries 159s of golangci-lint.
+3. **Re-derive the chart-check split before scoping it.** An earlier version of this doc listed splitting the kindnet lane's three chart checks (104s) into a parallel job, and scored it ~0 because calico ran beside it on PRs.
+   That premise died with Q675: e2e is merge-queue-only now, so the question is whether 104s off a queue entry is worth a new job and a new required status check in a workflow with documented wedging history (Q363).
+   Do not carry the old score forward.
+4. **Narrowing the calico lane is declined, not pending.** It would take ~420s off that lane, but the 75 non-gated specs are the only proof the product still *functions* under real NetworkPolicy enforcement: kindnet accepts policy objects without dropping egress, so an allowlist too narrow for legitimate traffic passes kindnet and fails only under Calico.
+   That is a live bug class for a secure-by-default repo.
+
+## The measurements
+
+### The latency split
+
+Across the 12 most recently merged PRs, on 2026-08-12:
 
 | Segment | Minutes | Share |
 |---|---|---|
@@ -25,107 +73,27 @@ Median open→merge 45 min; p25 22, p75 131, max 878.
 PR #1382 spent 4 minutes in CI and 875 waiting; #1385, 4 and 759.
 Both single-push, no re-runs.
 
-The gate is that enqueueing is the maintainer's action taken after review ([parallel-dispatch.md](../development/parallel-dispatch.md), Q692), combined with `allow_auto_merge=false` on the repo.
-The landing decision therefore cannot be made until after CI is already green, which forces review latency and CI time into series.
+**The 59% segment is owned elsewhere and this doc proposes no mechanism for it.** It is being closed on the attention side rather than by relaxing the enqueue gate, so do not scope an auto-merge change from these numbers.
+They are recorded because they set the scale of everything else here.
 
-`reviewDecision` is empty on every PR sampled and the ruleset requires no approving review, so the gate is the enqueue action itself, not a review step.
+### Heavy-gate failure rates
 
-**This segment is owned elsewhere and this doc proposes no mechanism for it.** Closing it is in flight in separate work, on the attention side rather than by relaxing the enqueue gate, so do not scope an auto-merge change from the numbers above.
-They are recorded here because they set the scale of every other finding: anything that shortens CI is working on the 5%.
+Sampled over 100 runs each, 2026-08-12.
+These are the inputs Q675's Phase 3 decision turned on, and they are what makes "pay a queue kickback instead of a PR-time failure" a good trade:
 
-## Finding 2: the critical path is `max(kindnet, calico)`
+| Workflow | Failures | Rate |
+|---|---|---|
+| `e2e` | 1 | 1% |
+| `integration-test` | 1 | 1% |
+| `unit-test` | 5 | 5% |
 
-`e2e` and `e2e-calico` are separate workflows on the same PR event, so they run concurrently.
-Calico is the longer lane and already skips the chart checks.
+### Five specs are CNI-gated, not four
 
-| Lane | Job | Test step | Chart checks |
-|---|---|---|---|
-| `e2e` (kindnet) | 804s | 468s | 104s |
-| `e2e-calico` | 870s | 548s | disabled ([e2e-calico.yml](../../.github/workflows/e2e-calico.yml)) |
+`egressEnforcingCNI()` gates five specs, totalling 139.8s of spec time: the two `TenantProvisioning` egress negatives, the two `ManagerMetricsNP` specs, and `E2E_V2_DirectEgress_NonGitHubBlocked`.
+Prose copies of that list in `testing.md` and `e2e-calico.yml` had both gone stale at four, missing the direct-egress spec from the v2 work; Q809 corrected both and made `egressEnforcingCNI()` the stated authority.
+Grep the call sites rather than trusting any count, including this one.
 
-Calico runs on 21 of 30 sampled PR branches (70%).
-Observed finish times:
-
-- #1402: kindnet 03:24:24, calico 03:24:30, 6s apart
-- #1401: calico finished 375s *after* kindnet
-- #1405: kindnet 90s after calico
-
-So removing the kindnet lane's 104s of chart checks saves ~0 on the 70% of PRs where calico runs, and ~50s per PR weighted across the split.
-
-## Finding 3: suite parallelism is already tuned, do not re-open it
-
-A naive read of the calico JUnit artifact gives 1,519s of spec time in 548s of wall, which looks like 2.77× against `--procs 6` and therefore like ~295s of lost parallelism. **That number is wrong as a parallelism figure** and no work should be scoped from it: the 548s step covers compile, the parallel phase, and the `Serial` tail, so dividing total spec time by it mixes three phases.
-
-[e2e-ci-speed-round-2.md](e2e-ci-speed-round-2.md) already measured this properly.
-The parallel phase does 646s of spec time in ~144s, i.e. **4.5× on `--procs 6` against 4 vCPUs**, and that round records it as "healthy and not worth further tuning".
-It targeted the two real poles instead, the image bake (~570s of contended compile) and the `Serial` tail (150s, over half the suite wall), and shipped both.
-
-Two speed rounds have already run here ([e2e-tests-speed.md](e2e-tests-speed.md), [e2e-ci-speed-round-2.md](e2e-ci-speed-round-2.md)).
-The lever they left explicitly open is a **larger runner**: both poles are CPU-bound on a 4-vCPU `ubuntu-latest`, both scale close to linearly, and `vars.GAG_E2E_RUNNER` already routes the job when set, so it is a config decision rather than a code change.
-
-CPU starvation on this runner is separately documented as the mechanism behind the Q300/Q747 kindnet flake family, which is why [e2e-reusable.yml](../../.github/workflows/e2e-reusable.yml) dumps `cpu.stat` CFS throttle ratios on failure.
-
-## Finding 4: five specs are CNI-gated, not four
-
-`egressEnforcingCNI()` gates exactly five specs:
-
-| Spec | Spec time |
-|---|---|
-| `ManagerMetricsNP_DeniesUnlabeledNamespace` ([manager_np_test.go:106](../../cmd/gmc/test/e2e/manager_np_test.go)) | 40.9s |
-| `V2_DirectEgress_NonGitHubBlocked` ([direct_egress_test.go:204](../../cmd/gmc/test/e2e/direct_egress_test.go)) | 41.8s |
-| `TenantProvisioning_WorkloadEgressBlockedToNonProxyPod` ([provisioning_test.go:478](../../cmd/gmc/test/e2e/provisioning_test.go)) | 21.0s |
-| `TenantProvisioning_WorkerCannotReachK8sAPI` ([provisioning_test.go:516](../../cmd/gmc/test/e2e/provisioning_test.go)) | 18.0s |
-| `ManagerMetricsNP_AllowsLabeledNamespace` ([manager_np_test.go:123](../../cmd/gmc/test/e2e/manager_np_test.go)) | 18.1s |
-| **Total** | **139.8s** |
-
-`e2e-calico.yml`'s header comment lists only four.
-It misses `V2_DirectEgress_NonGitHubBlocked`, added with the v2 direct-egress work, so the comment is stale regardless of what else changes here.
-
-`E2E_GMC_CrossTenantNetworkBlocked` looks like a sixth but is not: it asserts *ingress* blocking, which kindnet does enforce, and carries its own FailOpen retry logic for the Q747 enforcer-restart case.
-
-### Why narrowing the calico lane costs real coverage
-
-Scoping calico to those five specs would cut its test step from 548s to roughly 150–250s.
-But the other 75 specs are not redundant there: they are the only proof that the product still *functions* when NetworkPolicy is actually enforced.
-Kindnet accepts policy objects without dropping egress, so a NetworkPolicy allowlist that is too narrow for legitimate traffic passes kindnet and fails only under Calico.
-
-That is a real bug class for a repo whose security posture is secure-by-default, and narrowing the lane retires the only gate that covers it.
-
-## Finding 5: Q675 is due, and these measurements are its inputs
-
-Q675 deferred the merge-queue Phase 3 re-measure behind an event trigger of "~1 week of queue operation, on/after 2026-08-10".
-That trigger fired, the re-measure ran on the numbers above, and the row is closed.
-Its first recorded candidate was:
-
-> Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time).
-
-That candidate is the one change on the list that directly targets session wait, because the session's blocking wait *is* the PR-side e2e.
-Demoting it would take the PR-side critical path from ~870s (e2e-calico) to ~630s (integration-test, the next longest), and drop each branch's heavy-gate runs from two e2e cycles to one.
-
-The measured failure rates below are what [merge-queue.md](merge-queue.md#phase-3-re-measure-then-decide) asks the re-measure to establish, so the decision no longer needs them re-derived:
-
-| Workflow | Runs sampled | Failures | Rate |
-|---|---|---|---|
-| `e2e` | 100 | 1 | 1% |
-| `integration-test` | 100 | 1 | 1% |
-| `unit-test` | 100 | 5 | 5% |
-
-At a 1% e2e failure rate, the trade the candidate names, paying a queue kickback instead of a PR-time failure, costs a full cycle on 1 push in 100 and saves ~4 minutes on the other 99.
-
-## Options
-
-Ordered by return per unit of risk.
-
-1. ~~**Work Q675.**~~ **Shipped 2026-08-12.** Both e2e lanes are merge-group-only; the decision and the re-measurement table are in [merge-queue.md](merge-queue.md#phase-3-re-measure-then-decide).
-2. **Larger e2e runner.** The lever round 2 left open, unchanged by this analysis.
-   Elevate rather than exploit: it costs money on a public repo.
-3. **Narrow the calico lane.** Takes ~420s off the longer lane, but retires the full-product-under-enforcement gate described in Finding 4.
-   Not recommended without a replacement for that coverage.
-4. **Split the kindnet chart checks into a parallel job.** Takes ~104s off the kindnet lane, but saves ~0 while calico is the critical path (Finding 2).
-   Only worth doing once calico is shorter than kindnet, and it adds a job plus a required status check to a workflow with documented wedging history (Q363).
-
-Not on the list: re-tuning `--procs` or the suite's parallel phase.
-Finding 3 explains why.
+`E2E_GMC_CrossTenantNetworkBlocked` looks like a sixth and is not: it asserts *ingress* blocking, which kindnet does enforce.
 
 ## Reproducing
 
@@ -133,3 +101,5 @@ Finding 3 explains why.
     gh pr view <n> --json statusCheckRollup
     gh api repos/{owner}/{repo}/actions/runs/<id>/jobs
     gh api repos/{owner}/{repo}/actions/artifacts/<id>/zip > report.zip
+
+The per-job breakdown is what distinguishes a real pole from a flat profile; the JUnit artifact gives per-spec times but see trap 3 before dividing anything by it.
