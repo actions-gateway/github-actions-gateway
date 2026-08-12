@@ -402,22 +402,30 @@ State roughly how often the condition holds in the tree as it stands, or say the
 
 This is the same reason a gate's own tests assert both directions ([testing.md](testing.md#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query)): a gate that cannot go red is unfalsifiable, and a gate that cannot stay green is unshippable.
 
-### One investigation, two rows: say which one owns the measurement
+### Two rows on one defect: cross-link them, and say which owns the measurement
 
-A reproduce campaign that pins a flake often measures the production defect underneath it, and the result is two rows: the test fix and the product fix.
-They get filed minutes apart, out of one run, by someone holding all of it at once, which is exactly why neither row records that the other exists.
+One defect routinely lands on two Queue rows, and the two ways that happens have opposite causes.
+Either a reproduce campaign measures the production defect underneath the flake it was chasing, and both rows get filed minutes apart by someone holding all of it at once, so neither records that the other exists.
+Or the second row is filed days later by someone who does not know there is a pair, and nothing connects them because nobody yet knows there is anything to connect.
+Only the first is a habit at filing time.
+The second is caught by whoever re-reads a sibling row and recognises the pair, so the obligation attaches there rather than to the filer.
 
-**Each row names the other, and one of them owns the measurement.** The owner is the row whose Notes or linked doc hold the run itself: the counts, the date, the correlation.
-The other cites it by ID instead of restating the figure, because a bare number with no provenance reads as a second, independent measurement, and a later session cannot tell that both rows rest on one campaign.
+**Each row names the other, and one of them owns the measurement.** The owner is the row whose link resolves to the measurement itself: the counts, the date, the correlation.
+Where both rows link the same doc, the owner is the one pointing at the anchor that holds the run rather than at the doc's root, and its Notes say so outright, because nobody works it out by comparing two URLs.
+The other row cites the owner by ID instead of restating the figure, since a bare number with no provenance reads as a second, independent measurement.
 
-Q685 and Q689 were one window seen from two sides.
+Q685 and Q689 were one window seen from two sides, the same-campaign shape.
 Q685's campaign correlated 60 stops taken at maximum pressure: the 4 taken before the delete all replayed, the 56 taken after it did not.
 That single correlation established both the test's bad wait and the production window the test was landing in.
 Q689 was filed carrying "4/60 graceful stops" with nothing naming where the 60 came from, Q685's flake-watch row named no successor, and the correlation itself sat in a parenthetical inside Q685's [testing.md paragraph](testing.md#synchronize-on-the-signal-you-assert-on).
 Q685 gained the pointer only in the commit that closed Q689, so it was missing for the whole window in which Q689 was open work someone might pick up; the Q689 retro records a dispatcher having to ask which row owned the number.
 
+Q549 and Q809 are the other shape, and the reason this cannot live at filing time alone.
+Q549 was filed 2026-07-31 carrying an undiagnosed second failure mode, Q809 on 2026-08-11 under a different diagnosis, and neither row named the other, because at filing nobody knew there was a pair to name.
+A session re-reading a merged sibling eleven days later is what recognised one, which is both the moment the cross-link is owed and the moment nothing prompts for it.
+
 **Nothing gates this, and the obvious proxy does not transfer.** The linter can see a `(#QN)` link that resolves to no row (rule 5); it cannot see a relationship nobody stated.
-The nearest rule that does exist is [`check-plan-index`](../../scripts/docs/check-plan-index.sh)'s linked-iff-live check on `plan/README.md` Status cells (Q800), and extending it to Queue Notes cells would still miss this omission while breaking rows that are correct: measured on 2026-08-12 it fires on six, incidental mentions of the "distinct from Q695's alert gap" shape, each of which would then spend link characters against the 250-character cap.
+The nearest rule that does exist is [`check-plan-index`](../../scripts/docs/check-plan-index.sh)'s linked-iff-live check on `plan/README.md` Status cells (Q800), and extending it to Queue Notes cells would still miss this omission while breaking rows that are correct: seven of them on 2026-08-12, one more than the same scan returned that morning, all incidental mentions of the "distinct from Q695's alert gap" shape, and each would then spend link characters against the 250-character cap.
 
 ## Flake fixes go first
 
@@ -434,7 +442,7 @@ Sweep it in the fixing PR and state what the sweep found, "nothing" included: a 
 Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later [Q685](../STATUS.md#Q685) was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
 That one never flaked: its positive assertion held whether or not the listener ever observed the completion, so waiting for CI would never have surfaced it.
 
-**A campaign that pins a flake often measures a production defect too.** File both rows, cross-link them, and [say which one owns the measurement](#one-investigation-two-rows-say-which-one-owns-the-measurement).
+**A campaign that pins a flake often measures a production defect too, and a flake filed later often turns out to be one already on the Queue.** Either way the pair gets cross-linked the moment it is recognised, with [one row owning the measurement](#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement).
 
 **Once the mitigation ships, move the row to [Flake watch](../STATUS.md#flake-watch)** — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always `**Event:** recurs on main after the fix`, and on recurrence the row returns to the **top** of the Queue, escalated (the first mitigation didn't hold).
 Keeping the row (rather than closing it) preserves the memory that a fix was already attempted, so a second occurrence reads as a recurrence, not a fresh find.
