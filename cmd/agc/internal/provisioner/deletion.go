@@ -14,9 +14,16 @@ import (
 // genuinely failing job AND to a run a human cancelled at GitHub, so neither phase nor
 // reason can carry recovery. What separates them, measured at live GitHub on both halves
 // (Q459), is metadata.deletionTimestamp at the moment the terminal phase publishes: set
-// on a drained/deleted worker, absent on a cancel (nothing deletes the pod) and on a
-// real failure (nothing issued a delete). The full measurement and the decision are
-// Q459's; the design boundary is the table in docs/design/04-operational-flows.md §4.2.
+// on a drained/deleted worker, absent on a cancel (nothing in the gateway deletes a
+// cancelled run's pod) and on a real failure (nothing issued a delete). The full
+// measurement and the decision are Q459's; the design boundary is the table in
+// docs/design/04-operational-flows.md §4.2.
+//
+// The cancel exclusion holds only while nothing deletes the pod. An operator who
+// hand-deletes a cancelled run's worker to reclaim its slot supplies the mark
+// themselves, and the re-run lands: a cancelled conclusion accepts rerun-failed-jobs
+// (measured 2026-08-05, Q683) where a false green refuses it. Whether this predicate
+// should read the run's conclusion first is Q811.
 //
 // The one deleter that must NOT trigger recovery is the AGC itself: the reaper deletes
 // pods it gave up on (a stuck-Pending worker, an orphaned Running one), and the
