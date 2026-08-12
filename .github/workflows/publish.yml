@@ -53,6 +53,13 @@ env:
   # tag's current digest and auto-bumps it here and in the e2e/security-scan
   # workflows together so the three pins can't drift.
   BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
+  # syft release that scans the pushed images, and the SHA256 of its linux/amd64
+  # tarball taken from the release's published checksums file (Q127 — release
+  # assets are mutable for an existing tag, so verify before trusting).
+  # Auto-bumped by updatecli.d/syft.yaml, which rewrites the pair here and in
+  # security-scan.yml together so the two cannot drift.
+  SYFT_VERSION: v1.45.1
+  SYFT_SHA256: 20c84195e24927f50a3b2269946be51f4c4abc9d2f145fee7388b4199149f716
 
 jobs:
   # Stop-ship gate, ahead of every publishing job. A stable tag push makes
@@ -266,25 +273,33 @@ jobs:
           # `make verify-release` verifies with the same version that signed.
           cosign-release: v2.5.2
       - name: Install syft
-        id: syft
-        # download-syft only (no scan): the wrapping sbom-action has no
-        # per-platform mode, and a single syft scan of a multi-arch index
-        # silently picks ONE platform — the other arch's attestation would
-        # carry the wrong package list. The step below loops the platforms.
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
-        with:
-          # Pin the syft version explicitly: the action otherwise resolves syft
-          # at runtime and would float to a newer release between otherwise
-          # identical builds, changing the bytes that scan the release images.
-          # This is a runtime tool download, not a SHA-pinnable action, so
-          # Dependabot can't bump it — bump by hand alongside the action SHA.
-          syft-version: v1.45.1
+        # Installed from the pinned release rather than via
+        # anchore/sbom-action/download-syft: that action fetches anchore's
+        # install.sh from raw.githubusercontent and runs it with NO retry, so a
+        # single transient CDN denial failed the step outright (Q806).
+        # download-verified.sh retries and refuses to write bytes that miss
+        # SYFT_SHA256, so the flake is absorbed without loosening what runs.
+        #
+        # No sbom-action scan mode either way: it has no per-platform option, and
+        # a single syft scan of a multi-arch index silently picks ONE platform —
+        # the other arch's attestation would carry the wrong package list. The
+        # step below loops the platforms.
+        run: |
+          set -euo pipefail
+          # syft embeds the version WITHOUT the leading "v" in its asset names:
+          # tag v1.45.1 -> syft_1.45.1_linux_amd64.tar.gz.
+          asset="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
+          scripts/fetch/download-verified.sh \
+            "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/${asset}" \
+            "${SYFT_SHA256}" "${RUNNER_TEMP}/syft.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/syft.tar.gz" -C "${RUNNER_TEMP}" syft
+          sudo install "${RUNNER_TEMP}/syft" /usr/local/bin/syft
+          syft version
       - name: Generate per-arch SBOMs (SPDX-JSON) for the pushed image
         id: sbom
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
           INDEX_DIGEST: ${{ steps.build.outputs.digest }}
-          SYFT: ${{ steps.syft.outputs.cmd }}
         run: |
           set -euo pipefail
           # One SBOM per architecture, scanned from that arch's exact manifest
@@ -299,7 +314,7 @@ jobs:
               echo "no linux/${arch} manifest found in index ${INDEX_DIGEST}" >&2
               exit 1
             fi
-            "${SYFT}" "registry:${IMAGE}@${digest}" \
+            syft "registry:${IMAGE}@${digest}" \
               -o "spdx-json=sbom-${{ matrix.name }}-${arch}.spdx.json"
             echo "digest-${arch}=${digest}" >> "${GITHUB_OUTPUT}"
           done
