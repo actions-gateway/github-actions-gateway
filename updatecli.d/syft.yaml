@@ -1,0 +1,94 @@
+# Keep the syft version and its linux/amd64 checksum in
+# .github/workflows/publish.yml and .github/workflows/security-scan.yml current.
+# updatecli resolves the latest syft release, fetches the matching upstream
+# checksum, and opens a PR bumping SYFT_VERSION and SYFT_SHA256 together in both
+# files — the version+checksum pair Dependabot cannot track because the pins are
+# workflow env vars, not a package-manifest entry. Rewriting both copies here is
+# what keeps the release-time and PR-time scanners on the same syft. Run by
+# .github/workflows/updatecli.yml.
+#
+# syft used to be pinned through the `syft-version` input on
+# anchore/sbom-action, which had to be bumped by hand alongside the action SHA.
+# The action's installer fetches syft with no retry, so a transient CDN denial
+# failed the scan outright; both workflows now download the pinned tarball
+# through scripts/fetch/download-verified.sh instead (Q806), which leaves this
+# manifest as the thing that keeps the pin fresh.
+name: 'Bump syft (SBOM generator) version + linux-amd64 checksum'
+
+scms:
+  workflow:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: workflow
+    spec:
+      labels:
+        - dependencies
+
+sources:
+  syftVersion:
+    name: 'Latest syft release tag'
+    kind: githubrelease
+    spec:
+      owner: anchore
+      repository: syft
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      versionfilter:
+        kind: semver
+  syftChecksum:
+    name: 'Upstream syft linux-amd64 sha256 for the resolved version'
+    kind: shell
+    dependson:
+      - syftVersion
+    spec:
+      command: 'scripts/updatecli/syft-linux-amd64-sha256.sh {{ source "syftVersion" }}'
+      environments:
+        - name: PATH
+
+targets:
+  publishVersion:
+    name: 'SYFT_VERSION in publish.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/publish.yml
+      matchpattern: '(SYFT_VERSION: )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "syftVersion" }}'
+  publishChecksum:
+    name: 'SYFT_SHA256 in publish.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/publish.yml
+      matchpattern: '(SYFT_SHA256: )[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "syftChecksum" }}'
+  scanVersion:
+    name: 'SYFT_VERSION in security-scan.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/security-scan.yml
+      matchpattern: '(SYFT_VERSION: )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "syftVersion" }}'
+  scanChecksum:
+    name: 'SYFT_SHA256 in security-scan.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/security-scan.yml
+      matchpattern: '(SYFT_SHA256: )[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "syftChecksum" }}'

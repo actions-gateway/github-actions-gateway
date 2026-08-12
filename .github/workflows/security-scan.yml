@@ -155,6 +155,13 @@ jobs:
       # the bytes that pin selected. Keep BUILDKIT_IMAGE as the source of truth —
       # updatecli.d/buildkit.yaml bumps it by name.
       BUILDKIT_LOCAL_IMAGE: local/buildkit:pinned
+      # syft release that generates the SBOMs, and the SHA256 of its linux/amd64
+      # tarball taken from the release's published checksums file (Q127 — release
+      # assets are mutable for an existing tag, so verify before trusting).
+      # Auto-bumped by updatecli.d/syft.yaml, which rewrites the pair here and in
+      # publish.yml together so the PR-time and release-time scanners match.
+      SYFT_VERSION: v1.45.1
+      SYFT_SHA256: 20c84195e24927f50a3b2269946be51f4c4abc9d2f145fee7388b4199149f716
     strategy:
       fail-fast: false
       # Each image is a named stage of the root Dockerfile, so a leg is selected
@@ -220,18 +227,44 @@ jobs:
           # One scope, not one per image: every target shares the Dockerfile's
           # `deps` stage, so the bake exports that warm Go build cache once.
           cache-from: type=gha,scope=images
+      - name: install syft
+        # Installed from the pinned release rather than via anchore/sbom-action:
+        # that action fetches anchore's install.sh from raw.githubusercontent and
+        # runs it with NO retry, so a single transient CDN denial reddened this
+        # whole job — measured twice on 2026-08-12, `HTTP status=000` on `main`
+        # and on #1406 (Q806). download-verified.sh retries and refuses to write
+        # bytes that miss SYFT_SHA256, so the flake is absorbed without loosening
+        # what runs. Mirrors publish.yml, which installs the same pinned syft.
+        run: |
+          set -euo pipefail
+          # syft embeds the version WITHOUT the leading "v" in its asset names:
+          # tag v1.45.1 -> syft_1.45.1_linux_amd64.tar.gz.
+          asset="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
+          scripts/fetch/download-verified.sh \
+            "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/${asset}" \
+            "${SYFT_SHA256}" "${RUNNER_TEMP}/syft.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/syft.tar.gz" -C "${RUNNER_TEMP}" syft
+          sudo install "${RUNNER_TEMP}/syft" /usr/local/bin/syft
+          syft version
       # Generate an SPDX-JSON SBOM for the image we just built and upload it as a
       # build artifact. Runs right after the build (before the trivy scan) so a
       # CVE-induced scan failure never suppresses SBOM generation. This is the
       # PR-time exercise of the SBOM path; publish.yml regenerates the SBOM for
       # the pushed image and attaches it as a keyless cosign attestation.
       - name: generate SBOM for ${{ matrix.name }}
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        # `docker:` scheme explicitly: the image was built with load: true and
+        # exists only in the local daemon, never in a registry syft could fall
+        # back to.
+        run: |
+          set -euo pipefail
+          syft "docker:local/${{ matrix.name }}:scan" \
+            -o "spdx-json=sbom-${{ matrix.name }}.spdx.json"
+      - name: upload SBOM for ${{ matrix.name }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          image: local/${{ matrix.name }}:scan
-          format: spdx-json
-          output-file: sbom-${{ matrix.name }}.spdx.json
-          artifact-name: sbom-${{ matrix.name }}.spdx.json
+          name: sbom-${{ matrix.name }}.spdx.json
+          path: sbom-${{ matrix.name }}.spdx.json
+          if-no-files-found: error
       # Cache trivy's data dir (vuln DB + scan cache) so each run avoids
       # re-pulling the ~50 MB DB from the registry — the DB pull is otherwise a
       # rate-limit flake source. The DB refreshes every few hours; the run_id

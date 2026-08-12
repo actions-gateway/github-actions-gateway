@@ -938,7 +938,9 @@ The comment is not decoration: it is what Dependabot reads to know which release
 Exempt shapes, because neither is a mutable third-party reference: a local `./…` action or reusable workflow, which is in-tree code the same PR reviews, and a `docker://` image, which must carry an `@sha256:` digest instead.
 An unparseable workflow fails the gate rather than being skipped.
 
-The runtime tool downloads in the publish path are pinned the same way: `cosign` via `sigstore/cosign-installer` with an explicit `cosign-release` (kept in step with `COSIGN_VERSION` in the Makefile so a local `make verify-release` uses the same version that signed), and `syft` via the `syft-version` input on `anchore/sbom-action/download-syft` (the action is SHA-pinned, but syft itself is a runtime download).
+The runtime tool downloads in the publish path are pinned the same way: `cosign` via `sigstore/cosign-installer` with an explicit `cosign-release` (kept in step with `COSIGN_VERSION` in the Makefile so a local `make verify-release` uses the same version that signed), and `syft` by `SYFT_VERSION` plus the `SYFT_SHA256` of its release tarball, downloaded through [`scripts/fetch/download-verified.sh`](../../scripts/fetch/download-verified.sh).
+That download used to go through `anchore/sbom-action/download-syft`, which fetches anchore's `install.sh` and runs it with no retry, so one transient CDN denial failed the step outright (Q806).
+The helper retries and refuses to write bytes that miss the pinned digest, so absorbing the flake tightened the pin rather than loosening it: the release now names the exact syft bytes instead of trusting an installer to resolve them.
 
 **Bumping a pinned action.** Dependabot's `github-actions` ecosystem ([`.github/dependabot.yml`](../../.github/dependabot.yml)) opens weekly PRs that bump both the SHA *and* the `# vX.Y.Z` comment, so the pins don't rot — review and merge those like any dependency PR.
 To pin or bump by hand, resolve the tag to its commit SHA and keep the comment in sync:
@@ -948,7 +950,8 @@ gh api repos/<owner>/<action>/commits/<tag> --jq '.sha'
 # -> uses: <owner>/<action>@<sha> # <tag>
 ```
 
-`syft-version` is **not** Dependabot-managed (it's a tool download, not an action ref) — bump it by hand in `publish.yml` when you bump the `anchore/sbom-action` SHA.
+`SYFT_VERSION`/`SYFT_SHA256` are **not** Dependabot-managed (a tool download, not an action ref).
+[`updatecli.d/syft.yaml`](../../updatecli.d/syft.yaml) bumps the pair weekly, in `publish.yml` and `security-scan.yml` together, so the released images and the PR-time scan are described by the same syft.
 
 The two workflow gates divide the work, and it is worth knowing which answers what. `actionlint` checks that a `uses:` ref is present and well formed, so a pin edited down to a bare `owner/repo` fails the PR.
 But measured against v1.7.12, the version `tools/` pins, it accepts `@v7.0.1`, `@v4` and `@main` at exit 0, resolving the action's inputs off the tag while doing so.
