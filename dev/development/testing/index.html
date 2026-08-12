@@ -4739,6 +4739,11 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
 <li><strong>Backgrounded, <code>; echo "EXIT=$?"</code> reports the <code>echo</code>'s status, not the gate's.</strong> The redirect-and-echo idiom above is written for a foreground run, where the echoed line is the thing you read. Run with <code>run_in_background: true</code> and the completion notification carries the <em>chain's</em> status instead. A chain ending in <code>echo</code> always ends 0, so a gate that failed arrives as <code>completed (exit code 0)</code>: the most authoritative-looking signal in the session, and the only one that is wrong. Preserve the status explicitly, and still reconcile against the log: <code>make check &gt; tmp/check.log 2&gt;&amp;1; rc=$?; echo "EXIT=$rc"; exit $rc</code>.
   Confirmed directly: <code>( false; echo "EXIT=$?" )</code> prints <code>EXIT=1</code> and exits 0; the <code>rc=</code> form prints <code>EXIT=1</code> and exits 1. Re-measured through the Bash tool on 2026-08-04, which is the path that matters: a backgrounded <code>false &gt; /dev/null 2&gt;&amp;1; echo "EXIT=$?"</code> wrote <code>EXIT=1</code> to its output file and notified <code>completed (exit code 0)</code>.
   The same hook as above covers this shape (Q681): it asks when a <strong>backgrounded</strong> call names a registered gate and ends in something that cannot carry the gate's failure out (an <code>echo</code>, a <code>||</code> fallback, a trailing <code>&amp;</code>), and stays silent for the <code>exit $rc</code> form, for the gate as the last statement, and for the identical command run in the <em>foreground</em>, where the echo is the thing you read.</li>
+<li><strong>A <code>pgrep -f</code> pattern that appears in your own command line matches your own shell.</strong> Probing a background gate with <code>pgrep -f "make check &gt; tmp/check.log"</code> answers "running" for as long as you keep asking, because the Bash tool's invocation carries the pattern as text and is itself a match.
+  This is worse than having no probe: the reading is stable, plausible, and completely independent of whether the gate is still alive, so it survives every re-check.
+  A background run's verdict comes from its completion notification and its output file, never from a process probe.
+  Read the task output for the <code>EXIT=</code> line the <code>rc=</code> idiom above preserves.
+  When a probe genuinely needs <code>pgrep</code>, break the self-match with a bracket, <code>pgrep -f "pr-sentinel-watc[h]"</code>, and confirm it against a case whose answer is already known.</li>
 <li><strong>A tool that exits 0 having printed nothing may have checked nothing.</strong> <code>gh attestation verify</code> writes its summary only to a TTY; captured or redirected it is silent, and silence is indistinguishable from a no-op.
   When a verification's whole value is that it ran, make it emit something assertable (<code>--format json</code>, then read the predicate) rather than trusting the status alone.</li>
 <li><strong>A state observed once is not a steady state.</strong> Pods wedged now may clear in ten minutes; a set that looks static may be churning underneath a stable count.
@@ -5399,6 +5404,11 @@ Use the dedicated Makefile targets — they set <code>KUBEBUILDER_ASSETS</code> 
 <a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>make<span class="w"> </span>-C<span class="w"> </span>cmd/agc<span class="w"> </span>test-integration<span class="w">   </span><span class="c1"># AGC only</span>
 <a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>make<span class="w"> </span>-C<span class="w"> </span>cmd/gmc<span class="w"> </span>test-integration<span class="w">   </span><span class="c1"># GMC only</span>
 </code></pre></div>
+<p><strong>In CI the two modules are a matrix, one job each,</strong> so the tier costs the slower suite rather than their sum.
+They had shared a job, which serialized them at 308s (GMC) then 284s (AGC) inside a 617s job (measured 2026-08-12); as a matrix that is roughly 333s.
+Two consequences when reading a run: the check names are <code>integration-test (gmc)</code> and <code>integration-test (agc)</code> rather than a single <code>integration-test</code>, and <code>fail-fast</code> is off, so a failure in one still lets the other report.
+Whether a change broke one module or both is usually the first thing triage needs, and one aggregated red could not answer it.
+The required check is still the single <code>integration-test-gate</code>, which passes only when every matrix entry succeeded or skipped.</p>
 <p><code>RUN=</code> narrows a module's run to matching test names.
 It is passed straight to <code>go test -run</code>, so the full regexp syntax works:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>make<span class="w"> </span>-C<span class="w"> </span>cmd/gmc<span class="w"> </span>test-integration<span class="w"> </span><span class="nv">RUN</span><span class="o">=</span><span class="s1">&#39;TestCRD_ActionsGateway_LogLevel_DefaultsToInfo&#39;</span>
@@ -5418,8 +5428,9 @@ Hand-assembling it has two traps, both of which surface as a confusing envtest f
 <p>Unit tests (<code>make test</code> / <code>go test ./...</code>) do <strong>not</strong> require envtest — the integration packages are excluded by their <code>//go:build integration</code> tag.</p>
 <h3 id="the-envtest-suite-budget">The envtest suite budget<a class="headerlink" href="#the-envtest-suite-budget" title="Permanent link">&para;</a></h3>
 <p><code>go test -timeout</code> gives each suite a wall-clock budget.
-It is <strong>10m</strong>, single-sourced in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh"><code>scripts/go/go-test-integration.sh</code></a>, which both module Makefiles and both CI steps run through.
-The budget is per test <em>binary</em>, so each module's suite gets its own.</p>
+It is <strong>10m</strong>, single-sourced in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh"><code>scripts/go/go-test-integration.sh</code></a>, which both module Makefiles and the matrixed CI step run through.
+The budget is per test <em>binary</em>, so each module's suite gets its own.
+That is also why the CI job's own <code>timeout-minutes</code> is 20 rather than 30: one entry now carries one 10m budget plus setup and the <code>-race</code> build, and the job timeout has to stay above that or it kills a hung suite before the suite's own timeout can produce the goroutine dump.</p>
 <p>Every run reports what it spent:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>==&gt; github.com/actions-gateway/github-actions-gateway/gmc/internal/controller/integration used 213.9s of its 10m budget (36%)
 </code></pre></div>

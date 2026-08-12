@@ -2824,6 +2824,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q809"></a>Q809</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-calico.yml">e2e-calico NetworkPolicy enforcement negatives intermittently see traffic that should be blocked</a></td>
+<td><code>flake</code> <code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Measured 2026-08-12: 3 of 100 runs failed in one 3h window (main, and the pr-1405/pr-1415 queue entries), each a different calico-gated enforcement negative, and each evicted its PR. Q747's enforcer dump greps <code>app=kindnet</code>, so calico dumps nothing.</td>
+</tr>
+<tr>
 <td><a id="Q806"></a>Q806</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml"><code>anchore/sbom-action</code> downloads syft with no retry, so a transient fetch fails the security scan</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2862,6 +2870,14 @@
 <td>🔲</td>
 <td>M</td>
 <td>Every worker deletes its own row, so batch PRs conflict on GitHub's merge, which never runs a per-clone driver (<a href="../plan/merge-queue/">why</a>). 2026-08-11: one PR evicted 4x, conflict set STATUS.md alone each time. Serializing is the only lever.</td>
+</tr>
+<tr>
+<td><a id="Q808"></a>Q808</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code> wall clock is set by lint, not the unit tests</a></td>
+<td><code>ci</code> <code>speed</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12: the 221s wall is <code>lint</code> (159s golangci-lint), with unit-test 200s and coverage 178s beside it, so shortening tests alone buys ~0. Flat profile: target lint or skip. Biggest test package is <code>agc/internal/scalesetlistener</code>, 62.6s.</td>
 </tr>
 <tr>
 <td><a id="Q781"></a>Q781</td>
