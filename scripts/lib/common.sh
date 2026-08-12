@@ -56,13 +56,19 @@ git_candidates() {
 # select_present_files` pipeline under `set -o pipefail` reports a failing
 # candidate query instead of degrading to an empty — silently green — file set.
 # Asserted by scripts/ci/shellcheck-scripts-test.sh.
+#
+# The seen-set is an associative array, not a string scanned with a glob: the
+# doc-links oracle feeds this the whole tree (13.8k paths, 90% of them vendor/),
+# and a substring test against an accumulating string costs O(N^2) — 38s there,
+# against 0.5s for the keyed lookup.
 select_present_files() {
-	local path seen=$'\n'
+	local path
+	local -A seen=()
 	while IFS= read -r path; do
 		[[ -n "$path" ]] || continue
 		[[ -f "$path" ]] || continue
-		[[ "$seen" == *$'\n'"$path"$'\n'* ]] && continue
-		seen+="$path"$'\n'
+		[[ -n "${seen[$path]:-}" ]] && continue
+		seen[$path]=1
 		printf '%s\n' "$path"
 	done
 }
