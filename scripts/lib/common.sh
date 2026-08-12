@@ -349,6 +349,58 @@ _stable_release_tag() {
 	awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && !/^v0\./' | sort -V | tail -1
 }
 
+# release_pin_exempt_versions_regexp — print the pattern matching a release
+# version that appears in the pin-bearing pages on purpose and must not be
+# bumped. Currently only v2.0.0, the announced v1alpha1/v2alpha1 removal
+# release. The pattern is v-prefixed; chart pins are written without the `v`, so
+# a bare `2.0.0` still fails. Shared by the two gates below.
+release_pin_exempt_versions_regexp() {
+	printf '%s' '^v2\.0\.0$'
+}
+
+# release_version_literals FILE — emit one `<line>\t<literal>\t<kind>` record per
+# release-version literal in FILE.
+#
+# `kind` is `semver` for a full X.Y.Z (optionally v-prefixed) or `patchline` for
+# the `X.Y.z` shorthand the install callout uses for "newer patch releases".
+# A match flanked by a digit — or by a dot followed by a digit — is part of a
+# longer dotted run (a four-part version, a dotted-quad address) and is not a
+# release version. A line beginning `Measured on kind ` records what was actually
+# installed for a measurement, so its versions are skipped: bumping one would
+# falsify the record.
+#
+# Shared by check-release-pins.sh, which reads the working tree, and
+# verify-published-docs.sh, which reads the pages that tree published (Q784) —
+# one extractor, so a pin shape the source gate sees cannot be invisible to the
+# published-site gate.
+release_version_literals() {
+	awk '
+		function flanked(before, after, after2) {
+			if (before ~ /[0-9]/) return 1
+			if (before == "." ) return 1
+			if (after ~ /[0-9]/) return 1
+			if (after == "." && after2 ~ /[0-9]/) return 1
+			return 0
+		}
+		/^Measured on kind / { next }
+		{
+			rest = $0
+			offset = 0
+			while (match(rest, /v?[0-9]+\.[0-9]+\.([0-9]+|z)/)) {
+				tok = substr(rest, RSTART, RLENGTH)
+				before = (RSTART + offset > 1) ? substr($0, RSTART + offset - 1, 1) : ""
+				end = RSTART + RLENGTH
+				after  = substr(rest, end, 1)
+				after2 = substr(rest, end + 1, 1)
+				offset += end - 1
+				rest = substr(rest, end)
+				if (flanked(before, after, after2)) continue
+				printf "%d\t%s\t%s\n", NR, tok, (tok ~ /z$/ ? "patchline" : "semver")
+			}
+		}
+	' "$1"
+}
+
 # Placeholder sha256 digest used only to render the Helm chart for scanning
 # and validation: production installs pin the image digests, so auditing the
 # digest-pinned form reflects the SHIPPED posture. A digest is also REQUIRED

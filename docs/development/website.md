@@ -139,7 +139,10 @@ That backport must be tagged off the release line, not off feature-ahead `main`;
 The install pins are the case still paying for it.
 They can only be bumped *after* the tag exists, because `check-release-pins.sh` compares them for equality with the newest stable tag, so three of the four releases since `1.0.0` published the previous version's `helm install --version` as their landing page.
 The bump therefore lands twice: on `main`, and on a `release-X.Y` branch cut from the tag, which is then republished over the version via `workflow_dispatch` with `docs_ref`.
-The procedure is [release.md step 7](../operations/release.md#the-bump-on-main-does-not-reach-the-published-release).
+The procedure is [release.md step 7](../operations/release.md#the-bump-on-main-does-not-reach-the-published-release), and `make verify-published-docs VERSION=vX.Y.Z` ([verify-published-docs.sh](../../scripts/release/verify-published-docs.sh)) is what says the republish worked.
+
+That check reads each page's `<article>` and nothing around it, because the chrome is deliberately *not* the version being read: the announce bar names the newest release site-wide, so a correct `/1.1.0/` page announces a later one.
+A theme change that renames or drops `<article>` therefore fails it rather than quietly reducing it to scanning nothing.
 
 Pages source stays **"GitHub Actions"**: `mike` maintains the tree on `gh-pages`, and the `publish` job serves that whole tree as the Pages artifact. `--alias-type=copy` makes `stable/` a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.
 

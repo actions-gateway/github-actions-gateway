@@ -53,14 +53,12 @@ DEFAULT_PIN_FILES=(
     docs/operations/gitops.md
 )
 
-# Lines whose versions record what was measured, not what to install. Bumping
-# one falsifies the record, so they are matched by shape rather than by value.
-EXEMPT_LINE_RE='^Measured on kind '
-
-# Versions in the pin-bearing set that are deliberately not the current release.
-# Both are v-prefixed; chart pins are written without the `v`, so a bare `2.0.0`
-# still fails.
-EXEMPT_VERSIONS_RE='^v2\.0\.0$'   # the announced v1alpha1/v2alpha1 removal release
+# Versions in the pin-bearing set that are deliberately not the current release,
+# and the extractor that finds every literal — both in scripts/lib/common.sh, so
+# verify-published-docs.sh means the same thing by "a pin" when it reads the
+# rendered pages this gate's files publish as (Q784). Lines whose versions record
+# a measurement rather than a pin are skipped there too.
+EXEMPT_VERSIONS_RE="$(release_pin_exempt_versions_regexp)"
 
 if (( $# > 0 )); then
     pin_files=("$@")
@@ -96,41 +94,6 @@ release_minor="${release_version%.*}"
 printf 'check-release-pins: current release %s (chart version %s), from %s\n' \
     "$release_tag" "$release_version" "$tag_source"
 
-# Emit one `<line>\t<literal>\t<kind>` record per release-version literal.
-#
-# `kind` is `semver` for a full X.Y.Z (optionally v-prefixed) or `patchline` for
-# the `X.Y.z` shorthand the install callout uses for "newer patch releases".
-# A match flanked by a digit — or by a dot followed by a digit — is part of a
-# longer dotted run (a four-part version, a dotted-quad address) and is not a
-# release version.
-literals() {
-    awk -v exempt_line="$EXEMPT_LINE_RE" '
-        function flanked(before, after, after2) {
-            if (before ~ /[0-9]/) return 1
-            if (before == "." ) return 1
-            if (after ~ /[0-9]/) return 1
-            if (after == "." && after2 ~ /[0-9]/) return 1
-            return 0
-        }
-        $0 ~ exempt_line { next }
-        {
-            rest = $0
-            offset = 0
-            while (match(rest, /v?[0-9]+\.[0-9]+\.([0-9]+|z)/)) {
-                tok = substr(rest, RSTART, RLENGTH)
-                before = (RSTART + offset > 1) ? substr($0, RSTART + offset - 1, 1) : ""
-                end = RSTART + RLENGTH
-                after  = substr(rest, end, 1)
-                after2 = substr(rest, end + 1, 1)
-                offset += end - 1
-                rest = substr(rest, end)
-                if (flanked(before, after, after2)) continue
-                printf "%d\t%s\t%s\n", NR, tok, (tok ~ /z$/ ? "patchline" : "semver")
-            }
-        }
-    ' "$1"
-}
-
 fail=0
 total=0
 
@@ -154,7 +117,7 @@ for f in "${pin_files[@]}"; do
                 "$rel" "$line_no" "$tok" "$release_tag" >&2
         fi
         fail=1
-    done < <(literals "$f")
+    done < <(release_version_literals "$f")
 
     # An empty result cannot tell "this page has no stale pin" from "the pin
     # moved and my scan no longer sees it", so a page that yields nothing is a

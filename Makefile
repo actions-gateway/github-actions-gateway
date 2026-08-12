@@ -400,7 +400,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  go/go-test-integration-test \
                  go/go-vet-tags-test go/go-work-tidy-test \
                  release/download-cosign-test release/release-delta-test \
-                 release/verify-release-test \
+                 release/verify-release-test release/verify-published-docs-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
@@ -1147,6 +1147,13 @@ cosign: $(COSIGN) ## Download pinned cosign (COSIGN_VERSION) into .build/
 .PHONY: verify-release
 verify-release: $(COSIGN) ## Verify cosign signatures for a published release: make verify-release VERSION=vX.Y.Z
 	@COSIGN=$(COSIGN) scripts/release/verify-release.sh $(VERSION)
+
+# Reads the live site, so it belongs to a release cut rather than to `make check`,
+# and it runs at step 7 after the docs republish, not at step 3 with the signature
+# check. Add ARGS=--no-stable for a backport to an older line.
+.PHONY: verify-published-docs
+verify-published-docs: ## Verify the published /X.Y.Z/ docs advertise X.Y.Z: make verify-published-docs VERSION=vX.Y.Z
+	@scripts/release/verify-published-docs.sh $(VERSION) $(ARGS)
 
 # These all build the same way from the vendored tools/ module; only the package
 # path differs (the target-specific TOOL_PKG below). ginkgo is the exception: it

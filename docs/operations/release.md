@@ -783,7 +783,7 @@ make release-pins-check
 It resolves the newest stable `vX.Y.Z` tag and fails with the file and line of every pin that still names an older one, across the five pages that tell a reader which version to install — `README.md`, `docs/index.md`, and `docs/operations/`'s `install.md`, `upgrade.md`, and `gitops.md`.
 Bump each site it reports (charts drop the leading `v`; `gitops.md` carries the Argo `targetRevision` and both Flux forms) and re-run until it is green.
 
-Two things it deliberately leaves alone, both documented in [`scripts/docs/check-release-pins.sh`](../../scripts/docs/check-release-pins.sh): a line beginning `Measured on kind`, whose version records what was actually installed for a measurement — bumping it would falsify the record — and `v2.0.0`, the announced `v1alpha1`/`v2alpha1` removal release.
+Two things it deliberately leaves alone, both documented alongside the extractor it shares with the published-site check in [`scripts/lib/common.sh`](../../scripts/lib/common.sh): a line beginning `Measured on kind`, whose version records what was actually installed for a measurement — bumping it would falsify the record — and `v2.0.0`, the announced `v1alpha1`/`v2alpha1` removal release.
 A page that yields *no* pin at all is a failure rather than a pass, so a pin that moves out of the scan's reach is reported instead of silently going unchecked.
 
 Landing the bump is a normal PR; the gate is part of `make check` and of the `doc-links` CI workflow, so a stale pin reddens every subsequent PR until it is fixed.
@@ -793,8 +793,7 @@ This step exists because `v1.3.0` shipped without it: `README.md`, `docs/index.m
 
 Landing it on `main` fixes `make check` and the `dev` docs, and **nothing else**.
 The site builds each version from its tag ([step 2](#2-tag-and-push)), so `/X.Y.Z/` is frozen at what the tag's tree said, which is the *previous* release's pins.
-So are `stable` and the root redirect a visitor lands on.
-The gate cannot catch this: it reads the working tree, not the published site.
+So are `stable` and the root redirect a visitor lands on. `make release-pins-check` cannot catch this: it reads the working tree, not the published site. `make verify-published-docs` is the half that reads the site, and it is the last thing this step does.
 
 The two facts are stated separately above and were never reconciled.
 Three of the four releases cut since `1.0.0` published the previous version's install command as their landing page.
@@ -823,11 +822,17 @@ Keep the branch: it is the backport line [patch releases](#patch-releases-and-ba
 For a backport patch to an older line, drop `-f alias=stable -f set_default=true`.
 Those belong to the highest release, and a dispatch applies them verbatim rather than checking ([pages.yml](../../.github/workflows/pages.yml)).
 
-Then confirm the published page, not the branch:
+Then confirm the published pages, not the branch:
 
 ```bash
-curl -sS https://actions-gateway.com/X.Y.Z/ | grep -o -- '--version [0-9.]*' | head -1
+make verify-published-docs VERSION=vX.Y.Z
 ```
+
+It reads the four site pages that pin a version (the landing page, and `operations/`'s `install`, `upgrade` and `gitops`), plus the `stable` alias and the root redirect, and fails with the page and the version each one actually advertises.
+Add `ARGS=--no-stable` for a backport to an older line, whose dispatch above drops the alias.
+This is the same comparison [`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh) makes against the working tree, run against what the tree published; the two share one literal extractor so a pin shape the source gate catches cannot slip past this one.
+
+Do not spot-check it with `curl … | grep`: the theme wraps the leading digit of a highlighted version in its own `<span>`, so `--version 1.0.0` is not one string in the served HTML and a grep for it matches nothing, which is exactly what a correct page returns too. `/1.1.0/` and `/1.2.0/` still advertise `--version 1.0.0` today and both read as clean that way.
 
 ### 8. Hand off to operators
 
