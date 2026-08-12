@@ -12,8 +12,10 @@
 # concentrated in the same two sections, on every gate PR. Measured on
 # docs/roadmap.md at 61cf54e7b: two branches each deleting their own bullet from
 # the "In progress / near-term" list conflict under a plain three-way merge,
-# while the same two deletions ten bullets apart merge clean. Q715's PR was
-# queue-evicted three times in one session on exactly that shape.
+# while the same two deletions ten bullets apart merge clean. Q715's PR met that
+# shape three times in one session, each an eviction followed by a hand-resolved
+# rebase. This makes that rebase silent; it does not make the eviction rarer
+# (see LIMITS).
 #
 # WHAT IT DOES. Each run of top-level bullets whose members all carry an
 # annotation is merged as a set keyed on the annotation's normalized ID list —
@@ -57,8 +59,11 @@
 # exactly. Nothing about this repo requires it.
 #
 # LIMITS. It runs on local merges, rebases, cherry-picks and stash
-# applications. It does not run on GitHub's server-side squash-merge, which has
-# no access to a clone's config. An annotation inside a fenced code block is
+# applications. It does not run anywhere GitHub does the merging — neither the
+# squash-merge nor the merge queue's candidate build, which have no access to a
+# clone's config — so two branches deleting adjacent bullets still conflict
+# server-side and still get evicted. What this removes is the hand-resolution of
+# the rebase that follows. An annotation inside a fenced code block is
 # prose about the format to roadmapcheck but a binding to this driver; the page
 # carries no such fence, and one would only cost a fallback.
 #
